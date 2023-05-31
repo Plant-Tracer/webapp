@@ -1,0 +1,7 @@
+bottle
+pylint
+pytest
+pytest-cov
+pytest-env
+pymysql
+coverage
