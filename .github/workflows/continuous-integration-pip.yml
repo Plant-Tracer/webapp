@@ -10,6 +10,7 @@ jobs:
         os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
         python-version: [3.9]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -35,7 +36,8 @@ jobs:
         run: |
           make pylint
 
-      - name: Test with pytest and a functioning database
+      - name: Test with pytest and a functioning database (but only on Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
         env:
           MYSQL_HOST:     ${{ secrets.MYSQL_HOST }}
           MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
@@ -46,6 +48,7 @@ jobs:
           make coverage
 
       - name: Upload to codecov.io
+        if: startsWith(matrix.os, 'ubuntu')
         uses: codecov/codecov-action@v3
         with:
           verbose: true
