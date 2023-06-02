@@ -25,7 +25,6 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           make install-dependencies
-          find . -print
 
       - name: Lint with pylint
         run: |
