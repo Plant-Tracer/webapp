@@ -1,6 +1,7 @@
 boddle
 bottle
 coverage
+jinja2
 pylint
 pymysql
 pytest
