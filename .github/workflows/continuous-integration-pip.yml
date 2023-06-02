@@ -16,6 +16,11 @@ jobs:
         with:
           submodules: true
 
+      - name: "Configure MacOS"
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install libmagic
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
