@@ -1,5 +1,6 @@
 boddle
 bottle
+magic
 pylint
 pytest
 pytest-cov
