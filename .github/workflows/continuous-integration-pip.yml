@@ -7,7 +7,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-latest']
+        os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
         python-version: [3.9]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     steps:
@@ -15,6 +15,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
+
+      - name: "Configure MacOS"
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install libmagic
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -25,7 +30,6 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           make install-dependencies
-          find . -print
 
       - name: Lint with pylint
         run: |

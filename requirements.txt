@@ -1,8 +1,11 @@
 boddle
 bottle
+coverage
+jinja2
 pylint
+pymysql
 pytest
 pytest-cov
 pytest-env
-pymysql
-coverage
+python-magic
+WebTest
