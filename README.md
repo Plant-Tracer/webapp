@@ -7,7 +7,12 @@ The website runs with WordPress. This repo runs in a sub-domain https://app.plan
 
 The repo is designed to be check out as ~/app.planttracer.com/ on a Dreamhost user account. It runs the python application in Bottle using the Dreamhost Passenger WSGI framework. The repo can also be checked out into other domain directories for development and testing on the website. You can also check it out locally and run a local webserver.
 
-This application was written with Linux as the target platform, and the Makefile is Linux-specific. Most things should just work on MacOS as well, though that's not a specifically targetted platform for either development or runtime.
+This application was written with Linux as the target platform, and the Makefile is Linux-specific. 
+
+Most things should just work on MacOS as well, though that's not a specifically targetted platform for either development or runtime. On MacOS, libmagic must be installed:
+```
+brew install libmagic
+```
 
 To run bottle_app.py on Windows (assuming no POSIX-compliant command line there):
 Prequisities:
