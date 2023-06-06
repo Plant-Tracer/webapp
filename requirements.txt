@@ -7,4 +7,5 @@ pymysql
 pytest
 pytest-cov
 pytest-env
+python-magic
 WebTest

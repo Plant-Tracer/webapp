@@ -19,6 +19,7 @@ import sys
 import io
 import os
 import functools
+import magic
 from urllib.parse import urlparse
 
 import bottle
