@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - run: |
+        echo temporarily disabled
+        exit 0
         eval $(ssh-agent)
         ssh-add - <<< "${{ secrets.DCMANAGER_KEY }}"
         ssh-add -l
