@@ -21,6 +21,7 @@ flake8:
 
 # These are used by the CI pipeline:
 install-dependencies:
+	python3 -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
 
 pytest:
