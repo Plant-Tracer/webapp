@@ -13,23 +13,21 @@ Debug locally:
 
 """
 
-import csv
-import json
 import sys
-import io
 import os
 import functools
-import magic
 from urllib.parse import urlparse
 
+import magic
 import bottle
+from bottle import request
 
 from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,view
 from lib.ctools import dbfile
 
 assert os.path.exists(TEMPLATE_DIR)
 
-__version__='1.0.0'
+__version__='0.0.1'
 VERSION_TEMPLATE='version.txt'
 
 DEFAULT_OFFSET = 0
@@ -45,7 +43,7 @@ def get_dbreader():
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
 @bottle.route('/ver')
-@view('version.txt')
+@view(VERSION_TEMPLATE)
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3"""
     return {'__version__':__version__,'sys_version':sys.version}
@@ -63,9 +61,15 @@ def func_root():
     return {'title':'ROOT',
             'hostname':o.hostname}
 
-@view('add.html')
+## Demo API
+@bottle.route('/api/add', method='POST')
 def func_add():
-    return {}
+    a = bottle.request.forms.get('a')
+    b = bottle.request.forms.get('b')
+    try:
+        return {'result':float(a)+float(b), 'error':False}
+    except (TypeError,ValueError):
+        return {'error':True}
 
 def app():
     """The application"""
