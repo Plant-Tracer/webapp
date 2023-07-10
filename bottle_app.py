@@ -13,15 +13,12 @@ Debug locally:
 
 """
 
-import csv
-import json
 import sys
-import io
 import os
 import functools
-import magic
 from urllib.parse import urlparse
 
+import magic
 import bottle
 from bottle import request
 
@@ -67,16 +64,12 @@ def func_root():
 ## Demo API
 @bottle.route('/api/add', method='POST')
 def func_add():
-    a = request.forms.get('a')
-    b = request.forms.get('b')
+    a = bottle.request.forms.get('a')
+    b = bottle.request.forms.get('b')
     try:
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
         return {'error':True}
-
-@view('add.html')
-def func_add():
-    return {}
 
 def app():
     """The application"""
