@@ -14,7 +14,10 @@ jobs:
     steps:
     - run: |
         eval $(ssh-agent)
-        echo "${{ secrets.PTMANAGER_SSH_KEY }}" | tr -d '\r' | ssh-add -
+        echo "${{ secrets.PTMANAGER_SSH_KEY }}" > .sshkey
+        wc -l .sshkey
+        openssl sha1 .sshkey
+        cat .sshkey | ssh-add -
         ssh-add -l
         ssh -o GlobalKnownHostsFile=etc/known_hosts brennerbotany@app.planttracer.com 'cd app.planttracer.com;git pull'
         echo The PR has been merged
