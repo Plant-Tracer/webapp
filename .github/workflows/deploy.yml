@@ -13,10 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - run: |
-        echo temporarily disabled
-        exit 0
         eval $(ssh-agent)
-        ssh-add - <<< "${{ secrets.DCMANAGER_KEY }}"
+        ssh-add - <<< "${{ secrets.PTMANAGER_SSH_KEY }}"
         ssh-add -l
-        ssh -o GlobalKnownHostsFile=etc/known_hosts dcmanager@downloads.digitalcorpora.org hostname
-        echo The PR was merged
+        ssh -o GlobalKnownHostsFile=etc/known_hosts brennerbotany@app.planttracer.com 'cd app.planttracer.com;git pull'
+        echo The PR has been merged
