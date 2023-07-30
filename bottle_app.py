@@ -16,6 +16,7 @@ Debug locally:
 import sys
 import os
 import functools
+import datetime
 from urllib.parse import urlparse
 
 import magic
@@ -36,6 +37,16 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 
 INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
+
+def datetime_to_str(obj):
+    if isinstance(obj, datetime.datetime):
+        return obj.isoformat()  # or str(obj) if you prefer
+    elif isinstance(obj, dict):
+        return {k: datetime_to_str(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [datetime_to_str(elem) for elem in obj]
+    else:
+        return obj
 
 @functools.cache
 def get_dbreader():
@@ -76,10 +87,10 @@ def func_root():
 @bottle.route('/api/check-apikey', method='POST')
 def func_check_apikey():
     apikey = bottle.request.forms.get('apikey')
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys where key_value=%s",
-                                    (bottle.request.forms.get('apikey')), asDict=True)
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
+                                    (bottle.request.forms.get('apikey')), asDicts=True)
     if res:
-        return { 'error':False, 'userinfo': res[0] }
+        return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
     return INVALID_APIKEY
 
 
@@ -102,7 +113,7 @@ def func_new_frame():
     if apikey_userid:
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
                                             int(bottle.request.forms.get('movie_id')),
-                                            asDict=True)
+                                            asDicts=True)
         if apikey_userid != res['user_id']:
             return INVALID_MOVIE_ACCESS
 
