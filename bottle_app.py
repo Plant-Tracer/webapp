@@ -22,7 +22,7 @@ import magic
 import bottle
 from bottle import request
 
-from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,view
+from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,DBWRITER_BASH_FILE,view
 from lib.ctools import dbfile
 
 assert os.path.exists(TEMPLATE_DIR)
@@ -34,6 +34,9 @@ DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 
+INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
+INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
+
 @functools.cache
 def get_dbreader():
     """Get the dbreader authentication info from the DBREADER_BASH_FILE if it exists. Variables there are
@@ -42,7 +45,15 @@ def get_dbreader():
     fname = DBREADER_BASH_FILE if os.path.exists(DBREADER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
-@bottle.route('/ver')
+@functools.cache
+def get_dbwriter():
+    """Get the dbwriter authentication info from the DBWRITER_BASH_FILE if it exists. Variables there are
+    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    If the file doesn't exist, send in None, hoping that the environment variables exist."""
+    fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
+    return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
+
+@bottle.route('/ver', method=['POST','GET'])
 @view(VERSION_TEMPLATE)
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3"""
@@ -61,6 +72,58 @@ def func_root():
     return {'title':'ROOT',
             'hostname':o.hostname}
 
+## API Validation
+@bottle.route('/api/check-apikey', method='POST')
+def func_check_apikey():
+    apikey = bottle.request.forms.get('apikey')
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys where key_value=%s",
+                                    (bottle.request.forms.get('apikey')), asDict=True)
+    if res:
+        return { 'error':False, 'userinfo': res[0] }
+    return INVALID_APIKEY
+
+
+## Movies API
+@bottle.route('/api/new-movie', method='POST')
+def func_new_movie():
+    apikey = bottle.request.forms.get('apikey')
+    apikey_userid = validate_apikey()
+    if apikey_userid:
+        movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
+                                            "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
+                                            (bottle.request.forms.get('title'), bottle.request.forms.get('description'), apikey_userid ))
+        return {'error':False,'movie_id':movie_id}
+    return INVALID_APIKEY
+
+@bottle.route('/api/new-frame', method='POST')
+def func_new_frame():
+    apikey = bottle.request.forms.get('apikey')
+    apikey_userid = validate_apikey()
+    if apikey_userid:
+        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
+                                            int(bottle.request.forms.get('movie_id')),
+                                            asDict=True)
+        if apikey_userid != res['user_id']:
+            return INVALID_MOVIE_ACCESS
+
+        frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
+                                        """INSERT INTO frames (movie_id,frame_number,frame_msec,frame_data)
+                                           VALUES (%s,%s,%s,%s)
+                                           ON DUPLICATE KEY UPDATE frame_msec=%s,frame_data=%s""",
+                                            (
+                                                int(bottle.reqeust.forms.get('movie_id')),
+                                            int(bottle.reqeust.forms.get('frame_number')),
+                                            int(bottle.reqeust.forms.get('frame_msec')),
+                                            bottle.reqeust.forms.get('frame_data'),
+                                            int(bottle.reqeust.forms.get('frame_msec')),
+                                            bottle.reqeust.forms.get('frame_data')))
+
+        return {'error':False,'frame_id':frame_id}
+    return INVALID_APIKEY
+
+
+
+
 ## Demo API
 @bottle.route('/api/add', method='POST')
 def func_add():
@@ -70,6 +133,8 @@ def func_add():
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
         return {'error':True}
+
+
 
 def app():
     """The application"""

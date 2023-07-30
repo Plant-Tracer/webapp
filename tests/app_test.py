@@ -10,7 +10,7 @@ from os.path import abspath,dirname
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
 from boddle import boddle
-from webtest import TestApp
+# from webtest import TestApp
 
 sys.path.append( dirname(dirname(abspath(__file__))))
 
