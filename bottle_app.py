@@ -17,6 +17,7 @@ import sys
 import os
 import functools
 import datetime
+import base64
 from urllib.parse import urlparse
 
 import magic
@@ -84,20 +85,29 @@ def func_root():
             'hostname':o.hostname}
 
 ## API Validation
+def validate_apikey():
+    apikey = bottle.request.forms.get('apikey')
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where key_value=%s limit 1",
+                                    ( bottle.request.forms.get('apikey'), ), asDicts=True)
+    if res:
+        return res[0]['user_id']
+    return None
+
+
 @bottle.route('/api/check-apikey', method='POST')
 def func_check_apikey():
     apikey = bottle.request.forms.get('apikey')
     res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
-                                    (bottle.request.forms.get('apikey')), asDicts=True)
+                                    (bottle.request.forms.get('apikey'), ), asDicts=True)
     if res:
         return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
     return INVALID_APIKEY
 
 
+
 ## Movies API
 @bottle.route('/api/new-movie', method='POST')
 def func_new_movie():
-    apikey = bottle.request.forms.get('apikey')
     apikey_userid = validate_apikey()
     if apikey_userid:
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
@@ -112,22 +122,25 @@ def func_new_frame():
     apikey_userid = validate_apikey()
     if apikey_userid:
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
-                                            int(bottle.request.forms.get('movie_id')),
-                                            asDicts=True)
-        if apikey_userid != res['user_id']:
+                                       ( int(bottle.request.forms.get('movie_id')), ),
+                                       asDicts=True)
+        if apikey_userid != res[0]['user_id']:
             return INVALID_MOVIE_ACCESS
 
+        frame_data = base64.b64decode(bottle.request.forms.get('frame_base64_data'))
         frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                         """INSERT INTO frames (movie_id,frame_number,frame_msec,frame_data)
                                            VALUES (%s,%s,%s,%s)
                                            ON DUPLICATE KEY UPDATE frame_msec=%s,frame_data=%s""",
                                             (
-                                                int(bottle.reqeust.forms.get('movie_id')),
-                                            int(bottle.reqeust.forms.get('frame_number')),
-                                            int(bottle.reqeust.forms.get('frame_msec')),
-                                            bottle.reqeust.forms.get('frame_data'),
-                                            int(bottle.reqeust.forms.get('frame_msec')),
-                                            bottle.reqeust.forms.get('frame_data')))
+                                                int(bottle.request.forms.get('movie_id')),
+                                            int(bottle.request.forms.get('frame_number')),
+                                            int(bottle.request.forms.get('frame_msec')),
+                                            frame_data,
+                                            int(bottle.request.forms.get('frame_msec')),
+                                            frame_data),
+                                            debug=False)
+
 
         return {'error':False,'frame_id':frame_id}
     return INVALID_APIKEY
