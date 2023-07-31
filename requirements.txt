@@ -9,3 +9,4 @@ pytest-cov
 pytest-env
 python-magic
 WebTest
+requests
