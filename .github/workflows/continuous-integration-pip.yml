@@ -36,9 +36,17 @@ jobs:
         run: |
           make pylint
 
+      - name: Extra
+        run: |
+          echo 1 = ${{ TEST_ENDPOINT }}
+          echo 2 = ${{ env.TEST_ENDPOINT }}
+          echo 3 = ${{ secrets.TEST_USER_APIKEY }}
+
+
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         env:
+          TEST_ENDPOINT:    ${{ TEST_ENDPOINT }}
           TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
           MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
           MYSQL_DATABASE:   ${{ secrets.MYSQL_DATABASE }}
