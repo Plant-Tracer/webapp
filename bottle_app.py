@@ -98,9 +98,9 @@ def validate_apikey():
 
 @bottle.route('/api/check-apikey', method='POST')
 def func_check_apikey():
-    apikey = request.forms.get('apikey')
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
-                                    (request.forms.get('apikey'), ), asDicts=True)
+    res = dbfile.DBMySQL.csfr( get_dbwriter(),
+                               "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
+                               (request.forms.get('apikey'), ), asDicts=True)
     if res:
         return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
     return INVALID_APIKEY
