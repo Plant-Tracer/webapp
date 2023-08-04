@@ -1,8 +1,12 @@
 # Gallery of Plant Videos
+- The webpage would appear as a grid of images. Each thumbnail would be one frame of the video. When clicking on the thumbnail the video would play.
 
 # Purpose
+- The gallery would allow user to easily select videos to view. The user would be able to search the database for videos based on various criteria (author, date range).
 
 # Requirements
+- access to database with a video as one field of a table
+- access to database with thumbnail as one field of a table
 
 # Implementation Plan
 - [ ] Implement REST API to get a list of public videos with certain search criteria (date range, keyword, author, etc.). (Returns a cookie for each video)
