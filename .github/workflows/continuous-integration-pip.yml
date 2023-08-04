@@ -46,7 +46,7 @@ jobs:
           MYSQL_USER:       ${{ secrets.MYSQL_USER }}
           MYSQL_PASSWORD:   ${{ secrets.MYSQL_PASSWORD }}
         run: |
-          printenv
+          printenv | sort
           pip install pytest
           make coverage
 
