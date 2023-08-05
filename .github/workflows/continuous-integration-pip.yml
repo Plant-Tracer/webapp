@@ -39,11 +39,14 @@ jobs:
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         env:
-          MYSQL_HOST:     ${{ secrets.MYSQL_HOST }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_USER:     ${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          TEST_ENDPOINT:    ${{ secrets.TEST_ENDPOINT }}
+          TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
+          MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
+          MYSQL_DATABASE:   ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER:       ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD:   ${{ secrets.MYSQL_PASSWORD }}
         run: |
+          printenv | sort
           pip install pytest
           make coverage
 
