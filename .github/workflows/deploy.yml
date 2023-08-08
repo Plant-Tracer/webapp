@@ -16,10 +16,10 @@ jobs:
         APP_HOST=app.planttracer.com
         SSH_USER=planttracer
         eval $(ssh-agent)
-        echo key:
-        echo ${{ secrets.PT_SSH_BASE64 }} | openssl base64 -d | wc
-        echo ssh-add:
-        echo ${{ secrets.PT_SSH_BASE64 }} | openssl base64 -d | ssh-add -
+        echo ${{ secrets.PT_SSH_BASE64 }} | openssl base64 -d > .sshkey
+        wc -l .sshkey
+        ssh-add .sshkey
         ssh-add -l
+        /bin/rm -f .sshkey
         ssh -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "hostname;cd $APP_HOST;git pull"
         echo The PR has been merged
