@@ -24,6 +24,9 @@ import magic
 import bottle
 from bottle import request
 
+# pylint: disable=no-member
+
+
 from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,DBWRITER_BASH_FILE,view
 from lib.ctools import dbfile
 
@@ -80,15 +83,14 @@ def static_path(path):
 @bottle.route('/')
 @view('index.html')
 def func_root():
-    o = urlparse(bottle.request.url)
+    o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname}
 
 ## API Validation
 def validate_apikey():
-    apikey = bottle.request.forms.get('apikey')
     res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where key_value=%s limit 1",
-                                    ( bottle.request.forms.get('apikey'), ), asDicts=True)
+                                    ( request.forms.get('apikey'), ), asDicts=True)
     if res:
         return res[0]['user_id']
     return None
@@ -96,9 +98,9 @@ def validate_apikey():
 
 @bottle.route('/api/check-apikey', method='POST')
 def func_check_apikey():
-    apikey = bottle.request.forms.get('apikey')
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
-                                    (bottle.request.forms.get('apikey'), ), asDicts=True)
+    res = dbfile.DBMySQL.csfr( get_dbwriter(),
+                               "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
+                               (request.forms.get('apikey'), ), asDicts=True)
     if res:
         return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
     return INVALID_APIKEY
@@ -112,32 +114,31 @@ def func_new_movie():
     if apikey_userid:
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                             "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
-                                            (bottle.request.forms.get('title'), bottle.request.forms.get('description'), apikey_userid ))
+                                            (request.forms.get('title'), request.forms.get('description'), apikey_userid ))
         return {'error':False,'movie_id':movie_id}
     return INVALID_APIKEY
 
 @bottle.route('/api/new-frame', method='POST')
 def func_new_frame():
-    apikey = bottle.request.forms.get('apikey')
     apikey_userid = validate_apikey()
     if apikey_userid:
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
-                                       ( int(bottle.request.forms.get('movie_id')), ),
+                                       ( int(request.forms.get('movie_id')), ),
                                        asDicts=True)
         if apikey_userid != res[0]['user_id']:
             return INVALID_MOVIE_ACCESS
 
-        frame_data = base64.b64decode(bottle.request.forms.get('frame_base64_data'))
+        frame_data = base64.b64decode(request.forms.get('frame_base64_data'))
         frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                         """INSERT INTO frames (movie_id,frame_number,frame_msec,frame_data)
                                            VALUES (%s,%s,%s,%s)
                                            ON DUPLICATE KEY UPDATE frame_msec=%s,frame_data=%s""",
                                             (
-                                                int(bottle.request.forms.get('movie_id')),
-                                            int(bottle.request.forms.get('frame_number')),
-                                            int(bottle.request.forms.get('frame_msec')),
+                                                int(request.forms.get('movie_id')),
+                                            int(request.forms.get('frame_number')),
+                                            int(request.forms.get('frame_msec')),
                                             frame_data,
-                                            int(bottle.request.forms.get('frame_msec')),
+                                            int(request.forms.get('frame_msec')),
                                             frame_data),
                                             debug=False)
 
@@ -151,8 +152,8 @@ def func_new_frame():
 ## Demo API
 @bottle.route('/api/add', method='POST')
 def func_add():
-    a = bottle.request.forms.get('a')
-    b = bottle.request.forms.get('b')
+    a = request.forms.get('a')
+    b = request.forms.get('b')
     try:
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
