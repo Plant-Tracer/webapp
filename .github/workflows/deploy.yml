@@ -16,10 +16,11 @@ jobs:
         APP_HOST=app.planttracer.com
         SSH_USER=planttracer
         eval $(ssh-agent)
-        echo "${{ secrets.PTMANAGER_SSH_KEY }}" > .sshkey
+        cat > .sshkey <<EOF
+        ${{ secrets.PT_SSH_BASE64 }}
+        EOF
         wc .sshkey
-        openssl sha1 .sshkey
-        cat .sshkey | ssh-add -
+        ssh-add .sshkey
         ssh-add -l
         /bin/rm -f .sshkey
         ssh -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "hostname;cd $APP_HOST;git pull"
