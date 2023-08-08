@@ -16,7 +16,7 @@ jobs:
         APP_HOST=app.planttracer.com
         SSH_USER=planttracer
         eval $(ssh-agent)
-        ssh-add -l <<EOF
+        ssh-add  << EOF
         ${{ secrets.PT_SSH_BASE64 }}
         EOF
         ssh-add -l
