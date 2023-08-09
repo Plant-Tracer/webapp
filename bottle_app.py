@@ -18,11 +18,13 @@ import os
 import functools
 import datetime
 import base64
+import uuid
 from urllib.parse import urlparse
 
 import magic
 import bottle
 from bottle import request
+from validate_email_address import validate_email
 
 # pylint: disable=no-member
 
@@ -40,7 +42,11 @@ DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 
 INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
+INVALID_APIKEY = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
+
+class InvalidEmail(RuntimeError):
+    pass
 
 def datetime_to_str(obj):
     if isinstance(obj, datetime.datetime):
@@ -68,6 +74,28 @@ def get_dbwriter():
     fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
+## Register email or create a new key for it
+def register_email(email, course_name):
+    if not validate_email(email, check_mx=True):
+        raise InvalidEmail()
+    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_name) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_name=%s",
+                             ( email, course_name, email, course_name ))
+    return None
+
+def new_apikey(email, capabilities):
+    apikey = str(uuid.uuid4()).replace('-','')
+    res = dbfile.DBMySQL.csfr( get_dbwriter(),
+    """INSERT into api_keys (user_id, key_value,capabilities)
+       VALUES ((select id from users where email=%s), %s, %s)""",
+                                   (email, apikey, capabilities))
+    return apikey
+
+
+
+################################################################
+## Bottle endpoints
+
+
 @bottle.route('/ver', method=['POST','GET'])
 @view(VERSION_TEMPLATE)
 def func_ver():
@@ -86,6 +114,16 @@ def func_root():
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname}
+
+@bottle.route('/register')
+@view('register.html')
+def func_root():
+    o = urlparse(request.url)
+    return {'title':'ROOT',
+            'hostname':o.hostname}
+
+
+
 
 ## API Validation
 def validate_apikey():
@@ -106,8 +144,31 @@ def func_check_apikey():
     return INVALID_APIKEY
 
 
-
 ## Movies API
+@bottle.route('/api/register', method='POST')
+def func_register():
+    """Register the email address if it does not exist. Send a login and upload link"""
+    email = request.forms.get('email')
+    if not validate_email(email, check_mx=True):
+        return INVALID_EMAIL
+    course_name = request.forms.get('course_name')
+    if not validate_course_name(course_name):
+        return INVALID_COURSE_NAME
+    register_email(email, course_name)
+    send_link(email)
+    return {'error':False}
+
+
+@bottle.route('/api/resend-link', method='POST')
+def func_send_link():
+    """Register the email address if it does not exist. Send a login and upload link"""
+    email = request.forms.get('email')
+    if not validate_email(email, check_mx=True):
+        return INVALID_EMAIL
+    send_link(email)
+    return {'error':False}
+
+
 @bottle.route('/api/new-movie', method='POST')
 def func_new_movie():
     apikey_userid = validate_apikey()
@@ -147,8 +208,6 @@ def func_new_frame():
     return INVALID_APIKEY
 
 
-
-
 ## Demo API
 @bottle.route('/api/add', method='POST')
 def func_add():
@@ -158,8 +217,6 @@ def func_add():
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
         return {'error':True}
-
-
 
 def app():
     """The application"""
