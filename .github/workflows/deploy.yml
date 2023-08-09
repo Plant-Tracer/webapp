@@ -21,5 +21,5 @@ jobs:
         openssl sha1 .sshkey
         cat .sshkey | ssh-add -
         ssh-add -l
-        ssh -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull"
+        ssh -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull && make install-dependencies && make touch"
         echo The PR has been merged
