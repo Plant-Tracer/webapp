@@ -36,6 +36,22 @@ CREATE TABLE `api_keys` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `course_keys`
+--
+
+DROP TABLE IF EXISTS `course_keys`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `course_keys` (
+  `id` int NOT NULL,
+  `course_name` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+  `max_enrollment` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `course_name` (`course_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `frames`
 --
 
@@ -52,7 +68,7 @@ CREATE TABLE `frames` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `movie_id` (`movie_id`,`frame_number`),
   CONSTRAINT `frames_ibfk_1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=109 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=269 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -71,7 +87,7 @@ CREATE TABLE `movies` (
   PRIMARY KEY (`id`),
   KEY `userid` (`user_id`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -85,8 +101,12 @@ CREATE TABLE `users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `course_name` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'dev',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  `links_sent` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `course_name` (`course_name`),
+  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`course_name`) REFERENCES `course_keys` (`course_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -99,4 +119,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2023-08-08  7:03:56
+-- Dump completed on 2023-08-09 18:19:53
