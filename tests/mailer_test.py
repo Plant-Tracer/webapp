@@ -24,6 +24,7 @@ guid = str(uuid.uuid4())
 
 # https://realpython.com/python-sleep/#adding-a-python-sleep-call-with-decorators
 
+@pytest.mark.skipif('GITHUB_JOB' in os.environ, reason="does not run on GitHub - outbound SMTP is blocked")
 def test_send_message():
     msg_env = NativeEnvironment().from_string( MSG )
     msg = msg_env.render( to_addr='simsong@acm.org',
