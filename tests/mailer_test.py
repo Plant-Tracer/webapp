@@ -2,6 +2,7 @@ import sys
 import os
 import uuid
 import logging
+import pytest
 
 from os.path import abspath,dirname
 
