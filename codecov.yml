@@ -2,3 +2,5 @@
 ignore:
   - "bottle.py"
   - "passenger_wsgi.py"
+  - "mailer.py"
+  - "tests/mailer_test.py"
