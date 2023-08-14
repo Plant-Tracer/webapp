@@ -40,11 +40,20 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           TEST_ENDPOINT:    ${{ vars.TEST_ENDPOINT }}
+          TEST_USER_EMAIL:  ${{ vars.TEST_USER_EMAIl }}
           TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
           MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
           MYSQL_DATABASE:   ${{ secrets.MYSQL_DATABASE }}
           MYSQL_USER:       ${{ secrets.MYSQL_USER }}
           MYSQL_PASSWORD:   ${{ secrets.MYSQL_PASSWORD }}
+          SMTP_USERNAME:    ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD:    ${{ secrets.SMTP_PASSWORD }}
+          SMTP_SERVER:      ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT:        ${{ secrets.SMTP_PORT }}
+          IMAP_USERNAME:    ${{ secrets.IMAP_USERNAME }}
+          IMAP_PASSWORD:    ${{ secrets.IMAP_PASSWORD }}
+          IMAP_SERVER:      ${{ secrets.IMAP_SERVER }}
+
         run: |
           printenv | sort
           pip install pytest
