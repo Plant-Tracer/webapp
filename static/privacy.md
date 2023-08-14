@@ -33,4 +33,4 @@ Please note that your opt-out choice is specific to this digital property but is
 
 
 <hr/>
-<a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html"><img src="https://gnu.org/graphics/heckert_gnu.transp.small.png" height="48" width="49" alt="&nbsp;[A GNU head]&nbsp;"></a><br />This website and that software is licensed under the <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html">GNU Affero General Public License Version 3, 19 November 2007</a>.
+<a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html"><img src="https://gnu.org/graphics/heckert_gnu.transp.small.png" height="48" width="49" alt="&nbsp;[A GNU head]&nbsp;"></a><br />This website and the software that implements it are licensed under the <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html">GNU Affero General Public License Version 3, 19 November 2007</a>.
