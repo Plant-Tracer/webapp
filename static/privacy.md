@@ -17,9 +17,7 @@ and so that faculty can indicate the students in classes that they teach.
 
 ## Exceptions to the Pace Privacy Policy
 
-1. This website is not covered by the copyright claim in the Pace Privacy Policy.
-
-<a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html"><img src="https://gnu.org/graphics/heckert_gnu.transp.small.png" height="48" width="49" alt="&nbsp;[A GNU head]&nbsp;"></a><br />This website and that software is licensed under the <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html">GNU Affero General Public License Version 3, 19 November 2007</a>.
+This website is not covered by the copyright claim in the Pace Privacy Policy.
 
 # Personal Data
 
@@ -32,3 +30,7 @@ Some states provide residents or, in some cases, their authorized agents, with t
 This website does not engage in interest-based advertising and does not implement social media tools applicable state laws as “targeted advertising,” or a “sale” or “sharing” of personal information. Therefore, there is no way to submit a request to opt out of targeted advertising, or the sale or sharing of your personal information, since this website does not engage in these practices.
 
 Please note that your opt-out choice is specific to this digital property but is not specfic to the device and browser you are using. If you access other digital properties, you will need to make a separate election for each. Also, if you clear your cookies on your browser or use another browser or device, that will have no impact on this website, because this website does not use cookies. We find cookies annoying to program and do not wish to create cookie banners.
+
+
+<hr/>
+<a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html"><img src="https://gnu.org/graphics/heckert_gnu.transp.small.png" height="48" width="49" alt="&nbsp;[A GNU head]&nbsp;"></a><br />This website and that software is licensed under the <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html">GNU Affero General Public License Version 3, 19 November 2007</a>.
