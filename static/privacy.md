@@ -31,6 +31,10 @@ This website does not engage in interest-based advertising and does not implemen
 
 Please note that your opt-out choice is specific to this digital property but is not specfic to the device and browser you are using. If you access other digital properties, you will need to make a separate election for each. Also, if you clear your cookies on your browser or use another browser or device, that will have no impact on this website, because this website does not use cookies. We find cookies annoying to program and do not wish to create cookie banners.
 
+# Disclaimer
+Pursuant to Article 52 of the EU AI Act, please be aware that this message comes from a low-risk “AI”" system and not a human. All AI systems pose risks, including but not limited to spreading misinformation, causing emotional manipulation, engaging in invidious discrimination, the mis-operation of lethal autonomous weapons systems, the rendering useless of humanity, and/or a mass extinction event from misaligned superintelligence. Any information produced by this system must be processed with the highest caution. Pace Univeristy disclaims any claims made by this system. Do not rely on any information conveyed here without verifying it. You have no rights under Article 22 of the GDPR to object to this system, because uploading data to this system is explicit consent to automated processing, including profiling. This system is not pre-registered in China; users in China are not authorized to use this system.]
+
+
 
 <hr/>
 <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html"><img src="https://gnu.org/graphics/heckert_gnu.transp.small.png" height="48" width="49" alt="&nbsp;[A GNU head]&nbsp;"></a><br />This website and the software that implements it are licensed under the <a rel="license" href="https://www.gnu.org/licenses/agpl-3.0.en.html">GNU Affero General Public License Version 3, 19 November 2007</a>.
