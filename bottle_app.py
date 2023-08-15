@@ -18,11 +18,13 @@ import os
 import functools
 import datetime
 import base64
+import uuid
 from urllib.parse import urlparse
 
 import magic
 import bottle
 from bottle import request
+from validate_email_address import validate_email
 
 # pylint: disable=no-member
 
@@ -38,9 +40,16 @@ VERSION_TEMPLATE='version.txt'
 DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
+MIN_SEND_INTERVAL = 60
 
 INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
+INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
+INVALID_COURSE_NAME = {'error':True, 'message':'Course name does not exist'}
+
+class InvalidEmail(RuntimeError):
+    """Exception thrown in email is invalid"""
+
 
 def datetime_to_str(obj):
     if isinstance(obj, datetime.datetime):
@@ -68,6 +77,36 @@ def get_dbwriter():
     fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
+## Register email or create a new key for it
+def register_email(email, course_name):
+    if not validate_email(email, check_mx=True):
+        raise InvalidEmail()
+    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_name) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_name=%s",
+                             ( email, course_name, email, course_name ))
+
+
+def send_links(email):
+    """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
+    raise RuntimeError("implement send_links")
+
+def new_apikey(email, capabilities):
+    apikey = str(uuid.uuid4()).replace('-','')
+    dbfile.DBMySQL.csfr( get_dbwriter(),
+                         """INSERT into api_keys (user_id, key_value,capabilities)
+                            VALUES ((select id from users where email=%s), %s, %s)""",
+                         (email, apikey, capabilities))
+    return apikey
+
+def validate_course_name( course_name ):
+    res = dbfile.DBMySQL.csfr(get_dbreader(),
+                              """SELECT course_name from course_keys where course_name=%s LIMIT 1""", (course_name,))
+    return len(res)==1 and res[0][0]==course_name
+
+
+################################################################
+## Bottle endpoints
+
+
 @bottle.route('/ver', method=['POST','GET'])
 @view(VERSION_TEMPLATE)
 def func_ver():
@@ -87,6 +126,16 @@ def func_root():
     return {'title':'ROOT',
             'hostname':o.hostname}
 
+@bottle.route('/register')
+@view('register.html')
+def func_register():
+    o = urlparse(request.url)
+    return {'title':'ROOT',
+            'hostname':o.hostname}
+
+
+
+
 ## API Validation
 def validate_apikey():
     res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where key_value=%s limit 1",
@@ -97,7 +146,7 @@ def validate_apikey():
 
 
 @bottle.route('/api/check-apikey', method='POST')
-def func_check_apikey():
+def api_check_apikey():
     res = dbfile.DBMySQL.csfr( get_dbwriter(),
                                "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
                                (request.forms.get('apikey'), ), asDicts=True)
@@ -106,10 +155,33 @@ def func_check_apikey():
     return INVALID_APIKEY
 
 
-
 ## Movies API
+@bottle.route('/api/register', method='POST')
+def api_register():
+    """Register the email address if it does not exist. Send a login and upload link"""
+    email = request.forms.get('email')
+    if not validate_email(email, check_mx=True):
+        return INVALID_EMAIL
+    course_name = request.forms.get('course_name')
+    if not validate_course_name(course_name):
+        return INVALID_COURSE_NAME
+    register_email(email, course_name)
+    send_links(email)
+    return {'error':False}
+
+
+@bottle.route('/api/resend-link', method='POST')
+def api_send_link():
+    """Register the email address if it does not exist. Send a login and upload link"""
+    email = request.forms.get('email')
+    if not validate_email(email, check_mx=True):
+        return INVALID_EMAIL
+    send_links(email)
+    return {'error':False}
+
+
 @bottle.route('/api/new-movie', method='POST')
-def func_new_movie():
+def api_new_movie():
     apikey_userid = validate_apikey()
     if apikey_userid:
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
@@ -119,7 +191,7 @@ def func_new_movie():
     return INVALID_APIKEY
 
 @bottle.route('/api/new-frame', method='POST')
-def func_new_frame():
+def api_new_frame():
     apikey_userid = validate_apikey()
     if apikey_userid:
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
@@ -147,19 +219,15 @@ def func_new_frame():
     return INVALID_APIKEY
 
 
-
-
 ## Demo API
 @bottle.route('/api/add', method='POST')
-def func_add():
+def api_add():
     a = request.forms.get('a')
     b = request.forms.get('b')
     try:
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
         return {'error':True}
-
-
 
 def app():
     """The application"""
