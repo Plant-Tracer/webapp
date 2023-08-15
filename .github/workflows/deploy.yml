@@ -16,7 +16,7 @@ jobs:
         APP_HOST=app.planttracer.com
         SSH_USER=planttracer
         eval $(ssh-agent)
-        ssh-add  - <<< "${{ secrets.PT_SSH_BASE64 }}"
+        base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
         ssh-add -l
         ssh -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull && make install-dependencies && make touch"
         echo The PR has been merged
