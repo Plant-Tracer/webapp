@@ -25,5 +25,5 @@ jobs:
           eval $(ssh-agent)
           base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
           ssh-add -l
-          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull && make install-dependencies && make touch"
+          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull --recurse-submodules && make install-dependencies && make touch"
           echo The PR has been merged
