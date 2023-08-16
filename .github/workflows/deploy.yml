@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: "Deploy SSH"
-      - run: |
+        run: |
           APP_HOST=app.planttracer.com
           SSH_USER=planttracer
           eval $(ssh-agent)
