@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %} PlantTracer App {% endblock %}
+{% block script %} <script type="text/javascript" charset="utf8" src="static/register.js"></script> {% endblock %}
+
+{% block body %}
+
+<h2>Register or recover your login link</h2>
+
+<p>Enter your email address, course code, and click REGISTER to register for this website. You will receive an email message with a link that allows you to upload videos or edit those that you have uploaded.</p>
+
+<p>If you previously registered, you only need to enter your email address and click the RESEND button.</p>
+
+<p>
+
+<form>
+<div><label>email: </label> <input id='email' size='30'></div>
+<div><label>course code: </label> <input id='course_code' size='30'></div>
+<input id='register_button' type='button' value='REGISTER'>
+<input id='resend_button' type='button' value='RESEND'>
+</form>
+<div id='message'></div>
+{% endblock %}
