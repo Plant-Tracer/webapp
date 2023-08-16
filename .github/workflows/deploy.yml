@@ -12,11 +12,18 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-    - run: |
-        APP_HOST=app.planttracer.com
-        SSH_USER=planttracer
-        eval $(ssh-agent)
-        base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
-        ssh-add -l
-        ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull && make install-dependencies && make touch"
-        echo The PR has been merged
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Deploy-SSH
+      - run: |
+          APP_HOST=app.planttracer.com
+          SSH_USER=planttracer
+          eval $(ssh-agent)
+          base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
+          ssh-add -l
+          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull && make install-dependencies && make touch"
+          echo The PR has been merged
