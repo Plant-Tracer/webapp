@@ -41,6 +41,7 @@ DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
+DEFAULT_CAPABILITIES = ""
 
 INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
 INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
@@ -88,7 +89,6 @@ def create_course(course_key, course_name, max_enrollment):
     return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment) values (%s,%s,%s)",
                                 (course_key, course_name, max_enrollment))
 
-
 def delete_course(course_key):
     """Delete a course.
     :return: number of courses deleted.
@@ -97,16 +97,18 @@ def delete_course(course_key):
 
 ##
 def register_email(email, course_key):
-    """Register email or create a new key for it
-    @param email - user email
-    @param course_key - the key
+    """Register email for a given course
+    :param: email - user email
+    :param: course_key - the key
+    :return: the number of users registered
     """
 
-    if not validate_email(email, check_mx=True):
-        raise InvalidEmail()
-    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_key) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_key=%s",
-                             ( email, course_key, email, course_key ))
-
+    CHECK_MX = False            # True doesn't work
+    if not validate_email(email, check_mx=CHECK_MX):
+        raise InvalidEmail( email )
+    return dbfile.DBMySQL.csfr( get_dbwriter(),
+                         "INSERT into users (email, course_key) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_key=%s",
+                         ( email, course_key, email, course_key ))
 
 def rename_user(user_id, old_email, new_email):
     """Changes a user's email. Requires a correct old_email"""
@@ -122,18 +124,30 @@ def delete_movie(movie_id):
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where movie_id=%s", (movie_id,))
 
+def new_apikey(email, *, capabilities=DEFAULT_CAPABILITIES):
+    """Create a new apikey for an email that is registered
+    :param: email - the email
+    :return: apikey - the apikey
+    """
+    apikey = str(uuid.uuid4()).replace('-','')
+    dbfile.DBMySQL.csfr( get_dbwriter(),
+                         """INSERT into api_keys (user_id, api_key, capabilities)
+                            VALUES ((select id from users where email=%s), %s, %s)""",
+                         (email, apikey, capabilities), debug=True)
+    return apikey
+
+def delete_apikey(apikey):
+    """Deletes an apikey
+    :param: apikey - the apikey
+    :return: the number of keys deleted
+    """
+    return dbfile.DBMySQL.csfr( get_dbwriter(),
+                                """DELETE from api_keys WHERE api_key=%s""",
+                                (apikey,))
 
 def send_links(email):
     """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
     raise RuntimeError("implement send_links")
-
-def new_apikey(email, capabilities):
-    apikey = str(uuid.uuid4()).replace('-','')
-    dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT into api_keys (user_id, key_value,capabilities)
-                            VALUES ((select id from users where email=%s), %s, %s)""",
-                         (email, apikey, capabilities))
-    return apikey
 
 def validate_course_key( course_key ):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
@@ -193,7 +207,7 @@ def func_register():
 
 ## API Validation
 def validate_apikey():
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where key_value=%s limit 1",
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where api_key=%s limit 1",
                                     ( request.forms.get('apikey'), ), asDicts=True)
     if res:
         return res[0]['user_id']
@@ -203,7 +217,7 @@ def validate_apikey():
 @bottle.route('/api/check-apikey', method='POST')
 def api_check_apikey():
     res = dbfile.DBMySQL.csfr( get_dbwriter(),
-                               "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
+                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s",
                                (request.forms.get('apikey'), ), asDicts=True)
     if res:
         return { 'error':False, 'userinfo': datetime_to_str(res[0]) }

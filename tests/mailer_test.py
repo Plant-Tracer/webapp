@@ -27,16 +27,19 @@ guid = str(uuid.uuid4())
 
 @pytest.mark.skipif('GITHUB_JOB' in os.environ, reason="does not run on GitHub - outbound SMTP is blocked")
 def test_send_message():
+    TEST_USER_EMAIL = os.environ['TEST_USER_EMAIL']
+    DO_NOT_REPLY_EMAIL = 'do-not-reply@planttracer.com'
+
     msg_env = NativeEnvironment().from_string( MSG )
-    msg = msg_env.render( to_addr='simsong@acm.org',
-                          from_addr='plantadmin@planttracer.com',
+    msg = msg_env.render( to_addr=TEST_USER_EMAIL,
+                          from_addr=TEST_USER_EMAIL,
                           guid = guid)
 
     DRY_RUN = False
-    TO_ADDRS = ['plantadmin@planttracer.com']
+    TO_ADDRS = [ TEST_USER_EMAIL ]
     smtp_config = mailer.smtp_config_from_environ()
     smtp_config['SMTP_DEBUG'] = True
-    mailer.send_message( from_addr = 'do-not-reply@planttracer.com',
+    mailer.send_message( from_addr = DO_NOT_REPLY_EMAIL,
                          to_addrs  = TO_ADDRS,
                          smtp_config = smtp_config,
                          dry_run     = DRY_RUN,
