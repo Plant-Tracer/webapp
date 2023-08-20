@@ -4,19 +4,36 @@
 
 {% block body %}
 
-<h2>Register or recover your login link</h2>
+{% if register %}
 
-<p>Enter your email address, course code, and click REGISTER to register for this website. You will receive an email message with a link that allows you to upload videos or edit those that you have uploaded.</p>
+<h2>Register </h2>
 
-<p>If you previously registered, you only need to enter your email address and click the RESEND button.</p>
+<p>Enter your email address, course code, and click REGISTER to
+register for this website. You will receive an email message with a
+link that allows you to upload videos or edit those that you have
+uploaded.</p>
 
+{% else %}
+
+<h2>Recover </h2>
+
+<p>Enter your email address and click RECOVER to receive an email message with a
+new login link.</p>
+
+{% end %}
 <p>
 
 <form>
 <div><label>email: </label> <input id='email' size='30'></div>
-<div><label>course code: </label> <input id='course_code' size='30'></div>
+
+{% if register %}
+<div><label>course key: </label> <input id='course_key' size='30'></div>
 <input id='register_button' type='button' value='REGISTER'>
+{% else %}
+
 <input id='resend_button' type='button' value='RESEND'>
+{% endif %}
+
 </form>
 <div id='message'></div>
 {% endblock %}

@@ -33,7 +33,7 @@ def test_send_message():
                           guid = guid)
 
     DRY_RUN = False
-    TO_ADDRS = ['plantadmin@planttracer.com', 'simsong@acm.org']
+    TO_ADDRS = ['plantadmin@planttracer.com']
     smtp_config = mailer.smtp_config_from_environ()
     smtp_config['SMTP_DEBUG'] = True
     mailer.send_message( from_addr = 'do-not-reply@planttracer.com',

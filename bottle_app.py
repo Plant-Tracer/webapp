@@ -44,8 +44,9 @@ MIN_SEND_INTERVAL = 60
 
 INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
 INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
-INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
-INVALID_COURSE_NAME = {'error':True, 'message':'Course name does not exist'}
+INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
+INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
+NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
 
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
@@ -77,12 +78,49 @@ def get_dbwriter():
     fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
-## Register email or create a new key for it
-def register_email(email, course_name):
+################################################################
+## database utility functions
+
+def create_course(course_key, course_name, max_enrollment):
+    """Create a new course
+    :return: course_id of the new course
+    """
+    return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment) values (%s,%s,%s)",
+                                (course_key, course_name, max_enrollment))
+
+
+def delete_course(course_key):
+    """Delete a course.
+    :return: number of courses deleted.
+    """
+    return dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from courses where course_key=%s", (course_key,))
+
+##
+def register_email(email, course_key):
+    """Register email or create a new key for it
+    @param email - user email
+    @param course_key - the key
+    """
+
     if not validate_email(email, check_mx=True):
         raise InvalidEmail()
-    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_name) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_name=%s",
-                             ( email, course_name, email, course_name ))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_key) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_key=%s",
+                             ( email, course_key, email, course_key ))
+
+
+def rename_user(user_id, old_email, new_email):
+    """Changes a user's email. Requires a correct old_email"""
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE users set email=%s where id=%s and email=%s",
+                         ( old_email, user_id, new_email))
+
+def delete_user(email):
+    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies"""
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from users where email=%s", (email,))
+
+def delete_movie(movie_id):
+    """Delete a movie and all its frames"""
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where movie_id=%s", (movie_id,))
 
 
 def send_links(email):
@@ -97,11 +135,19 @@ def new_apikey(email, capabilities):
                          (email, apikey, capabilities))
     return apikey
 
-def validate_course_name( course_name ):
+def validate_course_key( course_key ):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT course_name from course_keys where course_name=%s LIMIT 1""", (course_name,))
+                              """SELECT course_key from courses where course_key=%s LIMIT 1""", (course_name,))
     return len(res)==1 and res[0][0]==course_name
 
+def remaining_coures_registrations( course_key ):
+    res = dbfile.DBMySQL.csfr(get_dbreader(),
+                              """SELECT max_enrollment - (select count(*) from users where course_key=%s) from courses where course_key=%s""",
+                              (course_key,course_key))
+    try:
+        return int(res[0][0])
+    except (IndexError,ValueError):
+        return 0
 
 ################################################################
 ## Bottle endpoints
@@ -131,9 +177,18 @@ def func_root():
 def func_register():
     o = urlparse(request.url)
     return {'title':'ROOT',
-            'hostname':o.hostname}
+            'hostname':o.hostname,
+            'register':True
+            }
 
-
+@bottle.route('/resend')
+@view('register.html')
+def func_register():
+    o = urlparse(request.url)
+    return {'title':'ROOT',
+            'hostname':o.hostname,
+            'register':False
+            }
 
 
 ## API Validation
@@ -162,10 +217,12 @@ def api_register():
     email = request.forms.get('email')
     if not validate_email(email, check_mx=True):
         return INVALID_EMAIL
-    course_name = request.forms.get('course_name')
-    if not validate_course_name(course_name):
-        return INVALID_COURSE_NAME
-    register_email(email, course_name)
+    course_key = request.forms.get('course_key')
+    if not validate_course_key(course_key):
+        return INVALID_COURSE_KEY
+    if remaining_course_registrations(course_key) < 1:
+        return NO_REMAINING_REGISTRATIONS
+    register_email(email, course_key)
     send_links(email)
     return {'error':False}
 
