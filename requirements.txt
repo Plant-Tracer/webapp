@@ -2,6 +2,7 @@ WebTest
 boddle
 bottle
 coverage
+cryptography
 jinja2
 py3DNS
 pylint
