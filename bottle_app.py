@@ -45,6 +45,8 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 
+NEW_MEMFILE_MAX = 1024*1024*16
+
 INVALID_API_KEY = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
@@ -54,8 +56,13 @@ NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remain
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
 
-class InvalidApi_Key(RuntimeError):
+class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
+
+def expand_memfile_max():
+    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
+    bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
+
 
 def datetime_to_str(obj):
     if isinstance(obj, datetime.datetime):
@@ -126,7 +133,8 @@ def delete_user(email):
 def delete_movie(movie_id):
     """Delete a movie and all its frames"""
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
 def new_api_key(email, *, capabilities=DEFAULT_CAPABILITIES):
     """Create a new api_key for an email that is registered
@@ -137,7 +145,7 @@ def new_api_key(email, *, capabilities=DEFAULT_CAPABILITIES):
     dbfile.DBMySQL.csfr( get_dbwriter(),
                          """INSERT into api_keys (user_id, api_key, capabilities)
                             VALUES ((select id from users where email=%s), %s, %s)""",
-                         (email, api_key, capabilities), debug=True)
+                         (email, api_key, capabilities))
     return api_key
 
 def delete_api_key(api_key):
@@ -145,6 +153,8 @@ def delete_api_key(api_key):
     :param: api_key - the api_key
     :return: the number of keys deleted
     """
+    if len(api_key) < 10:
+        raise InvalidAPI_key(api_key)
     return dbfile.DBMySQL.csfr( get_dbwriter(),
                                 """DELETE from api_keys WHERE api_key=%s""",
                                 (api_key,))
@@ -259,11 +269,23 @@ def api_send_link():
 
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
+    """Creates a new movie for which we can upload frame-by-frame or all at once.
+    :param api_key: the user's api_key
+    :param title: The movie's title
+    :param description: The movie's description
+    :param base64_data: If present, the movie data.
+    """
+
     api_key_userid = validate_api_key()
     if api_key_userid:
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                             "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
                                             (request.forms.get('title'), request.forms.get('description'), api_key_userid ))
+        movie_base64_data = request.forms.get('movie_base64_data',None)
+        if movie_base64_data:
+            dbfile.DBMySQL.csfr( get_dbwriter(),
+                                 "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
+                                 (movie_id, base64.b64decode( movie_base64_data )))
         return {'error':False,'movie_id':movie_id}
     return INVALID_API_KEY
 
@@ -295,6 +317,14 @@ def api_new_frame():
         return {'error':False,'frame_id':frame_id}
     return INVALID_API_KEY
 
+@bottle.route('/api/delete-movie', method='POST')
+def api_delete_movie():
+    api_key_userid = validate_api_key()
+    if api_key_userid:
+        delete_movie( int(request.forms.get('movie_id') ) )
+        return {'error':False}
+    return INVALID_API_KEY
+
 
 ## Demo API
 @bottle.route('/api/add', method='POST')
@@ -312,9 +342,12 @@ def app():
     # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
     root = logging.getLogger()
     root.setLevel(logging.INFO)
+    #root.setLevel(logging.DEBUG)
     hdlr = root.handlers[0]
     fmt = logging.Formatter(clogging.LOG_FORMAT)
     hdlr.setFormatter(fmt)
+
+    expand_memfile_max()
     return bottle.default_app()
 
 if __name__=="__main__":

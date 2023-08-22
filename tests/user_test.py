@@ -11,6 +11,7 @@ from os.path import abspath,dirname
 sys.path.append( dirname(dirname(abspath(__file__))))
 
 import bottle_app
+from boddle import boddle
 
 MYDIR = dirname(abspath(__file__))
 
@@ -59,22 +60,35 @@ def test_movie_upload(new_user):
     with open(MOVIE_FILENAME,"rb") as f:
         movie_base64_data = base64.b64encode(f.read())
 
-    # make sure we cannot delete a movie with a bad key
-    try:
-        movie_id = bottle_app.upload_movie( "invalid", movie_base64_data)
-        raise RuntimeError("invalid api_key accepted")
-    except bottle_app.InvalidAPI_Key:
-        pass
+   # Try to uplaod the movie with an invalid key
+    with boddle(params = {"api_key":api_key+'invalid',
+                          "title":"test movie title",
+                          "description":"test movie description",
+                          "movie_base64_data":movie_base64_data} ):
+        bottle_app.expand_memfile_max()
+        res = bottle_app.api_new_movie()
+        assert res['error']==True
 
-    movie_id = bottle_app.upload_movie( api_key, movie_base64_data)
-    assert movie_id > 0
+
+    # Try to uplaod the movie all at once
+    with boddle(params = {"api_key":api_key,
+                          "title":"test movie title",
+                          "description":"test movie description",
+                          "movie_base64_data":movie_base64_data} ):
+        res = bottle_app.api_new_movie()
+        assert res['error']==False
+
+        movie_id = res['movie_id']
+        assert movie_id > 0
 
     # Make sure that we cannot delete the movie with a bad key
-    try:
-        ct = bottle_app.delete_movie( "invalid", movie_id )
-        raise RuntimeError("invalid api_key accepted")
-    except bottle_app.InvalidAPI_Key:
-        pass
+    with boddle(params ={'api_key':'invalid',
+                         'movie_id':movie_id}):
+        res = bottle_app.api_delete_movie()
+        assert res['error']==True
 
-    ct = bottle_app.delete_movie( api_key, movie_id )
-    assert ct==1
+    # Delete the movie we uploaded
+    with boddle(params ={'api_key':api_key,
+                         'movie_id':movie_id}):
+        res = bottle_app.api_delete_movie()
+        assert res['error']==False
