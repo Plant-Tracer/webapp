@@ -42,7 +42,6 @@ def test_api_key():
     r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     if (r.status_code != 200):
         logging.error("TEST_ENDPOINT=%s",TEST_ENDPOINT)
-        logging.error("TEST_ENDPOINT_BASE64=%s",base64.b64encode(TEST_ENDPOINT))
         raise RuntimError(f"r.status_code={r.status_code}  r.text={r.text}")
     assert r.status_code == 200
     assert r.json()['error'] == False
