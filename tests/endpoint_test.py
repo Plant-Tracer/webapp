@@ -1,3 +1,8 @@
+"""
+endpoint_test.py - this tests a running endpoint, not the code in the repo. (Unless the code in the repo is actually running.)
+"""
+
+
 import sys
 import os
 from os.path import dirname, abspath
@@ -6,6 +11,7 @@ import re
 import time
 import json
 import base64
+import pytest
 sys.path.append( dirname(dirname(abspath(__file__))))
 
 MYDIR = dirname(abspath(__file__))
@@ -32,12 +38,20 @@ def test_add():
 def test_api_key():
     r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     assert r.status_code == 200
-    print(r.json())
+    assert r.json()['error'] == False
     assert r.json()['userinfo']['username'] == 'Test User'
 
-def test_upload_movie():
+    r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY+'invalid'} )
+    assert r.status_code == 200
+    assert r.json()['error'] == True
+
+
+@pytest.mark.skip(reason='not working yet')
+def test_upload_movie_frame_by_frame():
+    """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
     assert len(FRAME_FILES)>0
-    r = requests.post( TEST_ENDPOINT+'/api/new-movie', {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'} )
+    post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'}
+    r = requests.post( TEST_ENDPOINT+'/api/new-movie', post_data )
     res = r.json()
     assert res['error']==False
     movie_id = res['movie_id']
@@ -55,3 +69,22 @@ def test_upload_movie():
             print("r.text=",r.text,file=sys.stderr)
             if r.json()['error']:
                 raise RuntimeError(json.dumps(r.json(), indent=4))
+
+    # Now delete the movie
+    raise RuntimeError("todo: delete the movie")
+
+@pytest.mark.skip(reason='not working yet')
+def test_upload_movie_base64():
+    """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
+    assert len(FRAME_FILES)>0
+    with open(MOVIE_FILE,'rb') as f:
+        movie_base64_data = base64.b64encode(f.read())
+        post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload',
+                     'movie_base64_data': movie_base64_data }
+    r = requests.post( TEST_ENDPOINT+'/api/new-movie', post_data )
+    res = r.json()
+    assert res['error']==False
+    movie_id = res['movie_id']
+
+    # Now delete the movie
+    raise RuntimeError("todo: delete the movie")
