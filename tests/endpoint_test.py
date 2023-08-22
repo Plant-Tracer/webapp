@@ -1,5 +1,6 @@
 """
-endpoint_test.py - this tests a running endpoint, not the code in the repo. (Unless the code in the repo is actually running.)
+endpoint_test.py - these tests use http to rest a running endpoint, not the code in this repo.
+(Unless the code in the repo is actually running.)
 """
 
 
