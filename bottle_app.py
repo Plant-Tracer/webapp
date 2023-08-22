@@ -19,6 +19,7 @@ import functools
 import datetime
 import base64
 import uuid
+import logging
 from urllib.parse import urlparse
 
 import magic
@@ -31,6 +32,7 @@ from validate_email_address import validate_email
 
 from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,DBWRITER_BASH_FILE,view
 from lib.ctools import dbfile
+from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -43,7 +45,7 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 
-INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
+INVALID_API_KEY = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
 INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
@@ -52,6 +54,8 @@ NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remain
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
 
+class InvalidApi_Key(RuntimeError):
+    """ API Key is invalid """
 
 def datetime_to_str(obj):
     if isinstance(obj, datetime.datetime):
@@ -124,26 +128,26 @@ def delete_movie(movie_id):
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where movie_id=%s", (movie_id,))
 
-def new_apikey(email, *, capabilities=DEFAULT_CAPABILITIES):
-    """Create a new apikey for an email that is registered
+def new_api_key(email, *, capabilities=DEFAULT_CAPABILITIES):
+    """Create a new api_key for an email that is registered
     :param: email - the email
-    :return: apikey - the apikey
+    :return: api_key - the api_key
     """
-    apikey = str(uuid.uuid4()).replace('-','')
+    api_key = str(uuid.uuid4()).replace('-','')
     dbfile.DBMySQL.csfr( get_dbwriter(),
                          """INSERT into api_keys (user_id, api_key, capabilities)
                             VALUES ((select id from users where email=%s), %s, %s)""",
-                         (email, apikey, capabilities), debug=True)
-    return apikey
+                         (email, api_key, capabilities), debug=True)
+    return api_key
 
-def delete_apikey(apikey):
-    """Deletes an apikey
-    :param: apikey - the apikey
+def delete_api_key(api_key):
+    """Deletes an api_key
+    :param: api_key - the api_key
     :return: the number of keys deleted
     """
     return dbfile.DBMySQL.csfr( get_dbwriter(),
                                 """DELETE from api_keys WHERE api_key=%s""",
-                                (apikey,))
+                                (api_key,))
 
 def send_links(email):
     """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
@@ -151,10 +155,10 @@ def send_links(email):
 
 def validate_course_key( course_key ):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT course_key from courses where course_key=%s LIMIT 1""", (course_name,))
-    return len(res)==1 and res[0][0]==course_name
+                              """SELECT course_key from courses where course_key=%s LIMIT 1""", (course_key,))
+    return len(res)==1 and res[0][0]==course_key
 
-def remaining_coures_registrations( course_key ):
+def remaining_course_registrations( course_key ):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT max_enrollment - (select count(*) from users where course_key=%s) from courses where course_key=%s""",
                               (course_key,course_key))
@@ -197,7 +201,7 @@ def func_register():
 
 @bottle.route('/resend')
 @view('register.html')
-def func_register():
+def func_resend():
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
@@ -206,22 +210,24 @@ def func_register():
 
 
 ## API Validation
-def validate_apikey():
+def validate_api_key():
     res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where api_key=%s limit 1",
-                                    ( request.forms.get('apikey'), ), asDicts=True)
+                                    ( request.forms.get('api_key'), ), asDicts=True)
     if res:
         return res[0]['user_id']
     return None
 
 
-@bottle.route('/api/check-apikey', method='POST')
-def api_check_apikey():
+@bottle.route('/api/check-api_key', method='POST')
+def api_check_api_key():
+    api_key = str(request.forms.get('api_key'))
     res = dbfile.DBMySQL.csfr( get_dbwriter(),
                                "SELECT * from api_keys left join users on user_id=users.id where api_key=%s",
-                               (request.forms.get('apikey'), ), asDicts=True)
+                               (api_key, ), asDicts=True)
+    logging.info("api_key[0:9]=%s res=%s",api_key[0:9], res)
     if res:
         return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
-    return INVALID_APIKEY
+    return INVALID_API_KEY
 
 
 ## Movies API
@@ -253,22 +259,22 @@ def api_send_link():
 
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
-    apikey_userid = validate_apikey()
-    if apikey_userid:
+    api_key_userid = validate_api_key()
+    if api_key_userid:
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                             "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
-                                            (request.forms.get('title'), request.forms.get('description'), apikey_userid ))
+                                            (request.forms.get('title'), request.forms.get('description'), api_key_userid ))
         return {'error':False,'movie_id':movie_id}
-    return INVALID_APIKEY
+    return INVALID_API_KEY
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
-    apikey_userid = validate_apikey()
-    if apikey_userid:
+    api_key_userid = validate_api_key()
+    if api_key_userid:
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
                                        ( int(request.forms.get('movie_id')), ),
                                        asDicts=True)
-        if apikey_userid != res[0]['user_id']:
+        if api_key_userid != res[0]['user_id']:
             return INVALID_MOVIE_ACCESS
 
         frame_data = base64.b64decode(request.forms.get('frame_base64_data'))
@@ -287,7 +293,7 @@ def api_new_frame():
 
 
         return {'error':False,'frame_id':frame_id}
-    return INVALID_APIKEY
+    return INVALID_API_KEY
 
 
 ## Demo API
@@ -302,6 +308,13 @@ def api_add():
 
 def app():
     """The application"""
+    # Set up logging for a bottle app
+    # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    hdlr = root.handlers[0]
+    fmt = logging.Formatter(clogging.LOG_FORMAT)
+    hdlr.setFormatter(fmt)
     return bottle.default_app()
 
 if __name__=="__main__":
