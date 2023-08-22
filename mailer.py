@@ -32,7 +32,7 @@ def send_message(*,
         assert isinstance(to_addr, str)
 
     if dry_run:
-        print("==== Will not send this message: ====\n{}\n====================\n".format(msg),file=sys.stderr)
+        print(f"==== Will not send this message: ====\n{msg}\n====================\n",file=sys.stderr)
         return
 
     port  = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
@@ -69,12 +69,16 @@ def imap_inbox_scan( imap_config, callback ):
     M = imaplib.IMAP4_SSL( imap_config[IMAP_HOST])
     M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD] )
     M.select()
+    # pylint: disable=unused-variable
     typ, data = M.search(None, 'ALL')
+    # pylint: enable=unused-variable
     for num in data[0].split():
         typ, d2 = M.fetch(num, '(RFC822)')
         for val in d2:
-            if type(val)==tuple:
+            if isinstance(val,tuple):
+                # pylint: disable=unpacking-non-sequence
                 (a,b) = val
+                # pylint: enable=unpacking-non-sequence
                 num = a.decode('utf-8').split()[0]
                 msg = BytesParser(policy=policy.default).parsebytes(b)
                 if callback( num, msg ) is DELETE:

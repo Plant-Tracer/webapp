@@ -25,6 +25,7 @@ install-dependencies:
 	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
 
 pytest:
+	make touch
 	pytest .
 
 coverage:

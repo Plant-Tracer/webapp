@@ -1,7 +1,7 @@
 // Define the variables used
 
 var user = null;                  // not logged in
-var apikey = null;                // no API key yet
+var api_key = null;                // no API key yet
 
 function findGetParameter(parameterName) {
     var result = null,

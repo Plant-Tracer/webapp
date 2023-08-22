@@ -29,15 +29,15 @@ def test_add():
     assert r.status_code == 200
     assert r.json() == {'result':30, 'error':False}
 
-def test_apikey():
-    r = requests.post( TEST_ENDPOINT+'/api/check-apikey', {'apikey': TEST_USER_APIKEY} )
+def test_api_key():
+    r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     assert r.status_code == 200
     print(r.json())
     assert r.json()['userinfo']['username'] == 'Test User'
 
 def test_upload_movie():
     assert len(FRAME_FILES)>0
-    r = requests.post( TEST_ENDPOINT+'/api/new-movie', {'apikey': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'} )
+    r = requests.post( TEST_ENDPOINT+'/api/new-movie', {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'} )
     res = r.json()
     assert res['error']==False
     movie_id = res['movie_id']
@@ -47,7 +47,7 @@ def test_upload_movie():
         print("uploading frame ",frame_number)
         with open(frame_file,'rb') as f:
             r = requests.post( TEST_ENDPOINT+'/api/new-frame', {
-                'apikey': TEST_USER_APIKEY,
+                'api_key': TEST_USER_APIKEY,
                 'movie_id':movie_id,
                 'frame_number':frame_number,
                 'frame_msec':frame_number*200,
