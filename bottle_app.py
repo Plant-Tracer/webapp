@@ -130,11 +130,15 @@ def delete_user(email):
     """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies"""
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from users where email=%s", (email,))
 
-def delete_movie(movie_id):
-    """Delete a movie and all its frames"""
+def purge_movie(movie_id):
+    """Actually delete a movie and all its frames"""
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
+
+def delete_movie(movie_id, delete=1):
+    """Set a movie's deleted bit to be true"""
+    dbfile.DBMySQL.csfr( get_dbwriter(), "update movies set deleted=%s where id=%s", (delete, movie_id,))
 
 def new_api_key(email, *, capabilities=DEFAULT_CAPABILITIES):
     """Create a new api_key for an email that is registered
@@ -219,6 +223,9 @@ def func_resend():
             }
 
 
+################################################################
+## API
+
 ## API Validation
 def validate_api_key():
     res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where api_key=%s limit 1",
@@ -240,7 +247,8 @@ def api_check_api_key():
     return INVALID_API_KEY
 
 
-## Movies API
+################################################################
+## Registration
 @bottle.route('/api/register', method='POST')
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
@@ -267,6 +275,8 @@ def api_send_link():
     return {'error':False}
 
 
+################################################################
+## Movies
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
@@ -319,14 +329,20 @@ def api_new_frame():
 
 @bottle.route('/api/delete-movie', method='POST')
 def api_delete_movie():
+    """ delete a movie
+    :param movie_id: the id of the movie to delete
+    :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
+    """
     api_key_userid = validate_api_key()
     if api_key_userid:
-        delete_movie( int(request.forms.get('movie_id') ) )
+        delete = request.forms.get('delete',1)
+        delete_movie( int(request.forms.get('movie_id')), delete )
         return {'error':False}
     return INVALID_API_KEY
 
 
-## Demo API
+################################################################
+## Demo and debug
 @bottle.route('/api/add', method='POST')
 def api_add():
     a = request.forms.get('a')
@@ -335,6 +351,10 @@ def api_add():
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
         return {'error':True}
+
+################################################################
+## App
+
 
 def app():
     """The application"""

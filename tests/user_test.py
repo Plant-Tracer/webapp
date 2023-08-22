@@ -92,3 +92,6 @@ def test_movie_upload(new_user):
                          'movie_id':movie_id}):
         res = bottle_app.api_delete_movie()
         assert res['error']==False
+
+    # And purge the movie that we have deleted
+    bottle_app.purge_movie(movie_id);
