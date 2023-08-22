@@ -21,6 +21,7 @@ TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
 TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
 FRAME_FILES = glob.glob( os.path.join(MYDIR, "data", "frame_*.jpg") )
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
+MOVIE_FILE_NAME = os.path.join(MYDIR, "data","2019-07-31 plantmovie.mov")
 
 def test_ver():
     r = requests.post( TEST_ENDPOINT+'/ver')
@@ -46,7 +47,7 @@ def test_api_key():
     assert r.json()['error'] == True
 
 
-@pytest.mark.skip(reason='not working yet')
+#@pytest.mark.skip(reason='not working yet')
 def test_upload_movie_frame_by_frame():
     """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
     assert len(FRAME_FILES)>0
@@ -71,13 +72,22 @@ def test_upload_movie_frame_by_frame():
                 raise RuntimeError(json.dumps(r.json(), indent=4))
 
     # Now delete the movie
-    raise RuntimeError("todo: delete the movie")
+    r = requests.post( TEST_ENDPOINT+'/api/delete-movie', {
+        'api_key': TEST_USER_APIKEY,
+        'movie_id':movie_id })
 
-@pytest.mark.skip(reason='not working yet')
+    # Now delete the movie
+    post_data2 = {'api_key': TEST_USER_APIKEY,
+                 'movie_id': movie_id}
+    r = requests.post( TEST_ENDPOINT+'/api/delete-movie', post_data2 )
+    res = r.json()
+    assert res['error']==False
+
+#@pytest.mark.skip(reason='not working yet')
 def test_upload_movie_base64():
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
     assert len(FRAME_FILES)>0
-    with open(MOVIE_FILE,'rb') as f:
+    with open(MOVIE_FILE_NAME,'rb') as f:
         movie_base64_data = base64.b64encode(f.read())
         post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload',
                      'movie_base64_data': movie_base64_data }
@@ -87,4 +97,8 @@ def test_upload_movie_base64():
     movie_id = res['movie_id']
 
     # Now delete the movie
-    raise RuntimeError("todo: delete the movie")
+    post_data2 = {'api_key': TEST_USER_APIKEY,
+                 'movie_id': movie_id}
+    r = requests.post( TEST_ENDPOINT+'/api/delete-movie', post_data2 )
+    res = r.json()
+    assert res['error']==False
