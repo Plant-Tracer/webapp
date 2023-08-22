@@ -12,6 +12,8 @@ import time
 import json
 import base64
 import pytest
+import logging
+
 sys.path.append( dirname(dirname(abspath(__file__))))
 
 MYDIR = dirname(abspath(__file__))

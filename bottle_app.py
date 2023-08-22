@@ -158,7 +158,7 @@ def delete_api_key(api_key):
     :return: the number of keys deleted
     """
     if len(api_key) < 10:
-        raise InvalidAPI_key(api_key)
+        raise InvalidAPI_Key(api_key)
     return dbfile.DBMySQL.csfr( get_dbwriter(),
                                 """DELETE from api_keys WHERE api_key=%s""",
                                 (api_key,))
