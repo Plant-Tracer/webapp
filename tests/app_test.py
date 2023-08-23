@@ -35,3 +35,4 @@ def test_templates():
         bottle_app.func_root()
         bottle_app.func_register()
         bottle_app.func_resend()
+        bottle_app.func_tos()

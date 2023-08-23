@@ -6,6 +6,7 @@ cryptography
 jinja2
 py3DNS
 pylint
+mistune
 pymysql
 pytest
 pytest-cov
