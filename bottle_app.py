@@ -22,6 +22,7 @@ import uuid
 import logging
 from urllib.parse import urlparse
 
+import mistune
 import magic
 import bottle
 from bottle import request
@@ -38,6 +39,12 @@ assert os.path.exists(TEMPLATE_DIR)
 
 __version__='0.0.1'
 VERSION_TEMPLATE='version.txt'
+
+TOS_MD_FILE     = os.path.join(STATIC_DIR, 'tos.md')
+PRIVACY_MD_FILE = os.path.join(STATIC_DIR, 'privacy.md')
+PAGE_TEMPLATE   = 'page.html'
+
+
 
 DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
@@ -186,10 +193,17 @@ def remaining_course_registrations( course_key ):
 
 
 @bottle.route('/ver', method=['POST','GET'])
-@view(VERSION_TEMPLATE)
+@view(VERSION_TEMPLATE)         # run the dictionary below through the VERSION_TEAMPLTE with jinja2
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3"""
     return {'__version__':__version__,'sys_version':sys.version}
+
+@bottle.route('/tos', method=['GET'])
+@view(PAGE_TEMPLATE)
+def func_tos():
+    """Fill the page template with the terms of service produced with markdown to HTML translation"""
+    with open(TOS_MD_FILE,"r") as f:
+        return {'page':mistune.html(f.read()) }
 
 ### Local Static
 @bottle.get('/static/<path:path>')
