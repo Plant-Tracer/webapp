@@ -43,8 +43,7 @@ VERSION_TEMPLATE='version.txt'
 TOS_MD_FILE     = os.path.join(STATIC_DIR, 'tos.md')
 PRIVACY_MD_FILE = os.path.join(STATIC_DIR, 'privacy.md')
 PAGE_TEMPLATE   = 'page.html'
-
-
+PAGE_STYLE = "<style>\ndiv.mypage { max-width: 600px;}\n</style>\n"
 
 DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
@@ -203,7 +202,14 @@ def func_ver():
 def func_tos():
     """Fill the page template with the terms of service produced with markdown to HTML translation"""
     with open(TOS_MD_FILE,"r") as f:
-        return {'page':mistune.html(f.read()) }
+        return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
+
+@bottle.route('/privacy', method=['GET'])
+@view(PAGE_TEMPLATE)
+def func_privacy():
+    """Fill the page template with the terms of service produced with markdown to HTML translation"""
+    with open(PRIVACY_MD_FILE,"r") as f:
+        return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
 
 ### Local Static
 @bottle.get('/static/<path:path>')
