@@ -1,13 +1,16 @@
+WebTest
 boddle
 bottle
 coverage
+cryptography
 jinja2
+py3DNS
 pylint
+mistune
 pymysql
 pytest
 pytest-cov
 pytest-env
 python-magic
-WebTest
 requests
 validate_email_address
