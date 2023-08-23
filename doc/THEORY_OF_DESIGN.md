@@ -1,12 +1,12 @@
 # Web app theory of design.
 
 ## Authentication
-Users are authenticated with an `apikey`:
+Users are authenticated with an `api_key`:
 * Generated server-side with `to_base64(rand())` and stored in the users table.
 * New ones can be requested by entering an email address on a web form. The key and several URLs with the key embedded are sent to the email address.
-* Generating a new apikey kills the old one.
-* apikeys expire after 6 months.
-* apikeys are embedded in HTML pages using the template system, making the key accessible to JavaScript running on the page. The global variable is `pt_apikey`.
+* Generating a new api_key kills the old one.
+* api_keys expire after 6 months.
+* api_keys are embedded in HTML pages using the template system, making the key accessible to JavaScript running on the page. The global variable is `pt_api_key`.
 
 ## Use Stories
 
@@ -18,7 +18,7 @@ Users are authenticated with an `apikey`:
 
   - Eventually, we will also be able to log in with Google and then see the page with the URLs.
 
-2 - User clicks the `upload a plant movie` url. This brings the user to another page that has a HTML FORM Upload with the apikey as one of the parameters. This should work for uploading any movie under 10MB. It won't give a nice progress bar unless we use a clever JavaScript uploader.
+2 - User clicks the `upload a plant movie` url. This brings the user to another page that has a HTML FORM Upload with the api_key as one of the parameters. This should work for uploading any movie under 10MB. It won't give a nice progress bar unless we use a clever JavaScript uploader.
 
 ### View/Edit/Delete upload files.
 
