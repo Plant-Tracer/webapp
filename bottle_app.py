@@ -65,6 +65,9 @@ class InvalidEmail(RuntimeError):
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
+class InvalidCourse_Key(RuntimeError):
+    """ API Key is invalid """
+
 def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
     bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
@@ -99,12 +102,12 @@ def get_dbwriter():
 ################################################################
 ## database utility functions
 
-def create_course(course_key, course_name, max_enrollment):
+def create_course(course_key, course_name, max_enrollment, course_section=None):
     """Create a new course
     :return: course_id of the new course
     """
-    return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment) values (%s,%s,%s)",
-                                (course_key, course_name, max_enrollment))
+    return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
+                                (course_key, course_name, max_enrollment, course_section))
 
 def delete_course(course_key):
     """Delete a course.
@@ -123,9 +126,14 @@ def register_email(email, course_key):
     CHECK_MX = False            # True doesn't work
     if not validate_email(email, check_mx=CHECK_MX):
         raise InvalidEmail( email )
+    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT id from courses where course_key=%s",(course_key,))
+    if (not res) or (len(res)!=1) :
+        raise InvalidCourse_Key( course_key )
+
+    course_id = res[0][0]
     return dbfile.DBMySQL.csfr( get_dbwriter(),
-                         "INSERT into users (email, course_key) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_key=%s",
-                         ( email, course_key, email, course_key ))
+                         """INSERT into users (email, primary_course_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s""",
+                         ( email, course_id, email ))
 
 def rename_user(user_id, old_email, new_email):
     """Changes a user's email. Requires a correct old_email"""
@@ -174,18 +182,33 @@ def send_links(email):
     raise RuntimeError("implement send_links")
 
 def validate_course_key( course_key ):
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
+    res = dbfile.DBMySQL.csfr( get_dbreader(),
                               """SELECT course_key from courses where course_key=%s LIMIT 1""", (course_key,))
     return len(res)==1 and res[0][0]==course_key
 
 def remaining_course_registrations( course_key ):
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT max_enrollment - (select count(*) from users where course_key=%s) from courses where course_key=%s""",
-                              (course_key,course_key))
+    res = dbfile.DBMySQL.csfr( get_dbreader(),
+                              """SELECT max_enrollment - (select count(*) from users where course_id=(select id from courses where course_key=%s))
+                                 FROM courses WHERE course_key=%s""",
+                              ( course_key,course_key))
     try:
         return int(res[0][0])
     except (IndexError,ValueError):
         return 0
+
+def list_movies( user_id ):
+    """Return a list of movies that the user is allowed to access."""
+    return dbfile.DBMySQL.csfr( get_dbreader(),
+                                """SELECT * from movies
+                                WHERE user_id=%s
+                                OR
+                                (course_id = (select course_id from users where id=%s) AND published>0 AND deleted=0)
+                                OR
+                                (course_id in (select course_id from admins where user_id=%s))""",
+                                (user_id, user_id, user_id), asDicts=True)
+
+
+
 
 ################################################################
 ## Bottle endpoints
@@ -308,9 +331,14 @@ def api_new_movie():
 
     api_key_userid = validate_api_key()
     if api_key_userid:
+        res = dbfile.DBMySQL.csfr( get_dbreader(),"select primary_course_id from users where id=%s",(api_key_userid,))
+        if not res or len(res)!=1:
+            raise RuntimeError()
+        primary_course_id = res[0][0]
         movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                            "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
-                                            (request.forms.get('title'), request.forms.get('description'), api_key_userid ))
+                                            """INSERT INTO movies (title,description,user_id,course_id) VALUES (%s,%s,%s,%s)
+                                            """,
+                                            (request.forms.get('title'), request.forms.get('description'), api_key_userid, primary_course_id ))
         movie_base64_data = request.forms.get('movie_base64_data',None)
         if movie_base64_data:
             dbfile.DBMySQL.csfr( get_dbwriter(),
@@ -358,6 +386,15 @@ def api_delete_movie():
         delete = request.forms.get('delete',1)
         delete_movie( int(request.forms.get('movie_id')), delete )
         return {'error':False}
+    return INVALID_API_KEY
+
+
+@bottle.route('/api/list-movies', method=['POST','GET'])
+def api_list_movies():
+    api_key_userid = validate_api_key()
+    if api_key_userid:
+        movies = list_movies( api_key_userid )
+        return {'error':False, 'movies':movies}
     return INVALID_API_KEY
 
 

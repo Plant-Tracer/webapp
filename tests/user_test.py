@@ -57,12 +57,14 @@ def test_movie_upload(new_user):
     """Create a new user, upload the movie, delete the movie, and shut down"""
     (email, api_key) = new_user
 
+    MOVIE_TITLE = 'test movie title ' + str(uuid.uuid4())
+
     with open(MOVIE_FILENAME,"rb") as f:
         movie_base64_data = base64.b64encode(f.read())
 
    # Try to uplaod the movie with an invalid key
     with boddle(params = {"api_key":api_key+'invalid',
-                          "title":"test movie title",
+                          "title": MOVIE_TITLE,
                           "description":"test movie description",
                           "movie_base64_data":movie_base64_data} ):
         bottle_app.expand_memfile_max()
@@ -72,26 +74,34 @@ def test_movie_upload(new_user):
 
     # Try to uplaod the movie all at once
     with boddle(params = {"api_key":api_key,
-                          "title":"test movie title",
+                          "title": MOVIE_TITLE,
                           "description":"test movie description",
                           "movie_base64_data":movie_base64_data} ):
         res = bottle_app.api_new_movie()
-        assert res['error']==False
+    assert res['error']==False
+    movie_id = res['movie_id']
+    assert movie_id > 0
 
-        movie_id = res['movie_id']
-        assert movie_id > 0
+    # Did the movie appear in the list?
+    with boddle(params = {"api_key":api_key}):
+        res = bottle_app.api_list_movies()
+    assert res['error']==False
+    print("res:",res)
+    movies = res['movies']
+    assert len( [movie for movie in movies if movie['deleted']==0 and movie['published']==0 and movie['title']==MOVIE_TITLE] ) == 1
+
 
     # Make sure that we cannot delete the movie with a bad key
     with boddle(params ={'api_key':'invalid',
                          'movie_id':movie_id}):
         res = bottle_app.api_delete_movie()
-        assert res['error']==True
+    assert res['error']==True
 
     # Delete the movie we uploaded
     with boddle(params ={'api_key':api_key,
                          'movie_id':movie_id}):
         res = bottle_app.api_delete_movie()
-        assert res['error']==False
+    assert res['error']==False
 
     # And purge the movie that we have deleted
     bottle_app.purge_movie(movie_id);
