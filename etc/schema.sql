@@ -68,7 +68,7 @@ CREATE TABLE `courses` (
   `course_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `course_section` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `max_enrollment` int NOT NULL,
-  `modified` timestamp NULL DEFAULT NULL,
+  `modified` timestamp NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `course_name` (`course_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -170,4 +170,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2023-08-23 16:53:07
+-- Dump completed on 2023-08-24  7:00:30
