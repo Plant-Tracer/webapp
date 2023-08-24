@@ -15,10 +15,7 @@ Debug locally:
 
 import sys
 import os
-import functools
 import datetime
-import base64
-import uuid
 import logging
 from urllib.parse import urlparse
 
@@ -31,8 +28,8 @@ from validate_email_address import validate_email
 # pylint: disable=no-member
 
 
-from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,DBWRITER_BASH_FILE,view
-from lib.ctools import dbfile
+import db
+from paths import STATIC_DIR,TEMPLATE_DIR,view
 from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
@@ -59,15 +56,6 @@ INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to re
 INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
 
-class InvalidEmail(RuntimeError):
-    """Exception thrown in email is invalid"""
-
-class InvalidAPI_Key(RuntimeError):
-    """ API Key is invalid """
-
-class InvalidCourse_Key(RuntimeError):
-    """ API Key is invalid """
-
 def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
     bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
@@ -82,133 +70,6 @@ def datetime_to_str(obj):
         return [datetime_to_str(elem) for elem in obj]
     else:
         return obj
-
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from the DBREADER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
-    fname = DBREADER_BASH_FILE if os.path.exists(DBREADER_BASH_FILE) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from the DBWRITER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
-    fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
-
-################################################################
-## database utility functions
-
-def create_course(course_key, course_name, max_enrollment, course_section=None):
-    """Create a new course
-    :return: course_id of the new course
-    """
-    return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
-                                (course_key, course_name, max_enrollment, course_section))
-
-def delete_course(course_key):
-    """Delete a course.
-    :return: number of courses deleted.
-    """
-    return dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from courses where course_key=%s", (course_key,))
-
-##
-def register_email(email, course_key):
-    """Register email for a given course
-    :param: email - user email
-    :param: course_key - the key
-    :return: the number of users registered
-    """
-
-    CHECK_MX = False            # True doesn't work
-    if not validate_email(email, check_mx=CHECK_MX):
-        raise InvalidEmail( email )
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT id from courses where course_key=%s",(course_key,))
-    if (not res) or (len(res)!=1) :
-        raise InvalidCourse_Key( course_key )
-
-    course_id = res[0][0]
-    return dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT into users (email, primary_course_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s""",
-                         ( email, course_id, email ))
-
-def rename_user(user_id, old_email, new_email):
-    """Changes a user's email. Requires a correct old_email"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE users set email=%s where id=%s and email=%s",
-                         ( old_email, user_id, new_email))
-
-def delete_user(email):
-    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from users where email=%s", (email,))
-
-def purge_movie(movie_id):
-    """Actually delete a movie and all its frames"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
-
-def delete_movie(movie_id, delete=1):
-    """Set a movie's deleted bit to be true"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "update movies set deleted=%s where id=%s", (delete, movie_id,))
-
-def new_api_key(email, *, capabilities=DEFAULT_CAPABILITIES):
-    """Create a new api_key for an email that is registered
-    :param: email - the email
-    :return: api_key - the api_key
-    """
-    api_key = str(uuid.uuid4()).replace('-','')
-    dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT into api_keys (user_id, api_key, capabilities)
-                            VALUES ((select id from users where email=%s), %s, %s)""",
-                         (email, api_key, capabilities))
-    return api_key
-
-def delete_api_key(api_key):
-    """Deletes an api_key
-    :param: api_key - the api_key
-    :return: the number of keys deleted
-    """
-    if len(api_key) < 10:
-        raise InvalidAPI_Key(api_key)
-    return dbfile.DBMySQL.csfr( get_dbwriter(),
-                                """DELETE from api_keys WHERE api_key=%s""",
-                                (api_key,))
-
-def send_links(email):
-    """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
-    raise RuntimeError("implement send_links")
-
-def validate_course_key( course_key ):
-    res = dbfile.DBMySQL.csfr( get_dbreader(),
-                              """SELECT course_key from courses where course_key=%s LIMIT 1""", (course_key,))
-    return len(res)==1 and res[0][0]==course_key
-
-def remaining_course_registrations( course_key ):
-    res = dbfile.DBMySQL.csfr( get_dbreader(),
-                              """SELECT max_enrollment - (select count(*) from users where course_id=(select id from courses where course_key=%s))
-                                 FROM courses WHERE course_key=%s""",
-                              ( course_key,course_key))
-    try:
-        return int(res[0][0])
-    except (IndexError,ValueError):
-        return 0
-
-def list_movies( user_id ):
-    """Return a list of movies that the user is allowed to access."""
-    return dbfile.DBMySQL.csfr( get_dbreader(),
-                                """SELECT * from movies
-                                WHERE user_id=%s
-                                OR
-                                (course_id = (select course_id from users where id=%s) AND published>0 AND deleted=0)
-                                OR
-                                (course_id in (select course_id from admins where user_id=%s))""",
-                                (user_id, user_id, user_id), asDicts=True)
-
-
-
 
 ################################################################
 ## Bottle endpoints
@@ -269,24 +130,12 @@ def func_resend():
 ################################################################
 ## API
 
-## API Validation
-def validate_api_key():
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where api_key=%s limit 1",
-                                    ( request.forms.get('api_key'), ), asDicts=True)
-    if res:
-        return res[0]['user_id']
-    return None
-
-
 @bottle.route('/api/check-api_key', method='POST')
-def api_check_api_key():
-    api_key = str(request.forms.get('api_key'))
-    res = dbfile.DBMySQL.csfr( get_dbwriter(),
-                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s",
-                               (api_key, ), asDicts=True)
-    logging.info("api_key[0:9]=%s res=%s",api_key[0:9], res)
-    if res:
-        return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
+def api_check_api_key( api_key ):
+    userdict = db.validate_api_key( request.forms.get('api_key') )
+    logging.info( "api_key[0:9]=%s userdict=%s", api_key[0:9], userdict )
+    if userdict:
+        return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
     return INVALID_API_KEY
 
 
@@ -299,12 +148,12 @@ def api_register():
     if not validate_email(email, check_mx=True):
         return INVALID_EMAIL
     course_key = request.forms.get('course_key')
-    if not validate_course_key(course_key):
+    if not db.validate_course_key( course_key ):
         return INVALID_COURSE_KEY
-    if remaining_course_registrations(course_key) < 1:
+    if db.remaining_course_registrations( course_key ) < 1:
         return NO_REMAINING_REGISTRATIONS
-    register_email(email, course_key)
-    send_links(email)
+    db.register_email( email, course_key )
+    db.send_links( email )
     return {'error':False}
 
 
@@ -314,8 +163,10 @@ def api_send_link():
     email = request.forms.get('email')
     if not validate_email(email, check_mx=True):
         return INVALID_EMAIL
-    send_links(email)
+    db.send_links(email)
     return {'error':False}
+
+
 
 
 ################################################################
@@ -329,49 +180,19 @@ def api_new_movie():
     :param base64_data: If present, the movie data.
     """
 
-    api_key_userid = validate_api_key()
-    if api_key_userid:
-        res = dbfile.DBMySQL.csfr( get_dbreader(),"select primary_course_id from users where id=%s",(api_key_userid,))
-        if not res or len(res)!=1:
-            raise RuntimeError()
-        primary_course_id = res[0][0]
-        movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                            """INSERT INTO movies (title,description,user_id,course_id) VALUES (%s,%s,%s,%s)
-                                            """,
-                                            (request.forms.get('title'), request.forms.get('description'), api_key_userid, primary_course_id ))
-        movie_base64_data = request.forms.get('movie_base64_data',None)
-        if movie_base64_data:
-            dbfile.DBMySQL.csfr( get_dbwriter(),
-                                 "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
-                                 (movie_id, base64.b64decode( movie_base64_data )))
+    user_id = db.validate_api_key( request.forms.get('api_key') )
+    if user_id:
+        movie_id = db.create_new_movie( user_id, request.forms.get('title'), request.forms.get('description'), request.forms.get('movie_base64_data'))
         return {'error':False,'movie_id':movie_id}
     return INVALID_API_KEY
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
-    api_key_userid = validate_api_key()
-    if api_key_userid:
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
-                                       ( int(request.forms.get('movie_id')), ),
-                                       asDicts=True)
-        if api_key_userid != res[0]['user_id']:
+    user_id = db.validate_api_key( request.forms.get('api_key'))
+    if user_id:
+        frame_id = db.create_new_frame( user_id, request.forms.get('movie_id'), request.forms.get('frame_msec'), request.forms.get('frame_base64_data'))
+        if not frame_id:
             return INVALID_MOVIE_ACCESS
-
-        frame_data = base64.b64decode(request.forms.get('frame_base64_data'))
-        frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                        """INSERT INTO frames (movie_id,frame_number,frame_msec,frame_data)
-                                           VALUES (%s,%s,%s,%s)
-                                           ON DUPLICATE KEY UPDATE frame_msec=%s,frame_data=%s""",
-                                            (
-                                                int(request.forms.get('movie_id')),
-                                            int(request.forms.get('frame_number')),
-                                            int(request.forms.get('frame_msec')),
-                                            frame_data,
-                                            int(request.forms.get('frame_msec')),
-                                            frame_data),
-                                            debug=False)
-
-
         return {'error':False,'frame_id':frame_id}
     return INVALID_API_KEY
 
@@ -381,19 +202,17 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    api_key_userid = validate_api_key()
-    if api_key_userid:
-        delete = request.forms.get('delete',1)
-        delete_movie( int(request.forms.get('movie_id')), delete )
+    user_id = db.validate_api_key( request.forms.get('api_key'))
+    if user_id:
+        db.delete_movie( request.forms.get('movie_id'), request.forms.get('delete',1) )
         return {'error':False}
     return INVALID_API_KEY
 
-
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
-    api_key_userid = validate_api_key()
-    if api_key_userid:
-        movies = list_movies( api_key_userid )
+    user_id = db.validate_api_key( request.forms.get('api_key'))
+    if user_id:
+        movies = db.list_movies( user_id )
         return {'error':False, 'movies':movies}
     return INVALID_API_KEY
 
