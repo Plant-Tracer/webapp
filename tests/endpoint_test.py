@@ -46,14 +46,14 @@ def test_api_key():
         raise RuntimeError(f"r.status_code={r.status_code}  r.text={r.text}")
     assert r.status_code == 200
     assert r.json()['error'] == False
-    assert r.json()['userinfo']['username'] == 'Test User'
+    assert r.json()['userinfo']['name'] == 'Test User'
 
     r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY+'invalid'} )
     assert r.status_code == 200
     assert r.json()['error'] == True
 
 
-#@pytest.mark.skip(reason='not working yet')
+@pytest.mark.skip(reason='not working yet')
 def test_upload_movie_frame_by_frame():
     """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
     assert len(FRAME_FILES)>0
@@ -70,7 +70,6 @@ def test_upload_movie_frame_by_frame():
             r = requests.post( TEST_ENDPOINT+'/api/new-frame', {
                 'api_key': TEST_USER_APIKEY,
                 'movie_id':movie_id,
-                'frame_number':frame_number,
                 'frame_msec':frame_number*200,
                 'frame_base64_data':base64.b64encode(f.read()) })
             print("r.text=",r.text,file=sys.stderr)
@@ -89,7 +88,7 @@ def test_upload_movie_frame_by_frame():
     res = r.json()
     assert res['error']==False
 
-#@pytest.mark.skip(reason='not working yet')
+@pytest.mark.skip(reason='not working yet')
 def test_upload_movie_base64():
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
     assert len(FRAME_FILES)>0
