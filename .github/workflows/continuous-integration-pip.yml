@@ -39,7 +39,8 @@ jobs:
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         env:
-          TEST_ENDPOINT:    ${{ vars.TEST_ENDPOINT }}
+          TEST_ENDPOINT:           ${{ vars.TEST_ENDPOINT }}
+          PLANTTRACER_ENDPOINT:    ${{ vars.TEST_ENDPOINT }}
           TEST_USER_EMAIL:  ${{ vars.TEST_USER_EMAIl }}
           TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
           MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
