@@ -5,8 +5,8 @@ from os.path import abspath,dirname
 
 sys.path.append( dirname(dirname(abspath(__file__))))
 
-import bottle_app
+import db
 
 def test_dbreader():
-    dbreader = bottle_app.get_dbreader()
+    dbreader = db.get_dbreader()
     assert dbreader is not None
