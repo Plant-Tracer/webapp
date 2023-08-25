@@ -6,6 +6,7 @@ import functools
 import os
 import base64
 import uuid
+import logging
 
 from validate_email_address import validate_email
 
@@ -48,7 +49,7 @@ def validate_api_key( api_key ):
     res = dbfile.DBMySQL.csfr( get_dbwriter(),
                                "SELECT * from api_keys left join users on user_id=users.id where api_key=%s",
                                (api_key, ), asDicts=True)
-    return res[0] if res else None
+    return res[0] if res else {}
 
 
 
@@ -97,9 +98,31 @@ def delete_user( email ):
     """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies"""
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
-def purge_movie( movie_id ):
+def get_movie_metadata( user_id, movie_id ):
+    cmd = """SELECT * from movies WHERE
+                (user_id=%s OR
+                 course_id=(select primary_course_id from users where id=%s) OR
+                 course_id in (select course_id from admins where user_id=%s))"""
+    params = [user_id, user_id, user_id]
+    if movie_id:
+        cmd += " AND movie_id=%s"
+        params.append(movie_id)
+    return dbfile.DBMySQL.csfr( get_dbreader(), cmd, params, asDicts=True)
+
+def can_access_movie( user_id, movie_id ):
+    """Return if the user is allowed to access the movie"""
+    res = dbfile.DBMySQL.csfr(
+        get_dbreader(),
+        """select count(*) from movies WHERE id=%s AND
+        (user_id=%s OR
+        course_id=(select primary_course_id from users where id=%s) OR
+        course_id in (select course_id from admins where user_id=%s))""",
+        (movie_id, user_id, user_id, user_id))
+    return res[0][0]>0
+
+def purge_movie(  movie_id ):
     """Actually delete a movie and all its frames"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from frames where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
@@ -133,7 +156,9 @@ def delete_api_key(api_key):
 def create_new_movie(user_id, title, description, movie_base64_data):
     res = dbfile.DBMySQL.csfr( get_dbreader(),"select primary_course_id from users where id=%s",(user_id,))
     if not res or len(res)!=1:
-        raise RuntimeError()
+        logging.error("len(res)=%s",len(res))
+        logging.error("res=%s",res)
+        raise RuntimeError(f"user_id={user_id} len(res)={len(res)} res={res}")
     primary_course_id = res[0][0]
     movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
                                     """INSERT INTO movies (title,description,user_id,course_id) VALUES (%s,%s,%s,%s)
@@ -146,14 +171,10 @@ def create_new_movie(user_id, title, description, movie_base64_data):
     return movie_id
 
 
-def create_new_frame( user_id, movie_id, frame_msec, frame_base64_data ):
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s", (movie_id,))
-    if user_id != res[0][0]:
-        return None
-
+def create_new_frame( movie_id, frame_msec, frame_base64_data ):
     frame_data = base64.b64decode( frame_base64_data )
     frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                    """INSERT INTO frames (movie_id, frame_msec, frame_data)
+                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
                                         ( movie_id, frame_msec, frame_base64_data,

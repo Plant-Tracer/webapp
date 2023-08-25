@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 import mistune
 import magic
 import bottle
+import json
 from bottle import request
 from validate_email_address import validate_email
 
@@ -130,10 +131,17 @@ def func_resend():
 ################################################################
 ## API
 
-@bottle.route('/api/check-api_key', method='POST')
-def api_check_api_key( api_key ):
+def get_user_id():
     userdict = db.validate_api_key( request.forms.get('api_key') )
-    logging.info( "api_key[0:9]=%s userdict=%s", api_key[0:9], userdict )
+    if 'id' in userdict:
+        return userdict['id']
+    logging.warning("invalid api_key = %s",request.forms.get('api_key'))
+    raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
+
+
+@bottle.route('/api/check-api_key', method='POST')
+def api_check_api_key( ):
+    userdict = db.validate_api_key( request.forms.get('api_key') )
     if userdict:
         return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
     return INVALID_API_KEY
@@ -180,21 +188,19 @@ def api_new_movie():
     :param base64_data: If present, the movie data.
     """
 
-    user_id = db.validate_api_key( request.forms.get('api_key') )
-    if user_id:
-        movie_id = db.create_new_movie( user_id, request.forms.get('title'), request.forms.get('description'), request.forms.get('movie_base64_data'))
-        return {'error':False,'movie_id':movie_id}
-    return INVALID_API_KEY
+    movie_id = db.create_new_movie( get_user_id(), request.forms.get('title'),
+                                    request.forms.get('description'), request.forms.get('movie_base64_data'))
+    return {'error':False,'movie_id':movie_id}
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
-    user_id = db.validate_api_key( request.forms.get('api_key'))
-    if user_id:
-        frame_id = db.create_new_frame( user_id, request.forms.get('movie_id'), request.forms.get('frame_msec'), request.forms.get('frame_base64_data'))
-        if not frame_id:
-            return INVALID_MOVIE_ACCESS
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id') ):
+        frame_id = db.create_new_frame( request.forms.get('movie_id'),
+                                        request.forms.get('frame_msec'),
+                                        request.forms.get('frame_base64_data'))
         return {'error':False,'frame_id':frame_id}
-    return INVALID_API_KEY
+    return INVALID_MOVIE_ACCESS
+
 
 @bottle.route('/api/delete-movie', method='POST')
 def api_delete_movie():
@@ -202,19 +208,14 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    user_id = db.validate_api_key( request.forms.get('api_key'))
-    if user_id:
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id')  ):
         db.delete_movie( request.forms.get('movie_id'), request.forms.get('delete',1) )
         return {'error':False}
-    return INVALID_API_KEY
+    return INVALID_MOVIE_ACCESS
 
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
-    user_id = db.validate_api_key( request.forms.get('api_key'))
-    if user_id:
-        movies = db.list_movies( user_id )
-        return {'error':False, 'movies':movies}
-    return INVALID_API_KEY
+    return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
 
 ################################################################
