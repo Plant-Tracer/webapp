@@ -32,9 +32,17 @@ def redirect_stderr():
         if DUMP_VARS:
             dump_vars(errfile)
 
+def redirect_stdout():
+    """Make stderr go to a file"""
+    # pylint: disable=unspecified-encoding
+    with open( os.path.join( os.getenv('HOME'), 'access.log.app') ,'a') as accfile:
+        os.close(sys.stdout.fileno())
+        os.dup2(accfile.fileno(), sys.stdout.fileno())
+
 if 'IN_PASSENGER' in os.environ:
     # Send error to error.log, but not when running under pytest
     redirect_stderr()
+    #redirect_stdout()
 
     # Use python of choice
     if DREAMHOST_PYTHON_BINDIR not in os.environ['PATH']:
