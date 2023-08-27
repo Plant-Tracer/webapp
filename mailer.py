@@ -12,7 +12,7 @@ from email.parser import BytesParser
 from email import policy
 
 
-SMTP_SERVER = 'SMTP_SERVER'
+SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'
 SMTP_PORT = 'SMTP_PORT'
@@ -32,13 +32,13 @@ def send_message(*,
         assert isinstance(to_addr, str)
 
     if dry_run:
-        print("==== Will not send this message: ====\n{}\n====================\n".format(msg),file=sys.stderr)
+        print(f"==== Will not send this message: ====\n{msg}\n====================\n",file=sys.stderr)
         return
 
     port  = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
     debug = smtp_config.get(SMTP_DEBUG, SMTP_DEBUG_DEFAULT)
 
-    with smtplib.SMTP( smtp_config[SMTP_SERVER], port ) as smtp:
+    with smtplib.SMTP( smtp_config[SMTP_HOST], port ) as smtp:
         logging.info("sending mail to %s with SMTP" ,",".join(to_addrs))
         if debug:
             smtp.set_debuglevel( 1 )
@@ -49,14 +49,14 @@ def send_message(*,
         smtp.sendmail( from_addr, to_addrs, msg.encode('utf8'))
 
 def smtp_config_from_environ():
-    return { SMTP_SERVER : os.environ[ SMTP_SERVER ],
+    return { SMTP_HOST : os.environ[ SMTP_HOST ],
              SMTP_USERNAME : os.environ[SMTP_USERNAME],
              SMTP_PASSWORD : os.environ[SMTP_PASSWORD],
              SMTP_PORT     : int(os.environ[SMTP_PORT])
             }
 
 
-IMAP_SERVER   = 'IMAP_SERVER'
+IMAP_HOST   = 'IMAP_HOST'
 IMAP_USERNAME = 'IMAP_USERNAME'
 IMAP_PASSWORD = 'IMAP_PASSWORD'
 DELETE = "<DELETE>"
@@ -66,15 +66,19 @@ def imap_inbox_scan( imap_config, callback ):
     returns numbers of messages deleted.
     """
     deleted = 0
-    M = imaplib.IMAP4_SSL( imap_config[IMAP_SERVER])
+    M = imaplib.IMAP4_SSL( imap_config[IMAP_HOST])
     M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD] )
     M.select()
+    # pylint: disable=unused-variable
     typ, data = M.search(None, 'ALL')
+    # pylint: enable=unused-variable
     for num in data[0].split():
         typ, d2 = M.fetch(num, '(RFC822)')
         for val in d2:
-            if type(val)==tuple:
+            if isinstance(val,tuple):
+                # pylint: disable=unpacking-non-sequence
                 (a,b) = val
+                # pylint: enable=unpacking-non-sequence
                 num = a.decode('utf-8').split()[0]
                 msg = BytesParser(policy=policy.default).parsebytes(b)
                 if callback( num, msg ) is DELETE:
@@ -90,7 +94,7 @@ def imap_inbox_scan( imap_config, callback ):
 
 
 def imap_config_from_environ():
-    return { IMAP_SERVER : os.environ[ IMAP_SERVER ],
+    return { IMAP_HOST : os.environ[ IMAP_HOST ],
              IMAP_USERNAME : os.environ[IMAP_USERNAME],
              IMAP_PASSWORD : os.environ[IMAP_PASSWORD]
             }

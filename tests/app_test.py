@@ -28,3 +28,11 @@ def test_static_path():
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
         assert open( os.path.join( STATIC_DIR, 'test.txt'), 'rb').read() == res.body.read()
+
+
+def test_templates():
+    with boddle(params={}):
+        bottle_app.func_root()
+        bottle_app.func_register()
+        bottle_app.func_resend()
+        bottle_app.func_tos()

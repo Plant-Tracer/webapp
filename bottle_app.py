@@ -15,40 +15,51 @@ Debug locally:
 
 import sys
 import os
-import functools
 import datetime
-import base64
-import uuid
+import logging
 from urllib.parse import urlparse
 
+import mistune
 import magic
 import bottle
+import json
 from bottle import request
 from validate_email_address import validate_email
 
 # pylint: disable=no-member
 
 
-from paths import STATIC_DIR,TEMPLATE_DIR,DBREADER_BASH_FILE,DBWRITER_BASH_FILE,view
-from lib.ctools import dbfile
+import db
+from paths import STATIC_DIR,TEMPLATE_DIR,view
+from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
 
 __version__='0.0.1'
 VERSION_TEMPLATE='version.txt'
 
+TOS_MD_FILE     = os.path.join(STATIC_DIR, 'tos.md')
+PRIVACY_MD_FILE = os.path.join(STATIC_DIR, 'privacy.md')
+PAGE_TEMPLATE   = 'page.html'
+PAGE_STYLE = "<style>\ndiv.mypage { max-width: 600px;}\n</style>\n"
+
 DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
+DEFAULT_CAPABILITIES = ""
 
-INVALID_APIKEY = {'error':True, 'message':'Invalid apikey'}
+NEW_MEMFILE_MAX = 1024*1024*16
+
+INVALID_API_KEY = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
-INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie'}
-INVALID_COURSE_NAME = {'error':True, 'message':'Course name does not exist'}
+INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
+INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
+NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
 
-class InvalidEmail(RuntimeError):
-    """Exception thrown in email is invalid"""
+def expand_memfile_max():
+    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
+    bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
 
 
 def datetime_to_str(obj):
@@ -61,57 +72,29 @@ def datetime_to_str(obj):
     else:
         return obj
 
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from the DBREADER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
-    fname = DBREADER_BASH_FILE if os.path.exists(DBREADER_BASH_FILE) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from the DBWRITER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
-    fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
-
-## Register email or create a new key for it
-def register_email(email, course_name):
-    if not validate_email(email, check_mx=True):
-        raise InvalidEmail()
-    dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into users (email, course_name) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s,course_name=%s",
-                             ( email, course_name, email, course_name ))
-
-
-def send_links(email):
-    """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
-    raise RuntimeError("implement send_links")
-
-def new_apikey(email, capabilities):
-    apikey = str(uuid.uuid4()).replace('-','')
-    dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT into api_keys (user_id, key_value,capabilities)
-                            VALUES ((select id from users where email=%s), %s, %s)""",
-                         (email, apikey, capabilities))
-    return apikey
-
-def validate_course_name( course_name ):
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT course_name from course_keys where course_name=%s LIMIT 1""", (course_name,))
-    return len(res)==1 and res[0][0]==course_name
-
-
 ################################################################
 ## Bottle endpoints
 
 
 @bottle.route('/ver', method=['POST','GET'])
-@view(VERSION_TEMPLATE)
+@view(VERSION_TEMPLATE)         # run the dictionary below through the VERSION_TEAMPLTE with jinja2
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3"""
     return {'__version__':__version__,'sys_version':sys.version}
+
+@bottle.route('/tos', method=['GET'])
+@view(PAGE_TEMPLATE)
+def func_tos():
+    """Fill the page template with the terms of service produced with markdown to HTML translation"""
+    with open(TOS_MD_FILE,"r") as f:
+        return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
+
+@bottle.route('/privacy', method=['GET'])
+@view(PAGE_TEMPLATE)
+def func_privacy():
+    """Fill the page template with the terms of service produced with markdown to HTML translation"""
+    with open(PRIVACY_MD_FILE,"r") as f:
+        return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
 
 ### Local Static
 @bottle.get('/static/<path:path>')
@@ -131,42 +114,54 @@ def func_root():
 def func_register():
     o = urlparse(request.url)
     return {'title':'ROOT',
-            'hostname':o.hostname}
+            'hostname':o.hostname,
+            'register':True
+            }
+
+@bottle.route('/resend')
+@view('register.html')
+def func_resend():
+    o = urlparse(request.url)
+    return {'title':'ROOT',
+            'hostname':o.hostname,
+            'register':False
+            }
 
 
+################################################################
+## API
+
+def get_user_id():
+    userdict = db.validate_api_key( request.forms.get('api_key') )
+    if 'id' in userdict:
+        return userdict['id']
+    logging.warning("invalid api_key = %s",request.forms.get('api_key'))
+    raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
-## API Validation
-def validate_apikey():
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT user_id from api_keys where key_value=%s limit 1",
-                                    ( request.forms.get('apikey'), ), asDicts=True)
-    if res:
-        return res[0]['user_id']
-    return None
+@bottle.route('/api/check-api_key', method='POST')
+def api_check_api_key( ):
+    userdict = db.validate_api_key( request.forms.get('api_key') )
+    if userdict:
+        return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
+    return INVALID_API_KEY
 
 
-@bottle.route('/api/check-apikey', method='POST')
-def api_check_apikey():
-    res = dbfile.DBMySQL.csfr( get_dbwriter(),
-                               "SELECT * from api_keys left join users on user_id=users.id where key_value=%s",
-                               (request.forms.get('apikey'), ), asDicts=True)
-    if res:
-        return { 'error':False, 'userinfo': datetime_to_str(res[0]) }
-    return INVALID_APIKEY
-
-
-## Movies API
+################################################################
+## Registration
 @bottle.route('/api/register', method='POST')
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
     if not validate_email(email, check_mx=True):
         return INVALID_EMAIL
-    course_name = request.forms.get('course_name')
-    if not validate_course_name(course_name):
-        return INVALID_COURSE_NAME
-    register_email(email, course_name)
-    send_links(email)
+    course_key = request.forms.get('course_key')
+    if not db.validate_course_key( course_key ):
+        return INVALID_COURSE_KEY
+    if db.remaining_course_registrations( course_key ) < 1:
+        return NO_REMAINING_REGISTRATIONS
+    db.register_email( email, course_key )
+    db.send_links( email )
     return {'error':False}
 
 
@@ -176,50 +171,55 @@ def api_send_link():
     email = request.forms.get('email')
     if not validate_email(email, check_mx=True):
         return INVALID_EMAIL
-    send_links(email)
+    db.send_links(email)
     return {'error':False}
 
 
+
+
+################################################################
+## Movies
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
-    apikey_userid = validate_apikey()
-    if apikey_userid:
-        movie_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                            "INSERT INTO movies (title,description,user_id) VALUES (%s,%s,%s)",
-                                            (request.forms.get('title'), request.forms.get('description'), apikey_userid ))
-        return {'error':False,'movie_id':movie_id}
-    return INVALID_APIKEY
+    """Creates a new movie for which we can upload frame-by-frame or all at once.
+    :param api_key: the user's api_key
+    :param title: The movie's title
+    :param description: The movie's description
+    :param base64_data: If present, the movie data.
+    """
+
+    movie_id = db.create_new_movie( get_user_id(), request.forms.get('title'),
+                                    request.forms.get('description'), request.forms.get('movie_base64_data'))
+    return {'error':False,'movie_id':movie_id}
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
-    apikey_userid = validate_apikey()
-    if apikey_userid:
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT user_id from movies where id=%s",
-                                       ( int(request.forms.get('movie_id')), ),
-                                       asDicts=True)
-        if apikey_userid != res[0]['user_id']:
-            return INVALID_MOVIE_ACCESS
-
-        frame_data = base64.b64decode(request.forms.get('frame_base64_data'))
-        frame_id = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                        """INSERT INTO frames (movie_id,frame_number,frame_msec,frame_data)
-                                           VALUES (%s,%s,%s,%s)
-                                           ON DUPLICATE KEY UPDATE frame_msec=%s,frame_data=%s""",
-                                            (
-                                                int(request.forms.get('movie_id')),
-                                            int(request.forms.get('frame_number')),
-                                            int(request.forms.get('frame_msec')),
-                                            frame_data,
-                                            int(request.forms.get('frame_msec')),
-                                            frame_data),
-                                            debug=False)
-
-
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id') ):
+        frame_id = db.create_new_frame( request.forms.get('movie_id'),
+                                        request.forms.get('frame_msec'),
+                                        request.forms.get('frame_base64_data'))
         return {'error':False,'frame_id':frame_id}
-    return INVALID_APIKEY
+    return INVALID_MOVIE_ACCESS
 
 
-## Demo API
+@bottle.route('/api/delete-movie', method='POST')
+def api_delete_movie():
+    """ delete a movie
+    :param movie_id: the id of the movie to delete
+    :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
+    """
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id')  ):
+        db.delete_movie( request.forms.get('movie_id'), request.forms.get('delete',1) )
+        return {'error':False}
+    return INVALID_MOVIE_ACCESS
+
+@bottle.route('/api/list-movies', method=['POST','GET'])
+def api_list_movies():
+    return {'error':False, 'movies': db.list_movies( get_user_id() ) }
+
+
+################################################################
+## Demo and debug
 @bottle.route('/api/add', method='POST')
 def api_add():
     a = request.forms.get('a')
@@ -229,8 +229,22 @@ def api_add():
     except (TypeError,ValueError):
         return {'error':True}
 
+################################################################
+## App
+
+
 def app():
     """The application"""
+    # Set up logging for a bottle app
+    # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    #root.setLevel(logging.DEBUG)
+    hdlr = root.handlers[0]
+    fmt = logging.Formatter(clogging.LOG_FORMAT)
+    hdlr.setFormatter(fmt)
+
+    expand_memfile_max()
     return bottle.default_app()
 
 if __name__=="__main__":

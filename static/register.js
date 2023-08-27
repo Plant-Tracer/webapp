@@ -6,13 +6,13 @@ function register_func() {
         $('#message').html("<b>Please provide an email address</b>");
         return;
     }
-    let course_code = $('#course_code').val();
-    if (course_code=='') {
-        $('#message').html("<b>Please provide a course code</b>");
+    let course_key = $('#course_key').val();
+    if (course_key=='') {
+        $('#message').html("<b>Please provide a course key</b>");
         return;
     }
-    $('#message').html(`Asking to regsiter <b>${email}</b> for course <b>${course_code}<b>...</br>`);
-    $.post('/api/register', {email:email, course_code:course_code}, function(data) {
+    $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
+    $.post('/api/register', {email:email, course_key:course_key}, function(data) {
         alert(data);
     });
 };
