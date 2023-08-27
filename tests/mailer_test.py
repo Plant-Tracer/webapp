@@ -14,7 +14,7 @@ import time
 from jinja2.nativetypes import NativeEnvironment
 
 
-MSG="""to: {{ to_addr }}
+MSG="""to: {{ to_addrs }}
 from: {{ from_addr }}
 subject: This is a test subject {{ guid }}
 
@@ -30,13 +30,13 @@ def test_send_message():
     TEST_USER_EMAIL = os.environ['TEST_USER_EMAIL']
     DO_NOT_REPLY_EMAIL = 'do-not-reply@planttracer.com'
 
+    TO_ADDRS = [ TEST_USER_EMAIL ]
     msg_env = NativeEnvironment().from_string( MSG )
-    msg = msg_env.render( to_addr=TEST_USER_EMAIL,
+    msg = msg_env.render( to_addrs=",".join(TO_ADDRS),
                           from_addr=TEST_USER_EMAIL,
                           guid = guid)
 
     DRY_RUN = False
-    TO_ADDRS = [ TEST_USER_EMAIL ]
     smtp_config = mailer.smtp_config_from_environ()
     smtp_config['SMTP_DEBUG'] = True
     mailer.send_message( from_addr = DO_NOT_REPLY_EMAIL,

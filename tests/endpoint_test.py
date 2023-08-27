@@ -1,6 +1,8 @@
-"""
-endpoint_test.py - these tests use http to rest a running endpoint, not the code in this repo.
-(Unless the code in the repo is actually running.)
+"""endpoint_test.py - these tests use http to rest a running endpoint, not the code in this repo.
+
+(Unless the code in the repo is actually running, which requires that
+this code be running on dev.planttracer.com or that a test server be
+set up on the GitHub Actions server.)
 """
 
 
@@ -25,7 +27,9 @@ TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
 FRAME_FILES = glob.glob( os.path.join(MYDIR, "data", "frame_*.jpg") )
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
 MOVIE_FILE_NAME = os.path.join(MYDIR, "data","2019-07-31 plantmovie.mov")
+SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST','NO') == 'YES')
 
+@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST=YES')
 def test_ver():
     r = requests.post( TEST_ENDPOINT+'/ver')
     assert r.status_code==200
@@ -34,11 +38,13 @@ def test_ver():
     r = requests.get( TEST_ENDPOINT+'/verx')
     assert r.status_code==404
 
+@pytest.mark.skipif( SKIP_ENDPOINT_TEST , reason='SKIP_ENDPOINT_TEST=YES')
 def test_add():
     r = requests.post( TEST_ENDPOINT+'/api/add', {'a':10, 'b':20})
     assert r.status_code == 200
     assert r.json() == {'result':30, 'error':False}
 
+@pytest.mark.skipif( SKIP_ENDPOINT_TEST , reason='SKIP_ENDPOINT_TEST=YES')
 def test_api_key():
     r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     if (r.status_code != 200):
