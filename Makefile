@@ -23,6 +23,7 @@ flake8:
 install-dependencies:
 	python3 -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
+	python3 -m pip install --upgrade pip
 
 pytest:
 	pytest .
