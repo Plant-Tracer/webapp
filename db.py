@@ -8,10 +8,17 @@ import base64
 import uuid
 import logging
 
+from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_FILE,DBWRITER_BASH_FILE
+from paths import DBREADER_BASH_FILE,DBWRITER_BASH_FILE,TEMPLATE_DIR
 from lib.ctools import dbfile
+
+
+import mailer
+
+EMAIL_TEMPLATE_FNAME = 'email.txt'
+PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
 
 class InvalidEmail(RuntimeError):
@@ -184,9 +191,30 @@ def create_new_frame( movie_id, frame_msec, frame_base64_data ):
 
 
 
-def send_links(email):
-    """Send the links to the email address if they haven't been sent for MIN_SEND_INTERVAL"""
-    raise RuntimeError("implement send_links")
+def send_links( email ):
+    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
+    PROJECT_EMAIL = 'admin@planttracer.com'
+
+    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
+
+    TO_ADDRS = [ email ]
+    with open(os.path.join( TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME ),"r") as f:
+        msg_env = NativeEnvironment().from_string( f.read() )
+    msg = msg_env.render( to_addrs   = ",".join([email]),
+                          from_addr = PROJECT_EMAIL,
+                          planttracer_endpoint  = PLANTTRACER_ENDPOINT,
+                          api_key   = new_api_key( email ))
+
+    DRY_RUN = False
+    smtp_config = mailer.smtp_config_from_environ()
+    smtp_config['SMTP_DEBUG'] = True
+    mailer.send_message( from_addr   = PROJECT_EMAIL,
+                         to_addrs    = TO_ADDRS,
+                         smtp_config = smtp_config,
+                         dry_run     = DRY_RUN,
+                         msg         = msg
+                        )
+
 
 def validate_course_key( course_key ):
     res = dbfile.DBMySQL.csfr( get_dbreader(),

@@ -18,11 +18,11 @@ import os
 import datetime
 import logging
 from urllib.parse import urlparse
+import json
 
 import mistune
 import magic
 import bottle
-import json
 from bottle import request
 from validate_email_address import validate_email
 
@@ -51,11 +51,12 @@ DEFAULT_CAPABILITIES = ""
 
 NEW_MEMFILE_MAX = 1024*1024*16
 
-INVALID_API_KEY = {'error':True, 'message':'Invalid api_key'}
-INVALID_EMAIL  = {'error':True, 'message':'Invalid email address'}
+INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
+INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
 INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
+CHECK_MX = False                # True didn't work
 
 def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
@@ -112,6 +113,7 @@ def func_root():
 @bottle.route('/register')
 @view('register.html')
 def func_register():
+    """/register sends the register.html template which loads register.js with register variable set to True"""
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
@@ -121,6 +123,7 @@ def func_register():
 @bottle.route('/resend')
 @view('register.html')
 def func_resend():
+    """/resend sends the register.html template which loads register.js with register variable set to False"""
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
@@ -139,7 +142,7 @@ def get_user_id():
     raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
-@bottle.route('/api/check-api_key', method='POST')
+@bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):
     userdict = db.validate_api_key( request.forms.get('api_key') )
     if userdict:
@@ -149,11 +152,12 @@ def api_check_api_key( ):
 
 ################################################################
 ## Registration
-@bottle.route('/api/register', method='POST')
+@bottle.route('/api/register', method=['GET','POST'])
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
     if not validate_email(email, check_mx=True):
+        logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key( course_key ):
@@ -165,14 +169,15 @@ def api_register():
     return {'error':False}
 
 
-@bottle.route('/api/resend-link', method='POST')
+@bottle.route('/api/resend-link', method=['GET','POST'])
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
-    if not validate_email(email, check_mx=True):
+    if not validate_email(email, check_mx=CHECK_MX):
+        logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
     db.send_links(email)
-    return {'error':False}
+    return {'error':False,'message':'If you have an account, a link was sent.' }
 
 
 
@@ -220,14 +225,14 @@ def api_list_movies():
 
 ################################################################
 ## Demo and debug
-@bottle.route('/api/add', method='POST')
+@bottle.route('/api/add', method=['GET','POST'])
 def api_add():
     a = request.forms.get('a')
     b = request.forms.get('b')
     try:
         return {'result':float(a)+float(b), 'error':False}
     except (TypeError,ValueError):
-        return {'error':True}
+        return {'error':True,'message':'arguments malformed'}
 
 ################################################################
 ## App
@@ -248,4 +253,17 @@ def app():
     return bottle.default_app()
 
 if __name__=="__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--sendlink",help="send link to the given email address, registering it if necessary.")
+
+    clogging.add_argument(parser, loglevel_default='WARNING')
+    args = parser.parse_args()
+    clogging.setup(level=args.loglevel)
+
+    if args.sendlink:
+        db.send_links( args.sendlink )
+        sys.exit(0)
+
     bottle.default_app().run(host='localhost',debug=True, reloader=True)
