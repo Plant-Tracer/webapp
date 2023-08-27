@@ -25,7 +25,8 @@ guid = str(uuid.uuid4())
 
 # https://realpython.com/python-sleep/#adding-a-python-sleep-call-with-decorators
 
-@pytest.mark.skipif('GITHUB_JOB' in os.environ, reason="does not run on GitHub - outbound SMTP is blocked")
+SKIP_IF = ('GITHUB_JOB' in os.environ) or ('SKIP_MAILER_TEST' in os.environ)
+@pytest.mark.skipif(SKIP_IF, reason="does not run on GitHub - outbound SMTP is blocked")
 def test_send_message():
     TEST_USER_EMAIL = os.environ['TEST_USER_EMAIL']
     DO_NOT_REPLY_EMAIL = 'do-not-reply@planttracer.com'
