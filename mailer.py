@@ -11,7 +11,6 @@ import os
 from email.parser import BytesParser
 from email import policy
 
-
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'
@@ -49,7 +48,7 @@ def send_message(*,
         smtp.sendmail( from_addr, to_addrs, msg.encode('utf8'))
 
 def smtp_config_from_environ():
-    return { SMTP_HOST : os.environ[ SMTP_HOST ],
+    return { SMTP_HOST     : os.environ[ SMTP_HOST ],
              SMTP_USERNAME : os.environ[SMTP_USERNAME],
              SMTP_PASSWORD : os.environ[SMTP_PASSWORD],
              SMTP_PORT     : int(os.environ[SMTP_PORT])

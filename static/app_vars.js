@@ -15,5 +15,5 @@ function findGetParameter(parameterName) {
 }
 
 $( document ).ready( function() {
-    $('#adder').click( add_func );
+
 });
