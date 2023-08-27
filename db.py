@@ -53,11 +53,20 @@ def get_dbwriter():
 ##
 def validate_api_key( api_key ):
     """Validate API key. return User dictionary or None if key is not valid"""
-    res = dbfile.DBMySQL.csfr( get_dbwriter(),
-                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s",
+    res = dbfile.DBMySQL.csfr( get_dbreader(),
+                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s LIMIT 1",
                                (api_key, ), asDicts=True)
-    return res[0] if res else {}
 
+    if len(res)>0:
+        dbfile.DBMySQL.csfr( get_dbwriter(),
+                             """UPDATE api_keys
+                             SET last_used_at=now(),
+                             first_used_at=if(first_used_at is null,now(),first_used_at),
+                             use_count=use_count+1
+                             WHERE api_key=%s""",
+                             (api_key,))
+        return res[0]
+    return {}
 
 
 ################################################################
