@@ -24,9 +24,14 @@ function resend_func() {
         return;
     }
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-    $.post('/api/resend', {email:email}, function(data) {
-        alert(data);
-    });
+    $.post('/api/resend-link', {email:email})
+        .done(function(data) {
+            $('#message').html('Response: ' + data['message']);
+        })
+        .fail(function(xhr, status, error) {
+            $('#message').html(`POST error: `+xhr['responseText']);
+            console.log("xhr:",xhr);
+        });
 };
 
 $( document ).ready( function() {

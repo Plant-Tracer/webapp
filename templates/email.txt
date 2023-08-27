@@ -1,13 +1,16 @@
-To: {{to_address}}
-From: {{from_address}}
+To: {{to_addrs}}
+From: {{from_addr}}
 Subject: Plant Tracer Login Information
 
 Hi! Welcome to Plant Tracer.
 
-You are receiving this email because someone (probably you) entered your email address {{to_address}} at the Plant Tracer website.
+You are receiving this email because someone (probably you) entered your email address {{to_addrs}} at the Plant Tracer website ({{planttracer_endpoint}}).
 
 Keep this email message!  You can use it to upload plant movies to the website and edit the movies that you have uploaded.
 
-Upload a new movie: https://{{hostname}}/upload
+Upload a new movie: {{planttracer_endpoint}}/upload?api_key={{api_key}}
 
-Edit your profile or uploaded movies: https://{{hostname}}/edit
+Edit your profile or uploaded movies: {{planttracer_endpoint}}/edit?api_key=={{api_key}}
+
+
+(note: please delete all earlier copies of this email; the links in those messages will no longer work.)
