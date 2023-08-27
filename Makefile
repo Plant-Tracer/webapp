@@ -26,6 +26,7 @@ install-dependencies:
 	python3 -m pip install --upgrade pip
 
 pytest:
+	make touch
 	pytest .
 
 coverage:
