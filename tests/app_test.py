@@ -2,7 +2,7 @@ import pytest
 import sys
 import os
 import bottle
-import warnings
+import logging
 import json
 
 from os.path import abspath,dirname
