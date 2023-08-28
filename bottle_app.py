@@ -23,6 +23,7 @@ import json
 import mistune
 import magic
 import bottle
+import base64
 from bottle import request
 from validate_email_address import validate_email
 
@@ -132,7 +133,7 @@ def func_resend():
 
 @bottle.route('/edit')
 @view('edit.html')
-def func_resend():
+def func_edit():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
     user_id = get_user_id ( )
@@ -144,7 +145,7 @@ def func_resend():
 
 @bottle.route('/upload')
 @view('upload.html')
-def func_resend():
+def func_upload():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
     user_id = get_user_id ( )
@@ -239,9 +240,22 @@ def api_new_movie():
     :param base64_data: If present, the movie data.
     """
 
-    movie_id = db.create_new_movie( get_user_id(), request.forms.get('title'),
-                                    request.forms.get('description'), request.forms.get('movie_base64_data'))
+    logging.error("request.forms.keys=%s",request.forms.keys())
+    movie_data = request.forms.get('movie_data',None)
+    if movie_data is None:
+        movie_base64_data = request.forms.get('movie_base64_data',None)
+        if movie_base64_data:
+            movie_data = base64.b64decode( movie_base64_data )
+    if movie_data is None:
+        return {'error':True,'message':'API requires movie_data or movie_base64_data'}
+
+    movie_id = db.create_new_movie( get_user_id(),
+                                    title = request.forms.get('title'),
+                                    description = request.forms.get('description'),
+                                    movie_data = movie_data
+                                   )
     return {'error':False,'movie_id':movie_id}
+
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
@@ -267,6 +281,7 @@ def api_delete_movie():
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
+
 
 
 ################################################################

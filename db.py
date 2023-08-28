@@ -169,7 +169,7 @@ def delete_api_key(api_key):
                                 """DELETE FROM api_keys WHERE api_key=%s""",
                                 (api_key,))
 
-def create_new_movie(user_id, title, description, movie_base64_data):
+def create_new_movie(user_id, *, title=None, description=None, movie_data=None):
     res = dbfile.DBMySQL.csfr( get_dbreader(),"select primary_course_id from users where id=%s",(user_id,))
     if not res or len(res)!=1:
         logging.error("len(res)=%s",len(res))
@@ -180,10 +180,10 @@ def create_new_movie(user_id, title, description, movie_base64_data):
                                     """INSERT INTO movies (title,description,user_id,course_id) VALUES (%s,%s,%s,%s)
                                     """,
                                     (title, description, user_id, primary_course_id ))
-    if movie_base64_data:
+    if movie_data:
         dbfile.DBMySQL.csfr( get_dbwriter(),
                              "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
-                             (movie_id, base64.b64decode( movie_base64_data )))
+                             (movie_id, movie_data))
     return movie_id
 
 
