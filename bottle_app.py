@@ -134,13 +134,23 @@ def func_resend():
 @view('edit.html')
 def func_resend():
     """list movies and edit them and user info"""
-    o       = urlparse(request.url)
     api_key = get_user_api_key()
     user_id = get_user_id ( )
     return {'title':'Plant Tracer List, Edit and Play',
-            'hostname':o.hostname,
             'api_key':api_key,
-            'user_id':user_id,
+            'user_id':user_id
+            }
+
+
+@bottle.route('/upload')
+@view('upload.html')
+def func_resend():
+    """list movies and edit them and user info"""
+    api_key = get_user_api_key()
+    user_id = get_user_id ( )
+    return {'title':'Plant Tracer List, Edit and Play',
+            'api_key':api_key,
+            'user_id':user_id
             }
 
 
