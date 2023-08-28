@@ -163,15 +163,15 @@ def get_user_api_key():
     """TODO: Also check the cookies"""
 
     # check the query string
-    api_key = request.query['api_key']
+    api_key = request.query.get('api_key',None)
     if api_key:
         return api_key
     # check for a form submission
-    api_key = request.forms.get('api_key')
+    api_key = request.forms.get('api_key',None)
     if api_key:
         return api_key
     # Check for a cookie
-    api_key = request.get_cookie('api_key')
+    api_key = request.get_cookie('api_key',None)
     if api_key:
         return api_key
     return None
