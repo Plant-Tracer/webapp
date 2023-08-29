@@ -132,9 +132,9 @@ def func_resend():
             'register':False
             }
 
-@bottle.route('/edit')
-@view('edit.html')
-def func_edit():
+@bottle.route('/list')
+@view('list.html')
+def func_list():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
     user_id = get_user_id ( )
@@ -147,7 +147,7 @@ def func_edit():
 @bottle.route('/upload')
 @view('upload.html')
 def func_upload():
-    """list movies and edit them and user info"""
+    """Upload a new file"""
     api_key = get_user_api_key()
     user_id = get_user_id ( )
     return {'title':'Plant Tracer List, Edit and Play',
