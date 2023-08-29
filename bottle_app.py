@@ -15,6 +15,7 @@ Debug locally:
 
 import sys
 import os
+import io
 import datetime
 import logging
 from urllib.parse import urlparse
@@ -237,17 +238,15 @@ def api_new_movie():
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param base64_data: If present, the movie data.
+    :param movie: If present, the movie file
     """
 
-    logging.error("request.forms.keys=%s",request.forms.keys())
-    movie_data = request.forms.get('movie_data',None)
-    if movie_data is None:
-        movie_base64_data = request.forms.get('movie_base64_data',None)
-        if movie_base64_data:
-            movie_data = base64.b64decode( movie_base64_data )
-    if movie_data is None:
-        return {'error':True,'message':'API requires movie_data or movie_base64_data'}
+    if 'movie' in request.files:
+        with io.BytesIO() as f:
+            request.files['movie'].save(f)
+            movie_data = f.getvalue()
+    else:
+        movie_data = None
 
     movie_id = db.create_new_movie( get_user_id(),
                                     title = request.forms.get('title'),
