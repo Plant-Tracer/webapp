@@ -249,6 +249,9 @@ def api_new_movie():
     else:
         movie_data = None
 
+    if len(movie_data) > MAX_FILE_UPLOAD:
+        return {'error':True, 'message':f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+
     movie_id = db.create_new_movie( get_user_id(),
                                     title = request.forms.get('title'),
                                     description = request.forms.get('description'),
