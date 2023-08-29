@@ -51,7 +51,7 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 
-NEW_MEMFILE_MAX = 1024*1024*16
+MAX_FILE_UPLOAD = 1024*1024*16
 
 INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
@@ -61,8 +61,8 @@ NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remain
 CHECK_MX = False                # True didn't work
 
 def expand_memfile_max():
-    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
-    bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
+    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, MAX_FILE_UPLOAD)
+    bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
 
 
 def datetime_to_str(obj):
@@ -152,7 +152,8 @@ def func_upload():
     user_id = get_user_id ( )
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_id
+            'user_id':user_id,
+            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
             }
 
 
