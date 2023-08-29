@@ -246,11 +246,11 @@ def api_new_movie():
         with io.BytesIO() as f:
             request.files['movie'].save(f)
             movie_data = f.getvalue()
+            if len(movie_data) > MAX_FILE_UPLOAD:
+                return {'error':True, 'message':f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
     else:
         movie_data = None
 
-    if len(movie_data) > MAX_FILE_UPLOAD:
-        return {'error':True, 'message':f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
 
     movie_id = db.create_new_movie( get_user_id(),
                                     title = request.forms.get('title'),
