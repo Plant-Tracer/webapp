@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %} PlantTracer List, Edit and Play {% endblock %}
+{% block script %}
+<script>
+var user_id = {{user_id}};                  // not logged in
+var api_key = "{{api_key}}";                // no API key yet
+</script>
+{% endblock %}
+
+{% block body %}
+
+<h2>Upload </h2>
+
+<p>ID: {{user_id}}</p>
+<p>Name: <span id='user_name'></span></p>
+
+
+<p><b>Please enter your movie title and then select your movie..</b></p>
+
+<label for='title'>Title:</label> <input type='text' id='movie-title' name='title'></br>
+<label for='description'>Description:</label> <input type='text' id='movie-description' name='description'></br>
+<input id='movie-file' type="file" onchange="upload_movie(this)"></br>
+<p><div id='message'></div></p>
+
+<h2>Done uploading?</h2>
+<p>When you are done uploading, <a href='edit'>click here to view your uploaded files</a>.</p>
+
+{% endblock %}
