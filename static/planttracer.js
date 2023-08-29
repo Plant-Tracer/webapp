@@ -40,10 +40,14 @@ async function upload_movie(inp)
 {
     $('#message').html(`Uploading image...`);
     console.log("upload_movie inp=",inp);
-    let movie = inp.files[0];
-    console.log('movie:',movie);
+    let movieFile = inp.files[0];
+    if (movieFile.fileSize > MAX_FILE_UPLOAD) {
+        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
+        return;
+    }
+    console.log('movieFile:',movieFile);
     let formData = new FormData();
-    formData.append("movie",    movie); // the movie itself
+    formData.append("movie",    movieFile); // the movie itself
     formData.append("api_key",  api_key); // on the upload form
     formData.append("title",       $('#movie-title').val());
     formData.append("description", $('#movie-description').val());
