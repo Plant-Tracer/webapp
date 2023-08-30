@@ -1,27 +1,15 @@
 {% extends 'base.html' %}
-{% block title %} PlantTracer App {% endblock %}
-{% block script %}
-<script type="text/javascript" charset="utf8" src="static/app_vars.js"></script>
-{% endblock %}
+{% block title %} PlantTracer List, Edit and Play {% endblock %}
+
 {% block body %}
 
-{% if user %}
-{% else %}
-  <h2> Please register if you do not have an account: </h2>
-  <form>
-  Enter your email: <input id='email' type='text'></p>
-  Enter your class code: <input id='code' type='text'>
-  <input id='register_button' type='button' value='register'>
-  </form>
+<h2>Edit </h2>
 
-</p>
+<p>ID: {{id}}</p>
+<p>Name: {{name}}</p>
 
-{% endif %}
-
-<h2>Simple App</h2>
 
 <p>
 
-<p>Type a number in each field and then click the equal sign!</p>
-
+<div id='message'></div>
 {% endblock %}

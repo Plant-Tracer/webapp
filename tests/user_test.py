@@ -70,11 +70,8 @@ def test_movie_upload(new_user):
                           "description":"test movie description",
                           "movie_base64_data":movie_base64_data} ):
         bottle_app.expand_memfile_max()
-        try:
+        with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_new_movie()
-            assert res['error']==True
-        except bottle.HTTPResponse as e:
-            pass
 
 
     # Try to uplaod the movie all at once
@@ -99,11 +96,8 @@ def test_movie_upload(new_user):
     # Make sure that we cannot delete the movie with a bad key
     with boddle(params ={'api_key':'invalid',
                          'movie_id':movie_id}):
-        try:
+        with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_delete_movie()
-            assert res['error']==True
-        except bottle.HTTPResponse as e:
-            pass
 
     # Delete the movie we uploaded
     with boddle(params ={'api_key':api_key,
