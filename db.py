@@ -18,7 +18,6 @@ from lib.ctools import dbfile
 import mailer
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
-PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
 
 class InvalidEmail(RuntimeError):
@@ -200,7 +199,7 @@ def create_new_frame( movie_id, frame_msec, frame_base64_data ):
 
 
 
-def send_links( email ):
+def send_links( email, planttracer_html_endpoint ):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
     PROJECT_EMAIL = 'admin@planttracer.com'
 
@@ -210,9 +209,9 @@ def send_links( email ):
     with open(os.path.join( TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME ),"r") as f:
         msg_env = NativeEnvironment().from_string( f.read() )
     msg = msg_env.render( to_addrs   = ",".join([email]),
-                          from_addr = PROJECT_EMAIL,
-                          planttracer_endpoint  = PLANTTRACER_ENDPOINT,
-                          api_key   = new_api_key( email ))
+                          from_addr  = PROJECT_EMAIL,
+                          planttracer_html_endpoint  = planttracer_html_endpoint,
+                          api_key    = new_api_key( email ))
 
     DRY_RUN = False
     smtp_config = mailer.smtp_config_from_environ()
