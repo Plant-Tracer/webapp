@@ -8,9 +8,9 @@ You are receiving this email because someone (probably you) entered your email a
 
 Keep this email message!  You can use it to upload plant movies to the website and edit the movies that you have uploaded.
 
-Upload a new movie: {{planttracer_endpoint}}/upload?api_key={{api_key}}
+Upload a new movie: {{planttracer_html_endpoint}}/upload?api_key={{api_key}}
 
-Edit your profile or uploaded movies: {{planttracer_endpoint}}/edit?api_key={{api_key}}
+Edit your profile or uploaded movies: {{planttracer_html_endpoint}}/edit?api_key={{api_key}}
 
 
 (note: please delete all earlier copies of this email; the links in those messages will no longer work.)

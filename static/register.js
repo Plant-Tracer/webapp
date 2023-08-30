@@ -12,9 +12,18 @@ function register_func() {
         return;
     }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-    $.post('/api/register', {email:email, course_key:course_key}, function(data) {
-        alert(data);
-    });
+    $.post('/api/register',
+           { email:email,
+             course_key:course_key,
+             base_url: window.location.href.replace('/register','')
+           })
+        .done(function(data) {
+            $('#message').html('Response: ' + data['message']);
+        })
+        .fail(function(xhr, status, error) {
+            $('#message').html(`POST error: `+xhr['responseText']);
+            console.log("xhr:",xhr);
+        });
 };
 
 function resend_func() {
@@ -24,7 +33,10 @@ function resend_func() {
         return;
     }
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-    $.post('/api/resend-link', {email:email})
+    $.post('/api/resend-link',
+           { email:email,
+             base_url: window.location.href.replace('/resend','')
+           })
         .done(function(data) {
             $('#message').html('Response: ' + data['message']);
         })
