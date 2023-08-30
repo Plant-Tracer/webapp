@@ -15,6 +15,7 @@ Debug locally:
 
 import sys
 import os
+import io
 import datetime
 import logging
 from urllib.parse import urlparse
@@ -23,6 +24,7 @@ import json
 import mistune
 import magic
 import bottle
+import base64
 from bottle import request
 from validate_email_address import validate_email
 
@@ -49,7 +51,7 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 
-NEW_MEMFILE_MAX = 1024*1024*16
+MAX_FILE_UPLOAD = 1024*1024*16
 
 INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
@@ -59,8 +61,8 @@ NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remain
 CHECK_MX = False                # True didn't work
 
 def expand_memfile_max():
-    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
-    bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
+    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, MAX_FILE_UPLOAD)
+    bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
 
 
 def datetime_to_str(obj):
@@ -130,17 +132,28 @@ def func_resend():
             'register':False
             }
 
-@bottle.route('/edit')
-@view('edit.html')
-def func_resend():
+@bottle.route('/list')
+@view('list.html')
+def func_list():
     """list movies and edit them and user info"""
-    o       = urlparse(request.url)
     api_key = get_user_api_key()
     user_id = get_user_id ( )
     return {'title':'Plant Tracer List, Edit and Play',
-            'hostname':o.hostname,
+            'api_key':api_key,
+            'user_id':user_id
+            }
+
+
+@bottle.route('/upload')
+@view('upload.html')
+def func_upload():
+    """Upload a new file"""
+    api_key = get_user_api_key()
+    user_id = get_user_id ( )
+    return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
             'user_id':user_id,
+            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
             }
 
 
@@ -153,15 +166,15 @@ def get_user_api_key():
     """TODO: Also check the cookies"""
 
     # check the query string
-    api_key = request.query['api_key']
+    api_key = request.query.get('api_key',None)
     if api_key:
         return api_key
     # check for a form submission
-    api_key = request.forms.get('api_key')
+    api_key = request.forms.get('api_key',None)
     if api_key:
         return api_key
     # Check for a cookie
-    api_key = request.get_cookie('api_key')
+    api_key = request.get_cookie('api_key',None)
     if api_key:
         return api_key
     return None
@@ -225,12 +238,26 @@ def api_new_movie():
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param base64_data: If present, the movie data.
+    :param movie: If present, the movie file
     """
 
-    movie_id = db.create_new_movie( get_user_id(), request.forms.get('title'),
-                                    request.forms.get('description'), request.forms.get('movie_base64_data'))
+    if 'movie' in request.files:
+        with io.BytesIO() as f:
+            request.files['movie'].save(f)
+            movie_data = f.getvalue()
+            if len(movie_data) > MAX_FILE_UPLOAD:
+                return {'error':True, 'message':f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+    else:
+        movie_data = None
+
+
+    movie_id = db.create_new_movie( get_user_id(),
+                                    title = request.forms.get('title'),
+                                    description = request.forms.get('description'),
+                                    movie_data = movie_data
+                                   )
     return {'error':False,'movie_id':movie_id}
+
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
@@ -256,6 +283,7 @@ def api_delete_movie():
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
+
 
 
 ################################################################
