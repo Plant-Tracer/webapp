@@ -37,6 +37,7 @@ from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
 
+
 __version__='0.0.1'
 VERSION_TEMPLATE='version.txt'
 
@@ -283,7 +284,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
-    return {'error':False, 'movies': db.list_movies( get_user_id() ) }
+    return json.dumps({'error':False, 'movies': db.list_movies( get_user_id() ) }, default=str)
 
 
 

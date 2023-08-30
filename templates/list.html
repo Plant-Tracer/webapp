@@ -1,15 +1,44 @@
 {% extends 'base.html' %}
 {% block title %} PlantTracer List, Edit and Play {% endblock %}
 
+{% block script %}
+<script>
+var user_id = {{user_id}};                  // not logged in
+var api_key = "{{api_key}}";                // no API key yet
+</script>
+{% endblock %}
+
+
 {% block body %}
 
-<h2>Edit </h2>
+<h2>User Info </h2>
 
 <p>ID: {{id}}</p>
-<p>Name: {{name}}</p>
+<p>Name: <span id='user-name'></span></p>
+<p>Email: <span id='user-email'></span></p>
+<p>Primary class: <span id='user-primary-class'></span></p>
 
+<h2>Your Movies</h2>
+<h3>Published</h3>
+<p class='instructions'><i>Published movies can be viewed by anyone in your class.</i></p>
+<div id='your-published-movies'></div>
 
-<p>
+<h3>Unpublished</h3>
+<p class='instructions'><i>Unpublished movies can only be published by a class instructor</i></p>
+<div id='your-unpublished-movies'></div>
+
+<h3>Deleted</h3>
+<p class='instructions'><i>Deleted movies will be automatically purged after two weeks</i></p>
+<div id='your-deleted-movies'></div>
+
+<h2>Your class movies</h2>
+<p class='instructions'><i>These movies have been published by a class instructor</i></p>
 
 <div id='message'></div>
+
+<script>
+$( document ).ready( function() {
+   list_movies();
+});
+</script>
 {% endblock %}

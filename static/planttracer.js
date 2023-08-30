@@ -82,8 +82,21 @@ function add_func() {
     $('#sum').html( a + b );
 }
 
-$( document ).ready( function() {
-});
+// List the movies
+function list_movies() {
+    console.log('list_movies');
+    $('#message').html('Listing movies...');
+
+    let formData = new FormData();
+    formData.append("api_key",  api_key); // on the upload form
+    fetch('/api/list-movies', { method:"POST", body:formData })
+        .then((response) => response.json())
+        .then((data) => {
+            console.log("data:",data);
+        })
+        .catch(console.error)
+    console.log('list_movies done');
+}
 
 
 // Wire up whatever happens to be present
