@@ -192,6 +192,7 @@ def api_check_api_key( ):
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
+    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
     if not validate_email(email, check_mx=True):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
@@ -201,7 +202,7 @@ def api_register():
     if db.remaining_course_registrations( course_key ) < 1:
         return NO_REMAINING_REGISTRATIONS
     db.register_email( email, course_key )
-    db.send_links( email )
+    db.send_links( email, planttracer_html_endpoint )
     return {'error':False}
 
 
@@ -209,14 +210,12 @@ def api_register():
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
+    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
     if not validate_email(email, check_mx=CHECK_MX):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
-    db.send_links(email)
+    db.send_links( email, planttracer_html_endpoint )
     return {'error':False,'message':'If you have an account, a link was sent.' }
-
-
-
 
 ################################################################
 ## Movies
