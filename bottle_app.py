@@ -32,7 +32,7 @@ from validate_email_address import validate_email
 
 
 import db
-from paths import STATIC_DIR,TEMPLATE_DIR,view
+from paths import STATIC_DIR,TEMPLATE_DIR,view,PLANTTRACER_API_ENDPOINT
 from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
@@ -132,6 +132,7 @@ def func_resend():
             'register':False
             }
 
+
 @bottle.route('/list')
 @view('list.html')
 def func_list():
@@ -140,7 +141,8 @@ def func_list():
     user_id = get_user_id ( )
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_id
+            'user_id':user_id,
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
 
 
@@ -153,7 +155,8 @@ def func_upload():
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
             'user_id':user_id,
-            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
+            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD,
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
 
 

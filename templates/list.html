@@ -1,6 +1,14 @@
 {% extends 'base.html' %}
 {% block title %} PlantTracer List, Edit and Play {% endblock %}
 
+{% block script %}
+<script>
+var user_id = {{user_id}};                  // not logged in
+var api_key = "{{api_key}}";                // no API key yet
+var planttracer_api_endpoint = "{{planttracer_api_endpoint}}";
+</script>
+{% endblock %}
+
 {% block body %}
 
 <h2>Edit </h2>
