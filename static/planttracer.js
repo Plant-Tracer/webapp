@@ -93,11 +93,45 @@ function list_movies() {
         .then((response) => response.json())
         .then((data) => {
             console.log("data:",data);
+            if (data['error']!=false){
+                $('#message').html('error: '+data['message']);
+            } else {
+                list_movies_data( data['movies'] );
+                $('#message').html('');
+            }
         })
         .catch(console.error)
     console.log('list_movies done');
 }
 
+
+
+function list_movies_data( movies ) {
+    function movies_fill_div( div, mlist ) {
+        let h = "<table>";
+        h += "<tr><th>id</th><th>title</th><th>description</th><th>published</th><th>delete?</th></tr>";
+
+        function movie_html( m ) {
+            let ch = m.published>0 ? 'checked' : '';
+            let d  = m.deleted>0 ? '' : '🗑 ';
+            return `<tr><td>${m.id}</td><td>${m.title}</td><td>${m.description}</td><td><input type='checkbox' ${ch}</td><td>${d}</td></tr>`;
+        }
+
+        if (mlist.length>0){
+            mlist.forEach( m => ( h += movie_html(m) ));
+        } else {
+            h += '<tr><td colspan="5"><i>No movies</i></td></tr>';
+        }
+
+        h += "</table>";
+        div.html(h);
+    }
+
+    movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
+    movies_fill_div( $('#your-unpublished-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
+    movies_fill_div( $('#your-deleted-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
+    movies_fill_div( $('#course-movies'), movies.filter( m => (m['course_id']==user_primary_course_id)));
+}
 
 // Wire up whatever happens to be present
 $( document ).ready( function() {

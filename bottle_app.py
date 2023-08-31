@@ -101,9 +101,14 @@ def func_privacy():
         return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
 
 ### Local Static
+
 @bottle.get('/static/<path:path>')
 def static_path(path):
     return bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+
+@bottle.get('/favicon.ico')
+def favicon():
+    static_path('favicon.ico')
 
 ## TEMPLATE VIEWS
 @bottle.route('/')
@@ -139,10 +144,11 @@ def func_resend():
 def func_list():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
-    user_id = get_user_id ( )
+    user_dict = get_user_dict( )
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_id,
+            'user_id':user_dict['id'],
+            'user_primary_course_id':user_dict['primary_course_id'],
             'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
 
@@ -185,10 +191,15 @@ def get_user_api_key():
 
 
 
-def get_user_id():
+def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
     userdict = db.validate_api_key( api_key )
+    return userdict
+
+def get_user_id():
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    userdict = get_user_dict()
     if 'id' in userdict:
         return userdict['id']
     logging.warning("invalid api_key = %s",api_key)
