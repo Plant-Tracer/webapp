@@ -57,7 +57,7 @@ MAX_FILE_UPLOAD = 1024*1024*16
 INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
-INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
+INVALID_COURSE_KEY   = {'error':True, 'message':'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
 CHECK_MX = False                # True didn't work
 
@@ -301,7 +301,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
-    return json.dumps({'error':False, 'movies': db.list_movies( get_user_id() ) }, default=str)
+    return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
 
 
