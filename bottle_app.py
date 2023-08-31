@@ -172,8 +172,10 @@ def func_upload():
 ## API
 
 def get_user_api_key():
-    """Gets the user APIkey from either the URL or the cookie or the form."""
-    """TODO: Also check the cookies"""
+    """Gets the user APIkey from either the URL or the cookie or the form.
+    :return: None if user is not logged in
+    """
+
 
     # check the query string
     api_key = request.query.get('api_key',None)
@@ -194,6 +196,8 @@ def get_user_api_key():
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
+    if api_key is None:
+        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
     userdict = db.validate_api_key( api_key )
     return userdict
 
@@ -202,7 +206,7 @@ def get_user_id():
     userdict = get_user_dict()
     if 'id' in userdict:
         return userdict['id']
-    logging.warning("invalid api_key = %s",api_key)
+    logging.warning("no ID in userdict = %s",userdict)
     raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
