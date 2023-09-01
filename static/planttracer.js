@@ -1,6 +1,6 @@
-// Combined
-// https://stackoverflow.com/questions/5448545/how-to-retrieve-get-parameters-from-javascript
 
+
+// Implements the registration web page
 function register_func() {
     let email = $('#email').val();
     if (email=='') {
@@ -18,6 +18,7 @@ function register_func() {
     });
 };
 
+// Implements the resend a link web page
 function resend_func() {
     let email = $('#email').val();
     if (email=='') {
@@ -35,6 +36,7 @@ function resend_func() {
         });
 };
 
+// Uploads an entire movie at once using an HTTP POST
 // https://stackoverflow.com/questions/5587973/javascript-upload-file
 async function upload_movie(inp)
 {
@@ -82,9 +84,9 @@ function add_func() {
     $('#sum').html( a + b );
 }
 
-// List the movies
+// Gets the list from the server of every movie we can view and displays it in the HTML element
+// The functions after this implement the interactivity
 function list_movies() {
-    console.log('list_movies');
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
@@ -101,17 +103,19 @@ function list_movies() {
             }
         })
         .catch(console.error)
-    console.log('list_movies done');
 }
 
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
 // the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
 // and then do a repaint.
 function row_checkbox_clicked( e ) {
-    console.log("row_checkbox_clicked e=",e);
-    console.log("movie_id=", e.getAttribute('x-movie_id'));
-    console.log("property=", e.getAttribute('x-property'));
-    console.log("checked=", e.checked);
+    const movie_id = e.getAttribute('x-movie_id');
+    const property = e.getAttribute('x-property');
+    const value    = e.checked;
+    console.log(`set movie_id ${property} = ${value}`)
+    // send message to server
+    // And refetch the movies
+    list_movies();
 }
 
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
@@ -119,35 +123,40 @@ function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
     const target = e.getAttribute('x-target');
     t = document.getElementById(target);
-    console.log('target=',target,'t=',t);
+    console.log("t=",t);
+    const property = t.getAttribute('x-property');
+    const oValue   = t.textContent;
     t.setAttribute('contenteditable','true');
-    t.setAttribute('x-original-value', t.value); // so we can restore if the user hits escape
     t.focus();
+
+    function finished_editing() {
+        t.setAttribute('contenteditable','false'); // no longer editable
+        t.blur();                                  // no longer key
+        const value = t.textContent;
+        if (value != oValue){
+            console.log(`set movie_id ${property} = ${value}`);
+        } else {
+            console.log(`value unchanged`);
+        }
+    }
+
     t.addEventListener('keydown', function(e) {
         if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
-            console.log('escape pressed');
+            console.log('tab or return pressed');
+            finished_editing();
         } else if (e.keyCode==27){ // escape pressed
-            console.log('escape pressed');
+            console.log(`escape pressed. Restore ${oValue}`);
+            t.textContent = oValue; // restore the original value
+            t.blur();           // does this work?
+            t.setAttribute('contenteditable','false'); // no longer editable
         } else {
-            console.log('keycode ',e.keyCode);
+            // Normal keypress
         }
     });
     t.addEventListener('blur', function(e) {
-        console.log('blur');
+        finished_editing();
     });
 }
-
-// This is called when the editing is over and the user clicked elsewhere
-function text_blur( e ) {
-    console.log("text blur e=",e);
-}
-
-function text_keypress( e ) {
-    console.log("keypress e=",e);
-}
-
-// todo - when lose focus, send it back
-// todo - if escape, restore original
 
 function list_movies_data( movies ) {
     // This fills in the given table with a given list
@@ -161,7 +170,8 @@ function list_movies_data( movies ) {
             function make_td_text(id,name,text) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
-                return `<td> <span id='${id}-${name}'> ${text} </span> <span class='editor' x-target='${id}-${name}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                return `<td> <span id='${id}-${name}' x-property='${name}'> ${text} </span>` +
+                    `<span class='editor' x-target='${id}-${name}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
             }
             // This products the HTML for each <td> that has a checkbox
             function make_td_checkbox(id,name,value) {
