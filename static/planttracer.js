@@ -53,7 +53,6 @@ async function upload_movie(inp)
     formData.append("api_key",  api_key); // on the upload form
     formData.append("title",       $('#movie-title').val());
     formData.append("description", $('#movie-description').val());
-    console.log('formData:',formData);
 
     const ctrl = new AbortController();    // timeout
     const timeoutId = setTimeout(() => ctrl.abort(), 5000);
@@ -85,7 +84,9 @@ function add_func() {
 }
 
 // Gets the list from the server of every movie we can view and displays it in the HTML element
+// It's called from the document ready function and after a movie change request is sent to the server.
 // The functions after this implement the interactivity
+//
 function list_movies() {
     $('#message').html('Listing movies...');
 
@@ -105,41 +106,61 @@ function list_movies() {
         .catch(console.error)
 }
 
+// This sends the data to the server and then redraws the screen
+function set_movie_property(movie_id, property, value)
+{
+    console.log(`set_movie_property(${movie_id}, ${property}, ${value})`);
+    let formData = new FormData();
+    formData.append("api_key",  api_key); // on the upload form
+    formData.append("movie_id", movie_id);
+    formData.append("property", property);
+    formData.append("value", value);
+    fetch('/api/set-movie-metadata', { method:"POST", body:formData})
+        .then((response) => response.json())
+        .then((data) => {
+            if (data['error']!=false){
+                $('#message').html('error: '+data['message']);
+            } else {
+                list_movies();
+            }
+        })
+        .catch(console.error);
+    console.log("set_movie_property done");
+}
+
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
 // the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
 // and then do a repaint.
 function row_checkbox_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     const property = e.getAttribute('x-property');
-    const value    = e.checked;
-    console.log(`set movie_id ${property} = ${value}`)
-    // send message to server
-    // And refetch the movies
-    list_movies();
+    const value    = e.checked ? 1 : 0;
+    set_movie_property(movie_id, property, value);
 }
 
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
 function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
-    const target = e.getAttribute('x-target');
-    t = document.getElementById(target);
-    console.log("t=",t);
-    const property = t.getAttribute('x-property');
-    const oValue   = t.textContent;
-    t.setAttribute('contenteditable','true');
-    t.focus();
+    const target = e.getAttribute('x-target'); // name of the target
+    t = document.getElementById(target);       // element of the target
+    const movie_id = t.getAttribute('x-movie_id'); // property we are changing
+    const property = t.getAttribute('x-property'); // property we are changing
+    const oValue   = t.textContent;                // current content of the text
+    t.setAttribute('contenteditable','true');      // make the text editable
+    t.focus();                                     // give it the focus
 
-    function finished_editing() {
+    function finished_editing() {                  // undoes editing and sends to server
         t.setAttribute('contenteditable','false'); // no longer editable
         t.blur();                                  // no longer key
         const value = t.textContent;
         if (value != oValue){
-            console.log(`set movie_id ${property} = ${value}`);
+            set_movie_property(movie_id, property, value);
         } else {
             console.log(`value unchanged`);
         }
     }
 
+    // handle tab, return and escape
     t.addEventListener('keydown', function(e) {
         if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
             console.log('tab or return pressed');
@@ -153,11 +174,14 @@ function row_pencil_clicked( e ) {
             // Normal keypress
         }
     });
+    // Click somewhere else to finish editing
     t.addEventListener('blur', function(e) {
         finished_editing();
     });
 }
 
+// top-level function is called to fill in all of the movies tables
+// It's called with a list of movies
 function list_movies_data( movies ) {
     // This fills in the given table with a given list
     function movies_fill_div( div, mlist ) {
@@ -194,7 +218,7 @@ function list_movies_data( movies ) {
         }
 
         h += "</table>";
-        console.log("h=",h);
+        //console.log("h=",h);
         div.html(h);
     }
     movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
