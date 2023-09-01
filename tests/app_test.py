@@ -2,7 +2,7 @@ import pytest
 import sys
 import os
 import bottle
-import warnings
+import logging
 import json
 
 from os.path import abspath,dirname
@@ -16,6 +16,9 @@ sys.path.append( dirname(dirname(abspath(__file__))))
 
 import bottle_app
 from paths import STATIC_DIR
+
+API_KEY = os.getenv('TEST_USER_APIKEY')
+
 
 def test_version():
     # With templates, res is just a string
@@ -31,8 +34,24 @@ def test_static_path():
 
 
 def test_templates():
+    # Test templates with and without an API_KEY
     with boddle(params={}):
         bottle_app.func_root()
         bottle_app.func_register()
         bottle_app.func_resend()
+        bottle_app.func_tos()
+
+        with pytest.raises(bottle.HTTPResponse):
+            bottle_app.func_list()
+
+        with pytest.raises(bottle.HTTPResponse):
+            bottle_app.func_upload()
+
+
+    with boddle(params={'api_key':API_KEY}):
+        bottle_app.func_root()
+        bottle_app.func_register()
+        bottle_app.func_resend()
+        bottle_app.func_list()
+        bottle_app.func_upload()
         bottle_app.func_tos()
