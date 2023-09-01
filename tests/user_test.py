@@ -134,7 +134,7 @@ def test_movie_update_metadata(new_movie):
     new_title = 'special new title ' + str(uuid.uuid4())
     with boddle(params = {'api_key':api_key,
                           'movie_id':movie_id,
-                          'key':'title',
+                          'property':'title',
                           'value':new_title}):
         bottle_app.api_set_movie_metadata()
 
@@ -144,7 +144,7 @@ def test_movie_update_metadata(new_movie):
     new_description = 'special new description ' + str(uuid.uuid4())
     with boddle(params = {'api_key':api_key,
                           'movie_id':movie_id,
-                          'key':'description',
+                          'property':'description',
                           'value':new_description}):
         bottle_app.api_set_movie_metadata()
 
@@ -153,7 +153,7 @@ def test_movie_update_metadata(new_movie):
     # Try to delete the movie
     with boddle(params = {'api_key':api_key,
                           'movie_id':movie_id,
-                          'key':'deleted',
+                          'property':'deleted',
                           'value':1}):
         bottle_app.api_set_movie_metadata()
     assert get_movie( api_key, movie_id)['deleted'] == 1
@@ -161,7 +161,7 @@ def test_movie_update_metadata(new_movie):
     # Undelete the movie
     with boddle(params = {'api_key':api_key,
                           'movie_id':movie_id,
-                          'key':'deleted',
+                          'property':'deleted',
                           'value':0}):
         bottle_app.api_set_movie_metadata()
     assert get_movie( api_key, movie_id)['deleted'] == 0
@@ -170,7 +170,7 @@ def test_movie_update_metadata(new_movie):
     assert get_movie( api_key, movie_id)['published'] == 0
     with boddle(params = {'api_key':api_key,
                           'movie_id':movie_id,
-                          'key':'published',
+                          'property':'published',
                           'value':1}):
         bottle_app.api_set_movie_metadata()
     assert get_movie( api_key, movie_id)['published'] == 0
