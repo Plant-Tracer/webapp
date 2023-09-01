@@ -95,7 +95,7 @@ def test_upload_movie_frame_by_frame():
     assert res['error']==False
 
 @pytest.mark.skip(reason='not working yet')
-def test_upload_movie_base64():
+def test_upload_movie_data():
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
     assert len(FRAME_FILES)>0
     with open(MOVIE_FILE_NAME,'rb') as f:

@@ -1,15 +1,11 @@
 {% extends 'base.html' %}
 {% block title %} PlantTracer App {% endblock %}
-{% block script %}
-<script type="text/javascript" charset="utf8" src="static/app_vars.js"></script>
-{% endblock %}
-{% block body %}
 
+{% block body %}
 <h2> Welcome! </h2>
 
 <ul>
-<li> <a href='/register'> Register for a new account</a> (you must have a <b>class key</b>).
+<li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).
 <li> <a href='/resend'> Resend your account login link</a>
 </ul>
-
 {% endblock %}

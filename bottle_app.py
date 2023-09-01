@@ -15,6 +15,7 @@ Debug locally:
 
 import sys
 import os
+import io
 import datetime
 import logging
 from urllib.parse import urlparse
@@ -23,6 +24,7 @@ import json
 import mistune
 import magic
 import bottle
+import base64
 from bottle import request
 from validate_email_address import validate_email
 
@@ -30,10 +32,11 @@ from validate_email_address import validate_email
 
 
 import db
-from paths import STATIC_DIR,TEMPLATE_DIR,view
+from paths import STATIC_DIR,TEMPLATE_DIR,view,PLANTTRACER_API_ENDPOINT
 from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
+
 
 __version__='0.0.1'
 VERSION_TEMPLATE='version.txt'
@@ -49,18 +52,18 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 
-NEW_MEMFILE_MAX = 1024*1024*16
+MAX_FILE_UPLOAD = 1024*1024*16
 
 INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
-INVALID_COURSE_KEY = {'error':True, 'message':'There is no course for that course key.'}
+INVALID_COURSE_KEY   = {'error':True, 'message':'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
 CHECK_MX = False                # True didn't work
 
 def expand_memfile_max():
-    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, NEW_MEMFILE_MAX)
-    bottle.BaseRequest.MEMFILE_MAX = NEW_MEMFILE_MAX
+    logging.info("Changing MEMFILE_MAX from %d to %d",bottle.BaseRequest.MEMFILE_MAX, MAX_FILE_UPLOAD)
+    bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
 
 
 def datetime_to_str(obj):
@@ -98,9 +101,14 @@ def func_privacy():
         return {'page':mistune.html(f.read()), 'style':PAGE_STYLE }
 
 ### Local Static
+
 @bottle.get('/static/<path:path>')
 def static_path(path):
     return bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+
+@bottle.get('/favicon.ico')
+def favicon():
+    static_path('favicon.ico')
 
 ## TEMPLATE VIEWS
 @bottle.route('/')
@@ -131,14 +139,75 @@ def func_resend():
             }
 
 
+@bottle.route('/list')
+@view('list.html')
+def func_list():
+    """list movies and edit them and user info"""
+    api_key = get_user_api_key()
+    user_dict = get_user_dict( )
+    return {'title':'Plant Tracer List, Edit and Play',
+            'api_key':api_key,
+            'user_id':user_dict['id'],
+            'admin':False,
+            'user_primary_course_id':user_dict['primary_course_id'],
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
+            }
+
+
+@bottle.route('/upload')
+@view('upload.html')
+def func_upload():
+    """Upload a new file"""
+    api_key = get_user_api_key()
+    user_id = get_user_id ( )
+    return {'title':'Plant Tracer List, Edit and Play',
+            'api_key':api_key,
+            'user_id':user_id,
+            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD,
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
+            }
+
+
+
 ################################################################
 ## API
 
+def get_user_api_key():
+    """Gets the user APIkey from either the URL or the cookie or the form.
+    :return: None if user is not logged in
+    """
+
+
+    # check the query string
+    api_key = request.query.get('api_key',None)
+    if api_key:
+        return api_key
+    # check for a form submission
+    api_key = request.forms.get('api_key',None)
+    if api_key:
+        return api_key
+    # Check for a cookie
+    api_key = request.get_cookie('api_key',None)
+    if api_key:
+        return api_key
+    return None
+
+
+
+def get_user_dict():
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    api_key = get_user_api_key()
+    if api_key is None:
+        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
+    userdict = db.validate_api_key( api_key )
+    return userdict
+
 def get_user_id():
-    userdict = db.validate_api_key( request.forms.get('api_key') )
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    userdict = get_user_dict()
     if 'id' in userdict:
         return userdict['id']
-    logging.warning("invalid api_key = %s",request.forms.get('api_key'))
+    logging.warning("no ID in userdict = %s",userdict)
     raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
@@ -156,6 +225,7 @@ def api_check_api_key( ):
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
+    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
     if not validate_email(email, check_mx=True):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
@@ -165,7 +235,7 @@ def api_register():
     if db.remaining_course_registrations( course_key ) < 1:
         return NO_REMAINING_REGISTRATIONS
     db.register_email( email, course_key )
-    db.send_links( email )
+    db.send_links( email, planttracer_html_endpoint )
     return {'error':False}
 
 
@@ -173,14 +243,12 @@ def api_register():
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
+    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
     if not validate_email(email, check_mx=CHECK_MX):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
-    db.send_links(email)
+    db.send_links( email, planttracer_html_endpoint )
     return {'error':False,'message':'If you have an account, a link was sent.' }
-
-
-
 
 ################################################################
 ## Movies
@@ -190,12 +258,26 @@ def api_new_movie():
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param base64_data: If present, the movie data.
+    :param movie: If present, the movie file
     """
 
-    movie_id = db.create_new_movie( get_user_id(), request.forms.get('title'),
-                                    request.forms.get('description'), request.forms.get('movie_base64_data'))
+    if 'movie' in request.files:
+        with io.BytesIO() as f:
+            request.files['movie'].save(f)
+            movie_data = f.getvalue()
+            if len(movie_data) > MAX_FILE_UPLOAD:
+                return {'error':True, 'message':f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+    else:
+        movie_data = None
+
+
+    movie_id = db.create_new_movie( get_user_id(),
+                                    title = request.forms.get('title'),
+                                    description = request.forms.get('description'),
+                                    movie_data = movie_data
+                                   )
     return {'error':False,'movie_id':movie_id}
+
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
@@ -221,6 +303,25 @@ def api_delete_movie():
 @bottle.route('/api/list-movies', method=['POST','GET'])
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
+
+@bottle.route('/api/set-movie-metadata', method='POST')
+def api_set_movie_metadata():
+    """ set some aspect of the movie's metadata
+    :param api_key: authorization key
+    :param movie_id: movie ID
+    :param property: which piece of metadata to set
+    :param value: what to set it to
+    """
+    logging.warning("request.forms=%s",list(request.forms.keys()))
+    logging.warning("api_key=%s",request.forms.get('api_key'))
+    logging.warning("get_user_id()=%s",get_user_id())
+
+    result = db.set_movie_metadata( get_user_id(),
+                                    int(request.forms.get('movie_id')),
+                                    request.forms.get('property'),
+                                    request.forms.get('value') )
+
+    return {'error':False, 'result':result}
 
 
 ################################################################
