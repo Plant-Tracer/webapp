@@ -304,6 +304,24 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
+@bottle.route('/api/set-movie-metadata', method='POST')
+def api_set_movie_metadata():
+    """ set some aspect of the movie's metadata
+    :param api_key: authorization key
+    :param movie_id: movie ID
+    :param property: which piece of metadata to set
+    :param value: what to set it to
+    """
+    logging.warning("request.forms=%s",list(request.forms.keys()))
+    logging.warning("api_key=%s",request.forms.get('api_key'))
+    logging.warning("get_user_id()=%s",get_user_id())
+
+    result = db.set_movie_metadata( get_user_id(),
+                                    int(request.forms.get('movie_id')),
+                                    request.forms.get('property'),
+                                    request.forms.get('value') )
+
+    return {'error':False, 'result':result}
 
 
 ################################################################
