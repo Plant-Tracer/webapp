@@ -104,17 +104,77 @@ function list_movies() {
     console.log('list_movies done');
 }
 
+// This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
+// the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
+// and then do a repaint.
+function row_checkbox_clicked( e ) {
+    console.log("row_checkbox_clicked e=",e);
+    console.log("movie_id=", e.getAttribute('x-movie_id'));
+    console.log("property=", e.getAttribute('x-property'));
+    console.log("checked=", e.checked);
+}
 
+// This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
+function row_pencil_clicked( e ) {
+    console.log('row_pencil_clicked e=',e);
+    const target = e.getAttribute('x-target');
+    t = document.getElementById(target);
+    console.log('target=',target,'t=',t);
+    t.setAttribute('contenteditable','true');
+    t.setAttribute('x-original-value', t.value); // so we can restore if the user hits escape
+    t.focus();
+    t.addEventListener('keydown', function(e) {
+        if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
+            console.log('escape pressed');
+        } else if (e.keyCode==27){ // escape pressed
+            console.log('escape pressed');
+        } else {
+            console.log('keycode ',e.keyCode);
+        }
+    });
+    t.addEventListener('blur', function(e) {
+        console.log('blur');
+    });
+}
+
+// This is called when the editing is over and the user clicked elsewhere
+function text_blur( e ) {
+    console.log("text blur e=",e);
+}
+
+function text_keypress( e ) {
+    console.log("keypress e=",e);
+}
+
+// todo - when lose focus, send it back
+// todo - if escape, restore original
 
 function list_movies_data( movies ) {
+    // This fills in the given table with a given list
     function movies_fill_div( div, mlist ) {
         let h = "<table>";
         h += "<tr><th>id</th><th>title</th><th>description</th><th>published</th><th>delete?</th></tr>";
 
+        // This produces the HTML for each row of the table
         function movie_html( m ) {
-            let ch = m.published>0 ? 'checked' : '';
-            let d  = m.deleted>0 ? '' : '🗑 ';
-            return `<tr><td>${m.id}</td><td>${m.title}</td><td>${m.description}</td><td><input type='checkbox' ${ch}</td><td>${d}</td></tr>`;
+            // This products the HTML for each <td> that has text
+            function make_td_text(id,name,text) {
+                // for debugging:
+                // return `<td> ${text} </td>`;
+                return `<td> <span id='${id}-${name}'> ${text} </span> <span class='editor' x-target='${id}-${name}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+            }
+            // This products the HTML for each <td> that has a checkbox
+            function make_td_checkbox(id,name,value) {
+                // for debugging:
+                // return `<td> ${name} = ${value} </td>`;
+                let ch = value > 0 ? 'checked' : '';
+                return `<td> <input id='${id}-${name}' x-movie_id='${m.id}' x-property='${name}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
+            }
+            return '<tr>'
+                + `<td> ${m.id} </td>`
+                + make_td_text(      m.id, "title", m.title) + make_td_text( m.id, "description", m.description)
+                + make_td_checkbox(  m.id, "published", m.published) + make_td_checkbox( m.id, "deleted", m.deleted)
+                + "</tr>\n";
         }
 
         if (mlist.length>0){
@@ -124,9 +184,9 @@ function list_movies_data( movies ) {
         }
 
         h += "</table>";
+        console.log("h=",h);
         div.html(h);
     }
-
     movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
     movies_fill_div( $('#your-unpublished-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
     movies_fill_div( $('#your-deleted-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));

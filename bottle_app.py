@@ -148,6 +148,7 @@ def func_list():
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
             'user_id':user_dict['id'],
+            'admin':False,
             'user_primary_course_id':user_dict['primary_course_id'],
             'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
