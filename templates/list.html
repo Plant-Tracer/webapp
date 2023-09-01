@@ -29,11 +29,16 @@ const user_primary_course_id   = {{user_primary_course_id}};
 <div class='mtable' id='your-unpublished-movies'></div>
 
 <h3>Deleted</h3>
-<p class='instructions'><i>Deleted movies will be automatically purged after two weeks</i></p>
+<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its deleted box.</i></p>
 <div class='mtable' id='your-deleted-movies'></div>
 
 <h2>Your course movies</h2>
-<p class='instructions'><i>These are the course movies available to you.</i></p>
+<p class='instructions'><i>These are the course movies available to you.</i>
+{% if admin %}
+You can can publish or unpublish movies by checking or unchecking the 'publish' box.
+{% endif %}
+</p>
+
 <div class='mtable' id='course-movies'></div>
 
 <div id='message'></div>
