@@ -130,49 +130,59 @@ def test_movie_upload(new_movie):
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""
+
     (movie_id, movie_title, api_key) = new_movie
+
+    # Validate the old title
+    assert get_movie( api_key, movie_id)['title'] == movie_title
+
     new_title = 'special new title ' + str(uuid.uuid4())
     with boddle(params = {'api_key':api_key,
-                          'movie_id':movie_id,
+                          'set_movie_id':movie_id,
                           'property':'title',
                           'value':new_title}):
-        bottle_app.api_set_metadata()
+        res = bottle_app.api_set_metadata()
+    logging.error('res=%s',res)
+    assert res['error']==False
 
     # Get the list of movies
     assert get_movie( api_key, movie_id)['title'] == new_title
 
     new_description = 'special new description ' + str(uuid.uuid4())
     with boddle(params = {'api_key':api_key,
-                          'movie_id':movie_id,
+                          'set_movie_id':movie_id,
                           'property':'description',
                           'value':new_description}):
-        bottle_app.api_set_metadata()
-
+        res = bottle_app.api_set_metadata()
+    assert res['error']==False
     assert get_movie( api_key, movie_id)['description'] == new_description
 
     # Try to delete the movie
     with boddle(params = {'api_key':api_key,
-                          'movie_id':movie_id,
+                          'set_movie_id':movie_id,
                           'property':'deleted',
                           'value':1}):
-        bottle_app.api_set_metadata()
+        res = bottle_app.api_set_metadata()
+    assert res['error']==False
     assert get_movie( api_key, movie_id)['deleted'] == 1
 
     # Undelete the movie
     with boddle(params = {'api_key':api_key,
-                          'movie_id':movie_id,
+                          'set_movie_id':movie_id,
                           'property':'deleted',
                           'value':0}):
-        bottle_app.api_set_metadata()
+        res = bottle_app.api_set_metadata()
+    assert res['error']==False
     assert get_movie( api_key, movie_id)['deleted'] == 0
 
     # Try to publish the movie under the user's API key. This should not work
     assert get_movie( api_key, movie_id)['published'] == 0
     with boddle(params = {'api_key':api_key,
-                          'movie_id':movie_id,
+                          'set_movie_id':movie_id,
                           'property':'published',
                           'value':1}):
-        bottle_app.api_set_metadata()
+        res = bottle_app.api_set_metadata()
+    assert res['error']==False
     assert get_movie( api_key, movie_id)['published'] == 0
 
     # Try to publish the movie with the course admin's API key. This should work
