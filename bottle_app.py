@@ -349,6 +349,9 @@ def api_set_metadata():
     if set_user_id is not None:
         set_user_id = int(set_user_id)
 
+    if (set_movie_id is None) and (set_user_id is None):
+        return {'error':True, 'result':'Either set_movie_id or set_user_id is required'}
+
     result = db.set_metadata( user_id=get_user_id(),
                               set_movie_id=set_movie_id,
                               set_user_id=set_user_id,
