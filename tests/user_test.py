@@ -136,7 +136,7 @@ def test_movie_update_metadata(new_movie):
                           'movie_id':movie_id,
                           'property':'title',
                           'value':new_title}):
-        bottle_app.api_set_movie_metadata()
+        bottle_app.api_set_metadata()
 
     # Get the list of movies
     assert get_movie( api_key, movie_id)['title'] == new_title
@@ -146,7 +146,7 @@ def test_movie_update_metadata(new_movie):
                           'movie_id':movie_id,
                           'property':'description',
                           'value':new_description}):
-        bottle_app.api_set_movie_metadata()
+        bottle_app.api_set_metadata()
 
     assert get_movie( api_key, movie_id)['description'] == new_description
 
@@ -155,7 +155,7 @@ def test_movie_update_metadata(new_movie):
                           'movie_id':movie_id,
                           'property':'deleted',
                           'value':1}):
-        bottle_app.api_set_movie_metadata()
+        bottle_app.api_set_metadata()
     assert get_movie( api_key, movie_id)['deleted'] == 1
 
     # Undelete the movie
@@ -163,7 +163,7 @@ def test_movie_update_metadata(new_movie):
                           'movie_id':movie_id,
                           'property':'deleted',
                           'value':0}):
-        bottle_app.api_set_movie_metadata()
+        bottle_app.api_set_metadata()
     assert get_movie( api_key, movie_id)['deleted'] == 0
 
     # Try to publish the movie under the user's API key. This should not work
@@ -172,7 +172,7 @@ def test_movie_update_metadata(new_movie):
                           'movie_id':movie_id,
                           'property':'published',
                           'value':1}):
-        bottle_app.api_set_movie_metadata()
+        bottle_app.api_set_metadata()
     assert get_movie( api_key, movie_id)['published'] == 0
 
     # Try to publish the movie with the course admin's API key. This should work
