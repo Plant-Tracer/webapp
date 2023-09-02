@@ -26,7 +26,7 @@ function resend_func() {
         return;
     }
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-    $.post('/api/resend-link', {email:email})
+    $.post('/api/resend-link', {email:email, planttracer_html_endpoint:planttracer_html_endpoint})
         .done(function(data) {
             $('#message').html('Response: ' + data['message']);
         })
