@@ -101,6 +101,12 @@ def delete_user( email ):
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
+def lookup_user( *, email ):
+    try:
+        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from users where email=%s",(email,), asDicts=True)[0]
+    except IndexError:
+        return {}
+
 def new_api_key( email ):
     """Create a new api_key for an email that is registered
     :param: email - the email
@@ -153,9 +159,9 @@ def send_links( email, planttracer_html_endpoint ):
 ## Course Management
 ################################################################
 
-def lookup_user( email ):
+def lookup_course( *, course_id ):
     try:
-        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from users where email=%s",(email,), asDicts=True)[0]
+        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from courses where id=%s",(course_id,), asDicts=True)[0]
     except IndexError:
         return {}
 
@@ -189,6 +195,13 @@ def remove_course_admin( email, *, course_key=None, course_id=None ):
                              "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_key=%s) "
                              "AND user_id IN (SELECT id FROM users WHERE email=%s)",
                              (course_key, email))
+
+
+def check_course_admin( user_id, course_id ):
+    """Return True if user_id is an admin in course_id"""
+    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * FROM admins WHERE user_id=%s AND course_id=%s LIMIT 1",
+                               (user_id,course_id))
+    return len(res)==1
 
 
 def validate_course_key( course_key ):

@@ -152,18 +152,27 @@ def func_resend():
             }
 
 
+LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 @bottle.route('/list', method=['GET'])
 @view('list.html')
 def func_list():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
-    user_dict = get_user_dict( )
+    user_dict  = get_user_dict( )
+    user_id     = user_dict['id']
+    user_primary_course_id   = user_dict['primary_course_id']
+    course_dict = db.lookup_course(course_id = user_primary_course_id)
+    logging.warning('course_dict=%s',course_dict)
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_dict['id'],
-            'admin':False,
-            'user_primary_course_id':user_dict['primary_course_id'],
-            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
+            'user_id':user_id,
+            'user_name':user_dict['name'],
+            'user_email':user_dict['email'],
+            'admin': db.check_course_admin( user_id, user_primary_course_id ),
+            'user_primary_course_id':user_primary_course_id,
+            'course_name':course_dict['course_name'],
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT,
+            'load_message':LOAD_MESSAGE
             }
 
 
@@ -172,10 +181,12 @@ def func_list():
 def func_upload():
     """Upload a new file"""
     api_key = get_user_api_key()
-    user_id = get_user_id ( )
+    user_dict = get_user_dict( )
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_id,
+            'user_id':user_dict['id'],
+            'user_name':user_dict['name'],
+            'user_primary_course_id':user_dict['primary_course_id'],
             'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD,
             'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
