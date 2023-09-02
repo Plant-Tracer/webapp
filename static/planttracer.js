@@ -2,7 +2,7 @@
 
 // Implements the registration web page
 function register_func() {
-    let email = $('#email').val();
+    let email = $('#email').val().toLowerCase();
     if (email=='') {
         $('#message').html("<b>Please provide an email address</b>");
         return;
@@ -20,7 +20,7 @@ function register_func() {
 
 // Implements the resend a link web page
 function resend_func() {
-    let email = $('#email').val();
+    let email = $('#email').val().toLowerCase();
     if (email=='') {
         $('#message').html("<b>Please provide an email address</b>");
         return;
