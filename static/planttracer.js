@@ -191,18 +191,18 @@ function list_movies_data( movies ) {
         // This produces the HTML for each row of the table
         function movie_html( m ) {
             // This products the HTML for each <td> that has text
-            function make_td_text(id,name,text) {
+            function make_td_text(movie_id,property,text) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
-                return `<td> <span id='${id}-${name}' x-property='${name}'> ${text} </span>` +
-                    `<span class='editor' x-target='${id}-${name}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                return `<td> <span id='${movie_id}-${property}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>` +
+                    `<span class='editor' x-target='${movie_id}-${property}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
             }
             // This products the HTML for each <td> that has a checkbox
-            function make_td_checkbox(id,name,value) {
+            function make_td_checkbox(movie_id,property,value) {
                 // for debugging:
-                // return `<td> ${name} = ${value} </td>`;
+                // return `<td> ${property} = ${value} </td>`;
                 let ch = value > 0 ? 'checked' : '';
-                return `<td> <input id='${id}-${name}' x-movie_id='${m.id}' x-property='${name}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
+                return `<td> <input id='${movie_id}-${property}' x-movie_id='${m.id}' x-property='${property}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
             return '<tr>'
                 + `<td> ${m.id} </td>`

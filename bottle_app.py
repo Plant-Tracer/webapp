@@ -102,23 +102,23 @@ def func_privacy():
 
 ### Local Static
 
-@bottle.get('/static/<path:path>')
+@bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
     return bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
 
-@bottle.get('/favicon.ico')
+@bottle.route('/favicon.ico', method=['GET'])
 def favicon():
     static_path('favicon.ico')
 
 ## TEMPLATE VIEWS
-@bottle.route('/')
+@bottle.route('/', method=['GET'])
 @view('index.html')
 def func_root():
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname}
 
-@bottle.route('/register')
+@bottle.route('/register', method=['GET'])
 @view('register.html')
 def func_register():
     """/register sends the register.html template which loads register.js with register variable set to True"""
@@ -128,7 +128,7 @@ def func_register():
             'register':True
             }
 
-@bottle.route('/resend')
+@bottle.route('/resend', method=['GET'])
 @view('register.html')
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
@@ -139,7 +139,7 @@ def func_resend():
             }
 
 
-@bottle.route('/list')
+@bottle.route('/list', method=['GET'])
 @view('list.html')
 def func_list():
     """list movies and edit them and user info"""
@@ -154,7 +154,7 @@ def func_list():
             }
 
 
-@bottle.route('/upload')
+@bottle.route('/upload', method=['GET'])
 @view('upload.html')
 def func_upload():
     """Upload a new file"""
