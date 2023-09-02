@@ -229,6 +229,7 @@ function list_movies_data( movies ) {
 
 // Wire up whatever happens to be present
 $( document ).ready( function() {
+    $('#load_message').html('');       // remove the load message
     $('#adder_button').click( add_func );
     $('#register_button').click( register_func );
     $('#resend_button').click( resend_func );
