@@ -328,11 +328,12 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
-@bottle.route('/api/set-movie-metadata', method='POST')
-def api_set_movie_metadata():
-    """ set some aspect of the movie's metadata
+@bottle.route('/api/set-metadata', method='POST')
+def api_set_metadata():
+    """ set some aspect of the metadata
     :param api_key: authorization key
-    :param movie_id: movie ID
+    :param movie_id: movie ID - if present, we are setting movie metadata
+    :param user_id:  user ID  - if present, we are setting user metadata. (May not be the user_id from the api key)
     :param property: which piece of metadata to set
     :param value: what to set it to
     """
@@ -340,10 +341,19 @@ def api_set_movie_metadata():
     logging.warning("api_key=%s",request.forms.get('api_key'))
     logging.warning("get_user_id()=%s",get_user_id())
 
-    result = db.set_movie_metadata( get_user_id(),
-                                    int(request.forms.get('movie_id')),
-                                    request.forms.get('property'),
-                                    request.forms.get('value') )
+    set_movie_id = request.forms.get('set_movie_id')
+    if set_movie_id is not None:
+        set_movie_id = int(set_movie_id)
+
+    set_user_id = request.forms.get('set_user_id')
+    if set_user_id is not None:
+        set_user_id = int(set_user_id)
+
+    result = db.set_metadata( user_id=get_user_id(),
+                              set_movie_id=set_movie_id,
+                              set_user_id=set_user_id,
+                              property=request.forms.get('property'),
+                              value=request.forms.get('value') )
 
     return {'error':False, 'result':result}
 

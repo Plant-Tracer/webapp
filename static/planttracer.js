@@ -107,15 +107,15 @@ function list_movies() {
 }
 
 // This sends the data to the server and then redraws the screen
-function set_movie_property(movie_id, property, value)
+function set_property(user_id,movie_id, property, value)
 {
-    console.log(`set_movie_property(${movie_id}, ${property}, ${value})`);
+    console.log(`set_property(${user_id}, ${movie_id}, ${property}, ${value})`);
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    formData.append("movie_id", movie_id);
+    formData.append("set_movie_id", movie_id);
     formData.append("property", property);
     formData.append("value", value);
-    fetch('/api/set-movie-metadata', { method:"POST", body:formData})
+    fetch('/api/set-metadata', { method:"POST", body:formData})
         .then((response) => response.json())
         .then((data) => {
             if (data['error']!=false){
@@ -125,17 +125,18 @@ function set_movie_property(movie_id, property, value)
             }
         })
         .catch(console.error);
-    console.log("set_movie_property done");
+    console.log("set_property done");
 }
 
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
 // the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
 // and then do a repaint.
 function row_checkbox_clicked( e ) {
+    const user_id  = e.getAttribute('x-user_id');
     const movie_id = e.getAttribute('x-movie_id');
     const property = e.getAttribute('x-property');
     const value    = e.checked ? 1 : 0;
-    set_movie_property(movie_id, property, value);
+    set_property(user_id, movie_id, property, value);
 }
 
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
@@ -143,6 +144,7 @@ function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
     const target = e.getAttribute('x-target'); // name of the target
     t = document.getElementById(target);       // element of the target
+    const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
     const property = t.getAttribute('x-property'); // property we are changing
     const oValue   = t.textContent;                // current content of the text
@@ -154,7 +156,7 @@ function row_pencil_clicked( e ) {
         t.blur();                                  // no longer key
         const value = t.textContent;
         if (value != oValue){
-            set_movie_property(movie_id, property, value);
+            set_property(user_id, movie_id, property, value);
         } else {
             console.log(`value unchanged`);
         }
