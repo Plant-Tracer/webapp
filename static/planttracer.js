@@ -13,7 +13,7 @@ function register_func() {
         return;
     }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-    $.post('/api/register', {email:email, course_key:course_key}, function(data) {
+    $.post('/api/register', {email:email, course_key:course_key, planttracer_html_endpoint:planttracer_html_endpoint}, function(data) {
         alert(data);
     });
 };
