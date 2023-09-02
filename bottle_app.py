@@ -102,9 +102,19 @@ def func_privacy():
 
 ### Local Static
 
+# Disable caching during development.
+# https://stackoverflow.com/questions/24672996/python-bottle-and-cache-control
+# "Note: If there is a Cache-Control header with the max-age or s-maxage directive in the response,
+#  the Expires header is ignored."
+# "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires
+# Unfortunately, we are getting duplicate cache-control headers.
+# So better to disable in the client:
+# https://www.webinstinct.com/faq/how-to-disable-browser-cache
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    return bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+    response = bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+    response.set_header('Cache-Control','public, max-age=5')
+    return response
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
