@@ -10,6 +10,6 @@ Keep this email message!  You can use it to upload plant movies to the website a
 
 Upload a new movie: {{planttracer_html_endpoint}}/upload?api_key={{api_key}}
 
-List or edit your movies: {{planttracer_html_endpoint}}/edit?api_key={{api_key}}
+List or edit your movies: {{planttracer_html_endpoint}}/list?api_key={{api_key}}
 
-Edit your profile: {{planttracer_endpoint}}/list?api_key={{api_key}}
+Edit your profile: {{planttracer_html_endpoint}}/list?api_key={{api_key}}
