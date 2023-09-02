@@ -32,7 +32,7 @@ from validate_email_address import validate_email
 
 
 import db
-from paths import STATIC_DIR,TEMPLATE_DIR,view,PLANTTRACER_API_ENDPOINT
+from paths import STATIC_DIR,TEMPLATE_DIR,view,PLANTTRACER_API_ENDPOINT,PLANTTRACER_HTML_ENDPOINT
 from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
@@ -125,17 +125,20 @@ def func_register():
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
-            'register':True
+            'register':True,
+            'planttracer_html_endpoint':PLANTTRACER_HTML_ENDPOINT
             }
 
 @bottle.route('/resend', method=['GET'])
 @view('register.html')
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
+    logging.warning("endpoint=%s",PLANTTRACER_API_ENDPOINT);
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
-            'register':False
+            'register':False,
+            'planttracer_html_endpoint':PLANTTRACER_HTML_ENDPOINT
             }
 
 
