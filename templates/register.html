@@ -1,5 +1,11 @@
 {% extends 'base.html' %}
 {% block title %} PlantTracer App {% endblock %}
+{% block script %}
+<script>
+const version = '0.1.0';
+const planttracer_api_endpoint = "{{planttracer_api_endpoint}}";
+</script>
+{% endblock %}
 
 {% block body %}
 
