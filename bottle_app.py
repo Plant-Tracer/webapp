@@ -102,9 +102,19 @@ def func_privacy():
 
 ### Local Static
 
+# Disable caching during development.
+# https://stackoverflow.com/questions/24672996/python-bottle-and-cache-control
+# "Note: If there is a Cache-Control header with the max-age or s-maxage directive in the response,
+#  the Expires header is ignored."
+# "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires
+# Unfortunately, we are getting duplicate cache-control headers.
+# So better to disable in the client:
+# https://www.webinstinct.com/faq/how-to-disable-browser-cache
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    return bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+    response = bottle.static_file(path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR,path)))
+    response.set_header('Cache-Control','public, max-age=5')
+    return response
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
@@ -142,18 +152,27 @@ def func_resend():
             }
 
 
+LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 @bottle.route('/list', method=['GET'])
 @view('list.html')
 def func_list():
     """list movies and edit them and user info"""
     api_key = get_user_api_key()
-    user_dict = get_user_dict( )
+    user_dict  = get_user_dict( )
+    user_id     = user_dict['id']
+    user_primary_course_id   = user_dict['primary_course_id']
+    course_dict = db.lookup_course(course_id = user_primary_course_id)
+    logging.warning('course_dict=%s',course_dict)
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_dict['id'],
-            'admin':False,
-            'user_primary_course_id':user_dict['primary_course_id'],
-            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
+            'user_id':user_id,
+            'user_name':user_dict['name'],
+            'user_email':user_dict['email'],
+            'admin': db.check_course_admin( user_id, user_primary_course_id ),
+            'user_primary_course_id':user_primary_course_id,
+            'course_name':course_dict['course_name'],
+            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT,
+            'load_message':LOAD_MESSAGE
             }
 
 
@@ -162,10 +181,12 @@ def func_list():
 def func_upload():
     """Upload a new file"""
     api_key = get_user_api_key()
-    user_id = get_user_id ( )
+    user_dict = get_user_dict( )
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_id,
+            'user_id':user_dict['id'],
+            'user_name':user_dict['name'],
+            'user_primary_course_id':user_dict['primary_course_id'],
             'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD,
             'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
             }
@@ -307,11 +328,12 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
-@bottle.route('/api/set-movie-metadata', method='POST')
-def api_set_movie_metadata():
-    """ set some aspect of the movie's metadata
+@bottle.route('/api/set-metadata', method='POST')
+def api_set_metadata():
+    """ set some aspect of the metadata
     :param api_key: authorization key
-    :param movie_id: movie ID
+    :param movie_id: movie ID - if present, we are setting movie metadata
+    :param user_id:  user ID  - if present, we are setting user metadata. (May not be the user_id from the api key)
     :param property: which piece of metadata to set
     :param value: what to set it to
     """
@@ -319,10 +341,22 @@ def api_set_movie_metadata():
     logging.warning("api_key=%s",request.forms.get('api_key'))
     logging.warning("get_user_id()=%s",get_user_id())
 
-    result = db.set_movie_metadata( get_user_id(),
-                                    int(request.forms.get('movie_id')),
-                                    request.forms.get('property'),
-                                    request.forms.get('value') )
+    def converter(x):
+        if (x=='null') or (x is None):
+            return None
+        return int(x)
+
+    set_movie_id = converter(request.forms.get('set_movie_id'))
+    set_user_id  = converter(request.forms.get('set_user_id'))
+
+    if (set_movie_id is None) and (set_user_id is None):
+        return {'error':True, 'result':'Either set_movie_id or set_user_id is required'}
+
+    result = db.set_metadata( user_id=get_user_id(),
+                              set_movie_id=set_movie_id,
+                              set_user_id=set_user_id,
+                              property=request.forms.get('property'),
+                              value=request.forms.get('value') )
 
     return {'error':False, 'result':result}
 

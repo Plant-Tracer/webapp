@@ -138,7 +138,9 @@ CREATE TABLE `movies` (
   FULLTEXT KEY `description` (`description`),
   FULLTEXT KEY `title_ft` (`title`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`)
+  CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
+  CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
+  CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -155,11 +157,13 @@ CREATE TABLE `users` (
   `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `primary_course_id` int NOT NULL,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
+  `enabled` int DEFAULT '1',
   `links_sent_without_acknowledgement` int NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   KEY `c4` (`primary_course_id`),
-  CONSTRAINT `c4` FOREIGN KEY (`primary_course_id`) REFERENCES `courses` (`id`)
+  CONSTRAINT `c4` FOREIGN KEY (`primary_course_id`) REFERENCES `courses` (`id`),
+  CONSTRAINT `users_chk_1` CHECK (((0 <= `enabled`) <= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -172,4 +176,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2023-08-31  8:16:33
+-- Dump completed on 2023-09-02 11:07:07
