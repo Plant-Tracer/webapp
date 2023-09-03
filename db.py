@@ -347,7 +347,9 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, valu
     # Currently, users can only set their own data
     if set_user_id:
         if user_id == set_user_id:
-            ret = dbfile.DBMySQL.csfr( get_dbwriter(),
-                                       "UPDATE users set %s=%s where id=%s",
-                                       (property, value, user_id))
-            return ret
+            property = property.lower()
+            if property in ['name','email']:
+                ret = dbfile.DBMySQL.csfr( get_dbwriter(),
+                                           f"UPDATE users set {property}=%s where id=%s",
+                                           (value, user_id))
+                return ret

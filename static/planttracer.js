@@ -107,11 +107,12 @@ function list_movies() {
 }
 
 // This sends the data to the server and then redraws the screen
-function set_property(user_id,movie_id, property, value)
+function set_property(user_id, movie_id, property, value)
 {
     console.log(`set_property(${user_id}, ${movie_id}, ${property}, ${value})`);
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
+    formData.append("set_user_id", user_id);
     formData.append("set_movie_id", movie_id);
     formData.append("property", property);
     formData.append("value", value);
