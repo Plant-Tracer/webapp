@@ -2,9 +2,11 @@
 {% block title %} PlantTracer List, Edit and Play {% endblock %}
 {% block script %}
 <script>
+const version = '0.1.0';
 var user_id = {{user_id}};                  // not logged in
 var api_key = "{{api_key}}";                // no API key yet
 var MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
+const user_primary_course_id   = {{user_primary_course_id}};
 </script>
 {% endblock %}
 
@@ -13,14 +15,19 @@ var MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
 <h2>Upload </h2>
 
 <p>ID: {{user_id}}</p>
-<p>Name: <span id='user_name'></span></p>
+<p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
+          <span class='editor'  x-target='user-name'    onclick='row_pencil_clicked(this)'> ✏️  </span>
+</p>
+<p>Email: <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
+          <span class='editor'  x-target='user-email'    onclick='row_pencil_clicked(this)'> ✏️  </span>
 
 
-<p><b>Please enter your movie title and then select your movie..</b></p>
 
-<label for='title'>Title:</label> <input type='text' id='movie-title' name='title'></br>
-<label for='description'>Description:</label> <input type='text' id='movie-description' name='description'></br>
-<input id='movie-file' type="file" onchange="upload_movie(this)"></br>
+<p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
+
+<label for='title'>Title:</label> <input type='text' id='movie-title' name='title' onkeydown='check_upload_metadata()'></br>
+<label for='description'>Description:</label> <input type='text' id='movie-description' onkeydown='check_upload_metadata()' name='description'></br>
+<input id='movie-file' type="file" onchange="upload_movie(this)" disabled='true'></br>
 <p><div id='message'></div></p>
 
 <h2>Done uploading?</h2>

@@ -14,12 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: "Deploy SSH"
+      - name: "Deploy to dev.plannttracer"
         run: |
-          APP_HOST=app.planttracer.com
+          APP_HOST=dev.planttracer.com
           SSH_USER=planttracer
           eval $(ssh-agent)
           base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
           ssh-add -l
-          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git pull --recurse-submodules && make install-dependencies && make touch"
-          echo The PR has been merged
+          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "cd $APP_HOST;git checkout main && git pull --recurse-submodules && make install-dependencies && make touch"
