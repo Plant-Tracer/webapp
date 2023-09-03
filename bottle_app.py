@@ -341,13 +341,13 @@ def api_set_metadata():
     logging.warning("api_key=%s",request.forms.get('api_key'))
     logging.warning("get_user_id()=%s",get_user_id())
 
-    set_movie_id = request.forms.get('set_movie_id')
-    if set_movie_id is not None:
-        set_movie_id = int(set_movie_id)
+    def converter(x):
+        if (x=='null') or (x is None):
+            return None
+        return int(x)
 
-    set_user_id = request.forms.get('set_user_id')
-    if set_user_id is not None:
-        set_user_id = int(set_user_id)
+    set_movie_id = converter(request.forms.get('set_movie_id'))
+    set_user_id  = converter(request.forms.get('set_user_id'))
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error':True, 'result':'Either set_movie_id or set_user_id is required'}
