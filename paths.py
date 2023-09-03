@@ -15,8 +15,7 @@ if HOME is None:
 STATIC_DIR   = join(dirname(abspath(__file__)), 'static')
 TEMPLATE_DIR = join(dirname(abspath(__file__)), 'templates')
 
-PLANTTRACER_API_ENDPOINT = os.environ['PLANTTRACER_API_ENDPOINT']
-PLANTTRACER_HTML_ENDPOINT = os.environ['PLANTTRACER_HTML_ENDPOINT']
+PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
 
 # Add the relative template path (since jinja2 doesn't like absolute paths)
