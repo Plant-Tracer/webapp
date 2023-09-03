@@ -101,6 +101,12 @@ def delete_user( email ):
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
+def lookup_user( *, email ):
+    try:
+        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from users where email=%s",(email,), asDicts=True)[0]
+    except IndexError:
+        return {}
+
 def new_api_key( email ):
     """Create a new api_key for an email that is registered
     :param: email - the email
@@ -153,9 +159,9 @@ def send_links( email, planttracer_html_endpoint ):
 ## Course Management
 ################################################################
 
-def lookup_user( email ):
+def lookup_course( *, course_id ):
     try:
-        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from users where email=%s",(email,), asDicts=True)[0]
+        return dbfile.DBMySQL.csfr( get_dbreader(), "select * from courses where id=%s",(course_id,), asDicts=True)[0]
     except IndexError:
         return {}
 
@@ -189,6 +195,13 @@ def remove_course_admin( email, *, course_key=None, course_id=None ):
                              "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_key=%s) "
                              "AND user_id IN (SELECT id FROM users WHERE email=%s)",
                              (course_key, email))
+
+
+def check_course_admin( user_id, course_id ):
+    """Return True if user_id is an admin in course_id"""
+    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * FROM admins WHERE user_id=%s AND course_id=%s LIMIT 1",
+                               (user_id,course_id))
+    return len(res)==1
 
 
 def validate_course_key( course_key ):
@@ -302,29 +315,41 @@ SET_MOVIE_METADATA = {
     'published':'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 }
 
-def set_movie_metadata(user_id, movie_id, property, value):
+def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, value):
     """We tried doing this in a single statement and it failed"""
     # First compute @is_owner
 
-    logging.warning("movie_id=%s (%s) property=%s value=%s",movie_id,type(movie_id),property,value)
+    logging.warning("set_user_id=%s set_movie_id=%s property=%s value=%s",set_user_id, set_movie_id,property,value)
     assert isinstance(user_id,int)
-    assert isinstance(movie_id,int)
+    assert isinstance(set_movie_id,int) or (set_movie_id is None)
+    assert isinstance(set_user_id,int) or (set_user_id is None)
     assert isinstance(property,str)
     assert value is not None
 
     MAPPER = {0:'FALSE',
               1:'TRUE'}
 
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from movies where id=%s)", (user_id,movie_id), debug=True)
-    is_owner = MAPPER[res[0][0]]
+    if set_movie_id:
+        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from movies where id=%s)", (user_id, set_movie_id), debug=True)
+        is_owner = MAPPER[res[0][0]]
 
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
-                               (user_id,movie_id))
-    is_admin = MAPPER[res[0][0]]
-    logging.warning("user_id=%s movie_id=%s property=%s value=%s is_owner=%s is_admin=%s",user_id, movie_id, property, value, is_owner,is_admin)
+        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
+                                   (user_id, set_movie_id))
+        is_admin = MAPPER[res[0][0]]
+        logging.warning("user_id=%s set_movie_id=%s property=%s value=%s is_owner=%s is_admin=%s",user_id, set_movie_id, property, value, is_owner,is_admin)
 
-    cmd = SET_MOVIE_METADATA[property].replace('@is_owner',is_owner).replace('@is_admin',is_admin)
-    args = [ value, movie_id ]
+        cmd = SET_MOVIE_METADATA[property].replace('@is_owner',is_owner).replace('@is_admin',is_admin)
+        args = [ value, set_movie_id ]
 
-    ret = dbfile.DBMySQL.csfr( get_dbwriter(), cmd, args, debug=True)
-    return ret
+        ret = dbfile.DBMySQL.csfr( get_dbwriter(), cmd, args, debug=True)
+        return ret
+
+    # Currently, users can only set their own data
+    if set_user_id:
+        if user_id == set_user_id:
+            property = property.lower()
+            if property in ['name','email']:
+                ret = dbfile.DBMySQL.csfr( get_dbwriter(),
+                                           f"UPDATE users set {property}=%s where id=%s",
+                                           (value, user_id))
+                return ret

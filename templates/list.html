@@ -8,17 +8,25 @@ const user_id = {{user_id}};                  // not logged in
 const api_key = "{{api_key}}";                // no API key yet
 const planttracer_api_endpoint = "{{planttracer_api_endpoint}}";
 const user_primary_course_id   = {{user_primary_course_id}};
+
 </script>
 {% endblock %}
 
 {% block body %}
 
+<div id='load_message'><b>{{load_message}}</b></div>
+
 <h2>User Info </h2>
 
-<p>ID: {{id}}</p>
-<p>Name: <span id='user-name'></span></p>
-<p>Email: <span id='user-email'></span></p>
-<p>Primary course: <span id='user-primary-course'></span></p>
+<p>ID: {{user_id}}</p>
+<p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
+          <span class='editor'  x-target='user-name'    onclick='row_pencil_clicked(this)'> ✏️  </span>
+</p>
+<p>Email: <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
+          <span class='editor'  x-target='user-email'    onclick='row_pencil_clicked(this)'> ✏️  </span>
+
+</p>
+<p>Primary course: <span id='course-name'> {{course_name}} ({{user_primary_course_id}}) </span></p>
 
 <h2>Your Movies</h2>
 <h3>Published</h3>
