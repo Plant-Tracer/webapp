@@ -114,9 +114,13 @@ def get_movie( api_key, movie_id):
     try:
         return [movie for movie in movies if movie['id']==movie_id][0]
     except IndexError as e:
-        logging.error("api_key=%s movie_id=%s",api_key,movie_id)
+        user_id = bottle_app.validate_api_key( api_key )['user_id']
+        logging.error("api_key=%s movie_id=%s user_id=",api_key,movie_id,user_id)
         logging.error("len(movies)=%s",len(movies))
         for movie in movies:
+            logging.error("%s",str(movie))
+        logging.error("Full database:")
+        for movie in dbfile.DBMySQL.csfr( db.get_dbreader(), "select * from movies",(),asDicts=True):
             logging.error("%s",str(movie))
         raise
 
