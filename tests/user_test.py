@@ -13,6 +13,7 @@ sys.path.append( dirname(dirname(abspath(__file__))))
 
 import bottle_app
 import db
+import ctools.dbfile as dbfile
 from boddle import boddle
 
 MYDIR = dirname(abspath(__file__))
@@ -110,7 +111,21 @@ def movie_list(api_key):
 
 def get_movie( api_key, movie_id):
     """Used for testing. Just pull the specific movie"""
-    return [movie for movie in movie_list(api_key) if movie['id']==movie_id][0]
+    movies = movie_list(api_key)
+    for movie in movies:
+        return movie
+
+    user_id = db.validate_api_key( api_key )['user_id']
+    logging.error("api_key=%s movie_id=%s user_id=%s",api_key,movie_id,user_id)
+    logging.error("len(movies)=%s",len(movies))
+    for movie in movies:
+        logging.error("%s",str(movie))
+    dbreader = db.get_dbreader()
+    logging.error("Full database: (dbreader: %s)",dbreader)
+    for movie in dbfile.DBMySQL.csfr( dbreader, "select * from movies",(),asDicts=True):
+        logging.error("%s",str(movie))
+    raise RuntimeError(f"No movie has movie_id {movie_id}")
+
 
 def test_movie_upload(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
