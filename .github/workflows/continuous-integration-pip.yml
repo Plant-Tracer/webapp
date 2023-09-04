@@ -40,9 +40,8 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST: NO
-          TEST_ENDPOINT:               ${{ vars.TEST_ENDPOINT }}
-          PLANTTRACER_API_ENDPOINT:    ${{ vars.PLANTTRACER_API_ENDPOINT }}
-          PLANTTRACER_HTML_ENDPOINT:   ${{ vars.PLANTTRACER_HTML_ENDPOINT }}
+          TEST_ENDPOINT:           ${{ vars.TEST_ENDPOINT }}
+          PLANTTRACER_ENDPOINT:    ${{ vars.PLANTTRACER_API_ENDPOINT }}
           TEST_USER_EMAIL:  ${{ vars.TEST_USER_EMAIl }}
           TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
           MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
