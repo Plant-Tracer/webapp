@@ -1,8 +1,9 @@
-
+////////////////////////////////////////////////////////////////
+///  registration and resend pages
 
 // Implements the registration web page
 function register_func() {
-    let email = $('#email').val().toLowerCase();
+    const email = $('#email').val().toLowerCase();
     if (email=='') {
         $('#message').html("<b>Please provide an email address</b>");
         return;
@@ -36,13 +37,39 @@ function resend_func() {
         });
 };
 
+////////////////////////////////////////////////////////////////
+// Upload pages
+// Enable the movie-file upload when we have at least 3 characters of title and description
+function check_upload_metadata()
+{
+    const title = $('#movie-title').val();
+    const description = $('#movie-description').val();
+
+    $('#movie-file').prop('disabled', (title.length < 3 || description.length < 3));
+}
+
 // Uploads an entire movie at once using an HTTP POST
 // https://stackoverflow.com/questions/5587973/javascript-upload-file
+const UPLOAD_TIMEOUT_SECONDS = 20;
 async function upload_movie(inp)
 {
+    const title = $('#movie-title').val();
+    const description = $('#movie-description').val();
+
+    console.log('title.length=',title.length);
+    if (title.length < 3) {
+        $('#message').html('<b>Movie title must be at least 3 characters long');
+        return;
+    }
+
+    if (description.length < 3) {
+        $('#message').html('<b>Movie description must be at least 3 characters long');
+        return;
+    }
+
     $('#message').html(`Uploading image...`);
     console.log("upload_movie inp=",inp);
-    let movieFile = inp.files[0];
+    const movieFile = inp.files[0];
     if (movieFile.fileSize > MAX_FILE_UPLOAD) {
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
@@ -51,11 +78,11 @@ async function upload_movie(inp)
     let formData = new FormData();
     formData.append("movie",    movieFile); // the movie itself
     formData.append("api_key",  api_key); // on the upload form
-    formData.append("title",       $('#movie-title').val());
-    formData.append("description", $('#movie-description').val());
+    formData.append("title",       title);
+    formData.append("description", description);
 
     const ctrl = new AbortController();    // timeout
-    const timeoutId = setTimeout(() => ctrl.abort(), 5000);
+    const timeoutId = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
 
     try {
         let r = await fetch('/api/new-movie',
@@ -64,15 +91,21 @@ async function upload_movie(inp)
         if (r.status!=200) {
             $('#message').html(`<i>Error uploading movie: ${r.status}</i>`);
         } else{
-            const body = await r.text();
-            $('#message').html(`Movie successfully uploaded: ${body}`);
-            $('#movie-title').val('');
-            $('#movie-description').val('');
-            $('#movie-file').val('');
+            const body = await r.json();
+            console.log('body=',body);
+            if (body.error==false ){
+                $('#message').html(`Movie ${body.movie_id} successfully uploaded. <a href='/list?api_key=${api_key}'>List movies</a>`);
+                $('#movie-title').val('');
+                $('#movie-description').val('');
+                $('#movie-file').val('');
+                check_upload_metadata(); // disable the button
+            } else {
+                $('#message').html(`Error uploading movie. ${body.message}`);
+            }
         }
     } catch(e) {
         console.log('Error uploading movie:',e);
-        $('#message').html('Error uploading movie.');
+        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
     }
 }
 

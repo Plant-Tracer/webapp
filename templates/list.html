@@ -6,15 +6,35 @@
 const version = '0.1.0';
 const user_id = {{user_id}};                  // not logged in
 const api_key = "{{api_key}}";                // no API key yet
-const planttracer_api_endpoint = "{{planttracer_api_endpoint}}";
 const user_primary_course_id   = {{user_primary_course_id}};
 
 </script>
 {% endblock %}
 
 {% block body %}
-
 <div id='load_message'><b>{{load_message}}</b></div>
+
+<style>
+div.mtable table {
+ border:1px solid black;
+ border-collapse:collapse;
+ overflow-x:hidden;
+}
+
+div.mtable input[type=checkbox] {
+   color:black;
+   background-color: yellow;
+}
+
+div.mtable th {
+ border:1px solid red;
+}
+
+div.mtable td {
+ border:1px solid blue;
+}
+
+</style>
 
 <h2>User Info </h2>
 
@@ -52,27 +72,6 @@ You can can publish or unpublish movies by checking or unchecking the 'publish' 
 
 <div id='message'></div>
 
-<style>
-div.mtable table {
- border:1px solid black;
- border-collapse:collapse;
- overflow-x:hidden;
-}
-
-div.mtable input[type=checkbox] {
-   color:black;
-   background-color: yellow;
-}
-
-div.mtable th {
- border:1px solid red;
-}
-
-div.mtable td {
- border:1px solid blue;
-}
-
-</style>
 
 <script>
 $( document ).ready( function() {
