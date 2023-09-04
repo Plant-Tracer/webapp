@@ -291,7 +291,7 @@ def list_movies( user_id ):
     This should be updated so that we can request only a specific movie
     """
     return dbfile.DBMySQL.csfr( get_dbreader(),
-                                """SELECT * from movies
+                                """SELECT * from movies LEFT JOIN users on movies.user_id = users.id
                                 WHERE user_id=%s
                                 OR
                                 (course_id = (SELECT course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
