@@ -32,7 +32,7 @@ from validate_email_address import validate_email
 
 
 import db
-from paths import STATIC_DIR,TEMPLATE_DIR,view,PLANTTRACER_API_ENDPOINT,PLANTTRACER_HTML_ENDPOINT
+from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
 assert os.path.exists(TEMPLATE_DIR)
@@ -128,6 +128,8 @@ def func_root():
     return {'title':'ROOT',
             'hostname':o.hostname}
 
+# Note: register and resend both need the endpint so that they can post it to the server
+# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
 @bottle.route('/register', method=['GET'])
 @view('register.html')
 def func_register():
@@ -136,19 +138,18 @@ def func_register():
     return {'title':'ROOT',
             'hostname':o.hostname,
             'register':True,
-            'planttracer_html_endpoint':PLANTTRACER_HTML_ENDPOINT
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
             }
 
 @bottle.route('/resend', method=['GET'])
 @view('register.html')
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
-    logging.warning("endpoint=%s",PLANTTRACER_API_ENDPOINT);
     o = urlparse(request.url)
     return {'title':'ROOT',
             'hostname':o.hostname,
             'register':False,
-            'planttracer_html_endpoint':PLANTTRACER_HTML_ENDPOINT
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
             }
 
 
@@ -171,7 +172,6 @@ def func_list():
             'admin': db.check_course_admin( user_id, user_primary_course_id ),
             'user_primary_course_id':user_primary_course_id,
             'course_name':course_dict['course_name'],
-            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT,
             'load_message':LOAD_MESSAGE
             }
 
@@ -186,9 +186,9 @@ def func_upload():
             'api_key':api_key,
             'user_id':user_dict['id'],
             'user_name':user_dict['name'],
+            'user_email':user_dict['email'],
             'user_primary_course_id':user_dict['primary_course_id'],
-            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD,
-            'planttracer_api_endpoint':PLANTTRACER_API_ENDPOINT
+            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
             }
 
 
