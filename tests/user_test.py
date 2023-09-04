@@ -110,7 +110,16 @@ def movie_list(api_key):
 
 def get_movie( api_key, movie_id):
     """Used for testing. Just pull the specific movie"""
-    return [movie for movie in movie_list(api_key) if movie['id']==movie_id][0]
+    movies = movie_list(api_key)
+    try:
+        return [movie for movie in movies if movie['id']==movie_id][0]
+    except IndexError as e:
+        logging.error("api_key=%s movie_id=%s",api_key,movie_id)
+        logging.error("len(movies)=%s",len(movies))
+        for movie in movies:
+            logging.error("%s",str(movie))
+        raise
+
 
 def test_movie_upload(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
