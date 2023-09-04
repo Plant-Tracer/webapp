@@ -222,7 +222,7 @@ function list_movies_data( movies ) {
     // This fills in the given table with a given list
     function movies_fill_div( div, mlist ) {
         let h = "<table>";
-        h += "<tr><th>id</th><th>title</th><th>description</th><th>published</th><th>delete?</th></tr>";
+        h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>published</th> <th>deleted</th> </tr>";
 
         // This produces the HTML for each row of the table
         function movie_html( m ) {
@@ -240,8 +240,11 @@ function list_movies_data( movies ) {
                 let ch = value > 0 ? 'checked' : '';
                 return `<td> <input id='${movie_id}-${property}' x-movie_id='${m.id}' x-property='${property}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
+            var movieDate = new Date(m.date_uploaded * 1000); //
+            var mds = movieDate.toLocaleString().replace(' ','<br>').replace(',',''); // get local setting and make take two lines
+
             return '<tr>'
-                + `<td> ${m.id} </td>`
+                + `<td> ${m.id} </td> <td> ${m.name} </td> <td> ${mds} </td>`
                 + make_td_text(      m.id, "title", m.title) + make_td_text( m.id, "description", m.description)
                 + make_td_checkbox(  m.id, "published", m.published) + make_td_checkbox( m.id, "deleted", m.deleted)
                 + "</tr>\n";
