@@ -19,6 +19,7 @@ div.mtable table {
  border:1px solid black;
  border-collapse:collapse;
  overflow-x:hidden;
+ max-height:9999px;
 }
 
 div.mtable input[type=checkbox] {
@@ -50,15 +51,15 @@ div.mtable td {
 
 <h2>Your Movies</h2>
 <h3>Published</h3>
-<p class='instructions'><i>Published movies can be viewed by anyone in your course.</i></p>
+<p class='instructions'><i>Published movies can be viewed by anyone in your course. Uncheck the box under 'published' to unpublish the movie. Check the box under 'deleted' to delete the movie.</i></p>
 <div class='mtable' id='your-published-movies'></div>
 
 <h3>Unpublished</h3>
-<p class='instructions'><i>Unpublished movies can only be published by a course instructor</i></p>
+<p class='instructions'><i>Unpublished movies can only be published by a course instructor. Check the box under 'deleted' to delete a movie.</i></p>
 <div class='mtable' id='your-unpublished-movies'></div>
 
 <h3>Deleted</h3>
-<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its deleted box.</i></p>
+<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its 'deleted' box.</i></p>
 <div class='mtable' id='your-deleted-movies'></div>
 
 <h2>Your course movies</h2>
