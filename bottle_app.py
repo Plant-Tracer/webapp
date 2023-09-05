@@ -194,7 +194,8 @@ def func_upload():
 
 
 ################################################################
-## API
+## Authentication API
+##
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form.
@@ -312,6 +313,30 @@ def api_new_frame():
         return {'error':False,'frame_id':frame_id}
     return INVALID_MOVIE_ACCESS
 
+@bottle.route('/api/get-frame', method='POST')
+def api_get_frame():
+    """
+    :param api_keuy:   authentication
+    :param movie_id:   movie
+    :param frame_msec: the frame specified
+    :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    """
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id') ):
+        return {'error':False, 'frame':db.get_frame( request.forms.get('movie_id'),
+                                                      request.forms.get('frame_msec'),
+                                                      request.forms.get('msec_delta')) }
+    return INVALID_MOVIE_ACCESS
+
+@bottle.route('/api/get-movie', method='POST')
+def api_get_movie():
+    """
+    :param api_keuy:   authentication
+    :param movie_id:   movie
+    """
+    if db.can_access_movie( get_user_id(), request.forms.get('movie_id') ):
+        response = bottle.Response(body = db.get_movie(request.forms.get('movie_id')))
+        response.status_code = 200
+        return response
 
 @bottle.route('/api/delete-movie', method='POST')
 def api_delete_movie():
@@ -328,6 +353,30 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
+################################################################
+## Metadata
+
+
+def converter(x):
+    if (x=='null') or (x is None):
+        return None
+    return int(x)
+
+
+@bottle.route('/api/get-metadata', method='POST')
+def api_get_metadata():
+    get_movie_id = converter(request.forms.get('get_movie_id'))
+    get_user_id  = converter(request.forms.get('get_user_id'))
+
+    if (get_movie_id is None) and (get_user_id is None):
+        return {'error':True, 'result':'Either get_movie_id or get_user_id is required'}
+
+    return {'error':False, 'result':db.get_metadata( user_id=get_user_id(),
+                                                     get_movie_id=get_movie_id,
+                                                     get_user_id=get_user_id,
+                                                     property=request.forms.get('property'),
+                                                     value=request.forms.get('value') ) }
+
 @bottle.route('/api/set-metadata', method='POST')
 def api_set_metadata():
     """ set some aspect of the metadata
@@ -340,11 +389,6 @@ def api_set_metadata():
     logging.warning("request.forms=%s",list(request.forms.keys()))
     logging.warning("api_key=%s",request.forms.get('api_key'))
     logging.warning("get_user_id()=%s",get_user_id())
-
-    def converter(x):
-        if (x=='null') or (x is None):
-            return None
-        return int(x)
 
     set_movie_id = converter(request.forms.get('set_movie_id'))
     set_user_id  = converter(request.forms.get('set_user_id'))

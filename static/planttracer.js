@@ -216,8 +216,10 @@ function row_pencil_clicked( e ) {
     });
 }
 
+// Create the movies table
 // top-level function is called to fill in all of the movies tables
 // It's called with a list of movies
+// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 function list_movies_data( movies ) {
     // This fills in the given table with a given list
     function movies_fill_div( div, mlist ) {
@@ -244,16 +246,17 @@ function list_movies_data( movies ) {
             var mds = movieDate.toLocaleString().replace(' ','<br>').replace(',',''); // get local setting and make take two lines
 
             return '<tr>'
-                + `<td> ${m.id} </td> <td> ${m.name} </td> <td> ${mds} </td>`
+                + `<td rowspan='2'> ${m.id} </td> <td rowspan='2'> ${m.name} </td> <td> ${mds} </td>`
                 + make_td_text(      m.id, "title", m.title) + make_td_text( m.id, "description", m.description)
                 + make_td_checkbox(  m.id, "published", m.published) + make_td_checkbox( m.id, "deleted", m.deleted)
-                + "</tr>\n";
+                + "</tr>\n"
+                + "<tr> <td colspan='3'>[play]</td> <td>bick</td></tr>\n";
         }
 
         if (mlist.length>0){
             mlist.forEach( m => ( h += movie_html(m) ));
         } else {
-            h += '<tr><td colspan="5"><i>No movies</i></td></tr>';
+            h += '<tr><td colspan="0"><i>No movies</i></td></tr>';
         }
 
         h += "</table>";
