@@ -332,7 +332,7 @@ def api_get_frame():
                                                       request.forms.get('msec_delta')) }
     return INVALID_MOVIE_ACCESS
 
-@bottle.route('/api/get-movie', method='POST')
+@bottle.route('/api/get-movie', method=['POST','GET'])
 def api_get_movie():
     """
     :param api_keuy:   authentication
