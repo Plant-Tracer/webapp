@@ -31,6 +31,10 @@ new login link.</p>
 <p>
 
 <form>
+{% if register %}
+<div><label>name: </label> <input id='name' size='40'></div>
+{% endif %}
+
 <div><label>email: </label> <input id='email' size='30'></div>
 
 {% if register %}

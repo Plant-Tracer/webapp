@@ -13,11 +13,25 @@ function register_func() {
         $('#message').html("<b>Please provide a course key</b>");
         return;
     }
+    let name = $('#name').val();
+    if (name=='') {
+        $('#message').html("<b>Please provide a name</b>");
+        return;
+    }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-    $.post('/api/register', {email:email, course_key:course_key, planttracer_html_endpoint:planttracer_html_endpoint}, function(data) {
-        alert(data);
-    });
-};
+    $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
+        .done(function(data) {
+            console.log("done data=",data);
+            if (data.error){
+                $('#message').html(`<b>Error: ${data.message}`);
+            } else {
+                $('#message').html(`<b>${data.message}</b>`);
+            }})
+        .fail(function(xhr, status, error) {
+            $('#message').html(`POST error: `+xhr['responseText']);
+            console.log("xhr:",xhr);
+        });
+}
 
 // Implements the resend a link web page
 function resend_func() {
@@ -27,7 +41,7 @@ function resend_func() {
         return;
     }
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-    $.post('/api/resend-link', {email:email, planttracer_html_endpoint:planttracer_html_endpoint})
+    $.post('/api/resend-link', {email:email, planttracer_endpoint:planttracer_endpoint})
         .done(function(data) {
             $('#message').html('Response: ' + data['message']);
         })
@@ -35,7 +49,7 @@ function resend_func() {
             $('#message').html(`POST error: `+xhr['responseText']);
             console.log("xhr:",xhr);
         });
-};
+}
 
 ////////////////////////////////////////////////////////////////
 // Upload pages
