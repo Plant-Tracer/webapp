@@ -203,8 +203,6 @@ def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
     :return: None if user is not logged in
     """
-
-
     # check the query string
     api_key = request.query.get('api_key',None)
     if api_key:
@@ -242,6 +240,8 @@ def get_user_id():
 
 @bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):
+    """API to check the user key and, if valid, return usedict or returns an error."""
+
     userdict = db.validate_api_key( request.forms.get('api_key') )
     if userdict:
         return { 'error':False, 'userinfo': datetime_to_str( userdict ) }

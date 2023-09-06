@@ -230,6 +230,28 @@ function row_pencil_clicked( e ) {
     });
 }
 
+// callback when the play button is clicked
+function play_clicked( e ) {
+    const url = 'https://github.com/Plant-Tracer/webapp/raw/main/tests/data/2019-07-12%20circumnutation.mp4';
+    const movie_id = e.getAttribute('x-movie_id');
+    var tr = $(`#movie_tr-${movie_id}`);
+    var video_id = "movie_video-" + movie_id;
+    var video = $(`#movie_video-${movie_id}`);
+    console.log("play e=",e,"tr=",tr,'video=',video);
+    tr.show();
+    video.show();
+
+    document.getElementById( video_id).play();
+}
+
+// callback when the download button is clicked
+function download_clicked( e ) {
+    console.log("download ",e);
+    const movie_id = e.getAttribute('x-movie_id');
+
+}
+
+
 // Create the movies table
 // top-level function is called to fill in all of the movies tables
 // It's called with a list of movies
@@ -256,15 +278,21 @@ function list_movies_data( movies ) {
                 let ch = value > 0 ? 'checked' : '';
                 return `<td> <input id='${movie_id}-${property}' x-movie_id='${m.id}' x-property='${property}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
+            console.log("m=",m);
+            var mid = m.movie_id;
             var movieDate = new Date(m.date_uploaded * 1000); //
-            var mds = movieDate.toLocaleString().replace(' ','<br>').replace(',',''); // get local setting and make take two lines
+            var download  = `<input class='download' x-movie_id='${mid}' type='button' value='download' onclick='download_clicked(this)'>`;
+            var play      = `<input class='play'     x-movie_id='${mid}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var up_down  = movieDate.toLocaleString().replace(' ','<br>').replace(',','') + download;
 
             return '<tr>'
-                + `<td rowspan='2'> ${m.id} </td> <td rowspan='2'> ${m.name} </td> <td> ${mds} </td>`
-                + make_td_text(      m.id, "title", m.title) + make_td_text( m.id, "description", m.description)
-                + make_td_checkbox(  m.id, "published", m.published) + make_td_checkbox( m.id, "deleted", m.deleted)
+                + `<td rowspan='1'> ${mid} </td> <td rowspan='1'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+                + make_td_text(      mid, "title", m.title) + make_td_text( mid, "description", m.description)
+                + make_td_checkbox(  mid, "published", m.published) + make_td_checkbox( mid, "deleted", m.deleted)
                 + "</tr>\n"
-                + "<tr> <td colspan='3'>[play]</td> <td>bick</td></tr>\n";
+                + `<tr class='movie_player' id='movie_tr-${mid}'> `
+                + `<td><video class='movie_player' controls id='movie_video-${mid}' src='https://github.com/Plant-Tracer/webapp/raw/main/tests/data/2019-07-12%20circumnutation.mp4'> </video> </td><td colspan='0'> </td>`
+                + `</tr>\n`;
         }
 
         if (mlist.length>0){
@@ -274,13 +302,13 @@ function list_movies_data( movies ) {
         }
 
         h += "</table>";
-        //console.log("h=",h);
         div.html(h);
     }
     movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
     movies_fill_div( $('#your-unpublished-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
     movies_fill_div( $('#your-deleted-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     movies_fill_div( $('#course-movies'), movies.filter( m => (m['course_id']==user_primary_course_id)));
+    $('.movie_player').hide();
 }
 
 // Wire up whatever happens to be present
