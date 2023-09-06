@@ -69,7 +69,7 @@ def validate_api_key( api_key ):
     return {}
 
 ##
-def register_email(email, course_key):
+def register_email(email, course_key, name):
     """Register email for a given course
     :param: email - user email
     :param: course_key - the key
@@ -85,8 +85,8 @@ def register_email(email, course_key):
 
     course_id = res[0][0]
     return dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT INTO users (email, primary_course_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE email=%s""",
-                         ( email, course_id, email ))
+                         """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
+                         ( email, course_id, name, email ))
 
 def rename_user(user_id, old_email, new_email):
     """Changes a user's email. Requires a correct old_email"""
@@ -130,7 +130,7 @@ def delete_api_key(api_key):
                                 """DELETE FROM api_keys WHERE api_key=%s""",
                                 (api_key,))
 
-def send_links( email, planttracer_html_endpoint ):
+def send_links( email, planttracer_endpoint ):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
     PROJECT_EMAIL = 'admin@planttracer.com'
 
@@ -141,7 +141,7 @@ def send_links( email, planttracer_html_endpoint ):
         msg_env = NativeEnvironment().from_string( f.read() )
     msg = msg_env.render( to_addrs   = ",".join([email]),
                           from_addr  = PROJECT_EMAIL,
-                          planttracer_html_endpoint  = planttracer_html_endpoint,
+                          planttracer_endpoint  = planttracer_endpoint,
                           api_key    = new_api_key( email ))
 
     DRY_RUN = False
@@ -211,7 +211,7 @@ def validate_course_key( course_key ):
 
 def remaining_course_registrations( course_key ):
     res = dbfile.DBMySQL.csfr( get_dbreader(),
-                              """SELECT max_enrollment - (SELECT COUNT(*) FROM users WHERE course_id=(SELECT id FROM courses WHERE course_key=%s))
+                              """SELECT max_enrollment - (SELECT COUNT(*) FROM users WHERE primary_course_id=(SELECT id FROM courses WHERE course_key=%s))
                                  FROM courses WHERE course_key=%s""",
                               ( course_key,course_key))
     try:

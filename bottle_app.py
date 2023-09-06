@@ -181,10 +181,12 @@ def func_list():
 def func_upload():
     """Upload a new file"""
     api_key = get_user_api_key()
+    logging.error("api_key=%s",api_key)
     user_dict = get_user_dict( )
+    logging.error("user_dict=%s",user_dict)
     return {'title':'Plant Tracer List, Edit and Play',
             'api_key':api_key,
-            'user_id':user_dict['id'],
+            'user_id':user_dict['user_id'],
             'user_name':user_dict['name'],
             'user_email':user_dict['email'],
             'user_primary_course_id':user_dict['primary_course_id'],
@@ -198,7 +200,7 @@ def func_upload():
 ##
 
 def get_user_api_key():
-    """Gets the user APIkey from either the URL or the cookie or the form.
+    """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
     :return: None if user is not logged in
     """
 
@@ -225,6 +227,8 @@ def get_user_dict():
     if api_key is None:
         raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
     userdict = db.validate_api_key( api_key )
+    if not userdict:
+        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
     return userdict
 
 def get_user_id():
@@ -250,8 +254,8 @@ def api_check_api_key( ):
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
-    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
-    if not validate_email(email, check_mx=True):
+    planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    if not validate_email(email, check_mx=False):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
     course_key = request.forms.get('course_key')
@@ -259,20 +263,21 @@ def api_register():
         return INVALID_COURSE_KEY
     if db.remaining_course_registrations( course_key ) < 1:
         return NO_REMAINING_REGISTRATIONS
-    db.register_email( email, course_key )
-    db.send_links( email, planttracer_html_endpoint )
-    return {'error':False}
+    name = request.forms.get('name')
+    db.register_email( email, course_key, name )
+    db.send_links( email, planttracer_endpoint )
+    return {'error':False, 'message':'Registration key sent to '+email}
 
 
 @bottle.route('/api/resend-link', method=['GET','POST'])
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
-    planttracer_html_endpoint = request.forms.get('planttracer_html_endpoint')
+    planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=CHECK_MX):
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
-    db.send_links( email, planttracer_html_endpoint )
+    db.send_links( email, planttracer_endpoint )
     return {'error':False,'message':'If you have an account, a link was sent.' }
 
 ################################################################
