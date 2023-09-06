@@ -21,6 +21,7 @@ MYDIR = dirname(abspath(__file__))
 MAX_ENROLLMENT = 10
 
 TEST_USER_EMAIL  = 'simsong@gmail.com'           # from configure
+TEST_USER_NAME   = 'Test User Name'
 TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
@@ -48,7 +49,7 @@ def new_user(new_course):
     """
     user_email = TEST_USER_EMAIL.replace('@','+'+str(uuid.uuid4())+'@')
     course_key = new_course
-    user_id = db.register_email( user_email, course_key )
+    user_id = db.register_email( user_email, course_key, TEST_USER_NAME )
     assert user_id>0
     api_key = db.new_api_key( user_email )
     assert len(api_key)>8
