@@ -117,7 +117,7 @@ def make_new_api_key( email ):
         user_id = user['id']
         api_key = str(uuid.uuid4()).replace('-','')
         dbfile.DBMySQL.csfr( get_dbwriter(),
-                             """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s), %s)""",
+                             """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
                              (user_id, api_key))
         return api_key
     return None
