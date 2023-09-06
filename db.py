@@ -146,7 +146,7 @@ def send_links( email, planttracer_endpoint ):
 
     DRY_RUN = False
     smtp_config = mailer.smtp_config_from_environ()
-    smtp_config['SMTP_DEBUG'] = True
+    #smtp_config['SMTP_DEBUG'] = False
     mailer.send_message( from_addr   = PROJECT_EMAIL,
                          to_addrs    = TO_ADDRS,
                          smtp_config = smtp_config,
@@ -330,7 +330,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, valu
               1:'TRUE'}
 
     if set_movie_id:
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from movies where id=%s)", (user_id, set_movie_id), debug=True)
+        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from movies where id=%s)", (user_id, set_movie_id))
         is_owner = MAPPER[res[0][0]]
 
         res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
@@ -341,7 +341,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, valu
         cmd = SET_MOVIE_METADATA[property].replace('@is_owner',is_owner).replace('@is_admin',is_admin)
         args = [ value, set_movie_id ]
 
-        ret = dbfile.DBMySQL.csfr( get_dbwriter(), cmd, args, debug=True)
+        ret = dbfile.DBMySQL.csfr( get_dbwriter(), cmd, args)
         return ret
 
     # Currently, users can only set their own data
