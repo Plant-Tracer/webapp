@@ -107,17 +107,21 @@ def lookup_user( *, email ):
     except IndexError:
         return {}
 
-def new_api_key( email ):
+def make_new_api_key( email ):
     """Create a new api_key for an email that is registered
     :param: email - the email
     :return: api_key - the api_key
     """
-    api_key = str(uuid.uuid4()).replace('-','')
-    dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT INTO api_keys (user_id, api_key)
-                            VALUES ((select id from users where email=%s and enabled=1), %s)""",
-                         (email, api_key))
-    return api_key
+    user = lookup_user(email = email)
+    if user and user['enabled']==1:
+        user_id = user['id']
+        api_key = str(uuid.uuid4()).replace('-','')
+        dbfile.DBMySQL.csfr( get_dbwriter(),
+                             """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s), %s)""",
+                             (user_id, api_key))
+        return api_key
+    return None
+
 
 def delete_api_key(api_key):
     """Deletes an api_key
@@ -139,20 +143,22 @@ def send_links( email, planttracer_endpoint ):
     TO_ADDRS = [ email ]
     with open(os.path.join( TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME ),"r") as f:
         msg_env = NativeEnvironment().from_string( f.read() )
-    msg = msg_env.render( to_addrs   = ",".join([email]),
-                          from_addr  = PROJECT_EMAIL,
-                          planttracer_endpoint  = planttracer_endpoint,
-                          api_key    = new_api_key( email ))
+    new_api_key = make_new_api_key( email )
+    if new_api_key:
+        msg = msg_env.render( to_addrs   = ",".join([email]),
+                              from_addr  = PROJECT_EMAIL,
+                              planttracer_endpoint  = planttracer_endpoint,
+                              api_key    = new_api_key)
 
-    DRY_RUN = False
-    smtp_config = mailer.smtp_config_from_environ()
-    #smtp_config['SMTP_DEBUG'] = False
-    mailer.send_message( from_addr   = PROJECT_EMAIL,
-                         to_addrs    = TO_ADDRS,
-                         smtp_config = smtp_config,
-                         dry_run     = DRY_RUN,
-                         msg         = msg
-                        )
+        DRY_RUN = False
+        smtp_config = mailer.smtp_config_from_environ()
+        #smtp_config['SMTP_DEBUG'] = False
+        mailer.send_message( from_addr   = PROJECT_EMAIL,
+                             to_addrs    = TO_ADDRS,
+                             smtp_config = smtp_config,
+                             dry_run     = DRY_RUN,
+                             msg         = msg
+                            )
 
 
 ################################################################
