@@ -278,7 +278,7 @@ def api_send_link():
         logging.warning("email not valid: %s",email)
         return INVALID_EMAIL
     db.send_links( email, planttracer_endpoint )
-    return {'error':False,'message':'If you have an account, a link was sent.' }
+    return {'error':False,'message':'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.' }
 
 ################################################################
 ## Movies
