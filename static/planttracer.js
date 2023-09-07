@@ -1,4 +1,12 @@
 ////////////////////////////////////////////////////////////////
+// For the demonstration page
+function add_func() {
+    let a = parseFloat($('#a').val());
+    let b = parseFloat($('#b').val());
+    $('#sum').html( a + b );
+}
+
+////////////////////////////////////////////////////////////////
 ///  registration and resend pages
 
 // Implements the registration web page
@@ -123,35 +131,49 @@ async function upload_movie(inp)
     }
 }
 
-// For the demonstration page
-function add_func() {
-    let a = parseFloat($('#a').val());
-    let b = parseFloat($('#b').val());
-    $('#sum').html( a + b );
+
+////////////////////////////////////////////////////////////////
+// List movie page
+
+
+////////////////
+// PLAYBACK
+// callback when the play button is clicked
+function play_clicked( e ) {
+    console.log('play_clicked=',e);
+    const movie_id = e.getAttribute('x-movie_id');
+    const rowid    = e.getAttribute('x-rowid');
+    const url = `/api/get-movie?api_key=${api_key}&movie_id=${movie_id}`;
+    var tr    = $(`#tr-${rowid}`).show();
+    var td    = $(`#td-${rowid}`).show();
+    var video = $(`#video-${rowid}`).show()
+    var vid = video.attr('id');
+    console.log('url=',url);
+    console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
+    video.attr('src',url);
+    document.getElementById( vid ).play();
 }
 
-// Gets the list from the server of every movie we can view and displays it in the HTML element
-// It's called from the document ready function and after a movie change request is sent to the server.
-// The functions after this implement the interactivity
-//
-function list_movies() {
-    $('#message').html('Listing movies...');
-
-    let formData = new FormData();
-    formData.append("api_key",  api_key); // on the upload form
-    fetch('/api/list-movies', { method:"POST", body:formData })
-        .then((response) => response.json())
-        .then((data) => {
-            console.log("data:",data);
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
-            } else {
-                list_movies_data( data['movies'] );
-                $('#message').html('');
-            }
-        })
-        .catch(console.error)
+function hide_clicked( e ) {
+    var rowid = e.getAttribute('x-rowid');
+    var tr    = $(`#tr-${rowid}`).hide();
+    var td    = $(`#td-${rowid}`).hide();
+    var video = $(`#video-${rowid}`).hide()
 }
+
+////////////////
+// DOWNLOAD
+// callback when the download button is clicked
+function download_clicked( e ) {
+    console.log("download ",e);
+    const movie_id = e.getAttribute('x-movie_id');
+
+}
+
+
+
+////////////////
+// EDIT METADATA
 
 // This sends the data to the server and then redraws the screen
 function set_property(user_id, movie_id, property, value)
@@ -190,7 +212,7 @@ function row_checkbox_clicked( e ) {
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
 function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
-    const target = e.getAttribute('x-target'); // name of the target
+    const target = e.getAttribute('x-target-id'); // name of the target
     t = document.getElementById(target);       // element of the target
     const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
@@ -230,12 +252,17 @@ function row_pencil_clicked( e ) {
     });
 }
 
+
+
+// CREATE THE MOVIES tables
 // Create the movies table
 // top-level function is called to fill in all of the movies tables
 // It's called with a list of movies
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 function list_movies_data( movies ) {
     // This fills in the given table with a given list
+    let tid = 0;
+    let rowid = 0;
     function movies_fill_div( div, mlist ) {
         let h = "<table>";
         h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>published</th> <th>deleted</th> </tr>";
@@ -243,28 +270,41 @@ function list_movies_data( movies ) {
         // This produces the HTML for each row of the table
         function movie_html( m ) {
             // This products the HTML for each <td> that has text
-            function make_td_text(movie_id,property,text) {
+            rowid += 1;
+            var movie_id = m.movie_id;
+            function make_td_text(property, text) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
-                return `<td> <span id='${movie_id}-${property}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>` +
-                    `<span class='editor' x-target='${movie_id}-${property}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                tid += 1;
+                return `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>` +
+                    `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
             }
             // This products the HTML for each <td> that has a checkbox
-            function make_td_checkbox(movie_id,property,value) {
+            function make_td_checkbox(property, value) {
                 // for debugging:
                 // return `<td> ${property} = ${value} </td>`;
+                tid += 1;
                 let ch = value > 0 ? 'checked' : '';
-                return `<td> <input id='${movie_id}-${property}' x-movie_id='${m.id}' x-property='${property}' type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
+                return `<td> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
+                    `type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
+            console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
             var movieDate = new Date(m.date_uploaded * 1000); //
-            var mds = movieDate.toLocaleString().replace(' ','<br>').replace(',',''); // get local setting and make take two lines
+            //var download  = `<input class='download' x-movie_id='${movie_id}' type='button' value='download' onclick='download_clicked(this)'>`;
+            var download = '';
+            var play      = `<input class='play'     x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var up_down  = movieDate.toLocaleString().replace(' ','<br>').replace(',','') + download;
 
             return '<tr>'
-                + `<td rowspan='2'> ${m.id} </td> <td rowspan='2'> ${m.name} </td> <td> ${mds} </td>`
-                + make_td_text(      m.id, "title", m.title) + make_td_text( m.id, "description", m.description)
-                + make_td_checkbox(  m.id, "published", m.published) + make_td_checkbox( m.id, "deleted", m.deleted)
+                + `<td rowspan='2'> ${movie_id} </td> <td rowspan='2'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+                + make_td_text(      "title", m.title) + make_td_text( "description", m.description)
+                + make_td_checkbox(  "published", m.published) + make_td_checkbox( "deleted", m.deleted)
                 + "</tr>\n"
-                + "<tr> <td colspan='3'>[play]</td> <td>bick</td></tr>\n";
+                + `<tr    class='movie_player' id='tr-${rowid}'> `
+                + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
+                + `<video class='movie_player' id='video-${rowid}' controls></video>`
+                + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
+                + `</tr>\n`;
         }
 
         if (mlist.length>0){
@@ -274,15 +314,37 @@ function list_movies_data( movies ) {
         }
 
         h += "</table>";
-        //console.log("h=",h);
         div.html(h);
     }
     movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
     movies_fill_div( $('#your-unpublished-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
     movies_fill_div( $('#your-deleted-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     movies_fill_div( $('#course-movies'), movies.filter( m => (m['course_id']==user_primary_course_id)));
+    $('.movie_player').hide();
 }
 
+// Gets the list from the server of every movie we can view and displays it in the HTML element
+// It's called from the document ready function and after a movie change request is sent to the server.
+// The functions after this implement the interactivity
+//
+function list_movies() {
+    $('#message').html('Listing movies...');
+
+    let formData = new FormData();
+    formData.append("api_key",  api_key); // on the upload form
+    fetch('/api/list-movies', { method:"POST", body:formData })
+        .then((response) => response.json())
+        .then((data) => {
+            console.log("data:",data);
+            if (data['error']!=false){
+                $('#message').html('error: '+data['message']);
+            } else {
+                list_movies_data( data['movies'] );
+                $('#message').html('');
+            }
+        })
+        .catch(console.error)
+}
 // Wire up whatever happens to be present
 $( document ).ready( function() {
     $('#load_message').html('');       // remove the load message

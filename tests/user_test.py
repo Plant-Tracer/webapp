@@ -51,7 +51,7 @@ def new_user(new_course):
     course_key = new_course
     user_id = db.register_email( user_email, course_key, TEST_USER_NAME )
     assert user_id>0
-    api_key = db.new_api_key( user_email )
+    api_key = db.make_new_api_key( user_email )
     assert len(api_key)>8
     yield ( user_email, api_key)
     ct = db.delete_api_key(api_key)
