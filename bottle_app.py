@@ -347,7 +347,7 @@ def api_get_movie():
     :param movie_id:   movie
     """
     if db.can_access_movie( get_user_id(), get_movie_id()):
-        bottle.response.set_header('mimetype','video/quicktime')
+        bottle.response.set_header('Content-Type','video/quicktime')
         return db.get_movie( get_movie_id())
     return INVALID_MOVIE_ACCESS
 
