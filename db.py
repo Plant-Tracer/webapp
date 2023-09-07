@@ -118,6 +118,7 @@ def make_new_api_key( email ):
         api_key = str(uuid.uuid4()).replace('-','')
         dbfile.DBMySQL.csfr( get_dbwriter(),
                              """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
+
                              (user_id, api_key))
         return api_key
     return None
@@ -232,6 +233,10 @@ def remaining_course_registrations( course_key ):
 ################################################################
 
 
+def get_movie( movie_id ):
+    """Returns the movie contents. Does no checking"""
+    return dbfile.DBMySQL.csfr( get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1",(movie_id,))[0][0]
+
 def get_movie_metadata( user_id, movie_id ):
     cmd = """SELECT * from movies WHERE
                 (user_id=%s OR
@@ -292,18 +297,25 @@ def create_new_frame( movie_id, frame_msec, frame_base64_data ):
     return frame_id
 
 
+LM_DEBUG=False
 def list_movies( user_id ):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
     """
-    return dbfile.DBMySQL.csfr( get_dbreader(),
-                                """SELECT * from movies LEFT JOIN users on movies.user_id = users.id
-                                WHERE user_id=%s
+    res = dbfile.DBMySQL.csfr( get_dbreader(),
+                                """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
+                                          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
+                                FROM movies LEFT JOIN users ON movies.user_id = users.id
+                                WHERE (user_id=%s)
                                 OR
-                                (course_id = (SELECT course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
+                                (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
                                 OR
                                 (course_id in (SELECT course_id FROM admins WHERE user_id=%s))""",
                                 (user_id, user_id, user_id), asDicts=True)
+    if LM_DEBUG:
+        for r in res:
+            logging.error("res=%s",res)
+    return res
 
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it

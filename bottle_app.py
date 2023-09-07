@@ -56,6 +56,7 @@ MAX_FILE_UPLOAD = 1024*1024*16
 
 INVALID_API_KEY      = {'error':True, 'message':'Invalid api_key'}
 INVALID_EMAIL        = {'error':True, 'message':'Invalid email address'}
+INVALID_MOVIE_ID     = {'error':True, 'message':'movie_id is invalid or missing'}
 INVALID_MOVIE_ACCESS = {'error':True, 'message':'User does not have access to requested movie.'}
 INVALID_COURSE_KEY   = {'error':True, 'message':'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {'error':True, 'message':'That course has no remaining registrations. Please contact your faculty member.'}
@@ -203,8 +204,6 @@ def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
     :return: None if user is not logged in
     """
-
-
     # check the query string
     api_key = request.query.get('api_key',None)
     if api_key:
@@ -219,7 +218,14 @@ def get_user_api_key():
         return api_key
     return None
 
-
+def get_movie_id():
+    movie_id = request.query.get('movie_id',None)
+    if movie_id is not None:
+        return movie_id
+    movie_id = request.forms.get('movie_id',None)
+    if movie_id is not None:
+        return movie_id
+    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID), status=200, headers={'Content-type':'application/json'})
 
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
@@ -242,6 +248,8 @@ def get_user_id():
 
 @bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):
+    """API to check the user key and, if valid, return usedict or returns an error."""
+
     userdict = db.validate_api_key( request.forms.get('api_key') )
     if userdict:
         return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
@@ -332,16 +340,16 @@ def api_get_frame():
                                                       request.forms.get('msec_delta')) }
     return INVALID_MOVIE_ACCESS
 
-@bottle.route('/api/get-movie', method='POST')
+@bottle.route('/api/get-movie', method=['POST','GET'])
 def api_get_movie():
     """
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie( get_user_id(), request.forms.get('movie_id') ):
-        response = bottle.Response(body = db.get_movie(request.forms.get('movie_id')))
-        response.status_code = 200
-        return response
+    if db.can_access_movie( get_user_id(), get_movie_id()):
+        bottle.response.set_header('mimetype','video/quicktime')
+        return db.get_movie( get_movie_id())
+    return INVALID_MOVIE_ACCESS
 
 @bottle.route('/api/delete-movie', method='POST')
 def api_delete_movie():
