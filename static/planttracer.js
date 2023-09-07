@@ -148,9 +148,11 @@ function play_clicked( e ) {
     var td    = $(`#td-${rowid}`).show();
     var video = $(`#video-${rowid}`).show()
     var vid = video.attr('id');
-    console.log('url=',url);
-    console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
-    video.attr('src',url);
+    //console.log('url=',url);
+    //console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
+    //video.attr('src',url);
+    video.html(`<source src='${url}' type='video/mp4'>`);
+    console.log('video=',video);
     document.getElementById( vid ).play();
 }
 
@@ -195,7 +197,7 @@ function set_property(user_id, movie_id, property, value)
             }
         })
         .catch(console.error);
-    console.log("set_property done");
+    //console.log("set_property done");
 }
 
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
@@ -228,17 +230,17 @@ function row_pencil_clicked( e ) {
         if (value != oValue){
             set_property(user_id, movie_id, property, value);
         } else {
-            console.log(`value unchanged`);
+            //console.log(`value unchanged`);
         }
     }
 
     // handle tab, return and escape
     t.addEventListener('keydown', function(e) {
         if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
-            console.log('tab or return pressed');
+            //console.log('tab or return pressed');
             finished_editing();
         } else if (e.keyCode==27){ // escape pressed
-            console.log(`escape pressed. Restore ${oValue}`);
+            //console.log(`escape pressed. Restore ${oValue}`);
             t.textContent = oValue; // restore the original value
             t.blur();           // does this work?
             t.setAttribute('contenteditable','false'); // no longer editable
@@ -288,7 +290,7 @@ function list_movies_data( movies ) {
                 return `<td> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
                     `type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
-            console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
+            //console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
             var movieDate = new Date(m.date_uploaded * 1000); //
             //var download  = `<input class='download' x-movie_id='${movie_id}' type='button' value='download' onclick='download_clicked(this)'>`;
             var download = '';
@@ -302,7 +304,7 @@ function list_movies_data( movies ) {
                 + "</tr>\n"
                 + `<tr    class='movie_player' id='tr-${rowid}'> `
                 + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
-                + `<video class='movie_player' id='video-${rowid}' controls></video>`
+                + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
                 + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
                 + `</tr>\n`;
         }
@@ -335,7 +337,7 @@ function list_movies() {
     fetch('/api/list-movies', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            console.log("data:",data);
+            //console.log("data:",data);
             if (data['error']!=false){
                 $('#message').html('error: '+data['message']);
             } else {
