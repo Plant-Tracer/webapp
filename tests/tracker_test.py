@@ -33,6 +33,8 @@ def extract_all_frames( infilename, pattern, destdir):
     if ret>0:
         raise RuntimeError("failed: "+ffmpeg_cmd.join(' '))
 
+from PIL import Image
+
 PATTERN = 'frame_%05d.jpeg'
 def test_blocktrack():
     count = 0
@@ -42,7 +44,8 @@ def test_blocktrack():
         for fn in sorted(glob.glob( os.path.join( td,"*.jpeg" ))):
             logging.info("process %s",fn)
             with open(fn,'rb') as infile:
-                context = blocktrack.blocktrack( context, infile )
+                img = Image.open(infile)
+                context = blocktrack.blocktrack( context, img )
                 count += 1
             logging.info("frame %d output: %s",count,context)
     logging.info("total frames processed: %d",count)
