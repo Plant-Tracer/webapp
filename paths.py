@@ -14,6 +14,8 @@ if HOME is None:
     HOME = ''
 STATIC_DIR   = join(dirname(abspath(__file__)), 'static')
 TEMPLATE_DIR = join(dirname(abspath(__file__)), 'templates')
+TEST_DIR = join(dirname(abspath(__file__)), 'tests')
+TEST_DATA_DIR = join(dirname(abspath(__file__)), 'tests','data')
 
 PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
