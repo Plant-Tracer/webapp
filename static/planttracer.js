@@ -144,7 +144,6 @@ function play_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid');
     const url = `/api/get-movie?api_key=${api_key}&movie_id=${movie_id}`;
-    const url = 'https://github.com/Plant-Tracer/webapp/raw/main/tests/data/2019-07-12%20circumnutation.mp4';
     var tr    = $(`#tr-${rowid}`).show();
     var td    = $(`#td-${rowid}`).show();
     var video = $(`#video-${rowid}`).show()
@@ -291,7 +290,8 @@ function list_movies_data( movies ) {
             }
             console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
             var movieDate = new Date(m.date_uploaded * 1000); //
-            var download  = `<input class='download' x-movie_id='${movie_id}' type='button' value='download' onclick='download_clicked(this)'>`;
+            //var download  = `<input class='download' x-movie_id='${movie_id}' type='button' value='download' onclick='download_clicked(this)'>`;
+            var download = '';
             var play      = `<input class='play'     x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
             var up_down  = movieDate.toLocaleString().replace(' ','<br>').replace(',','') + download;
 

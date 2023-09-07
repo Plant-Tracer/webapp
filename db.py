@@ -232,6 +232,10 @@ def remaining_course_registrations( course_key ):
 ################################################################
 
 
+def get_movie( movie_id ):
+    """Returns the movie contents. Does no checking"""
+    return dbfile.DBMySQL.csfr( get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1",(movie_id,))[0][0]
+
 def get_movie_metadata( user_id, movie_id ):
     cmd = """SELECT * from movies WHERE
                 (user_id=%s OR
