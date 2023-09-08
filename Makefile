@@ -44,7 +44,12 @@ install-ubuntu:
 	sudo apt install ffmpeg
 
 install-macos:
+	brew update
+	brew upgrade
+	brew install python3
 	brew install libmagic
+	brew install ffmpeg
+
 
 install-windows:
 	echo fill something in here
