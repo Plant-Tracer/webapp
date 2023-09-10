@@ -51,8 +51,8 @@ if __name__=="__main__":
 
     if args.createdb:
         dbreader_user = 'dbreader_' + args.createdb
-        dbreader_password = str(uuid.uuid4())
         dbwriter_user = 'dbwriter_' + args.createdb
+        dbreader_password = str(uuid.uuid4())
         dbwriter_password = str(uuid.uuid4())
         assert( args.createdb.isalnum())
         d.execute(f'CREATE DATABASE {args.createdb}')
@@ -82,4 +82,8 @@ if __name__=="__main__":
 
     if args.dropdb:
         assert( args.dropdb.isalnum())
+        dbreader_user = 'dbreader_' + args.dropdb
+        dbwriter_user = 'dbwriter_' + args.dropdb
+        d.execute(f'DROP USER `{dbreader_user}`@`localhost`')
+        d.execute(f'DROP USER `{dbwriter_user}`@`localhost`')
         d.execute(f'DROP DATABASE {args.dropdb}')
