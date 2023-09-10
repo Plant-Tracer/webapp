@@ -12,10 +12,13 @@ from bottle import jinja2_view
 HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
-STATIC_DIR   = join(dirname(abspath(__file__)), 'static')
-TEMPLATE_DIR = join(dirname(abspath(__file__)), 'templates')
-TEST_DIR = join(dirname(abspath(__file__)), 'tests')
-TEST_DATA_DIR = join(dirname(abspath(__file__)), 'tests','data')
+
+ROOT_DIR      = dirname(abspath(__file__))
+STATIC_DIR    = join(ROOT_DIR, 'static')
+TEMPLATE_DIR  = join(ROOT_DIR, 'templates')
+TEST_DIR      = join(ROOT_DIR, 'tests')
+TEST_DATA_DIR = join(ROOT_DIR, 'tests','data')
+SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
 
 PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
