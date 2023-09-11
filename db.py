@@ -11,7 +11,7 @@ import logging
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_FILE,DBWRITER_BASH_FILE,TEMPLATE_DIR
+from paths import DBREADER_BASH_FILE,DBWRITER_BASH_FILE,TEMPLATE_DIR,DBCREDENTIALS_PATH
 from lib.ctools import dbfile
 
 
@@ -33,17 +33,27 @@ class InvalidCourse_Key(RuntimeError):
 
 @functools.cache
 def get_dbreader():
-    """Get the dbreader authentication info from the DBREADER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
+    """Get the dbreader authentication info from:
+    1 - the [dbreader] section of the DBCREDENTIALS file the DBWRITER_BASH_FILE if it exists.
+    2 - 'export VAR=VALUE' from the DBWRITER_BASH_FILE if it exists.
+    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    """
+    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTlE_APP_INI_PATH):
+        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
     fname = DBREADER_BASH_FILE if os.path.exists(DBREADER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
 @functools.cache
 def get_dbwriter():
-    """Get the dbwriter authentication info from the DBWRITER_BASH_FILE if it exists. Variables there are
-    shadowed by environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
-    If the file doesn't exist, send in None, hoping that the environment variables exist."""
+    """Get the dbwriter authentication info from:
+    1 - the [dbwriter] section of the DBCREDENTIALS file the DBWRITER_BASH_FILE if it exists.
+    2 - 'export VAR=VALUE' from the DBWRITER_BASH_FILE if it exists.
+    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    """
+
+    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTlE_APP_INI_PATH):
+        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbwriter')
+
     fname = DBWRITER_BASH_FILE if os.path.exists(DBWRITER_BASH_FILE) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 

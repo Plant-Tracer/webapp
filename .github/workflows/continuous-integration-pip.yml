@@ -7,20 +7,48 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
+        os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
         python-version: [3.9]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
+    services:
+      # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
+      mysql:
+        image: mysql:8.0
+        env:
+          # The MySQL docker container requires these environment variables to be set
+          # so we can create and migrate the test database.
+          # See: https://hub.docker.com/_/mysql
+          MYSQL_DATABASE: testdb
+          MYSQL_ROOT_PASSWORD: testrootpass
+        ports:
+          # Opens port 3306 on service container and host
+          # https://docs.github.com/en/actions/using-containerized-services/about-service-containers
+          - 3306:3306
+          # Before continuing, verify the mysql container is reachable from the ubuntu host
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
     timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           submodules: true
 
+      - name: "Configure ubuntu"
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          make install-ubuntu
+
       - name: "Configure MacOS"
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install libmagic
+          make install-macos
+
+      - name: "Configure Windows"
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          make install-windows
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -30,7 +58,7 @@ jobs:
       - name: Update GITHUB_PATH and install dependencies
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          make install-dependencies
+          make install-python-dependencies
 
       - name: Lint with pylint
         run: |
