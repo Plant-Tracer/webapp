@@ -11,6 +11,31 @@ https://downloads.digitalcorpora.org/reports
 
 Debug locally:
 
+$ python bottle_app.py
+Bottle v0.12.23 server starting up (using WSGIRefServer())...
+Listening on http://localhost:8080/
+Hit Ctrl-C to quit.
+
+Then go to the URL printed above (e.g. http://localhost:8080). Note that you must have the environment variables set:
+export MYSQL_DATABASE=***
+export MYSQL_HOST=***
+export MYSQL_PASSWORD=***
+export MYSQL_USER=***
+export PLANTTRACER_ENDPOINT='http://localhost:8080' (or whatever it is printed above)
+export SMTP_HOST=***
+export SMTP_PASSWORD=***
+export SMTP_PORT=***
+export SMTP_USERNAME=***
+
+For testing, you must also set:
+export IMAP_PASSWORD=****
+export IMAP_SERVER=****
+export IMAP_USERNAME=****
+export TEST_ENDPOINT='http://localhost:8080' (or whatever it is above)
+
+And you will need a valid user in the current databse (or create your own with dbutil.py)
+export TEST_USER_APIKEY=****
+export TEST_USER_EMAIL=****
 """
 
 import sys
@@ -347,7 +372,7 @@ def api_get_movie():
     :param movie_id:   movie
     """
     if db.can_access_movie( get_user_id(), get_movie_id()):
-        bottle.response.set_header('mimetype','video/quicktime')
+        bottle.response.set_header('Content-Type','video/quicktime')
         return db.get_movie( get_movie_id())
     return INVALID_MOVIE_ACCESS
 
@@ -451,14 +476,14 @@ if __name__=="__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--sendlink",help="send link to the given email address, registering it if necessary.")
 
+    parser.add_argument('--dbcredentials',help='Specify .ini file with [dbreader] and [dbwriter] sections')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    if args.sendlink:
-        db.send_links( args.sendlink )
-        sys.exit(0)
-
+    if args.dbcredentials:
+        if not os.path.exists(args.dbcredentials):
+            raise FileNotFoundError(args.dbcredentials)
+        paths.BOTTLE_APP_INI = args.dbcredentials
     bottle.default_app().run(host='localhost',debug=True, reloader=True)

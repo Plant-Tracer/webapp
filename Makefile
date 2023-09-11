@@ -19,12 +19,6 @@ pylint:
 flake8:
 	flake8 $(PYLINT_FILES)
 
-# These are used by the CI pipeline:
-install-dependencies:
-	python3 -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
-	python3 -m pip install --upgrade pip
-
 pytest:
 	make touch
 	pytest .
@@ -38,3 +32,24 @@ debug:
 
 clean:
 	find . -name '*~' -exec rm {} \;
+
+
+# These are used by the CI pipeline:
+install-python-dependencies:
+	python3 -m pip install --upgrade pip
+	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
+	python3 -m pip install --upgrade pip
+
+install-ubuntu:
+	sudo apt install ffmpeg
+
+install-macos:
+	brew update
+	brew upgrade
+	brew install python3
+	brew install libmagic
+	brew install ffmpeg
+
+
+install-windows:
+	echo fill something in here
