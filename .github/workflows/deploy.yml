@@ -23,5 +23,5 @@ jobs:
           eval $(ssh-agent)
           base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
           ssh-add -l
-          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "hostname; pwd; ls -l ; cd $APP_HOST; git checkout main && git pull --recurse-submodules && make install-python-dependencies && make touch"
-          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "source $HOME/plant_dev.bash ; cd $APP_HOST; make pytest"
+          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "export PATH=\$HOME/opt/bin:\$PATH; python3 --version; hostname; pwd; ls -l ; cd $APP_HOST; git checkout main && git pull --recurse-submodules && make install-python-dependencies && make touch"
+          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $SSH_USER@$APP_HOST "export PATH=\$HOME/opt/bin:\$PATH; source \$HOME/plant_dev.bash ; cd $APP_HOST; make pytest"
