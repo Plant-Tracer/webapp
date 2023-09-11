@@ -22,9 +22,11 @@ SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
 
 PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 
-
 # Add the relative template path (since jinja2 doesn't like absolute paths)
 bottle.TEMPLATE_PATH.append( relpath(TEMPLATE_DIR))
+
+# Database credentials
+DBCREDENTIALS_PATH = None
 
 DBREADER_BASH_FILE = join( HOME, 'plant_dev.bash')
 if not os.path.exists(DBREADER_BASH_FILE):
