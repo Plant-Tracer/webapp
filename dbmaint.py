@@ -36,10 +36,13 @@ if __name__=="__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    required = parser.add_argument_group('required arguments')
+
+    required.add_argument("--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
     parser.add_argument("--sendlink", help="send link to the given email address, registering it if necessary.")
     parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER are all set with a MySQL username that can issue the "CREATE DATABASE"command. Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
-    parser.add_argument("--config",  help="specify the config.ini file used.")
+    parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -49,7 +52,7 @@ if __name__=="__main__":
         db.send_links( args.sendlink )
         sys.exit(0)
 
-    auth = dbfile.DBMySQLAuth.FromEnv()
+    auth = dbfile.DBMySQLAuth.FromConfigFile( args.rootconfig, 'client' )
     try:
         d = dbfile.DBMySQL( auth)
     except pymysql.err.OperationalError:
