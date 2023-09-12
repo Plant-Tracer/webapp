@@ -1,3 +1,7 @@
+#
+# Note: when this runs on Dreamhost, we need to use the python in $HOME/opt/bin
+#
+
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=8
 
@@ -49,7 +53,6 @@ install-macos:
 	brew install python3
 	brew install libmagic
 	brew install ffmpeg
-
 
 install-windows:
 	echo fill something in here
