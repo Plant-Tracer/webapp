@@ -25,7 +25,7 @@ flake8:
 
 pytest:
 	make touch
-	pytest .
+	python3 -m pytest .
 
 coverage:
 	python3 -m pip install pytest pytest_cov
