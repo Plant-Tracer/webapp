@@ -12,7 +12,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
-      if: startsWith(matrix.os, 'ubuntu')
       mysql:
         image: mysql:8.0
         env:
