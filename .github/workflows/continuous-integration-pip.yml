@@ -7,7 +7,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-latest', mlatest']   # with MySQL service, we now only run on ubuntu
+        os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
         python-version: [3.9]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     services:
