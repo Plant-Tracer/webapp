@@ -64,12 +64,6 @@ jobs:
         run: |
           make pylint
 
-      - name: Check MySQL
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          mysql --version
-          echo "show databases;" | mysql -h127.0.0.1 -uroot -ptestrootpass testdb
-
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         env:
@@ -91,9 +85,9 @@ jobs:
           IMAP_SERVER:      ${{ secrets.IMAP_SERVER }}
 
         run: |
-          printenv | sort
-          pip install pytest
+          make create_localdb
           make coverage
+          make remove_localdb
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
