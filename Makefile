@@ -27,6 +27,14 @@ pytest:
 	make touch
 	python3 -m pytest .
 
+create_localdb:
+	python3 dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini
+	cat etc/actions_test.ini
+
+remove_localdb:
+	python3 dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/actions_test.ini
+	/bin/rm -f etc/actions_test.ini
+
 coverage:
 	python3 -m pip install pytest pytest_cov
 	python3 -m pytest -v --cov=. --cov-report=xml tests
