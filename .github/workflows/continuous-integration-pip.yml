@@ -7,10 +7,11 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
+        os: ['ubuntu-latest', 'macos-latest']   # with MySQL service, we now only run on ubuntu
         python-version: [3.9]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     services:
+      if: ${{ matrix.os == 'ubuntu-latest' }}
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
       mysql:
         image: mysql:8.0
@@ -63,6 +64,11 @@ jobs:
       - name: Lint with pylint
         run: |
           make pylint
+
+      - name: Check MySQL
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          echo "show databases;" | mysql --defaults-extra-file=.github/workflows/client.ini
 
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
