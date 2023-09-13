@@ -85,6 +85,8 @@ jobs:
           IMAP_SERVER:      ${{ secrets.IMAP_SERVER }}
 
         run: |
+          cp -v etc/github_actions_mysql_rootconfig.ini $HOME
+          export
           make create_localdb
           make coverage
           make remove_localdb
