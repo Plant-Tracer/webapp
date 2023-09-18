@@ -35,14 +35,15 @@ jobs:
         with:
           submodules: true
 
+      - name: "Configure ubuntu with ffmpeg"
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: FedericoCarboni/setup-ffmpeg@v2
+        id: setup-ffmpeg
+
       - name: "Configure ubuntu"
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           make install-ubuntu
-
-      - name: "Configure ubuntu with ffmpeg"
-        uses: FedericoCarboni/setup-ffmpeg@v2
-        id: setup-ffmpeg
 
       - name: "Configure MacOS"
         if: startsWith(matrix.os, 'macos')
