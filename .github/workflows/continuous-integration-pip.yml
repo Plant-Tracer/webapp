@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
-        python-version: [3.9]   # installed version on Dreamhost
+        python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
