@@ -46,7 +46,7 @@ install-python-dependencies:
 
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
-	sudo apt install ffmpeg
+	which ffmpeg || sudo apt install ffmpeg
 
 install-macos:
 	brew update
