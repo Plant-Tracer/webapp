@@ -40,6 +40,10 @@ jobs:
         run: |
           make install-ubuntu
 
+      - name: "Configure ubuntu with ffmpeg"
+        uses: FedericoCarboni/setup-ffmpeg@v2
+        id: setup-ffmpeg
+
       - name: "Configure MacOS"
         if: startsWith(matrix.os, 'macos')
         run: |
