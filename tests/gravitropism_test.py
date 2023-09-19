@@ -14,15 +14,12 @@ from gravitropism import calculate_results_gravitropism
     (3, 4, 0, 1, 2, {'distance': pytest.approx(4.24, 0.01), 'rate': pytest.approx(2.12, 0.01), 'angle': pytest.approx(-135.0, 0.1)})
 ])
 
-def test_calculate_two_points(x1, y1, x2, y2, time_elapsed, expected_results):
-    logging.info("Starting test_calculate_two_points...")
 
-    results = calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed)
+def test_calculate_two_points(x1, y1, x2, y2, time_elapsed, expected_results):
     
-    logging.info(f"Running calculate_results_gravitropism with coordinates: ({x1}, {y1}), ({x2}, {y2}) and time_elapsed: {time_elapsed}")
-     
-    logging.info(f"Results from calculate_results_gravitropism: {results}")
+    results = calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed)
     
     assert results == expected_results
     
-    logging.info("Test completed successfully.")
+    
+    
