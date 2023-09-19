@@ -53,7 +53,8 @@ install-python-dependencies:
 	python3 -m pip install --upgrade pip
 
 install-ubuntu:
-	sudo apt install ffmpeg
+	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
+	which ffmpeg || sudo apt install ffmpeg
 
 install-macos:
 	brew update
