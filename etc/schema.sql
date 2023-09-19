@@ -50,11 +50,11 @@ CREATE TABLE `api_keys` (
   `last_used_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `use_count` int NOT NULL DEFAULT '0',
-  `active` int DEFAULT '1',
+  `enabled` int DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `api_keys_ibfk_1` (`user_id`),
   CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `active_chk` CHECK ((`active` in (0,1)))
+  CONSTRAINT `enabled_chk` CHECK ((`enabled` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
