@@ -7,6 +7,7 @@ import os
 import base64
 import uuid
 import logging
+from bottle import Bottle, request
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
@@ -14,7 +15,7 @@ from validate_email_address import validate_email
 from paths import DBREADER_BASH_PATH,DBWRITER_BASH_PATH,TEMPLATE_DIR,DBCREDENTIALS_PATH
 from lib.ctools import dbfile
 
-
+from auth import get_user_api_key, get_movie_id, get_user_dict, get_user_id, get_user_ipaddr
 import mailer
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
@@ -59,12 +60,27 @@ def get_dbwriter():
 
 
 ################################################################
+## Logging
+################################################################
+
+def log(func, *, apikey_id=None, user_id=None, course_id=None, movie_id=None, message=None, args=None)):
+    if (args is not None) and (not isinstance(args,str)):
+        args = json.dumps(args, default=str)
+
+    return dbfile.DBMySQL.csfr( get_dbwriter(),
+                         """INSERT INTO logs (time_t,ipaddr,apikey_id,user_id,course_id,movie_id,func,message,args)
+                         VALUES (UNIX_TIMESTAMP(), %s, %s, %s, %s, %s, %s, %s, %s)""",
+                         (get_user_ipaddr(), apikey_id, user_id, course_id, movie_id, func, message, args))
+
+
+
+################################################################
 ##  USER MANAGEMENT
 ############################################
 def validate_api_key( api_key ):
     """Validate API key. return User dictionary or None if key is not valid"""
     res = dbfile.DBMySQL.csfr( get_dbreader(),
-                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and enabled=1 LIMIT 1",
+                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and api_key.enabled=1 and users.enabled=1 LIMIT 1",
                                (api_key, ), asDicts=True)
 
     if len(res)>0:
@@ -94,12 +110,15 @@ def register_email(email, course_key, name):
         raise InvalidCourse_Key( course_key )
 
     course_id = res[0][0]
+    log("register_email", course_id=course_id, args={'email':email})
     return dbfile.DBMySQL.csfr( get_dbwriter(),
                          """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
                          ( email, course_id, name, email ))
 
+
 def rename_user(user_id, old_email, new_email):
     """Changes a user's email. Requires a correct old_email"""
+    log("rename_user",user_id=user_id, args={'old_email':old_email,'new_email':new_email))
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
                          ( old_email, user_id, new_email))
 
@@ -107,6 +126,7 @@ def delete_user( email ):
     """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
     Also deletes the user from any courses where they may be an admin.
     """
+    log("delete_user",args={'email':email})
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
