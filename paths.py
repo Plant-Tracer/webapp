@@ -26,15 +26,19 @@ PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 bottle.TEMPLATE_PATH.append( relpath(TEMPLATE_DIR))
 
 # Database credentials
-DBCREDENTIALS_PATH = None
+DBCREDENTIALS_PATH = join( HOME, 'planttracer.ini')
+if not os.path.exists(DBCREDENTIALS_PATH):
+    DBCREDENTIALS_PATH = join( HOME, 'plant_dev.ini')
+if not os.path.exists(DBCREDENTIALS_PATH):
+    DBCREDENTIALS_PATH = None
 
-DBREADER_BASH_FILE = join( HOME, 'plant_dev.bash')
-if not os.path.exists(DBREADER_BASH_FILE):
-    DBREADER_BASH_FILE = join( HOME, 'plant_app.bash')
+DBREADER_BASH_PATH = join( HOME, 'plant_dev.bash')
+if not os.path.exists(DBREADER_BASH_PATH):
+    DBREADER_BASH_PATH = join( HOME, 'plant_app.bash')
 
-DBWRITER_BASH_FILE = join( HOME, 'plant_dev.bash')
-if not os.path.exists(DBWRITER_BASH_FILE):
-    DBWRITER_BASH_FILE = join( HOME, 'plant_app.bash')
+DBWRITER_BASH_PATH = join( HOME, 'plant_dev.bash')
+if not os.path.exists(DBWRITER_BASH_PATH):
+    DBWRITER_BASH_PATH = join( HOME, 'plant_app.bash')
 
 # Create the @view decorator to add template to the function output
 view = functools.partial(jinja2_view)
