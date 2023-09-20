@@ -55,8 +55,10 @@ install-python-dependencies:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	which ffmpeg || sudo apt install ffmpeg
+	if [ -r requirements-ubuntu.txt ]; then python3 -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
 
 install-macos:
+	if [ -r requirements-macos.txt ]; then python3 -m pip install --user -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	brew update
 	brew upgrade
 	brew install python3
