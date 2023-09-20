@@ -7,15 +7,15 @@ import os
 import base64
 import uuid
 import logging
-from bottle import Bottle, request
+import json
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_PATH,DBWRITER_BASH_PATH,TEMPLATE_DIR,DBCREDENTIALS_PATH
+from paths import DBREADER_BASH_PATH,DBWRITER_BASH_PATH,TEMPLATE_DIR,DBCREDENTIALS_PATH,BOTTlE_APP_INI_PATH
 from lib.ctools import dbfile
 
-from auth import get_user_api_key, get_movie_id, get_user_dict, get_user_id, get_user_ipaddr
+from auth import get_user_api_key, get_user_ipaddr, get_movie_id
 import mailer
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
@@ -63,14 +63,24 @@ def get_dbwriter():
 ## Logging
 ################################################################
 
-def log(func, *, apikey_id=None, user_id=None, course_id=None, movie_id=None, message=None, args=None)):
+def log(func, *, course_id=None, movie_id=None, message=None, args=None):
     if (args is not None) and (not isinstance(args,str)):
         args = json.dumps(args, default=str)
 
+    user_api_key = get_user_api_key()
+
     return dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT INTO logs (time_t,ipaddr,apikey_id,user_id,course_id,movie_id,func,message,args)
-                         VALUES (UNIX_TIMESTAMP(), %s, %s, %s, %s, %s, %s, %s, %s)""",
-                         (get_user_ipaddr(), apikey_id, user_id, course_id, movie_id, func, message, args))
+                         """INSERT INTO logs (time_t,
+                                              apikey_id,
+                                              user_id,
+                                              ipaddr, course_id,movie_id,func,message,args)
+                         VALUES (UNIX_TIMESTAMP(),
+                                (select min(id) from api_keys where api_key=%s),
+                                (select min(user_id) from api_keys where api_key=%s),
+                                %s, %s, %s, %s, %s, %s)""",
+                                (user_api_key,
+                                 user_api_key,
+                                 get_user_ipaddr(), course_id, movie_id, func, message, args))
 
 
 
@@ -80,7 +90,7 @@ def log(func, *, apikey_id=None, user_id=None, course_id=None, movie_id=None, me
 def validate_api_key( api_key ):
     """Validate API key. return User dictionary or None if key is not valid"""
     res = dbfile.DBMySQL.csfr( get_dbreader(),
-                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and api_key.enabled=1 and users.enabled=1 LIMIT 1",
+                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1",
                                (api_key, ), asDicts=True)
 
     if len(res)>0:
@@ -118,7 +128,7 @@ def register_email(email, course_key, name):
 
 def rename_user(user_id, old_email, new_email):
     """Changes a user's email. Requires a correct old_email"""
-    log("rename_user",user_id=user_id, args={'old_email':old_email,'new_email':new_email))
+    log("rename_user",user_id=user_id, args={'old_email':old_email,'new_email':new_email})
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
                          ( old_email, user_id, new_email))
 
@@ -132,6 +142,7 @@ def delete_user( email ):
 
 
 def lookup_user( *, email ):
+    log("lookup_user", args={'email':email})
     try:
         return dbfile.DBMySQL.csfr( get_dbreader(), "select * from users where email=%s",(email,), asDicts=True)[0]
     except IndexError:
@@ -146,10 +157,11 @@ def make_new_api_key( email ):
     if user and user['enabled']==1:
         user_id = user['id']
         api_key = str(uuid.uuid4()).replace('-','')
-        dbfile.DBMySQL.csfr( get_dbwriter(),
+        r = dbfile.DBMySQL.csfr( get_dbwriter(),
                              """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
 
                              (user_id, api_key))
+        log("make_new_api_key", args={'user_id':user_id,'api_keys.id=':r})
         return api_key
     return None
 
@@ -161,6 +173,7 @@ def delete_api_key(api_key):
     """
     if len(api_key) < 10:
         raise InvalidAPI_Key(api_key)
+    log("delete_api_key",args={'api_key':api_key})
     return dbfile.DBMySQL.csfr( get_dbwriter(),
                                 """DELETE FROM api_keys WHERE api_key=%s""",
                                 (api_key,))
@@ -175,6 +188,10 @@ def send_links( email, planttracer_endpoint ):
     with open(os.path.join( TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME ),"r") as f:
         msg_env = NativeEnvironment().from_string( f.read() )
     new_api_key = make_new_api_key( email )
+
+    log("send_links", args={'to_addrs':email,
+                            'from_addr':PROJECT_EMAIL,
+                            'planttracer_endpoint':planttracer_endpoint})
     if new_api_key:
         msg = msg_env.render( to_addrs   = ",".join([email]),
                               from_addr  = PROJECT_EMAIL,
@@ -182,8 +199,9 @@ def send_links( email, planttracer_endpoint ):
                               api_key    = new_api_key)
 
         DRY_RUN = False
+        SMTP_DEBUG = False
         smtp_config = mailer.smtp_config_from_environ()
-        #smtp_config['SMTP_DEBUG'] = False
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
         mailer.send_message( from_addr   = PROJECT_EMAIL,
                              to_addrs    = TO_ADDRS,
                              smtp_config = smtp_config,
@@ -206,8 +224,10 @@ def create_course(course_key, course_name, max_enrollment, course_section=None):
     """Create a new course
     :return: course_id of the new course
     """
-    return dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
+    ret =dbfile.DBMySQL.csfr( get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
                                 (course_key, course_name, max_enrollment, course_section))
+    log("create_course",args={'course_name':course_name,'max_enrollment':max_enrollment, 'course_section':course_section, 'ret':ret})
+    return ret
 
 def delete_course(course_key):
     """Delete a course.

@@ -53,10 +53,13 @@ import base64
 from bottle import request
 from validate_email_address import validate_email
 
+if mistune.__version__ < '3':
+    raise RuntimeError("Please uninstall and reinstall mistune")
+
 # pylint: disable=no-member
 
 import db
-from auth import get_user_api_key, get_movie_id, get_user_dict, get_user_id
+from auth import get_user_api_key, get_user_ipaddr, get_movie_id
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
@@ -177,6 +180,25 @@ def func_resend():
             'register':False,
             'planttracer_endpoint':PLANTTRACER_ENDPOINT
             }
+
+
+def get_user_dict():
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    api_key = get_user_api_key()
+    if api_key is None:
+        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
+    userdict = db.validate_api_key( api_key )
+    if not userdict:
+        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
+    return userdict
+
+def get_user_id():
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    userdict = get_user_dict()
+    if 'id' in userdict:
+        return userdict['id']
+    logging.warning("no ID in userdict = %s",userdict)
+    raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
 LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
