@@ -35,6 +35,11 @@ jobs:
         with:
           submodules: true
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: "Configure ubuntu with ffmpeg"
         if: startsWith(matrix.os, 'ubuntu')
         uses: FedericoCarboni/setup-ffmpeg@v2
@@ -54,11 +59,6 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         run: |
           make install-windows
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: Update GITHUB_PATH and install dependencies
         run: |
