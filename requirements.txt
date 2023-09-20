@@ -11,7 +11,7 @@ pymysql
 pytest
 pytest-cov
 pytest-env
-python-magic
+python-magic-bin
 requests
 validate_email_address
 opencv-python
