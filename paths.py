@@ -19,6 +19,7 @@ TEMPLATE_DIR  = join(ROOT_DIR, 'templates')
 TEST_DIR      = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR = join(ROOT_DIR, 'tests','data')
 SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
+BOTTLE_APP_INI_PATH = join(ROOT_DIR, 'bottle_app.ini')
 
 PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
 

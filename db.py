@@ -7,18 +7,19 @@ import os
 import base64
 import uuid
 import logging
+import sys
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_PATH,DBWRITER_BASH_PATH,TEMPLATE_DIR,DBCREDENTIALS_PATH
+from paths import DBREADER_BASH_PATH,DBWRITER_BASH_PATH,TEMPLATE_DIR,DBCREDENTIALS_PATH,BOTTLE_APP_INI_PATH
 from lib.ctools import dbfile
-
-
 import mailer
 
-EMAIL_TEMPLATE_FNAME = 'email.txt'
+if sys.version < '3.11':
+    raise RuntimeError("Requires python 3.11 or above.")
 
+EMAIL_TEMPLATE_FNAME = 'email.txt'
 
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
@@ -38,7 +39,7 @@ def get_dbreader():
     2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
     3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
     """
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTlE_APP_INI_PATH):
+    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
         return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
     fname = DBREADER_BASH_PATH if os.path.exists(DBREADER_BASH_PATH) else None
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
@@ -51,7 +52,7 @@ def get_dbwriter():
     3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
     """
 
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTlE_APP_INI_PATH):
+    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
         return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbwriter')
 
     fname = DBWRITER_BASH_PATH if os.path.exists(DBWRITER_BASH_PATH) else None
@@ -64,7 +65,7 @@ def get_dbwriter():
 def validate_api_key( api_key ):
     """Validate API key. return User dictionary or None if key is not valid"""
     res = dbfile.DBMySQL.csfr( get_dbreader(),
-                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and enabled=1 LIMIT 1",
+                               "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1",
                                (api_key, ), asDicts=True)
 
     if len(res)>0:
