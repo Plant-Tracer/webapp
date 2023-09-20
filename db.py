@@ -30,6 +30,9 @@ class InvalidAPI_Key(RuntimeError):
 class InvalidCourse_Key(RuntimeError):
     """ API Key is invalid """
 
+LOG_DB   = 'LOG_DB'
+LOG_INFO = 'LOG_INFO'
+logging_policy = set(list[LOG_DB])
 
 
 @functools.cache
@@ -69,7 +72,8 @@ def log(func, *, course_id=None, movie_id=None, message=None, args=None):
 
     user_api_key = get_user_api_key()
 
-    return dbfile.DBMySQL.csfr( get_dbwriter(),
+    if LOG_DB in logging_policy:
+        dbfile.DBMySQL.csfr( get_dbwriter(),
                          """INSERT INTO logs (time_t,
                                               apikey_id,
                                               user_id,
@@ -82,6 +86,12 @@ def log(func, *, course_id=None, movie_id=None, message=None, args=None):
                                  user_api_key,
                                  get_user_ipaddr(), course_id, movie_id, func, message, args))
 
+    if LOG_INFO in logging_policy:
+        logging.info("%s course_id=%s movie_id=%s message=%s args=%s",func,course_id,movie_id,message,args)
+
+def set_log_policy(v):
+    logging_policy.clear()
+    logging_policy.add(v)
 
 
 ################################################################
