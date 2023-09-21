@@ -26,17 +26,22 @@ TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
+#TEST_LOG_POLICY = db.LOG_WARNING
+TEST_LOG_POLICY = db.LOG_DB
+TEST_CLEANUP = False
+
 @pytest.fixture
 def new_course():
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY) # disable logging to database
     course_key = str(uuid.uuid4())
     ct = db.create_course( course_key, course_key + "course name", MAX_ENROLLMENT )
     assert ct>0                 # returns course_id
     db.make_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
     yield course_key
-    db.remove_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
-    ct = db.delete_course(course_key)
-    assert ct==1                # returns number of courses deleted
+    if TEST_CLEANUP:
+        db.remove_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
+        ct = db.delete_course(course_key)
+        assert ct==1                # returns number of courses deleted
 
 def test_new_course(new_course):
     course_key = new_course
@@ -48,7 +53,7 @@ def new_user(new_course):
     """Creates a new course and a new user and yields (USER_EMAIL, api_key)
     Then deletes them. The course gets deleted by the new_course fixture.
     """
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY)
     user_email = TEST_USER_EMAIL.replace('@','+'+str(uuid.uuid4())+'@')
     course_key = new_course
     user_id = db.register_email( user_email, course_key, TEST_USER_NAME )
@@ -56,9 +61,10 @@ def new_user(new_course):
     api_key = db.make_new_api_key( user_email )
     assert len(api_key)>8
     yield ( user_email, api_key)
-    ct = db.delete_api_key(api_key)
-    assert ct==1
-    db.delete_user( user_email )
+    if TEST_CLEANUP:
+        ct = db.delete_api_key(api_key)
+        assert ct==1
+        db.delete_user( user_email )
 
 def test_new_user(new_user):
     (email, api_key) = new_user
@@ -67,7 +73,7 @@ def test_new_user(new_user):
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it"""
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY) # disable logging to database
 
     (email, api_key) = new_user
 
@@ -96,14 +102,15 @@ def new_movie(new_user):
     assert movie_id > 0
     yield (movie_id, MOVIE_TITLE, api_key)
 
-    # Delete the movie we uploaded
-    with boddle(params ={'api_key':api_key,
-                         'movie_id':movie_id}):
-        res = bottle_app.api_delete_movie()
-    assert res['error']==False
+    if TEST_CLEANUP:
+        # Delete the movie we uploaded
+        with boddle(params ={'api_key':api_key,
+                             'movie_id':movie_id}):
+            res = bottle_app.api_delete_movie()
+        assert res['error']==False
 
-    # And purge the movie that we have deleted
-    db.purge_movie(movie_id);
+        # And purge the movie that we have deleted
+        db.purge_movie(movie_id);
 
 
 def movie_list(api_key):

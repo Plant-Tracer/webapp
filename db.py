@@ -36,6 +36,7 @@ class InvalidCourse_Key(RuntimeError):
 
 LOG_DB   = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
+LOG_WARNING = 'LOG_WARNING'
 logging_policy = set(list[LOG_DB])
 
 
@@ -47,8 +48,10 @@ def get_dbreader():
     3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
     """
     if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
+        logging.info("authentication from %s",DBCREDENTIALS_PATH)
         return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
     fname = DBREADER_BASH_PATH if os.path.exists(DBREADER_BASH_PATH) else None
+    logging.info("authentication from %s",fname)
     return dbfile.DBMySQLAuth.FromBashEnvFile( fname )
 
 @functools.cache
@@ -84,26 +87,36 @@ def logit(*, func_name, func_args, func_return):
     user_api_key = get_user_api_key()
     user_ipaddr  = get_user_ipaddr()
 
+    if not isinstance(func_args, str):
+        func_args = json.dumps( func_args, default=str )
+
+    logging.debug("func_args=%s",func_args)
+    logging.debug("type(func_args)=%s",type(func_args))
+
     if LOG_DB in logging_policy:
         dbfile.DBMySQL.csfr( get_dbwriter(),
-                         """INSERT INTO logs (time_t,
+                         """INSERT INTO logs (
+                                time_t,
                                 apikey_id, user_id, ipaddr,
                                 func_name, func_args, func_return)
                          VALUES (UNIX_TIMESTAMP(),
-                                (select min(id) from api_keys where api_key=%s), (select min(user_id) from api_keys where api_key=%s), %s,
+                                (select min(id) from api_keys where api_key=%s),
+                                   (select min(user_id) from api_keys where api_key=%s), %s,
                                  %s, %s, %s )""",
                                 (user_api_key, user_api_key, user_ipaddr,
                                  func_name, func_args, func_return))
 
     if LOG_INFO in logging_policy:
         logging.info("%s func_name=%s func_args=%s func_return=%s",user_ipaddr, func_name, func_args, func_return)
+    if LOG_WARNING in logging_policy:
+        logging.warning("%s func_name=%s func_args=%s func_return=%s",user_ipaddr, func_name, func_args, func_return)
 
 def log(func):
     """Logging decorator."""
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
         logit( func_name = func.__name__,
-               func_args = json.dumps( {**kwargs, **{'args':args}} ),
+               func_args = {**kwargs, **{'args':args}},
                func_return = r)
         return r
     return wrapper
