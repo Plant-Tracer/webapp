@@ -247,7 +247,7 @@ def func_upload():
 def api_check_api_key( ):
     """API to check the user key and, if valid, return usedict or returns an error."""
 
-    userdict = db.validate_api_key( get_user_api_key )
+    userdict = db.validate_api_key( get_user_api_key() )
     if userdict:
         return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
     return INVALID_API_KEY
