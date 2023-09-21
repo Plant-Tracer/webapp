@@ -59,7 +59,7 @@ if mistune.__version__ < '3':
 # pylint: disable=no-member
 
 import db
-from auth import get_user_api_key, get_user_ipaddr, get_movie_id
+from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
@@ -206,7 +206,10 @@ def get_user_id():
 ################################################################
 
 def page_dict():
+    """Fill in data that goes to templates below and also set the cookie in a response"""
     api_key = get_user_api_key()
+    if api_key is not None:
+        bottle.response.set_cookie( API_KEY_COOKIE_NAME, api_key, path='/')
     user_dict  = get_user_dict( )
     user_id    = user_dict['id']
     user_primary_course_id   = user_dict['primary_course_id']
