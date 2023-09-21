@@ -22,7 +22,7 @@ SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
 BOTTLE_APP_INI_PATH = join(ROOT_DIR, 'bottle_app.ini')
 
 PLANTTRACER_ENDPOINT = os.environ['PLANTTRACER_ENDPOINT']
-
+BOTTlE_APP_INI_PATH  = join(ROOT_DIR,'bottle_app.ini')
 # Add the relative template path (since jinja2 doesn't like absolute paths)
 bottle.TEMPLATE_PATH.append( relpath(TEMPLATE_DIR))
 
