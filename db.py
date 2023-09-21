@@ -189,6 +189,8 @@ def make_new_api_key( email ):
                              """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
 
                              (user_id, api_key))
+        # Manually log so that the api_key is not logged
+        logit(func_name='make_new_api_key',func_args={'email':email}, func_return='*****')
         return api_key
     return None
 
