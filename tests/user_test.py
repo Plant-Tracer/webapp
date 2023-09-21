@@ -28,6 +28,7 @@ MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
 @pytest.fixture
 def new_course():
+    db.set_log_policy(db.LOG_INFO) # disable logging to database
     course_key = str(uuid.uuid4())
     ct = db.create_course( course_key, course_key + "course name", MAX_ENROLLMENT )
     assert ct>0                 # returns course_id
@@ -47,6 +48,7 @@ def new_user(new_course):
     """Creates a new course and a new user and yields (USER_EMAIL, api_key)
     Then deletes them. The course gets deleted by the new_course fixture.
     """
+    db.set_log_policy(db.LOG_INFO) # disable logging to database
     user_email = TEST_USER_EMAIL.replace('@','+'+str(uuid.uuid4())+'@')
     course_key = new_course
     user_id = db.register_email( user_email, course_key, TEST_USER_NAME )
@@ -65,6 +67,8 @@ def test_new_user(new_user):
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it"""
+    db.set_log_policy(db.LOG_INFO) # disable logging to database
+
     (email, api_key) = new_user
 
     MOVIE_TITLE = 'test movie title ' + str(uuid.uuid4())
@@ -80,7 +84,6 @@ def new_movie(new_user):
         bottle_app.expand_memfile_max()
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_new_movie()
-
 
     # Try to uplaod the movie all at once
     with boddle(params = {"api_key":api_key,
