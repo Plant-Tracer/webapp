@@ -7,6 +7,8 @@ import json
 
 from os.path import abspath,dirname
 
+from lxml import etree
+
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
 from boddle import boddle
@@ -37,7 +39,6 @@ def test_static_path():
 def validate_html(html):
     '''If lxml can properly parse the html, return the lxml representation.
     Otherwise raise.'''
-    from lxml import etree
     try:
         return etree.fromstring(html, etree.HTMLParser())
     except etree.XMLSyntaxError as e:
