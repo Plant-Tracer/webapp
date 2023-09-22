@@ -59,7 +59,7 @@ if mistune.__version__ < '3':
 # pylint: disable=no-member
 
 import db
-from auth import get_user_api_key, get_user_ipaddr, get_movie_id
+from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
@@ -201,47 +201,56 @@ def get_user_id():
     raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
-LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
-@bottle.route('/list', method=['GET'])
-@view('list.html')
-def func_list():
-    """list movies and edit them and user info"""
+################################################################
+### HTML Pages
+################################################################
+
+def page_dict():
+    """Fill in data that goes to templates below and also set the cookie in a response"""
     api_key = get_user_api_key()
+    if api_key is not None:
+        bottle.response.set_cookie( API_KEY_COOKIE_NAME, api_key, path='/')
     user_dict  = get_user_dict( )
-    user_id     = user_dict['id']
+    user_id    = user_dict['id']
     user_primary_course_id   = user_dict['primary_course_id']
     course_dict = db.lookup_course(course_id = user_primary_course_id)
-    logging.warning('course_dict=%s',course_dict)
-    return {'title':'Plant Tracer List, Edit and Play',
-            'api_key':api_key,
+    return {'api_key':api_key,
             'user_id':user_id,
             'user_name':user_dict['name'],
             'user_email':user_dict['email'],
             'admin': db.check_course_admin( user_id, user_primary_course_id ),
             'user_primary_course_id':user_primary_course_id,
-            'course_name':course_dict['course_name'],
-            'load_message':LOAD_MESSAGE
-            }
+            'course_name':course_dict['course_name']}
 
 
-@bottle.route('/upload', method=['GET'])
+LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+@bottle.route('/list', method=['GET','POST'])
+@view('list.html')
+def func_list():
+    """list movies and edit them and user info"""
+    return {**page_dict(),
+            **{'load_message':LOAD_MESSAGE}}
+
+
+@bottle.route('/upload', method=['GET','POST'])
 @view('upload.html')
 def func_upload():
     """Upload a new file"""
-    api_key = get_user_api_key()
-    logging.error("api_key=%s",api_key)
-    user_dict = get_user_dict( )
-    logging.error("user_dict=%s",user_dict)
-    return {'title':'Plant Tracer List, Edit and Play',
-            'api_key':api_key,
-            'user_id':user_dict['user_id'],
-            'user_name':user_dict['name'],
-            'user_email':user_dict['email'],
-            'user_primary_course_id':user_dict['primary_course_id'],
-            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
-            }
+    return {**page_dict(),
+            **{'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD}}
 
 
+@bottle.route('/audit', method=['GET','POST'])
+@view('audit.html')
+def func_audit():
+    """Upload a new file"""
+    return page_dict()
+
+@bottle.route('/users', method=['GET','POST'])
+@view('users.html')
+def func_audit():
+    """Upload a new file"""
+    return page_dict()
 
 @bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):

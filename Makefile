@@ -26,7 +26,11 @@ flake8:
 
 pytest:
 	make touch
-	$(PYTHON) -m pytest .
+	$(PYTHON) -m pytest . -v --log-cli-level=INFO
+
+pytest-debug:
+	make touch
+	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 create_localdb:
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini

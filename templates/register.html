@@ -2,7 +2,6 @@
 {% block title %} PlantTracer App {% endblock %}
 {% block script %}
 <script>
-const version = '0.1.0';
 // This is the only place where the endpoint is required. It is passed from the bottle app so that
 // it can be provided in the POST to generate the email with valid links.
 const planttracer_endpoint = "{{planttracer_endpoint}}";
@@ -46,5 +45,4 @@ new login link.</p>
 {% endif %}
 
 </form>
-<div id='message'></div>
 {% endblock %}
