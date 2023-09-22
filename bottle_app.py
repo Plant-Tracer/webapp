@@ -149,39 +149,6 @@ def static_path(path):
 def favicon():
     static_path('favicon.ico')
 
-## TEMPLATE VIEWS
-@bottle.route('/', method=['GET'])
-@view('index.html')
-def func_root():
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname}
-
-# Note: register and resend both need the endpint so that they can post it to the server
-# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
-@bottle.route('/register', method=['GET'])
-@view('register.html')
-def func_register():
-    """/register sends the register.html template which loads register.js with register variable set to True"""
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname,
-            'register':True,
-            'planttracer_endpoint':PLANTTRACER_ENDPOINT
-            }
-
-@bottle.route('/resend', method=['GET'])
-@view('register.html')
-def func_resend():
-    """/resend sends the register.html template which loads register.js with register variable set to False"""
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname,
-            'register':False,
-            'planttracer_endpoint':PLANTTRACER_ENDPOINT
-            }
-
-
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
@@ -202,7 +169,7 @@ def get_user_id():
 
 
 ################################################################
-### HTML Pages
+### HTML Pages served with template system
 ################################################################
 
 def page_dict():
@@ -223,34 +190,74 @@ def page_dict():
             'course_name':course_dict['course_name']}
 
 
+
+@bottle.route('/', method=['GET'])
+@view('index.html')
+def func_root():
+    """/ - serve the home page"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Launch Page',
+            'hostname':o.hostname}
+
+# Note: register and resend both need the endpint so that they can post it to the server
+# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
+@bottle.route('/register', method=['GET'])
+@view('register.html')
+def func_register():
+    """/register sends the register.html template which loads register.js with register variable set to True"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Registration Page',
+            'hostname':o.hostname,
+            'register':True,
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
+            }
+
+@bottle.route('/resend', method=['GET'])
+@view('register.html')
+def func_resend():
+    """/resend sends the register.html template which loads register.js with register variable set to False"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Resend Registration Link',
+            'hostname':o.hostname,
+            'register':False,
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
+            }
+
+
 LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 @bottle.route('/list', method=['GET','POST'])
 @view('list.html')
 def func_list():
-    """list movies and edit them and user info"""
+    """/list - list movies and edit them and user info"""
     return {**page_dict(),
-            **{'load_message':LOAD_MESSAGE}}
-
+            **{'title':'Plant Tracer List Movies',
+               'load_message':LOAD_MESSAGE}}
 
 @bottle.route('/upload', method=['GET','POST'])
 @view('upload.html')
 def func_upload():
-    """Upload a new file"""
+    """/upload - Upload a new file"""
     return {**page_dict(),
-            **{'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD}}
-
+            **{'title':'Plant Tracer Upload a Movie',
+               'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD}}
 
 @bottle.route('/audit', method=['GET','POST'])
 @view('audit.html')
 def func_audit():
-    """Upload a new file"""
-    return page_dict()
+    """/audit - view the audit logs"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer Audit'}}
 
 @bottle.route('/users', method=['GET','POST'])
 @view('users.html')
-def func_audit():
-    """Upload a new file"""
-    return page_dict()
+def func_users():
+    """/users - provide a users list"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer List Users'}}
+
+################################################################
+## /api URLs
+################################################################
 
 @bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):
@@ -262,8 +269,6 @@ def api_check_api_key( ):
     return INVALID_API_KEY
 
 
-################################################################
-## Registration
 @bottle.route('/api/register', method=['GET','POST'])
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
@@ -294,8 +299,10 @@ def api_send_link():
     db.send_links( email, planttracer_endpoint )
     return {'error':False,'message':'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.' }
 
-################################################################
+##
 ## Movies
+##
+
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
@@ -372,9 +379,9 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
-################################################################
+##
 ## Metadata
-
+##
 
 def converter(x):
     if (x=='null') or (x is None):
@@ -424,8 +431,9 @@ def api_set_metadata():
     return {'error':False, 'result':result}
 
 
-################################################################
+##
 ## Demo and debug
+##
 @bottle.route('/api/add', method=['GET','POST'])
 def api_add():
     a = request.forms.get('a')
@@ -436,8 +444,8 @@ def api_add():
         return {'error':True,'message':'arguments malformed'}
 
 ################################################################
-## App
-
+## Bottle App
+##
 
 def app():
     """The application"""
