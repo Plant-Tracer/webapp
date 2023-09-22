@@ -1,19 +1,28 @@
 import math
 
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
+    
     """
     Calculate distance, rate, and angle of movement.
 
-    Parameters:
-        x1, y1: initial coordinates of the plant
-        x2, y2: final coordinates of the plant
-        time_elapsed: time elapsed between the two points
-
-    Returns:
-    dictionary of 
-        distance: distance moved (mm)
-        rate: rate of movement (mm/min)
-        angle: angle of movement in degrees relative to positive x-axis
+    :param x1: initial x coordinate
+    :type x1: float
+    :param x2: final x coordinate
+    :type x2: float
+    :param y1: initial y coordinate
+    :type y1: float
+    :param y2: final y coordinate
+    :type y2: float
+    :param time_elapsed: time elapsed between the two points
+    :type time_elapsed: float
+    
+    :raises TypeError: All coordinates must be provided and time elapsed must be greater than zero.
+    
+    :return:A dictionary of 
+        distance - distance moved (mm)
+        rate - rate of movement (mm/min)
+        angle - angle of movement relative to positive x-axis (degrees)
+    :rtype: dict    
     """
     
     # check to see if any of the parameters are not valid (null or 0)
