@@ -26,9 +26,7 @@ TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
-#TEST_LOG_POLICY = db.LOG_WARNING
-TEST_LOG_POLICY = db.LOG_DB
-TEST_CLEANUP = False
+TEST_LOG_POLICY = db.LOG_INFO
 
 @pytest.fixture
 def new_course():
@@ -38,10 +36,9 @@ def new_course():
     assert ct>0                 # returns course_id
     db.make_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
     yield course_key
-    if TEST_CLEANUP:
-        db.remove_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
-        ct = db.delete_course(course_key)
-        assert ct==1                # returns number of courses deleted
+    db.remove_course_admin( TEST_ADMIN_EMAIL, course_key=course_key )
+    ct = db.delete_course(course_key)
+    assert ct==1                # returns number of courses deleted
 
 def test_new_course(new_course):
     course_key = new_course
@@ -61,10 +58,9 @@ def new_user(new_course):
     api_key = db.make_new_api_key( user_email )
     assert len(api_key)>8
     yield ( user_email, api_key)
-    if TEST_CLEANUP:
-        ct = db.delete_api_key(api_key)
-        assert ct==1
-        db.delete_user( user_email )
+    ct = db.delete_api_key(api_key)
+    assert ct==1
+    db.delete_user( user_email )
 
 def test_new_user(new_user):
     (email, api_key) = new_user
@@ -102,15 +98,14 @@ def new_movie(new_user):
     assert movie_id > 0
     yield (movie_id, MOVIE_TITLE, api_key)
 
-    if TEST_CLEANUP:
-        # Delete the movie we uploaded
-        with boddle(params ={'api_key':api_key,
-                             'movie_id':movie_id}):
-            res = bottle_app.api_delete_movie()
-        assert res['error']==False
+    # Delete the movie we uploaded
+    with boddle(params ={'api_key':api_key,
+                         'movie_id':movie_id}):
+        res = bottle_app.api_delete_movie()
+    assert res['error']==False
 
-        # And purge the movie that we have deleted
-        db.purge_movie(movie_id);
+    # And purge the movie that we have deleted
+    db.purge_movie(movie_id);
 
 
 def movie_list(api_key):

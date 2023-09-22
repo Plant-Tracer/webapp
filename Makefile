@@ -26,9 +26,9 @@ flake8:
 
 pytest:
 	make touch
-	$(PYTHON) -m pytest .
+	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
-pytest-info:
+pytest-debug:
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
