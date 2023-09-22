@@ -90,6 +90,8 @@ def logit(*, func_name, func_args, func_return):
     if not isinstance(func_args, str):
         func_args = json.dumps( func_args, default=str )
 
+
+
     logging.debug("func_args=%s",func_args)
     logging.debug("type(func_args)=%s",type(func_args))
 
@@ -125,6 +127,8 @@ def set_log_policy(v):
     logging_policy.clear()
     logging_policy.add(v)
 
+def add_log_policy(v):
+    logging_policy.add(v)
 
 ################################################################
 ##  USER MANAGEMENT
