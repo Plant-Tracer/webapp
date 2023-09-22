@@ -59,16 +59,15 @@ if __name__=="__main__":
         print("Invalid auth: ",auth,file=sys.stderr)
         raise
 
-    if args.config:
+    if args.writeconfig:
         cp = configparser.ConfigParser()
-        cp.read(args.config)
+        cp.read(args.writeconfig)
 
     if args.createdb:
         dbreader_user = 'dbreader_' + args.createdb
         dbwriter_user = 'dbwriter_' + args.createdb
         dbreader_password = str(uuid.uuid4())
         dbwriter_password = str(uuid.uuid4())
-        assert( args.createdb.isalnum())
         d.execute(f'CREATE DATABASE {args.createdb}')
         d.execute(f'USE {args.createdb}')
         with open(SCHEMA_FILE,'r') as f:
@@ -109,11 +108,10 @@ if __name__=="__main__":
             cp[dbwriter][MYSQL_USER] = dbwriter_user
             cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
             cp[dbwriter][MYSQL_DATABASE] = args.createdb
-            with open( args.config, 'w') as fp:
+            with open( args.writeconfig, 'w') as fp:
                 cp.write( fp )
 
     if args.dropdb:
-        assert( args.dropdb.isalnum())
         dbreader_user = 'dbreader_' + args.dropdb
         dbwriter_user = 'dbwriter_' + args.dropdb
         d.execute(f'DROP USER `{dbreader_user}`@`localhost`')

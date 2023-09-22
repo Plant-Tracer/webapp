@@ -7,8 +7,8 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
-        python-version: [3.9]   # installed version on Dreamhost
+        os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
+        python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
@@ -26,12 +26,24 @@ jobs:
           - 3306:3306
           # Before continuing, verify the mysql container is reachable from the ubuntu host
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
     timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           submodules: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Configure ubuntu with ffmpeg"
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: FedericoCarboni/setup-ffmpeg@v2
+        id: setup-ffmpeg
 
       - name: "Configure ubuntu"
         if: startsWith(matrix.os, 'ubuntu')
@@ -48,11 +60,6 @@ jobs:
         run: |
           make install-windows
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Update GITHUB_PATH and install dependencies
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
@@ -65,9 +72,9 @@ jobs:
       - name: Test with pytest and a functioning database (but only on Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         env:
-          SKIP_ENDPOINT_TEST: NO
-          TEST_ENDPOINT:           ${{ vars.TEST_ENDPOINT }}
-          PLANTTRACER_ENDPOINT:    ${{ vars.PLANTTRACER_API_ENDPOINT }}
+          SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
+          TEST_ENDPOINT:        ${{ vars.TEST_ENDPOINT }}
+          PLANTTRACER_ENDPOINT: ${{ vars.PLANTTRACER_API_ENDPOINT }}
           TEST_USER_EMAIL:  ${{ vars.TEST_USER_EMAIl }}
           TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
           MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
@@ -83,9 +90,11 @@ jobs:
           IMAP_SERVER:      ${{ secrets.IMAP_SERVER }}
 
         run: |
-          printenv | sort
-          pip install pytest
+          cp -v etc/github_actions_mysql_rootconfig.ini $HOME
+          export
+          make create_localdb
           make coverage
+          make remove_localdb
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')

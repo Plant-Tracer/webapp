@@ -50,9 +50,11 @@ CREATE TABLE `api_keys` (
   `last_used_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `use_count` int NOT NULL DEFAULT '0',
+  `enabled` int DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `api_keys_ibfk_1` (`user_id`),
-  CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `enabled_chk` CHECK ((`enabled` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -72,6 +74,30 @@ CREATE TABLE `courses` (
   `modified` timestamp NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `course_name` (`course_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `logs`
+--
+
+DROP TABLE IF EXISTS `logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `time_t` int NOT NULL DEFAULT (unix_timestamp()),
+  `ipaddr` varchar(39) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `apikey_id` int DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `func_name` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `func_args` json DEFAULT NULL,
+  `func_return` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `apikey_id` (`apikey_id`),
+  KEY `user_id` (`user_id`),
+  KEY `time_t` (`time_t`),
+  KEY `ipaddr` (`ipaddr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -174,4 +200,3 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2023-09-10 13:42:55

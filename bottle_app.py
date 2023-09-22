@@ -53,10 +53,13 @@ import base64
 from bottle import request
 from validate_email_address import validate_email
 
+if mistune.__version__ < '3':
+    raise RuntimeError("Please uninstall and reinstall mistune")
+
 # pylint: disable=no-member
 
-
 import db
+from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
@@ -146,112 +149,6 @@ def static_path(path):
 def favicon():
     static_path('favicon.ico')
 
-## TEMPLATE VIEWS
-@bottle.route('/', method=['GET'])
-@view('index.html')
-def func_root():
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname}
-
-# Note: register and resend both need the endpint so that they can post it to the server
-# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
-@bottle.route('/register', method=['GET'])
-@view('register.html')
-def func_register():
-    """/register sends the register.html template which loads register.js with register variable set to True"""
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname,
-            'register':True,
-            'planttracer_endpoint':PLANTTRACER_ENDPOINT
-            }
-
-@bottle.route('/resend', method=['GET'])
-@view('register.html')
-def func_resend():
-    """/resend sends the register.html template which loads register.js with register variable set to False"""
-    o = urlparse(request.url)
-    return {'title':'ROOT',
-            'hostname':o.hostname,
-            'register':False,
-            'planttracer_endpoint':PLANTTRACER_ENDPOINT
-            }
-
-
-LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
-@bottle.route('/list', method=['GET'])
-@view('list.html')
-def func_list():
-    """list movies and edit them and user info"""
-    api_key = get_user_api_key()
-    user_dict  = get_user_dict( )
-    user_id     = user_dict['id']
-    user_primary_course_id   = user_dict['primary_course_id']
-    course_dict = db.lookup_course(course_id = user_primary_course_id)
-    logging.warning('course_dict=%s',course_dict)
-    return {'title':'Plant Tracer List, Edit and Play',
-            'api_key':api_key,
-            'user_id':user_id,
-            'user_name':user_dict['name'],
-            'user_email':user_dict['email'],
-            'admin': db.check_course_admin( user_id, user_primary_course_id ),
-            'user_primary_course_id':user_primary_course_id,
-            'course_name':course_dict['course_name'],
-            'load_message':LOAD_MESSAGE
-            }
-
-
-@bottle.route('/upload', method=['GET'])
-@view('upload.html')
-def func_upload():
-    """Upload a new file"""
-    api_key = get_user_api_key()
-    logging.error("api_key=%s",api_key)
-    user_dict = get_user_dict( )
-    logging.error("user_dict=%s",user_dict)
-    return {'title':'Plant Tracer List, Edit and Play',
-            'api_key':api_key,
-            'user_id':user_dict['user_id'],
-            'user_name':user_dict['name'],
-            'user_email':user_dict['email'],
-            'user_primary_course_id':user_dict['primary_course_id'],
-            'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD
-            }
-
-
-
-################################################################
-## Authentication API
-##
-
-def get_user_api_key():
-    """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
-    :return: None if user is not logged in
-    """
-    # check the query string
-    api_key = request.query.get('api_key',None)
-    if api_key:
-        return api_key
-    # check for a form submission
-    api_key = request.forms.get('api_key',None)
-    if api_key:
-        return api_key
-    # Check for a cookie
-    api_key = request.get_cookie('api_key',None)
-    if api_key:
-        return api_key
-    return None
-
-def get_movie_id():
-    movie_id = request.query.get('movie_id',None)
-    if movie_id is not None:
-        return movie_id
-    movie_id = request.forms.get('movie_id',None)
-    if movie_id is not None:
-        return movie_id
-    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID), status=200, headers={'Content-type':'application/json'})
-
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
@@ -271,18 +168,107 @@ def get_user_id():
     raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={'Content-type':'application/json'})
 
 
+################################################################
+### HTML Pages served with template system
+################################################################
+
+def page_dict():
+    """Fill in data that goes to templates below and also set the cookie in a response"""
+    api_key = get_user_api_key()
+    if api_key is not None:
+        bottle.response.set_cookie( API_KEY_COOKIE_NAME, api_key, path='/')
+    user_dict  = get_user_dict( )
+    user_id    = user_dict['id']
+    user_primary_course_id   = user_dict['primary_course_id']
+    course_dict = db.lookup_course(course_id = user_primary_course_id)
+    return {'api_key':api_key,
+            'user_id':user_id,
+            'user_name':user_dict['name'],
+            'user_email':user_dict['email'],
+            'admin': db.check_course_admin( user_id, user_primary_course_id ),
+            'user_primary_course_id':user_primary_course_id,
+            'course_name':course_dict['course_name']}
+
+
+
+@bottle.route('/', method=['GET'])
+@view('index.html')
+def func_root():
+    """/ - serve the home page"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Launch Page',
+            'hostname':o.hostname}
+
+# Note: register and resend both need the endpint so that they can post it to the server
+# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
+@bottle.route('/register', method=['GET'])
+@view('register.html')
+def func_register():
+    """/register sends the register.html template which loads register.js with register variable set to True"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Registration Page',
+            'hostname':o.hostname,
+            'register':True,
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
+            }
+
+@bottle.route('/resend', method=['GET'])
+@view('register.html')
+def func_resend():
+    """/resend sends the register.html template which loads register.js with register variable set to False"""
+    o = urlparse(request.url)
+    return {'title':'Plant Tracer Resend Registration Link',
+            'hostname':o.hostname,
+            'register':False,
+            'planttracer_endpoint':PLANTTRACER_ENDPOINT
+            }
+
+
+LOAD_MESSAGE="Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+@bottle.route('/list', method=['GET','POST'])
+@view('list.html')
+def func_list():
+    """/list - list movies and edit them and user info"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer List Movies',
+               'load_message':LOAD_MESSAGE}}
+
+@bottle.route('/upload', method=['GET','POST'])
+@view('upload.html')
+def func_upload():
+    """/upload - Upload a new file"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer Upload a Movie',
+               'MAX_FILE_UPLOAD':MAX_FILE_UPLOAD}}
+
+@bottle.route('/audit', method=['GET','POST'])
+@view('audit.html')
+def func_audit():
+    """/audit - view the audit logs"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer Audit'}}
+
+@bottle.route('/users', method=['GET','POST'])
+@view('users.html')
+def func_users():
+    """/users - provide a users list"""
+    return {**page_dict(),
+            **{'title':'Plant Tracer List Users'}}
+
+################################################################
+## /api URLs
+################################################################
+
 @bottle.route('/api/check-api_key', method=['GET','POST'])
 def api_check_api_key( ):
     """API to check the user key and, if valid, return usedict or returns an error."""
 
-    userdict = db.validate_api_key( request.forms.get('api_key') )
+    userdict = db.validate_api_key( get_user_api_key() )
     if userdict:
         return { 'error':False, 'userinfo': datetime_to_str( userdict ) }
     return INVALID_API_KEY
 
 
-################################################################
-## Registration
 @bottle.route('/api/register', method=['GET','POST'])
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
@@ -313,8 +299,10 @@ def api_send_link():
     db.send_links( email, planttracer_endpoint )
     return {'error':False,'message':'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.' }
 
-################################################################
+##
 ## Movies
+##
+
 @bottle.route('/api/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
@@ -391,9 +379,9 @@ def api_delete_movie():
 def api_list_movies():
     return {'error':False, 'movies': db.list_movies( get_user_id() ) }
 
-################################################################
+##
 ## Metadata
-
+##
 
 def converter(x):
     if (x=='null') or (x is None):
@@ -443,8 +431,9 @@ def api_set_metadata():
     return {'error':False, 'result':result}
 
 
-################################################################
+##
 ## Demo and debug
+##
 @bottle.route('/api/add', method=['GET','POST'])
 def api_add():
     a = request.forms.get('a')
@@ -455,8 +444,8 @@ def api_add():
         return {'error':True,'message':'arguments malformed'}
 
 ################################################################
-## App
-
+## Bottle App
+##
 
 def app():
     """The application"""

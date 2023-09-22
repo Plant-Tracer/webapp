@@ -1,5 +1,10 @@
+#
+# Note: when this runs on Dreamhost, we need to use the python in $HOME/opt/bin
+#
+
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=8
+PYTHON=python3.11
 
 all:
 	@echo verify syntax and then restart
@@ -21,11 +26,23 @@ flake8:
 
 pytest:
 	make touch
-	pytest .
+	$(PYTHON) -m pytest . -v --log-cli-level=INFO
+
+pytest-debug:
+	make touch
+	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
+
+create_localdb:
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini
+	cat etc/actions_test.ini
+
+remove_localdb:
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/actions_test.ini
+	/bin/rm -f etc/actions_test.ini
 
 coverage:
-	python3 -m pip install pytest pytest_cov
-	python3 -m pytest -v --cov=. --cov-report=xml tests
+	$(PYTHON) -m pip install pytest pytest_cov
+	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
 	python bottle_app.py
@@ -36,20 +53,22 @@ clean:
 
 # These are used by the CI pipeline:
 install-python-dependencies:
-	python3 -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then python3 -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
-	python3 -m pip install --upgrade pip
+	$(PYTHON) -m pip install --upgrade pip
+	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
+	$(PYTHON) -m pip install --upgrade pip
 
 install-ubuntu:
-	sudo apt install ffmpeg
+	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
+	which ffmpeg || sudo apt install ffmpeg
+	if [ -r requirements-ubuntu.txt ]; then $(PYTHON) -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
 
 install-macos:
+	if [ -r requirements-macos.txt ]; then $(PYTHON) -m pip install --user -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	brew update
 	brew upgrade
 	brew install python3
 	brew install libmagic
 	brew install ffmpeg
-
 
 install-windows:
 	echo fill something in here
