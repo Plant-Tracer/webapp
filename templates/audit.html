@@ -10,32 +10,8 @@ const user_primary_course_id   = {{user_primary_course_id}};
 {% endblock %}
 
 {% block body %}
-<div id='load_message'><b>{{load_message}}</b></div>
 
-<style>
-div.mtable table {
- border:1px solid black;
- border-collapse:collapse;
- overflow-x:hidden;
- max-height:9999px;
-}
-
-div.mtable input[type=checkbox] {
-   color:black;
-   background-color: yellow;
-}
-
-div.mtable th {
- border:1px solid red;
-}
-
-div.mtable td {
- border:1px solid blue;
-}
-
-</style>
-
-<h2>User Info </h2>
+<h2>Audit </h2>
 
 <p>ID: {{user_id}}</p>
 <p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
@@ -67,11 +43,11 @@ You can can publish or unpublish movies by checking or unchecking the 'publish' 
 {% endif %}
 </p>
 
-<div class='mtable' id='course-movies'></div>
+<div class='audit' id='audit'></div>
 
 <script>
 $( document ).ready( function() {
-   list_movies();
+   list_audit();
 });
 </script>
 {% endblock %}

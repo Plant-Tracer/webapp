@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title> {% block title %}{% endblock %} </title>
+    <title> {% block title %} {{title}} {% endblock %} </title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="google"   content="notranslate"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-    <link rel="stylesheet" href="https://cdn.rawgit.com/Chalarangelo/mini.css/v3.0.1/dist/mini-default.min.css">
+    <link rel="stylesheet" href="https://cdn.rawgit.com/Chalarangelo/mini.css/v3.0.1/dist/mini-default.min.css"></link>
     <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
+
+    <script>
+    const version = '0.9.0';
+    </script>
 
     {% block head %}{% endblock %}
     {% block script %}{% endblock %}
@@ -22,8 +26,9 @@
     {% block body %}
     {% endblock %}
 
+    <div id='message'></div>
     <footer>
-      <p id="copyright">Copyright &copy; 2023 Plant Tracer Project</p>
+      <p id="copyright">Copyright &#169; 2023 Plant Tracer Project</p>
     </footer>
   </body>
 </html>

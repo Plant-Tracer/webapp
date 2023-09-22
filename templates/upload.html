@@ -1,8 +1,6 @@
 {% extends 'base.html' %}
-{% block title %} PlantTracer List, Edit and Play {% endblock %}
 {% block script %}
 <script>
-const version = '0.1.0';
 var user_id = {{user_id}};                  // not logged in
 var api_key = "{{api_key}}";                // no API key yet
 var MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};

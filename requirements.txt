@@ -7,11 +7,11 @@ jinja2
 py3DNS
 pylint
 mistune
+lxml
 pymysql
 pytest
 pytest-cov
 pytest-env
-python-magic
 requests
 validate_email_address
 opencv-python
