@@ -1,5 +1,5 @@
 [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
-# web2
+# webapp
 Client for web-based JavaScript app; Server for python-based backend
 
 This repo provides the custom-written Python code to for the https://app.planttracer.com/ website.
