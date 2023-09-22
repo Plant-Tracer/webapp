@@ -13,6 +13,8 @@ import json
 import bottle
 from bottle import request
 
+API_KEY_COOKIE_NAME='api_key'
+
 ################################################################
 ## Authentication API
 ##
@@ -24,7 +26,7 @@ def get_user_api_key():
 
     # check the query string
     try:
-        api_key = request.query.get('api_key',None)
+        api_key = request.query.get(API_KEY_COOKIE_NAME,None)
     except KeyError:
         return None             # not running in WSGI
 

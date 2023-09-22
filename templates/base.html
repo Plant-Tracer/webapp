@@ -10,6 +10,10 @@
     <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
 
+    <script>
+    const version = '0.9.0';
+    </script>
+
     {% block head %}{% endblock %}
     {% block script %}{% endblock %}
   </head>
@@ -22,6 +26,7 @@
     {% block body %}
     {% endblock %}
 
+    <div id='message'></div>
     <footer>
       <p id="copyright">Copyright &copy; 2023 Plant Tracer Project</p>
     </footer>

@@ -26,9 +26,11 @@ TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
+TEST_LOG_POLICY = db.LOG_INFO
+
 @pytest.fixture
 def new_course():
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY) # disable logging to database
     course_key = str(uuid.uuid4())
     ct = db.create_course( course_key, course_key + "course name", MAX_ENROLLMENT )
     assert ct>0                 # returns course_id
@@ -48,7 +50,7 @@ def new_user(new_course):
     """Creates a new course and a new user and yields (USER_EMAIL, api_key)
     Then deletes them. The course gets deleted by the new_course fixture.
     """
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY)
     user_email = TEST_USER_EMAIL.replace('@','+'+str(uuid.uuid4())+'@')
     course_key = new_course
     user_id = db.register_email( user_email, course_key, TEST_USER_NAME )
@@ -67,7 +69,7 @@ def test_new_user(new_user):
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it"""
-    db.set_log_policy(db.LOG_INFO) # disable logging to database
+    db.set_log_policy(TEST_LOG_POLICY) # disable logging to database
 
     (email, api_key) = new_user
 

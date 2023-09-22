@@ -90,22 +90,14 @@ CREATE TABLE `logs` (
   `ipaddr` varchar(39) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `apikey_id` int DEFAULT NULL,
   `user_id` int DEFAULT NULL,
-  `course_id` int DEFAULT NULL,
-  `movie_id` int DEFAULT NULL,
-  `func` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `message` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `args` json DEFAULT NULL,
+  `func_name` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `func_args` json DEFAULT NULL,
+  `func_return` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `apikey_id` (`apikey_id`),
   KEY `user_id` (`user_id`),
-  KEY `course_id` (`course_id`),
-  KEY `movie_id` (`movie_id`),
   KEY `time_t` (`time_t`),
-  KEY `ipaddr` (`ipaddr`),
-  CONSTRAINT `logs_ibfk_1` FOREIGN KEY (`apikey_id`) REFERENCES `api_keys` (`id`),
-  CONSTRAINT `logs_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `logs_ibfk_3` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
-  CONSTRAINT `logs_ibfk_4` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
+  KEY `ipaddr` (`ipaddr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
