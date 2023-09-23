@@ -1,8 +1,6 @@
-"""endpoint_test.py - these tests use http to rest a running endpoint, not the code in this repo.
+"""endpoint_test.py - these tests use http to a running endpoint.
 
-(Unless the code in the repo is actually running, which requires that
-this code be running on dev.planttracer.com or that a test server be
-set up on the GitHub Actions server.)
+The fixutre allows that running endpoint to be one that is running locally.
 """
 
 
@@ -16,21 +14,43 @@ import json
 import base64
 import pytest
 import logging
+import subprocess
 
 sys.path.append( dirname(dirname(abspath(__file__))))
 
-MYDIR = dirname(abspath(__file__))
+from paths import TEST_DIR, BOTTLE_APP_PATH
 
 import requests
 TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
 TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
-FRAME_FILES = glob.glob( os.path.join(MYDIR, "data", "frame_*.jpg") )
+FRAME_FILES = glob.glob( os.path.join(TEST_DIR, "data", "frame_*.jpg") )
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-MOVIE_FILE_NAME = os.path.join(MYDIR, "data","2019-07-31 plantmovie.mov")
+MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data","2019-07-31 plantmovie.mov")
 SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST','NO') == 'YES')
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST=YES')
-def test_ver():
+HTTP_PORT = 8008
+
+@pytest.fixture
+def http_endpoint():
+    """Create an endpoint running on localhost."""
+    p = subprocess.Popen([sys.executable, BOTTLE_APP_PATH, '--port', str(HTTP_PORT)],stderr=subprocess.PIPE,encoding='utf-8')
+    line = p.stderr.readline()
+    assert 'server starting up' in line
+    line2 = p.stderr.readline()
+    assert 'Listening on' in line2
+    line3 = p.stderr.readline()
+    assert 'Hit Ctrl-C to quit.' in line3
+    yield f'http://localhost:{HTTP_PORT}'
+    p.terminate()
+    try:
+        p.wait(timeout=1.0)
+    except subprocess.TimeoutExpired as e:
+        p.kill()
+        p.wait()
+
+
+def test_ver(http_endpoint):
+    TEST_ENDPOINT = http_endpoint
     r = requests.post( TEST_ENDPOINT+'/ver')
     assert r.status_code==200
     r = requests.get( TEST_ENDPOINT+'/ver')
