@@ -60,6 +60,7 @@ if mistune.__version__ < '3':
 
 import db
 from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
+import paths
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
