@@ -22,6 +22,7 @@ sys.path.append( dirname(dirname(abspath(__file__))))
 from paths import TEST_DIR, BOTTLE_APP_PATH
 
 import requests
+from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
 
 # TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
@@ -30,7 +31,7 @@ FRAME_FILES = glob.glob( os.path.join(TEST_DIR, "data", "frame_*.jpg") )
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
 MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data","2019-07-31 plantmovie.mov")
 SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST','NO') == 'YES')
-SKIP_ENDPOINT_TEST = True
+SKIP_ENDPOINT_TEST = False
 
 HTTP_PORT = 8008
 
@@ -54,8 +55,10 @@ def http_endpoint():
     # Make sure it is working and retry up to 10 times
 
     s = requests.Session()
-    s.mount( http_endpoint+'/ver', HTTPAdapter(max_retries=5))
-    logging.info("Server running")
+    s.mount( http_endpoint+'/ver', HTTPAdapter(max_retries= Retry(total=10, backoff_factor=0.2)))
+    r = s.get(http_endpoint+'/ver')
+    logging.info("Server running. r=%s",r)
+    assert r.ok
     yield http_endpoint
     p.terminate()
     try:
@@ -65,10 +68,9 @@ def http_endpoint():
         logging.error('KILL')
         p.kill()
         p.wait()
-    time.sleep(1)
 
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST and False, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_ver(http_endpoint):
     r = requests.post( http_endpoint+'/ver')
     assert r.status_code==200
@@ -77,7 +79,7 @@ def test_ver(http_endpoint):
     r = requests.get( http_endpoint+'/verx')
     assert r.status_code==404
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST and False, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_add(http_endpoint):
     r = requests.post( http_endpoint+'/api/add', {'a':10, 'b':20})
     assert r.status_code == 200
