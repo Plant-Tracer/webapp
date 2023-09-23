@@ -58,14 +58,14 @@ def test_ver(http_endpoint):
     r = requests.get( TEST_ENDPOINT+'/verx')
     assert r.status_code==404
 
-@pytest.mark.skipif( SKIP_ENDPOINT_TEST , reason='SKIP_ENDPOINT_TEST=YES')
-def test_add():
+def test_add(http_endpoint):
+    TEST_ENDPOINT = http_endpoint
     r = requests.post( TEST_ENDPOINT+'/api/add', {'a':10, 'b':20})
     assert r.status_code == 200
     assert r.json() == {'result':30, 'error':False}
 
-@pytest.mark.skipif( SKIP_ENDPOINT_TEST , reason='SKIP_ENDPOINT_TEST=YES')
-def test_api_key():
+def test_api_key( http_endpoint ):
+    TEST_ENDPOINT = http_endpoint
     r = requests.post( TEST_ENDPOINT+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     if (r.status_code != 200):
         logging.error("TEST_ENDPOINT=%s",TEST_ENDPOINT)
@@ -79,9 +79,9 @@ def test_api_key():
     assert r.json()['error'] == True
 
 
-@pytest.mark.skip(reason='not working yet')
-def test_upload_movie_frame_by_frame():
+def test_upload_movie_frame_by_frame( http_endpoint ):
     """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
+    TEST_ENDPOINT = http_endpoint
     assert len(FRAME_FILES)>0
     post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'}
     r = requests.post( TEST_ENDPOINT+'/api/new-movie', post_data )
@@ -115,8 +115,9 @@ def test_upload_movie_frame_by_frame():
     assert res['error']==False
 
 @pytest.mark.skip(reason='not working yet')
-def test_upload_movie_data():
+def test_upload_movie_data( http_endpoint ):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
+    TEST_ENDPOINT = http_endpoint
     assert len(FRAME_FILES)>0
     with open(MOVIE_FILE_NAME,'rb') as f:
         movie_base64_data = base64.b64encode(f.read())
