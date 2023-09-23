@@ -467,6 +467,7 @@ if __name__=="__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--dbcredentials',help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument('--port',type=int)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
@@ -475,4 +476,4 @@ if __name__=="__main__":
         if not os.path.exists(args.dbcredentials):
             raise FileNotFoundError(args.dbcredentials)
         paths.BOTTLE_APP_INI = args.dbcredentials
-    bottle.default_app().run(host='localhost',debug=True, reloader=True)
+    bottle.default_app().run(host='localhost',debug=True, reloader=True, port=args.port)
