@@ -19,54 +19,58 @@ SMTP_PORT_DEFAULT = 587
 SMTP_DEBUG = 'SMTP_DEBUG'
 SMTP_DEBUG_DEFAULT = False
 
+
 def send_message(*,
-                 from_addr : str ,
-                 to_addrs : [str] ,
-                 msg : str,
-                 dry_run:bool = False,
-                 smtp_config:dict ):
+                 from_addr: str,
+                 to_addrs: [str],
+                 msg: str,
+                 dry_run: bool = False,
+                 smtp_config: dict):
     # Validate types
     assert isinstance(from_addr, str)
     for to_addr in to_addrs:
         assert isinstance(to_addr, str)
 
     if dry_run:
-        print(f"==== Will not send this message: ====\n{msg}\n====================\n",file=sys.stderr)
+        print(
+            f"==== Will not send this message: ====\n{msg}\n====================\n", file=sys.stderr)
         return
 
-    port  = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
+    port = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
     debug = smtp_config.get(SMTP_DEBUG, SMTP_DEBUG_DEFAULT)
 
-    with smtplib.SMTP( smtp_config[SMTP_HOST], port ) as smtp:
-        logging.info("sending mail to %s with SMTP" ,",".join(to_addrs))
+    with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
+        logging.info("sending mail to %s with SMTP", ",".join(to_addrs))
         if debug:
-            smtp.set_debuglevel( 1 )
+            smtp.set_debuglevel(1)
         smtp.ehlo()
         smtp.starttls()
         smtp.ehlo()
-        smtp.login( smtp_config[ SMTP_USERNAME ] , smtp_config[ SMTP_PASSWORD ] )
-        smtp.sendmail( from_addr, to_addrs, msg.encode('utf8'))
+        smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
+        smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
+
 
 def smtp_config_from_environ():
-    return { SMTP_HOST     : os.environ[ SMTP_HOST ],
-             SMTP_USERNAME : os.environ[SMTP_USERNAME],
-             SMTP_PASSWORD : os.environ[SMTP_PASSWORD],
-             SMTP_PORT     : int(os.environ[SMTP_PORT])
+    return {SMTP_HOST: os.environ[SMTP_HOST],
+            SMTP_USERNAME: os.environ[SMTP_USERNAME],
+            SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
+            SMTP_PORT: int(os.environ[SMTP_PORT])
             }
 
 
-IMAP_HOST   = 'IMAP_HOST'
+IMAP_HOST = 'IMAP_HOST'
 IMAP_USERNAME = 'IMAP_USERNAME'
 IMAP_PASSWORD = 'IMAP_PASSWORD'
 DELETE = "<DELETE>"
 
-def imap_inbox_scan( imap_config, callback ):
+
+def imap_inbox_scan(imap_config, callback):
     """Call callback on each message in the imap inbox. If callback returns DELETE, then delete the message.
     returns numbers of messages deleted.
     """
     deleted = 0
-    M = imaplib.IMAP4_SSL( imap_config[IMAP_HOST])
-    M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD] )
+    M = imaplib.IMAP4_SSL(imap_config[IMAP_HOST])
+    M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD])
     M.select()
     # pylint: disable=unused-variable
     typ, data = M.search(None, 'ALL')
@@ -74,13 +78,13 @@ def imap_inbox_scan( imap_config, callback ):
     for num in data[0].split():
         typ, d2 = M.fetch(num, '(RFC822)')
         for val in d2:
-            if isinstance(val,tuple):
+            if isinstance(val, tuple):
                 # pylint: disable=unpacking-non-sequence
-                (a,b) = val
+                (a, b) = val
                 # pylint: enable=unpacking-non-sequence
                 num = a.decode('utf-8').split()[0]
                 msg = BytesParser(policy=policy.default).parsebytes(b)
-                if callback( num, msg ) is DELETE:
+                if callback(num, msg) is DELETE:
                     M.store(num, '+FLAGS', '\\Deleted')
                     deleted += 1
     try:
@@ -93,7 +97,7 @@ def imap_inbox_scan( imap_config, callback ):
 
 
 def imap_config_from_environ():
-    return { IMAP_HOST : os.environ[ IMAP_HOST ],
-             IMAP_USERNAME : os.environ[IMAP_USERNAME],
-             IMAP_PASSWORD : os.environ[IMAP_PASSWORD]
+    return {IMAP_HOST: os.environ[IMAP_HOST],
+            IMAP_USERNAME: os.environ[IMAP_USERNAME],
+            IMAP_PASSWORD: os.environ[IMAP_PASSWORD]
             }
