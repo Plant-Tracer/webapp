@@ -89,7 +89,6 @@ def test_add(http_endpoint):
 def test_api_key( http_endpoint ):
     r = requests.post( http_endpoint+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
     if (r.status_code != 200):
-        logging.error("http_endpoint=%s",http_endpoint)
         raise RuntimeError(f"r.status_code={r.status_code}  r.text={r.text}")
     assert r.status_code == 200
     assert r.json()['error'] == False
