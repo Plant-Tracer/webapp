@@ -4,6 +4,10 @@ The fixutre allows that running endpoint to be one that is running locally.
 """
 
 
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+import requests
+from paths import TEST_DIR, BOTTLE_APP_PATH
 import sys
 import os
 from os.path import dirname, abspath
@@ -17,23 +21,19 @@ import logging
 import subprocess
 
 
-sys.path.append( dirname(dirname(abspath(__file__))))
+sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import TEST_DIR, BOTTLE_APP_PATH
-
-import requests
-from urllib3.util import Retry
-from requests.adapters import HTTPAdapter
 
 # TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
 TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
-FRAME_FILES = glob.glob( os.path.join(TEST_DIR, "data", "frame_*.jpg") )
+FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data","2019-07-31 plantmovie.mov")
-SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST','NO') == 'YES')
+MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
+SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
 SKIP_ENDPOINT_TEST = False
 
 HTTP_PORT = 8008
+
 
 def next_port():
     global HTTP_PORT
@@ -46,18 +46,20 @@ def next_port():
 def http_endpoint():
     """Create an endpoint running on localhost."""
     port = next_port()
-    p = subprocess.Popen([sys.executable, BOTTLE_APP_PATH, '--port', str(port)],stderr=subprocess.PIPE,encoding='utf-8')
-    for want in ['server starting up','Listening on','Hit Ctrl-C to quit.']:
+    p = subprocess.Popen([sys.executable, BOTTLE_APP_PATH, '--port',
+                         str(port)], stderr=subprocess.PIPE, encoding='utf-8')
+    for want in ['server starting up', 'Listening on', 'Hit Ctrl-C to quit.']:
         line = p.stderr.readline()
-        logging.info('%s',line)
+        logging.info('%s', line)
         assert want in line
     http_endpoint = f'http://127.0.0.1:{port}'
     # Make sure it is working and retry up to 10 times
 
     s = requests.Session()
-    s.mount( http_endpoint+'/ver', HTTPAdapter(max_retries= Retry(total=10, backoff_factor=0.2)))
+    s.mount(http_endpoint+'/ver',
+            HTTPAdapter(max_retries=Retry(total=10, backoff_factor=0.2)))
     r = s.get(http_endpoint+'/ver')
-    logging.info("Server running. r=%s",r)
+    logging.info("Server running. r=%s", r)
     assert r.ok
     yield http_endpoint
     p.terminate()
@@ -72,83 +74,90 @@ def http_endpoint():
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_ver(http_endpoint):
-    r = requests.post( http_endpoint+'/ver')
-    assert r.status_code==200
-    r = requests.get( http_endpoint+'/ver')
-    assert r.status_code==200
-    r = requests.get( http_endpoint+'/verx')
-    assert r.status_code==404
+    r = requests.post(http_endpoint+'/ver')
+    assert r.status_code == 200
+    r = requests.get(http_endpoint+'/ver')
+    assert r.status_code == 200
+    r = requests.get(http_endpoint+'/verx')
+    assert r.status_code == 404
+
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_add(http_endpoint):
-    r = requests.post( http_endpoint+'/api/add', {'a':10, 'b':20})
+    r = requests.post(http_endpoint+'/api/add', {'a': 10, 'b': 20})
     assert r.status_code == 200
-    assert r.json() == {'result':30, 'error':False}
+    assert r.json() == {'result': 30, 'error': False}
+
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
-def test_api_key( http_endpoint ):
-    r = requests.post( http_endpoint+'/api/check-api_key', {'api_key': TEST_USER_APIKEY} )
+def test_api_key(http_endpoint):
+    r = requests.post(http_endpoint+'/api/check-api_key',
+                      {'api_key': TEST_USER_APIKEY})
     if (r.status_code != 200):
         raise RuntimeError(f"r.status_code={r.status_code}  r.text={r.text}")
     assert r.status_code == 200
     assert r.json()['error'] == False
     assert r.json()['userinfo']['name'] == 'Test User'
 
-    r = requests.post( http_endpoint+'/api/check-api_key', {'api_key': TEST_USER_APIKEY+'invalid'} )
+    r = requests.post(http_endpoint+'/api/check-api_key',
+                      {'api_key': TEST_USER_APIKEY+'invalid'})
     assert r.status_code == 200
     assert r.json()['error'] == True
 
+
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
-def test_upload_movie_frame_by_frame( http_endpoint ):
+def test_upload_movie_frame_by_frame(http_endpoint):
     """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
-    assert len(FRAME_FILES)>0
-    post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload'}
-    r = requests.post( http_endpoint+'/api/new-movie', post_data )
+    assert len(FRAME_FILES) > 0
+    post_data = {'api_key': TEST_USER_APIKEY, 'title': 'Test Title at ' +
+                 time.asctime(), 'description': 'Test Upload'}
+    r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
-    assert res['error']==False
+    assert res['error'] == False
     movie_id = res['movie_id']
     for frame_file in FRAME_FILES:
         m = FRAME_RE.search(frame_file)
         frame_number = int(m.group(1))
-        print("uploading frame ",frame_number)
-        with open(frame_file,'rb') as f:
-            r = requests.post( http_endpoint+'/api/new-frame', {
+        print("uploading frame ", frame_number)
+        with open(frame_file, 'rb') as f:
+            r = requests.post(http_endpoint+'/api/new-frame', {
                 'api_key': TEST_USER_APIKEY,
-                'movie_id':movie_id,
-                'frame_msec':frame_number*200,
-                'frame_base64_data':base64.b64encode(f.read()) })
-            print("r.text=",r.text,file=sys.stderr)
+                'movie_id': movie_id,
+                'frame_msec': frame_number*200,
+                'frame_base64_data': base64.b64encode(f.read())})
+            print("r.text=", r.text, file=sys.stderr)
             if r.json()['error']:
                 raise RuntimeError(json.dumps(r.json(), indent=4))
 
     # Now delete the movie
-    r = requests.post( http_endpoint+'/api/delete-movie', {
+    r = requests.post(http_endpoint+'/api/delete-movie', {
         'api_key': TEST_USER_APIKEY,
-        'movie_id':movie_id })
+        'movie_id': movie_id})
 
     # Now delete the movie
     post_data2 = {'api_key': TEST_USER_APIKEY,
-                 'movie_id': movie_id}
-    r = requests.post( http_endpoint+'/api/delete-movie', post_data2 )
+                  'movie_id': movie_id}
+    r = requests.post(http_endpoint+'/api/delete-movie', post_data2)
     res = r.json()
-    assert res['error']==False
+    assert res['error'] == False
+
 
 @pytest.mark.skip(reason='not working yet')
-def test_upload_movie_data( http_endpoint ):
+def test_upload_movie_data(http_endpoint):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
-    assert len(FRAME_FILES)>0
-    with open(MOVIE_FILE_NAME,'rb') as f:
+    assert len(FRAME_FILES) > 0
+    with open(MOVIE_FILE_NAME, 'rb') as f:
         movie_base64_data = base64.b64encode(f.read())
-        post_data = {'api_key': TEST_USER_APIKEY, 'title':'Test Title at '+time.asctime(), 'description':'Test Upload',
-                     'movie_base64_data': movie_base64_data }
-    r = requests.post( http_endpoint+'/api/new-movie', post_data )
+        post_data = {'api_key': TEST_USER_APIKEY, 'title': 'Test Title at '+time.asctime(), 'description': 'Test Upload',
+                     'movie_base64_data': movie_base64_data}
+    r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
-    assert res['error']==False
+    assert res['error'] == False
     movie_id = res['movie_id']
 
     # Now delete the movie
     post_data2 = {'api_key': TEST_USER_APIKEY,
-                 'movie_id': movie_id}
-    r = requests.post( http_endpoint+'/api/delete-movie', post_data2 )
+                  'movie_id': movie_id}
+    r = requests.post(http_endpoint+'/api/delete-movie', post_data2)
     res = r.json()
-    assert res['error']==False
+    assert res['error'] == False
