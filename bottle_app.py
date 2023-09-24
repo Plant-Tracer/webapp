@@ -60,6 +60,7 @@ if mistune.__version__ < '3':
 
 import db
 from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
+import paths
 from paths import view,STATIC_DIR,TEMPLATE_DIR,PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 
@@ -467,6 +468,7 @@ if __name__=="__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--dbcredentials',help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument('--port',type=int,default=8080)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
@@ -475,4 +477,4 @@ if __name__=="__main__":
         if not os.path.exists(args.dbcredentials):
             raise FileNotFoundError(args.dbcredentials)
         paths.BOTTLE_APP_INI = args.dbcredentials
-    bottle.default_app().run(host='localhost',debug=True, reloader=True)
+    bottle.default_app().run(host='localhost',debug=True, reloader=True, port=args.port)
