@@ -468,7 +468,7 @@ if __name__=="__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--dbcredentials',help='Specify .ini file with [dbreader] and [dbwriter] sections')
-    parser.add_argument('--port',type=int,default=8008)
+    parser.add_argument('--port',type=int,default=8080)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
