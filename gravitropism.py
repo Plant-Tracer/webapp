@@ -1,7 +1,10 @@
+""" Implement the gravitropism algorithm """
+
+
 import math
 
+
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
-    
     """
     Calculate distance, rate, and angle of movement.
 
@@ -15,20 +18,21 @@ def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     :type y2: float
     :param time_elapsed: time elapsed between the two points
     :type time_elapsed: float
-    
+
     :raises TypeError: All coordinates must be provided and time elapsed must be greater than zero.
-    
-    :return:A dictionary of 
+
+    :return:A dictionary of
         distance - distance moved (mm)
         rate - rate of movement (mm/min)
         angle - angle of movement relative to positive x-axis (degrees)
-    :rtype: dict    
+    :rtype: dict
     """
-    
+
     # check to see if any of the parameters are not valid (null or 0)
-    if any(parameter is None for parameter in[x1, y1, x2, y2]) or time_elapsed == 0:
-        raise TypeError("All coordinates must be provided and time elapsed must be greater than zero.")
-    
+    if any(parameter is None for parameter in [x1, y1, x2, y2]) or time_elapsed == 0:
+        raise TypeError(
+            "All coordinates must be provided and time elapsed must be greater than zero.")
+
     # Calculate the distance using the Euclidean distance formula
     distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
@@ -43,5 +47,3 @@ def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     angle = round(angle, 2)
 
     return {'distance': distance, 'rate': rate, 'angle': angle}
-
-    return None
