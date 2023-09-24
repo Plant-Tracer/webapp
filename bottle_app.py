@@ -49,22 +49,23 @@ import json
 import mistune
 import magic
 import bottle
-import base64
 from bottle import request
 from validate_email_address import validate_email
-
-if mistune.__version__ < '3':
-    raise RuntimeError("Please uninstall and reinstall mistune")
 
 # pylint: disable=no-member
 
 import db
-from auth import get_user_api_key, get_user_ipaddr, get_movie_id, API_KEY_COOKIE_NAME
 import paths
+
+from auth import get_user_api_key, get_movie_id, API_KEY_COOKIE_NAME
 from paths import view, STATIC_DIR, TEMPLATE_DIR, PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS
 
 assert os.path.exists(TEMPLATE_DIR)
+
+if mistune.__version__ < '3':
+    raise RuntimeError("Please uninstall and reinstall mistune")
 
 
 __version__ = '0.0.1'
@@ -83,15 +84,6 @@ DEFAULT_CAPABILITIES = ""
 
 MAX_FILE_UPLOAD = 1024*1024*16
 
-INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
-INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
-INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
-INVALID_MOVIE_ACCESS = {
-    'error': True, 'message': 'User does not have access to requested movie.'}
-INVALID_COURSE_KEY = {'error': True,
-                      'message': 'There is no course for that course key.'}
-NO_REMAINING_REGISTRATIONS = {
-    'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
 CHECK_MX = False                # True didn't work
 
 
@@ -339,6 +331,7 @@ def api_new_movie():
     :param movie: If present, the movie file
     """
 
+    # pylint: disable=unsupported-membership-test
     if 'movie' in request.files:
         with io.BytesIO() as f:
             request.files['movie'].save(f)
@@ -445,7 +438,7 @@ def api_set_metadata():
     :param api_key: authorization key
     :param movie_id: movie ID - if present, we are setting movie metadata
     :param user_id:  user ID  - if present, we are setting user metadata. (May not be the user_id from the api key)
-    :param property: which piece of metadata to set
+    :param prop: which piece of metadata to set
     :param value: what to set it to
     """
     logging.warning("request.forms=%s", list(request.forms.keys()))
@@ -461,7 +454,7 @@ def api_set_metadata():
     result = db.set_metadata(user_id=get_user_id(),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
-                             property=request.forms.get('property'),
+                             prop=request.forms.get('property'),
                              value=request.forms.get('value'))
 
     return {'error': False, 'result': result}

@@ -5,9 +5,6 @@ Database Management Tool for webapp
 
 import sys
 import os
-import io
-import datetime
-import logging
 import configparser
 
 import uuid
@@ -16,7 +13,7 @@ import pymysql
 # pylint: disable=no-member
 
 import db
-from paths import view, STATIC_DIR, TEMPLATE_DIR, PLANTTRACER_ENDPOINT, SCHEMA_FILE
+from paths import TEMPLATE_DIR, SCHEMA_FILE, PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 from lib.ctools import dbfile
 
@@ -52,7 +49,7 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     if args.sendlink:
-        db.send_links(args.sendlink)
+        db.send_links(args.sendlink, planttracer_endpoint = PLANTTRACER_ENDPOINT)
         sys.exit(0)
 
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')

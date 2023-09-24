@@ -1,3 +1,6 @@
+""" Implement the gravitropism algorithm """
+
+
 import math
 
 
@@ -18,11 +21,11 @@ def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
 
     :raises TypeError: All coordinates must be provided and time elapsed must be greater than zero.
 
-    :return:A dictionary of 
+    :return:A dictionary of
         distance - distance moved (mm)
         rate - rate of movement (mm/min)
         angle - angle of movement relative to positive x-axis (degrees)
-    :rtype: dict    
+    :rtype: dict
     """
 
     # check to see if any of the parameters are not valid (null or 0)
@@ -44,5 +47,3 @@ def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     angle = round(angle, 2)
 
     return {'distance': distance, 'rate': rate, 'angle': angle}
-
-    return None

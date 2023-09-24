@@ -2,16 +2,12 @@
 
 This layer is necessarily customized to bottle.
 """
-import sys
-import os
-import io
-import datetime
-import logging
-from urllib.parse import urlparse
 import json
 
 import bottle
 from bottle import request
+
+from errors import INVALID_MOVIE_ID
 
 API_KEY_COOKIE_NAME = 'api_key'
 

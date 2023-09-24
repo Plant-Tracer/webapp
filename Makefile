@@ -3,8 +3,11 @@
 #
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
-PYLINT_THRESHOLD=8
 PYTHON=python3.11
+
+# By default, PYLINT generates an error if your code does not rank 10.0.
+# This makes us tolerant of minor problems.
+PYLINT_THRESHOLD=9.5
 
 all:
 	@echo verify syntax and then restart

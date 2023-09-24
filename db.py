@@ -9,14 +9,14 @@ import uuid
 import logging
 import json
 import sys
-import inspect
+#import inspect
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
 from paths import DBREADER_BASH_PATH, DBWRITER_BASH_PATH, TEMPLATE_DIR, DBCREDENTIALS_PATH, BOTTLE_APP_INI_PATH
 
-from auth import get_user_api_key, get_user_ipaddr, get_movie_id
+from auth import get_user_api_key, get_user_ipaddr
 from lib.ctools import dbfile
 import mailer
 
@@ -220,7 +220,7 @@ def make_new_api_key(email):
     if user and user['enabled'] == 1:
         user_id = user['id']
         api_key = str(uuid.uuid4()).replace('-', '')
-        r = dbfile.DBMySQL.csfr(get_dbwriter(),
+        dbfile.DBMySQL.csfr(get_dbwriter(),
                                 """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
 
                                 (user_id, api_key))
@@ -350,7 +350,7 @@ def remaining_course_registrations(course_key):
                               (course_key, course_key))
     try:
         return int(res[0][0])
-    except (IndexError, ValueError) as e:
+    except (IndexError, ValueError):
         return 0
 
 
@@ -475,16 +475,16 @@ SET_MOVIE_METADATA = {
 
 
 @log
-def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, value):
+def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """We tried doing this in a single statement and it failed"""
     # First compute @is_owner
 
-    logging.info("set_user_id=%s set_movie_id=%s property=%s value=%s",
-                 set_user_id, set_movie_id, property, value)
+    logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s",
+                 set_user_id, set_movie_id, prop, value)
     assert isinstance(user_id, int)
     assert isinstance(set_movie_id, int) or (set_movie_id is None)
     assert isinstance(set_user_id, int) or (set_user_id is None)
-    assert isinstance(property, str)
+    assert isinstance(prop, str)
     assert value is not None
 
     MAPPER = {0: 'FALSE', 1: 'TRUE'}
@@ -494,11 +494,12 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, valu
         ), "SELECT %s in (select user_id from movies where id=%s)", (user_id, set_movie_id))
         is_owner = MAPPER[res[0][0]]
 
-        res = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
+        res = dbfile.DBMySQL.csfr(get_dbreader(),
+                                  "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
                                   (user_id, set_movie_id))
         is_admin = MAPPER[res[0][0]]
 
-        cmd = SET_MOVIE_METADATA[property].replace(
+        cmd = SET_MOVIE_METADATA[prop].replace(
             '@is_owner', is_owner).replace('@is_admin', is_admin)
         args = [value, set_movie_id]
 
@@ -508,9 +509,10 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, property, valu
     # Currently, users can only set their own data
     if set_user_id:
         if user_id == set_user_id:
-            property = property.lower()
-            if property in ['name', 'email']:
+            prop = prop.lower()
+            if prop in ['name', 'email']:
                 ret = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                          f"UPDATE users set {property}=%s where id=%s",
+                                          f"UPDATE users set {prop}=%s where id=%s",
                                           (value, user_id))
                 return ret
+    return None
