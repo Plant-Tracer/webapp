@@ -52,23 +52,32 @@ clean:
 
 
 # These are used by the CI pipeline:
+# Generic:
 install-python-dependencies:
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
-	$(PYTHON) -m pip install --upgrade pip
 
+# Includes ubuntu dependencies
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	which ffmpeg || sudo apt install ffmpeg
+	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-ubuntu.txt ]; then $(PYTHON) -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
+	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
 
+# Includes MacOS dependencies managed through Brew
 install-macos:
-	if [ -r requirements-macos.txt ]; then $(PYTHON) -m pip install --user -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	brew update
 	brew upgrade
 	brew install python3
 	brew install libmagic
 	brew install ffmpeg
+	$(PYTHON) -m pip install --upgrade pip
+	if [ -r requirements-macos.txt ]; then $(PYTHON) -m pip install --user -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
+	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
 
+# Includes Windows dependencies
 install-windows:
-	echo fill something in here
+	$(PYTHON) -m pip install --upgrade pip
+	if [ -r requirements-windows.txt ]; then $(PYTHON) -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
+	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
