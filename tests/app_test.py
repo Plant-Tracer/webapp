@@ -1,5 +1,3 @@
-from paths import STATIC_DIR
-import bottle_app
 import pytest
 import sys
 import os
@@ -17,6 +15,8 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+from paths import STATIC_DIR
+import bottle_app
 
 API_KEY = os.getenv('TEST_USER_APIKEY')
 
