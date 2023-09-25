@@ -49,7 +49,7 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     if args.sendlink:
-        db.send_links(args.sendlink, planttracer_endpoint = PLANTTRACER_ENDPOINT)
+        db.send_links(email=args.sendlink, planttracer_endpoint = PLANTTRACER_ENDPOINT)
         sys.exit(0)
 
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')

@@ -1,6 +1,12 @@
-from gravitropism import calculate_results_gravitropism
 import pytest
 import logging
+import sys
+from os.path import dirname,abspath
+
+sys.path.append(dirname(dirname(abspath(__file__))))
+
+from gravitropism import calculate_results_gravitropism
+
 
 # Configuring the logging module
 logging.basicConfig(level=logging.INFO)
