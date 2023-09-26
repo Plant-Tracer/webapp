@@ -67,7 +67,6 @@ assert os.path.exists(TEMPLATE_DIR)
 if mistune.__version__ < '3':
     raise RuntimeError("Please uninstall and reinstall mistune")
 
-
 __version__ = '0.0.1'
 VERSION_TEMPLATE = 'version.txt'
 
