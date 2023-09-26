@@ -29,6 +29,7 @@ MAX_ENROLLMENT = 10
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
 TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
+TEST_ADMIN_NAME = 'Test User Name'
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
@@ -65,10 +66,10 @@ def get_movie(api_key, movie_id):
 def new_course():
     """Fixture to create a new course and then delete it. New course creates a new course admin and a new user for it"""
     course_key = str(uuid.uuid4())[0:4]
-    admin_email = TEST_USER_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:4]+'@')
+    admin_email = TEST_ADMIN_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:4]+'@')
 
     ct = db.create_course(course_key=course_key, course_name=course_key + "course name", max_enrollment=MAX_ENROLLMENT)['course_id']
-    admin_id = db.register_email(email=admin_email, course_key=course_key, name=TEST_USER_NAME)['user_id']
+    admin_id = db.register_email(email=admin_email, course_key=course_key, name=TEST_ADMIN_NAME)['user_id']
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
     db.make_course_admin(email=admin_email, course_key=course_key)
     yield (course_key,admin_email)
@@ -225,31 +226,33 @@ def test_get_logs():
     dbreader = db.get_dbreader()
     for security in [False,True]:
         logging.info("security=%s",security)
-        db.get_logs( 0 , security=security)
-        db.get_logs( 0, start_time = 0 , security=security)
-        db.get_logs( 0, end_time = 0 , security=security)
-        db.get_logs( 0, course_key = 0 , security=security)
-        db.get_logs( 0, movie_id = 0, security=security)
-        db.get_logs( 0, log_user_id = 0, security=security)
-        db.get_logs( 0, ipaddr = "", security=security)
+        db.get_logs( user_id=0 , security=security)
+        db.get_logs( user_id=0, start_time = 0 , security=security)
+        db.get_logs( user_id=0, end_time = 0 , security=security)
+        db.get_logs( user_id=0, course_key = 0 , security=security)
+        db.get_logs( user_id=0, movie_id = 0, security=security)
+        db.get_logs( user_id=0, log_user_id = 0, security=security)
+        db.get_logs( user_id=0, ipaddr = "", security=security)
 
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""
-    (email, api_key) = new_user
+    (user_email, api_key) = new_user
     user_id = db.validate_api_key(api_key)['user_id']
     dbreader = db.get_dbreader()
-    assert len(db.get_logs( user_id )) > 0
-    assert len(db.get_logs( user_id, start_time = 10)) > 0
-    assert len(db.get_logs( user_id, end_time = time.time())) > 0
 
-    db.logit_DEBUG = True
+    ret = db.get_logs( user_id=user_id )
+    logging.info("search for user_email=%s user_id=%s returns %s logs",user_email,user_id, len(ret))
+
+    assert len(ret) > 0
+    assert len(db.get_logs( user_id=user_id, start_time = 10)) > 0
+    assert len(db.get_logs( user_id=user_id, end_time = time.time())) > 0
 
     # Make sure that restricting the time to something that happened more than a day ago fails,
     # because we just created this user.
-    assert len(db.get_logs( user_id, end_time = time.time()-24*60*60)) ==0
+    assert len(db.get_logs( user_id=user_id, end_time = time.time()-24*60*60)) ==0
 
     # Find the course that this user is in
-    res = dbfile.DBMySQL.csfr(dbreader, "select primary_course_id from users where user_id=%s", (user_id,))
+    res = dbfile.DBMySQL.csfr(dbreader, "select primary_course_id from users where id=%s", (user_id,))
     assert(len(res)==1)
     course_id = res[0][0]
 
@@ -257,17 +260,23 @@ def test_log_search_user(new_user):
     assert(len(res)==1)
     course_key = res[0][0]
 
-    assert(len(db.get_logs( user_id, course_id = course_id)) > 0)
-    assert(len(db.get_logs( user_id, course_key = course_key)) > 0)
+    assert(len(db.get_logs( user_id=user_id, course_id = course_id)) > 0)
+    assert(len(db.get_logs( user_id=user_id, course_key = course_key)) > 0)
 
-    assert(len(db.get_logs( user_id, ipaddr="0.0.0.0"))==0)
+    # Test to make sure that the course admin gets access to this user
+    admin_id = dbfile.DBMySQL.csfr(dbreader, "select user_id from admins where course_id=%s LIMIT 1", (course_id,))[0]
+    assert(len(db.get_logs( user_id=admin_id, log_user_id=user_id, course_id = course_id)) > 0)
+    assert(len(db.get_logs( user_id=admin_id, log_user_id=user_id, course_key = course_key)) > 0)
+
+    # We should have nothing with this IP address
+    assert(len(db.get_logs( user_id=user_id, ipaddr="0.0.0.0"))==0)
 
 def test_log_search_movie(new_movie):
     (movie_id, movie_title, api_key) = new_movie
     dbreader = db.get_dbreader()
     res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
     user_id = res[0][0]
-    res = db.get_logs( user_id, movie_id = movie_id)
+    res = db.get_logs( user_id=user_id, movie_id = movie_id)
     logging.info("log entries for movie:")
     for r in res:
         logging.info("%s",r)
