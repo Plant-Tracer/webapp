@@ -193,7 +193,7 @@ def register_email(email, course_key, name):
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
                                """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
                                (email, course_id, name, email))
-    return {'user_id':user_id}
+    return {'user_id':user_id,'course_id':course_id}
 
 
 @log
@@ -477,8 +477,8 @@ def list_movies(user_id):
 ## Logs
 ################################################################
 
-@log
-def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None, ipaddr=None, count=LOG_MAX_RECORDS, offset=1, security=True):
+# Do we need to log get_logs?
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None, ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
     """get log entries (to which the user is entitled)
     :param: user_id    - the user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
@@ -497,12 +497,12 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
     args = [start_time]
 
     if end_time:
-        cmd += "AND time_t <= %s "
+        cmd += "AND (time_t <= %s) "
         args.append(end_time)
 
     if course_id:
-        cmd += "AND (func_args->'$.course_id'=%s) OR (func_return->'$.course_id'=%s)"
-        args.append(course_id)
+        cmd += "AND ((func_args->'$.course_id'=%s) OR (func_return->'$.course_id'=%s)) "
+        args += [course_id, course_id]
 
     if course_key:
         cmd += """AND (func_args->'$.course_key'=%s
@@ -512,16 +512,16 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
         args += [course_key, course_key, course_key]
 
     if movie_id:
-        cmd += "AND func_args->'$.movie_id'=%s "
+        cmd += "AND (func_args->'$.movie_id'=%s) "
         args.append(movie_id)
 
     if ipaddr:
-        cmd += "AND ipaddr=%s "
+        cmd += "AND (ipaddr=%s) "
         args.append(ipaddr)
 
     if log_user_id:
-        cmd += "AND (func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s)"
-        args += [log_user_id, log_user_id]
+        cmd += "AND ((user_id=%s OR func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s))"
+        args += [log_user_id, log_user_id, log_user_id]
 
     cmd += ") "
 
@@ -547,7 +547,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
 
         # If the user is the super admin:
 
-        cmd += " OR IF( (SELECT COUNT(*) FROM admins WHERE user_id=%s and course_id=%s)>0, TRUE, FALSE) "
+        cmd += " OR (%s IN (SELECT user_id FROM admins WHERE course_id=%s)) "
         args += [user_id, SUPER_ADMIN_COURSE_ID]
 
         cmd += ")"
@@ -558,7 +558,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
     args.append(count)
     args.append(offset)
 
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True, debug=True)
 
 
 
