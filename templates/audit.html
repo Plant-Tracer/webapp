@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
+
+
 {% block script %}
+<!-- See https://datatables.net/download/ for info on datatables -->
+<link href="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.css" rel="stylesheet">
+<script src="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.js"></script>
 <script>
 const user_id = {{user_id}};                  // not logged in
 const api_key = "{{api_key}}";                // no API key yet
@@ -11,7 +16,7 @@ const user_primary_course_id   = {{user_primary_course_id}};
 
 {% block body %}
 
-<h2>Audit </h2>
+<h2>Your Identity </h2>
 
 <p>ID: {{user_id}}</p>
 <p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
@@ -23,31 +28,31 @@ const user_primary_course_id   = {{user_primary_course_id}};
 </p>
 <p>Primary course: <span id='course-name'> {{course_name}} ({{user_primary_course_id}}) </span></p>
 
-<h2>Your Movies</h2>
-<h3>Published</h3>
-<p class='instructions'><i>Published movies can be viewed by anyone in your course. Uncheck the box under 'published' to unpublish the movie. Check the box under 'deleted' to delete the movie.</i></p>
-<div class='mtable' id='your-published-movies'></div>
+<h2>Audit Log</h2>
+<i>The audit log shows all actions that are yours or about you. If you are the admin in a course, you see all actions related to the course.</i>
 
-<h3>Unpublished</h3>
-<p class='instructions'><i>Unpublished movies can only be published by a course instructor. Check the box under 'deleted' to delete a movie.</i></p>
-<div class='mtable' id='your-unpublished-movies'></div>
+<table id='audit'></table>
 
-<h3>Deleted</h3>
-<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its 'deleted' box.</i></p>
-<div class='mtable' id='your-deleted-movies'></div>
-
-<h2>Your course movies</h2>
-<p class='instructions'><i>These are the course movies available to you. Students can only see their own movies and published movies, while the course admin can see all of the movies. </i>
-{% if admin %}
-You can can publish or unpublish movies by checking or unchecking the 'publish' box.
-{% endif %}
-</p>
-
-<div class='audit' id='audit'></div>
+<!-- See https://stackoverflow.com/questions/33682122/datatables-generate-whole-table-from-json -->
 
 <script>
+var columns = [
+  { "data": "a-data", "title":"Column A" },
+  { "data": "b-data", "title":"Column B" },
+  { "data": "c-data", "title":"Column C" }
+  ];
+
+var data = [
+ { "a-data":"This is A", "b-data":"This is B","c-data":"This is C"},
+ { "a-data":"Something", "b-data":"Different","c-data":"Here"}
+ ];
+
+
 $( document ).ready( function() {
-   list_audit();
+   $('#audit').DataTable( {
+     columns: columns,
+     data: data
+   })
 });
 </script>
 {% endblock %}
