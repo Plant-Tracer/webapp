@@ -3,6 +3,8 @@
 
 import math
 
+from errors import CALC_RESULTS_PARAM_INVALID 
+
 
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     """
@@ -30,8 +32,7 @@ def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
 
     # check to see if any of the parameters are not valid (null or 0)
     if any(parameter is None for parameter in [x1, y1, x2, y2]) or time_elapsed == 0:
-        raise TypeError(
-            "All coordinates must be provided and time elapsed must be greater than zero.")
+        raise TypeError(CALC_RESULTS_PARAM_INVALID.message)
 
     # Calculate the distance using the Euclidean distance formula
     distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)

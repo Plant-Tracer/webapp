@@ -10,3 +10,5 @@ INVALID_COURSE_KEY = {'error': True,
                       'message': 'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {
     'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
+CALC_RESULTS_PARAM_INVALID = {
+    'error': True, 'message': 'All coordinates must be provided (not none) and time elapsed must be greater than zero.'}
