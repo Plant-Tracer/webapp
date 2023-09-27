@@ -1,6 +1,9 @@
-from gravitropism import calculate_results_gravitropism
-import pytest
 import logging
+import pytest
+
+from errors import CALC_RESULTS_PARAM_INVALID
+from gravitropism import calculate_results_gravitropism
+
 
 # Configuring the logging module
 logging.basicConfig(level=logging.INFO)
@@ -28,4 +31,4 @@ def test_calculate_two_points(x1, y1, x2, y2, time_elapsed, expected_results):
 def test_coordinates_type_error():
     with pytest.raises(TypeError) as e:
         calculate_results_gravitropism(1, 2, 3, 4, 0)
-        assert e.message == "All coordinates must be provided and time elapsed must be greater than zero."
+        assert e.message == CALC_RESULTS_PARAM_INVALID['message']
