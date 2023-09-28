@@ -1,7 +1,6 @@
 from PIL import Image
 import blocktrack
 from paths import TEST_DATA_DIR
-import bottle_app
 import pytest
 import sys
 import os
@@ -17,10 +16,10 @@ from os.path import abspath, dirname
 
 import subprocess
 from boddle import boddle
-# from webtest import TestApp
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+import bottle_app
 
 # get the first MOV
 TEST_MOV = glob.glob(os.path.join(TEST_DATA_DIR, '*.mov'))[0]

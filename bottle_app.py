@@ -195,7 +195,7 @@ def page_dict():
             'user_id': user_id,
             'user_name': user_dict['name'],
             'user_email': user_dict['email'],
-            'admin': db.check_course_admin(user_id, user_primary_course_id),
+            'admin': db.check_course_admin(user_id=user_id, course_id=user_primary_course_id),
             'user_primary_course_id': user_primary_course_id,
             'course_name': course_dict['course_name']}
 
@@ -296,13 +296,13 @@ def api_register():
         logging.warning("email not valid: %s", email)
         return INVALID_EMAIL
     course_key = request.forms.get('course_key')
-    if not db.validate_course_key(course_key):
+    if not db.validate_course_key(course_key=course_key):
         return INVALID_COURSE_KEY
-    if db.remaining_course_registrations(course_key) < 1:
+    if db.remaining_course_registrations(course_key=course_key) < 1:
         return NO_REMAINING_REGISTRATIONS
     name = request.forms.get('name')
-    db.register_email(email, course_key, name)
-    db.send_links(email, planttracer_endpoint)
+    db.register_email(email=email, course_key=course_key, name=name)
+    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'Registration key sent to '+email}
 
 
@@ -314,11 +314,11 @@ def api_send_link():
     if not validate_email(email, check_mx=CHECK_MX):
         logging.warning("email not valid: %s", email)
         return INVALID_EMAIL
-    db.send_links(email, planttracer_endpoint)
+    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
 ##
-# Movies
+# Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
 
 
@@ -341,21 +341,21 @@ def api_new_movie():
     else:
         movie_data = None
 
-    movie_id = db.create_new_movie(get_user_id(),
+    movie_id = db.create_new_movie(user_id=get_user_id(),
                                    title=request.forms.get('title'),
                                    description=request.forms.get(
                                        'description'),
                                    movie_data=movie_data
-                                   )
+                                   )['movie_id']
     return {'error': False, 'movie_id': movie_id}
 
 
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
-    if db.can_access_movie(get_user_id(), request.forms.get('movie_id')):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
         frame_id = db.create_new_frame(request.forms.get('movie_id'),
                                        request.forms.get('frame_msec'),
-                                       request.forms.get('frame_base64_data'))
+                                       request.forms.get('frame_base64_data'))['frame_id']
         return {'error': False, 'frame_id': frame_id}
     return INVALID_MOVIE_ACCESS
 
@@ -368,7 +368,7 @@ def api_get_frame():
     :param frame_msec: the frame specified
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
     """
-    if db.can_access_movie(get_user_id(), request.forms.get('movie_id')):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
         return {'error': False, 'frame': db.get_frame(request.forms.get('movie_id'),
                                                       request.forms.get(
                                                           'frame_msec'),
@@ -376,15 +376,15 @@ def api_get_frame():
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-movie', method=['POST', 'GET'])
+@bottle.route('/api/get-movie', method='POST')
 def api_get_movie():
     """
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(get_user_id(), get_movie_id()):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get_movie_id()):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie(get_movie_id())
+        return db.get_movie(movie_id=get_movie_id())
     return INVALID_MOVIE_ACCESS
 
 
@@ -394,16 +394,24 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if db.can_access_movie(get_user_id(), request.forms.get('movie_id')):
-        db.delete_movie(request.forms.get('movie_id'),
-                        request.forms.get('delete', 1))
+    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
+        db.delete_movie(movie_id=request.forms.get('movie_id'),
+                        delete=request.forms.get('delete', 1))
         return {'error': False}
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/list-movies', method=['POST', 'GET'])
+@bottle.route('/api/list-movies', method=['POST'])
 def api_list_movies():
     return {'error': False, 'movies': db.list_movies(get_user_id())}
+
+##
+# Log API
+#
+@bottle.route('/api/get-log', method=['POST'])
+def api_get_log():
+    """TODO: Add additional fields"""
+    return {'error':False, 'logs': db.get_log(user_id=get_user_id()) }
 
 ##
 # Metadata
