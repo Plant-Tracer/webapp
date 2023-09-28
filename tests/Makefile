@@ -4,7 +4,7 @@ extract_and_upload:
 
 # https://stackoverflow.com/questions/14405063/how-to-see-normal-print-output-created-during-pytest-run
 bt:
-	cd ..;pytest tests/tracker_test.py -k test_blocktrack -v --log-cli-level=DEBUG
+	cd ..;python -m pytest tests/tracker_test.py -k test_blocktrack -v --log-cli-level=DEBUG
 
 pytest:
-	cd ..;make pytest
+	python -m pytest -v --log-cli-level=DEBUG
