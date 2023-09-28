@@ -49,10 +49,7 @@ var data = [
 
 
 $( document ).ready( function() {
-   $('#audit').DataTable( {
-     columns: columns,
-     data: data
-   })
+   build_audit_table();
 });
 </script>
 {% endblock %}
