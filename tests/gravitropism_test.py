@@ -1,5 +1,9 @@
-import logging
 import pytest
+import logging
+import sys
+from os.path import dirname,abspath
+
+sys.path.append(dirname(dirname(abspath(__file__))))
 
 from errors import CALC_RESULTS_PARAM_INVALID
 from gravitropism import calculate_results_gravitropism

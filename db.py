@@ -24,7 +24,7 @@ if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
-
+SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
@@ -41,8 +41,11 @@ class InvalidCourse_Key(RuntimeError):
 LOG_DB = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
 LOG_WARNING = 'LOG_WARNING'
-logging_policy = set(list[LOG_DB])
+logging_policy = set()
+logging_policy.add(LOG_DB)
 
+LOG_MAX_RECORDS = 5000
+MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 
 @functools.cache
 def get_dbreader():
@@ -87,6 +90,7 @@ def get_dbwriter():
 """
 
 
+logit_DEBUG = False
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
     user_api_key = get_user_api_key()
@@ -94,11 +98,16 @@ def logit(*, func_name, func_args, func_return):
 
     if not isinstance(func_args, str):
         func_args = json.dumps(func_args, default=str)
+    if not isinstance(func_return, str):
+        func_return = json.dumps(func_return, default=str)
 
-    logging.debug("func_args=%s", func_args)
-    logging.debug("type(func_args)=%s", type(func_args))
+    if len(func_return) > MAX_FUNC_RETURN_LOG:
+        func_return = json.dumps({'log_size':len(func_return), 'error':True})
+
+    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s", func_name, func_args, func_return, logging_policy)
 
     if LOG_DB in logging_policy:
+        logging.debug("LOG_DB in logging_policy")
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """INSERT INTO logs (
                                 time_t,
@@ -109,7 +118,8 @@ def logit(*, func_name, func_args, func_return):
                                    (select min(user_id) from api_keys where api_key=%s), %s,
                                  %s, %s, %s )""",
                             (user_api_key, user_api_key, user_ipaddr,
-                             func_name, func_args, func_return))
+                             func_name, func_args, func_return),
+                            debug=logit_DEBUG)
 
     if LOG_INFO in logging_policy:
         logging.info("%s func_name=%s func_args=%s func_return=%s",
@@ -168,7 +178,7 @@ def register_email(email, course_key, name):
     """Register email for a given course
     :param: email - user email
     :param: course_key - the key
-    :return: the number of users registered
+    :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
     CHECK_MX = False            # True doesn't work
@@ -180,16 +190,17 @@ def register_email(email, course_key, name):
         raise InvalidCourse_Key(course_key)
 
     course_id = res[0][0]
-    return dbfile.DBMySQL.csfr(get_dbwriter(),
+    user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
                                """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
                                (email, course_id, name, email))
+    return {'user_id':user_id,'course_id':course_id}
 
 
 @log
-def rename_user(user_id, old_email, new_email):
+def rename_user(user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
     dbfile.DBMySQL.csfr(get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
-                        (old_email, user_id, new_email))
+                        (email, user_id, new_email))
 
 
 @log
@@ -203,15 +214,15 @@ def delete_user(email):
         get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
-@log
+# No need to log this one
 def lookup_user(*, email):
     try:
-        return dbfile.DBMySQL.csfr(get_dbreader(), "select * from users where email=%s", (email,), asDicts=True)[0]
+        return dbfile.DBMySQL.csfr(get_dbreader(), "select *,id as user_id from users where email=%s", (email,), asDicts=True)[0]
     except IndexError:
         return {}
 
 
-def make_new_api_key(email):
+def make_new_api_key(*,email):
     """Create a new api_key for an email that is registered
     :param: email - the email
     :return: api_key - the api_key
@@ -225,8 +236,7 @@ def make_new_api_key(email):
 
                                 (user_id, api_key))
         # Manually log so that the api_key is not logged
-        logit(func_name='make_new_api_key', func_args={
-              'email': email}, func_return='*****')
+        logit(func_name='make_new_api_key', func_args={'email': email}, func_return={'api_key':'*****'})
         return api_key
     return None
 
@@ -245,7 +255,7 @@ def delete_api_key(api_key):
 
 
 @log
-def send_links(email, planttracer_endpoint):
+def send_links(*, email, planttracer_endpoint):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
     PROJECT_EMAIL = 'admin@planttracer.com'
 
@@ -254,7 +264,7 @@ def send_links(email, planttracer_endpoint):
     TO_ADDRS = [email]
     with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
-    new_api_key = make_new_api_key(email)
+    new_api_key = make_new_api_key(email=email)
 
     if new_api_key:
         msg = msg_env.render(to_addrs=",".join([email]),
@@ -286,17 +296,17 @@ def lookup_course(*, course_id):
 
 
 @log
-def create_course(course_key, course_name, max_enrollment, course_section=None):
+def create_course(*, course_key, course_name, max_enrollment, course_section=None):
     """Create a new course
     :return: course_id of the new course
     """
     ret = dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
                               (course_key, course_name, max_enrollment, course_section))
-    return ret
+    return {'course_id':ret}
 
 
 @log
-def delete_course(course_key):
+def delete_course(*,course_key):
     """Delete a course.
     :return: number of courses deleted.
     """
@@ -304,17 +314,21 @@ def delete_course(course_key):
 
 
 @log
-def make_course_admin(email, *, course_key=None, course_id=None):
-    if course_id:
-        dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into admins (course_id, user_id) values (%s, (select id from users where email=%s))",
-                            (course_id, email))
-    if course_key:
-        dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into admins (course_id, user_id) values ((select id from courses where course_key=%s), (select id from users where email=%s))",
-                            (course_key, email))
+def make_course_admin(*, email, course_key=None, course_id=None):
+    user_id = lookup_user(email=email)['user_id']
+    logging.info("make_course_admin. email=%s user_id=%s",email,user_id)
+
+    if course_key and course_id is None:
+        course_id = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT id from courses WHERE course_key=%s",(course_key,))[0][0]
+        logging.info("course_id=%s",course_id)
+
+    dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into admins (course_id, user_id) values (%s, %s)",
+                        (course_id, user_id))
+    return {'user_id':user_id,'course_id':course_id}
 
 
 @log
-def remove_course_admin(email, *, course_key=None, course_id=None):
+def remove_course_admin(*, email, course_key=None, course_id=None):
     if course_id:
         dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE course_id=%s and user_id in (select id from users where email=%s)",
                             (course_id, email))
@@ -326,7 +340,7 @@ def remove_course_admin(email, *, course_key=None, course_id=None):
 
 
 @log
-def check_course_admin(user_id, course_id):
+def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
     res = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT * FROM admins WHERE user_id=%s AND course_id=%s LIMIT 1",
                               (user_id, course_id))
@@ -334,14 +348,14 @@ def check_course_admin(user_id, course_id):
 
 
 @log
-def validate_course_key(course_key):
+def validate_course_key(*, course_key):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT course_key FROM courses WHERE course_key=%s LIMIT 1""", (course_key,))
     return len(res) == 1 and res[0][0] == course_key
 
 
 @log
-def remaining_course_registrations(course_key):
+def remaining_course_registrations(*,course_key):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT max_enrollment
                               - (SELECT COUNT(*) FROM users
@@ -360,13 +374,13 @@ def remaining_course_registrations(course_key):
 
 
 @log
-def get_movie(movie_id):
+def get_movie(*, movie_id):
     """Returns the movie contents. Does no checking"""
     return dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))[0][0]
 
 
 @log
-def get_movie_metadata(user_id, movie_id):
+def get_movie_metadata(*,user_id, movie_id):
     cmd = """SELECT * from movies WHERE
                 (user_id=%s OR
                  course_id=(select primary_course_id from users where id=%s) OR
@@ -379,7 +393,7 @@ def get_movie_metadata(user_id, movie_id):
 
 
 @log
-def can_access_movie(user_id, movie_id):
+def can_access_movie(*, user_id, movie_id):
     """Return if the user is allowed to access the movie"""
     res = dbfile.DBMySQL.csfr(
         get_dbreader(),
@@ -392,7 +406,7 @@ def can_access_movie(user_id, movie_id):
 
 
 @log
-def purge_movie(movie_id):
+def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
@@ -403,14 +417,14 @@ def purge_movie(movie_id):
 
 
 @log
-def delete_movie(movie_id, delete=1):
+def delete_movie(*,movie_id, delete=1):
     """Set a movie's deleted bit to be true"""
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
 
 
 @log
-def create_new_movie(user_id, *, title=None, description=None, movie_data=None):
+def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -426,9 +440,10 @@ def create_new_movie(user_id, *, title=None, description=None, movie_data=None):
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
                             (movie_id, movie_data))
-    return movie_id
+    return {'movie_id':movie_id}
 
 
+# Don't log this; it will blow up the database when movies are updated
 def create_new_frame(movie_id, frame_msec, frame_base64_data):
     frame_data = base64.b64decode(frame_base64_data)
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
@@ -437,9 +452,10 @@ def create_new_frame(movie_id, frame_msec, frame_base64_data):
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
                                    (movie_id, frame_msec, frame_base64_data,
                                     frame_data, frame_msec))
-    return frame_id
+    return {'frame_id':frame_id}
 
 
+# Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
@@ -455,6 +471,100 @@ def list_movies(user_id):
                                 (course_id in (SELECT course_id FROM admins WHERE user_id=%s))""",
                               (user_id, user_id, user_id), asDicts=True)
     return res
+
+
+################################################################
+## Logs
+################################################################
+
+# Do we need to log get_logs?
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None, ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
+    """get log entries (to which the user is entitled)
+    :param: user_id    - the user who is initiating the query
+    :param: start_time - The earliest log entry to provide (time_t)
+    :param: end_time   - the last log entry to provide (time_t)
+    :param: course_id  - if provided, only provide log entries for this course
+    :param: movie_id   - if provided, only provide log entries for this movie
+    :param: log_user_id - if provided, only provide log entries for this person
+    :param: count      - maximum number of log entries to provide (for paging)
+    :param: offset     - Offset into SQL SELECT (for paging)
+    "param: security   - False to disable security checks
+    :return: list of dictionaries of log records.
+    """
+
+    # First the full log
+    cmd = """SELECT * FROM logs WHERE (time_t >= %s """
+    args = [start_time]
+
+    if end_time:
+        cmd += "AND (time_t <= %s) "
+        args.append(end_time)
+
+    if course_id:
+        cmd += "AND ((func_args->'$.course_id'=%s) OR (func_return->'$.course_id'=%s)) "
+        args += [course_id, course_id]
+
+    if course_key:
+        cmd += """AND (func_args->'$.course_key'=%s
+                       OR (func_args->'$.course_id' IN (select id from courses where course_key=%s))
+                       OR (func_return->'$.course_id' IN (select id from courses where course_key=%s)) )
+        """
+        args += [course_key, course_key, course_key]
+
+    if movie_id:
+        cmd += "AND (func_args->'$.movie_id'=%s) "
+        args.append(movie_id)
+
+    if ipaddr:
+        cmd += "AND (ipaddr=%s) "
+        args.append(ipaddr)
+
+    if log_user_id:
+        cmd += "AND ((user_id=%s OR func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s))"
+        args += [log_user_id, log_user_id, log_user_id]
+
+    cmd += ") "
+
+    # now put in the security controls
+
+    if security:
+        cmd += " AND ("
+
+        # If the user owns the record, or if the record is about the user:
+        cmd += "(user_id=%s OR func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s) "
+        args += [user_id, user_id, user_id]
+
+        cmd += " OR "
+
+        # If the log record is about a course, and the user is an admin in the course
+        cmd += " (func_args->'$.course_id' IN (SELECT course_id FROM admins WHERE user_id=%s ))"
+        args += [user_id]
+
+        cmd += " OR "
+
+        cmd += "  (func_return->'$.course_id' IN (SELECT course_id FROM admins WHERE user_id=%s ))"
+        args += [user_id]
+
+        # If the user is the super admin:
+
+        cmd += " OR (%s IN (SELECT user_id FROM admins WHERE course_id=%s)) "
+        args += [user_id, SUPER_ADMIN_COURSE_ID]
+
+        cmd += ")"
+
+    # finally limit the output for pagination
+
+    cmd += "LIMIT %s OFFSET %s"
+    args.append(count)
+    args.append(offset)
+
+    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True, debug=True)
+
+
+
+################################################################
+## Metadata
+################################################################
 
 
 # set movie metadata privileges array:
