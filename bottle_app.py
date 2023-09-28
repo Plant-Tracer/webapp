@@ -286,6 +286,20 @@ def api_check_api_key():
     return INVALID_API_KEY
 
 
+@bottle.route('/api/get-logs', method=['POST'])
+def api_get_logs():
+    """Get logs and return in JSON. The database function does all of the security checks, but we need to have a valid user."""
+    user_id = get_user_dict()['user_id']
+    kwargs = {}
+    for kw in ['start_time','end_time','course_id','course_key',
+               'movie_id','log_user_id','ipaddr','count','offset']:
+        if kw in request.forms:
+            kwargs[kw] = request.forms.get(kw)
+
+    logs    = db.get_logs(user_id=user_id,**kwargs)
+    return {'error':False,
+            'logs': logs}
+
 @bottle.route('/api/register', method=['GET', 'POST'])
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
