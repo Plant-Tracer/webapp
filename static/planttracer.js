@@ -293,7 +293,7 @@ function list_movies_data( movies ) {
                 // return `<td> ${property} = ${value} </td>`;
                 tid += 1;
                 let ch = value > 0 ? 'checked' : '';
-                return `<td> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
+                return `<td class='check'> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
                     `type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
             //console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
