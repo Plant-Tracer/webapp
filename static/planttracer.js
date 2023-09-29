@@ -267,7 +267,13 @@ function list_movies_data( movies ) {
     let rowid = 0;
     function movies_fill_div( div, mlist ) {
         let h = "<table>";
-        h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>published</th> <th>deleted</th> </tr>";
+
+        if (mlist.length > 0 ){
+            h += "<thead>";
+            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>published</th> <th>deleted</th> </tr>";
+            h += "</thead>";
+        }
+        h+= "<tbody>";
 
         // This produces the HTML for each row of the table
         function movie_html( m ) {
@@ -298,12 +304,12 @@ function list_movies_data( movies ) {
             var up_down  = movieDate.toLocaleString().replace(' ','<br>').replace(',','') + download;
 
             return '<tr>'
-                + `<td rowspan='2'> ${movie_id} </td> <td rowspan='2'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+                + `<td> ${movie_id} </td> <td> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
                 + make_td_text(      "title", m.title) + make_td_text( "description", m.description)
                 + make_td_checkbox(  "published", m.published) + make_td_checkbox( "deleted", m.deleted)
                 + "</tr>\n"
                 + `<tr    class='movie_player' id='tr-${rowid}'> `
-                + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
+                + `<td    class='movie_player' id='td-${rowid}' colspan='7' >`
                 + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
                 + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
                 + `</tr>\n`;
@@ -312,9 +318,10 @@ function list_movies_data( movies ) {
         if (mlist.length>0){
             mlist.forEach( m => ( h += movie_html(m) ));
         } else {
-            h += '<tr><td colspan="0"><i>No movies</i></td></tr>';
+            h += '<tr><td><i>No movies</i></td></tr>';
         }
 
+        h += "</tbody>";
         h += "</table>";
         div.html(h);
     }
