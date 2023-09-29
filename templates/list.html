@@ -1,13 +1,5 @@
 {% extends 'base.html' %}
 
-{% block script %}
-<script>
-const user_id = {{user_id}};                  // not logged in
-const api_key = "{{api_key}}";                // no API key yet
-const user_primary_course_id   = {{user_primary_course_id}};
-
-</script>
-{% endblock %}
 
 {% block body %}
 <div id='load_message'><b>{{load_message}}</b></div>

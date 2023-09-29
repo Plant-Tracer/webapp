@@ -6,7 +6,6 @@
     <meta name="google"   content="notranslate"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-
     <!-- use Pure.css - https://purecss.io/ -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
 
@@ -15,6 +14,22 @@
 
     <script>
    const version = '0.9.0';
+   {% if api_key %}
+   const api_key = "{{api_key}}";
+   const user_id = {{user_id}};
+   const user_primary_course_id   = {{user_primary_course_id}};
+   {% else %}
+   const api_key = null;
+   const user_id = null;
+   const user_primary_course_id = null;
+   {% endif %}
+
+   {% if admin %}
+   const admin = true;
+   {% else %}
+   const admin = false;
+   {% endif %}
+
     </script>
 
     <style>
@@ -30,23 +45,51 @@
       <h1>Plant Tracer</h1>
     </header>
 
-<div class="pure-menu pure-menu-horizontal">
-    <a href="/list" class="pure-menu-heading pure-menu-link">Movies</a>
-    <ul class="pure-menu-list">
+    <!-- menu changes if we are authenticated or not -->
+    <div class="pure-menu pure-menu-horizontal">
+      <a href="/" class="pure-menu-heading pure-menu-link">PlantTracer</a>
+      <ul class="pure-menu-list">
+        {% if api_key %}
         <li class="pure-menu-item">
-            <a href="/upload" class="pure-menu-link">Upload</a>
+          <a href="/list" class="pure-menu-link">Movies</a>
         </li>
         <li class="pure-menu-item">
-            <a href="/users" class="pure-menu-link">Users</a>
+          <a href="/upload" class="pure-menu-link">Upload</a>
         </li>
         <li class="pure-menu-item">
-            <a href="/audit" class="pure-menu-link">Audit</a>
+          <a href="/users" class="pure-menu-link">Users</a>
+        </li>
+        {% if admin %}
+        <li class="pure-menu-item">
+          <a href="/audit" class="pure-menu-link">Audit</a>
+        </li>
+        {% endif %}
+        {% else %}
+        <li class="pure-menu-item">
+          <a href="/register" class="pure-menu-link">Register</a>
         </li>
         <li class="pure-menu-item">
-            <a href="/logout" class="pure-menu-link">Logout</a>
+          <a href="/resend" class="pure-menu-link">Resend</a>
         </li>
-    </ul>
-</div>
+        {% endif %}
+        <li class="pure-menu-item">
+          <a href="/about" class="pure-menu-link">About</a>
+        </li>
+        <li class="pure-menu-item">
+          <a href="/privacy" class="pure-menu-link">Privacy</a>
+        </li>
+        {% if api_key %}
+        <li class="pure-menu-item">
+          <a href="/logout" class="pure-menu-link">Logout</a>
+        </li>
+        {% else %}
+        <li class="pure-menu-item">
+          <a href="/login" class="pure-menu-link">Login</a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+
 
     {% block body %}
     {% endblock %}
