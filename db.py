@@ -561,7 +561,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
     args.append(count)
     args.append(offset)
 
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True, debug=True)
+    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
 
 
 
