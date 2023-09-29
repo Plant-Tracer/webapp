@@ -3,7 +3,7 @@
 
 import math
 
-from errors import CALC_RESULTS_PARAM_INVALID 
+from errors import CALC_RESULTS_PARAM_INVALID
 
 
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):

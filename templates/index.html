@@ -1,14 +1,19 @@
 {% extends 'base.html' %}
 
 {% block body %}
-<h2> Welcome! </h2>
+<h2> Welcome Plan Tracer! </h2>
 
-<i>background paragraph goes here</i>
+<p>TODO: write welcome text</p>
 
 {% if api_key %}
 <i>You are logged in. you can...</i>
+<ul>
+<li> <a href='/list'> List the movies that you can work with.</li>
+<li> <a href='/upload'> Upload a new movie</a></li>
+</ul>
+
 {% else %}
-<i>you are not logged in, you can ...</i>
+<i>You are not logged in, you can ...</i>
 
 <ul>
 <li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).</li>

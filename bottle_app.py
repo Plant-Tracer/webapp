@@ -44,7 +44,6 @@ import io
 import datetime
 import logging
 from urllib.parse import urlparse
-import json
 
 import magic
 import bottle
@@ -55,8 +54,8 @@ from validate_email_address import validate_email
 
 import db
 import paths
+import auth
 
-from auth import get_user_api_key, get_movie_id, API_KEY_COOKIE_NAME
 from paths import view, STATIC_DIR, TEMPLATE_DIR, PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
 from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS
@@ -122,7 +121,7 @@ def favicon():
 
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
-    api_key = get_user_api_key()
+    api_key = auth.get_user_api_key()
     if api_key is None:
         logging.warning("api_key is none")
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
@@ -152,12 +151,12 @@ def page_dict(title='Plant Tracer', *, auth=False, logout=False):
     :param: logout - if true, log out the user
     """
     o = urlparse(request.url)
-    api_key = get_user_api_key()
+    api_key = auth.get_user_api_key()
     if api_key is None and auth is True:
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
 
     if (api_key is not None) and (logout is False):
-        auth.set_cookie()
+        auth.set_cookie(api_key)
         user_dict = get_user_dict()
         user_name = user_dict['name']
         user_email = user_dict['email']
@@ -166,13 +165,11 @@ def page_dict(title='Plant Tracer', *, auth=False, logout=False):
         course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
         admin = db.check_course_admin(user_id=user_id, course_id=user_primary_course_id)
     else:
-        user_name = None,
-        user_email = None,
+        user_name = None
+        user_email = None
         user_id = None
-        user_primary = None
-        course_id = None
-        course_name = None
         user_primary_course_id = None
+        course_name = None
         admin = None
 
     if logout:
@@ -223,7 +220,7 @@ def func_login():
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
-def func_list():
+def func_logout():
     """/list - list movies and edit them and user info"""
     return page_dict('Logout',logout=True)
 
@@ -288,7 +285,7 @@ def func_ver():
 def api_check_api_key():
     """API to check the user key and, if valid, return usedict or returns an error."""
 
-    userdict = db.validate_api_key(get_user_api_key())
+    userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': datetime_to_str(userdict)}
     return INVALID_API_KEY
@@ -301,7 +298,7 @@ def api_get_logs():
     kwargs = {}
     for kw in ['start_time','end_time','course_id','course_key',
                'movie_id','log_user_id','ipaddr','count','offset']:
-        if kw in request.forms:
+        if kw in request.forms.keys():
             kwargs[kw] = request.forms.get(kw)
 
     logs    = db.get_logs(user_id=user_id,**kwargs)
@@ -403,9 +400,9 @@ def api_get_movie():
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get_movie_id()):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=auth.get_movie_id()):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie(movie_id=get_movie_id())
+        return db.get_movie(movie_id=auth.get_movie_id())
     return INVALID_MOVIE_ACCESS
 
 
@@ -447,18 +444,18 @@ def converter(x):
 
 @bottle.route('/api/get-metadata', method='POST')
 def api_get_metadata():
-    get_movie_id = converter(request.forms.get('get_movie_id'))
-    get_user_id = converter(request.forms.get('get_user_id'))
+    gmovie_id = converter(request.forms.get('get_movie_id'))
+    guser_id = converter(request.forms.get('get_user_id'))
 
-    if (get_movie_id is None) and (get_user_id is None):
+    if (gmovie_id is None) and (guser_id is None):
         return {'error': True, 'result': 'Either get_movie_id or get_user_id is required'}
 
     return {'error': False, 'result': db.get_metadata(user_id=get_user_id(),
-                                                      get_movie_id=get_movie_id,
-                                                      get_user_id=get_user_id,
+                                                      get_movie_id=gmovie_id,
+                                                      get_user_id=guser_id,
                                                       property=request.forms.get(
-        'property'),
-        value=request.forms.get('value'))}
+                                                          'property'),
+                                                      value=request.forms.get('value'))}
 
 
 @bottle.route('/api/set-metadata', method='POST')
