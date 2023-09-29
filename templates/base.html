@@ -6,6 +6,7 @@
     <meta name="google"   content="notranslate"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
+
     <!-- use Pure.css - https://purecss.io/ -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
 
@@ -13,7 +14,7 @@
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
 
     <script>
-    const version = '0.9.0';
+   const version = '0.9.0';
     </script>
 
     <style>
@@ -28,6 +29,24 @@
     <header>
       <h1>Plant Tracer</h1>
     </header>
+
+<div class="pure-menu pure-menu-horizontal">
+    <a href="/list" class="pure-menu-heading pure-menu-link">Movies</a>
+    <ul class="pure-menu-list">
+        <li class="pure-menu-item">
+            <a href="/upload" class="pure-menu-link">Upload</a>
+        </li>
+        <li class="pure-menu-item">
+            <a href="/users" class="pure-menu-link">Users</a>
+        </li>
+        <li class="pure-menu-item">
+            <a href="/audit" class="pure-menu-link">Audit</a>
+        </li>
+        <li class="pure-menu-item">
+            <a href="/logout" class="pure-menu-link">Logout</a>
+        </li>
+    </ul>
+</div>
 
     {% block body %}
     {% endblock %}
