@@ -10,11 +10,18 @@ from bottle import request
 from errors import INVALID_MOVIE_ID
 
 API_KEY_COOKIE_NAME = 'api_key'
+COOKIE_MAXAGE = 60*60*24*180
 
 ################################################################
 # Authentication API
 ##
 
+
+def set_cookie():
+    bottle.response.set_cookie(API_KEY_COOKIE_NAME, api_key, path='/', maxage=COOKIE_MAXAGE)
+
+def clear_cookie():
+    bottle.response.delete_cookie(API_KEY_COOKIE_NAME, api_key, path='/')
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.

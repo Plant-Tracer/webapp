@@ -46,7 +46,6 @@ import logging
 from urllib.parse import urlparse
 import json
 
-import mistune
 import magic
 import bottle
 from bottle import request
@@ -64,23 +63,14 @@ from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_CO
 
 assert os.path.exists(TEMPLATE_DIR)
 
-if mistune.__version__ < '3':
-    raise RuntimeError("Please uninstall and reinstall mistune")
-
 __version__ = '0.0.1'
-VERSION_TEMPLATE = 'version.txt'
-
-TOS_MD_FILE = os.path.join(STATIC_DIR, 'tos.md')
-PRIVACY_MD_FILE = os.path.join(STATIC_DIR, 'privacy.md')
-PAGE_TEMPLATE = 'page.html'
-PAGE_STYLE = "<style>\ndiv.mypage { max-width: 600px;}\n</style>\n"
 
 DEFAULT_OFFSET = 0
 DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
-
+LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 MAX_FILE_UPLOAD = 1024*1024*16
 
 CHECK_MX = False                # True didn't work
@@ -106,29 +96,6 @@ def datetime_to_str(obj):
 # Bottle endpoints
 
 
-@bottle.route('/ver', method=['POST', 'GET'])
-# run the dictionary below through the VERSION_TEAMPLTE with jinja2
-@view(VERSION_TEMPLATE)
-def func_ver():
-    """Demo for reporting python version. Allows us to validate we are using Python3"""
-    return {'__version__': __version__, 'sys_version': sys.version}
-
-
-@bottle.route('/tos', method=['GET'])
-@view(PAGE_TEMPLATE)
-def func_tos():
-    """Fill the page template with the terms of service produced with markdown to HTML translation"""
-    with open(TOS_MD_FILE, "r") as f:
-        return {'page': mistune.html(f.read()), 'style': PAGE_STYLE}
-
-
-@bottle.route('/privacy', method=['GET'])
-@view(PAGE_TEMPLATE)
-def func_privacy():
-    """Fill the page template with the terms of service produced with markdown to HTML translation"""
-    with open(PRIVACY_MD_FILE, "r") as f:
-        return {'page': mistune.html(f.read()), 'style': PAGE_STYLE}
-
 # Local Static
 
 # Disable caching during development.
@@ -153,68 +120,120 @@ def static_path(path):
 def favicon():
     static_path('favicon.ico')
 
-
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
     if api_key is None:
-        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={
-                                  'Content-type': 'application/json'})
+        logging.warning("api_key is none")
+        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={
-                                  'Content-type': 'application/json'})
+        logging.warning("api_key %s is invalid",api_key)
+        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     return userdict
-
 
 def get_user_id():
     """Returns the user_id of the currently logged in user, or throws a response"""
     userdict = get_user_dict()
-    if 'id' in userdict:
-        return userdict['id']
-    logging.warning("no ID in userdict = %s", userdict)
-    raise bottle.HTTPResponse(body=json.dumps(INVALID_API_KEY), status=200, headers={
-                              'Content-type': 'application/json'})
+    if 'id' not in userdict:
+        logging.warning("no ID in userdict = %s", userdict)
+        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+    return userdict['id']
 
 
 ################################################################
 # HTML Pages served with template system
 ################################################################
 
-def page_dict():
-    """Fill in data that goes to templates below and also set the cookie in a response"""
+def page_dict(title='Plant Tracer', *, auth=False, logout=False):
+    """Fill in data that goes to templates below and also set the cookie in a response
+    :param: title - the title we should give the page
+    :param: auth  - if true, the user must already be authenticated
+    :param: logout - if true, log out the user
+    """
+    o = urlparse(request.url)
     api_key = get_user_api_key()
-    if api_key is not None:
-        bottle.response.set_cookie(API_KEY_COOKIE_NAME, api_key, path='/')
-    user_dict = get_user_dict()
-    user_id = user_dict['id']
-    user_primary_course_id = user_dict['primary_course_id']
-    course_dict = db.lookup_course(course_id=user_primary_course_id)
+    if api_key is None and auth is True:
+        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+
+    if (api_key is not None) and (logout is False):
+        auth.set_cookie()
+        user_dict = get_user_dict()
+        user_name = user_dict['name']
+        user_email = user_dict['email']
+        user_id = user_dict['id']
+        user_primary_course_id = user_dict['primary_course_id']
+        course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
+        admin = db.check_course_admin(user_id=user_id, course_id=user_primary_course_id)
+    else:
+        user_name = None,
+        user_email = None,
+        user_id = None
+        user_primary = None
+        course_id = None
+        course_name = None
+        user_primary_course_id = None
+        admin = None
+
+    if logout:
+        auth.clear_cookie()
+
     return {'api_key': api_key,
             'user_id': user_id,
-            'user_name': user_dict['name'],
-            'user_email': user_dict['email'],
-            'admin': db.check_course_admin(user_id=user_id, course_id=user_primary_course_id),
+            'user_name': user_name,
+            'user_email': user_email,
+            'admin':admin,
             'user_primary_course_id': user_primary_course_id,
-            'course_name': course_dict['course_name']}
+            'title':'Plant Tracer '+title,
+            'hostname':o.hostname,
+            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD,
+            'course_name': course_name}
 
+GET='GET'
+POST='POST'
+GET_POST = [GET,POST]
 
-@bottle.route('/', method=['GET'])
+@bottle.route('/', method=GET_POST)
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
-    o = urlparse(request.url)
-    return {'title': 'Plant Tracer Launch Page',
-            'hostname': o.hostname}
+    return page_dict()
 
-# Note: register and resend both need the endpint so that they can post it to the server
-# for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
+@bottle.route('/about', method=GET_POST)
+@view('about.html')
+def func_about():
+    return page_dict('About')
 
+@bottle.route('/audit', method=GET_POST)
+@view('audit.html')
+def func_audit():
+    """/audit - view the audit logs"""
+    return page_dict("Audit", auth=True)
 
-@bottle.route('/register', method=['GET'])
+@bottle.route('/list', method=GET_POST)
+@view('list.html')
+def func_list():
+    """/list - list movies and edit them and user info"""
+    return page_dict('List Movies', auth=True)
+
+@bottle.route('/login', method=GET_POST)
+@view('login.html')
+def func_login():
+    return page_dict('Login')
+
+@bottle.route('/logout', method=GET_POST)
+@view('logout.html')
+def func_list():
+    """/list - list movies and edit them and user info"""
+    return page_dict('Logout',logout=True)
+
+@bottle.route('/register', method=GET)
 @view('register.html')
 def func_register():
-    """/register sends the register.html template which loads register.js with register variable set to True"""
+    """/register sends the register.html template which loads register.js with register variable set to True
+     Note: register and resend both need the endpint so that they can post it to the server
+     for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
+    """
     o = urlparse(request.url)
     return {'title': 'Plant Tracer Registration Page',
             'hostname': o.hostname,
@@ -222,8 +241,7 @@ def func_register():
             'planttracer_endpoint': PLANTTRACER_ENDPOINT
             }
 
-
-@bottle.route('/resend', method=['GET'])
+@bottle.route('/resend', method=GET)
 @view('register.html')
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
@@ -235,41 +253,31 @@ def func_resend():
             }
 
 
-LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+@bottle.route('/tos', method=GET_POST)
+@view('tos.html')
+def func_tos():
+    return page_dict('Terms of Service')
 
-
-@bottle.route('/list', method=['GET', 'POST'])
-@view('list.html')
-def func_list():
-    """/list - list movies and edit them and user info"""
-    return {**page_dict(),
-            **{'title': 'Plant Tracer List Movies',
-               'load_message': LOAD_MESSAGE}}
-
-
-@bottle.route('/upload', method=['GET', 'POST'])
+@bottle.route('/upload', method=POST)
 @view('upload.html')
 def func_upload():
     """/upload - Upload a new file"""
-    return {**page_dict(),
-            **{'title': 'Plant Tracer Upload a Movie',
-               'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD}}
-
-
-@bottle.route('/audit', method=['GET', 'POST'])
-@view('audit.html')
-def func_audit():
-    """/audit - view the audit logs"""
-    return {**page_dict(),
-            **{'title': 'Plant Tracer Audit'}}
-
+    return page_dict('Upload a Movie', auth=True)
 
 @bottle.route('/users', method=['GET', 'POST'])
 @view('users.html')
 def func_users():
     """/users - provide a users list"""
-    return {**page_dict(),
-            **{'title': 'Plant Tracer List Users'}}
+    return page_dict('List Users', auth=True)
+
+@bottle.route('/ver', method=['POST', 'GET'])
+@view('version.txt')
+def func_ver():
+    """Demo for reporting python version. Allows us to validate we are using Python3.
+    Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
+    """
+    return {'__version__': __version__, 'sys_version': sys.version}
+
 
 ################################################################
 # /api URLs

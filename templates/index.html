@@ -3,8 +3,16 @@
 {% block body %}
 <h2> Welcome! </h2>
 
+<i>background paragraph goes here</i>
+
+{% if api_key %}
+<i>You are logged in. you can...</i>
+{% else %}
+<i>you are not logged in, you can ...</i>
+
 <ul>
 <li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).</li>
 <li> <a href='/resend'> Resend your account login link</a></li>
 </ul>
+{% endif %}
 {% endblock %}

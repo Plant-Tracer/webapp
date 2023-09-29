@@ -50,39 +50,43 @@ def validate_html(html):
             print(ct, line, file=sys.stderr)
         raise
 
-
 def test_html_validator():
     validate_html(
         """<!DOCTYPE html><html lang="en"><invalid> html </invalid></html>""")
 
-
 def test_templates():
-    # Test templates with and without an API_KEY
+    # Test templates without an API_KEY
     with boddle(params={}):
+        # These work without an api_key
         validate_html(bottle_app.func_root())
+        validate_html(bottle_app.func_about())
+        validate_html(bottle_app.func_login())
+        validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
         validate_html(bottle_app.func_tos())
 
+        # These should all generate a redirect
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_list()
 
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_upload()
 
-    # Currently we just test that the functions generate no errors,
-    # not validity of their HTML
+    # Test with
     with boddle(params={'api_key': API_KEY}):
         validate_html(bottle_app.func_root())
+        validate_html(bottle_app.func_about())
+        validate_html(bottle_app.func_audit())
+        validate_html(bottle_app.func_list())
+        validate_html(bottle_app.func_login())
+        validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
-        validate_html(bottle_app.func_list())
-        validate_html(bottle_app.func_upload())
-        validate_html(bottle_app.func_list())
+        validate_html(bottle_app.func_tos())
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
-        validate_html(bottle_app.func_audit())
-
+        validate_html(bottle_app.func_ver())
 
 def test_check_api_key():
     # no parameter should generate error
