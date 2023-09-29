@@ -6,13 +6,19 @@
     <meta name="google"   content="notranslate"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-    <link rel="stylesheet" href="https://cdn.rawgit.com/Chalarangelo/mini.css/v3.0.1/dist/mini-default.min.css"></link>
+    <!-- use Pure.css - https://purecss.io/ -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+
     <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
 
     <script>
     const version = '0.9.0';
     </script>
+
+    <style>
+    html { margin-left: 20px; }
+    </style>
 
     {% block head %}{% endblock %}
     {% block script %}{% endblock %}
