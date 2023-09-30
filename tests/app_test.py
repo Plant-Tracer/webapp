@@ -49,10 +49,7 @@ def validate_html(html):
         for (ct, line) in enumerate(html.split("\n"), 1):
             print(ct, line, file=sys.stderr)
         raise
-
-def test_html_validator():
-    validate_html(
-        """<!DOCTYPE html><html lang="en"><invalid> html </invalid></html>""")
+    assert "404 Not Found" not in data
 
 def test_templates():
     # Test templates without an API_KEY
@@ -60,18 +57,21 @@ def test_templates():
         # These work without an api_key
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
+        with pytest.raises(bottle.HTTPResponse):
+            bottle_app.func_audit()
+        with pytest.raises(bottle.HTTPResponse):
+            bottle_app.func_list()
         validate_html(bottle_app.func_login())
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
         validate_html(bottle_app.func_tos())
-
-        # These should all generate a redirect
-        with pytest.raises(bottle.HTTPResponse):
-            bottle_app.func_list()
-
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_upload()
+        with pytest.raises(bottle.HTTPResponse):
+            bottle_app.func_users()
+        validate_html(bottle_app.func_ver())
+
 
     # Test with
     with boddle(params={'api_key': API_KEY}):

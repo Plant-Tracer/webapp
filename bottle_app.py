@@ -144,7 +144,7 @@ def get_user_id():
 # HTML Pages served with template system
 ################################################################
 
-def page_dict(title='Plant Tracer', *, auth=False, logout=False):
+def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
     """Fill in data that goes to templates below and also set the cookie in a response
     :param: title - the title we should give the page
     :param: auth  - if true, the user must already be authenticated
@@ -152,7 +152,7 @@ def page_dict(title='Plant Tracer', *, auth=False, logout=False):
     """
     o = urlparse(request.url)
     api_key = auth.get_user_api_key()
-    if api_key is None and auth is True:
+    if api_key is None and require_auth is True:
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
 
     if (api_key is not None) and (logout is False):
@@ -205,13 +205,13 @@ def func_about():
 @view('audit.html')
 def func_audit():
     """/audit - view the audit logs"""
-    return page_dict("Audit", auth=True)
+    return page_dict("Audit", require_auth=True)
 
 @bottle.route('/list', method=GET_POST)
 @view('list.html')
 def func_list():
     """/list - list movies and edit them and user info"""
-    return page_dict('List Movies', auth=True)
+    return page_dict('List Movies', require_auth=True)
 
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
@@ -223,6 +223,11 @@ def func_login():
 def func_logout():
     """/list - list movies and edit them and user info"""
     return page_dict('Logout',logout=True)
+
+@bottle.route('/privacy', method=GET_POST)
+@view('privacy.html')
+def func_privacy():
+    return page_dict('Privacy')
 
 @bottle.route('/register', method=GET)
 @view('register.html')
@@ -259,13 +264,13 @@ def func_tos():
 @view('upload.html')
 def func_upload():
     """/upload - Upload a new file"""
-    return page_dict('Upload a Movie', auth=True)
+    return page_dict('Upload a Movie', require_auth=True)
 
 @bottle.route('/users', method=['GET', 'POST'])
 @view('users.html')
 def func_users():
     """/users - provide a users list"""
-    return page_dict('List Users', auth=True)
+    return page_dict('List Users', require_auth=True)
 
 @bottle.route('/ver', method=['POST', 'GET'])
 @view('version.txt')
