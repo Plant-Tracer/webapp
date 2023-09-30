@@ -18,7 +18,8 @@ COOKIE_MAXAGE = 60*60*24*180
 
 
 def set_cookie(api_key):
-    bottle.response.set_cookie(API_KEY_COOKIE_NAME, api_key, path='/', maxage=COOKIE_MAXAGE)
+    bottle.response.set_cookie(API_KEY_COOKIE_NAME, api_key, path='/',
+                               max_age=COOKIE_MAXAGE)
 
 def clear_cookie():
     bottle.response.delete_cookie(API_KEY_COOKIE_NAME, path='/')
