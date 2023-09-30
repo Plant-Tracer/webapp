@@ -260,19 +260,19 @@ def func_resend():
 def func_tos():
     return page_dict('Terms of Service')
 
-@bottle.route('/upload', method=POST)
+@bottle.route('/upload', method=GET_POST)
 @view('upload.html')
 def func_upload():
     """/upload - Upload a new file"""
     return page_dict('Upload a Movie', require_auth=True)
 
-@bottle.route('/users', method=['GET', 'POST'])
+@bottle.route('/users', method=GET_POST)
 @view('users.html')
 def func_users():
     """/users - provide a users list"""
     return page_dict('List Users', require_auth=True)
 
-@bottle.route('/ver', method=['POST', 'GET'])
+@bottle.route('/ver', method=GET_POST)
 @view('version.txt')
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
