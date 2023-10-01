@@ -13,11 +13,30 @@
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
 
     <script>
-    const version = '0.9.0';
+      const version = '0.9.0';
+      {% if api_key %}
+      const api_key = "{{api_key}}";
+      const user_id = {{user_id}};
+      const user_primary_course_id   = {{user_primary_course_id}};
+      {% else %}
+      const api_key = null;
+      const user_id = null;
+      const user_primary_course_id = null;
+      {% endif %}
+
+      {% if admin %}
+      const admin = true;
+      {% else %}
+      const admin = false;
+      {% endif %}
+
     </script>
 
     <style>
-    html { margin-left: 20px; }
+      html {
+      margin-left: 20px;
+      margin-right: 20px;
+      }
     </style>
 
     {% block head %}{% endblock %}
@@ -26,15 +45,60 @@
 
   <body lang='en-US' style='background:white'>
     <header>
-      <h1>Plant Tracer</h1>
+      <!-- menu changes if we are authenticated or not -->
+      <div class="pure-menu pure-menu-horizontal">
+        <a href="/" class="pure-menu-heading pure-menu-link">PlantTracer</a>
+        <ul class="pure-menu-list">
+          {% if api_key %}
+          <li class="pure-menu-item">
+            <a href="/list" class="pure-menu-link">Movies</a>
+          </li>
+          <li class="pure-menu-item">
+            <a href="/upload" class="pure-menu-link">Upload</a>
+          </li>
+          <li class="pure-menu-item">
+            <a href="/users" class="pure-menu-link">Users</a>
+          </li>
+          {% if admin %}
+          <li class="pure-menu-item">
+            <a href="/audit" class="pure-menu-link">Audit</a>
+          </li>
+          {% endif %}
+          {% else %}
+          <li class="pure-menu-item">
+            <a href="/register" class="pure-menu-link">Register</a>
+          </li>
+          <li class="pure-menu-item">
+            <a href="/resend" class="pure-menu-link">Resend</a>
+          </li>
+          {% endif %}
+          <li class="pure-menu-item">
+            <a href="/about" class="pure-menu-link">About</a>
+          </li>
+          <li class="pure-menu-item">
+            <a href="/privacy" class="pure-menu-link">Privacy</a>
+          </li>
+          {% if api_key %}
+          <li class="pure-menu-item">
+            <a href="/logout" class="pure-menu-link">Logout</a>
+          </li>
+          {% else %}
+          <li class="pure-menu-item">
+            <a href="/login" class="pure-menu-link">Login</a>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
     </header>
+
+
 
     {% block body %}
     {% endblock %}
 
     <div id='message'></div>
     <footer>
-      <p id="copyright">Copyright &#169; 2023 Plant Tracer Project</p>
+      <p id="copyright"><a href='/tos'>Copyright &#169; 2023</a></p>
     </footer>
   </body>
 </html>

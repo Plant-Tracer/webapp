@@ -1,13 +1,5 @@
 {% extends 'base.html' %}
 
-{% block script %}
-<script>
-const user_id = {{user_id}};                  // not logged in
-const api_key = "{{api_key}}";                // no API key yet
-const user_primary_course_id   = {{user_primary_course_id}};
-
-</script>
-{% endblock %}
 
 {% block body %}
 <div id='load_message'><b>{{load_message}}</b></div>
@@ -16,13 +8,12 @@ const user_primary_course_id   = {{user_primary_course_id}};
 div.mtable table {
  border:1px solid black;
  border-collapse:collapse;
- overflow-x:hidden;
- max-height:9999px;
 }
 
 div.mtable input[type=checkbox] {
    color:black;
    background-color: yellow;
+   padding: 3px;
 }
 
 div.mtable th {
@@ -31,6 +22,16 @@ div.mtable th {
 
 div.mtable td {
  border:1px solid blue;
+ padding: 3px;
+}
+
+div.mtable td.check {
+ text-align:center;
+}
+
+input[type=checkbox] {
+ width: 20px;
+ height: 20px;
 }
 
 </style>

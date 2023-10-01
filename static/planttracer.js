@@ -293,7 +293,7 @@ function list_movies_data( movies ) {
                 // return `<td> ${property} = ${value} </td>`;
                 tid += 1;
                 let ch = value > 0 ? 'checked' : '';
-                return `<td> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
+                return `<td class='check'> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
                     `type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
             //console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
@@ -354,7 +354,40 @@ function list_movies() {
         })
         .catch(console.error)
 }
+
+////////////////////////////////////////////////////////////////
+// audit page
+// This could fill in the table with search keys; right now we just search for everything
+function build_audit_table() {
+    let formData = new FormData();
+    formData.append("api_key",  api_key); // on the upload form
+    fetch('/api/get-logs', { method:"POST", body:formData })
+        .then((response) => response.json())
+        .then((data) => {
+            if (data['error']!=false){
+                $('#message').html('error: '+data['message']);
+            } else {
+                console.log("data=",data);
+                let logs = data['logs'];
+                console.log("logs=",logs);
+                // get the columns
+                var columns = [];
+                for (const key in logs[0]) {
+                    //console.log(`${key}: ${logs{key}}`);
+                    columns.push( {'data':key, 'title':key } );
+                }
+                // make the data displayable
+                $('#audit').DataTable( {
+                    columns: columns,
+                    data: logs
+                });
+            }
+        });
+}
+
+
 // Wire up whatever happens to be present
+// audit and list are wired with their own ready functions
 $( document ).ready( function() {
     $('#load_message').html('');       // remove the load message
     $('#adder_button').click( add_func );

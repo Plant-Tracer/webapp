@@ -28,20 +28,42 @@ new login link.</p>
 {% endif %}
 <p>
 
-<form>
+<form class='pure-form pure-form-aligned'>
+<fieldset>
 {% if register %}
-<div><label>name: </label> <input id='name' size='40'></div>
+<legend>Registration</legend>
+<div class='pure-control-group'>
+  <label for='name'>Name</label>
+  <input id='name' placeholder='Name' size='40'/>
+  <span class="pure-form-message-inline">required</span>
+</div>
+{% else %}
+<legend>Resend</legend>
 {% endif %}
 
-<div><label>email: </label> <input id='email' size='30'></div>
+<div class='pure-control-group'>
+  <label for='email'>Email Address</label>
+  <input id='email' placeholder='Email Address' size='30'/>
+  <span class="pure-form-message-inline">required</span>
+</div>
 
 {% if register %}
-<div><label>course key: </label> <input id='course_key' size='30'></div>
-<input id='register_button' type='button' value='REGISTER'>
+<div class='pure-control-group'>
+  <label for='course_key'>Course Key</label>
+  <input id='course_key' placeholder='Course Key' size='30'/>
+  <span class="pure-form-message-inline">required</span>
+</div>
+
+<div class='pure-controls'>
+  <input id='register_button' type='button' value='REGISTER' class="pure-button pure-button-primary"/>
+</div>
 {% else %}
 
-<input id='resend_button' type='button' value='RESEND'>
+<div class='pure-controls'>
+  <input id='resend_button' type='button' value='RESEND' class="pure-button pure-button-primary"/>
+</div>
 {% endif %}
 
+</fieldset>
 </form>
 {% endblock %}
