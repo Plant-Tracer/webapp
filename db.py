@@ -478,7 +478,8 @@ def list_movies(user_id):
 ################################################################
 
 # Do we need to log get_logs?
-def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None, ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None,
+              ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
     """get log entries (to which the user is entitled)
     :param: user_id    - the user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
@@ -488,11 +489,13 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
     :param: log_user_id - if provided, only provide log entries for this person
     :param: count      - maximum number of log entries to provide (for paging)
     :param: offset     - Offset into SQL SELECT (for paging)
-    "param: security   - False to disable security checks
+    :param: security   - False to disable security checks
     :return: list of dictionaries of log records.
     """
 
-    # First the full log
+    count = max(count, LOG_MAX_RECORDS)
+
+    # First find all of the records requested by the searcher
     cmd = """SELECT * FROM logs WHERE (time_t >= %s """
     args = [start_time]
 
@@ -558,7 +561,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, cour
     args.append(count)
     args.append(offset)
 
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True, debug=True)
+    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
 
 
 
