@@ -136,6 +136,19 @@ async function upload_movie(inp)
 // List movie page
 
 
+// special buttons
+const PUBLISH_BUTTON='PUBLISH';
+const UNPUBLISH_BUTTON='UNPUBLISH';
+const DELETE_BUTTON='DELETE';
+const UNDELETE_BUTTON='UNDELETE';
+
+// sounds for buttons
+var SOUNDS = [];
+SOUNDS[DELETE_BUTTON] = new Audio('static/pop-up-something-160353.mp3');
+SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+
+
+
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked
@@ -172,8 +185,6 @@ function download_clicked( e ) {
 
 }
 
-
-
 ////////////////
 // EDIT METADATA
 
@@ -183,8 +194,8 @@ function set_property(user_id, movie_id, property, value)
     console.log(`set_property(${user_id}, ${movie_id}, ${property}, ${value})`);
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    formData.append("set_user_id", user_id);
-    formData.append("set_movie_id", movie_id);
+    if (user_id) formData.append("set_user_id", user_id);
+    if (movie_id) formData.append("set_movie_id", movie_id);
     formData.append("property", property);
     formData.append("value", value);
     fetch('/api/set-metadata', { method:"POST", body:formData})
@@ -197,8 +208,8 @@ function set_property(user_id, movie_id, property, value)
             }
         })
         .catch(console.error);
-    //console.log("set_property done");
 }
+
 
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
 // the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
@@ -255,27 +266,53 @@ function row_pencil_clicked( e ) {
 }
 
 
-
+////////////////////////////////////////////////////////////////
+//
 // CREATE THE MOVIES tables
 // Create the movies table
 // top-level function is called to fill in all of the movies tables
 // It's called with a list of movies
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
-function list_movies_data( movies ) {
-    // This fills in the given table with a given list
-    let tid = 0;
-    let rowid = 0;
-    function movies_fill_div( div, mlist ) {
-        let h = "<table>";
 
+// Function called when an action button is clicked
+function action_button_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
+    const property = e.getAttribute('x-property');
+    const value    = e.getAttribute('x-value');
+    const kind     = e.getAttribute('value');
+    sound = SOUNDS[ kind ];
+    console.log('kind=',kind,'sound=',sound);
+    if (sound) {
+        sound.play();
+    }
+    set_property(null, movie_id, property, value);
+}
+
+
+function list_movies_data( movies ) {
+    const PUBLISHED = 'published';
+    const UNPUBLISHED = 'unpublished'
+    const DELETED = 'deleted';
+    const COURSE = 'course';
+
+    let tid = 0;  // Every <td> on the page has a unique id
+    let rowid = 0;// Every row on the page has a unique number
+
+    // movies_fill_div() - creates the
+    // This fills in the given table with a given list
+    function movies_fill_div( div, which, mlist ) {
+        // Top of table
+        let h = "<table>";
         if (mlist.length > 0 ){
             h += "<thead>";
-            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>published</th> <th>deleted</th> </tr>";
+            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>action</th> </tr>";
             h += "</thead>";
         }
         h+= "<tbody>";
 
-        // This produces the HTML for each row of the table
+        // This produces two HTML <tr>'s for each movie of the table.
+        // The first has metadata, which may be editable.
+        // The second is by default hidden; it becomes visible to play the movie
         function movie_html( m ) {
             // This products the HTML for each <td> that has text
             rowid += 1;
@@ -296,23 +333,62 @@ function list_movies_data( movies ) {
                 return `<td class='check'> <input id='${tid}' x-movie_id='${movie_id}' x-property='${property}' ` +
                     `type='checkbox' ${ch} onclick='row_checkbox_clicked(this)'> </td>\n`;
             }
-            //console.log("m=",m,'rowid=',rowid,'movie_id=',movie_id);
-            var movieDate = new Date(m.date_uploaded * 1000); //
-            //var download  = `<input class='download' x-movie_id='${movie_id}' type='button' value='download' onclick='download_clicked(this)'>`;
-            var download = '';
-            var play      = `<input class='play'     x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
-            var up_down  = movieDate.toLocaleString().replace(' ','<br>').replace(',','') + download;
 
-            return '<tr>'
+            // action buttons are HTML buttons that when clicked change the metadata in a predictable way.
+            function make_action_button( kind ) {
+                if (kind==PUBLISH_BUTTON) {
+                    prop = 'published';
+                    nval = 1;
+                } else if (kind==UNPUBLISH_BUTTON) {
+                    prop = 'published';
+                    nval = 0;
+                } else if (kind==DELETE_BUTTON) {
+                    prop = 'deleted';
+                    nval = 1;
+                } else if (kind==UNDELETE_BUTTON) {
+                    prop = 'deleted';
+                    nval = 0;
+                } else {
+                    console.log("make_action_button: unknown button type: ",kind);
+                    return "ERROR";
+                }
+                return `<input type='button' x-movie_id='${movie_id}' x-property='${prop}' value='${kind}' x-value='${nval}' onclick='action_button_clicked(this)'>`;
+            }
+
+            var movieDate = new Date(m.date_uploaded * 1000);
+            var play      = `<input class='play' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
+
+            rows = '<tr>'
                 + `<td> ${movie_id} </td> <td> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
-                + make_td_text(      "title", m.title) + make_td_text( "description", m.description)
-                + make_td_checkbox(  "published", m.published) + make_td_checkbox( "deleted", m.deleted)
-                + "</tr>\n"
-                + `<tr    class='movie_player' id='tr-${rowid}'> `
-                + `<td    class='movie_player' id='td-${rowid}' colspan='7' >`
+                + make_td_text(      "title", m.title) + make_td_text( "description", m.description);
+
+            rows += "<td>";
+            // Do we create an unpublish button?
+            if (which==PUBLISHED || which==COURSE){
+                    rows += make_action_button( UNPUBLISH_BUTTON );
+            }
+            // Do we create a publish button?
+            if (which==COURSE && admin){
+                rows += make_action_button( PUBLISH_BUTTON );
+            }
+            // Do we create a delete button?
+            if ( (which==PUBLISHED || which==UNPUBLISHED) || (which==COURSE && admin)) {
+                rows += make_action_button( DELETE_BUTTON );
+            }
+            // Do we create an undelete delete button?
+            if (which==DELETED){
+                rows += make_action_button( UNDELETE_BUTTON );
+            }
+            rows += "</td></tr>\n";
+
+            // Now make the player row
+            rows += `<tr    class='movie_player' id='tr-${rowid}'> `
+                + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
                 + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
                 + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
                 + `</tr>\n`;
+            return rows;
         }
 
         if (mlist.length>0){
@@ -325,10 +401,10 @@ function list_movies_data( movies ) {
         h += "</table>";
         div.html(h);
     }
-    movies_fill_div( $('#your-published-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==1)));
-    movies_fill_div( $('#your-unpublished-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
-    movies_fill_div( $('#your-deleted-movies'), movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
-    movies_fill_div( $('#course-movies'), movies.filter( m => (m['course_id']==user_primary_course_id)));
+    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)));
+    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)));
     $('.movie_player').hide();
 }
 
