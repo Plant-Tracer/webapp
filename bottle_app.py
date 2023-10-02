@@ -162,14 +162,14 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
         user_email = user_dict['email']
         user_id = user_dict['id']
         user_primary_course_id = user_dict['primary_course_id']
-        course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
+        primary_course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
         admin = db.check_course_admin(user_id=user_id, course_id=user_primary_course_id)
     else:
         user_name = None
         user_email = None
         user_id = None
         user_primary_course_id = None
-        course_name = None
+        primary_course_name = None
         admin = None
 
     if logout:
@@ -181,10 +181,10 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
             'user_email': user_email,
             'admin':admin,
             'user_primary_course_id': user_primary_course_id,
+            'primary_course_name': primary_course_name,
             'title':'Plant Tracer '+title,
             'hostname':o.hostname,
-            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD,
-            'course_name': course_name}
+            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD}
 
 GET='GET'
 POST='POST'
@@ -399,7 +399,7 @@ def api_get_frame():
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-movie', method='POST')
+@bottle.route('/api/get-movie', method=['POST','GET'])
 def api_get_movie():
     """
     :param api_keuy:   authentication

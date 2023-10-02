@@ -18,10 +18,12 @@
       const api_key = "{{api_key}}";
       const user_id = {{user_id}};
       const user_primary_course_id   = {{user_primary_course_id}};
+      const primary_course_name = "{{primary_course_name}}";
       {% else %}
       const api_key = null;
       const user_id = null;
       const user_primary_course_id = null;
+      const primary_course_name = null;
       {% endif %}
 
       {% if admin %}
@@ -91,6 +93,11 @@
       </div>
     </header>
 
+    {% if api_key %}
+    <div>
+      {{user_name}} ({{user_id}}) Course: {{primary_course_name}}
+    </div>
+    {% endif %}
 
 
     {% block body %}
