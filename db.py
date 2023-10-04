@@ -283,6 +283,23 @@ def send_links(*, email, planttracer_endpoint):
                             msg=msg
                             )
 
+@log
+def list_users(*, user_id):
+    """Returns a directory of all the courses to which the user has access, and all of the people in them."""
+    cmd = """SELECT *,users.id as user_id FROM users
+             WHERE users.id=%s
+                OR users.primary_course_id IN (select primary_course_id from users where id=%s)
+                OR users.primary_course_id IN (select course_id from admins where user_id=%s)
+                OR %s IN (select user_id from admins where course_id=%s)"""
+    args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
+    return dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+
+def list_admins():
+    """Returns a list of all the admins"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
+                               asDicts=True)
+
 
 ################################################################
 # Course Management

@@ -234,6 +234,22 @@ def test_get_logs():
         db.get_logs( user_id=0, log_user_id = 0, security=security)
         db.get_logs( user_id=0, ipaddr = "", security=security)
 
+def test_course_list(new_user):
+    (user_email, api_key) = new_user
+    user_dict = db.validate_api_key(api_key)
+    user_id = user_dict['user_id']
+    primary_course_id = user_dict['primary_course_id']
+
+    recs = db.list_users(user_id=user_id)
+
+    matches = [rec for rec in recs if rec['user_id']==user_id]
+    assert(len(matches)>0)
+
+    # Make sure that there is an admin in the course who is not the user
+    recs = db.list_admins()
+    matches = [rec for rec in recs if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
+    assert len(matches)==1
+
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""
     (user_email, api_key) = new_user
