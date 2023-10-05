@@ -156,14 +156,15 @@ def add_log_policy(v):
 def validate_api_key(api_key):
     """Validate API key. return User dictionary or None if key is not valid"""
     res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              "SELECT * from api_keys left join users on user_id=users.id where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1",
+                              """SELECT * from api_keys left join users on user_id=users.id
+                              where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1""",
                               (api_key, ), asDicts=True)
 
     if len(res) > 0:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
-                             SET last_used_at=now(),
-                             first_used_at=if(first_used_at is null,now(),first_used_at),
+                             SET last_used_at=unix_timestamp(),
+                             first_used_at=if(first_used_at is null,unix_timestamp(),first_used_at),
                              use_count=use_count+1
                              WHERE api_key=%s""",
                             (api_key,))
