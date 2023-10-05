@@ -161,8 +161,8 @@ def validate_api_key(api_key):
     if len(res) > 0:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
-                             SET last_used_at=now(),
-                             first_used_at=if(first_used_at is null,now(),first_used_at),
+                             SET last_used_at=unix_timestamp(),
+                             first_used_at=if(first_used_at is null,unix_timestamp(),first_used_at),
                              use_count=use_count+1
                              WHERE api_key=%s""",
                             (api_key,))
