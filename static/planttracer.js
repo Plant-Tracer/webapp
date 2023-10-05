@@ -305,7 +305,7 @@ function list_movies_data( movies ) {
         let h = "<table>";
         if (mlist.length > 0 ){
             h += "<thead>";
-            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>action</th> </tr>";
+            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>status and action</th> </tr>";
             h += "</thead>";
         }
         h+= "<tbody>";
@@ -359,26 +359,39 @@ function list_movies_data( movies ) {
             var play      = `<input class='play' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
-            rows = '<tr>'
-                + `<td> ${movie_id} </td> <td> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+            var you       = (m.user_id == user_id) ? "you" : "";
+
+            rows = `<tr class='${you}'>`
+                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
                 + make_td_text(      "title", m.title) + make_td_text( "description", m.description);
 
             rows += "<td>";
-            // Do we create an unpublish button?
-            if (which==PUBLISHED || which==COURSE){
+            rows += "Status: ";
+            if (m.deleted) {
+                rows += "<i>Deleted</i>";
+            } else {
+                rows += m.published ? "<b>Published</b> " : "Not published";
+            }
+            rows += "<br/>";
+
+            if (m.deleted) {
+                if (which==DELETED){
+                    // Do we create an undelete delete button?
+                    rows += make_action_button( UNDELETE_BUTTON );
+                }
+            } else {
+                // Do we create an unpublish button?
+                if ((m.published) && ((which==PUBLISHED || which==COURSE))){
                     rows += make_action_button( UNPUBLISH_BUTTON );
-            }
-            // Do we create a publish button?
-            if (which==COURSE && admin){
-                rows += make_action_button( PUBLISH_BUTTON );
-            }
-            // Do we create a delete button?
-            if ( (which==PUBLISHED || which==UNPUBLISHED) || (which==COURSE && admin)) {
-                rows += make_action_button( DELETE_BUTTON );
-            }
-            // Do we create an undelete delete button?
-            if (which==DELETED){
-                rows += make_action_button( UNDELETE_BUTTON );
+                }
+                // Do we create a publish button?
+                if ((m.published==0) && ((which==COURSE && admin))){
+                    rows += make_action_button( PUBLISH_BUTTON );
+                }
+                // Do we create a delete button? (users can only delete their own movies)
+                if (m.user_id == user_id){
+                    rows += make_action_button( DELETE_BUTTON );
+                }
             }
             rows += "</td></tr>\n";
 
