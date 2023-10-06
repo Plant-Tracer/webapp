@@ -16,3 +16,4 @@ pytest-cov
 pytest-env
 requests
 validate_email_address
+aiosmtplib
