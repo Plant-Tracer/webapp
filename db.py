@@ -288,16 +288,19 @@ def send_links(*, email, planttracer_endpoint):
 
 @log
 def list_users(*, user_id):
-    """Returns a directory of all the courses to which the user has access, and all of the people in them."""
-    cmd = """SELECT users.name AS name,users.email AS email,users.id AS user_id,
-                    k.first,k.last
+    """Returns a directory of all the courses to which the user has access, and all of the people in them.
+    :param: user_id - the user doing the listing (determines what they can see)
+    """
+    cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
+                    k.first as first,k.last as last
               FROM users LEFT JOIN
                       (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys) k
               ON users.id=k.user_id
               WHERE users.id=%s
                 OR users.primary_course_id IN (select primary_course_id from users where id=%s)
                 OR users.primary_course_id IN (select course_id from admins where user_id=%s)
-                OR %s IN (select user_id from admins where course_id=%s)"""
+                OR %s IN (select user_id from admins where course_id=%s)
+              ORDER BY primary_course_id,name,email"""
     args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
     return dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
 

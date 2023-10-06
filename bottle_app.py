@@ -348,7 +348,7 @@ def api_bulk_register():
     course_id =  int(request.forms.get('course_id'))
     user_id   = get_user_id()
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
-    if not db.check_course_admin(course_id = course_id, user_id=user_id)
+    if not db.check_course_admin(course_id = course_id, user_id=user_id):
         return INVALID_COURSE_ACCESS
 
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
