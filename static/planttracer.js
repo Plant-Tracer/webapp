@@ -286,6 +286,10 @@ function action_button_clicked( e ) {
         sound.play();
     }
     set_property(null, movie_id, property, value);
+    // If we deleted the movie, automatically unpublish it
+    if (property=='deleted' && value==1){
+        set_property(null, movie_id, 'published', 0);
+    }
 }
 
 
@@ -365,19 +369,19 @@ function list_movies_data( movies ) {
 
             rows += "<td>";
             // Do we create an unpublish button?
-            if (which==PUBLISHED || which==COURSE){
+            if ((m.published) && ((m.user_id == user_id) || (admin))) {
                     rows += make_action_button( UNPUBLISH_BUTTON );
             }
             // Do we create a publish button?
-            if (which==COURSE && admin){
+            if ((m.published==0) && (admin)) {
                 rows += make_action_button( PUBLISH_BUTTON );
             }
             // Do we create a delete button?
-            if ( (which==PUBLISHED || which==UNPUBLISHED) || (which==COURSE && admin)) {
+            if ((m.deleted == 0) && (m.user_id == user_id)) {
                 rows += make_action_button( DELETE_BUTTON );
             }
             // Do we create an undelete delete button?
-            if (which==DELETED){
+            if ((m.deleted == 1) && (m.user_id == user_id)) {
                 rows += make_action_button( UNDELETE_BUTTON );
             }
             rows += "</td></tr>\n";
@@ -403,8 +407,8 @@ function list_movies_data( movies ) {
     }
     movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)));
     movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)));
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     $('.movie_player').hide();
 }
 
