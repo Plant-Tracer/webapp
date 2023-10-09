@@ -53,6 +53,11 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
+launch-local-mail:
+	if [ -r twistd.pid ]; then echo kill -9 `cat twistd.pid` ; kill -9 `cat twistd.pid` ; /bin/rm -f twistd.pid ; fi
+	/bin/rm -f /tmp/localmail.mbox
+	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
+
 
 # These are used by the CI pipeline:
 # Generic:

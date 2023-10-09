@@ -33,6 +33,8 @@ export IMAP_SERVER=****
 export IMAP_USERNAME=****
 export TEST_ENDPOINT='http://localhost:8080' (or whatever it is above)
 
+For automated tests, we are using the localmail server.
+
 And you will need a valid user in the current databse (or create your own with dbutil.py)
 export TEST_USER_APIKEY=****
 export TEST_USER_EMAIL=****
@@ -58,7 +60,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR, PLANTTRACER_ENDPOINT
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -299,16 +301,19 @@ def api_check_api_key():
 @bottle.route('/api/get-logs', method=['POST'])
 def api_get_logs():
     """Get logs and return in JSON. The database function does all of the security checks, but we need to have a valid user."""
-    user_id = get_user_dict()['user_id']
     kwargs = {}
     for kw in ['start_time','end_time','course_id','course_key',
                'movie_id','log_user_id','ipaddr','count','offset']:
         if kw in request.forms.keys():
             kwargs[kw] = request.forms.get(kw)
 
-    logs    = db.get_logs(user_id=user_id,**kwargs)
-    return {'error':False,
-            'logs': logs}
+    logs    = db.get_logs(user_id=get_user_id(),**kwargs)
+    return {'error':False, 'logs': logs}
+
+@bottle.route('/api/list-users', method=['POST'])
+def api_list_users():
+    """Get a list of the uses in the current course or all courses, depending on the user permissions."""
+    return db.list_users( user_id=get_user_id());
 
 @bottle.route('/api/register', method=['GET', 'POST'])
 def api_register():
@@ -328,7 +333,6 @@ def api_register():
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'Registration key sent to '+email}
 
-
 @bottle.route('/api/resend-link', method=['GET', 'POST'])
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
@@ -339,6 +343,23 @@ def api_send_link():
         return INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
+
+@bottle.route('/api/bulk-register', method=['POST'])
+def api_bulk_register():
+    """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
+    course_id =  int(request.forms.get('course_id'))
+    user_id   = get_user_id()
+    planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    if not db.check_course_admin(course_id = course_id, user_id=user_id):
+        return INVALID_COURSE_ACCESS
+
+    email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
+    for email in email_addresses:
+        if not validate_email(email, check_mx=CHECK_MX):
+            return INVALID_EMAIL
+        db.register_email(email=email, course_id=course_id, name="")
+        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
+    return {'error':False, 'message':f'Registered {count} email addresses'}
 
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
@@ -428,6 +449,8 @@ def api_delete_movie():
 def api_list_movies():
     return {'error': False, 'movies': db.list_movies(get_user_id())}
 
+
+
 ##
 # Log API
 #
@@ -489,6 +512,14 @@ def api_set_metadata():
                              value=request.forms.get('value'))
 
     return {'error': False, 'result': result}
+
+
+##
+## All of the users that this person can see
+##
+@bottle.route('/api/list-users', method=['POST'])
+def api_list_users():
+    return {'error': False, 'result': db.list_users(user_id=get_user_id())}
 
 
 ##
