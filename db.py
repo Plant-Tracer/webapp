@@ -146,19 +146,22 @@ def set_log_policy(v):
 def add_log_policy(v):
     logging_policy.add(v)
 
-################################################################
-# USER MANAGEMENT
-############################################
-
+#####################
+## USER MANAGEMENT ##
+#####################
 
 def validate_api_key(api_key):
-    """Validate API key. return User dictionary or None if key is not valid"""
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
+    """
+    Validate API key.
+    :param: api_key - the key provided by the cookie or the HTML form.
+    :return: User dictionary or {} if key is not valid
+    """
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT * from api_keys left join users on user_id=users.id
                               where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1""",
                               (api_key, ), asDicts=True)
 
-    if len(res) > 0:
+    if ret:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
                              SET last_used_at=unix_timestamp(),
@@ -166,11 +169,66 @@ def validate_api_key(api_key):
                              use_count=use_count+1
                              WHERE api_key=%s""",
                             (api_key,))
-        return res[0]
+        return ret[0]
     return {}
 
 ##
 
+# No need to log this one
+def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
+    """
+    :param: user_id - user ID to get information about.
+    :param: group_info - if True get information about the user's groups
+    :return: User dictionary augmented with additional information.
+    """
+    cmd = "select *,id as user_id from users WHERE"
+    args = []
+    if email:
+        cmd += "email=%s "
+        args += [email]
+    if user_id and not email:
+        cmd += "id=%s "
+        args += [user_id]
+    try:
+        ret= dbfile.DBMySQL.csfr(get_dbreader(), "select *,id as user_id from users where email=%s", (email,), asDicts=True)[0]
+        # If we don't have the user_id, set it
+        if not user_id:
+            user_id = ret['user_id']
+    except IndexError:
+        return {}
+
+    if get_admin:
+        ret['admin'] = dbfile.DBMySQL.csfr(get_dbreader(),
+                                           """SELECT * from admin where user_id = %s""",
+                                           (user_id,), asDicts=True)
+    if get_courses:
+        ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),
+                                           """SELECT *,id as course_id from courses where id = %s
+                                           OR id in (select course_id from admin where user_id=%s)
+                                           """, (user_id,user_id),asDicts=True)
+    return ret
+
+
+################ RENAME AND DELETE ################
+@log
+def rename_user(user_id, email, new_email):
+    """Changes a user's email. Requires a correct old_email"""
+    dbfile.DBMySQL.csfr(get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
+                        (email, user_id, new_email))
+
+
+@log
+def delete_user(email):
+    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+    Also deletes the user from any courses where they may be an admin.
+    """
+    dbfile.DBMySQL.csfr(get_dbwriter(
+    ), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
+
+
+################ REGISTRATION ################
 
 @log
 def register_email(*, email, name, course_key=None, course_id=None):
@@ -200,30 +258,35 @@ def register_email(*, email, name, course_key=None, course_id=None):
 
 
 @log
-def rename_user(user_id, email, new_email):
-    """Changes a user's email. Requires a correct old_email"""
-    dbfile.DBMySQL.csfr(get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
-                        (email, user_id, new_email))
+def send_links(*, email, planttracer_endpoint):
+    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
+    PROJECT_EMAIL = 'admin@planttracer.com'
 
+    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
 
-@log
-def delete_user(email):
-    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
-    Also deletes the user from any courses where they may be an admin.
-    """
-    dbfile.DBMySQL.csfr(get_dbwriter(
-    ), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
+    TO_ADDRS = [email]
+    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
+        msg_env = NativeEnvironment().from_string(f.read())
+    new_api_key = make_new_api_key(email=email)
 
+    if new_api_key:
+        msg = msg_env.render(to_addrs=",".join([email]),
+                             from_addr=PROJECT_EMAIL,
+                             planttracer_endpoint=planttracer_endpoint,
+                             api_key=new_api_key)
 
-# No need to log this one
-def lookup_user(*, email):
-    try:
-        return dbfile.DBMySQL.csfr(get_dbreader(), "select *,id as user_id from users where email=%s", (email,), asDicts=True)[0]
-    except IndexError:
-        return {}
+        DRY_RUN = False
+        SMTP_DEBUG = False
+        smtp_config = mailer.smtp_config_from_environ()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+        mailer.send_message(from_addr=PROJECT_EMAIL,
+                            to_addrs=TO_ADDRS,
+                            smtp_config=smtp_config,
+                            dry_run=DRY_RUN,
+                            msg=msg
+                            )
 
+################ API KEY ################
 
 def make_new_api_key(*,email):
     """Create a new api_key for an email that is registered
@@ -258,35 +321,6 @@ def delete_api_key(api_key):
 
 
 @log
-def send_links(*, email, planttracer_endpoint):
-    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
-    PROJECT_EMAIL = 'admin@planttracer.com'
-
-    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
-    TO_ADDRS = [email]
-    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
-        msg_env = NativeEnvironment().from_string(f.read())
-    new_api_key = make_new_api_key(email=email)
-
-    if new_api_key:
-        msg = msg_env.render(to_addrs=",".join([email]),
-                             from_addr=PROJECT_EMAIL,
-                             planttracer_endpoint=planttracer_endpoint,
-                             api_key=new_api_key)
-
-        DRY_RUN = False
-        SMTP_DEBUG = False
-        smtp_config = mailer.smtp_config_from_environ()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg
-                            )
-
-@log
 def list_users(*, user_id):
     """Returns a directory of all the courses to which the user has access, and all of the people in them.
     :param: user_id - the user doing the listing (determines what they can see)
@@ -311,9 +345,9 @@ def list_admins():
                                asDicts=True)
 
 
-################################################################
-# Course Management
-################################################################
+#########################
+### Course Management ###
+#########################
 
 def lookup_course(*, course_id):
     try:
@@ -396,10 +430,9 @@ def remaining_course_registrations(*,course_key):
 
 
 
-################################################################
-# Movie Management
-################################################################
-
+########################
+### Movie Management ###
+########################
 
 @log
 def get_movie(*, movie_id):
