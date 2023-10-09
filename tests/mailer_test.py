@@ -33,7 +33,7 @@ if USE_LOCALMAIL:
     FNAME = join(dirname(__file__),"localmail_config.ini")
     localmail_config.read( FNAME )
     if 'smtp' not in localmail_config:
-        logging.error('LOCALMAIL FNAME: %s",FNAME)
+        logging.error('LOCALMAIL FNAME: %s',FNAME)
         logging.error('LOCALMMAIL config: %s',localmail_config)
         logging.error('LOCALMAIL file: %s',open(FNAME).read())
 
