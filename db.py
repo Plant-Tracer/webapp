@@ -29,14 +29,11 @@ SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admin
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
 
-
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
-
 class InvalidCourse_Key(RuntimeError):
     """ API Key is invalid """
-
 
 LOG_DB = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
@@ -46,6 +43,7 @@ logging_policy.add(LOG_DB)
 
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
+CHECK_MX = False            # True doesn't work
 
 @functools.cache
 def get_dbreader():
@@ -175,22 +173,26 @@ def validate_api_key(api_key):
 
 
 @log
-def register_email(email, course_key, name):
+def register_email(*, email, name, course_key=None, course_id=None):
     """Register email for a given course
     :param: email - user email
     :param: course_key - the key
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
-    CHECK_MX = False            # True doesn't work
     if not validate_email(email, check_mx=CHECK_MX):
         raise InvalidEmail(email)
-    res = dbfile.DBMySQL.csfr(
-        get_dbreader(), "SELECT id FROM courses WHERE course_key=%s", (course_key,))
-    if (not res) or (len(res) != 1):
-        raise InvalidCourse_Key(course_key)
 
-    course_id = res[0][0]
+    assert not ((course_key is None) and (course_id is None))
+
+    # Get the course_id if not provided
+    if not course_id:
+        res = dbfile.DBMySQL.csfr(
+            get_dbreader(), "SELECT id FROM courses WHERE course_key=%s", (course_key,))
+        if (not res) or (len(res) != 1):
+            raise InvalidCourse_Key(course_key)
+        course_id = res[0][0]
+
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
                                """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
                                (email, course_id, name, email))
@@ -284,6 +286,30 @@ def send_links(*, email, planttracer_endpoint):
                             msg=msg
                             )
 
+@log
+def list_users(*, user_id):
+    """Returns a directory of all the courses to which the user has access, and all of the people in them.
+    :param: user_id - the user doing the listing (determines what they can see)
+    """
+    cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
+                    k.first as first,k.last as last
+              FROM users LEFT JOIN
+                      (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys) k
+              ON users.id=k.user_id
+              WHERE users.id=%s
+                OR users.primary_course_id IN (select primary_course_id from users where id=%s)
+                OR users.primary_course_id IN (select course_id from admins where user_id=%s)
+                OR %s IN (select user_id from admins where course_id=%s)
+              ORDER BY primary_course_id,name,email"""
+    args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
+    return dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+
+def list_admins():
+    """Returns a list of all the admins"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
+                               asDicts=True)
+
 
 ################################################################
 # Course Management
@@ -367,6 +393,7 @@ def remaining_course_registrations(*,course_key):
         return int(res[0][0])
     except (IndexError, ValueError):
         return 0
+
 
 
 ################################################################

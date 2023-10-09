@@ -49,6 +49,9 @@
     <header>
       <!-- menu changes if we are authenticated or not -->
       <div class="pure-menu pure-menu-horizontal">
+        {% if admin %}
+        <b> ADMIN </b>
+        {% endif %}
         <a href="/" class="pure-menu-heading pure-menu-link">PlantTracer</a>
         <ul class="pure-menu-list">
           {% if api_key %}
