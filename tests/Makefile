@@ -7,8 +7,5 @@ bt:
 	cd ..;python -m pytest tests/tracker_test.py -k test_blocktrack -v --log-cli-level=DEBUG
 
 pytest:
-	python -m pytest -v --log-cli-level=DEBUG
-
-launch-local-mail:
-	/bin/rm -f /tmp/localmail.mbox
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
+	@echo use pytest-debug if make is run from here
+	cd ..;make pytest-debug
