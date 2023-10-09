@@ -33,6 +33,8 @@ export IMAP_SERVER=****
 export IMAP_USERNAME=****
 export TEST_ENDPOINT='http://localhost:8080' (or whatever it is above)
 
+For automated tests, we are using the localmail server.
+
 And you will need a valid user in the current databse (or create your own with dbutil.py)
 export TEST_USER_APIKEY=****
 export TEST_USER_EMAIL=****
@@ -510,6 +512,14 @@ def api_set_metadata():
                              value=request.forms.get('value'))
 
     return {'error': False, 'result': result}
+
+
+##
+## All of the users that this person can see
+##
+@bottle.route('/api/list-users', method=['POST'])
+def api_list_users():
+    return {'error': False, 'result': db.list_users(user_id=get_user_id())}
 
 
 ##
