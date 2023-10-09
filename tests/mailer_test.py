@@ -30,7 +30,13 @@ USE_LOCALMAIL = True
 
 if USE_LOCALMAIL:
     localmail_config = configparser.ConfigParser()
-    localmail_config.read( join(dirname(__file__),"localmail_config.ini"))
+    FNAME = join(dirname(__file__),"localmail_config.ini")
+    localmail_config.read( FNAME )
+    if 'smtp' not in localmail_config:
+        logging.error('LOCALMAIL FNAME: %s",FNAME)
+        logging.error('LOCALMMAIL config: %s',localmail_config)
+        logging.error('LOCALMAIL file: %s',open(FNAME).read())
+
 
 @pytest.mark.skipif(SKIP_IF, reason="does not run on GitHub - outbound SMTP is blocked")
 def test_send_message():
