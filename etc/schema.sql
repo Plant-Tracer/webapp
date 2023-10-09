@@ -46,8 +46,8 @@ CREATE TABLE `api_keys` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `api_key` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `first_used_at` timestamp NULL DEFAULT NULL,
-  `last_used_at` timestamp NULL DEFAULT NULL,
+  `first_used_at` int DEFAULT NULL,
+  `last_used_at` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `use_count` int NOT NULL DEFAULT '0',
   `enabled` int DEFAULT '1',
@@ -112,6 +112,7 @@ DROP TABLE IF EXISTS `movie_data`;
 CREATE TABLE `movie_data` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
+  `movie_sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `movie_data` mediumblob NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -134,6 +135,7 @@ CREATE TABLE `movie_frames` (
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `movie_id` (`movie_id`),
   CONSTRAINT `movie_frames_ibfk_1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
@@ -169,6 +171,23 @@ CREATE TABLE `movies` (
   CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
   CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
   CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `objects`
+--
+
+DROP TABLE IF EXISTS `objects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `objects` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data` mediumblob,
+  `url` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
