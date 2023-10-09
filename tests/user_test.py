@@ -240,15 +240,22 @@ def test_course_list(new_user):
     user_id = user_dict['user_id']
     primary_course_id = user_dict['primary_course_id']
 
-    recs = db.list_users(user_id=user_id)
+    recs1 = db.list_users(user_id=user_id)
 
-    matches = [rec for rec in recs if rec['user_id']==user_id]
+    matches = [rec for rec in recs1 if rec['user_id']==user_id]
     assert(len(matches)>0)
 
     # Make sure that there is an admin in the course who is not the user
-    recs = db.list_admins()
-    matches = [rec for rec in recs if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
+    recs2 = db.list_admins()
+    matches = [rec for rec in recs2 if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
     assert len(matches)==1
+
+    # Make sure that the endpoint works
+    with boddle(params={'api_key': api_key}):
+        res = bottle_app.api_list_users()
+    assert res['error']==False
+    assert res['result'] == recs1
+
 
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""

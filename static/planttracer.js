@@ -7,7 +7,8 @@ function add_func() {
 }
 
 ////////////////////////////////////////////////////////////////
-///  registration and resend pages
+///  page: /register
+///  page: /resend
 
 // Implements the registration web page
 function register_func() {
@@ -60,8 +61,8 @@ function resend_func() {
 }
 
 ////////////////////////////////////////////////////////////////
-// Upload pages
-// Enable the movie-file upload when we have at least 3 characters of title and description
+/// page: /upload
+/// Enable the movie-file upload when we have at least 3 characters of title and description
 function check_upload_metadata()
 {
     const title = $('#movie-title').val();
@@ -133,7 +134,7 @@ async function upload_movie(inp)
 
 
 ////////////////////////////////////////////////////////////////
-// List movie page
+/// page: /list
 
 
 // special buttons
@@ -264,7 +265,6 @@ function row_pencil_clicked( e ) {
         finished_editing();
     });
 }
-
 
 ////////////////////////////////////////////////////////////////
 //
@@ -445,7 +445,7 @@ function list_movies() {
 }
 
 ////////////////////////////////////////////////////////////////
-// audit page
+// page: /audit
 // This could fill in the table with search keys; right now we just search for everything
 function build_audit_table() {
     let formData = new FormData();
@@ -472,6 +472,15 @@ function build_audit_table() {
                 });
             }
         });
+}
+
+
+////////////////////////////////////////////////////////////////
+/// page: /users
+
+function list_users()
+{
+    $('#message').html('Listing users...');
 }
 
 

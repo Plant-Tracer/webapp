@@ -73,7 +73,7 @@ def test_templates():
         validate_html(bottle_app.func_ver())
 
 
-    # Test with
+    # Test templates to see if they work with an API key
     with boddle(params={'api_key': API_KEY}):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())

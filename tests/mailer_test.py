@@ -6,11 +6,11 @@ import os
 import uuid
 import logging
 import pytest
+import configparser
 
-from os.path import abspath, dirname
+from os.path import abspath, dirname, join
 
 sys.path.append(dirname(dirname(abspath(__file__))))
-
 
 MSG = """to: {{ to_addrs }}
 from: {{ from_addr }}
@@ -23,8 +23,14 @@ guid = str(uuid.uuid4())
 
 # https://realpython.com/python-sleep/#adding-a-python-sleep-call-with-decorators
 
-SKIP_IF = ('GITHUB_JOB' in os.environ) or ('SKIP_MAILER_TEST' in os.environ)
+# SKIP_IF = ('GITHUB_JOB' in os.environ) or ('SKIP_MAILER_TEST' in os.environ)
+SKIP_IF = False
 
+USE_LOCALMAIL = True
+
+if USE_LOCALMAIL:
+    localmail_config = configparser.ConfigParser()
+    localmail_config.read( join(dirname(__file__),"localmail_config.ini"))
 
 @pytest.mark.skipif(SKIP_IF, reason="does not run on GitHub - outbound SMTP is blocked")
 def test_send_message():
@@ -38,8 +44,11 @@ def test_send_message():
                          guid=guid)
 
     DRY_RUN = False
-    smtp_config = mailer.smtp_config_from_environ()
-    smtp_config['SMTP_DEBUG'] = True
+    if USE_LOCALMAIL:
+        smtp_config = localmail_config['smtp']
+    else:
+        smtp_config = mailer.smtp_config_from_environ()
+        smtp_config['SMTP_DEBUG'] = 'YES'
     mailer.send_message(from_addr=DO_NOT_REPLY_EMAIL,
                         to_addrs=TO_ADDRS,
                         smtp_config=smtp_config,
@@ -53,8 +62,12 @@ def test_send_message():
         if guid in M['subject']:
             return mailer.DELETE
 
+    if USE_LOCALMAIL:
+        imap_config = localmail_config['imap']
+    else:
+        imap_config = mailer.imap_config_from_environ()
     for i in range(50):
-        deleted = mailer.imap_inbox_scan(mailer.imap_config_from_environ(), cb)
+        deleted = mailer.imap_inbox_scan(imap_config, cb)
         if deleted > 0:
             break
 

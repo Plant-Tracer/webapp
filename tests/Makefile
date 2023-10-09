@@ -8,3 +8,7 @@ bt:
 
 pytest:
 	python -m pytest -v --log-cli-level=DEBUG
+
+launch-local-mail:
+	/bin/rm -f /tmp/localmail.mbox
+	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
