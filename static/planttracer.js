@@ -286,6 +286,10 @@ function action_button_clicked( e ) {
         sound.play();
     }
     set_property(null, movie_id, property, value);
+    // If we deleted the movie, automatically unpublish it
+    if (property=='deleted' && value==1){
+        set_property(null, movie_id, 'published', 0);
+    }
 }
 
 
@@ -392,6 +396,7 @@ function list_movies_data( movies ) {
                 if (m.user_id == user_id){
                     rows += make_action_button( DELETE_BUTTON );
                 }
+
             }
             rows += "</td></tr>\n";
 
@@ -416,8 +421,8 @@ function list_movies_data( movies ) {
     }
     movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)));
     movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)));
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
     $('.movie_player').hide();
 }
 
