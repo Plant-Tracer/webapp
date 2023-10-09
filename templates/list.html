@@ -43,13 +43,20 @@ input[type=checkbox] {
 
 <h2>User Info </h2>
 
-<p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
-          <span class='editor'  x-target='user-name'    onclick='row_pencil_clicked(this)'> ✏️  </span>
-</p>
-<p>Email: <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
-          <span class='editor'  x-target='user-email'    onclick='row_pencil_clicked(this)'> ✏️  </span>
+<div class='pure-control-group'>
+<div class='pure-control-group'>
+  <label for='name'>Name</label>
+  <span  id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
+  <span class='editor'  x-target='user-name' onclick='row_pencil_clicked(this)'> ✏️  </span>
+  <span class="pure-form-message-inline">required; click pencil to change</span>
+</div>
 
-</p>
+<div class='pure-control-group'>
+  <label for='email'>Email Address</label>
+  <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
+  <span class='editor'  x-target='user-email'    onclick='row_pencil_clicked(this)'> ✏️  </span>
+  <span class="pure-form-message-inline">required; click pencil to change</span>
+</div>
 
 <h2>Your Movies</h2>
 <h3>Published</h3>
@@ -59,10 +66,6 @@ input[type=checkbox] {
 <h3>Unpublished</h3>
 <p class='instructions'><i>Unpublished movies can only be published by a course instructor. Check the box under 'deleted' to delete a movie.</i></p>
 <div class='mtable' id='your-unpublished-movies'></div>
-
-<h3>Deleted</h3>
-<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its 'deleted' box.</i></p>
-<div class='mtable' id='your-deleted-movies'></div>
 
 <h3> Course movies for {{primary_course_name}}</h3>
 <p class='instructions'><i>These are the course movies available to
@@ -77,8 +80,13 @@ the 'publish' box. Admins cannot delete or undelete movies; only
 students can delete or undelete their own movies.</p>
 {% endif %}
 </p>
-
 <div class='mtable' id='course-movies'></div>
+
+<h3>Deleted</h3>
+<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its 'deleted' box.</i></p>
+<div class='mtable' id='your-deleted-movies'></div>
+
+
 
 <script>
 $( document ).ready( function() {
