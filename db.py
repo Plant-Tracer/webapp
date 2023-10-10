@@ -9,6 +9,7 @@ import uuid
 import logging
 import json
 import sys
+import copy
 #import inspect
 
 from jinja2.nativetypes import NativeEnvironment
@@ -94,6 +95,13 @@ def logit(*, func_name, func_args, func_return):
     user_api_key = get_user_api_key()
     user_ipaddr = get_user_ipaddr()
 
+    # Make copies of func_args and func_return so we can modify without fear
+    func_args = copy.copy(func_args)
+    func_return = copy.copy(func_return)
+
+    if 'movie_data' in func_args and func_args['movie_data'] is not None:
+        func_args['movie_data'] = f"({len(func_args['movie_data'])} bytes)"
+
     if not isinstance(func_args, str):
         func_args = json.dumps(func_args, default=str)
     if not isinstance(func_return, str):
@@ -102,7 +110,8 @@ def logit(*, func_name, func_args, func_return):
     if len(func_return) > MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True})
 
-    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s", func_name, func_args, func_return, logging_policy)
+    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s",
+                  func_name, func_args, func_return, logging_policy)
 
     if LOG_DB in logging_policy:
         logging.debug("LOG_DB in logging_policy")
@@ -128,13 +137,22 @@ def logit(*, func_name, func_args, func_return):
 
 
 def log(func):
-    """Logging decorator."""
+    """Logging decorator --- log both the arguments and what was returned."""
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
         return r
+    return wrapper
+
+def log_args(func):
+    """Logging decorator --- log only the arguments, not the response (for things with long responses)."""
+    def wrapper(*args, **kwargs):
+        logit(func_name=func.__name__,
+              func_args={**kwargs, **{'args': args}},
+              func_return=None)
+        return func(*args, **kwargs)
     return wrapper
 
 
@@ -150,6 +168,7 @@ def add_log_policy(v):
 ## USER MANAGEMENT ##
 #####################
 
+@log_args
 def validate_api_key(api_key):
     """
     Validate API key.
@@ -174,14 +193,14 @@ def validate_api_key(api_key):
 
 ##
 
-# No need to log this one
+@log_args
 def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
     """
     :param: user_id - user ID to get information about.
     :param: group_info - if True get information about the user's groups
     :return: User dictionary augmented with additional information.
     """
-    cmd = "select *,id as user_id from users WHERE"
+    cmd = "select *,id as user_id from users WHERE "
     args = []
     if email:
         cmd += "email=%s "
@@ -190,8 +209,8 @@ def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
         cmd += "id=%s "
         args += [user_id]
     try:
-        ret= dbfile.DBMySQL.csfr(get_dbreader(), "select *,id as user_id from users where email=%s", (email,), asDicts=True)[0]
-        # If we don't have the user_id, set it
+        ret= dbfile.DBMySQL.csfr(get_dbreader(),cmd, args, asDicts=True)[0]
+        # If the user_id was not provided as an argument, provide it.
         if not user_id:
             user_id = ret['user_id']
     except IndexError:
@@ -505,13 +524,12 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 
 # Don't log this; it will blow up the database when movies are updated
-def create_new_frame(movie_id, frame_msec, frame_base64_data):
-    frame_data = base64.b64decode(frame_base64_data)
+def create_new_frame(*, movie_id, frame_msec, frame_data):
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_base64_data,
+                                   (movie_id, frame_msec, frame_data,
                                     frame_data, frame_msec))
     return {'frame_id':frame_id}
 

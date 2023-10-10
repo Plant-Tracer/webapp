@@ -176,7 +176,6 @@ def test_movie_update_metadata(new_movie):
                         'property': 'title',
                         'value': new_title}):
         res = bottle_app.api_set_metadata()
-    logging.error('res=%s', res)
     assert res['error'] == False
 
     # Get the list of movies
