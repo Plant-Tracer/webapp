@@ -45,6 +45,7 @@ import os
 import io
 import datetime
 import logging
+import base64
 from urllib.parse import urlparse
 
 import magic
@@ -397,9 +398,11 @@ def api_new_movie():
 @bottle.route('/api/new-frame', method='POST')
 def api_new_frame():
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        frame_id = db.create_new_frame(request.forms.get('movie_id'),
-                                       request.forms.get('frame_msec'),
-                                       request.forms.get('frame_base64_data'))['frame_id']
+        frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
+        res = db.create_new_frame( movie_id = request.forms.get('movie_id'),
+                                   frame_msec = request.forms.get('frame_msec'),
+                                   frame_data = frame_data)
+        frame_id = res['frame_id']
         return {'error': False, 'frame_id': frame_id}
     return INVALID_MOVIE_ACCESS
 
