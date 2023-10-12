@@ -252,7 +252,9 @@ def test_course_list(new_user):
     # Make sure that the endpoint works
     with boddle(params={'api_key': api_key}):
         res = bottle_app.api_list_users()
-    assert res['error']==False
+    assert res['error'] is False
+    assert len(recs1)==2
+    assert len(res['result'])==2
     assert res['result'] == recs1
 
 
