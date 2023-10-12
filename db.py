@@ -341,13 +341,13 @@ def delete_api_key(api_key):
 
 @log
 def list_users(*, user_id):
-    """Returns a directory of all the courses to which the user has access, and all of the people in them.
+    """Returns a dictionary of all the courses to which the user has access, and all of the people in them.
     :param: user_id - the user doing the listing (determines what they can see)
     """
     cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
                     k.first as first,k.last as last
               FROM users LEFT JOIN
-                      (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys) k
+                      (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys group by user_id) k
               ON users.id=k.user_id
               WHERE users.id=%s
                 OR users.primary_course_id IN (select primary_course_id from users where id=%s)
