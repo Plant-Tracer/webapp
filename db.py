@@ -295,7 +295,7 @@ def send_links(*, email, planttracer_endpoint):
                              api_key=new_api_key)
 
         DRY_RUN = False
-        SMTP_DEBUG = False
+        SMTP_DEBUG = "No"
         smtp_config = mailer.smtp_config_from_environ()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
         mailer.send_message(from_addr=PROJECT_EMAIL,
