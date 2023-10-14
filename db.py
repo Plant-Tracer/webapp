@@ -9,6 +9,7 @@ import uuid
 import logging
 import json
 import sys
+import copy
 #import inspect
 
 from jinja2.nativetypes import NativeEnvironment
@@ -29,14 +30,11 @@ SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admin
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
 
-
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
-
 class InvalidCourse_Key(RuntimeError):
     """ API Key is invalid """
-
 
 LOG_DB = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
@@ -46,6 +44,7 @@ logging_policy.add(LOG_DB)
 
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
+CHECK_MX = False            # True doesn't work
 
 @functools.cache
 def get_dbreader():
@@ -96,6 +95,13 @@ def logit(*, func_name, func_args, func_return):
     user_api_key = get_user_api_key()
     user_ipaddr = get_user_ipaddr()
 
+    # Make copies of func_args and func_return so we can modify without fear
+    func_args = copy.copy(func_args)
+    func_return = copy.copy(func_return)
+
+    if 'movie_data' in func_args and func_args['movie_data'] is not None:
+        func_args['movie_data'] = f"({len(func_args['movie_data'])} bytes)"
+
     if not isinstance(func_args, str):
         func_args = json.dumps(func_args, default=str)
     if not isinstance(func_return, str):
@@ -104,7 +110,8 @@ def logit(*, func_name, func_args, func_return):
     if len(func_return) > MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True})
 
-    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s", func_name, func_args, func_return, logging_policy)
+    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s",
+                  func_name, func_args, func_return, logging_policy)
 
     if LOG_DB in logging_policy:
         logging.debug("LOG_DB in logging_policy")
@@ -130,13 +137,22 @@ def logit(*, func_name, func_args, func_return):
 
 
 def log(func):
-    """Logging decorator."""
+    """Logging decorator --- log both the arguments and what was returned."""
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
         return r
+    return wrapper
+
+def log_args(func):
+    """Logging decorator --- log only the arguments, not the response (for things with long responses)."""
+    def wrapper(*args, **kwargs):
+        logit(func_name=func.__name__,
+              func_args={**kwargs, **{'args': args}},
+              func_return=None)
+        return func(*args, **kwargs)
     return wrapper
 
 
@@ -148,19 +164,23 @@ def set_log_policy(v):
 def add_log_policy(v):
     logging_policy.add(v)
 
-################################################################
-# USER MANAGEMENT
-############################################
+#####################
+## USER MANAGEMENT ##
+#####################
 
-
+@log_args
 def validate_api_key(api_key):
-    """Validate API key. return User dictionary or None if key is not valid"""
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
+    """
+    Validate API key.
+    :param: api_key - the key provided by the cookie or the HTML form.
+    :return: User dictionary or {} if key is not valid
+    """
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT * from api_keys left join users on user_id=users.id
                               where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1""",
                               (api_key, ), asDicts=True)
 
-    if len(res) > 0:
+    if ret:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
                              SET last_used_at=unix_timestamp(),
@@ -168,35 +188,47 @@ def validate_api_key(api_key):
                              use_count=use_count+1
                              WHERE api_key=%s""",
                             (api_key,))
-        return res[0]
+        return ret[0]
     return {}
 
 ##
 
-
-@log
-def register_email(email, course_key, name):
-    """Register email for a given course
-    :param: email - user email
-    :param: course_key - the key
-    :return: dictionary of {'user_id':user_id} for user who is registered.
+@log_args
+def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
     """
+    :param: user_id - user ID to get information about.
+    :param: group_info - if True get information about the user's groups
+    :return: User dictionary augmented with additional information.
+    """
+    cmd = "select *,id as user_id from users WHERE "
+    args = []
+    if email:
+        cmd += "email=%s "
+        args += [email]
+    if user_id and not email:
+        cmd += "id=%s "
+        args += [user_id]
+    try:
+        ret= dbfile.DBMySQL.csfr(get_dbreader(),cmd, args, asDicts=True)[0]
+        # If the user_id was not provided as an argument, provide it.
+        if not user_id:
+            user_id = ret['user_id']
+    except IndexError:
+        return {}
 
-    CHECK_MX = False            # True doesn't work
-    if not validate_email(email, check_mx=CHECK_MX):
-        raise InvalidEmail(email)
-    res = dbfile.DBMySQL.csfr(
-        get_dbreader(), "SELECT id FROM courses WHERE course_key=%s", (course_key,))
-    if (not res) or (len(res) != 1):
-        raise InvalidCourse_Key(course_key)
-
-    course_id = res[0][0]
-    user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
-                               (email, course_id, name, email))
-    return {'user_id':user_id,'course_id':course_id}
+    if get_admin:
+        ret['admin'] = dbfile.DBMySQL.csfr(get_dbreader(),
+                                           """SELECT * from admin where user_id = %s""",
+                                           (user_id,), asDicts=True)
+    if get_courses:
+        ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),
+                                           """SELECT *,id as course_id from courses where id = %s
+                                           OR id in (select course_id from admin where user_id=%s)
+                                           """, (user_id,user_id),asDicts=True)
+    return ret
 
 
+################ RENAME AND DELETE ################
 @log
 def rename_user(user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
@@ -215,13 +247,65 @@ def delete_user(email):
         get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
-# No need to log this one
-def lookup_user(*, email):
-    try:
-        return dbfile.DBMySQL.csfr(get_dbreader(), "select *,id as user_id from users where email=%s", (email,), asDicts=True)[0]
-    except IndexError:
-        return {}
+################ REGISTRATION ################
 
+@log
+def register_email(*, email, name, course_key=None, course_id=None):
+    """Register email for a given course
+    :param: email - user email
+    :param: course_key - the key
+    :return: dictionary of {'user_id':user_id} for user who is registered.
+    """
+
+    if not validate_email(email, check_mx=CHECK_MX):
+        raise InvalidEmail(email)
+
+    assert not ((course_key is None) and (course_id is None))
+
+    # Get the course_id if not provided
+    if not course_id:
+        res = dbfile.DBMySQL.csfr(
+            get_dbreader(), "SELECT id FROM courses WHERE course_key=%s", (course_key,))
+        if (not res) or (len(res) != 1):
+            raise InvalidCourse_Key(course_key)
+        course_id = res[0][0]
+
+    user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
+                               """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
+                               (email, course_id, name, email))
+    return {'user_id':user_id,'course_id':course_id}
+
+
+@log
+def send_links(*, email, planttracer_endpoint):
+    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
+    PROJECT_EMAIL = 'admin@planttracer.com'
+
+    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
+
+    TO_ADDRS = [email]
+    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
+        msg_env = NativeEnvironment().from_string(f.read())
+    new_api_key = make_new_api_key(email=email)
+
+    if new_api_key:
+        msg = msg_env.render(to_addrs=",".join([email]),
+                             from_addr=PROJECT_EMAIL,
+                             planttracer_endpoint=planttracer_endpoint,
+                             api_key=new_api_key)
+
+        DRY_RUN = False
+        SMTP_DEBUG = "No"
+        smtp_config = mailer.smtp_config_from_environ()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+        mailer.send_message(from_addr=PROJECT_EMAIL,
+                            to_addrs=TO_ADDRS,
+                            smtp_config=smtp_config,
+                            dry_run=DRY_RUN,
+                            msg=msg
+                            )
+
+################ API KEY ################
 
 def make_new_api_key(*,email):
     """Create a new api_key for an email that is registered
@@ -256,38 +340,33 @@ def delete_api_key(api_key):
 
 
 @log
-def send_links(*, email, planttracer_endpoint):
-    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
-    PROJECT_EMAIL = 'admin@planttracer.com'
+def list_users(*, user_id):
+    """Returns a dictionary of all the courses to which the user has access, and all of the people in them.
+    :param: user_id - the user doing the listing (determines what they can see)
+    """
+    cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
+                    k.first as first,k.last as last
+              FROM users LEFT JOIN
+                      (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys group by user_id) k
+              ON users.id=k.user_id
+              WHERE users.id=%s
+                OR users.primary_course_id IN (select primary_course_id from users where id=%s)
+                OR users.primary_course_id IN (select course_id from admins where user_id=%s)
+                OR %s IN (select user_id from admins where course_id=%s)
+              ORDER BY primary_course_id,name,email"""
+    args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
+    return dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
 
-    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
-    TO_ADDRS = [email]
-    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
-        msg_env = NativeEnvironment().from_string(f.read())
-    new_api_key = make_new_api_key(email=email)
-
-    if new_api_key:
-        msg = msg_env.render(to_addrs=",".join([email]),
-                             from_addr=PROJECT_EMAIL,
-                             planttracer_endpoint=planttracer_endpoint,
-                             api_key=new_api_key)
-
-        DRY_RUN = False
-        SMTP_DEBUG = False
-        smtp_config = mailer.smtp_config_from_environ()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg
-                            )
+def list_admins():
+    """Returns a list of all the admins"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
+                               asDicts=True)
 
 
-################################################################
-# Course Management
-################################################################
+#########################
+### Course Management ###
+#########################
 
 def lookup_course(*, course_id):
     try:
@@ -369,10 +448,10 @@ def remaining_course_registrations(*,course_key):
         return 0
 
 
-################################################################
-# Movie Management
-################################################################
 
+########################
+### Movie Management ###
+########################
 
 @log
 def get_movie(*, movie_id):
@@ -445,13 +524,12 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 
 # Don't log this; it will blow up the database when movies are updated
-def create_new_frame(movie_id, frame_msec, frame_base64_data):
-    frame_data = base64.b64decode(frame_base64_data)
+def create_new_frame(*, movie_id, frame_msec, frame_data):
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_base64_data,
+                                   (movie_id, frame_msec, frame_data,
                                     frame_data, frame_msec))
     return {'frame_id':frame_id}
 

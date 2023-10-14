@@ -7,4 +7,5 @@ bt:
 	cd ..;python -m pytest tests/tracker_test.py -k test_blocktrack -v --log-cli-level=DEBUG
 
 pytest:
-	python -m pytest -v --log-cli-level=DEBUG
+	@echo use pytest-debug if make is run from here
+	cd ..;make pytest-debug
