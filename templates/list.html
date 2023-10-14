@@ -5,6 +5,10 @@
 <div id='load_message'><b>{{load_message}}</b></div>
 
 <style>
+tr.you {
+  color: blue;
+}
+
 div.mtable table {
  border:1px solid black;
  border-collapse:collapse;
@@ -65,11 +69,15 @@ input[type=checkbox] {
 
 <h3> Course movies for {{primary_course_name}}</h3>
 <p class='instructions'><i>These are the course movies available to
-    you. Students can only see their own movies and published movies,
+    you.</i></p>
+<p class='instructions'> Students can only see their own movies and published movies,
     while the course admin can see all of the movies. Students can
-    unpublish their own movies; admins can unpublish any more.</i>
+  unpublish, delete or undelete their own movies.<p>
+
 {% if admin %}
-You can can publish or unpublish movies by checking or unchecking the 'publish' box.
+<p class='instructions'>Admins can publish or unpublish movies by checking or unchecking
+the 'publish' box. Admins cannot delete or undelete movies; only
+students can delete or undelete their own movies.</p>
 {% endif %}
 </p>
 <div class='mtable' id='course-movies'></div>

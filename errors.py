@@ -12,3 +12,6 @@ NO_REMAINING_REGISTRATIONS = {
     'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
 CALC_RESULTS_PARAM_INVALID = {
     'error': True, 'message': 'All coordinates must be provided (not none) and time elapsed must be greater than zero.'}
+NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}
+INVALID_COURSE_ACCESS = {
+    'error':True, 'message':'User is not authorized to manipulate course.'}

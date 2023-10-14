@@ -17,7 +17,8 @@ SMTP_PASSWORD = 'SMTP_PASSWORD'
 SMTP_PORT = 'SMTP_PORT'
 SMTP_PORT_DEFAULT = 587
 SMTP_DEBUG = 'SMTP_DEBUG'
-SMTP_DEBUG_DEFAULT = False
+SMTP_DEBUG_DEFAULT = "NO"
+SMTP_NO_TLS = 'SMTP_NO_TLS'
 
 
 def send_message(*,
@@ -37,30 +38,33 @@ def send_message(*,
         return
 
     port = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
-    debug = smtp_config.get(SMTP_DEBUG, SMTP_DEBUG_DEFAULT)
+    debug = smtp_config.get(SMTP_DEBUG, SMTP_DEBUG_DEFAULT)[0] in 'yYtT1'
 
     with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
         logging.info("sending mail to %s with SMTP", ",".join(to_addrs))
         if debug:
             smtp.set_debuglevel(1)
         smtp.ehlo()
-        smtp.starttls()
+        if SMTP_NO_TLS not in smtp_config:
+            smtp.starttls()
         smtp.ehlo()
         smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
         smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
 
 
 def smtp_config_from_environ():
-    return {SMTP_HOST: os.environ[SMTP_HOST],
+    return {SMTP_HOST:     os.environ[SMTP_HOST],
             SMTP_USERNAME: os.environ[SMTP_USERNAME],
             SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
-            SMTP_PORT: int(os.environ[SMTP_PORT])
+            SMTP_PORT:     int(os.environ[SMTP_PORT])
             }
 
 
 IMAP_HOST = 'IMAP_HOST'
+IMAP_PORT = 'IMAP_PORT'
 IMAP_USERNAME = 'IMAP_USERNAME'
 IMAP_PASSWORD = 'IMAP_PASSWORD'
+IMAP_NO_SSL = 'IMAP_NO_SSL'
 DELETE = "<DELETE>"
 
 
@@ -69,7 +73,10 @@ def imap_inbox_scan(imap_config, callback):
     returns numbers of messages deleted.
     """
     deleted = 0
-    M = imaplib.IMAP4_SSL(imap_config[IMAP_HOST])
+    if IMAP_NO_SSL in imap_config:
+        M = imaplib.IMAP4(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
+    else:
+        M = imaplib.IMAP4_SSL(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
     M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD])
     M.select()
     # pylint: disable=unused-variable
