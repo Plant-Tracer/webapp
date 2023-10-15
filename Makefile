@@ -28,12 +28,19 @@ flake8:
 	flake8 $(PYLINT_FILES)
 
 pytest:
+	make launch-local-mail
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
+	make launch-local-mail
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
+
+pytest-quiet:
+	make launch-local-mail
+	make touch
+	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini

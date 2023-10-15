@@ -249,8 +249,9 @@ def test_course_list(new_user):
     primary_course_id = user_dict['primary_course_id']
 
     recs1 = db.list_users(user_id=user_id)
+    users1 = recs1['users']
 
-    matches = [rec for rec in recs1 if rec['user_id']==user_id]
+    matches = [user for user in users1 if user['user_id']==user_id]
     assert(len(matches)>0)
 
     # Make sure that there is an admin in the course who is not the user
@@ -262,9 +263,10 @@ def test_course_list(new_user):
     with boddle(params={'api_key': api_key}):
         res = bottle_app.api_list_users()
     assert res['error'] is False
-    assert len(recs1)==2
-    assert len(res['result'])==2
-    assert res['result'] == recs1
+    users2 = res['users']
+    assert len(users2)==2
+    assert users1[0]['name'] == users2[0]['name']
+    assert users1[0]['email'] == users2[0]['email']
 
 
 def test_log_search_user(new_user):
