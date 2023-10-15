@@ -18,8 +18,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import STATIC_DIR
 import bottle_app
 
-API_KEY = os.getenv('TEST_USER_APIKEY')
-
+from user_test import new_course,new_user,new_movie,API_KEY
 
 def test_version():
     # With templates, res is just a string
@@ -51,7 +50,9 @@ def validate_html(html):
         raise
     assert "404 Not Found" not in data
 
-def test_templates():
+def test_templates(new_user):
+    api_key = new_user[API_KEY]
+
     # Test templates without an API_KEY
     with boddle(params={}):
         # These work without an api_key
@@ -74,7 +75,7 @@ def test_templates():
 
 
     # Test templates to see if they work with an API key
-    with boddle(params={'api_key': API_KEY}):
+    with boddle(params={'api_key': api_key}):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
         validate_html(bottle_app.func_audit())
@@ -88,7 +89,8 @@ def test_templates():
         validate_html(bottle_app.func_users())
         validate_html(bottle_app.func_ver())
 
-def test_check_api_key():
+def test_check_api_key(new_user):
+    api_key = new_user[API_KEY]
     # no parameter should generate error
     with boddle(params={}):
         r = bottle_app.api_check_api_key()
@@ -100,6 +102,6 @@ def test_check_api_key():
         assert r['error'] == True
 
     # valid key should generate no error
-    with boddle(params={'api_key': API_KEY}):
+    with boddle(params={'api_key': api_key}):
         r = bottle_app.api_check_api_key()
         assert r['error'] == False, f'API_KEY {API_KEY} should be valid'
