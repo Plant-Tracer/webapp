@@ -218,12 +218,12 @@ def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
 
     if get_admin:
         ret['admin'] = dbfile.DBMySQL.csfr(get_dbreader(),
-                                           """SELECT * from admin where user_id = %s""",
+                                           """SELECT * from admins where user_id = %s""",
                                            (user_id,), asDicts=True)
     if get_courses:
         ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),
                                            """SELECT *,id as course_id from courses where id = %s
-                                           OR id in (select course_id from admin where user_id=%s)
+                                           OR id in (select course_id from admins where user_id=%s)
                                            """, (user_id,user_id),asDicts=True)
     return ret
 
