@@ -341,21 +341,29 @@ def delete_api_key(api_key):
 
 @log
 def list_users(*, user_id):
-    """Returns a dictionary of all the courses to which the user has access, and all of the people in them.
+    """Returns a dictionary with keys:
+    'users' - all the courses to which the user has access, and all of the people in them.
+    'courses' - all of the courses
     :param: user_id - the user doing the listing (determines what they can see)
     """
+    ret = {}
     cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
                     k.first as first,k.last as last
               FROM users LEFT JOIN
                       (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys group by user_id) k
-              ON users.id=k.user_id
+                         ON users.id=k.user_id
               WHERE users.id=%s
                 OR users.primary_course_id IN (select primary_course_id from users where id=%s)
                 OR users.primary_course_id IN (select course_id from admins where user_id=%s)
                 OR %s IN (select user_id from admins where course_id=%s)
               ORDER BY primary_course_id,name,email"""
     args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
-    return dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+    ret['users'] = dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+
+    cmd = """SELECT id as course_id,course_name,course_section,max_enrollment from courses"""
+    args = []
+    ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+    return ret
 
 def list_admins():
     """Returns a list of all the admins"""
