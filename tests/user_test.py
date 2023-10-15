@@ -146,6 +146,15 @@ def test_new_user(new_user):
     (email, api_key) = new_user
     logging.info("email=%s api_key=%s", email, api_key)
 
+    # Try looking up the user
+    ret1 = db.lookup_user(email=email)
+    ret2 = db.lookup_user(user_id=ret1['user_id'], get_admin=True)
+    ret3 = db.lookup_user(user_id=ret1['user_id'], get_courses=True)
+
+    assert 'admin' in ret2
+    assert 'courses' in ret3
+
+
 def test_movie_upload(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
     (movie_id, movie_title, api_key) = new_movie
