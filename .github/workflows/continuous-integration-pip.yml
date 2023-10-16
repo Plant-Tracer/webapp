@@ -93,9 +93,9 @@ jobs:
           cp -v etc/github_actions_mysql_rootconfig.ini $HOME
           export
           make create_localdb
-          make launch-local-mail
           make coverage
           make remove_localdb
+          make kill-local-mail
           echo ================================================================
           echo == BEGIN EMAIL TRANSCRIPT ==
           echo ================================================================
