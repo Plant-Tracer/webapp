@@ -41,6 +41,8 @@ COURSE_KEY = 'course_key'
 COURSE_NAME = 'course_name'
 USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
+MOVIE_ID = 'movie_id'
+MOVIE_TITLE = 'movie_title'
 
 ################################################################
 
@@ -164,10 +166,10 @@ def test_new_course(new_course):
     logging.info("Created course %s", course_key)
 
 def test_new_user(new_user):
-    cfg = copy.copy(new_course)
+    cfg = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
     api_key = cfg[API_KEY]
-    logging.info("user_email=%s api_key=%s", email, api_key)
+    logging.info("user_email=%s api_key=%s", user_email, api_key)
 
     # Try looking up the user
     ret1 = db.lookup_user(email=user_email)
@@ -302,7 +304,7 @@ def test_get_logs():
         db.get_logs( user_id=0, ipaddr = "", security=security)
 
 def test_course_list(new_user):
-    cfg        = copy.copy(new_movie)
+    cfg        = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
     api_key    = cfg[API_KEY]
 
@@ -333,7 +335,7 @@ def test_course_list(new_user):
 
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""
-    cfg        = copy.copy(new_movie)
+    cfg        = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
     api_key    = cfg[API_KEY]
 
