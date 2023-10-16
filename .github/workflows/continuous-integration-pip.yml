@@ -95,14 +95,8 @@ jobs:
           make create_localdb
           make coverage
           make remove_localdb
+          make dump-local-mail
           make kill-local-mail
-          echo ================================================================
-          echo == BEGIN EMAIL TRANSCRIPT ==
-          echo ================================================================
-          cat /tmp/localmail.mbox
-          echo ================================================================
-          echo == END EMAIL TRANSCRIPT ==
-          echo ================================================================
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
