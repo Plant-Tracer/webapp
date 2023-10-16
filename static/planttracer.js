@@ -227,7 +227,9 @@ function row_checkbox_clicked( e ) {
 function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
     const target = e.getAttribute('x-target-id'); // name of the target
+    console.log('target=',target);
     t = document.getElementById(target);       // element of the target
+    console.log('t=',t);
     const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
     const property = t.getAttribute('x-property'); // property we are changing
@@ -459,22 +461,22 @@ function build_audit_table() {
         .then((data) => {
             if (data['error']!=false){
                 $('#message').html('error: '+data['message']);
-            } else {
-                console.log("data=",data);
-                let logs = data['logs'];
-                console.log("logs=",logs);
-                // get the columns
-                var columns = [];
-                for (const key in logs[0]) {
-                    //console.log(`${key}: ${logs{key}}`);
-                    columns.push( {'data':key, 'title':key } );
-                }
-                // make the data displayable
-                $('#audit').DataTable( {
-                    columns: columns,
-                    data: logs
-                });
+                return
             }
+            console.log("data=",data);
+            let logs = data['logs'];
+            console.log("logs=",logs);
+            // get the columns
+            var columns = [];
+            for (const key in logs[0]) {
+                //console.log(`${key}: ${logs{key}}`);
+                columns.push( {'data':key, 'title':key } );
+            }
+            // make the data displayable
+            $('#audit').DataTable( {
+                columns: columns,
+                data: logs
+            });
         });
 }
 
@@ -482,9 +484,47 @@ function build_audit_table() {
 ////////////////////////////////////////////////////////////////
 /// page: /users
 
+
+
+function list_users_data( users, course_array ) {
+    let current_course = null;
+    let div = $('#your-users');
+    let h = '<table>';
+    h += '<tbody>';
+    function user_html(user) {
+        var d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
+        var d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
+        var ret = '';
+        if (current_course != user.primary_course_id) {
+            ret += `<tr><td colspan='4'>&nbsp;</td></tr>\n`;
+            ret += `<tr><th colspan='4'>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</th></tr>\n`;
+            ret += '<tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>\n';
+            current_course = user.primary_course_id;
+        }
+        ret +=  `<tr><td>${user.name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
+        return ret;
+    };
+    users.forEach( user => ( h+= user_html(user) ));
+    h += '</tbody>';
+    div.html(h);
+}
+
 function list_users()
 {
     $('#message').html('Listing users...');
+    let formData = new FormData();
+    formData.append("api_key",  api_key); // on the upload form
+    fetch('/api/list-users', { method:"POST", body:formData })
+        .then((response) => response.json())
+        .then((data) => {
+            if (data['error']!=false){
+                $('#message').html('error: '+data['message']);
+                return;
+            }
+            var course_array = [];
+            data['courses'].forEach( course => (course_array[course.course_id] = course ));
+            list_users_data( data['users'], course_array);
+        });
 }
 
 

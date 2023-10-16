@@ -18,13 +18,15 @@ import base64
 import pytest
 import logging
 import subprocess
-
+import copy
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+import db
+from user_test import new_course, new_user, api_key
 
 # TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
-TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
+# TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
 MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
@@ -51,16 +53,16 @@ def http_endpoint():
         line = p.stderr.readline()
         logging.info('%s', line)
         assert want in line
-    http_endpoint = f'http://127.0.0.1:{port}'
+    http_endpoint_url = f'http://127.0.0.1:{port}'
     # Make sure it is working and retry up to 10 times
 
     s = requests.Session()
-    s.mount(http_endpoint+'/ver',
+    s.mount(http_endpoint_url+'/ver',
             HTTPAdapter(max_retries=Retry(total=10, backoff_factor=0.2)))
-    r = s.get(http_endpoint+'/ver')
+    r = s.get(http_endpoint_url+'/ver')
     logging.info("Server running. r=%s", r)
     assert r.ok
-    yield http_endpoint
+    yield http_endpoint_url
     p.terminate()
     try:
         p.wait(timeout=1.0)
@@ -69,7 +71,6 @@ def http_endpoint():
         logging.error('KILL')
         p.kill()
         p.wait()
-
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_ver(http_endpoint):
@@ -89,26 +90,28 @@ def test_add(http_endpoint):
 
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
-def test_api_key(http_endpoint):
+def test_api_key(http_endpoint, api_key):
     r = requests.post(http_endpoint+'/api/check-api_key',
-                      {'api_key': TEST_USER_APIKEY})
+                      {'api_key': api_key})
     if (r.status_code != 200):
         raise RuntimeError(f"r.status_code={r.status_code}  r.text={r.text}")
     assert r.status_code == 200
     assert r.json()['error'] == False
-    assert r.json()['userinfo']['name'] == 'Test User'
+    assert r.json()['userinfo']['name'] == 'Test User Name'
 
     r = requests.post(http_endpoint+'/api/check-api_key',
-                      {'api_key': TEST_USER_APIKEY+'invalid'})
+                      {'api_key': 'invalid'})
     assert r.status_code == 200
     assert r.json()['error'] == True
 
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
-def test_upload_movie_frame_by_frame(http_endpoint):
-    """This tests creating a movie and uploading three frames using the frame-by-frame upload using an already existing test user"""
+def test_upload_movie_frame_by_frame(http_endpoint, api_key):
+    """This tests creating a movie and uploading
+    three frames using the frame-by-frame upload using an already existing test user"""
+
     assert len(FRAME_FILES) > 0
-    post_data = {'api_key': TEST_USER_APIKEY, 'title': 'Test Title at ' +
+    post_data = {'api_key': api_key, 'title': 'Test Title at ' +
                  time.asctime(), 'description': 'Test Upload'}
     r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
@@ -120,7 +123,7 @@ def test_upload_movie_frame_by_frame(http_endpoint):
         print("uploading frame ", frame_number)
         with open(frame_file, 'rb') as f:
             r = requests.post(http_endpoint+'/api/new-frame', {
-                'api_key': TEST_USER_APIKEY,
+                'api_key': api_key,
                 'movie_id': movie_id,
                 'frame_msec': frame_number*200,
                 'frame_base64_data': base64.b64encode(f.read())})
@@ -129,25 +132,25 @@ def test_upload_movie_frame_by_frame(http_endpoint):
                 raise RuntimeError(json.dumps(r.json(), indent=4))
 
     # Now delete the movie
-    r = requests.post(http_endpoint+'/api/delete-movie', {
-        'api_key': TEST_USER_APIKEY,
-        'movie_id': movie_id})
-
-    # Now delete the movie
-    post_data2 = {'api_key': TEST_USER_APIKEY,
-                  'movie_id': movie_id}
-    r = requests.post(http_endpoint+'/api/delete-movie', post_data2)
+    r = requests.post(http_endpoint+'/api/delete-movie',
+                      { 'api_key': api_key,
+                        'movie_id': movie_id
+                       })
     res = r.json()
     assert res['error'] == False
 
+    # Purge the movie (to clean up)
+    db.purge_movie(movie_id = movie_id)
 
 @pytest.mark.skip(reason='not working yet')
-def test_upload_movie_data(http_endpoint):
+def test_upload_movie_data(http_endpoint, api_key):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
     assert len(FRAME_FILES) > 0
     with open(MOVIE_FILE_NAME, 'rb') as f:
         movie_base64_data = base64.b64encode(f.read())
-        post_data = {'api_key': TEST_USER_APIKEY, 'title': 'Test Title at '+time.asctime(), 'description': 'Test Upload',
+        post_data = {'api_key': api_key,
+                     'title': 'Test Title at '+time.asctime(),
+                     'description': 'Test Upload',
                      'movie_base64_data': movie_base64_data}
     r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
@@ -160,3 +163,6 @@ def test_upload_movie_data(http_endpoint):
     r = requests.post(http_endpoint+'/api/delete-movie', post_data2)
     res = r.json()
     assert res['error'] == False
+
+    # Purge the movie (to clean up)
+    db.purge_movie(movie_id = movie_id)

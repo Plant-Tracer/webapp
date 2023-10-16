@@ -131,7 +131,7 @@ def get_user_dict():
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.warning("api_key %s is invalid",api_key)
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/error'})
     return userdict
 
 def get_user_id():
@@ -198,6 +198,14 @@ GET_POST = [GET,POST]
 def func_root():
     """/ - serve the home page"""
     return page_dict()
+
+@bottle.route('/error', method=GET_POST)
+@view('error.html')
+def func_error():
+    auth.clear_cookie()
+    return {}
+
+
 
 @bottle.route('/about', method=GET_POST)
 @view('about.html')
@@ -310,11 +318,6 @@ def api_get_logs():
 
     logs    = db.get_logs(user_id=get_user_id(),**kwargs)
     return {'error':False, 'logs': logs}
-
-@bottle.route('/api/list-users', method=['POST'])
-def api_list_users():
-    """Get a list of the uses in the current course or all courses, depending on the user permissions."""
-    return db.list_users( user_id=get_user_id());
 
 @bottle.route('/api/register', method=['GET', 'POST'])
 def api_register():
@@ -522,7 +525,7 @@ def api_set_metadata():
 ##
 @bottle.route('/api/list-users', method=['POST'])
 def api_list_users():
-    return {'error': False, 'result': db.list_users(user_id=get_user_id())}
+    return {**{'error': False}, **db.list_users(user_id=get_user_id())}
 
 
 ##
