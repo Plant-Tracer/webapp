@@ -75,7 +75,7 @@ launch-local-mail:
 	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX)
 
 dump-local-mail:
-	if [ -r $(LOCALMAIL_MBOX) ]; echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
+	if [ -r $(LOCALMAIL_MBOX) ]; then echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
 
 ################################################################
 # Installations are used by the CI pipeline:
