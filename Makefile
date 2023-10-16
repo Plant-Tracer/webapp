@@ -51,6 +51,7 @@ remove_localdb:
 	/bin/rm -f etc/actions_test.ini
 
 coverage:
+	make launch-local-mail
 	$(PYTHON) -m pip install pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
@@ -60,11 +61,13 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
-launch-local-mail:
+kill-local-mail:
 	if [ -r twistd.pid ]; then echo kill -9 `cat twistd.pid` ; kill -9 `cat twistd.pid` ; /bin/rm -f twistd.pid ; fi
 	/bin/rm -f /tmp/localmail.mbox
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
 
+launch-local-mail:
+	make kill-local-mail
+	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
 
 # These are used by the CI pipeline:
 # Generic:
