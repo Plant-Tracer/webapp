@@ -93,16 +93,10 @@ jobs:
           cp -v etc/github_actions_mysql_rootconfig.ini $HOME
           export
           make create_localdb
-          make launch-local-mail
           make coverage
           make remove_localdb
-          echo ================================================================
-          echo == BEGIN EMAIL TRANSCRIPT ==
-          echo ================================================================
-          cat /tmp/localmail.mbox
-          echo ================================================================
-          echo == END EMAIL TRANSCRIPT ==
-          echo ================================================================
+          make dump-local-mail
+          make kill-local-mail
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')

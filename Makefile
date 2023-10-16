@@ -51,6 +51,7 @@ remove_localdb:
 	/bin/rm -f etc/actions_test.ini
 
 coverage:
+	make launch-local-mail
 	$(PYTHON) -m pip install pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
@@ -60,13 +61,24 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
+################################################################
+## Local mail server
+
+LOCALMAIL_PID=twistd.pid
+LOCALMAIL_MBOX=/tmp/localmail.mbox
+kill-local-mail:
+	if [ -r $(LOCALMAIL_PID) ]; then echo kill -9 `cat $(LOCALMAIL_PID)` ; kill -9 `cat $(LOCALMAIL_PID)` ; /bin/rm -f $(LOCALMAIL_PID) ; fi
+	/bin/rm -f $(LOCALMAIL_MBOX)
+
 launch-local-mail:
-	if [ -r twistd.pid ]; then echo kill -9 `cat twistd.pid` ; kill -9 `cat twistd.pid` ; /bin/rm -f twistd.pid ; fi
-	/bin/rm -f /tmp/localmail.mbox
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file /tmp/localmail.mbox
+	make kill-local-mail
+	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX)
 
+dump-local-mail:
+	if [ -r $(LOCALMAIL_MBOX) ]; then echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
 
-# These are used by the CI pipeline:
+################################################################
+# Installations are used by the CI pipeline:
 # Generic:
 install-python-dependencies:
 	$(PYTHON) -m pip install --upgrade pip
