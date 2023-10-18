@@ -327,8 +327,12 @@ function list_movies_data( movies ) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
                 tid += 1;
-                return `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>` +
-                    `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
+                // check to see if this is editable;
+                if (admin || user_id == m.user_id){
+                    r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                }
+                return r;
             }
             // This products the HTML for each <td> that has a checkbox
             function make_td_checkbox(property, value) {
