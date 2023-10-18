@@ -288,22 +288,25 @@ def send_links(*, email, planttracer_endpoint):
         msg_env = NativeEnvironment().from_string(f.read())
     new_api_key = make_new_api_key(email=email)
 
-    if new_api_key:
-        msg = msg_env.render(to_addrs=",".join([email]),
-                             from_addr=PROJECT_EMAIL,
-                             planttracer_endpoint=planttracer_endpoint,
-                             api_key=new_api_key)
+    if not new_api_key:
+        logging.info("not in database: %s",email)
+        return
+    logging.info("sending new link to %s",email)
+    msg = msg_env.render(to_addrs=",".join([email]),
+                         from_addr=PROJECT_EMAIL,
+                         planttracer_endpoint=planttracer_endpoint,
+                         api_key=new_api_key)
 
-        DRY_RUN = False
-        SMTP_DEBUG = "No"
-        smtp_config = mailer.smtp_config_from_environ()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg
-                            )
+    DRY_RUN = False
+    SMTP_DEBUG = "No"
+    smtp_config = mailer.smtp_config_from_environ()
+    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    mailer.send_message(from_addr=PROJECT_EMAIL,
+                        to_addrs=TO_ADDRS,
+                        smtp_config=smtp_config,
+                        dry_run=DRY_RUN,
+                        msg=msg
+                        )
 
 ################ API KEY ################
 

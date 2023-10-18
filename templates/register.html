@@ -3,7 +3,7 @@
 <script>
 // This is the only place where the endpoint is required. It is passed from the bottle app so that
 // it can be provided in the POST to generate the email with valid links.
-const planttracer_endpoint = "{{planttracer_endpoint}}";
+const planttracer_endpoint = window.origin + "";
 </script>
 {% endblock %}
 

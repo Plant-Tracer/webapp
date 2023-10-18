@@ -25,8 +25,6 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 import db
 from user_test import new_course, new_user, api_key
 
-# TEST_ENDPOINT = os.environ['TEST_ENDPOINT']
-# TEST_USER_APIKEY = os.environ['TEST_USER_APIKEY']
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
 MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
