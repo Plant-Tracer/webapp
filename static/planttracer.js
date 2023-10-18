@@ -369,7 +369,7 @@ function list_movies_data( movies ) {
 
             rows = `<tr class='${you}'>`
                 + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
-                + make_td_text(      "title", m.title) + make_td_text( "description", m.description);
+                + make_td_text( "title", m.title) + make_td_text( "description", m.description);
 
             rows += "<td>";
             rows += "Status: ";
@@ -380,6 +380,8 @@ function list_movies_data( movies ) {
             }
             rows += "<br/>";
 
+            // below, note that 'admin' is set by the page before this runs
+
             if (m.deleted) {
                 if (which==DELETED){
                     // Do we create an undelete delete button?
@@ -387,7 +389,7 @@ function list_movies_data( movies ) {
                 }
             } else {
                 // Do we create an unpublish button?
-                if ((m.published) && ((which==PUBLISHED || which==COURSE))){
+                if ((m.published) && ((which==PUBLISHED || which==COURSE)) && (m.user_id==user_id || admin)){
                     rows += make_action_button( UNPUBLISH_BUTTON );
                 }
                 // Do we create a publish button?
@@ -403,10 +405,10 @@ function list_movies_data( movies ) {
 
             // Now make the player row
             rows += `<tr    class='movie_player' id='tr-${rowid}'> `
-                + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
-                + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
-                + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
-                + `</tr>\n`;
+                  + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
+                  + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
+                  + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
+                  + `</tr>\n`;
             return rows;
         }
 
