@@ -13,7 +13,7 @@ import pymysql
 # pylint: disable=no-member
 
 import db
-from paths import TEMPLATE_DIR, SCHEMA_FILE, PLANTTRACER_ENDPOINT
+from paths import TEMPLATE_DIR, SCHEMA_FILE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 
