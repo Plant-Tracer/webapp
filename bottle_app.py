@@ -21,7 +21,6 @@ export MYSQL_DATABASE=***
 export MYSQL_HOST=***
 export MYSQL_PASSWORD=***
 export MYSQL_USER=***
-export PLANTTRACER_ENDPOINT='http://localhost:8080' (or whatever it is printed above)
 export SMTP_HOST=***
 export SMTP_PASSWORD=***
 export SMTP_PORT=***
@@ -59,7 +58,7 @@ import db
 import paths
 import auth
 
-from paths import view, STATIC_DIR, TEMPLATE_DIR, PLANTTRACER_ENDPOINT
+from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
 from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
 
@@ -250,8 +249,7 @@ def func_register():
     o = urlparse(request.url)
     return {'title': 'Plant Tracer Registration Page',
             'hostname': o.hostname,
-            'register': True,
-            'planttracer_endpoint': PLANTTRACER_ENDPOINT
+            'register': True
             }
 
 @bottle.route('/resend', method=GET)
@@ -261,8 +259,7 @@ def func_resend():
     o = urlparse(request.url)
     return {'title': 'Plant Tracer Resend Registration Link',
             'hostname': o.hostname,
-            'register': False,
-            'planttracer_endpoint': PLANTTRACER_ENDPOINT
+            'register': False
             }
 
 
@@ -342,6 +339,7 @@ def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
         logging.warning("email not valid: %s", email)
         return INVALID_EMAIL
