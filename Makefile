@@ -72,7 +72,7 @@ kill-local-mail:
 
 launch-local-mail:
 	make kill-local-mail
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX)
+	$(PYTHON) -m twisted localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX) & echo "$$!" > $(LOCALMAIL_PID)
 
 dump-local-mail:
 	if [ -r $(LOCALMAIL_MBOX) ]; then echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
