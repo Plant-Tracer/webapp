@@ -498,10 +498,23 @@ def can_access_movie(*, user_id, movie_id):
 
 
 @log
-def purge_movie(*,movie_id):
-    """Actually delete a movie and all its frames"""
+def purge_movie_frames(*,movie_id):
+    """Delete the frames associated with a movie."""
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+
+@log
+def movie_frames_info(*,movie_id):
+    """Gets information about movie frames"""
+    ret = {}
+    ret['count'] = dbfile.DBMySQL.csfr(
+        get_dbwriter(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
+    return ret
+
+@log
+def purge_movie(*,movie_id):
+    """Actually delete a movie and all its frames"""
+    purge_movie_frames(movie_id=movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
     dbfile.DBMySQL.csfr(
