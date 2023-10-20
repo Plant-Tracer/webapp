@@ -6,6 +6,7 @@ Movie tool
 import sys
 import os
 import configparser
+import json
 
 import uuid
 import pymysql
@@ -26,7 +27,8 @@ if __name__ == "__main__":
     required = parser.add_argument_group('required arguments')
 
     required.add_argument(
-        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
+        "--rootconfig",
+        help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
     parser.add_argument( "--list",  help="List all the movies", action='store_true')
     parser.add_argument( "--extract",  help="extract all of the frames for the given movie",type=int)
 
@@ -40,3 +42,10 @@ if __name__ == "__main__":
     except pymysql.err.OperationalError:
         print("Invalid auth: ", auth, file=sys.stderr)
         raise
+
+    if args.list:
+        for item in db.list_movies(0):
+            print(f"{item['movie_id']}  {item['title']}  ")
+
+    if args.extract:
+        print(json.dumps(db.get_movie_metadata(user_id=0,movie_id=args.extract), indent=4, default=str))
