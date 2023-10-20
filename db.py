@@ -472,13 +472,14 @@ def get_movie(*, movie_id):
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
-    cmd = """SELECT * from movies WHERE
-                (user_id=%s OR
-                 course_id=(select primary_course_id from users where id=%s) OR
-                 course_id in (select course_id from admins where user_id=%s))"""
-    params = [user_id, user_id, user_id]
+    cmd = """SELECT *,id as movie_id from movies WHERE
+                ((user_id=%s) OR
+                (%s=0) OR
+                (course_id=(select primary_course_id from users where id=%s)) OR
+                (course_id in (select course_id from admins where user_id=%s))) """
+    params = [user_id, user_id, user_id, user_id]
     if movie_id:
-        cmd += " AND movie_id=%s"
+        cmd += " AND movies.id=%s"
         params.append(movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
 
@@ -558,8 +559,12 @@ def list_movies(user_id):
                                 OR
                                 (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
                                 OR
-                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))""",
-                              (user_id, user_id, user_id), asDicts=True)
+                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
+                              OR
+                              (%s=0)
+                              ORDER BY movies.id
+                              """,
+                              (user_id, user_id, user_id, user_id), asDicts=True)
     return res
 
 
