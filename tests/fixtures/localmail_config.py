@@ -16,7 +16,7 @@ def singleton(cls):
         return instances[cls]
     return getinstance
 
-# We use the mail_mutex to block the main thrad until the server is running
+# We use the mail_mutex to block the main thread until the server is running
 MAIL_TIMEOUT = 10
 mutex = threading.Lock()
 
