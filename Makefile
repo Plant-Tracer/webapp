@@ -28,17 +28,14 @@ flake8:
 	flake8 $(PYLINT_FILES)
 
 pytest:
-	make launch-local-mail
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
-	make launch-local-mail
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 pytest-quiet:
-	make launch-local-mail
 	make touch
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
@@ -51,7 +48,6 @@ remove_localdb:
 	/bin/rm -f etc/actions_test.ini
 
 coverage:
-	make launch-local-mail
 	$(PYTHON) -m pip install pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
@@ -61,21 +57,6 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
-################################################################
-## Local mail server
-
-LOCALMAIL_PID=twistd.pid
-LOCALMAIL_MBOX=/tmp/localmail.mbox
-kill-local-mail:
-	if [ -r $(LOCALMAIL_PID) ]; then echo kill -9 `cat $(LOCALMAIL_PID)` ; kill -9 `cat $(LOCALMAIL_PID)` ; /bin/rm -f $(LOCALMAIL_PID) ; fi
-	/bin/rm -f $(LOCALMAIL_MBOX)
-
-launch-local-mail:
-	make kill-local-mail
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX)
-
-dump-local-mail:
-	if [ -r $(LOCALMAIL_MBOX) ]; then echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
 
 ################################################################
 # Installations are used by the CI pipeline:
