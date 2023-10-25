@@ -559,6 +559,23 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
     return {'frame_id':frame_id}
 
 
+# Get a frame; again, don't log
+def get_frame(*, movie_id, frame_msec, msec_delta):
+    if msec_delta==0:
+        delta = "frame_msec = %s "
+    elif msec_delta>0:
+        delta = "frame_msec > %s order by frame_msec "
+    else:
+        delta = "frame_msec < %s order by frame_msec DESC "
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT movie_id, frame_msec, frame_data
+                               FROM movie_frames
+                               WHERE movie_id=%s and {delta} LIMIT 1""", (movie_id,frame_msec),asDicts=True)
+    if len(ret)>0:
+        return ret[0]
+    return None
+
+
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):
     """Return a list of movies that the user is allowed to access.

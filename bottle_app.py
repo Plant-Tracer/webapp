@@ -174,6 +174,11 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
         primary_course_name = None
         admin = None
 
+    try:
+        movie_id = int(request.query.get('movie_id'))
+    except (AttributeError, KeyError, TypeError):
+        movie_id = None
+
     if logout:
         auth.clear_cookie()
 
@@ -186,6 +191,7 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
             'primary_course_name': primary_course_name,
             'title':'Plant Tracer '+title,
             'hostname':o.hostname,
+            'movie_id':movie_id,
             'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD}
 
 GET='GET'
@@ -222,6 +228,12 @@ def func_audit():
 def func_list():
     """/list - list movies and edit them and user info"""
     return page_dict('List Movies', require_auth=True)
+
+@bottle.route('/analyze', method=GET)
+@view('analyze.html')
+def func_analyze():
+    """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
+    return page_dict('Analyze Movie', require_auth=True)
 
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
@@ -415,12 +427,12 @@ def api_get_frame():
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    :return:
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        return {'error': False, 'frame': db.get_frame(request.forms.get('movie_id'),
-                                                      request.forms.get(
-                                                          'frame_msec'),
-                                                      request.forms.get('msec_delta'))}
+        return {'error': False, 'frame': db.get_frame(movie_id=request.forms.get('movie_id'),
+                                                      frame_msec = request.forms.get('frame_msec'),
+                                                      msec_delta = request.forms.get('msec_delta'))}
     return INVALID_MOVIE_ACCESS
 
 
