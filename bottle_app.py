@@ -390,21 +390,32 @@ def api_new_movie():
     """
 
     # pylint: disable=unsupported-membership-test
+    movie_data = None
+    # First see if a file named movie was uploaded
     if 'movie' in request.files:
         with io.BytesIO() as f:
             request.files['movie'].save(f)
             movie_data = f.getvalue()
             if len(movie_data) > MAX_FILE_UPLOAD:
                 return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+        logging.debug("api_new_movie: movie uploaded as a file")
+
+    # Now check to see if it is in the post
+    if movie_data is None:
+        movie_data = request.forms.get('movie_data',None)
+        logging.debug("api_new_movie: movie_data from request.forms.get")
     else:
-        movie_data = None
+        logging.debug("api_new_movie: movie_data is None")
+
+
+    if (movie_data is not None) and (len(movie_data) > MAX_FILE_UPLOAD):
+        logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), MAX_FILE_UPLOAD)
+        return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
 
     movie_id = db.create_new_movie(user_id=get_user_id(),
                                    title=request.forms.get('title'),
-                                   description=request.forms.get(
-                                       'description'),
-                                   movie_data=movie_data
-                                   )['movie_id']
+                                   description=request.forms.get('description'),
+                                   movie_data=movie_data)['movie_id']
     return {'error': False, 'movie_id': movie_id}
 
 
@@ -436,8 +447,8 @@ def api_get_frame():
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-movie', method=['POST','GET'])
-def api_get_movie():
+@bottle.route('/api/get-movie-data', method=['POST','GET'])
+def api_get_movie_data():
     """
     :param api_keuy:   authentication
     :param movie_id:   movie

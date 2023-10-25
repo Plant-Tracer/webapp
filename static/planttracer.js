@@ -157,7 +157,7 @@ function play_clicked( e ) {
     console.log('play_clicked=',e);
     const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid');
-    const url = `/api/get-movie?api_key=${api_key}&movie_id=${movie_id}`;
+    const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     var tr    = $(`#tr-${rowid}`).show();
     var td    = $(`#td-${rowid}`).show();
     var video = $(`#video-${rowid}`).show()

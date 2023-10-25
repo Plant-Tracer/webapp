@@ -36,17 +36,18 @@ DEFAULT_FPS = 20
 def extract(auth, *, movie_id, user_id):
     """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
     Does not run if frames are already in the database
+    :return: count = number of frames uploaded.
     """
     info = db.movie_frames_info(movie_id=movie_id)
     if info['count']!=0:
         raise RuntimeError(f"extract movie frames requires no frames for movie {movie_id}; frame count {info['count']}")
 
-    metadata = db.get_movie_metadata(user_id=user_id, movie_id=args.extract)
+    metadata = db.get_movie_metadata(user_id=user_id, movie_id=movie_id)
     logging.info("Movie %s metadata: %s",movie_id, metadata)
 
     count  = 0
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
-        data = db.get_movie(movie_id=movie_id)
+        data = db.get_movie_data(movie_id=movie_id)
         logging.info("tempfile %s  movie size: %s written",tf.name,len(data))
         tf.write(data)
         tf.flush()
@@ -89,7 +90,8 @@ def extract(auth, *, movie_id, user_id):
                         logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
                         db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
                         count += 1
-    print("Frames uploaded:",count)
+    logging.info("Frames extracted: %s",count)
+    return count
 
 
 
@@ -127,4 +129,5 @@ if __name__ == "__main__":
         db.purge_movie_frames(movie_id=args.purgeframes)
 
     if args.extract:
-        extract(auth, movie_id=args.extract, user_id=ROOT_USER)
+        count = extract(auth, movie_id=args.extract, user_id=ROOT_USER)
+        print("Frames extracted:",count)
