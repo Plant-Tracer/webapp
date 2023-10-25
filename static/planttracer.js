@@ -177,6 +177,11 @@ function hide_clicked( e ) {
     var video = $(`#video-${rowid}`).hide()
 }
 
+function analyze_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
+    window.location = `/analyze?movie_id=${movie_id}`;
+}
+
 ////////////////
 // DOWNLOAD
 // callback when the download button is clicked
@@ -366,13 +371,14 @@ function list_movies_data( movies ) {
             }
 
             var movieDate = new Date(m.date_uploaded * 1000);
-            var play      = `<input class='play' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var analyze   = `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             var you       = (m.user_id == user_id) ? "you" : "";
 
             rows = `<tr class='${you}'>`
-                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} ${analyze} </td> <td> ${up_down} </td>`
                 + make_td_text( "title", m.title) + make_td_text( "description", m.description);
 
             rows += "<td>";

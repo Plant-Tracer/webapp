@@ -15,6 +15,8 @@ import pymysql
 import logging
 import subprocess
 
+from tabulate import tabulate
+
 # pylint: disable=no-member
 
 import db
@@ -42,6 +44,7 @@ def extract(auth, *, movie_id, user_id):
     metadata = db.get_movie_metadata(user_id=user_id, movie_id=args.extract)
     logging.info("Movie %s metadata: %s",movie_id, metadata)
 
+    count  = 0
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
         data = db.get_movie(movie_id=movie_id)
         logging.info("tempfile %s  movie size: %s written",tf.name,len(data))
@@ -85,6 +88,8 @@ def extract(auth, *, movie_id, user_id):
                         frame_data = f.read()
                         logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
                         db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
+                        count += 1
+    print("Frames uploaded:",count)
 
 
 
@@ -107,7 +112,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
+    auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'dbwriter')
     try:
         d = dbfile.DBMySQL(auth)
     except pymysql.err.OperationalError:
@@ -115,8 +120,8 @@ if __name__ == "__main__":
         raise
 
     if args.list:
-        for item in db.list_movies(0):
-            print(f"{item['movie_id']}  {item['title']}  ")
+        rows = [(item['movie_id'],item['title']) for item in db.list_movies(0)]
+        print(tabulate(rows, headers=['movie_id','title']))
 
     if args.purgeframes:
         db.purge_movie_frames(movie_id=args.purgeframes)
