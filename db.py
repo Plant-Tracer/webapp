@@ -465,8 +465,9 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie(*, movie_id):
+def get_movie_data(*, movie_id):
     """Returns the movie contents. Does no checking"""
+    logging.debug("movie_id=%s",movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))[0][0]
 
 
@@ -498,12 +499,6 @@ def can_access_movie(*, user_id, movie_id):
 
 
 @log
-def purge_movie_frames(*,movie_id):
-    """Delete the frames associated with a movie."""
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
-
-@log
 def movie_frames_info(*,movie_id):
     """Gets information about movie frames"""
     ret = {}
@@ -512,11 +507,24 @@ def movie_frames_info(*,movie_id):
     return ret
 
 @log
+def purge_movie_frames(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie_data(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+
+@log
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
     purge_movie_frames(movie_id=movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+    purge_movie_data(movie_id=movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
