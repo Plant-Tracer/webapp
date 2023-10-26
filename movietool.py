@@ -81,17 +81,20 @@ def extract(auth, *, movie_id, user_id):
             else:
                 fps = DEFAULT_FPS
 
-            # Now upload each frame
+            # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
             for frame in range(1,10000):
                 fname = template % frame;
                 if os.path.exists(fname):
-                    frame_msec = (frame * 1000) // DEFAULT_FPS
+                    frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
+                    prev_frame_id = None
                     with open(fname,"rb") as f:
                         frame_data = f.read()
                         logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
                         t0 = time.time()
                         frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
                         t1 = time.time()
+                        assert frame_id != prev_frame_id
+                        prev_frame_id = frame_id
                         logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
                         count += 1
     logging.info("Frames extracted: %s",count)
