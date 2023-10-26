@@ -192,8 +192,6 @@ def new_movie_uploaded(new_movie):
 ################################################################
 
 
-
-
 def test_new_course(new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
@@ -287,7 +285,7 @@ def test_movie_update_metadata(new_movie):
 
 def test_movie_extract(new_movie_uploaded):
     """Try extracting movie frames and the frame-by-frame access"""
-    cfg = copy.copy(new_movie)
+    cfg = copy.copy(new_movie_uploaded)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]

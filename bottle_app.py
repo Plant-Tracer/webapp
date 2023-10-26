@@ -401,6 +401,11 @@ def api_new_movie():
         logging.debug("api_new_movie: movie uploaded as a file")
 
     # Now check to see if it is in the post
+
+    #
+    # It turns out that you can upload arbitrary data in an HTTP POST
+    # provided that it is a file upload, but not in POST fields. That
+    # is why I it has to be base64-encoded.
     if movie_data is None:
         movie_base64_data = request.forms.get('movie_base64_data',None)
         if movie_base64_data is not None:
