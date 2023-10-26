@@ -578,10 +578,11 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
         delta = "frame_msec > %s order by frame_msec "
     else:
         delta = "frame_msec < %s order by frame_msec DESC "
-    ret = dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movie_id, frame_msec, frame_data
-                               FROM movie_frames
-                               WHERE movie_id=%s and {delta} LIMIT 1""", (movie_id,frame_msec),asDicts=True)
+    cmd = f"""SELECT movie_id, frame_msec, frame_data
+                              FROM movie_frames
+                              WHERE movie_id=%s and {delta} LIMIT 1"""
+    logging.debug("cmd = %s",cmd)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),cmd, (movie_id,frame_msec),asDicts=True)
     if len(ret)>0:
         return ret[0]
     return None
