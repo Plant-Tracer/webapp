@@ -53,6 +53,7 @@ def get_dbreader():
     2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
     3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
     """
+    logging.debug("get_dbreader")
     if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
         logging.info("authentication from %s", DBCREDENTIALS_PATH)
         return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
@@ -467,20 +468,22 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie(*, movie_id):
+def get_movie_data(*, movie_id):
     """Returns the movie contents. Does no checking"""
+    logging.debug("movie_id=%s",movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))[0][0]
 
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
-    cmd = """SELECT * from movies WHERE
-                (user_id=%s OR
-                 course_id=(select primary_course_id from users where id=%s) OR
-                 course_id in (select course_id from admins where user_id=%s))"""
-    params = [user_id, user_id, user_id]
+    cmd = """SELECT *,id as movie_id from movies WHERE
+                ((user_id=%s) OR
+                (%s=0) OR
+                (course_id=(select primary_course_id from users where id=%s)) OR
+                (course_id in (select course_id from admins where user_id=%s))) """
+    params = [user_id, user_id, user_id, user_id]
     if movie_id:
-        cmd += " AND movie_id=%s"
+        cmd += " AND movies.id=%s"
         params.append(movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
 
@@ -499,12 +502,32 @@ def can_access_movie(*, user_id, movie_id):
 
 
 @log
-def purge_movie(*,movie_id):
-    """Actually delete a movie and all its frames"""
+def movie_frames_info(*,movie_id):
+    """Gets information about movie frames"""
+    ret = {}
+    ret['count'] = dbfile.DBMySQL.csfr(
+        get_dbwriter(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
+    return ret
+
+@log
+def purge_movie_frames(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_frames movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie_data(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie(*,movie_id):
+    """Actually delete a movie and all its frames"""
+    purge_movie_frames(movie_id=movie_id)
+    purge_movie_data(movie_id=movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
@@ -547,6 +570,24 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
     return {'frame_id':frame_id}
 
 
+# Get a frame; again, don't log
+def get_frame(*, movie_id, frame_msec, msec_delta):
+    if msec_delta==0:
+        delta = "frame_msec = %s "
+    elif msec_delta>0:
+        delta = "frame_msec > %s order by frame_msec "
+    else:
+        delta = "frame_msec < %s order by frame_msec DESC "
+    cmd = f"""SELECT movie_id, frame_msec, frame_data
+                              FROM movie_frames
+                              WHERE movie_id=%s and {delta} LIMIT 1"""
+    logging.debug("cmd = %s",cmd)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),cmd, (movie_id,frame_msec),asDicts=True)
+    if len(ret)>0:
+        return ret[0]
+    return None
+
+
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):
     """Return a list of movies that the user is allowed to access.
@@ -560,8 +601,12 @@ def list_movies(user_id):
                                 OR
                                 (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
                                 OR
-                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))""",
-                              (user_id, user_id, user_id), asDicts=True)
+                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
+                              OR
+                              (%s=0)
+                              ORDER BY movies.id
+                              """,
+                              (user_id, user_id, user_id, user_id), asDicts=True)
     return res
 
 

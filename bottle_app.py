@@ -174,6 +174,11 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
         primary_course_name = None
         admin = None
 
+    try:
+        movie_id = int(request.query.get('movie_id'))
+    except (AttributeError, KeyError, TypeError):
+        movie_id = None
+
     if logout:
         auth.clear_cookie()
 
@@ -186,6 +191,7 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
             'primary_course_name': primary_course_name,
             'title':'Plant Tracer '+title,
             'hostname':o.hostname,
+            'movie_id':movie_id,
             'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD}
 
 GET='GET'
@@ -222,6 +228,12 @@ def func_audit():
 def func_list():
     """/list - list movies and edit them and user info"""
     return page_dict('List Movies', require_auth=True)
+
+@bottle.route('/analyze', method=GET)
+@view('analyze.html')
+def func_analyze():
+    """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
+    return page_dict('Analyze Movie', require_auth=True)
 
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
@@ -378,21 +390,39 @@ def api_new_movie():
     """
 
     # pylint: disable=unsupported-membership-test
+    movie_data = None
+    # First see if a file named movie was uploaded
     if 'movie' in request.files:
         with io.BytesIO() as f:
             request.files['movie'].save(f)
             movie_data = f.getvalue()
             if len(movie_data) > MAX_FILE_UPLOAD:
                 return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+        logging.debug("api_new_movie: movie uploaded as a file")
+
+    # Now check to see if it is in the post
+
+    #
+    # It turns out that you can upload arbitrary data in an HTTP POST
+    # provided that it is a file upload, but not in POST fields. That
+    # is why I it has to be base64-encoded.
+    if movie_data is None:
+        movie_base64_data = request.forms.get('movie_base64_data',None)
+        if movie_base64_data is not None:
+            movie_data = base64.b64decode(movie_base64_data)
+        logging.debug("api_new_movie: movie_base64_data from request.forms.get")
     else:
-        movie_data = None
+        logging.debug("api_new_movie: movie_base64_data is None")
+
+
+    if (movie_data is not None) and (len(movie_data) > MAX_FILE_UPLOAD):
+        logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), MAX_FILE_UPLOAD)
+        return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
 
     movie_id = db.create_new_movie(user_id=get_user_id(),
                                    title=request.forms.get('title'),
-                                   description=request.forms.get(
-                                       'description'),
-                                   movie_data=movie_data
-                                   )['movie_id']
+                                   description=request.forms.get('description'),
+                                   movie_data=movie_data)['movie_id']
     return {'error': False, 'movie_id': movie_id}
 
 
@@ -415,17 +445,17 @@ def api_get_frame():
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    :return:
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        return {'error': False, 'frame': db.get_frame(request.forms.get('movie_id'),
-                                                      request.forms.get(
-                                                          'frame_msec'),
-                                                      request.forms.get('msec_delta'))}
+        return {'error': False, 'frame': db.get_frame(movie_id=request.forms.get('movie_id'),
+                                                      frame_msec = request.forms.get('frame_msec'),
+                                                      msec_delta = request.forms.get('msec_delta'))}
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-movie', method=['POST','GET'])
-def api_get_movie():
+@bottle.route('/api/get-movie-data', method=['POST','GET'])
+def api_get_movie_data():
     """
     :param api_keuy:   authentication
     :param movie_id:   movie

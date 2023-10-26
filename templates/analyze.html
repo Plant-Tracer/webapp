@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<script type="text/javascript" charset="utf8" src="static/analyze.js"></script>
+{% endblock %}
+
+
+{% block body %}
+
+<h2>Test</h2>
+
+<h3> First Frame: </h3>
+<div id='frame0'></div>
+
+<script>
+$( document ).ready( function() {
+   list_movies();
+});
+</script>
+{% endblock %}
