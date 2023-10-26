@@ -13,6 +13,7 @@ import base64
 import time
 import bottle
 import copy
+import hashlib
 from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
@@ -299,13 +300,17 @@ def test_movie_extract(new_movie_uploaded):
 
     # Grab three frames and see if they are correct
     res0 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 0)
-    logging.info("res0: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res['movie_id'],res['frame_msec'], sha256(res['frame_data']))
+    assert res0 is not None
+    logging.info("res0: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res0['movie_id'],res0['frame_msec'], sha256(res0['frame_data']))
     res1 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 1)
-    logging.info("res1: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res['movie_id'],res['frame_msec'], sha256(res['frame_data']))
+    assert res1 is not None
+    logging.info("res1: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res1['movie_id'],res1['frame_msec'], sha256(res1['frame_data']))
     res2 = db.get_frame(movie_id=movie_id, frame_msec=res2['frame_msec'], msec_delta = 1)
-    logging.info("res2: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res['movie_id'],res['frame_msec'], sha256(res['frame_data']))
+    assert res2 is not None
+    logging.info("res2: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res2['movie_id'],res2['frame_msec'], sha256(res2['frame_data']))
     res0b = db.get_frame(movie_id=movie_id, frame_msec=res2['frame_msec'], msec_delta = -1)
-    logging.info("res0b: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res['movie_id'],res['frame_msec'], sha256(res['frame_data']))
+    assert res0b is not None
+    logging.info("res0b: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res0b['movie_id'],res0b['frame_msec'], sha256(res0b['frame_data']))
     assert res0['frame_msec'] < res1['frame_msec']
     assert res1['frame_msec'] < res2['frame_msec']
     assert res0['frame_msec'] == res0b['frame_msec']

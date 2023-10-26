@@ -9,6 +9,7 @@ import configparser
 import json
 import tempfile
 import re
+import time
 
 import uuid
 import pymysql
@@ -88,7 +89,10 @@ def extract(auth, *, movie_id, user_id):
                     with open(fname,"rb") as f:
                         frame_data = f.read()
                         logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
-                        db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
+                        t0 = time.time()
+                        frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
+                        t1 = time.time()
+                        logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
                         count += 1
     logging.info("Frames extracted: %s",count)
     return count
