@@ -53,6 +53,7 @@ def get_dbreader():
     2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
     3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
     """
+    logging.debug("get_dbreader")
     if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
         logging.info("authentication from %s", DBCREDENTIALS_PATH)
         return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')

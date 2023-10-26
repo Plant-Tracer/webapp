@@ -402,10 +402,12 @@ def api_new_movie():
 
     # Now check to see if it is in the post
     if movie_data is None:
-        movie_data = request.forms.get('movie_data',None)
-        logging.debug("api_new_movie: movie_data from request.forms.get")
+        movie_base64_data = request.forms.get('movie_base64_data',None)
+        if movie_base64_data is not None:
+            movie_data = base64.b64decode(movie_base64_data)
+        logging.debug("api_new_movie: movie_base64_data from request.forms.get")
     else:
-        logging.debug("api_new_movie: movie_data is None")
+        logging.debug("api_new_movie: movie_base64_data is None")
 
 
     if (movie_data is not None) and (len(movie_data) > MAX_FILE_UPLOAD):
