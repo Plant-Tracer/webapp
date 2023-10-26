@@ -13,10 +13,10 @@ import base64
 import time
 import bottle
 import copy
-
 from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
+
 
 import db
 import movietool
@@ -108,7 +108,6 @@ def new_user(new_course):
 def api_key(new_user):
     """Simple fixture that just returns a valid api_key"""
     yield new_user[API_KEY]
-
 
 @pytest.fixture
 def new_movie(new_user):

@@ -252,7 +252,7 @@ def delete_user(email):
 
 @log
 def register_email(*, email, name, course_key=None, course_id=None):
-    """Register email for a given course
+    """Register email for a given course. Does not send the links.
     :param: email - user email
     :param: course_key - the key
     :return: dictionary of {'user_id':user_id} for user who is registered.
@@ -272,7 +272,9 @@ def register_email(*, email, name, course_key=None, course_id=None):
         course_id = res[0][0]
 
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
+                               """INSERT INTO users (email, primary_course_id, name)
+                               VALUES (%s, %s, %s)
+                               ON DUPLICATE KEY UPDATE email=%s""",
                                (email, course_id, name, email))
     return {'user_id':user_id,'course_id':course_id}
 

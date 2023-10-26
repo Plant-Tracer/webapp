@@ -166,3 +166,4 @@ cython_debug/
 *.pid
 *.mbox
 */*.mbox
+localmail.mbox
