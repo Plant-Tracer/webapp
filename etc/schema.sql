@@ -191,8 +191,8 @@ CREATE TABLE `movie_frames` (
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `movie_id` (`movie_id`),
-  CONSTRAINT `movie_frames_ibfk_1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
+  UNIQUE KEY `i10` (`movie_id`,`frame_msec`),
+  CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

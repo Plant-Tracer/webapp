@@ -157,7 +157,7 @@ function play_clicked( e ) {
     console.log('play_clicked=',e);
     const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid');
-    const url = `/api/get-movie?api_key=${api_key}&movie_id=${movie_id}`;
+    const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     var tr    = $(`#tr-${rowid}`).show();
     var td    = $(`#td-${rowid}`).show();
     var video = $(`#video-${rowid}`).show()
@@ -175,6 +175,11 @@ function hide_clicked( e ) {
     var tr    = $(`#tr-${rowid}`).hide();
     var td    = $(`#td-${rowid}`).hide();
     var video = $(`#video-${rowid}`).hide()
+}
+
+function analyze_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
+    window.location = `/analyze?movie_id=${movie_id}`;
 }
 
 ////////////////
@@ -366,13 +371,14 @@ function list_movies_data( movies ) {
             }
 
             var movieDate = new Date(m.date_uploaded * 1000);
-            var play      = `<input class='play' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var analyze   = `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             var you       = (m.user_id == user_id) ? "you" : "";
 
             rows = `<tr class='${you}'>`
-                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
+                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} ${analyze} </td> <td> ${up_down} </td>`
                 + make_td_text( "title", m.title) + make_td_text( "description", m.description);
 
             rows += "<td>";

@@ -19,3 +19,4 @@ pytest-html>=4.0.2
 requests
 validate_email_address
 aiosmtplib
+tabulate
