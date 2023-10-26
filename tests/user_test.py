@@ -151,16 +151,9 @@ def new_movie(new_user):
     logging.debug("new_movie fixture: movie_id=%s",movie_id)
     logging.debug("new_movie fixture: Make sure that the correct movie is actually in the database")
 
-    # This is making it hang:
-    logging.debug("calling get_dbreader")
-    db.get_dbreader()
-    logging.debug("calling db.get_movie_data")
     retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
-    logging.debug("movie_data type=%s len=%s",type(movie_data), len(movie_data))
-    logging.debug("retrieved_movie_data type=%s len=%s",type(retrieved_movie_data), len(retrieved_movie_data))
     assert len(movie_data) == len(retrieved_movie_data)
-    #assert movie_data == retrieved_movie_data
-
+    assert movie_data == retrieved_movie_data
     logging.debug("new_movie fixture: yield %s",cfg)
     yield cfg
 
