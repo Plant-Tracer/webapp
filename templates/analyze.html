@@ -7,14 +7,19 @@
 
 {% block body %}
 
-<h2>Test</h2>
+<div id='message' class='alert'><b>{{message}}</b></div>
+
+<h2 id='firsth2'></h2>
 
 <h3> First Frame: </h3>
-<div id='frame0'></div>
+<div id='frame_data'></div>
+
+<p>Frame: <span id='frame_msec'></span> msec</p>
 
 <script>
+var movie_id={{movie_id}};
 $( document ).ready( function() {
-   list_movies();
+   analyze_movie();
 });
 </script>
 {% endblock %}

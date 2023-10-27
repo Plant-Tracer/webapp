@@ -6,6 +6,8 @@ INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
 INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
 INVALID_MOVIE_ACCESS = {
     'error': True, 'message': 'User does not have access to requested movie.'}
+INVALID_MOVIE_FRAME = {
+    'error': True, 'message': 'Could not retrieve the movie frame.'}
 INVALID_COURSE_KEY = {'error': True,
                       'message': 'There is no course for that course key.'}
 NO_REMAINING_REGISTRATIONS = {
