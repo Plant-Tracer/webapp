@@ -60,7 +60,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -177,7 +177,7 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
     try:
         movie_id = int(request.query.get('movie_id'))
     except (AttributeError, KeyError, TypeError):
-        movie_id = None
+        movie_id = 0            # to avoid errors
 
     if logout:
         auth.clear_cookie()
@@ -426,7 +426,7 @@ def api_new_movie():
     return {'error': False, 'movie_id': movie_id}
 
 
-@bottle.route('/api/new-frame', method='POST')
+@bottle.route('/api/new-frame', method=POST)
 def api_new_frame():
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
         frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
@@ -438,7 +438,7 @@ def api_new_frame():
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-frame', method='POST')
+@bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
     :param api_keuy:   authentication
@@ -447,10 +447,20 @@ def api_get_frame():
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
     :return:
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        return {'error': False, 'frame': db.get_frame(movie_id=request.forms.get('movie_id'),
-                                                      frame_msec = request.forms.get('frame_msec'),
-                                                      msec_delta = request.forms.get('msec_delta'))}
+    user_id    = get_user_id()
+    movie_id   = request.forms.get('movie_id', request.query.get('movie_id',-1))
+    frame_msec = request.forms.get('frame_msec', request.query.get('frame_msec',0))
+    msec_delta = request.forms.get('msec_delta', request.query.get('msec_delta',0))
+    logging.info("user_id=%s movie_id=%s",user_id,movie_id)
+    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+        if frame:
+            bottle.response.set_header('Content-Type', 'image/jpeg')
+            logging.info("Return %d bytes",len(frame['frame_data']))
+            return frame['frame_data']
+        else:
+            return INVALID_MOVIE_FRAME
+    logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return INVALID_MOVIE_ACCESS
 
 
