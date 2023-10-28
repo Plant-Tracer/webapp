@@ -448,9 +448,9 @@ def api_get_frame():
     :return:
     """
     user_id    = get_user_id()
-    movie_id   = request.forms.get('movie_id', request.query.get('movie_id',-1))
-    frame_msec = request.forms.get('frame_msec', request.query.get('frame_msec',0))
-    msec_delta = request.forms.get('msec_delta', request.query.get('msec_delta',0))
+    movie_id   = int(request.forms.get('movie_id', request.query.get('movie_id',-1)))
+    frame_msec = int(request.forms.get('frame_msec', request.query.get('frame_msec',0)))
+    msec_delta = int(request.forms.get('msec_delta', request.query.get('msec_delta',0)))
     logging.info("user_id=%s movie_id=%s",user_id,movie_id)
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
