@@ -3,70 +3,12 @@ var mousePosition;
 //track state of mousedown and up
 var isMouseDown;
 
-
-//add listeners
-document.addEventListener('mousemove', move, false);
-document.addEventListener('mousedown', setDraggable, false);
-document.addEventListener('mouseup', setDraggable, false);
-
 //make some circles
 var c1 = new Circle(50, 50, 50, "red", "black");
 var c2 = new Circle(200, 50, 50, "green", "black");
 var c3 = new Circle(350, 50, 50, "blue", "black");
 //initialise our circles
 var circles = [c1, c2, c3];
-
-//key track of circle focus and focused index
-var focused = {
-    key: 0,
-    state: false
-}
-
-function move(e) {
-    if (!isMouseDown) {
-        return;
-    }
-    getMousePosition(e);
-    //if any circle is focused
-    if (focused.state) {
-        circles[focused.key].x = mousePosition.x;
-        circles[focused.key].y = mousePosition.y;
-        draw();
-        return;
-    }
-    //no circle currently focused check if circle is hovered
-    for (var i = 0; i < circles.length; i++) {
-        if (intersects(circles[i])) {
-            circles.move(i, 0);
-            focused.state = true;
-            break;
-        }
-    }
-    draw();
-}
-
-//set mousedown state
-function setDraggable(e) {
-    var t = e.type;
-    if (t === "mousedown") {
-        isMouseDown = true;
-    } else if (t === "mouseup") {
-        isMouseDown = false;
-        releaseFocus();
-    }
-}
-
-function releaseFocus() {
-    focused.state = false;
-}
-
-function getMousePosition(e) {
-    var rect = c.getBoundingClientRect();
-    mousePosition = {
-        x: Math.round(e.x - rect.left),
-        y: Math.round(e.y - rect.top)
-    }
-}
 
 //detects whether the mouse cursor is between x and y relative to the radius specified
 function intersects(circle) {
