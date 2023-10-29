@@ -15,19 +15,31 @@ var globals = {
 
 /* myCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
  */
-function myCircle(x, y, r, fill, stroke, name) {
-    this.startingAngle = 0;
-    this.endAngle = 2 * Math.PI;
-    this.x = x;
-    this.y = y;
-    this.r = r;
-    this.name = name;
-    this.draggable = true;
 
-    this.fill = fill;
-    this.stroke = stroke;
+class myCircle {
+    constructor(x, y, r, fill, stroke, name) {
+        this.startingAngle = 0;
+        this.endAngle = 2 * Math.PI;
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.name = name;
+        this.draggable = true;
+        this.fill = fill;
+        this.stroke = stroke;
+    }
 
-    this.draw = function (ctx) {
+    selected() {
+        return this == globals.selected;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        if (this == globals.selected) {
+            // If we are selected, the cursor is cross-hair. Just draw the dot with alpha.
+            ctx.globalAlpha = 0.5;
+        }
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, this.startingAngle, this.endAngle);
         ctx.fillStyle = this.fill;
@@ -35,9 +47,10 @@ function myCircle(x, y, r, fill, stroke, name) {
         ctx.fill();
         ctx.strokeStyle = this.stroke;
         ctx.stroke();
+        ctx.restore();
     }
 
-    this.contains_point = function( pt) {
+    contains_point(pt) {
         // return true if the point (x,y) is inside the circle
         var areaX = pt.x - this.x;
         var areaY = pt.y - this.y;
@@ -59,6 +72,7 @@ function myImage(x,y,url) {
     this.ctx = null;
     this.img = new Image();
     this.img.src = url;
+    this.selected = false;
     this.draw = function (ctx) {
         console.log("img.draw");
         theImage.ctx = ctx;
@@ -78,9 +92,14 @@ function draw( ) {
     // clear canvas
     globals.ctx.clearRect(0, 0, globals.c.width, globals.c.height);
 
-    // draw the objects
-    for (var i = 0; i< globals.objects.length; i++){
-        globals.objects[i].draw( globals.ctx );
+    // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
+    for (var s = 0; s<2; s++){
+        for (var i = 0; i< globals.objects.length; i++){
+            var obj = globals.objects[i];
+            if ((s==0 && !obj.selected()) || (s==1 && obj.selected())) {
+                obj.draw( globals.ctx );
+            }
+        }
     }
 }
 
@@ -120,7 +139,6 @@ function mouseMoved(e) {
 
 function clear_selection() {
     if (globals.selected) {
-        globals.selected.selected = false;
         globals.selected = null;
     }
 }
@@ -133,21 +151,24 @@ function mouseChanged(e) {
         // if an object is selected, unselect it
         clear_selection();
 
+
         // find the object clicked in
         for (var i = 0; i < globals.objects.length; i++) {
             var obj = globals.objects[i];
             console.log("checking ",obj.name);
             if (obj.draggable && obj.contains_point( mousePosition)) {
                 globals.selected = obj;
-                globals.selected.selected = true;
+                // change the cursor to crosshair if something is selected
+                globals.c.style.cursor='crosshair';
             }
         }
-        draw();
     }
     if (e.type == 'mouseup') {
-        // if an object is selected, unselect
+        // if an object is selected, unselect and change back the cursor
         clear_selection();
+        globals.c.style.cursor='auto';
     }
+    draw();
 }
 
 
