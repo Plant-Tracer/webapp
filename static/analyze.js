@@ -64,26 +64,33 @@ class myCircle {
 
 /* myImage Object - Draws an image (x,y) specified by the url */
 
-function myImage(x,y,url) {
-    var theImage=this;
-    this.x = x;
-    this.y = y;
-    this.draggable = false;
-    this.ctx = null;
-    this.img = new Image();
-    this.img.src = url;
-    this.selected = false;
-    this.draw = function (ctx) {
-        console.log("img.draw");
-        theImage.ctx = ctx;
-        ctx.drawImage(this.img, 0, 0);
-    }
-
-    // When the image is loaded, draw the entire stack again.
-    this.img.onload = function() {
-        if (theImage.ctx) {
-            draw( theImage.ctx );
+class myImage {
+    constructor(x,y,url) {
+        var theImage=this;
+        this.x = x;
+        this.y = y;
+        this.draggable = false;
+        this.ctx = null;
+        this.img = new Image();
+        this.img.src = url;
+        this.draw = function (ctx) {
+            console.log("img.draw");
+            theImage.ctx = ctx;
+            ctx.drawImage(this.img, 0, 0);
         }
+
+        // When the image is loaded, draw the entire stack again.
+        this.img.onload = function() {
+            if (theImage.ctx) {
+                draw( theImage.ctx );
+            }
+        }
+    }
+    contains_point(pt) {
+        return false;
+    }
+    selected() {
+        return false;
     }
 }
 
@@ -96,6 +103,7 @@ function draw( ) {
     for (var s = 0; s<2; s++){
         for (var i = 0; i< globals.objects.length; i++){
             var obj = globals.objects[i];
+            console.log("obj=",obj,"i=",i);
             if ((s==0 && !obj.selected()) || (s==1 && obj.selected())) {
                 obj.draw( globals.ctx );
             }
@@ -192,7 +200,7 @@ function analyze_movie() {
     }
     // Create the objects. Draw order is insertion order.
     // Image first means that the circles go on top
-    //globals.objects.push( new myImage( 0, 0, url ));
+    globals.objects.push( new myImage( 0, 0, url ));
     globals.objects.push( new myCircle(50, 50, 10, "red", "white", "red ball"));
     globals.objects.push( new myCircle(10, 50, 10, "blue", "white", "blue ball"));
 
