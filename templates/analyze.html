@@ -11,11 +11,47 @@
 
 <h2 id='firsth2'></h2>
 
-<h3> First Frame: </h3>
+<h3> Annotating Frame: <span id='frame_number'></span> </h3>
 <div id='frame_data'></div>
-<canvas id="c1" width="340" height="340"></canvas>
+<div id='canvas-div'><canvas id="c1" width="340" height="340"></canvas></div>
 
-<p>Frame: <span id='frame_msec'></span> msec</p>
+<table class="pure-table pure-table-horizontal pure-table-striped">
+  <thead>
+    <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th></tr>
+  </thead>
+  <tbody id='marker-tbody'>
+  </tbody>
+</table>
+
+<form class='pure-form pure-form-aligned'>
+<fieldset>
+<legend>Movie Controls</legend>
+<div class='pure-control-group'>
+  <label for='marker-size-slider'>Marker size:</label>
+  <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
+</div>
+</fieldset>
+</form>
+
+<hr>
+<form class='pure-form pure-form-aligned'>
+<fieldset>
+<legend>Add a marker to track a point</legend>
+
+<div class='pure-control-group'>
+  <label for='marker-name'>Name:</label>
+  <input id='marker-name' placeholder='Marker name' size='20'/>
+  <input id='add-marker-button' type='button' value='add marker' onclick='add_marker();'/>
+</div>
+
+<div class='pure-control-group'>
+  <label for='done-button'>When done, please click:</label>
+  <input class='pure-button pure-button-primary' id='done-button' type='button' value='Done' onclick='add_marker();'/>
+</div>
+
+
+</fieldset>
+</form>
 
 <script>
 var movie_id={{movie_id}};
