@@ -127,9 +127,12 @@ CREATE TABLE `movie_analysis` (
   `id` int NOT NULL AUTO_INCREMENT,
   `engine_id` int NOT NULL,
   `annotations` json DEFAULT NULL,
+  `movie_id` int NOT NULL,
   PRIMARY KEY (`id`),
   KEY `engine_id` (`engine_id`),
-  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engine` (`id`)
+  KEY `mc1` (`movie_id`),
+  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engine` (`id`),
+  CONSTRAINT `mc1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -162,15 +165,12 @@ DROP TABLE IF EXISTS `movie_frame_analysis`;
 CREATE TABLE `movie_frame_analysis` (
   `id` int NOT NULL AUTO_INCREMENT,
   `frame_id` int NOT NULL,
-  `movie_analysis_id` int NOT NULL,
   `engine_id` int NOT NULL,
   `annotations` json DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `frame_id` (`frame_id`),
-  KEY `movie_analysis_id` (`movie_analysis_id`),
   KEY `engine_id` (`engine_id`),
   CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
-  CONSTRAINT `mfa2` FOREIGN KEY (`movie_analysis_id`) REFERENCES `movie_analysis` (`id`),
   CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engine` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

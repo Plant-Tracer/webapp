@@ -578,7 +578,7 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
         delta = "frame_msec > %s order by frame_msec "
     else:
         delta = "frame_msec < %s order by frame_msec DESC "
-    cmd = f"""SELECT movie_id, frame_msec, frame_data
+    cmd = f"""SELECT movie_id, frame_msec, frame_data, id as frame_id
                               FROM movie_frames
                               WHERE movie_id=%s and {delta} LIMIT 1"""
     logging.debug("cmd = %s",cmd)
@@ -587,6 +587,14 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
         return ret[0]
     return None
 
+def get_frame_analysis(*, frame_id):
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select * from movie_frame_analysis where frame_id=%s",
+                               (frame_id,),
+                               asDicts=True)
+
+def put_frame_analysis(*, frame_id, engine_id, annotations):
+    TODO
 
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):
