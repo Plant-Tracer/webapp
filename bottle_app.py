@@ -60,7 +60,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER,INVALID_FRAME_FORMAT
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -445,21 +445,37 @@ def api_get_frame():
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    :param format:     jpeg - just get the image; json - get the image and json annotation
+    :param analysis:   if true, return analysis as well. format must be json
     :return:
     """
     user_id    = get_user_id()
-    movie_id   = int(request.forms.get('movie_id', request.query.get('movie_id',-1)))
-    frame_msec = int(request.forms.get('frame_msec', request.query.get('frame_msec',0)))
-    msec_delta = int(request.forms.get('msec_delta', request.query.get('msec_delta',0)))
-    logging.info("user_id=%s movie_id=%s",user_id,movie_id)
+
+    def get(key, default):
+        return request.forms.get(key, request.query.get(key, default))
+
+    movie_id   = int( get('movie_id',-1 ))
+    frame_msec = int( get('frame_msec',0 ))
+    msec_delta = int( get('msec_delta',0 ))
+    fmt        = get('format', 'jpeg')
+    analysis   = get('analysis', None)
+    logging.info("user_id=%s movie_id=%s fmt=%s",user_id,movie_id,fmt)
+    if fmt not in ['jpeg', 'json']:
+        return INVALID_FRAME_FORMAT
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if frame:
+        if not frame:
+            return INVALID_MOVIE_FRAME
+
+        if fmt=='jpeg':
             bottle.response.set_header('Content-Type', 'image/jpeg')
             logging.info("Return %d bytes",len(frame['frame_data']))
             return frame['frame_data']
-        else:
-            return INVALID_MOVIE_FRAME
+
+        if analysis:
+            frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
+
+        return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return INVALID_MOVIE_ACCESS
 
