@@ -197,25 +197,6 @@ CREATE TABLE `movie_frames` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `movie_movie_analysis`
---
-
-DROP TABLE IF EXISTS `movie_movie_analysis`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `movie_movie_analysis` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `movie_id` int NOT NULL,
-  `movie_analysis_id` int NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `movie_id` (`movie_id`),
-  KEY `movie_analysis_id` (`movie_analysis_id`),
-  CONSTRAINT `mma1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`),
-  CONSTRAINT `mma2` FOREIGN KEY (`movie_analysis_id`) REFERENCES `movie_analysis` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `movies`
 --
 
