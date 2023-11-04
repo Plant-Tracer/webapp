@@ -24,33 +24,38 @@
 </table>
 
 <form class='pure-form pure-form-aligned'>
-<fieldset>
-<legend>Movie Controls</legend>
-<div class='pure-control-group'>
-  <label for='marker-size-slider'>Marker size:</label>
-  <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
-</div>
-</fieldset>
+  <fieldset>
+    <legend>Movie Controls</legend>
+    <div class='pure-control-group'>
+      <label for='marker-size-slider'>Marker size:</label>
+      <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
+    </div>
+  </fieldset>
 </form>
 
 <hr>
 <form class='pure-form pure-form-aligned'>
-<fieldset>
-<legend>Add a marker to track a point</legend>
+  <fieldset>
+    <legend>Add a marker to track a point</legend>
 
-<div class='pure-control-group'>
-  <label for='marker-name'>Name:</label>
-  <input id='marker-name' placeholder='Marker name' size='20'/>
-  <input id='add-marker-button' type='button' value='add marker' onclick='add_marker();'/>
-</div>
+    <div class='pure-control-group'>
+      <label for='marker-name'>Name:</label>
+      <input id='marker-name' placeholder='Marker name' size='20' oninput='marker_name_input();'/>
+      <input id='add-marker-button' class='pure-button pure-button-primary'
+             type='button' value='add marker' onclick='add_marker_clicked();' disabled/>
+    </div>
 
-<div class='pure-control-group'>
-  <label for='done-button'>When done, please click:</label>
-  <input class='pure-button pure-button-primary' id='done-button' type='button' value='Done' onclick='add_marker();'/>
-</div>
+    <div class='pure-control-group'>
+      <label for='marker-status'></label>
+      <label id='marker-status'></label>
+    </div>
 
+    <div class='pure-control-group'>
+      <label for='done-button'>Click to save:</label>
+      <input class='pure-button pure-button-primary' id='done-button' type='button' value='Sav' onclick='done_button_clicked();'/>
+    </div>
 
-</fieldset>
+  </fieldset>
 </form>
 
 <script>

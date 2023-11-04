@@ -71,9 +71,7 @@ class myCircle extends myObject {
         var areaX = pt.x - this.x;
         var areaY = pt.y - this.y;
         //return true if x^2 + y^2 <= radius squared.
-        console.log("pt.x=",pt.x,"pt.y=",pt.y,"this.x=",this.x,"this.y=",this.y,"areaX=",areaX,"areaY=",areaY,"this.r=",this.r);
         var contained = areaX * areaX + areaY * areaY <= this.r * this.r;
-        console.log("v1=", areaX * areaX + areaY * areaY , "contained=",contained);
         return contained;
     }
 
@@ -96,7 +94,6 @@ class myImage extends myObject {
         this.img = new Image();
         this.img.src = url;
         this.draw = function (ctx) {
-            console.log("img.draw");
             theImage.ctx = ctx;
             ctx.drawImage(this.img, 0, 0);
         }
@@ -135,7 +132,6 @@ function add_circle(x, y, name) {
             rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td><td id="${obj.id}">${obj.loc()}</td><td>n/a</td></tr>`;
         }
     }
-    console.log("rows=",rows)
     $('#marker-tbody').html( rows );
     draw();
 }
@@ -149,7 +145,6 @@ function draw( ) {
     for (let s = 0; s<2; s++){
         for (let i = 0; i< globals.objects.length; i++){
             let obj = globals.objects[i];
-            console.log("obj[",i,"]=",obj)
             if ((s==0 && !obj.selected()) || (s==1 && obj.selected())) {
                 obj.draw( globals.ctx );
             }
@@ -214,7 +209,6 @@ function mouseChanged(e) {
         // find the object clicked in
         for (var i = 0; i < globals.objects.length; i++) {
             var obj = globals.objects[i];
-            console.log("checking ",obj.name);
             if (obj.draggable && obj.contains_point( mousePosition)) {
                 globals.selected = obj;
                 // change the cursor to crosshair if something is selected
@@ -230,7 +224,33 @@ function mouseChanged(e) {
     draw();
 }
 
+function add_marker_clicked() {
+}
 
+function done_button_clicked() {
+}
+
+const MIN_MARKER_NAME_LEN = 5;
+function marker_name_input(e) {
+    let   but = $('#add-marker-button');
+    let   stat = $('#marker-status');
+    const val = $('#marker-name').val();
+    if (val.length < MIN_MARKER_NAME_LEN) {
+        stat.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
+        but.prop('disabled',true);
+        return;
+    }
+    // Make sure it isn't in use
+    for (let i=0;i<globals.objects.length; i++){
+        if(globals.objects[i].name == val){
+            stat.text("That name is in use, choose another.");
+            but.prop('disabled',true);
+            return;
+        }
+    }
+    stat.text('');
+    but.prop('disabled',false);
+}
 
 // Called when the page is loaded
 function analyze_movie() {
