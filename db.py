@@ -593,7 +593,8 @@ def get_frame_analysis(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def put_frame_analysis(*, frame_id, annotations, engine_id=None, engine_name=None, engine_version=None, ):
+def put_frame_analysis(*, frame_id, annotations, engine_id=None,
+                       engine_name=None, engine_version=None, ):
     if engine_id is None:
         if (engine_name is None) or (engine_version is None):
             raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")

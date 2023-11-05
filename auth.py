@@ -68,11 +68,3 @@ def get_movie_id():
     raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID),
                               status=200,
                               headers={ 'Content-type': 'application/json'})
-
-def get_frame_id():
-    frame_id = get_param('frame_id', None)
-    if frame_id is not None:
-        return frame_id
-    raise bottle.HTTPResponse(body=json.dumps(INVALID_FRAME_ID),
-                              status=200,
-                              headers={ 'Content-type': 'application/json'})
