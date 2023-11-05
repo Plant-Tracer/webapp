@@ -42,6 +42,7 @@ export TEST_USER_EMAIL=****
 import sys
 import os
 import io
+import json
 import datetime
 import logging
 import base64
@@ -119,7 +120,7 @@ def static_path(path):
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
-    static_path('favicon.ico')
+    return static_path('favicon.ico')
 
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
@@ -454,15 +455,18 @@ def api_get_frame():
     def get(key, default):
         return request.forms.get(key, request.query.get(key, default))
 
+
     movie_id   = int( get('movie_id',-1 ))
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
+
     fmt        = get('format', 'jpeg')
     analysis   = get('analysis', None)
-    logging.info("user_id=%s movie_id=%s fmt=%s",user_id,movie_id,fmt)
+
     if fmt not in ['jpeg', 'json']:
         return INVALID_FRAME_FORMAT
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
+
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
         if not frame:
             return INVALID_MOVIE_FRAME
@@ -471,6 +475,11 @@ def api_get_frame():
             bottle.response.set_header('Content-Type', 'image/jpeg')
             logging.info("Return %d bytes",len(frame['frame_data']))
             return frame['frame_data']
+
+        # JSON format; change frame_data into data_url
+        frame_data = frame['frame_data']
+        frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
+        del frame['frame_data'];
 
         if analysis:
             frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
