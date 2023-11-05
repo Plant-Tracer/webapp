@@ -9,7 +9,7 @@
 
 <div id='message' class='alert'><b>{{message}}</b></div>
 
-<h2 id='firsth2'></h2>
+<h2 id='firsth2'>First Movie Frame Loading...</h2>
 
 <h3> Annotating Frame: <span id='frame_number'></span> </h3>
 <div id='frame_data'></div>
@@ -51,12 +51,15 @@
     </div>
 
     <div class='pure-control-group'>
-      <label for='done-button'>Click to save:</label>
-      <input class='pure-button pure-button-primary' id='done-button' type='button' value='Sav' onclick='done_button_clicked();'/>
+      <label for='done-button'>Click to save annotations to server:</label>
+      <input class='pure-button pure-button-primary' id='done-button' type='button' value='Save' onclick='done_button_clicked();'/>
     </div>
 
   </fieldset>
 </form>
+
+<h2>Movie Frames</h2>
+
 
 <script>
 var movie_id={{movie_id}};
