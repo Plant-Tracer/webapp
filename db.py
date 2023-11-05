@@ -593,7 +593,36 @@ def get_frame_analysis(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def put_frame_analysis(*, frame_id, engine_id, engine_name, annotations):
+def put_frame_analysis(*, frame_id, annotations, engine_id=None, engine_name=None, engine_version=None, ):
+    if engine_id is None:
+        if (engine_name is None) or (engine_version is None):
+            raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
+    if engine_name is None:
+        if engine_id is None:
+            raise RuntimeError("if engine_name is None, then engine_id must be provided.")
+    if (engine_id is not None) and (engine_name is not None):
+        raise RuntimeError("Both engine_name and engine_id may not be provided.")
+
+    # Get the engine_id if only engine_name is provided
+    if engine_name is not None:
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            """INSERT INTO engines
+                            (`name`,version) VALUES (%s,%s)
+                            ON DUPLICATE KEY UPDATE name=%s""",
+                            (engine_name,engine_version))
+        engine_id = dbfile.DBMySQL.csfr(get_dbreader(),
+                                        """SELECT id from engines
+                                        WHERE `name`=%s and version=%s""",
+                                        (engine_name,engine_version))[0][0]
+    #
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO movie_frame_analysis
+                        (frame_id, engine_id, annotations)
+                        VALUES (%s,%s,%s)
+                        ON DUPLICATE KEY UPDATE
+                        annotations=%s""",
+                        (frame_id, engine_id, annotations, annotations))
+
     raise RuntimeException("Not implemented yet")
 
 # Don't log this; we run list_movies every time the page is refreshed
