@@ -593,7 +593,7 @@ def get_frame_analysis(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def put_frame_analysis(*, frame_id, engine_id, annotations):
+def put_frame_analysis(*, frame_id, engine_id, engine_name, annotations):
     raise RuntimeException("Not implemented yet")
 
 # Don't log this; we run list_movies every time the page is refreshed
