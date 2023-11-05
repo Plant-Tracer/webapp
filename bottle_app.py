@@ -482,7 +482,18 @@ def api_get_frame():
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])
 def api_put_frame_analysis():
-    if db.can_access_frame(user_id=get_user_id(), frame_id=auth.get_frame_id())
+    frame_id  = int(request.forms.get('frame_id',None))
+    try:
+        engine_id = int(request.forms.get('engine_id'))
+    except (TypeError,ValueError) as e:
+        engine_id = None
+    if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
+        db.put_frame_analysis(frame_id=frame_id,
+                              annotations=request.forms.get('annotations'),
+                              engine_id=engine_id,
+                              engine_name=request.forms.get('engine_name'),
+                              engine_version=request.forms.get('engine_version'))
+
 
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
 def api_get_movie_data():
@@ -559,10 +570,6 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    logging.warning("request.forms=%s", list(request.forms.keys()))
-    logging.warning("api_key=%s", request.forms.get('api_key'))
-    logging.warning("get_user_id()=%s", get_user_id())
-
     set_movie_id = converter(request.forms.get('set_movie_id'))
     set_user_id = converter(request.forms.get('set_user_id'))
 
