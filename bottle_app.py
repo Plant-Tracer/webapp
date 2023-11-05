@@ -480,6 +480,10 @@ def api_get_frame():
     return INVALID_MOVIE_ACCESS
 
 
+@bottle.route('/api/put-frame-analysis', method=['POST'])
+def api_put_frame_analysis():
+    if db.can_access_frame(user_id=get_user_id(), frame_id=auth.get_frame_id())
+
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
 def api_get_movie_data():
     """
