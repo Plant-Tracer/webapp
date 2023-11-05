@@ -170,6 +170,7 @@ CREATE TABLE `movie_frame_analysis` (
   `engine_id` int NOT NULL,
   `annotations` json DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `idx4` (`frame_id`,`engine_id`),
   KEY `frame_id` (`frame_id`),
   KEY `engine_id` (`engine_id`),
   CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
