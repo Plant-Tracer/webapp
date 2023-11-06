@@ -5,27 +5,111 @@
 // https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
 // a bit more object oriented, but not massively so
 
-const DEFAULT_R = 10;
+const DEFAULT_R = 10;           // default radius of the marker
+const DEFAULT_FRAMES = 20;      // default number of frames to show
+const DEFAULT_WIDTH = 340;
+const DEFAULT_HEIGHT= 340;
+const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
-// The globals that we need
-var globals = {
-    c:null,                     // the canvas
-    ctx:null,                   // the context
-    selected:null,               // the selected object
-    objects: []                // the objects
-};
+/* MyCanvas Object - creates a canvas that can manage MyObjects */
 
-/* myCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
- */
+class MyCanvas {
+    constructor(html_id) {      // html_id is where this canvas gets inserted
+        const canvas_id = html_id + "-canvas";
+        $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
+        this.c = document.getElementById( canvas_id );
+        this.ctx = this.c.getContext('2d');                  // the drawing context
+        this.selected = null,             // the selected object
+        this.objects = [];                // the objects
 
-class myObject {
+        // Register my events.
+        // We need to wrap them in lambdas and copy 'this' to 'me' because when the event triggers,
+        // 'this' points to the HTML element that generated the event.
+        // This took me several hours to figure out.
+        var me=this;
+        this.c.addEventListener('mousemove', function(e) {me.mousemove_handler(e);} , false);
+        this.c.addEventListener('mousedown', function(e) {me.mousedown_handler(e);} , false);
+        this.c.addEventListener('mouseup',   function(e) {me.mouseup_handler(e);}, false);
+    }
+
+    // Selection Management
+    clear_selection() {
+        if (this.selected) {
+            this.selected = null;
+        }
+    }
+
+    getMousePosition(e) {
+        var rect = this.c.getBoundingClientRect();
+        return { x: Math.round(e.x) - rect.left,
+                 y: Math.round(e.y) - rect.top };
+        return { x: Math.max(0,Math.max(e.x - rect.left, rect.left)),
+                 y: Math.max(0,Math.min(e.y - rect.top, rect.top)) };
+    }
+
+    mousedown_handler(e) {
+        var mousePosition = this.getMousePosition(e);
+        // if an object is selected, unselect it
+        this.clear_selection();
+
+        // find the object clicked in
+        for (var i = 0; i < this.objects.length; i++) {
+            var obj = this.objects[i];
+            if (obj.draggable && obj.contains_point( mousePosition)) {
+                this.selected = obj;
+                // change the cursor to crosshair if something is selected
+                this.c.style.cursor='crosshair';
+            }
+        }
+        this.redraw();
+    }
+
+    mouseup_handler(e) {
+        // if an object is selected, unselect and change back the cursor
+        this.clear_selection();
+        this.c.style.cursor='auto';
+        this.redraw();
+    }
+
+    mousemove_handler(e) {
+        if (this.selected == null) {
+            return;
+        }
+        const mousePosition = this.getMousePosition(e);
+
+        // update position
+        // Update the position in the selected object
+        this.selected.x = mousePosition.x;
+        this.selected.y = mousePosition.y;
+        this.redraw();
+
+    }
+    // TODO: might want to hilight entered object here.
+
+    // Main drawing function:
+    redraw() {
+        // clear canvas
+        this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+
+        // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
+        for (let s = 0; s<2; s++){
+            for (let i = 0; i< this.objects.length; i++){
+                let obj = this.objects[i];
+                if ((s==0 && this.selected!=obj) || (s==1 && this.selected==obj)){
+                    obj.draw( this.ctx , this.selected==obj);
+                }
+            }
+        }
+    }
+}
+
+
+/* MyObject --- base object for MyCanvas system */
+class MyObject {
     constructor(x, y, name) {
         this.x = x;
         this.y = y;
         this.name = name;
-    }
-    selected() {
-        return this == globals.selected;
     }
     // default - it never contains the point
     contains_point(pt) {
@@ -33,7 +117,10 @@ class myObject {
     }
 }
 
-class myCircle extends myObject {
+/* myCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
+ */
+
+class myCircle extends MyObject {
     constructor(x, y, r, fill, stroke, name) {
         super(x, y, name);
         this.startingAngle = 0;
@@ -45,12 +132,12 @@ class myCircle extends myObject {
         self.name = name;
     }
 
-    draw(ctx) {
+    draw(ctx, selected) {
         ctx.save();
         ctx.globalAlpha = 0.5;
-        if (this != globals.selected) {
+        if (selected) {
             // If we are selected, the cursor is cross-hair.
-            // If we are not selected, we need to draw the cross-hair
+            // If we are not selected, we might want to draw the cross-hair
         }
 
         ctx.beginPath();
@@ -82,11 +169,89 @@ class myCircle extends myObject {
 
 }
 
+// This contains code specific for the planttracer project
+class MyPlantTracerCanvas extends MyCanvas {
+    mousemove_handler(e) {
+        super.mousemove_handler(e);
+
+        // Update the matrix location if anything is registered
+        if (this.selected) {
+            $( "#"+this.selected.table_cell_id ).text( this.selected.loc() );
+        }
+    }
+
+    registerAddRow(marker_name_field_id, add_marker_button_id, add_marker_status_id) {
+        var me=this;
+        $('#'+marker_name_field_id).on('input',function(e) { me.marker_name_input_handler(e);});
+        this.add_marker_button = $('#'+add_marker_button_id);
+        this.add_marker_status = $('#'+add_marker_status_id);
+        this.add_marker_button.on('click',function(e){me.add_marker_onclick_handler(e);});
+    }
+
+    marker_name_input_handler (e) {
+        const val = $('#marker-name-field').val();
+        if (val.length < MIN_MARKER_NAME_LEN) {
+            this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
+            this.add_marker_button.prop('disabled',true);
+            return;
+        }
+        // Make sure it isn't in use
+        for (let i=0;i<this.objects.length; i++){
+            if(this.objects[i].name == val){
+                this.add_marker_status.text("That name is in use, choose another.");
+                this.add_marker_button.prop('disabled',true);
+                return;
+            }
+        }
+        this.add_marker_status.text('');
+        this.add_marker_button.prop('disabled',false);
+    }
+
+
+    add_marker_onclick_handler(e) {
+        this.add_circle( 50, 50, $('#marker-name-field').val());
+    }
+
+    // https://sashamaps.net/docs/resources/20-colors/
+    // removing green (for obvious reasons)
+    circle_colors = ['#ffe119', '#4363d8', '#f58231', '#911eb4',
+                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
+                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#e6194b', ]
+
+
+    // add a tracking circle with the next color
+    add_circle(x, y, name) {
+        // Find out how many circles there are
+        let count = 0;
+        for (let i=0;i<this.objects.length;i++){
+            if (this.objects[i].constructor.name == 'myCircle') count+=1;
+        }
+
+        let color = this.circle_colors[count];
+        this.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
+
+        // Generate the HTML for the table body
+        let rows = '';
+        for (let i=0;i<this.objects.length;i++){
+            let obj = this.objects[i];
+            if (obj.constructor.name == 'myCircle'){
+                obj.table_cell_id = `loc-${i}`
+                rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
+                    `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
+            }
+        }
+        $('#marker-tbody').html( rows );
+        this.redraw();
+    }
+}
+
+
 /* myImage Object - Draws an image (x,y) specified by the url */
 
-class myImage extends myObject {
-    constructor(x,y,url) {
+class myImage extends MyObject {
+    constructor(x, y, url, mptc) {
         super(x, y, url)
+        this.mptc = mptc;
 
         var theImage=this;
         this.draggable = false;
@@ -96,7 +261,7 @@ class myImage extends myObject {
         // When the image is loaded, draw the entire stack again.
         this.img.onload = function() {
             if (theImage.ctx) {
-                draw( theImage.ctx );
+                mptc.redraw()
             }
         }
         this.draw = function (ctx) {
@@ -106,190 +271,29 @@ class myImage extends myObject {
 
         // set the URL. It loads immediately if it is a here document.
         this.img.src = url;
-
     }
 }
 
-// https://sashamaps.net/docs/resources/20-colors/
-// removing green (for obvious reasons)
-circle_colors = ['#e6194b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
-                 '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                 '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080']
 
-// add a circle with the next color
-function add_circle(x, y, name) {
-    // Find out how many circles there are
-    let count = 0;
-    for (let i=0;i<globals.objects.length;i++){
-        if (globals.objects[i].constructor.name == 'myCircle') count+=1;
-    }
-    let color = circle_colors[count];
-    globals.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
-
-    // Generate the HTML for the table body
-    let rows = '';
-    for (let i=0;i<globals.objects.length;i++){
-        let obj = globals.objects[i];
-        if (obj.constructor.name == 'myCircle'){
-            obj.id = `loc-${i}`
-            rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td><td id="${obj.id}">${obj.loc()}</td><td>n/a</td></tr>`;
-        }
-    }
-    $('#marker-tbody').html( rows );
-    draw();
-}
-
-// main draw method
-function draw( ) {
-    // clear canvas
-    globals.ctx.clearRect(0, 0, globals.c.width, globals.c.height);
-
-    // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
-    for (let s = 0; s<2; s++){
-        for (let i = 0; i< globals.objects.length; i++){
-            let obj = globals.objects[i];
-            if ((s==0 && !obj.selected()) || (s==1 && obj.selected())) {
-                obj.draw( globals.ctx );
-            }
-        }
-    }
-}
 
 ////////////////////////////////////////////////////////////////
 // Drag control
 
-var isMouseDown = false;        // is the mouse down
-var focused = {
-    key: null,                  // the object being dragged
-    state: false
-}
-
-
-function getMousePosition(e) {
-    var rect = globals.c.getBoundingClientRect();
-    return { x: Math.round(e.x) - rect.left,
-             y: Math.round(e.y) - rect.top };
-    return { x: Math.max(0,Math.max(e.x - rect.left, rect.left)),
-             y: Math.max(0,Math.min(e.y - rect.top, rect.top)) };
-}
-
-function mouseMoved(e) {
-    if (!globals.selected) {
-        return;
-    }
-    var mousePosition = getMousePosition(e);
-
-    // update position
-    if (globals.selected) {
-        // Update the position in the image
-        globals.selected.x = mousePosition.x;
-        globals.selected.y = mousePosition.y;
-        draw();
-
-        // Update the matrix
-        $( "#"+globals.selected.id ).text( globals.selected.loc() );
-
-        return;
-    }
-    // TODO: might want to hilight entered object here.
-}
-
-function clear_selection() {
-    if (globals.selected) {
-        globals.selected = null;
-    }
-}
-
-
-// set mousedown state
-function mouseChanged(e) {
-    var mousePosition = getMousePosition(e);
-    if (e.type === "mousedown") {
-        // if an object is selected, unselect it
-        clear_selection();
-
-
-        // find the object clicked in
-        for (var i = 0; i < globals.objects.length; i++) {
-            var obj = globals.objects[i];
-            if (obj.draggable && obj.contains_point( mousePosition)) {
-                globals.selected = obj;
-                // change the cursor to crosshair if something is selected
-                globals.c.style.cursor='crosshair';
-            }
-        }
-    }
-    if (e.type == 'mouseup') {
-        // if an object is selected, unselect and change back the cursor
-        clear_selection();
-        globals.c.style.cursor='auto';
-    }
-    draw();
-}
-
-function slider_moved() {
-    draw();
-}
-
-function add_marker_clicked() {
-    add_circle( 50, 50, $('#marker-name').val());
-}
-
-function done_button_clicked() {
-}
-
-const MIN_MARKER_NAME_LEN = 5;
-function marker_name_input(e) {
-    let   but = $('#add-marker-button');
-    let   stat = $('#marker-status');
-    const val = $('#marker-name').val();
-    if (val.length < MIN_MARKER_NAME_LEN) {
-        stat.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
-        but.prop('disabled',true);
-        return;
-    }
-    // Make sure it isn't in use
-    for (let i=0;i<globals.objects.length; i++){
-        if(globals.objects[i].name == val){
-            stat.text("That name is in use, choose another.");
-            but.prop('disabled',true);
-            return;
-        }
-    }
-    stat.text('');
-    but.prop('disabled',false);
-}
 
 // Called when the page is loaded
 function analyze_movie() {
 
     // Say which movie it is and load the first frame
     $('#firsth2').html(`Movie ${movie_id}`);
+    mptc = new MyPlantTracerCanvas('#frame1');
+    mptc.registerAddRow('marker-name-field', 'add-marker-button','add-marker-status');
 
-
-    // The canvas is defined int he template
-    globals.c   = document.getElementById('c1'); // get the canvas
-    globals.ctx = globals.c.getContext('2d');          // get the 2d drawing context
-
-    // Make sure the array is empty.
-    while (globals.objects.length > 0){
-        globals.objects.pop();
-    }
-
-    // Create the objects. Draw order is insertion order.
-    // Image first means that the circles go on top
-    // URL of the first frame in the movie
-
-    // old style:
-    // const url = `/api/get-frame?movie_id=${movie_id}&api_key=${api_key}&frame_msec=0&msec_delta=0`;
-    // globals.objects.push( new myImage( 0, 0, url ));
-
-    // new style:
     $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
         .done( function(data) {
             data = JSON.parse(data); // convert to JSON
-            globals.objects.push( new myImage( 0, 0, data.data_url));
-            setTimeout( draw, 1000); // trigger a reload at 1 second just in case.
+            mptc.objects.push( new myImage( 0, 0, data.data_url, mptc));
+            setTimeout( function() {mptc.redraw()}, 10); // trigger a reload at 1 second just in case.
+            //setTimeout( draw, 1000); // trigger a reload at 1 second just in case.
         });
 
 
@@ -298,11 +302,8 @@ function analyze_movie() {
     // add_circle( 25, 25, "second");
 
     // Initial drawing
-    draw();
+    mptc.redraw();
 
     // And add the event listeners
     // Should this be redone with the jQuery event system
-    globals.c.addEventListener('mousemove', mouseMoved, false);
-    globals.c.addEventListener('mousedown', mouseChanged, false);
-    globals.c.addEventListener('mouseup', mouseChanged, false);
 }
