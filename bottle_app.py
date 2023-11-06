@@ -455,12 +455,11 @@ def api_get_frame():
     def get(key, default):
         return request.forms.get(key, request.query.get(key, default))
 
-
     movie_id   = int( get('movie_id',-1 ))
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
 
-    fmt        = get('format', 'jpeg')
+    fmt        = get('format', 'jpeg').lower()
     analysis   = get('analysis', None)
 
     if fmt not in ['jpeg', 'json']:

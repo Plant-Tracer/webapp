@@ -15,6 +15,8 @@ import time
 import bottle
 import copy
 import hashlib
+import magic
+import json
 from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
@@ -208,7 +210,24 @@ def test_movie_extract(new_movie_uploaded):
     assert res1['frame_msec'] < res2['frame_msec']
     assert res0['frame_msec'] == res0b['frame_msec']
 
+    # get the frame with the JPEG interface
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '0'}):
+        ret = bottle_app.api_get_frame()
+    assert res0['frame_data'] == ret
+    assert magic.from_buffer(ret,mime=True)=='image/jpeg'
 
+    # get the frame with the JSON interface
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '0',
+                        'format':'json' }):
+        ret = json.loads(bottle_app.api_get_frame())
+    assert ret['data_url'].startswith('data:image/jpeg;base64,')
+    assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
 
 ################################################################
