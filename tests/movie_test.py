@@ -235,7 +235,7 @@ def test_movie_extract(new_movie_uploaded):
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json',
-                        'analysis':true }):
+                        'analysis':True }):
         ret = json.loads(bottle_app.api_get_frame())
     assert 'analysis' in ret
 
