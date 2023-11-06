@@ -31,9 +31,13 @@ def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
-        assert open(os.path.join(STATIC_DIR, 'test.txt'),
-                    'rb').read() == res.body.read()
+        assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == res.body.read()
 
+
+def test_icon():
+    with boddle(params={}):
+        res = bottle_app.favicon():
+        assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
 
 ################################################################
 # Validate HTML produced by templates below.
