@@ -36,8 +36,8 @@ def test_static_path():
 
 def test_icon():
     with boddle(params={}):
-        res = bottle_app.favicon():
-        assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
+        res = bottle_app.favicon()
+    assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
 
 ################################################################
 # Validate HTML produced by templates below.
