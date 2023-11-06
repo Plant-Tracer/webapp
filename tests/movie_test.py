@@ -229,6 +229,16 @@ def test_movie_extract(new_movie_uploaded):
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
     assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
+    # get the frame with the JSON interface, asking for analysis
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '0',
+                        'format':'json',
+                        'analysis':true }):
+        ret = json.loads(bottle_app.api_get_frame())
+    assert 'analysis' in ret
+
 
 ################################################################
 ## support functions
