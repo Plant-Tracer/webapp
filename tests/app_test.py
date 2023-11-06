@@ -18,7 +18,8 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import STATIC_DIR
 import bottle_app
 
-from user_test import new_course,new_user,new_movie,API_KEY
+from user_test import new_course,new_user,API_KEY
+from movie_test import new_movie
 
 def test_version():
     # With templates, res is just a string
