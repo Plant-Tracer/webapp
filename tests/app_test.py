@@ -40,6 +40,13 @@ def test_icon():
         res = bottle_app.favicon()
     assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
 
+def test_error():
+    with boddle(params={}):
+        res = bottle_app.func_error()
+    # TODO - we need to know that the response sent the clear-cooky header
+    logging.warning("res=%s",res)
+
+
 ################################################################
 # Validate HTML produced by templates below.
 # https://stackoverflow.com/questions/35538/validate-xhtml-in-python
