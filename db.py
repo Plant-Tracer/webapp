@@ -675,7 +675,7 @@ def put_frame_analysis(*,
                         ON DUPLICATE KEY UPDATE
                         annotations={ea} """)
 
-    return
+
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
     if (frame_id is None) and (engine_id is None):
