@@ -300,7 +300,9 @@ def test_movie_extract(new_movie_uploaded):
     assert json.loads(analysis_stored[1]['annotations'])==annotations2
 
     # Delete the analysis
+    logging.info("deleting frame analsys engine_id %s name %s",analysis_stored[0]['engine_id'],analysis_stored[0]['engine_name'])
     db.delete_frame_analysis(engine_id=analysis_stored[0]['engine_id'])
+    db.delete_frame_analysis(engine_id=analysis_stored[1]['engine_id'])
 
     # delete the analysis engine
     db.delete_analysis_engine(engine_name=engine_name)
