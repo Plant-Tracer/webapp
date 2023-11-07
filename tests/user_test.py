@@ -133,7 +133,7 @@ def test_new_user(new_user):
     assert 'admin' in ret2
     assert 'courses' in ret3
 
-def test_get_logs():
+def test_get_logs(new_user):
     """Incrementally test each part of the get_logs functions"""
     dbreader = db.get_dbreader()
     for security in [False,True]:
@@ -145,6 +145,13 @@ def test_get_logs():
         db.get_logs( user_id=0, movie_id = 0, security=security)
         db.get_logs( user_id=0, log_user_id = 0, security=security)
         db.get_logs( user_id=0, ipaddr = "", security=security)
+
+    api_key = new_user[API_KEY]
+    user_id   = new_user['user_id']
+    with boddle(params={'api_key': api_key, 'log_user_id':user_id}):
+        res = bottle_app.api_get_logs()
+    assert len(res)>0
+    assert res[0]['log_user_id']==user_id
 
 def test_course_list(new_user):
     cfg        = copy.copy(new_user)

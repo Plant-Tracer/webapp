@@ -10,6 +10,7 @@ import logging
 import json
 import sys
 import copy
+from typing import Optional
 #import inspect
 
 from jinja2.nativetypes import NativeEnvironment
@@ -589,12 +590,48 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
 
 def get_frame_analysis(*, frame_id):
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select * from movie_frame_analysis where frame_id=%s",
+                               """select * from movie_frame_analysis left join engines on engine_id=engines.id
+                               where frame_id=%s order by engine_name,engine_version""",
                                (frame_id,),
                                asDicts=True)
 
-def put_frame_analysis(*, frame_id, annotations, engine_id=None,
-                       engine_name=None, engine_version=None, ):
+def get_analysis_engine_id(*, engine_name, engine_version):
+    """Create an analysis engine if it does not exist, and return the engine_id"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO engines
+                        (`name`,version) VALUES (%s,%s)
+                        ON DUPLICATE KEY UPDATE name=%s""",
+                        (engine_name,engine_version,engine_name))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT id from engines
+                               WHERE `name`=%s and version=%s""",
+                               (engine_name,engine_version))[0][0]
+
+def delte_analysis_engine_id(*, engine_id):
+    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "DELETE from engines where id=%s",(engine_id,))
+
+def encode_json(d):
+    """Given json data, encode it as base64 and return as an SQL statement that processes it."""
+    djson = json.dumps(d)
+    dlen  = len(djson)
+    return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
+
+def put_frame_analysis(*,
+                       frame_id:int,
+                       annotations:Optional[dict | list],
+                       engine_id:Optional[int] =None,
+                       engine_name:Optional[str]=None,
+                       engine_version:Optional[str]=None, ):
+    """
+    :param: frame_id - integer with frame id
+    :param: annotations - a dictionary that will be escaped
+    :param: engine_id - engine_id to use
+    :param: engine_name - string of engine to use; create the engine_id if it doesn't exist
+    :param: engine_version - string of version to use.
+    """
+
     if engine_id is None:
         if (engine_name is None) or (engine_version is None):
             raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
@@ -605,26 +642,29 @@ def put_frame_analysis(*, frame_id, annotations, engine_id=None,
         raise RuntimeError("Both engine_name and engine_id may not be provided.")
 
     # Get the engine_id if only engine_name is provided
-    if engine_name is not None:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            """INSERT INTO engines
-                            (`name`,version) VALUES (%s,%s)
-                            ON DUPLICATE KEY UPDATE name=%s""",
-                            (engine_name,engine_version))
-        engine_id = dbfile.DBMySQL.csfr(get_dbreader(),
-                                        """SELECT id from engines
-                                        WHERE `name`=%s and version=%s""",
-                                        (engine_name,engine_version))[0][0]
+    if engine_id is None:
+        engine_id = get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
+
+    if (not isinstance(annotations,dict)) and (not isinstance(annotations,list)):
+        raise ValueError(f"annotations is type {type(annotations)}, should be type dict or list")
+
+    ea = encode_json(annotations)
+
+    #
+    # We use base64 encoding to get by the quoting problems.
     #
     dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """INSERT INTO movie_frame_analysis
+                        f"""INSERT INTO movie_frame_analysis
                         (frame_id, engine_id, annotations)
-                        VALUES (%s,%s,%s)
+                        VALUES ({int(frame_id)},{int(engine_id)},{ea})
                         ON DUPLICATE KEY UPDATE
-                        annotations=%s""",
-                        (frame_id, engine_id, annotations, annotations))
+                        annotations={ea} """)
 
-    raise RuntimeException("Not implemented yet")
+    return
+
+def delete_frame_analysis(*, frame_id=None, engine_id=None):
+    if (frame_id is None) and (engine_id is None):
+        raise RuntimeError("frame_id and/or engine_id must not be None")
 
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):

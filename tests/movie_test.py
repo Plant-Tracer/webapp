@@ -229,15 +229,48 @@ def test_movie_extract(new_movie_uploaded):
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
     assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
+    # get the frame with the JSON interface
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '0',
+                        'format':'json'}):
+        ret = json.loads(bottle_app.api_get_frame())
+    assert 'analysis' not in ret
+    frame_id = ret['frame_id']
+
+    # Create a random engine and upload two analysis for it
+    engine_name = "engine " + str(uuid.uuid4())[0:8]
+    analysis1 = {'guid':str(uuid.uuid4()),
+                 "key1": "value with 'single' quotes",
+                 "key2": 'value with "double" quotes',
+                 "key3": "value with 'single' and \"double\" quotes"
+                 }
+    analysis2 = {'guid':str(uuid.uuid4())}
+    db.put_frame_analysis(frame_id=frame_id,
+                          engine_name=engine_name,
+                          engine_version="1",
+                          annotations=analysis1)
+    with boddle_params(params={'api_key': api_key,
+                               'frame_id': str(frame_id),
+                               engine_name: engine_name,
+                               engine_verison:'2',
+                               annotations:analysis2}):
+        api_put_frame_analysis()
+
     # get the frame with the JSON interface, asking for analysis
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json',
-                        'analysis':True }):
+                        'analysis':True}):
         ret = json.loads(bottle_app.api_get_frame())
-    assert 'analysis' in ret
+    logging.warning("ret=%s",ret)
+    XXX
+    # Delete the analysis
+    # delete the analysis engine
+
 
 
 ################################################################
