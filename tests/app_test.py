@@ -44,7 +44,7 @@ def test_error():
     with boddle(params={}):
         res = bottle_app.func_error()
     # TODO - we need to know that the response sent the clear-cooky header
-    logging.warning("res=%s",res)
+    assert "Session expired - You have been logged out" in res
 
 
 ################################################################

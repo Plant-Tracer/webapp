@@ -185,7 +185,7 @@ def test_movie_extract(new_movie_uploaded):
     movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
     user_id = cfg[USER_ID]
-    frames = movietool.extract(cfg[DBWRITER], movie_id=movie_id, user_id=user_id)
+    frames = movietool.extract(movie_id=movie_id, user_id=user_id)
     assert frames>0
 
     def sha256(x):
