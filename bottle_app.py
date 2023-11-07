@@ -480,6 +480,8 @@ def api_get_frame():
         frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
         del frame['frame_data'];
 
+        # If analysis is requested, get a list of dictionaries from the database where each dictionary
+        # contains metadata about the annotations and the JSON object of the annotations.
         if analysis:
             frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
 
@@ -490,14 +492,23 @@ def api_get_frame():
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])
 def api_put_frame_analysis():
+    """
+    :param: frame_id - the frame.
+    :param: api_key  - the api_key
+    :param: engine_id - the engine id (if you know it)
+    :param: engine_name - the engine name (if you don't; new engine_id created automatically)
+    :param: engine_version - the engine version.
+    :param: analysis - JSON string, must be an array or a dictionary.
+    """
     frame_id  = int(request.forms.get('frame_id',None))
     try:
         engine_id = int(request.forms.get('engine_id'))
     except (TypeError,ValueError) as e:
         engine_id = None
+    logging.warning("request.forms=%s keys=%s",request.forms,request.forms.keys())
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
         db.put_frame_analysis(frame_id=frame_id,
-                              annotations=request.forms.get('annotations'),
+                              annotations=json.loads(request.forms.get('annotations')),
                               engine_id=engine_id,
                               engine_name=request.forms.get('engine_name'),
                               engine_version=request.forms.get('engine_version'))
