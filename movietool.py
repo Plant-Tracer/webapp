@@ -5,23 +5,19 @@ Movie tool
 
 import sys
 import os
-import configparser
-import json
 import tempfile
 import re
 import time
 
-import uuid
-import pymysql
 import logging
 import subprocess
 
+import pymysql
 from tabulate import tabulate
 
 # pylint: disable=no-member
 
 import db
-from paths import TEMPLATE_DIR, SCHEMA_FILE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 
@@ -34,7 +30,7 @@ FFMPEG = 'ffmpeg'
 MOVIE_SPLIT_TIMEOUT=60
 DEFAULT_FPS = 20
 
-def extract(auth, *, movie_id, user_id):
+def extract(*, movie_id, user_id):
     """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
     Does not run if frames are already in the database
     :return: count = number of frames uploaded.
@@ -56,16 +52,17 @@ def extract(auth, *, movie_id, user_id):
         with tempfile.TemporaryDirectory() as td:
             template = os.path.join(td,"frame_%04d.jpg")
 
-            proc = subprocess.Popen([FFMPEG,'-i',tf.name,template], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
-            try:
-                (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
-                logging.info("stdout = %s",stdout.replace("\n","\\n"))
-                logging.info("stderr = %s",stderr.replace("\n","\\n"))
-            except TimeoutExpired:
-                proc.kill()
-                (stdout,stderr) = proc.communicate()
-                logging.error("stdout = %s",stdout.replace("\n","\\n"))
-                logging.error("stderr = %s",stderr.replace("\n","\\n"))
+            with subprocess.Popen([FFMPEG,'-i',tf.name,template],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
+                try:
+                    (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
+                    logging.info("stdout = %s",stdout.replace("\n","\\n"))
+                    logging.info("stderr = %s",stderr.replace("\n","\\n"))
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    (stdout,stderr) = proc.communicate()
+                    logging.error("stdout = %s",stdout.replace("\n","\\n"))
+                    logging.error("stderr = %s",stderr.replace("\n","\\n"))
 
             # Find the FPS and the duration
             m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stderr, re.MULTILINE)
@@ -76,14 +73,14 @@ def extract(auth, *, movie_id, user_id):
                 duration = None
             m = re.search(r", (\d+) fps",stderr, re.MULTILINE)
             if m:
-                logging.info("fps=%s", m.group(1))
                 fps = int( m.group(1))
             else:
                 fps = DEFAULT_FPS
 
+            logging.info("fps=%s (unused)", fps)
             # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
             for frame in range(1,10000):
-                fname = template % frame;
+                fname = template % frame
                 if os.path.exists(fname):
                     frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
                     prev_frame_id = None
@@ -99,10 +96,6 @@ def extract(auth, *, movie_id, user_id):
                         count += 1
     logging.info("Frames extracted: %s",count)
     return count
-
-
-
-
 
 if __name__ == "__main__":
     import argparse
@@ -136,5 +129,5 @@ if __name__ == "__main__":
         db.purge_movie_frames(movie_id=args.purgeframes)
 
     if args.extract:
-        count = extract(auth, movie_id=args.extract, user_id=ROOT_USER)
+        count = extract(movie_id=args.extract, user_id=ROOT_USER)
         print("Frames extracted:",count)

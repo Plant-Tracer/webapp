@@ -61,7 +61,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER,INVALID_FRAME_FORMAT
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -374,7 +374,7 @@ def api_bulk_register():
             return INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
-    return {'error':False, 'message':f'Registered {count} email addresses'}
+    return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
 
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
@@ -478,7 +478,7 @@ def api_get_frame():
         # JSON format; change frame_data into data_url
         frame_data = frame['frame_data']
         frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
-        del frame['frame_data'];
+        del frame['frame_data']
 
         # If analysis is requested, get a list of dictionaries from the database where each dictionary
         # contains metadata about the annotations and the JSON object of the annotations.
@@ -503,7 +503,7 @@ def api_put_frame_analysis():
     frame_id  = int(request.forms.get('frame_id',None))
     try:
         engine_id = int(request.forms.get('engine_id'))
-    except (TypeError,ValueError) as e:
+    except (TypeError,ValueError):
         engine_id = None
     logging.warning("request.forms=%s keys=%s",request.forms,request.forms.keys())
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):

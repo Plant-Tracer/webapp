@@ -7,7 +7,7 @@ import json
 import bottle
 from bottle import request
 
-from errors import INVALID_MOVIE_ID,INVALID_FRAME_ID
+from errors import INVALID_MOVIE_ID
 
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
