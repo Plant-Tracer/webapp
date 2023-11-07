@@ -501,6 +501,17 @@ def can_access_movie(*, user_id, movie_id):
         (movie_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
+@log
+def can_access_frame(*, user_id, frame_id):
+    """Return if the user is allowed to access a specific frame"""
+    res = dbfile.DBMySQL.csfr(
+        get_dbreader(),
+        """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
+        (user_id=%s OR
+        course_id=(select primary_course_id from users where id=%s) OR
+        course_id in (select course_id from admins where user_id=%s))""",
+        (frame_id, user_id, user_id, user_id))
+    return res[0][0] > 0
 
 @log
 def movie_frames_info(*,movie_id):
@@ -589,9 +600,15 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
     return None
 
 def get_frame_analysis(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a record.
+    Within that record, 'annotations' is a JSON string.
+    """
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """select * from movie_frame_analysis left join engines on engine_id=engines.id
-                               where frame_id=%s order by engine_name,engine_version""",
+                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
+                                         frame_id,engine_id,annotations,engines.name as engine_name,
+                                         engines.version AS engine_version FROM movie_frame_analysis
+                               LEFT JOIN engines ON engine_id=engines.id
+                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
                                (frame_id,),
                                asDicts=True)
 
@@ -632,12 +649,10 @@ def put_frame_analysis(*,
     :param: engine_version - string of version to use.
     """
 
-    if engine_id is None:
-        if (engine_name is None) or (engine_version is None):
-            raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
-    if engine_name is None:
-        if engine_id is None:
-            raise RuntimeError("if engine_name is None, then engine_id must be provided.")
+    if (engine_id is None) and ((engine_name is None) or (engine_version is None)):
+        raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
+    if (engine_name is None) and (engine_id is None):
+        raise RuntimeError("if engine_name is None, then engine_id must be provided.")
     if (engine_id is not None) and (engine_name is not None):
         raise RuntimeError("Both engine_name and engine_id may not be provided.")
 
@@ -665,6 +680,25 @@ def put_frame_analysis(*,
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
     if (frame_id is None) and (engine_id is None):
         raise RuntimeError("frame_id and/or engine_id must not be None")
+    cmd = "DELETE FROM movie_frame_analysis WHERE "
+    args = []
+    if frame_id:
+        cmd += "frame_id=%s "
+        args.append(frame_id)
+    if frame_id and engine_id:
+        cmd += " AND "
+    if engine_id:
+        cmd += " engine_id=%s"
+        args.append(engine_id)
+    dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
+
+def delete_analysis_engine(*, engine_name, version=None):
+    cmd = "DELETE FROM engines WHERE name=%s "
+    args = [engine_name]
+    if version_id:
+        cmd += "AND version=%s "
+        args.append(version)
+    dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
 
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id):
@@ -674,14 +708,11 @@ def list_movies(user_id):
     res = dbfile.DBMySQL.csfr(get_dbreader(),
                               """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
                                           user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
-                                FROM movies LEFT JOIN users ON movies.user_id = users.id
-                                WHERE (user_id=%s)
-                                OR
-                                (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
-                                OR
-                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
-                              OR
-                              (%s=0)
+                              FROM movies LEFT JOIN users ON movies.user_id = users.id
+                              WHERE (user_id=%s)
+                              OR (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
+                              OR (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
+                              OR (%s=0)
                               ORDER BY movies.id
                               """,
                               (user_id, user_id, user_id, user_id), asDicts=True)

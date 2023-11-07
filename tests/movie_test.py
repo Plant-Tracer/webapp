@@ -210,6 +210,11 @@ def test_movie_extract(new_movie_uploaded):
     assert res1['frame_msec'] < res2['frame_msec']
     assert res0['frame_msec'] == res0b['frame_msec']
 
+    # Make sure can_access frame is true
+    assert db.can_access_frame(user_id=user_id, frame_id = res0['frame_id'])
+    # Make sure a different user cannot access the frame
+    assert not db.can_access_frame(user_id=user_id+1, frame_id = res0['frame_id'])
+
     # get the frame with the JPEG interface
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
@@ -241,24 +246,45 @@ def test_movie_extract(new_movie_uploaded):
 
     # Create a random engine and upload two analysis for it
     engine_name = "engine " + str(uuid.uuid4())[0:8]
-    analysis1 = {'guid':str(uuid.uuid4()),
+    annotations1 = {'guid':str(uuid.uuid4()),
                  "key1": "value with 'single' quotes",
                  "key2": 'value with "double" quotes',
-                 "key3": "value with 'single' and \"double\" quotes"
-                 }
-    analysis2 = {'guid':str(uuid.uuid4())}
+                 "key3": "value with 'single' and \"double\" quotes" }
+    annotations2 = {'guid':str(uuid.uuid4()),
+                 "key1": "value with 'single' quotes",
+                 "key2": 'value with "double" quotes',
+                 "key3": "value with 'single' and \"double\" quotes" }
+
+
+    # Test various error conditions first
+
+    # Check for error if all three are none
+    with pytest.raises(RuntimeError):
+        db.put_frame_analysis(frame_id=frame_id, annotations=annotations1)
+
+    # Check for error if engine_name is provided but engine_version is not
+    with pytest.raises(RuntimeError):
+        db.put_frame_analysis(frame_id=frame_id, engine_name=engine_name, annotations=annotations1)
+
+    # Check for error if both engine_id and engine_name are provided
+    with pytest.raises(RuntimeError):
+        db.put_frame_analysis(frame_id=frame_id, engine_id=1, engine_name=engine_name, engine_version='1', annotations=annotations1)
+
+    # Now test putting frame analysis
     db.put_frame_analysis(frame_id=frame_id,
                           engine_name=engine_name,
                           engine_version="1",
-                          annotations=analysis1)
-    with boddle_params(params={'api_key': api_key,
-                               'frame_id': str(frame_id),
-                               engine_name: engine_name,
-                               engine_verison:'2',
-                               annotations:analysis2}):
-        api_put_frame_analysis()
+                          annotations=annotations1)
 
-    # get the frame with the JSON interface, asking for analysis
+    # Now test with the Bottle API
+    with boddle(params={'api_key': api_key,
+                        'frame_id': str(frame_id),
+                        'engine_name': engine_name,
+                        'engine_version':'2',
+                        'annotations':json.dumps(annotations2)}):
+        bottle_app.api_put_frame_analysis()
+
+    # get the frame with the JSON interface, asking for annotations
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
@@ -266,10 +292,18 @@ def test_movie_extract(new_movie_uploaded):
                         'format':'json',
                         'analysis':True}):
         ret = json.loads(bottle_app.api_get_frame())
-    logging.warning("ret=%s",ret)
-    XXX
+    analysis_stored = ret['analysis']
+    # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
+    # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
+    # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
+    assert json.loads(analysis_stored[0]['annotations'])==annotations1
+    assert json.loads(analysis_stored[1]['annotations'])==annotations2
+
     # Delete the analysis
+    db.delete_frame_analysis(engine_id=analysis_stored[0]['engine_id'])
+
     # delete the analysis engine
+    db.delete_analysis_engine(engine_name=engine_name)
 
 
 
