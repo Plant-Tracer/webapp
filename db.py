@@ -695,7 +695,7 @@ def delete_frame_analysis(*, frame_id=None, engine_id=None):
 def delete_analysis_engine(*, engine_name, version=None):
     cmd = "DELETE FROM engines WHERE name=%s "
     args = [engine_name]
-    if version_id:
+    if version:
         cmd += "AND version=%s "
         args.append(version)
     dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
