@@ -54,7 +54,7 @@ def new_course():
     """Fixture to create a new course and then delete it.
     New course creates a new course admin and a new user for it"""
 
-    course_key = str(uuid.uuid4())[0:4]
+    course_key = str(uuid.uuid4())[0:32]
     admin_email = TEST_ADMIN_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:4]+'@')
     course_name = course_key + "course name"
 
