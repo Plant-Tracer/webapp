@@ -79,16 +79,18 @@ CREATE TABLE `courses` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `engine`
+-- Table structure for table `engines`
 --
 
-DROP TABLE IF EXISTS `engine`;
+DROP TABLE IF EXISTS `engines`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `engine` (
+CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  PRIMARY KEY (`id`)
+  `version` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -131,7 +133,7 @@ CREATE TABLE `movie_analysis` (
   PRIMARY KEY (`id`),
   KEY `engine_id` (`engine_id`),
   KEY `mc1` (`movie_id`),
-  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engine` (`id`),
+  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`),
   CONSTRAINT `mc1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -168,10 +170,11 @@ CREATE TABLE `movie_frame_analysis` (
   `engine_id` int NOT NULL,
   `annotations` json DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `idx4` (`frame_id`,`engine_id`),
   KEY `frame_id` (`frame_id`),
   KEY `engine_id` (`engine_id`),
   CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
-  CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engine` (`id`)
+  CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
