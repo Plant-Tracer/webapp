@@ -61,10 +61,10 @@ def get_param(k, default=None):
     """Get param v from the reqeust"""
     return request.query.get(k, request.forms.get(k, default))
 
-def get_movie_id():
-    movie_id = get_param('movie_id', None)
-    if movie_id is not None:
-        return movie_id
-    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID),
-                              status=200,
-                              headers={ 'Content-type': 'application/json'})
+#def get_movie_id():
+#    movie_id = get_param('movie_id', None)
+#    if movie_id is not None:
+#        return movie_id
+#    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID),
+#                              status=200,
+#                              headers={ 'Content-type': 'application/json'})
