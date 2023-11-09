@@ -302,19 +302,17 @@ def get_movie(api_key, movie_id):
 def test_new_movie_analysis(new_engine):
     cfg = copy.copy(new_engine)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-    eid = cfg[ENGINE_ID]
+    engine_id = cfg[ENGINE_ID]
 
     annotations='{"key": "aKey", "value": "aValue" }'
 
     #create movie_analysis
     movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
-                                 engine_id=eid,
+                                 engine_id=engine_id,
                                  annotations=annotations
                                  )['movie_analysis_id']
     #verify movie_analysis exists
-    #ToDo
+    #TODO
 
     # delete the created movie_analysis
     db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
