@@ -455,7 +455,24 @@ def api_delete_movie():
 def api_list_movies():
     return {'error': False, 'movies': db.list_movies(get_user_id())}
 
+##
+# Movie analysis API
+#
+@bottle.route('/api/new-movie-analysis', method='POST')
+def api_new_movie_analysis():
+    """Creates a new movie analysis
+    :param api_key: the user's api_key
+    :param movie_id: The movie to associate this movie analysis with
+    :param engine_id: The nngine used to create the analyis
+    :param annotations: The movie analysis's annotations, that is, a JSON document containing analysis data
+    """
 
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=request.forms.get('movie_id'),
+                                   engine_id=request.forms.get('engine_id'),
+                                   annotations=request.forms.get(
+                                       'annotations')
+                                   )['movie_analysis_id']
+    return {'error': False, 'movie_analysis_id': movie_analysis_id}
 
 ##
 # Log API

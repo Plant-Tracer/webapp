@@ -43,6 +43,7 @@ USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
+ENGINE_ID = 'engine_id'
 
 ################################################################
 
@@ -151,9 +152,18 @@ def new_movie(new_user):
     # And purge the movie that we have deleted
     db.purge_movie(movie_id=movie_id)
 
+@pytest.fixture
+def new_engine(new_movie):
+    cfg = copy.copy(new_movie)
+
+    engine_name = 'STLK'
+    engine_id = db.create_new_engine(engine_name=engine_name)
+    cfg[ENGINE_ID] = engine_id
+    yield cfg
+    db.delete_engine(engine_id=engine_id)
 
 ################################################################
-## fixutre tests
+## fixture tests
 ################################################################
 
 
@@ -289,6 +299,25 @@ def get_movie(api_key, movie_id):
         logging.error("%s", str(movie))
     raise RuntimeError(f"No movie has movie_id {movie_id}")
 
+def test_new_movie_analysis(new_engine):
+    cfg = copy.copy(new_engine)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    eid = cfg[ENGINE_ID]
+
+    annotations='{"key": "aKey", "value": "aValue" }'
+
+    #create movie_analysis
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
+                                 engine_id=eid,
+                                 annotations=annotations
+                                 )['movie_analysis_id']
+    #verify movie_analysis exists
+    #ToDo
+
+    # delete the created movie_analysis
+    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
 
 def test_get_logs():
     """Incrementally test each part of the get_logs functions"""
