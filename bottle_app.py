@@ -489,6 +489,41 @@ def api_get_frame():
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return INVALID_MOVIE_ACCESS
 
+@bottle.route('/api/track-frame', method='POST')
+def api_track_frame():
+    """Takes 2 photos and a point array and engine name.
+    :param api_key: the user's api_key
+    :param photo0: JPEG format frame
+    :param photo1: JPEG format frame, assumed to be the next frame in a movie after photo0
+    :param point_array: array of points to track in photo0 coordinates in the form [(x1,y1), ...]
+    :param engine_name: string description tracking engine to use. May be omitted to get default engine.
+    : param engine_version - string to describe which version number of engine to use. May be omitted for default version.
+    """
+
+    # pylint: disable=unsupported-membership-test
+    if 'photo0' in request.files:
+        with io.BytesIO() as f:
+            request.files['photo0'].save(f)
+            photo0 = f.getvalue()
+            if len(photo0) > MAX_FILE_UPLOAD:
+                return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+    else:
+        photo0 = None
+
+    if 'photo1' in request.files:
+        with io.BytesIO() as f:
+            request.files['photo1'].save(f)
+            photo1 = f.getvalue()
+            if len(photo1) > MAX_FILE_UPLOAD:
+                return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+    else:
+        photo1 = None
+
+    point_array = json.loads(request.forms.get('point_array'))
+    point_array = np.array(point_array)
+    coordinates, status, err = track_blockmatching.track_frame(photo0, photo1, point_array)
+    return {'error': False, 'point_array': coordinates, 'status_array': status}
+
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])
 def api_put_frame_analysis():

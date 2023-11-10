@@ -13,6 +13,7 @@ import uuid
 import base64
 import time
 import bottle
+import cv2
 import copy
 import hashlib
 import magic
@@ -307,6 +308,34 @@ def test_movie_extract(new_movie_uploaded):
     # delete the analysis engine
     db.delete_analysis_engine(engine_name=engine_name)
 
+def test_api_track_frame(new_user):
+    """test track_frame """
+    cfg = new_user
+    api_key = cfg[API_KEY]
+    
+    cap = cv2.VideoCapture('tests/data/2019-07-12 circumnutation.mp4')
+    ret, photo0 = cap.read()
+    ret, photo1 = cap.read()
+
+    photo0_base64_data = base64.b64encode(photo0)
+    photo1_base64_data = base64.b64encode(photo1)
+    point_array = json.dumps([[137, 86]])
+
+    with boddle(params={"api_key": api_key,
+                        "photo0": photo0_base64_data,
+                        "photo1": photo1_base64_data,
+                        "point array": point_array
+                        }):
+
+        with pytest.raises(bottle.HTTPResponse):
+            res = bottle_app.api_track_frame()
+
+            assert res['error'] is False
+            assert (res['status_array'][0] == 1).all()
+            assert len(res['point_array']) == 1
+            assert len(res['status_array']) == 2
+            assert abs(res['point_array'][0][0] - 137) <= 5
+            assert abs(res['point_array'][0][1] - 86) <= 5
 
 
 ################################################################
