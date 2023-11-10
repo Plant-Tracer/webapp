@@ -624,7 +624,7 @@ def get_analysis_engine_id(*, engine_name, engine_version):
                                WHERE `name`=%s and version=%s""",
                                (engine_name,engine_version))[0][0]
 
-def delte_analysis_engine_id(*, engine_id):
+def delete_analysis_engine_id(*, engine_id):
     """Deletes an analysis engine_id. This fails if the engine_id is in use"""
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         "DELETE from engines where id=%s",(engine_id,))
