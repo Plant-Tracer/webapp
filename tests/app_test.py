@@ -18,7 +18,8 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import STATIC_DIR
 import bottle_app
 
-from user_test import new_course,new_user,new_movie,API_KEY
+from user_test import new_course,new_user,API_KEY
+from movie_test import new_movie
 
 def test_version():
     # With templates, res is just a string
@@ -31,8 +32,19 @@ def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
-        assert open(os.path.join(STATIC_DIR, 'test.txt'),
-                    'rb').read() == res.body.read()
+        assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == res.body.read()
+
+
+def test_icon():
+    with boddle(params={}):
+        res = bottle_app.favicon()
+    assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
+
+def test_error():
+    with boddle(params={}):
+        res = bottle_app.func_error()
+    # TODO - we need to know that the response sent the clear-cooky header
+    assert "Session expired - You have been logged out" in res
 
 
 ################################################################
