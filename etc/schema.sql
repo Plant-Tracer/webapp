@@ -217,6 +217,7 @@ CREATE TABLE `movies` (
   `deleted` int DEFAULT '0',
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `length` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
