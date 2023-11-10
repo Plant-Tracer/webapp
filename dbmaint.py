@@ -39,6 +39,7 @@ if __name__ == "__main__":
         "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
     parser.add_argument(
         "--sendlink", help="send link to the given email address, registering it if necessary.")
+    parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER are all set with a MySQL username that can issue the "CREATE DATABASE"command. Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument(
@@ -49,7 +50,9 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     if args.sendlink:
-        db.send_links(email=args.sendlink, planttracer_endpoint = PLANTTRACER_ENDPOINT)
+        if not args.planttracer_endpoint:
+            raise RuntimeError("Please specify --planttracer_endpoint")
+        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
         sys.exit(0)
 
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
