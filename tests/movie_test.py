@@ -13,7 +13,6 @@ import uuid
 import base64
 import time
 import bottle
-import cv2
 import copy
 import hashlib
 import magic
@@ -24,6 +23,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 import db
 import movietool
 import bottle_app
+import track_blockmatching_test
 import ctools.dbfile as dbfile
 
 # Get the fixtures from user_test
@@ -313,13 +313,11 @@ def test_api_track_frame(new_user):
     cfg = new_user
     api_key = cfg[API_KEY]
     
-    cap = cv2.VideoCapture('tests/data/2019-07-12 circumnutation.mp4')
-    ret, photo0 = cap.read()
-    ret, photo1 = cap.read()
+    photo0, photo1 = track_blockmatching_test.read_frames()
 
     photo0_base64_data = base64.b64encode(photo0)
     photo1_base64_data = base64.b64encode(photo1)
-    point_array = json.dumps([[137, 86]])
+    point_array = json.dumps([[279, 223]])
 
     with boddle(params={"api_key": api_key,
                         "photo0": photo0_base64_data,
@@ -334,8 +332,8 @@ def test_api_track_frame(new_user):
             assert (res['status_array'][0] == 1).all()
             assert len(res['point_array']) == 1
             assert len(res['status_array']) == 2
-            assert abs(res['point_array'][0][0] - 137) <= 5
-            assert abs(res['point_array'][0][1] - 86) <= 5
+            assert abs(res['point_array'][0][0] - 279) <= 5
+            assert abs(res['point_array'][0][1] - 223) <= 5
 
 
 ################################################################
