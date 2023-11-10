@@ -1,5 +1,8 @@
+# pylint: disable=no-member
 import cv2
 import numpy as np
+import json
+import argparse
 
 def track_movie(movie, apex_points):
     """
@@ -41,18 +44,16 @@ def track_movie(movie, apex_points):
 
         p0, status, err = track_frame(prev_frame, current_frame, p0) #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         video_coordinates = p0.tolist()
-        print(p0)
-        print(p0.shape)
+        
         # use the points to annotate the colored frames. write to colored tracked video
         for point in p0:
             x, y = point.ravel()
-            tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)
+            tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)# pylint: disable=no-member
             # Save the frame to the output video
             out.write(tracked_current_frame)
 
     cap.release()
-    out.release() 
-    print(video_coordinates)   
+    out.release()  
     return video_coordinates    
 
 
@@ -76,5 +77,15 @@ def track_frame(prev_frame, current_frame, p0):
 if __name__ == "__main__":
 
     # the only requirement for calling track_movie() would be the "control points" and the movie
-    apex_points = np.array([[136, 86]], dtype=np.float32)
-    track_movie('tests/data/2019-07-12 circumnutation.mp4', apex_points)
+    
+    
+    parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    parser.add_argument(
+        "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
+    parser.add_argument(
+        "--points_to_track", default='[[279, 223]]', help="list of points to track as json 2D array.")
+    args = parser.parse_args()
+    apex_points = np.array(json.loads(args.points_to_track), dtype=np.float32)
+    track_movie(args.moviefile, apex_points)
