@@ -113,8 +113,10 @@ if __name__ == "__main__":
     required.add_argument(
         "--rootconfig",
         help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
-    parser.add_argument( "--list",  help="List all the movies", action='store_true')
-    parser.add_argument( "--extract",  help="extract all of the frames for the given movie", type=int)
+    parser.add_argument( "--list-movies",  help="List all the movies", action='store_true')
+    parser.add_argument( "--no-frames", help="When listing all movies, just list those with no frames", action='store_true')
+    parser.add_argument( "--extract",  help="extract all of the frames for the given movie and store in the frames database", type=int)
+    parser.add_argument( "--extract-all",  help="extract all of the frames from all-movies that do not have extracted frames for the given movie", action='store_true')
     parser.add_argument( "--purgeframes", help="purge the frames associated with a movie", type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
@@ -128,8 +130,8 @@ if __name__ == "__main__":
         print("Invalid auth: ", auth, file=sys.stderr)
         raise
 
-    if args.list:
-        rows = [(item['movie_id'],item['title']) for item in db.list_movies(0)]
+    if args.list_movies:
+        rows = [(item['movie_id'],item['title']) for item in db.list_movies(0, no_frames=args.no_frames)]
         print(tabulate(rows, headers=['movie_id','title']))
 
     if args.purgeframes:
@@ -138,3 +140,7 @@ if __name__ == "__main__":
     if args.extract:
         count = extract(auth, movie_id=args.extract, user_id=ROOT_USER)
         print("Frames extracted:",count)
+
+    if args.extract_all:
+        movies_with_no_frames = [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
+        print("No frame movies:",movies_with_no_frames)
