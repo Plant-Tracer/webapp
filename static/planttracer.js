@@ -29,8 +29,8 @@ function register_func() {
     }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
     $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
-        .done(function(data) {
-            console.log("done data=",data);
+        .done( function(data) {
+            console.log("register data=",data);
             if (data.error){
                 $('#message').html(`<b>Error: ${data.message}`);
             } else {

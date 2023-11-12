@@ -2,15 +2,12 @@
 
 This layer is necessarily customized to bottle.
 """
-import json
-
 import bottle
 from bottle import request
 
-from errors import INVALID_MOVIE_ID
-
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
+
 
 ################################################################
 # Authentication API
@@ -57,13 +54,14 @@ def get_user_ipaddr():
     """This is the only place where db.py knows about bottle."""
     return request.environ.get('REMOTE_ADDR')
 
+def get_param(k, default=None):
+    """Get param v from the reqeust"""
+    return request.query.get(k, request.forms.get(k, default))
 
-def get_movie_id():
-    movie_id = request.query.get('movie_id', None)
-    if movie_id is not None:
-        return movie_id
-    movie_id = request.forms.get('movie_id', None)
-    if movie_id is not None:
-        return movie_id
-    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID), status=200, headers={
-                              'Content-type': 'application/json'})
+#def get_movie_id():
+#    movie_id = get_param('movie_id', None)
+#    if movie_id is not None:
+#        return movie_id
+#    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID),
+#                              status=200,
+#                              headers={ 'Content-type': 'application/json'})

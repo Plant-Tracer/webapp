@@ -10,6 +10,7 @@ import logging
 import json
 import sys
 import copy
+from typing import Optional
 #import inspect
 
 from jinja2.nativetypes import NativeEnvironment
@@ -500,6 +501,17 @@ def can_access_movie(*, user_id, movie_id):
         (movie_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
+@log
+def can_access_frame(*, user_id, frame_id):
+    """Return if the user is allowed to access a specific frame"""
+    res = dbfile.DBMySQL.csfr(
+        get_dbreader(),
+        """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
+        (user_id=%s OR
+        course_id=(select primary_course_id from users where id=%s) OR
+        course_id in (select course_id from admins where user_id=%s))""",
+        (frame_id, user_id, user_id, user_id))
+    return res[0][0] > 0
 
 @log
 def movie_frames_info(*,movie_id):
@@ -578,7 +590,7 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
         delta = "frame_msec > %s order by frame_msec "
     else:
         delta = "frame_msec < %s order by frame_msec DESC "
-    cmd = f"""SELECT movie_id, frame_msec, frame_data
+    cmd = f"""SELECT movie_id, frame_msec, frame_data, id as frame_id
                               FROM movie_frames
                               WHERE movie_id=%s and {delta} LIMIT 1"""
     logging.debug("cmd = %s",cmd)
@@ -587,6 +599,106 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
         return ret[0]
     return None
 
+def get_frame_analysis(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a record.
+    Within that record, 'annotations' is a JSON string.
+    """
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
+                                         frame_id,engine_id,annotations,engines.name as engine_name,
+                                         engines.version AS engine_version FROM movie_frame_analysis
+                               LEFT JOIN engines ON engine_id=engines.id
+                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
+                               (frame_id,),
+                               asDicts=True)
+
+def get_analysis_engine_id(*, engine_name, engine_version):
+    """Create an analysis engine if it does not exist, and return the engine_id"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO engines
+                        (`name`,version) VALUES (%s,%s)
+                        ON DUPLICATE KEY UPDATE name=%s""",
+                        (engine_name,engine_version,engine_name))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT id from engines
+                               WHERE `name`=%s and version=%s""",
+                               (engine_name,engine_version))[0][0]
+
+def delete_analysis_engine_id(*, engine_id):
+    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "DELETE from engines where id=%s",(engine_id,))
+
+def encode_json(d):
+    """Given json data, encode it as base64 and return as an SQL statement that processes it."""
+    djson = json.dumps(d)
+    dlen  = len(djson)
+    return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
+
+def put_frame_analysis(*,
+                       frame_id:int,
+                       annotations:Optional[dict | list],
+                       engine_id:Optional[int] =None,
+                       engine_name:Optional[str]=None,
+                       engine_version:Optional[str]=None, ):
+    """
+    :param: frame_id - integer with frame id
+    :param: annotations - a dictionary that will be escaped
+    :param: engine_id - engine_id to use
+    :param: engine_name - string of engine to use; create the engine_id if it doesn't exist
+    :param: engine_version - string of version to use.
+    """
+
+    if (engine_id is None) and ((engine_name is None) or (engine_version is None)):
+        raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
+    if (engine_name is None) and (engine_id is None):
+        raise RuntimeError("if engine_name is None, then engine_id must be provided.")
+    if (engine_id is not None) and (engine_name is not None):
+        raise RuntimeError("Both engine_name and engine_id may not be provided.")
+
+    # Get the engine_id if only engine_name is provided
+    if engine_id is None:
+        engine_id = get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
+
+    if (not isinstance(annotations,dict)) and (not isinstance(annotations,list)):
+        raise ValueError(f"annotations is type {type(annotations)}, should be type dict or list")
+
+    ea = encode_json(annotations)
+
+    #
+    # We use base64 encoding to get by the quoting problems.
+    #
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        f"""INSERT INTO movie_frame_analysis
+                        (frame_id, engine_id, annotations)
+                        VALUES ({int(frame_id)},{int(engine_id)},{ea})
+                        ON DUPLICATE KEY UPDATE
+                        annotations={ea} """)
+
+
+
+def delete_frame_analysis(*, frame_id=None, engine_id=None):
+    if (frame_id is None) and (engine_id is None):
+        raise RuntimeError("frame_id and/or engine_id must not be None")
+    cmd = "DELETE FROM movie_frame_analysis WHERE "
+    args = []
+    if frame_id:
+        cmd += "frame_id=%s "
+        args.append(frame_id)
+    if frame_id and engine_id:
+        cmd += " AND "
+    if engine_id:
+        cmd += " engine_id=%s"
+        args.append(engine_id)
+    dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
+
+def delete_analysis_engine(*, engine_name, version=None):
+    cmd = "DELETE FROM engines WHERE name=%s "
+    args = [engine_name]
+    if version:
+        cmd += "AND version=%s "
+        args.append(version)
+    dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
 
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id, no_frames=False):
