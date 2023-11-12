@@ -42,6 +42,7 @@ export TEST_USER_EMAIL=****
 import sys
 import os
 import io
+import json
 import datetime
 import logging
 import base64
@@ -60,7 +61,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,INVALID_COURSE_ACCESS,NO_REMAINING_REGISTRATIONS
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -119,7 +120,7 @@ def static_path(path):
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
-    static_path('favicon.ico')
+    return static_path('favicon.ico')
 
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
@@ -177,7 +178,7 @@ def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
     try:
         movie_id = int(request.query.get('movie_id'))
     except (AttributeError, KeyError, TypeError):
-        movie_id = None
+        movie_id = 0            # to avoid errors
 
     if logout:
         auth.clear_cookie()
@@ -426,7 +427,7 @@ def api_new_movie():
     return {'error': False, 'movie_id': movie_id}
 
 
-@bottle.route('/api/new-frame', method='POST')
+@bottle.route('/api/new-frame', method=POST)
 def api_new_frame():
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
         frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
@@ -438,20 +439,79 @@ def api_new_frame():
     return INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-frame', method='POST')
+@bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
     :param api_keuy:   authentication
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    :param format:     jpeg - just get the image; json - get the image and json annotation
+    :param analysis:   if true, return analysis as well. format must be json
     :return:
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        return {'error': False, 'frame': db.get_frame(movie_id=request.forms.get('movie_id'),
-                                                      frame_msec = request.forms.get('frame_msec'),
-                                                      msec_delta = request.forms.get('msec_delta'))}
+    user_id    = get_user_id()
+
+    def get(key, default):
+        return request.forms.get(key, request.query.get(key, default))
+
+    movie_id   = int( get('movie_id',-1 ))
+    frame_msec = int( get('frame_msec',0 ))
+    msec_delta = int( get('msec_delta',0 ))
+
+    fmt        = get('format', 'jpeg').lower()
+    analysis   = get('analysis', None)
+
+    if fmt not in ['jpeg', 'json']:
+        return INVALID_FRAME_FORMAT
+    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
+
+        frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+        if not frame:
+            return INVALID_MOVIE_FRAME
+
+        if fmt=='jpeg':
+            bottle.response.set_header('Content-Type', 'image/jpeg')
+            logging.info("Return %d bytes",len(frame['frame_data']))
+            return frame['frame_data']
+
+        # JSON format; change frame_data into data_url
+        frame_data = frame['frame_data']
+        frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
+        del frame['frame_data']
+
+        # If analysis is requested, get a list of dictionaries from the database where each dictionary
+        # contains metadata about the annotations and the JSON object of the annotations.
+        if analysis:
+            frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
+
+        return json.dumps(frame, default=str)
+    logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return INVALID_MOVIE_ACCESS
+
+
+@bottle.route('/api/put-frame-analysis', method=['POST'])
+def api_put_frame_analysis():
+    """
+    :param: frame_id - the frame.
+    :param: api_key  - the api_key
+    :param: engine_id - the engine id (if you know it)
+    :param: engine_name - the engine name (if you don't; new engine_id created automatically)
+    :param: engine_version - the engine version.
+    :param: analysis - JSON string, must be an array or a dictionary.
+    """
+    frame_id  = int(request.forms.get('frame_id',None))
+    try:
+        engine_id = int(request.forms.get('engine_id'))
+    except (TypeError,ValueError):
+        engine_id = None
+    logging.warning("request.forms=%s keys=%s",request.forms,request.forms.keys())
+    if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
+        db.put_frame_analysis(frame_id=frame_id,
+                              annotations=json.loads(request.forms.get('annotations')),
+                              engine_id=engine_id,
+                              engine_name=request.forms.get('engine_name'),
+                              engine_version=request.forms.get('engine_version'))
 
 
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
@@ -529,10 +589,6 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    logging.warning("request.forms=%s", list(request.forms.keys()))
-    logging.warning("api_key=%s", request.forms.get('api_key'))
-    logging.warning("get_user_id()=%s", get_user_id())
-
     set_movie_id = converter(request.forms.get('set_movie_id'))
     set_user_id = converter(request.forms.get('set_user_id'))
 
