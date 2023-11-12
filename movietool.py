@@ -61,7 +61,7 @@ def extract(auth, *, movie_id, user_id):
                 (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
                 logging.info("stdout = %s",stdout.replace("\n","\\n"))
                 logging.info("stderr = %s",stderr.replace("\n","\\n"))
-            except TimeoutExpired:
+            except subprocess.TimeoutExpired:
                 proc.kill()
                 (stdout,stderr) = proc.communicate()
                 logging.error("stdout = %s",stdout.replace("\n","\\n"))
@@ -83,7 +83,7 @@ def extract(auth, *, movie_id, user_id):
 
             # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
             for frame in range(1,10000):
-                fname = template % frame;
+                fname = template % frame
                 if os.path.exists(fname):
                     frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
                     prev_frame_id = None

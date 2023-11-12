@@ -60,7 +60,7 @@ import auth
 
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,NO_EMAIL_REGISTER
+from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_COURSE_KEY,INVALID_COURSE_ACCESS,NO_REMAINING_REGISTRATIONS
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -373,7 +373,7 @@ def api_bulk_register():
             return INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
-    return {'error':False, 'message':f'Registered {count} email addresses'}
+    return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
 
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
