@@ -49,7 +49,7 @@ def upload_frames_in_range(movie_id, template, frame_range):
     return count
 
 
-def extract(*, movie_id, user_id):
+def extract_frames(*, movie_id, user_id):
     """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
     Does not run if frames are already in the database
     :return: count = number of frames uploaded.
@@ -83,17 +83,15 @@ def extract(*, movie_id, user_id):
                     logging.error("stderr = %s",stderr.replace("\n","\\n"))
 
             # Find the FPS and the duration
+            fps = DEFAULT_FPS
+            duration = None
             m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stderr, re.MULTILINE)
             if m:
                 duration = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
                 logging.info("hms=%s:%s:%s duration=%s", m.group(1), m.group(2), m.group(3), duration)
-            else:
-                duration = None
             m = re.search(r", (\d+) fps",stderr, re.MULTILINE)
             if m:
                 fps = int( m.group(1))
-            else:
-                fps = DEFAULT_FPS
 
             count = upload_frames_in_range( movie_id, template, range(1,10000))
     logging.info("Frames extracted: %s  duration: %s  fps:%s ",count, duration, fps)
@@ -108,11 +106,14 @@ if __name__ == "__main__":
 
     required.add_argument(
         "--rootconfig",
-        help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
+        help='specify config file with MySQL database root credentials in [client] section. '
+        'Format is the same as the mysql --defaults-extra-file= argument', required=True)
     parser.add_argument( "--list-movies",  help="List all the movies", action='store_true')
     parser.add_argument( "--no-frames", help="When listing all movies, just list those with no frames", action='store_true')
     parser.add_argument( "--extract",  help="extract all of the frames for the given movie and store in the frames database", type=int)
-    parser.add_argument( "--extract-all",  help="extract all of the frames from all-movies that do not have extracted frames for the given movie", action='store_true')
+    parser.add_argument( "--extract-all",
+                         help="extract all of the frames from all-movies "
+                         "that do not have extracted frames for the given movie", action='store_true')
     parser.add_argument( "--purgeframes", help="purge the frames associated with a movie", type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
@@ -127,9 +128,11 @@ if __name__ == "__main__":
         db.purge_movie_frames(movie_id=args.purgeframes)
 
     if args.extract:
-        count = extract(movie_id=args.extract, user_id=ROOT_USER)
+        count = extract_frames(movie_id=args.extract, user_id=ROOT_USER)
         print("Frames extracted:",count)
 
     if args.extract_all:
         movies_with_no_frames = [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
-        print("No frame movies:",movies_with_no_frames)
+        print("Movies with no frames:",movies_with_no_frames)
+        for movie_id in movies_with_no_frames:
+            extract_frames(movie_id=movie_id, user_id=ROOT_USER)
