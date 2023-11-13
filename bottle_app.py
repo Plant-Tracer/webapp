@@ -508,7 +508,7 @@ def api_track_frame():
             if len(photo0) > MAX_FILE_UPLOAD:
                 return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
     else:
-        photo0 = None
+        return INVALID_MOVIE_FRAME
 
     if 'photo1' in request.files:
         with io.BytesIO() as f:
@@ -517,7 +517,7 @@ def api_track_frame():
             if len(photo1) > MAX_FILE_UPLOAD:
                 return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
     else:
-        photo1 = None
+        return INVALID_MOVIE_FRAME
 
     point_array = json.loads(request.forms.get('point_array'))
     point_array = np.array(point_array)

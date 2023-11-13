@@ -23,6 +23,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 import db
 import movietool
 import bottle_app
+from errors import INVALID_MOVIE_FRAME
 import track_blockmatching_test
 import ctools.dbfile as dbfile
 
@@ -335,7 +336,23 @@ def test_api_track_frame(new_user):
             assert abs(res['point_array'][0][0] - 279) <= 5
             assert abs(res['point_array'][0][1] - 223) <= 5
 
+def test_api_track_frame_error(new_user):
+    """test track_frame """
+    cfg = new_user
+    api_key = cfg[API_KEY]
 
+    photo0_base64_data = None
+    photo1_base64_data = None
+    point_array = json.dumps([[279, 223]])
+
+    with boddle(params={"api_key": api_key,
+                        "photo0": photo0_base64_data,
+                        "photo1": photo1_base64_data,
+                        "point array": point_array
+                        }):
+        res = bottle_app.api_track_frame()
+
+        assert res == INVALID_MOVIE_FRAME
 ################################################################
 ## support functions
 ################################################################
