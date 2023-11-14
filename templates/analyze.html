@@ -31,7 +31,7 @@ annotated.
   }
 </style>
 
-<h2 id='firsth2'>First Movie Frame Loading...</h2>
+<h2 id='firsth2'>Movie Loading...</h2>
 
 <div id='template' >
   <h3> Annotating Frame: <span id='frame_number'></span> </h3>
@@ -51,7 +51,7 @@ annotated.
           <thead>
             <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th></tr>
           </thead>
-          <tbody id='marker-tbody'>
+          <tbody class='marker_table_body'>
           </tbody>
         </table>
         <hr>
@@ -61,13 +61,13 @@ annotated.
 
             <div class='pure-control-group'>
               <label for='marker-name'>Name:</label>
-              <input id='marker-name-field' placeholder='Marker name' size='20' />
-              <input id='add-marker-button' class='pure-button pure-button-primary' type='button' value='add marker' disabled/>
+              <input class='marker_name_input' placeholder='Marker name' size='20' />
+              <input class='add_marker_button pure-button pure-button-primary' type='button' value='add marker' disabled/>
             </div>
 
             <div class='pure-control-group'>
-              <label for='add-marker-status'></label>
-              <label id='add-marker-status'></label>
+              <label> v1 </label>
+              <label class='add_marker_status'>v2</label>
             </div>
           </fieldset>
         </form>

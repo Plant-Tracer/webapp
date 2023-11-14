@@ -13,6 +13,8 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
 /* MyCanvas Object - creates a canvas that can manage MyObjects */
 
+var id_counter = 0;
+
 class MyCanvas {
     constructor(canvas_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
@@ -174,10 +176,20 @@ class myCircle extends MyObject {
 
 }
 
-// This contains code specific for the planttracer project
+// This contains code specific for the planttracer project.
+// Create the canvas and wire up the buttons for add_marker button
 class MyPlantTracerCanvas extends MyCanvas {
     constructor( div_selector ) {
         super( div_selector + ' canvas' );
+
+        var me=this;
+        this.div_selector = div_selector;
+        this.marker_name_input = $(div_selector + ' input.marker_name_input');
+        this.add_marker_button = $(div_selector + ' input.add_marker_button');
+        this.add_marker_status = $(div_selector + ' label.add_marker_status');
+
+        this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
+        this.add_marker_button.on('click',function(e){me.add_marker_onclick_handler(e);});
     }
 
     mousemove_handler(e) {
@@ -189,16 +201,10 @@ class MyPlantTracerCanvas extends MyCanvas {
         }
     }
 
-    registerAddRow(marker_name_field_id, add_marker_button_id, add_marker_status_id) {
-        var me=this;
-        $('#'+marker_name_field_id).on('input',function(e) { me.marker_name_input_handler(e);});
-        this.add_marker_button = $('#'+add_marker_button_id);
-        this.add_marker_status = $('#'+add_marker_status_id);
-        this.add_marker_button.on('click',function(e){me.add_marker_onclick_handler(e);});
-    }
-
     marker_name_input_handler (e) {
-        const val = $('#marker-name-field').val();
+        console.log("e=",e,"this=",this);
+        const val = this.marker_name_input.val();
+        console.log("val=",val);
         if (val.length < MIN_MARKER_NAME_LEN) {
             this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
             this.add_marker_button.prop('disabled',true);
@@ -218,7 +224,8 @@ class MyPlantTracerCanvas extends MyCanvas {
 
 
     add_marker_onclick_handler(e) {
-        this.add_circle( 50, 50, $('#marker-name-field').val());
+        this.add_circle( 50, 50, this.marker_name_input.val());
+        this.marker_name_input.val("");
     }
 
     // https://sashamaps.net/docs/resources/20-colors/
@@ -244,12 +251,12 @@ class MyPlantTracerCanvas extends MyCanvas {
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == 'myCircle'){
-                obj.table_cell_id = `loc-${i}`
+                obj.table_cell_id = ++id_counter;
                 rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
         }
-        $('#marker-tbody').html( rows );
+        $(this.div_selector + ' tbody.marker_table_body').html( rows );
         this.redraw();
     }
 }
@@ -295,7 +302,6 @@ function analyze_movie() {
     // Say which movie it is and load the first frame
     $('#firsth2').html(`Movie ${movie_id}`);
     mptc = new MyPlantTracerCanvas('#template');
-    mptc.registerAddRow('marker-name-field', 'add-marker-button','add-marker-status');
 
     $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
         .done( function(data) {
