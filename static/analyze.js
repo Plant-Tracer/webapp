@@ -14,11 +14,16 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 /* MyCanvas Object - creates a canvas that can manage MyObjects */
 
 class MyCanvas {
-    constructor(html_id) {      // html_id is where this canvas gets inserted
+    constructor(canvas_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
-        this.c = document.getElementById( 'canvas-1' );
+
+        let canvas = $( canvas_selector );
+        this.c   = canvas[0];     // get the element
+
+        //this.c = document.getElementById( 'canvas-1' );
         this.ctx = this.c.getContext('2d');                  // the drawing context
+
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
 
@@ -171,6 +176,10 @@ class myCircle extends MyObject {
 
 // This contains code specific for the planttracer project
 class MyPlantTracerCanvas extends MyCanvas {
+    constructor( div_selector ) {
+        super( div_selector + ' canvas' );
+    }
+
     mousemove_handler(e) {
         super.mousemove_handler(e);
 
@@ -285,7 +294,7 @@ function analyze_movie() {
 
     // Say which movie it is and load the first frame
     $('#firsth2').html(`Movie ${movie_id}`);
-    mptc = new MyPlantTracerCanvas('#frame1');
+    mptc = new MyPlantTracerCanvas('#template');
     mptc.registerAddRow('marker-name-field', 'add-marker-button','add-marker-status');
 
     $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
@@ -293,17 +302,9 @@ function analyze_movie() {
             data = JSON.parse(data); // convert to JSON
             mptc.objects.push( new myImage( 0, 0, data.data_url, mptc));
             setTimeout( function() {mptc.redraw()}, 10); // trigger a reload at 1 second just in case.
-            //setTimeout( draw, 1000); // trigger a reload at 1 second just in case.
         });
 
 
-    // For testing, just add two circles
-    // add_circle( 50, 50, "first");
-    // add_circle( 25, 25, "second");
-
     // Initial drawing
     mptc.redraw();
-
-    // And add the event listeners
-    // Should this be redone with the jQuery event system
 }

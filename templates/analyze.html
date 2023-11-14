@@ -37,7 +37,15 @@ annotated.
   <h3> Annotating Frame: <span id='frame_number'></span> </h3>
   <table class='float-container'>
     <tr>
-      <td> <canvas id='canvas-1' width='320' height='320'> </canvas></td>
+      <td> <canvas width='320' height='320'> </canvas><br>
+        <label for="zoom">zoom:</label>
+        <select name="zoom">
+          <option value="100">100%</option>
+          <option value="150">150%</option>
+          <option value="200">200%</option>
+          <option value="300">300%</option>
+        </select>
+      </td>
       <td>
         <table class="pure-table pure-table-horizontal pure-table-striped">
           <thead>
@@ -46,16 +54,6 @@ annotated.
           <tbody id='marker-tbody'>
           </tbody>
         </table>
-
-        <form class='pure-form pure-form-aligned'>
-          <fieldset>
-            <legend>Movie Controls</legend>
-            <div class='pure-control-group'>
-              <label for='marker-size-slider'>Marker size:</label>
-              <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
-            </div>
-          </fieldset>
-        </form>
         <hr>
         <form class='pure-form pure-form-aligned'>
           <fieldset>
@@ -70,11 +68,6 @@ annotated.
             <div class='pure-control-group'>
               <label for='add-marker-status'></label>
               <label id='add-marker-status'></label>
-            </div>
-
-            <div class='pure-control-group'>
-              <label for='done-button'>Click to save annotations to server:</label>
-              <input class='pure-button pure-button-primary' id='done-button' type='button' value='Save'/>
             </div>
           </fieldset>
         </form>
