@@ -2,6 +2,7 @@
 
 {% block head %}
 <script type="text/javascript" charset="utf8" src="static/analyze.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
 {% endblock %}
 
 
@@ -9,57 +10,78 @@
 
 <div id='message' class='alert'><b>{{message}}</b></div>
 
-<h2 id='firsth2'>First Movie Frame Loading...</h2>
-
-<h3> Annotating Frame: <span id='frame_number'></span> </h3>
-<div id='frame1'></div>
-
-<table class="pure-table pure-table-horizontal pure-table-striped">
-  <thead>
-    <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th></tr>
-  </thead>
-  <tbody id='marker-tbody'>
-  </tbody>
-</table>
-
-<form class='pure-form pure-form-aligned'>
-  <fieldset>
-    <legend>Movie Controls</legend>
-    <div class='pure-control-group'>
-      <label for='marker-size-slider'>Marker size:</label>
-      <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
-    </div>
-  </fieldset>
-</form>
-
-<hr>
-<form class='pure-form pure-form-aligned'>
-  <fieldset>
-    <legend>Add a marker to track a point</legend>
-
-    <div class='pure-control-group'>
-      <label for='marker-name'>Name:</label>
-      <input id='marker-name-field' placeholder='Marker name' size='20' />
-      <input id='add-marker-button' class='pure-button pure-button-primary' type='button' value='add marker' disabled/>
-    </div>
-
-    <div class='pure-control-group'>
-      <label for='add-marker-status'></label>
-      <label id='add-marker-status'></label>
-    </div>
-
-    <div class='pure-control-group'>
-      <label for='done-button'>Click to save annotations to server:</label>
-      <input class='pure-button pure-button-primary' id='done-button' type='button' value='Save'/>
-    </div>
-
-  </fieldset>
-</form>
-
-<h2>Movie Frames</h2>
+<h1>Movie Frame Annotation</h1>
 This section of the web page frames from the movie, each one
 annotated.
 
+<style>
+.float-container {
+    padding: 2px;
+    border: 2px solid red;
+}
+
+.float-movie {
+    float: left;
+    padding: 2px;
+  }
+
+.float-controls {
+    float: left;
+    padding: 2px;
+  }
+</style>
+
+<h2 id='firsth2'>First Movie Frame Loading...</h2>
+
+<div id='template' >
+  <h3> Annotating Frame: <span id='frame_number'></span> </h3>
+  <table class='float-container'>
+    <tr>
+      <td> <canvas id='canvas-1' width='320' height='320'> </canvas></td>
+      <td>
+        <table class="pure-table pure-table-horizontal pure-table-striped">
+          <thead>
+            <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th></tr>
+          </thead>
+          <tbody id='marker-tbody'>
+          </tbody>
+        </table>
+
+        <form class='pure-form pure-form-aligned'>
+          <fieldset>
+            <legend>Movie Controls</legend>
+            <div class='pure-control-group'>
+              <label for='marker-size-slider'>Marker size:</label>
+              <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
+            </div>
+          </fieldset>
+        </form>
+        <hr>
+        <form class='pure-form pure-form-aligned'>
+          <fieldset>
+            <legend>Add a marker to track a point</legend>
+
+            <div class='pure-control-group'>
+              <label for='marker-name'>Name:</label>
+              <input id='marker-name-field' placeholder='Marker name' size='20' />
+              <input id='add-marker-button' class='pure-button pure-button-primary' type='button' value='add marker' disabled/>
+            </div>
+
+            <div class='pure-control-group'>
+              <label for='add-marker-status'></label>
+              <label id='add-marker-status'></label>
+            </div>
+
+            <div class='pure-control-group'>
+              <label for='done-button'>Click to save annotations to server:</label>
+              <input class='pure-button pure-button-primary' id='done-button' type='button' value='Save'/>
+            </div>
+          </fieldset>
+        </form>
+      </td>
+    </tr>
+  </table>
+</div>
 
 <script>
 var movie_id={{movie_id}};
