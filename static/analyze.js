@@ -15,9 +15,9 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
 class MyCanvas {
     constructor(html_id) {      // html_id is where this canvas gets inserted
-        const canvas_id = html_id + "-canvas";
-        $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
-        this.c = document.getElementById( canvas_id );
+        // const canvas_id = html_id + "-canvas";
+        // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
+        this.c = document.getElementById( 'canvas-1' );
         this.ctx = this.c.getContext('2d');                  // the drawing context
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
