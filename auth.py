@@ -43,11 +43,9 @@ def get_user_api_key():
 
     if api_key:
         return api_key
-    # Check for a cookie
-    api_key = request.get_cookie('api_key', None)
-    if api_key:
-        return api_key
-    return None
+
+    # Return the api_key if it is in a cookie, otherwise None
+    return request.get_cookie('api_key', None)
 
 
 def get_user_ipaddr():
