@@ -13,12 +13,19 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
 /* MyCanvas Object - creates a canvas that can manage MyObjects */
 
+var id_counter = 0;
+
 class MyCanvas {
-    constructor(html_id) {      // html_id is where this canvas gets inserted
-        const canvas_id = html_id + "-canvas";
-        $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
-        this.c = document.getElementById( canvas_id );
+    constructor(canvas_selector) {      // html_id is where this canvas gets inserted
+        // const canvas_id = html_id + "-canvas";
+        // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
+
+        let canvas = $( canvas_selector );
+        this.c   = canvas[0];     // get the element
+
+        //this.c = document.getElementById( 'canvas-1' );
         this.ctx = this.c.getContext('2d');                  // the drawing context
+
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
 
@@ -64,13 +71,6 @@ class MyCanvas {
         this.redraw();
     }
 
-    mouseup_handler(e) {
-        // if an object is selected, unselect and change back the cursor
-        this.clear_selection();
-        this.c.style.cursor='auto';
-        this.redraw();
-    }
-
     mousemove_handler(e) {
         if (this.selected == null) {
             return;
@@ -82,9 +82,17 @@ class MyCanvas {
         this.selected.x = mousePosition.x;
         this.selected.y = mousePosition.y;
         this.redraw();
-
+        this.object_did_move(this.selected);
     }
-    // TODO: might want to hilight entered object here.
+
+    mouseup_handler(e) {
+        // if an object is selected, unselect and change back the cursor
+        var obj = this.selected;
+        this.clear_selection();
+        this.c.style.cursor='auto';
+        this.redraw();
+        this.object_move_finished(obj);
+    }
 
     // Main drawing function:
     redraw() {
@@ -101,6 +109,10 @@ class MyCanvas {
             }
         }
     }
+
+    // These can be subclassed
+    object_did_move(obj) { }
+    object_move_finished(obj) { }
 }
 
 
@@ -169,27 +181,25 @@ class myCircle extends MyObject {
 
 }
 
-// This contains code specific for the planttracer project
+// This contains code specific for the planttracer project.
+// Create the canvas and wire up the buttons for add_marker button
 class MyPlantTracerCanvas extends MyCanvas {
-    mousemove_handler(e) {
-        super.mousemove_handler(e);
+    constructor( div_selector ) {
+        super( div_selector + ' canvas' );
 
-        // Update the matrix location if anything is registered
-        if (this.selected) {
-            $( "#"+this.selected.table_cell_id ).text( this.selected.loc() );
-        }
-    }
-
-    registerAddRow(marker_name_field_id, add_marker_button_id, add_marker_status_id) {
         var me=this;
-        $('#'+marker_name_field_id).on('input',function(e) { me.marker_name_input_handler(e);});
-        this.add_marker_button = $('#'+add_marker_button_id);
-        this.add_marker_status = $('#'+add_marker_status_id);
-        this.add_marker_button.on('click',function(e){me.add_marker_onclick_handler(e);});
+        this.div_selector = div_selector;
+        this.marker_name_input = $(div_selector + ' input.marker_name_input');
+        this.add_marker_button = $(div_selector + ' input.add_marker_button');
+        this.add_marker_status = $(div_selector + ' label.add_marker_status');
+
+        this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
+        this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
     }
 
+    // Handle keystrokes
     marker_name_input_handler (e) {
-        const val = $('#marker-name-field').val();
+        const val = this.marker_name_input.val();
         if (val.length < MIN_MARKER_NAME_LEN) {
             this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
             this.add_marker_button.prop('disabled',true);
@@ -207,11 +217,13 @@ class MyPlantTracerCanvas extends MyCanvas {
         this.add_marker_button.prop('disabled',false);
     }
 
-
+    // new marker added
     add_marker_onclick_handler(e) {
-        this.add_circle( 50, 50, $('#marker-name-field').val());
+        this.add_circle( 50, 50, this.marker_name_input.val());
+        this.marker_name_input.val("");
     }
 
+    // available colors
     // https://sashamaps.net/docs/resources/20-colors/
     // removing green (for obvious reasons)
     circle_colors = ['#ffe119', '#4363d8', '#f58231', '#911eb4',
@@ -224,7 +236,7 @@ class MyPlantTracerCanvas extends MyCanvas {
         // Find out how many circles there are
         let count = 0;
         for (let i=0;i<this.objects.length;i++){
-            if (this.objects[i].constructor.name == 'myCircle') count+=1;
+            if (this.objects[i].constructor.name == myCircle.name) count+=1;
         }
 
         let color = this.circle_colors[count];
@@ -234,14 +246,48 @@ class MyPlantTracerCanvas extends MyCanvas {
         let rows = '';
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
-            if (obj.constructor.name == 'myCircle'){
-                obj.table_cell_id = `loc-${i}`
+            if (obj.constructor.name == myCircle.name){
+                obj.table_cell_id = ++id_counter;
                 rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
         }
-        $('#marker-tbody').html( rows );
+        $(this.div_selector + ' tbody.marker_table_body').html( rows );
         this.redraw();
+    }
+
+    // Subclassed methods
+    // Update the matrix location of the object the moved
+    object_did_move(obj) {
+        $( "#"+obj.table_cell_id ).text( obj.loc() );
+    }
+
+    // Movement finished; upload new annotations
+    object_move_finished(obj) {
+        this.put_frame_analysis();
+    }
+
+    put_frame_analysis() {
+        var annotations = [];
+        for (let i=0;i<this.objects.length;i++){
+            let obj = this.objects[i];
+            if (obj.constructor.name == myCircle.name){
+                annotations.push( {x:obj.x, y:obj.y, name:obj.name} );
+            }
+        }
+        console.log("annotations:",annotations);
+
+        $.post('/api/put-frame-analysis', {frame_id:this.frame_id,
+                                           api_key:api_key,
+                                           engine_name:'MANUAL',
+                                           engine_version:'1',
+                                           annotations:JSON.stringify(annotations)})
+            .done( function(data) {
+                console.log("response for put-frame-analysis:",data);
+                if (data['error']) {
+                    alert("Error saving annotations: "+data);
+                }
+            });
     }
 }
 
@@ -285,25 +331,18 @@ function analyze_movie() {
 
     // Say which movie it is and load the first frame
     $('#firsth2').html(`Movie ${movie_id}`);
-    mptc = new MyPlantTracerCanvas('#frame1');
-    mptc.registerAddRow('marker-name-field', 'add-marker-button','add-marker-status');
+    mptc = new MyPlantTracerCanvas('#template');
 
     $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
         .done( function(data) {
             data = JSON.parse(data); // convert to JSON
+            console.log('data:',data);
             mptc.objects.push( new myImage( 0, 0, data.data_url, mptc));
+            mptc.frame_id = data.frame_id;
             setTimeout( function() {mptc.redraw()}, 10); // trigger a reload at 1 second just in case.
-            //setTimeout( draw, 1000); // trigger a reload at 1 second just in case.
         });
 
 
-    // For testing, just add two circles
-    // add_circle( 50, 50, "first");
-    // add_circle( 25, 25, "second");
-
     // Initial drawing
     mptc.redraw();
-
-    // And add the event listeners
-    // Should this be redone with the jQuery event system
 }

@@ -185,8 +185,15 @@ def test_movie_extract(new_movie_uploaded):
     movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
     user_id = cfg[USER_ID]
-    frames = movietool.extract(movie_id=movie_id, user_id=user_id)
+
+    # Before we start, movie_id should be a movie with no frames
+    assert movie_id in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
+
+    frames = movietool.extract_frames(movie_id=movie_id, user_id=user_id)
     assert frames>0
+
+    # Now, it should not be in the list
+    assert movie_id not in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
 
     def sha256(x):
         hasher = hashlib.sha256()

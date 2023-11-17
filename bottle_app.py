@@ -512,6 +512,8 @@ def api_put_frame_analysis():
                               engine_id=engine_id,
                               engine_name=request.forms.get('engine_name'),
                               engine_version=request.forms.get('engine_version'))
+        return {'error': False, 'message':'Analysis recorded.'}
+    return INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
