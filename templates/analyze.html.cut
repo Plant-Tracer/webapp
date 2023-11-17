@@ -1,0 +1,14 @@
+        <form class='pure-form pure-form-aligned'>
+          <fieldset>
+            <legend>Movie Controls</legend>
+            <div class='pure-control-group'>
+              <label for='marker-size-slider'>Marker size:</label>
+              <input id="marker-size-slider" type="range" min="1" max="40" value="10" class="slider" onchange='slider_moved(this);'>
+            </div>
+          </fieldset>
+        </form>
+
+        <div class='pure-control-group'>
+          <label for='done-button'>Click to save annotations to server:</label>
+          <input class='pure-button pure-button-primary' id='done-button' type='button' value='Save'/>
+        </div>

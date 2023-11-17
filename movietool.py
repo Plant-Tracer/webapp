@@ -3,7 +3,6 @@ Movie tool
 
 """
 
-import sys
 import os
 import tempfile
 import re
@@ -12,14 +11,12 @@ import time
 import logging
 import subprocess
 
-import pymysql
 from tabulate import tabulate
 
 # pylint: disable=no-member
 
 import db
 from lib.ctools import clogging
-from lib.ctools import dbfile
 
 ROOT_USER = 0
 
@@ -30,7 +27,29 @@ FFMPEG = 'ffmpeg'
 MOVIE_SPLIT_TIMEOUT=60
 DEFAULT_FPS = 20
 
-def extract(*, movie_id, user_id):
+def upload_frames_in_range(movie_id, template, frame_range):
+    # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
+
+    count = 0
+    for frame in frame_range:
+        fname = template % frame
+        if os.path.exists(fname):
+            frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
+            prev_frame_id = None
+            with open(fname,"rb") as f:
+                frame_data = f.read()
+                logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
+                t0 = time.time()
+                frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
+                t1 = time.time()
+                assert frame_id != prev_frame_id
+                prev_frame_id = frame_id
+                logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
+                count += 1
+    return count
+
+
+def extract_frames(*, movie_id, user_id):
     """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
     Does not run if frames are already in the database
     :return: count = number of frames uploaded.
@@ -42,7 +61,6 @@ def extract(*, movie_id, user_id):
     metadata = db.get_movie_metadata(user_id=user_id, movie_id=movie_id)
     logging.info("Movie %s metadata: %s",movie_id, metadata)
 
-    count  = 0
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
         data = db.get_movie_data(movie_id=movie_id)
         logging.info("tempfile %s  movie size: %s written",tf.name,len(data))
@@ -50,7 +68,7 @@ def extract(*, movie_id, user_id):
         tf.flush()
 
         with tempfile.TemporaryDirectory() as td:
-            template = os.path.join(td,"frame_%04d.jpg")
+            template = os.path.join(td, "frame_%04d.jpg")
 
             with subprocess.Popen([FFMPEG,'-i',tf.name,template],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
@@ -65,36 +83,19 @@ def extract(*, movie_id, user_id):
                     logging.error("stderr = %s",stderr.replace("\n","\\n"))
 
             # Find the FPS and the duration
+            fps = DEFAULT_FPS
+            duration = None
             m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stderr, re.MULTILINE)
             if m:
                 duration = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
                 logging.info("hms=%s:%s:%s duration=%s", m.group(1), m.group(2), m.group(3), duration)
-            else:
-                duration = None
             m = re.search(r", (\d+) fps",stderr, re.MULTILINE)
             if m:
                 fps = int( m.group(1))
-            else:
-                fps = DEFAULT_FPS
 
-            logging.info("fps=%s (unused)", fps)
-            # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
-            for frame in range(1,10000):
-                fname = template % frame
-                if os.path.exists(fname):
-                    frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
-                    prev_frame_id = None
-                    with open(fname,"rb") as f:
-                        frame_data = f.read()
-                        logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
-                        t0 = time.time()
-                        frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
-                        t1 = time.time()
-                        assert frame_id != prev_frame_id
-                        prev_frame_id = frame_id
-                        logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
-                        count += 1
-    logging.info("Frames extracted: %s",count)
+            count = upload_frames_in_range( movie_id, template, range(1,10000))
+    logging.info("Frames extracted: %s  duration: %s  fps:%s ",count, duration, fps)
+    # Save  Duration and FPS to database
     return count
 
 if __name__ == "__main__":
@@ -105,29 +106,33 @@ if __name__ == "__main__":
 
     required.add_argument(
         "--rootconfig",
-        help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
-    parser.add_argument( "--list",  help="List all the movies", action='store_true')
-    parser.add_argument( "--extract",  help="extract all of the frames for the given movie", type=int)
+        help='specify config file with MySQL database root credentials in [client] section. '
+        'Format is the same as the mysql --defaults-extra-file= argument', required=True)
+    parser.add_argument( "--list-movies",  help="List all the movies", action='store_true')
+    parser.add_argument( "--no-frames", help="When listing all movies, just list those with no frames", action='store_true')
+    parser.add_argument( "--extract",  help="extract all of the frames for the given movie and store in the frames database", type=int)
+    parser.add_argument( "--extract-all",
+                         help="extract all of the frames from all-movies "
+                         "that do not have extracted frames for the given movie", action='store_true')
     parser.add_argument( "--purgeframes", help="purge the frames associated with a movie", type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'dbwriter')
-    try:
-        d = dbfile.DBMySQL(auth)
-    except pymysql.err.OperationalError:
-        print("Invalid auth: ", auth, file=sys.stderr)
-        raise
-
-    if args.list:
-        rows = [(item['movie_id'],item['title']) for item in db.list_movies(0)]
+    if args.list_movies:
+        rows = [(item['movie_id'],item['title']) for item in db.list_movies(0, no_frames=args.no_frames)]
         print(tabulate(rows, headers=['movie_id','title']))
 
     if args.purgeframes:
         db.purge_movie_frames(movie_id=args.purgeframes)
 
     if args.extract:
-        count = extract(movie_id=args.extract, user_id=ROOT_USER)
+        count = extract_frames(movie_id=args.extract, user_id=ROOT_USER)
         print("Frames extracted:",count)
+
+    if args.extract_all:
+        movies_with_no_frames = [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
+        print("Movies with no frames:",movies_with_no_frames)
+        for movie_id in movies_with_no_frames:
+            extract_frames(movie_id=movie_id, user_id=ROOT_USER)

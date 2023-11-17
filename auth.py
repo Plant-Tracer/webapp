@@ -2,15 +2,12 @@
 
 This layer is necessarily customized to bottle.
 """
-import json
-
 import bottle
 from bottle import request
 
-from errors import INVALID_MOVIE_ID
-
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
+
 
 ################################################################
 # Authentication API
@@ -32,11 +29,11 @@ def get_user_api_key():
     # check the query string
     try:
         api_key = request.query.get(API_KEY_COOKIE_NAME, None)
+        if api_key is not None:
+            return api_key
     except KeyError:
         return None             # not running in WSGI
 
-    if api_key:
-        return api_key
 
     # check for a form submission
     try:
@@ -46,11 +43,9 @@ def get_user_api_key():
 
     if api_key:
         return api_key
-    # Check for a cookie
-    api_key = request.get_cookie('api_key', None)
-    if api_key:
-        return api_key
-    return None
+
+    # Return the api_key if it is in a cookie, otherwise None
+    return request.get_cookie('api_key', None)
 
 
 def get_user_ipaddr():
