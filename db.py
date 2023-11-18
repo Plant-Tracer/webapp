@@ -701,21 +701,29 @@ def delete_analysis_engine(*, engine_name, version=None):
     dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
 
 # Don't log this; we run list_movies every time the page is refreshed
-def list_movies(user_id):
+def list_movies(user_id, no_frames=False):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
+    :param: user_id - only list movies visible to user_id (0 for all movies)
+    :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
-                                          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
-                              FROM movies LEFT JOIN users ON movies.user_id = users.id
-                              WHERE (user_id=%s)
-                              OR (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
-                              OR (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
-                              OR (%s=0)
-                              ORDER BY movies.id
-                              """,
-                              (user_id, user_id, user_id, user_id), asDicts=True)
+    cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
+          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
+          FROM movies LEFT JOIN users ON movies.user_id = users.id
+          WHERE
+          ((user_id=%s)
+            OR (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
+            OR (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
+            OR (%s=0)
+          )
+          """
+    args = [user_id, user_id, user_id, user_id]
+
+    if no_frames:
+        cmd += "AND (movies.id not in (select distinct movie_id from movie_frames)) "
+    cmd += " ORDER BY movies.id "
+
+    res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     return res
 
 
