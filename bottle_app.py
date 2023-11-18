@@ -497,7 +497,7 @@ def api_track_frame():
     :param photo1: JPEG format frame, assumed to be the next frame in a movie after photo0
     :param point_array: array of points to track in photo0 coordinates in the form [(x1,y1), ...]
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
-    : param engine_version - string to describe which version number of engine to use. May be omitted for default version.
+    :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     """
 
     # pylint: disable=unsupported-membership-test
@@ -506,18 +506,18 @@ def api_track_frame():
             request.files['photo0'].save(f)
             photo0 = f.getvalue()
             if len(photo0) > MAX_FILE_UPLOAD:
-                return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+                return {'error': True, 'message': f'photo0 larger than larger than {MAX_FILE_UPLOAD} bytes.'}
     else:
-        return INVALID_MOVIE_FRAME
+        return {'error': True, 'message': 'Invalid photo0'} #INVALID_MOVIE_FRAME
 
     if 'photo1' in request.files:
         with io.BytesIO() as f:
             request.files['photo1'].save(f)
             photo1 = f.getvalue()
             if len(photo1) > MAX_FILE_UPLOAD:
-                return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+                return {'error': True, 'message': f'photo1 larger than larger than {MAX_FILE_UPLOAD} bytes.'}
     else:
-        return INVALID_MOVIE_FRAME
+        return {'error': True, 'message': 'Invalid photo1'} #INVALID_MOVIE_FRAME
 
     point_array = json.loads(request.forms.get('point_array'))
     point_array = np.array(point_array)

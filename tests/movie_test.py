@@ -329,7 +329,7 @@ def test_api_track_frame(new_user):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_track_frame()
 
-            assert res['error'] is False
+            assert res['error'] is False, res['message']
             assert (res['status_array'][0] == 1).all()
             assert len(res['point_array']) == 1
             assert len(res['status_array']) == 2
@@ -352,7 +352,7 @@ def test_api_track_frame_error(new_user):
                         }):
         res = bottle_app.api_track_frame()
 
-        assert res == INVALID_MOVIE_FRAME
+        assert res['error'] is True, res['message']
 ################################################################
 ## support functions
 ################################################################
