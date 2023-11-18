@@ -28,7 +28,9 @@ import bottle_app
 from errors import INVALID_MOVIE_FRAME
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_FILENAME,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
+
+TEST_MOVIE_FILENAME = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")P
 
 @pytest.fixture
 def new_movie(new_user):
@@ -40,10 +42,10 @@ def new_movie(new_user):
 
     movie_title = 'test movie title ' + str(uuid.uuid4())
 
-    logging.debug("new_movie fixture: Opening %s",MOVIE_FILENAME)
-    with open(MOVIE_FILENAME, "rb") as f:
+    logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
+    with open(TEST_MOVIE_FILENAME, "rb") as f:
         movie_data = f.read()
-    assert len(movie_data) == os.path.getsize(MOVIE_FILENAME)
+    assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
     assert len(movie_data) > 0
 
     logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
