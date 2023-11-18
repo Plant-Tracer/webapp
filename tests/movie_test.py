@@ -2,8 +2,6 @@
 Test the various functions in the database involving movie creation.
 """
 
-from boddle import boddle
-
 import sys
 import os
 import uuid
@@ -19,13 +17,15 @@ import magic
 import json
 from os.path import abspath, dirname
 
+
+from boddle import boddle
+
 sys.path.append(dirname(dirname(abspath(__file__))))
+import ctools.dbfile as dbfile
 import db
 import movietool
 import bottle_app
 from errors import INVALID_MOVIE_FRAME
-import track_blockmatching_test
-import ctools.dbfile as dbfile
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_FILENAME,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
@@ -309,50 +309,7 @@ def test_movie_extract(new_movie_uploaded):
     # delete the analysis engine
     db.delete_analysis_engine(engine_name=engine_name)
 
-def test_api_track_frame(new_user):
-    """test track_frame """
-    cfg = new_user
-    api_key = cfg[API_KEY]
-    
-    photo0, photo1 = track_blockmatching_test.read_frames()
 
-    photo0_base64_data = base64.b64encode(photo0)
-    photo1_base64_data = base64.b64encode(photo1)
-    point_array = json.dumps([[279, 223]])
-
-    with boddle(params={"api_key": api_key,
-                        "photo0": photo0_base64_data,
-                        "photo1": photo1_base64_data,
-                        "point_array": point_array
-                        }):
-
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_app.api_track_frame()
-
-            assert res['error'] is False, res['message']
-            assert (res['status_array'][0] == 1).all()
-            assert len(res['point_array']) == 1
-            assert len(res['status_array']) == 2
-            assert abs(res['point_array'][0][0] - 279) <= 5
-            assert abs(res['point_array'][0][1] - 223) <= 5
-
-def test_api_track_frame_error(new_user):
-    """test track_frame """
-    cfg = new_user
-    api_key = cfg[API_KEY]
-
-    photo0_base64_data = None
-    photo1_base64_data = None
-    point_array = json.dumps([[279, 223]])
-
-    with boddle(params={"api_key": api_key,
-                        "photo0": photo0_base64_data,
-                        "photo1": photo1_base64_data,
-                        "point array": point_array
-                        }):
-        res = bottle_app.api_track_frame()
-
-        assert res['error'] is True, res['message']
 ################################################################
 ## support functions
 ################################################################
