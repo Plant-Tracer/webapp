@@ -323,7 +323,7 @@ def test_api_track_frame(new_user):
     with boddle(params={"api_key": api_key,
                         "photo0": photo0_base64_data,
                         "photo1": photo1_base64_data,
-                        "point array": point_array
+                        "point_array": point_array
                         }):
 
         with pytest.raises(bottle.HTTPResponse):
