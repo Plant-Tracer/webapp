@@ -19,22 +19,22 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from PIL import Image
 from paths import TEST_DATA_DIR
 import blocktrack
 import bottle_app
 
 import boddle
 
-
+from PIL import Image
 
 # get the first MOV
-TEST_MOV = glob.glob(os.path.join(TEST_DATA_DIR, '*.mov'))[0]
-PATTERN = 'frame_%05d.jpeg'
+ATTERN = 'frame_%05d.jpeg'
 PHOTO_SEQUENCE_NAME = os.path.join(MYDIR, "data", "frame_%04d.jpg")
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_FILENAME,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,PHOTO_SEQUENCE_NAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,PHOTO_SEQUENCE_NAME
+
+from movie_test import TEST_MOVIE_FILENAME
 
 import track_blockmatching
 
@@ -47,13 +47,10 @@ def extract_all_frames(infilename, pattern, destdir):
     if ret > 0:
         raise RuntimeError("failed: "+ffmpeg_cmd.join(' '))
 
-
-
-
 def test_blocktrack():
     count = 0
     with tempfile.TemporaryDirectory() as td:
-        extract_all_frames(TEST_MOV, PATTERN, td)
+        extract_all_frames(TEST_MOVIE_FILENAME, PATTERN, td)
         context = None
         for fn in sorted(glob.glob(os.path.join(td, "*.jpeg"))):
             logging.info("process %s", fn)
