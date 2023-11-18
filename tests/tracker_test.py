@@ -29,7 +29,7 @@ from PIL import Image
 
 # get the first MOV
 ATTERN = 'frame_%05d.jpeg'
-PHOTO_SEQUENCE_NAME = os.path.join(MYDIR, "data", "frame_%04d.jpg")
+PHOTO_SEQUENCE_NAME = os.path.join(TEST_DATA_DIR, "frame_%04d.jpg")
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,PHOTO_SEQUENCE_NAME
