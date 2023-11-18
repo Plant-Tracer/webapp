@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import sys
 from os.path import dirname, abspath
+from user_test import PHOTO_SEQUENCE_NAME
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -22,7 +23,7 @@ def test_track_frame():
     
 def read_frames():
     
-    cap = cv2.VideoCapture('tests/data/frame_%04d.jpg')
+    cap = cv2.VideoCapture(PHOTO_SEQUENCE_NAME)
     ret, photo0 = cap.read()
     ret, photo1 = cap.read()
         

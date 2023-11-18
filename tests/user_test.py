@@ -33,7 +33,7 @@ TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 TEST_ADMIN_NAME = 'Test User Name'
 
 MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
-
+PHOTO_SEQUENCE_NAME = os.path.join(MYDIR, "data", "frame_%04d.jpg")
 # keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
 ADMIN_ID = 'admin_id'
