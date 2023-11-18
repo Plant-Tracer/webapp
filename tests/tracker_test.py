@@ -7,6 +7,7 @@ import logging
 import json
 import tempfile
 import glob
+import base64
 
 from os.path import abspath, dirname
 
@@ -23,16 +24,15 @@ from paths import TEST_DATA_DIR
 import blocktrack
 import bottle_app
 
-import boddle
-
 from PIL import Image
 
 # get the first MOV
-ATTERN = 'frame_%05d.jpeg'
-PHOTO_SEQUENCE_NAME = os.path.join(TEST_DATA_DIR, "frame_%04d.jpg")
+
+PHOTO_SEQUENCE_PATTERN = 'frame_%05d.jpeg'
+PHOTO_SEQUENCE_PATH_PATTERN = os.path.join(TEST_DATA_DIR, PHOTO_SEQUENCE_PATTERN)
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,PHOTO_SEQUENCE_NAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
 
 from movie_test import TEST_MOVIE_FILENAME
 
@@ -40,8 +40,7 @@ import track_blockmatching
 
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
 def extract_all_frames(infilename, pattern, destdir):
-    ffmpeg_cmd = ['ffmpeg', '-i', infilename,
-                  os.path.join(destdir, pattern), '-hide_banner']
+    ffmpeg_cmd = ['ffmpeg', '-i', infilename, os.path.join(destdir, pattern), '-hide_banner']
     logging.info(ffmpeg_cmd)
     ret = subprocess.call(ffmpeg_cmd)
     if ret > 0:
@@ -50,7 +49,7 @@ def extract_all_frames(infilename, pattern, destdir):
 def test_blocktrack():
     count = 0
     with tempfile.TemporaryDirectory() as td:
-        extract_all_frames(TEST_MOVIE_FILENAME, PATTERN, td)
+        extract_all_frames(TEST_MOVIE_FILENAME, PHOTO_SEQUENCE_PATTERN, td)
         context = None
         for fn in sorted(glob.glob(os.path.join(td, "*.jpeg"))):
             logging.info("process %s", fn)
@@ -65,16 +64,14 @@ def test_blocktrack():
 
 
 def read_frames():
-    """What does this do? Why are we reading from PHOTO_SEQUENCE_NAME?  Who set up `frame_%04d.jpg` ???"""
-
-    cap = cv2.VideoCapture(PHOTO_SEQUENCE_NAME)
+    """What does this do? Why are we reading from PHOTO_SEQUENCE_PATH_PATTERN?  Who set up `frame_%04d.jpg` ???  WHY DOES IT ASSUME WHICH DIRECTORY IT IS RUNNING IN"""
+    cap = cv2.VideoCapture(PHOTO_SEQUENCE_PATH_PATTERN)
     ret, photo0 = cap.read()
     ret, photo1 = cap.read()
     return photo0, photo1
 
 
 def test_track_frame():
-
     photo0, photo1 = read_frames()
     point_array = np.array([[279, 223]], dtype=np.float32)
     point_array, status_array, err = track_blockmatching.track_frame(photo0, photo1, point_array)
@@ -91,7 +88,7 @@ def test_api_track_frame(new_user):
     cfg = new_user
     api_key = cfg[API_KEY]
 
-    photo0, photo1 = track_blockmatching_test.read_frames()
+    photo0, photo1 = read_frames()
 
     photo0_base64_data = base64.b64encode(photo0)
     photo1_base64_data = base64.b64encode(photo1)
