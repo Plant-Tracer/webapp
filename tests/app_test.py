@@ -15,7 +15,7 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import STATIC_DIR
+from paths import STATIC_DIR,TEST_DATA_DIR
 import bottle_app
 
 from user_test import new_course,new_user,API_KEY
