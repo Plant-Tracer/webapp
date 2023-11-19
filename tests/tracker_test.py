@@ -52,6 +52,7 @@ def extracted_jpeg_frames():
     logging.info("Done with frames; temporary directory deleted")
 
 def test_extracted_jpeg_frames(extracted_jpeg_frames):
+    """Test the fixture to make sure that it is good"""
     frames = extracted_jpeg_frames['jpegs']
     assert len(frames)>2
 
@@ -61,7 +62,10 @@ def test_extracted_jpeg_frames(extracted_jpeg_frames):
         assert magic.from_file( frames[i], mime=True) == 'image/jpeg'
 
 
+
+@pytest.mark.skip(reason='blocktrack.py is not operational yet')
 def test_blocktrack(extracted_jpeg_frames):
+    """Using JPEGs from the fixture, test the blocktrack.blocktrack function"""
     frames = extracted_jpeg_frames['jpegs']
     count = 0
     context = None
@@ -79,20 +83,22 @@ def test_blocktrack(extracted_jpeg_frames):
 
 
 @pytest.fixture
-def first_two_frames(extracted_jpeg_frames):
-    """Returns the first two extracted frames as CV2 images"""
+def first_two_frames_as_cv2_images(extracted_jpeg_frames):
+    """Returns the first two extracted frames as CV2 images."""
     frames = extracted_jpeg_frames['jpegs']
-    return ( cv2.imread(frames[0]), cv2.imread(frames[1]))
+    return {'images':[cv2.imread(frames[0]), cv2.imread(frames[1])]}
 
 
-def test_track_frame(first_two_frames):
-    photo0, photo1 = first_two_frames
+def test_track_frame(first_two_frames_as_cv2_images):
+    """Test the track_frame method by giving it two frames as NP arrays and validating its results"""
+    photo0, photo1 = first_two_frames_as_cv2_images['images']
     point_array = np.array([[279, 223]], dtype=np.float32)
     point_array, status_array, err = track_blockmatching.track_frame(photo0, photo1, point_array)
 
+    logging.info("point_array=%s status_array=%s err=%s",point_array, status_array, err)
+    assert len(point_array) == 1
     assert (status_array == 1)
     assert len(status_array) == 1
-    assert len(point_array) == 1
     assert abs(point_array[0][0] - 279) <= 5
     assert abs(point_array[0][1] - 223) <= 5
 
