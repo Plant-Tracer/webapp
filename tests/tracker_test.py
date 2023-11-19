@@ -8,6 +8,7 @@ import json
 import tempfile
 import glob
 import base64
+import magic
 
 from os.path import abspath, dirname
 
@@ -38,23 +39,27 @@ import track_blockmatching
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
 
 @pytest.fixture
-def extracted_frames():
+def extracted_jpeg_frames():
+    """Fixture that returns a dictionary containing two frames - 'frame0' and 'frame1'. Both are JPEGs"""
     with tempfile.TemporaryDirectory() as td:
         output_template = os.path.join(td, movietool.JPEG_TEMPLATE)
         logging.info("output_template=%s",output_template)
         (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
-        frames = movietool.frames_matching_template(output_template)
-        logging.info("extracted frame %s",frames)
-        assert len(frames)>0
-        yield {'frames':frames}
-    logging.info("Done with frames; deleting temporary directory")
+        jpegs = movietool.frames_matching_template(output_template)
+        logging.info("extracted jpegs: %s",jpegs)
+        assert len(jpegs)>0
+        yield {'jpegs':jpegs}
+    logging.info("Done with frames; temporary directory deleted")
 
-def test_extracted_frames(extracted_frames):
-    frames = extracted_frames['frames']
+def test_extracted_jpeg_frames(extracted_jpeg_frames):
+    frames = extracted_jpeg_frames['jpegs']
     assert len(frames)>2
+    assert magic.from_buffer( frames[0], mime=True) == 'image/jpeg'
+    assert magic.from_buffer( frames[1], mime=True) == 'image/jpeg'
 
-def test_blocktrack(extracted_frames):
-    frames = extracted_frames['frames']
+
+def test_blocktrack(extracted_jpeg_frames):
+    frames = extracted_jpeg_frames['jpegs']
     count = 0
     context = None
     logging.info("frames=%s",frames)
@@ -71,9 +76,9 @@ def test_blocktrack(extracted_frames):
 
 
 @pytest.fixture
-def first_two_frames(extracted_frames):
+def first_two_frames(extracted_jpeg_frames):
     """Returns the first two extracted frames as CV2 images"""
-    frames = extracted_frames['frames']
+    frames = extracted_jpeg_frames['jpegs']
     return ( cv2.imread(frames[0]), cv2.imread(frames[1]))
 
 
