@@ -12,6 +12,8 @@ import time
 import logging
 import subprocess
 
+from os.path import abspath,dirname
+
 from tabulate import tabulate
 
 # pylint: disable=no-member
@@ -24,11 +26,14 @@ ROOT_USER = 0
 __version__ = '0.0.1'
 
 FFMPEG = 'ffmpeg'
-
 MOVIE_SPLIT_TIMEOUT=20
 DEFAULT_FPS = 20
+JPEG_TEMPLATE = 'frame_%04d.jpg'
 
 def frames_matching_template(frame_template):
+    dname = dirname(abspath(frame_template))
+    if not os.path.exists(dname):
+        raise FileNotFoundError(dname)
     frames = []
     for ct in range(0,10000):
         fname = frame_template % ct
@@ -96,7 +101,7 @@ def extract_frames(*, movie_id, user_id):
         tf.flush()
 
         with tempfile.TemporaryDirectory() as td:
-            template = os.path.join(td, "frame_%04d.jpg")
+            template = os.path.join(td, JPEG_TEMPLATE)
 
             (stdout,stderr) = extract_all_frames_from_file_with_ffmpeg(tf.name, template)
 
