@@ -49,6 +49,22 @@ def upload_frames_in_range(movie_id, template, frame_range):
     return count
 
 
+def extract_all_frames_from_file_with_ffmpeg(movie_file, output_template):
+    """Extract all of the frames from a movie with ffmpeg. Returns (stdout,stderr) of the ffmpeg process."""
+    with subprocess.Popen([FFMPEG,'-i', movie_file, output_template],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
+        try:
+            (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
+            logging.info("stdout = %s",stdout.replace("\n","\\n"))
+            logging.info("stderr = %s",stderr.replace("\n","\\n"))
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            (stdout,stderr) = proc.communicate()
+            logging.error("stdout = %s",stdout.replace("\n","\\n"))
+            logging.error("stderr = %s",stderr.replace("\n","\\n"))
+    return (stdout, stderr)
+
+
 def extract_frames(*, movie_id, user_id):
     """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
     Does not run if frames are already in the database
@@ -70,17 +86,7 @@ def extract_frames(*, movie_id, user_id):
         with tempfile.TemporaryDirectory() as td:
             template = os.path.join(td, "frame_%04d.jpg")
 
-            with subprocess.Popen([FFMPEG,'-i',tf.name,template],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
-                try:
-                    (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
-                    logging.info("stdout = %s",stdout.replace("\n","\\n"))
-                    logging.info("stderr = %s",stderr.replace("\n","\\n"))
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    (stdout,stderr) = proc.communicate()
-                    logging.error("stdout = %s",stdout.replace("\n","\\n"))
-                    logging.error("stderr = %s",stderr.replace("\n","\\n"))
+            (stdout,stderr) = extract_all_frames_from_file_with_ffmpeg(tf.name, template)
 
             # Find the FPS and the duration
             fps = DEFAULT_FPS
