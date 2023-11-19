@@ -54,8 +54,11 @@ def extracted_jpeg_frames():
 def test_extracted_jpeg_frames(extracted_jpeg_frames):
     frames = extracted_jpeg_frames['jpegs']
     assert len(frames)>2
-    assert magic.from_buffer( frames[0], mime=True) == 'image/jpeg'
-    assert magic.from_buffer( frames[1], mime=True) == 'image/jpeg'
+
+    # Make sure that the files exist and that they have the correct mime type
+    for i in [0,1]:
+        assert os.path.exists( frames[i] )
+        assert magic.from_file( frames[i], mime=True) == 'image/jpeg'
 
 
 def test_blocktrack(extracted_jpeg_frames):
