@@ -28,8 +28,6 @@ from PIL import Image
 
 # get the first MOV
 
-PHOTO_SEQUENCE_PATTERN = 'frame_%05d.jpeg'
-
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
 
@@ -42,12 +40,14 @@ import track_blockmatching
 @pytest.fixture
 def extracted_frames():
     with tempfile.TemporaryDirectory() as td:
-        output_template = os.path.join(td, PHOTO_SEQUENCE_PATTERN)
+        output_template = os.path.join(td, movietool.JPEG_TEMPLATE)
+        logging.info("output_template=%s",output_template)
         (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
-    frames = movietool.frames_matching_template(output_template)
-    logging.info("extracted frame %s",frames)
-    assert len(frames)>0
-    yield {'frames':frames}
+        frames = movietool.frames_matching_template(output_template)
+        logging.info("extracted frame %s",frames)
+        assert len(frames)>0
+        yield {'frames':frames}
+    logging.info("Done with frames; deleting temporary directory")
 
 def test_extracted_frames(extracted_frames):
     frames = extracted_frames['frames']
@@ -57,8 +57,8 @@ def test_blocktrack(extracted_frames):
     frames = extracted_frames['frames']
     count = 0
     context = None
-    logging.info("list=%s",list_of_extracted_frames)
-    for infile in list_of_extracted_frames:
+    logging.info("frames=%s",frames)
+    for infile in frames:
         logging.info("process %s", infile)
         with open(infile, 'rb') as infile:
             img = Image.open(infile)
@@ -72,12 +72,9 @@ def test_blocktrack(extracted_frames):
 
 @pytest.fixture
 def first_two_frames(extracted_frames):
-    """What does this do? Why are we reading from PHOTO_SEQUENCE_PATH_PATTERN?  Who set up `frame_%04d.jpg` ???  WHY DOES IT ASSUME WHICH DIRECTORY IT IS RUNNING IN"""
-    #cap = cv2.VideoCapture(PHOTO_SEQUENCE_PATH_PATTERN)
-    #ret, photo0 = cap.read()
-    #ret, photo1 = cap.read()
+    """Returns the first two extracted frames as CV2 images"""
     frames = extracted_frames['frames']
-    return (frames[0],frames[1])
+    return ( cv2.imread(frames[0]), cv2.imread(frames[1]))
 
 
 def test_track_frame(first_two_frames):
