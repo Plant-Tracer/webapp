@@ -47,7 +47,7 @@ def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
         with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
             tf0.write(frame0_jpeg)
             tf1.write(frame1_jpeg)
-            return track_frame_cv2( cv2.imread(tf0.name), cv2.imread(tf1.name), points_array_in )
+            return track_frame_cv2( cv2.imread(tf0.name), cv2.imread(tf1.name), np.array(points_array_in,dtype=np.float32))
 
 
 
