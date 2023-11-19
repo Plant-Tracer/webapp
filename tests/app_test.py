@@ -1,3 +1,8 @@
+"""
+Tests for the application
+"""
+
+
 import pytest
 import sys
 import os
