@@ -95,7 +95,6 @@ def test_api_track_frame(new_user, first_two_frames):
     api_key = cfg[API_KEY]
 
     photo0, photo1 = first_two_frames
-
     photo0_base64_data = base64.b64encode(photo0)
     photo1_base64_data = base64.b64encode(photo1)
     point_array = json.dumps([[279, 223]])
@@ -105,16 +104,13 @@ def test_api_track_frame(new_user, first_two_frames):
                         "photo1": photo1_base64_data,
                         "point_array": point_array
                         }):
-
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_app.api_track_frame()
-
-            assert res['error'] is False, res['message']
-            assert (res['status_array'][0] == 1).all()
-            assert len(res['point_array']) == 1
-            assert len(res['status_array']) == 2
-            assert abs(res['point_array'][0][0] - 279) <= 5
-            assert abs(res['point_array'][0][1] - 223) <= 5
+        res = bottle_app.api_track_frame()
+        assert res['error'] is False, res['message']
+        assert (res['status_array'][0] == 1).all()
+        assert len(res['point_array']) == 1
+        assert len(res['status_array']) == 2
+        assert abs(res['point_array'][0][0] - 279) <= 5
+        assert abs(res['point_array'][0][1] - 223) <= 5
 
 def test_api_track_frame_error(new_user):
     """test track_frame """

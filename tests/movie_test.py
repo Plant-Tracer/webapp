@@ -48,6 +48,7 @@ def new_movie(new_user):
     assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
     assert len(movie_data) > 0
 
+    # This generates an error, which is why it needs to be caught with pytest.raises():
     logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
     with boddle(params={"api_key": api_key_invalid,
                         "title": movie_title,
@@ -57,6 +58,7 @@ def new_movie(new_user):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_new_movie()
 
+    # This does not raise an error
     logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
     with boddle(params={"api_key": api_key,
                         "title": movie_title,
