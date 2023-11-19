@@ -53,12 +53,14 @@ import bottle
 from bottle import request
 from validate_email_address import validate_email
 
+# Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
 
 import db
 import paths
 import auth
 
+import track_blockmatching
 from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
 from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
@@ -491,10 +493,13 @@ def api_get_frame():
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
-    """Takes 2 frames and a point array and engine name.
+    """Takes 2 frames and a point array and engine name. Note that the frames are uploaded as POST fields, not as files.
+    Files do not need to be BASE64 encoded, becuase there is a nice out-of-band protocol for doing that.
+    However, we hvae seen that binary data sent in forms should be base64 encoded.
+    Because we are uploading two frames, it's easier to do as a base64-encoded FORM submission.
     :param api_key: the user's api_key
-    :param frame0: JPEG format frame
-    :param frame1: JPEG format frame, assumed to be the next frame in a movie after frame0
+    :param frame0_base64_data: JPEG format frame
+    :param frame1_base64_data: JPEG format frame, assumed to be the next frame in a movie after frame0
     :param point_array: array of points to track in frame0 coordinates in the form [(x1,y1), ...]
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
@@ -502,25 +507,22 @@ def api_track_frame():
 
     # pylint: disable=unsupported-membership-test
     frames = {}
-    for frame in ['frame0','frame1']:
-        if frame in request.files:
-            with io.BytesIO() as f:
-                request.files[frame].save(f)
-                frame_bytes = f.getvalue()
-                if len(frame_bytes) > MAX_FILE_UPLOAD:
-                    return {'error': True, 'message': f'len({frame})={len(frame_bytes)} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
-                frames[frame] = frame_bytes
-        else:
-            return {'error': True, 'message': f'Parameter {frame} is required'}
-        mime_type = magic.from_buffer(frame_bytes,mime=True)
+    for i in [0,1]:
+        base64_data_name = f"frame{i}_base64_data"
+        data_name = f"frame{i}_data"
+        if base64_data_name not in request.forms:
+            return {'error': True, 'message': f'Parameter {base64_data_name} is required'}
+        frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
+        if len(frames[data_name]) > MAX_FILE_UPLOAD:
+            return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
+        mime_type = magic.from_buffer(frames[data_name],mime=True)
         if mime_type not in ['image/jpeg']:
-            return {'error': True, 'message': f'magic.from_buffer({frame})={mime_type} is not an allowable MIME type for frames'}
+            return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
-    point_array = json.loads(request.forms.get('point_array'))
-    point_array = np.array(point_array)
-    coordinates, status, err = track_blockmatching.track_frame( frames['frame0'], frames['frame1'], point_array)
-    return {'error': False, 'point_array': coordinates, 'status_array': status}
+    point_array_in = json.loads(request.forms.get('point_array'))
+    point_array_out, status, err = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    return {'error': False, 'point_array_out': point_array_out, 'status_array': status}
 
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])

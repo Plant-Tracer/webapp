@@ -48,12 +48,12 @@ def extracted_jpeg_frames():
         jpegs = movietool.frames_matching_template(output_template)
         logging.info("extracted jpegs: %s",jpegs)
         assert len(jpegs)>0
-        yield {'jpegs':jpegs}
+        yield {'jpeg_file_names':jpegs}
     logging.info("Done with frames; temporary directory deleted")
 
 def test_extracted_jpeg_frames(extracted_jpeg_frames):
     """Test the fixture to make sure that it is good"""
-    frames = extracted_jpeg_frames['jpegs']
+    frames = extracted_jpeg_frames['jpeg_file_names']
     assert len(frames)>2
 
     # Make sure that the files exist and that they have the correct mime type
@@ -61,12 +61,10 @@ def test_extracted_jpeg_frames(extracted_jpeg_frames):
         assert os.path.exists( frames[i] )
         assert magic.from_file( frames[i], mime=True) == 'image/jpeg'
 
-
-
 @pytest.mark.skip(reason='blocktrack.py is not operational yet')
 def test_blocktrack(extracted_jpeg_frames):
     """Using JPEGs from the fixture, test the blocktrack.blocktrack function"""
-    frames = extracted_jpeg_frames['jpegs']
+    frames = extracted_jpeg_frames['jpeg_file_names']
     count = 0
     context = None
     logging.info("frames=%s",frames)
@@ -82,64 +80,92 @@ def test_blocktrack(extracted_jpeg_frames):
         raise RuntimeError("no frames processed")
 
 
+def test_track_frame_jpegs(extracted_jpeg_frames):
+    """Test the track_frame_jpegs method by giving it two frames as JPEGs and validating its results"""
+
+    frames = extracted_jpeg_frames['jpeg_file_names']
+    jpegs = []
+    for i in [0,1]:
+        with open(frames[i],"rb") as f:
+            jpegs.append(f.read())
+            assert magic.from_buffer( jpegs[i], mime=True) == 'image/jpeg'
+
+    point_array_in = [[279, 223]]
+    res = track_blockmatching.track_frame_jpegs(jpegs[0], jpegs[1], point_array_in)
+
+    status_array = res['status_array']
+    assert len(status_array) == 1
+
+    err = res['res']
+    point_array_out = res['point_array_out']
+    assert len(point_array_out) == 1
+    assert len(point_array_out[0]) == 2
+    assert abs(point_array_out[0][0] - 279) <= 5
+    assert abs(point_array_out[0][1] - 223) <= 5
+
 @pytest.fixture
 def first_two_frames_as_cv2_images(extracted_jpeg_frames):
     """Returns the first two extracted frames as CV2 images."""
-    frames = extracted_jpeg_frames['jpegs']
+    frames = extracted_jpeg_frames['jpeg_file_names']
     return {'images':[cv2.imread(frames[0]), cv2.imread(frames[1])]}
 
 
-def test_track_frame(first_two_frames_as_cv2_images):
-    """Test the track_frame method by giving it two frames as NP arrays and validating its results"""
+def test_track_frame_cv2_images(first_two_frames_as_cv2_images):
+    """Test the track_frame_cv2 method by giving it two frames as NP arrays and validating its results"""
     photo0, photo1 = first_two_frames_as_cv2_images['images']
-    point_array = np.array([[279, 223]], dtype=np.float32)
-    point_array, status_array, err = track_blockmatching.track_frame(photo0, photo1, point_array)
+    point_array_in = np.array([[279, 223]], dtype=np.float32)
+    res = track_blockmatching.track_frame_cv2(photo0, photo1, point_array_in)
+    logging.info("res=%s",json.dumps(res,default=str))
 
-    logging.info("point_array=%s status_array=%s err=%s",point_array, status_array, err)
-    assert len(point_array) == 1
-    assert (status_array == 1)
+    status_array = res['status_array']
     assert len(status_array) == 1
-    assert abs(point_array[0][0] - 279) <= 5
-    assert abs(point_array[0][1] - 223) <= 5
+
+    err = res['err']
+    point_array_out = res['point_array_out']
+    assert len(point_array_out) == 1
+    assert len(point_array_out[0]) == 2
+    assert abs(point_array_out[0][0] - 279) <= 5
+    assert abs(point_array_out[0][1] - 223) <= 5
 
 
-def test_api_track_frame(new_user, first_two_frames):
-    """test track_frame """
-    cfg = new_user
-    api_key = cfg[API_KEY]
 
-    photo0, photo1 = first_two_frames
-    photo0_base64_data = base64.b64encode(photo0)
-    photo1_base64_data = base64.b64encode(photo1)
-    point_array = json.dumps([[279, 223]])
+def test_api_track_frame(new_user, extracted_jpeg_frames):
+    """Test the track_frame API. Note that the API requires base64-encoded JPEG files and NOT CV2 arrays. It also requires a valid API key"""
+    cfg      = new_user
+    fnames   = extracted_jpeg_frames['jpeg_file_names']
 
-    with boddle(params={"api_key": api_key,
-                        "photo0": photo0_base64_data,
-                        "photo1": photo1_base64_data,
-                        "point_array": point_array
-                        }):
+    # First check to make sure that the API generates an error when given an invalid API key
+    with boddle(params={"api_key": 'invalid key'}):
+        res = bottle_app.api_track_frame()
+        assert res['error'] is True, res['message']
+
+    # Now check with a valid API key but with no image parameters
+    # Note that the error no longer comes from an exception
+    params = {}
+    params['api_key'] = cfg[API_KEY]
+    with boddle(params={"api_key": 'invalid key'}):
+        res = bottle_app.api_track_frame()
+        assert res['error'] is True, res['message']
+
+    # Now add the images but no point_array to track
+    for i in [0,1]:
+        with open(fnames[i],'rb') as f:
+            params[f'frame{i}_base64_data'] = base64.b64encode(f.read())
+    with boddle(params={"api_key": 'invalid key'}):
+        res = bottle_app.api_track_frame()
+        assert res['error'] is True, res['message']
+
+    # point_array is a JSON-encoded array
+    # All of these are uploaded as parameters, which are not JSON encoded by the API
+    params['point_array'] = json.dumps([[279, 223]])
+
+    # Now run the function and check the results
+    logging.warning("params.keys()=%s",list(params.keys()))
+    with boddle(params=params):
         res = bottle_app.api_track_frame()
         assert res['error'] is False, res['message']
-        assert (res['status_array'][0] == 1).all()
-        assert len(res['point_array']) == 1
+        assert res['status_array'][0] == 1
         assert len(res['status_array']) == 2
-        assert abs(res['point_array'][0][0] - 279) <= 5
-        assert abs(res['point_array'][0][1] - 223) <= 5
-
-def test_api_track_frame_error(new_user):
-    """test track_frame """
-    cfg = new_user
-    api_key = cfg[API_KEY]
-
-    photo0_base64_data = None
-    photo1_base64_data = None
-    point_array = json.dumps([[279, 223]])
-
-    with boddle(params={"api_key": api_key,
-                        "photo0": photo0_base64_data,
-                        "photo1": photo1_base64_data,
-                        "point array": point_array
-                        }):
-        res = bottle_app.api_track_frame()
-
-        assert res['error'] is True, res['message']
+        assert len(res['point_array_out']) == 1
+        assert abs(res['point_array_out'][0][0] - 279) <= 5
+        assert abs(res['point_array_out'][0][1] - 223) <= 5

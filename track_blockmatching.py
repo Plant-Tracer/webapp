@@ -1,8 +1,56 @@
 # pylint: disable=no-member
-import cv2
-import numpy as np
 import json
 import argparse
+import io
+
+import cv2
+import numpy as np
+import tempfile
+
+
+def track_frame_cv2(prev_frame, current_frame, point_array_in):
+    """
+    Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
+    :param: prev_frame    - cv2 image of the previous frame
+    :param: current_frame - cv2 image of the current frame
+    :param: point_array_in   - array of poins
+    takes a     returns the new positions.
+
+    """
+    winSize=(15, 15)
+    maxLevel=2
+    criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+
+    gray_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    gray_current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+    point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_prev_frame, gray_current_frame, point_array_in, None,
+                                               winSize=winSize, maxLevel=maxLevel, criteria=criteria)
+
+    return {'point_array_out':point_array_out, 'status_array':status_array, 'err':err}
+
+def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
+    """
+    :param: frame0_jpeg     - binary buffer containing a JPEG of previous frame
+    :param: frame1_jpeg     - binary buffer containing a JPEG of current frame
+    :param: points_array_in - an array of points that is being tracked.
+    :return: a dictionary including:
+       'points_array_out' - the input array of points
+       'status' - a status message
+       'error' - some kind of error message.
+    """
+    # This should work, but it didn't. So we are going to put them in tempoary files...
+    # https://www.geeksforgeeks.org/python-opencv-imdecode-function/
+    # image0 = np.asarray(bytearray(frame0_jpeg))
+    # image1 = np.asarray(bytearray(frame1_jpeg))
+    # return track_frame_cv2( image0, image1, points_array_in )
+    with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
+        with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
+            tf0.write(frame0_jpeg)
+            tf1.write(frame1_jpeg)
+            return track_frame_cv2( cv2.imread(tf0.name), cv2.imread(tf1.name), points_array_in )
+
+
+
 
 def track_movie(movie, apex_points):
     """
@@ -55,45 +103,6 @@ def track_movie(movie, apex_points):
     cap.release()
     out.release()
     return video_coordinates
-
-
-def track_frame_cv2(prev_frame, current_frame, p0):
-    """
-    Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
-    :prev_frame:    - cv2 image of the previous frame
-    :current_frame: - cv2 image of the current frame
-    takes a     returns the new positions.
-
-    """
-    winSize=(15, 15)
-    maxLevel=2
-    criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-
-    gray_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-    gray_current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    p1, status, err = cv2.calcOpticalFlowPyrLK(gray_prev_frame, gray_current_frame, p0, None,
-                                               winSize=winSize, maxLevel=maxLevel, criteria=criteria)
-
-    # This is pretty gross: Is this crazy return documented? Why are we returning CV2 specific p1, status and err?
-    return p1, status, err
-
-def track_frame_jpegs(prev_frame, current_frame, p0):
-    """
-    :param: prev_frame - a binary array that holds a JPEG
-    :param: curent_frame - a binary array that holds a JPEG
-    :param: p0 - an array of points that is being tracked.
-    :return: a dictionary including:
-       'p0' - the input array of points
-       'p1' - the output array of points
-       'status' - a status message
-       'error' - some kind of error message.
-    """
-    raise RuntimeError("TODO")
-
-
-    (p1, status, err) = track_frame_cv2( cv2.imread(prev_frame), cv2.imread(current_frame), p0 )
-
-
 
 
 if __name__ == "__main__":
