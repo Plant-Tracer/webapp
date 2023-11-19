@@ -4,6 +4,7 @@ Movie tool
 """
 
 import os
+import os.path
 import tempfile
 import re
 import time
@@ -24,35 +25,44 @@ __version__ = '0.0.1'
 
 FFMPEG = 'ffmpeg'
 
-MOVIE_SPLIT_TIMEOUT=60
+MOVIE_SPLIT_TIMEOUT=20
 DEFAULT_FPS = 20
 
-def upload_frames_in_range(movie_id, template, frame_range):
+def frames_matching_template(frame_template):
+    frames = []
+    for ct in range(0,10000):
+        fname = frame_template % ct
+        if os.path.exists(fname):
+            frames.append(fname)
+    return frames
+
+
+def upload_frames(movie_id, template, fps):
     # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
 
-    count = 0
-    for frame in frame_range:
-        fname = template % frame
-        if os.path.exists(fname):
-            frame_msec = ((frame-1) * 1000) // DEFAULT_FPS
-            prev_frame_id = None
-            with open(fname,"rb") as f:
-                frame_data = f.read()
-                logging.info("uploading movie_id=%s frame=%s msec=%s", movie_id, frame, frame_msec)
-                t0 = time.time()
-                frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
-                t1 = time.time()
-                assert frame_id != prev_frame_id
-                prev_frame_id = frame_id
-                logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
-                count += 1
-    return count
+    for (ct, fname) in enumerate(frames_matching_template(template)):
+        frame_msec = (ct * 1000) // fps
+        prev_frame_id = None
+        with open(fname,"rb") as f:
+            frame_data = f.read()
+        logging.info("uploading movie_id=%s fname=%s msec=%s", movie_id, fname, frame_msec)
+        t0 = time.time()
+        frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=frame_data)
+        t1 = time.time()
+        assert frame_id != prev_frame_id
+        prev_frame_id = frame_id
+        logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
+    return ct+1
 
 
 def extract_all_frames_from_file_with_ffmpeg(movie_file, output_template):
     """Extract all of the frames from a movie with ffmpeg. Returns (stdout,stderr) of the ffmpeg process."""
+    if not os.path.exists(movie_file):
+        raise FileNotFoundError(movie_file)
+    if not os.path.exists(os.path.dirname(output_template)):
+        raise FileNotFoundError(os.path.dirname(output_template))
     cmd = [FFMPEG,'-i', movie_file, output_template]
-    logging.info("cmd=%s",' '.join(cmnd))
+    logging.info("cmd=%s",' '.join(cmd))
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
         try:
             (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
@@ -101,7 +111,7 @@ def extract_frames(*, movie_id, user_id):
             if m:
                 fps = int( m.group(1))
 
-            count = upload_frames_in_range( movie_id, template, range(1,10000))
+            count = upload_frames( movie_id, template, fps)
     logging.info("Frames extracted: %s  duration: %s  fps:%s ",count, duration, fps)
     # Save  Duration and FPS to database
     return count

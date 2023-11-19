@@ -33,27 +33,33 @@ PHOTO_SEQUENCE_PATTERN = 'frame_%05d.jpeg'
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
 
-from movie_test import TEST_MOVIE_FILENAME
+from endpoint_test import TEST_MOVIE_FILENAME
 import movietool
 import track_blockmatching
 
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
 
 @pytest.fixture
-def list_of_extracted_frames():
+def extracted_frames():
     with tempfile.TemporaryDirectory() as td:
         output_template = os.path.join(td, PHOTO_SEQUENCE_PATTERN)
         (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
-        frames = list(sorted(glob.glob(output_template)))
-        logging.info("Extracted %d frames from %s",len(frames),TEST_MOVIE_FILENAME);
-        yield frames
-        logging.info("Deleting temporary directory %s and the extracted frames",td)
+    frames = movietool.frames_matching_template(output_template)
+    logging.info("extracted frame %s",frames)
+    assert len(frames)>0
+    yield {'frames':frames}
 
-def test_blocktrack(list_of_extracted_frames):
+def test_extracted_frames(extracted_frames):
+    frames = extracted_frames['frames']
+    assert len(frames)>2
+
+def test_blocktrack(extracted_frames):
+    frames = extracted_frames['frames']
     count = 0
     context = None
+    logging.info("list=%s",list_of_extracted_frames)
     for infile in list_of_extracted_frames:
-        logging.info("process %s", fn)
+        logging.info("process %s", infile)
         with open(infile, 'rb') as infile:
             img = Image.open(infile)
             context = blocktrack.blocktrack(context, img)
@@ -65,12 +71,13 @@ def test_blocktrack(list_of_extracted_frames):
 
 
 @pytest.fixture
-def first_two_frames(list_of_extracted_frames):
+def first_two_frames(extracted_frames):
     """What does this do? Why are we reading from PHOTO_SEQUENCE_PATH_PATTERN?  Who set up `frame_%04d.jpg` ???  WHY DOES IT ASSUME WHICH DIRECTORY IT IS RUNNING IN"""
     #cap = cv2.VideoCapture(PHOTO_SEQUENCE_PATH_PATTERN)
     #ret, photo0 = cap.read()
     #ret, photo1 = cap.read()
-    return (list_of_extracted_frames[0], list_of_extracted_frames[1])
+    frames = extracted_frames['frames']
+    return (frames[0],frames[1])
 
 
 def test_track_frame(first_two_frames):
