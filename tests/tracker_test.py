@@ -29,50 +29,52 @@ from PIL import Image
 # get the first MOV
 
 PHOTO_SEQUENCE_PATTERN = 'frame_%05d.jpeg'
-PHOTO_SEQUENCE_PATH_PATTERN = os.path.join(TEST_DATA_DIR, PHOTO_SEQUENCE_PATTERN)
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
 
 from movie_test import TEST_MOVIE_FILENAME
-
+import movietool
 import track_blockmatching
 
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
-def extract_all_frames(infilename, pattern, destdir):
-    ffmpeg_cmd = ['ffmpeg', '-i', infilename, os.path.join(destdir, pattern), '-hide_banner']
-    logging.info(ffmpeg_cmd)
-    ret = subprocess.call(ffmpeg_cmd)
-    if ret > 0:
-        raise RuntimeError("failed: "+ffmpeg_cmd.join(' '))
 
-def test_blocktrack():
-    count = 0
+@pytest.fixture
+def list_of_extracted_frames():
     with tempfile.TemporaryDirectory() as td:
-        extract_all_frames(TEST_MOVIE_FILENAME, PHOTO_SEQUENCE_PATTERN, td)
-        context = None
-        for fn in sorted(glob.glob(os.path.join(td, "*.jpeg"))):
-            logging.info("process %s", fn)
-            with open(fn, 'rb') as infile:
-                img = Image.open(infile)
-                context = blocktrack.blocktrack(context, img)
-                count += 1
-            logging.info("frame %d output: %s", count, context)
+        output_template = os.path.join(td, PHOTO_SEQUENCE_PATTERN)
+        (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
+        frames = list(sorted(glob.glob(output_template)))
+        logging.info("Extracted %d frames from %s",len(frames),TEST_MOVIE_FILENAME);
+        yield frames
+        logging.info("Deleting temporary directory %s and the extracted frames",td)
+
+def test_blocktrack(list_of_extracted_frames):
+    count = 0
+    context = None
+    for infile in list_of_extracted_frames:
+        logging.info("process %s", fn)
+        with open(infile, 'rb') as infile:
+            img = Image.open(infile)
+            context = blocktrack.blocktrack(context, img)
+            count += 1
+        logging.info("frame %d output: %s", count, context)
     logging.info("total frames processed: %d", count)
     if count == 0:
         raise RuntimeError("no frames processed")
 
 
-def read_frames():
+@pytest.fixture
+def first_two_frames(list_of_extracted_frames):
     """What does this do? Why are we reading from PHOTO_SEQUENCE_PATH_PATTERN?  Who set up `frame_%04d.jpg` ???  WHY DOES IT ASSUME WHICH DIRECTORY IT IS RUNNING IN"""
-    cap = cv2.VideoCapture(PHOTO_SEQUENCE_PATH_PATTERN)
-    ret, photo0 = cap.read()
-    ret, photo1 = cap.read()
-    return photo0, photo1
+    #cap = cv2.VideoCapture(PHOTO_SEQUENCE_PATH_PATTERN)
+    #ret, photo0 = cap.read()
+    #ret, photo1 = cap.read()
+    return (list_of_extracted_frames[0], list_of_extracted_frames[1])
 
 
-def test_track_frame():
-    photo0, photo1 = read_frames()
+def test_track_frame(first_two_frames):
+    photo0, photo1 = first_two_frames
     point_array = np.array([[279, 223]], dtype=np.float32)
     point_array, status_array, err = track_blockmatching.track_frame(photo0, photo1, point_array)
 
@@ -83,12 +85,12 @@ def test_track_frame():
     assert abs(point_array[0][1] - 223) <= 5
 
 
-def test_api_track_frame(new_user):
+def test_api_track_frame(new_user, first_two_frames):
     """test track_frame """
     cfg = new_user
     api_key = cfg[API_KEY]
 
-    photo0, photo1 = read_frames()
+    photo0, photo1 = first_two_frames
 
     photo0_base64_data = base64.b64encode(photo0)
     photo1_base64_data = base64.b64encode(photo1)

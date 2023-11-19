@@ -27,7 +27,7 @@ from user_test import new_course, new_user, api_key
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
+MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "plantmovie.mov")
 SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
 SKIP_ENDPOINT_TEST = False
 

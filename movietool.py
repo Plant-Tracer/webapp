@@ -51,14 +51,16 @@ def upload_frames_in_range(movie_id, template, frame_range):
 
 def extract_all_frames_from_file_with_ffmpeg(movie_file, output_template):
     """Extract all of the frames from a movie with ffmpeg. Returns (stdout,stderr) of the ffmpeg process."""
-    with subprocess.Popen([FFMPEG,'-i', movie_file, output_template],
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
+    cmd = [FFMPEG,'-i', movie_file, output_template]
+    logging.info("cmd=%s",' '.join(cmnd))
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8') as proc:
         try:
             (stdout,stderr) = proc.communicate(timeout=MOVIE_SPLIT_TIMEOUT)
             logging.info("stdout = %s",stdout.replace("\n","\\n"))
             logging.info("stderr = %s",stderr.replace("\n","\\n"))
         except subprocess.TimeoutExpired:
             proc.kill()
+            logging.error("subprocess.TimeoutExpired")
             (stdout,stderr) = proc.communicate()
             logging.error("stdout = %s",stdout.replace("\n","\\n"))
             logging.error("stderr = %s",stderr.replace("\n","\\n"))
