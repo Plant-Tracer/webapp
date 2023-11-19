@@ -17,11 +17,12 @@ import magic
 import json
 from os.path import abspath, dirname
 
-
 from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
-import ctools.dbfile as dbfile
+
+from paths import TEST_DATA_DIR
+import lib.ctools.dbfile as dbfile
 import db
 import movietool
 import bottle_app
@@ -29,7 +30,6 @@ from errors import INVALID_MOVIE_FRAME
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
-from paths import TEST_DATA_DIR
 
 TEST_MOVIE_FILENAME = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
 
