@@ -163,6 +163,8 @@ def test_api_track_frame(new_user, extracted_jpeg_frames):
     logging.warning("params.keys()=%s",list(params.keys()))
     with boddle(params=params):
         res = bottle_app.api_track_frame()
+        logging.debug("res=%s",str(res))
+        logging.debug("res=%s",json.dumps(res,default=str))
         assert res['error'] is False, res['message']
         #assert res['status_array'][0] == 1
         #assert len(res['status_array']) == 2
