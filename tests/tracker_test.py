@@ -96,7 +96,6 @@ def test_track_frame_jpegs(extracted_jpeg_frames):
     status_array = res['status_array']
     assert len(status_array) == 1
 
-    err = res['res']
     point_array_out = res['point_array_out']
     assert len(point_array_out) == 1
     assert len(point_array_out[0]) == 2

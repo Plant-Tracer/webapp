@@ -521,8 +521,11 @@ def api_track_frame():
     # pylint: enable=unsupported-membership-test
 
     point_array_in = json.loads(request.forms.get('point_array'))
-    point_array_out, status, err = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
-    return {'error': False, 'point_array_out': point_array_out, 'status_array': status}
+    logging.info('point_array_in as JSON %s', request.forms.get('point_array'))
+    logging.info("point_array_in after loads %s", point_array_in)
+   
+    res = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])
