@@ -26,7 +26,7 @@ def track_frame_cv2(prev_frame, current_frame, point_array_in):
     point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_prev_frame, gray_current_frame, point_array_in, None,
                                                winSize=winSize, maxLevel=maxLevel, criteria=criteria)
 
-    return {'point_array_out':point_array_out, 'status_array':status_array, 'err':err}
+    return {'point_array_out': point_array_out, 'status_array': status_array, 'err': err}
 
 def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
     """
