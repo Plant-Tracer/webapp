@@ -1,9 +1,20 @@
 // code for /analyze
 
-// See ideas from:
-// https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
-// https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
-// a bit more object oriented, but not massively so
+/***
+*
+Core idea from the following websites, but made object-oriented.
+ * https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
+ * https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
+
+Core idea:
+- templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
+- With this frame, annotations can be created. They are stored on the server.
+- On startup, the <div> is stored in a variable and a first one is instantiated.
+- Pressing 'track next frame' loads the next frame under the current frame, but the annotations come from applying the tracking API to the current anotations.
+- Pressing 'track next 10 frames' does the same, but for 10 frames.
+
+
+***/
 
 const DEFAULT_R = 10;           // default radius of the marker
 const DEFAULT_FRAMES = 20;      // default number of frames to show
@@ -13,9 +24,11 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
 /* MyCanvas Object - creates a canvas that can manage MyObjects */
 
-var id_counter = 0;
+var cell_id_counter = 0;
+var div_id_counter  = 0;
+var template_html   = null;
 
-class MyCanvas {
+class CanvasController {
     constructor(canvas_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
@@ -116,7 +129,7 @@ class MyCanvas {
 }
 
 
-/* MyObject --- base object for MyCanvas system */
+/* MyObject --- base object for CanvasController system */
 class MyObject {
     constructor(x, y, name) {
         this.x = x;
@@ -183,18 +196,28 @@ class myCircle extends MyObject {
 
 // This contains code specific for the planttracer project.
 // Create the canvas and wire up the buttons for add_marker button
-class MyPlantTracerCanvas extends MyCanvas {
-    constructor( div_selector ) {
+class PlantTracerController extends CanvasController {
+    constructor( div_selector, msec ) {
         super( div_selector + ' canvas' );
 
-        var me=this;
+        var me=this;            // record me, becuase this is overridden when the functions below execute
         this.div_selector = div_selector;
-        this.marker_name_input = $(div_selector + ' input.marker_name_input');
-        this.add_marker_button = $(div_selector + ' input.add_marker_button');
+        this.msec         = msec; // offset
+        this.canvasId     =0;
+
+        // add_marker_status shows error messages regarding the marker name
         this.add_marker_status = $(div_selector + ' label.add_marker_status');
 
+        // marker_name_input is the text field for the marker name
+        this.marker_name_input = $(div_selector + ' input.marker_name_input');
         this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
+
+        // We need to be able to enable or display the add_marker button, so we record it
+        this.add_marker_button = $(div_selector + ' input.add_marker_button');
         this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
+
+        // Wire up the rest
+        $(div_selector + ' input.track_next_frame_button').on('click', function(e) {me.track_next_frame(e);});
     }
 
     // Handle keystrokes
@@ -247,7 +270,7 @@ class MyPlantTracerCanvas extends MyCanvas {
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
-                obj.table_cell_id = ++id_counter;
+                obj.table_cell_id = ++cell_id_counter;
                 rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
@@ -289,15 +312,20 @@ class MyPlantTracerCanvas extends MyCanvas {
                 }
             });
     }
+
+    // Request the next frame if we don't have it.
+    // If we do, track it.
+    track_next_frame() {
+        console.log(`track_next_frame. msec=${this.msec}`);
+    }
 }
 
 
 /* myImage Object - Draws an image (x,y) specified by the url */
-
 class myImage extends MyObject {
-    constructor(x, y, url, mptc) {
+    constructor(x, y, url, ptc) {
         super(x, y, url)
-        this.mptc = mptc;
+        this.ptc = ptc;
 
         var theImage=this;
         this.draggable = false;
@@ -307,7 +335,7 @@ class myImage extends MyObject {
         // When the image is loaded, draw the entire stack again.
         this.img.onload = function() {
             if (theImage.ctx) {
-                mptc.redraw()
+                ptc.redraw()
             }
         }
         this.draw = function (ctx) {
@@ -321,28 +349,39 @@ class myImage extends MyObject {
 }
 
 
-
-////////////////////////////////////////////////////////////////
-// Drag control
-
+// Creates a new analysis div
+function create_new_div() {
+    let this_id = div_id_counter++;
+    div_template.prop('id',`${this_id}`);        // change the <div> template's ID to be 0
+    $('#template').before().html(div_template);   // insert the div with id=0 before the now-empty template
+    let ptc = new PlantTracerController( `#${this_id}`);    // create a new PlantTracerController; we may need to save it in an array too
+    return ptc;
+}
 
 // Called when the page is loaded
 function analyze_movie() {
 
-    // Say which movie it is and load the first frame
+    // Say which movie we are working on
     $('#firsth2').html(`Movie ${movie_id}`);
-    mptc = new MyPlantTracerCanvas('#template');
 
+    // capture the HTML of the <div id='#template'> into a new div
+    div_template = $("<div>" + $('#template').html() + "</div>");
+
+    // erase the template div's contents, leaving an empty template at the end
+    $('#template').html('');
+
+    ptc = create_new_div();           // create the first <div> and its controller
+
+    // Prime by loading the first frame of the movie.
     $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
         .done( function(data) {
-            data = JSON.parse(data); // convert to JSON
-            console.log('data:',data);
-            mptc.objects.push( new myImage( 0, 0, data.data_url, mptc));
-            mptc.frame_id = data.frame_id;
-            setTimeout( function() {mptc.redraw()}, 10); // trigger a reload at 1 second just in case.
+            data = JSON.parse(data);
+            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+            ptc.frame_id = data.frame_id;
+            setTimeout( function() {ptc.redraw()}, 10); // trigger a reload at 1 second just in case.
         });
 
 
     // Initial drawing
-    mptc.redraw();
+    ptc.redraw();
 }
