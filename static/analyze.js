@@ -34,9 +34,14 @@ class CanvasController {
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
 
         let canvas = $( canvas_selector );
-        this.c   = canvas[0];     // get the element
+        if (canvas == null) {
+            console.log("CanvasController: Cannot find canvas ",canvas_controller);
+            return;
+        } else {
+            console.log("CanvasController: canvas_selector=",canvas_selector);
+        }
 
-        //this.c = document.getElementById( 'canvas-1' );
+        this.c   = canvas[0];     // get the element
         this.ctx = this.c.getContext('2d');                  // the drawing context
 
         this.selected = null,             // the selected object
@@ -108,8 +113,9 @@ class CanvasController {
     }
 
     // Main drawing function:
-    redraw() {
+    redraw(v) {
         // clear canvas
+        console.log("redraw=",v);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
         // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
@@ -197,27 +203,27 @@ class myCircle extends MyObject {
 // This contains code specific for the planttracer project.
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
-    constructor( div_selector, msec ) {
-        super( div_selector + ' canvas' );
+    constructor( this_id ) {
+        super( `#canvas-${this_id}` );
 
         var me=this;            // record me, becuase this is overridden when the functions below execute
-        this.div_selector = div_selector;
-        this.msec         = msec; // offset
-        this.canvasId     =0;
+        this.this_id      = this_id;
+        this.frame_msec   = null; // don't know it yet, but I will
+        this.canvasId     = 0;
 
         // add_marker_status shows error messages regarding the marker name
-        this.add_marker_status = $(div_selector + ' label.add_marker_status');
+        this.add_marker_status = $(`#${this_id} label.add_marker_status`);
 
         // marker_name_input is the text field for the marker name
-        this.marker_name_input = $(div_selector + ' input.marker_name_input');
+        this.marker_name_input = $(`#${this_id} input.marker_name_input`);
         this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
 
         // We need to be able to enable or display the add_marker button, so we record it
-        this.add_marker_button = $(div_selector + ' input.add_marker_button');
+        this.add_marker_button = $(`#${this_id} input.add_marker_button`);
         this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
 
         // Wire up the rest
-        $(div_selector + ' input.track_next_frame_button').on('click', function(e) {me.track_next_frame(e);});
+        $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {me.track_next_frame(e);});
     }
 
     // Handle keystrokes
@@ -275,8 +281,8 @@ class PlantTracerController extends CanvasController {
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
         }
-        $(this.div_selector + ' tbody.marker_table_body').html( rows );
-        this.redraw();
+        $(`#${this.this_id} tbody.marker_table_body`).html( rows );
+        this.redraw(0);
     }
 
     // Subclassed methods
@@ -316,7 +322,8 @@ class PlantTracerController extends CanvasController {
     // Request the next frame if we don't have it.
     // If we do, track it.
     track_next_frame() {
-        console.log(`track_next_frame. msec=${this.msec}`);
+        console.log(`track_next_frame. msec=${this.frame_msec}`);
+        create_new_div(this.frame_msec, +1); // get the next one
     }
 }
 
@@ -335,12 +342,13 @@ class myImage extends MyObject {
         // When the image is loaded, draw the entire stack again.
         this.img.onload = function() {
             if (theImage.ctx) {
-                ptc.redraw()
+                ptc.redraw(1)
             }
         }
         this.draw = function (ctx) {
             theImage.ctx = ctx;
             ctx.drawImage(this.img, 0, 0);
+            console.log("drew image");
         }
 
         // set the URL. It loads immediately if it is a here document.
@@ -350,11 +358,36 @@ class myImage extends MyObject {
 
 
 // Creates a new analysis div
-function create_new_div() {
-    let this_id = div_id_counter++;
-    div_template.prop('id',`${this_id}`);        // change the <div> template's ID to be 0
-    $('#template').before().html(div_template);   // insert the div with id=0 before the now-empty template
-    let ptc = new PlantTracerController( `#${this_id}`);    // create a new PlantTracerController; we may need to save it in an array too
+function create_new_div(frame_msec, msec_delta) {
+    let this_id  = div_id_counter++;
+    let this_sel = `#${this_id}`;
+    console.log("create_new_div this_id=",this_id,"this_sel=",this_sel);
+
+    let div_html = div_template
+        .replace('template', `${this_id}`)
+        .replace('<canvas ',`<canvas id='canvas-${this_id}' `)
+        + "<div id='template'></div>";
+    //console.log("div_html=",div_html);
+    $( '#template' ).replaceWith( div_html );
+
+    console.log("create new ptc");
+    let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
+    $.post('/api/get-frame', {movie_id:movie_id,
+                              api_key:api_key,
+                              frame_msec:frame_msec,
+                              msec_delta:msec_delta,
+                              format:'json',
+                              analysis:true})
+        .done( function(json_value) {
+            // We got data back consisting of the frame, frame_id, frame_msec and more...
+            data = JSON.parse(json_value);
+            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+            ptc.frame_id       = data.frame_id;
+            ptc.frame_msec     = data.frame_msec;
+            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} `);
+            setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
+        });
+    ptc.redraw(3);               // initial drawing
     return ptc;
 }
 
@@ -365,23 +398,13 @@ function analyze_movie() {
     $('#firsth2').html(`Movie ${movie_id}`);
 
     // capture the HTML of the <div id='#template'> into a new div
-    div_template = $("<div>" + $('#template').html() + "</div>");
+    div_template = "<div id='template'>" + $('#template').html() + "</div>";
 
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = create_new_div();           // create the first <div> and its controller
+    ptc = create_new_div(0, 0);           // create the first <div> and its controller
 
     // Prime by loading the first frame of the movie.
-    $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
-        .done( function(data) {
-            data = JSON.parse(data);
-            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
-            ptc.frame_id = data.frame_id;
-            setTimeout( function() {ptc.redraw()}, 10); // trigger a reload at 1 second just in case.
-        });
-
-
     // Initial drawing
-    ptc.redraw();
 }
