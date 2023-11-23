@@ -22,14 +22,14 @@ const DEFAULT_WIDTH = 340;
 const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
-/* MyCanvas Object - creates a canvas that can manage MyObjects */
+/* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
 var template_html   = null;
 
 class CanvasController {
-    constructor(canvas_selector) {      // html_id is where this canvas gets inserted
+    constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
 
@@ -46,6 +46,7 @@ class CanvasController {
 
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
+        this.zoom    = 1;                 // default zoom
 
         // Register my events.
         // We need to wrap them in lambdas and copy 'this' to 'me' because when the event triggers,
@@ -55,6 +56,13 @@ class CanvasController {
         this.c.addEventListener('mousemove', function(e) {me.mousemove_handler(e);} , false);
         this.c.addEventListener('mousedown', function(e) {me.mousedown_handler(e);} , false);
         this.c.addEventListener('mouseup',   function(e) {me.mouseup_handler(e);}, false);
+
+        // Catch the zoom change event
+        if (zoom_selector) {
+            $(zoom_selector).on('change', function() {
+                me.set_zoom( $(this).val() / 100 );
+            });
+        }
     }
 
     // Selection Management
@@ -66,10 +74,8 @@ class CanvasController {
 
     getMousePosition(e) {
         var rect = this.c.getBoundingClientRect();
-        return { x: Math.round(e.x) - rect.left,
-                 y: Math.round(e.y) - rect.top };
-        return { x: Math.max(0,Math.max(e.x - rect.left, rect.left)),
-                 y: Math.max(0,Math.min(e.y - rect.top, rect.top)) };
+        return { x: (Math.round(e.x) - rect.left) / this.zoom,
+                 y: (Math.round(e.y) - rect.top) / this.zoom };
     }
 
     mousedown_handler(e) {
@@ -112,13 +118,23 @@ class CanvasController {
         this.object_move_finished(obj);
     }
 
+    set_zoom(factor) {
+        this.zoom = factor;
+        this.c.width = this.naturalWidth * factor;
+        this.c.height = this.naturalHeight * factor;
+        this.redraw();
+    }
+
     // Main drawing function:
     redraw(v) {
         // clear canvas
         console.log("redraw=",v);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
-        // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
+        // draw the objects. Always draw the selected objects after
+        // the unselected (so they are on top)
+        this.ctx.save();
+        this.ctx.scale(this.zoom, this.zoom);
         for (let s = 0; s<2; s++){
             for (let i = 0; i< this.objects.length; i++){
                 let obj = this.objects[i];
@@ -127,6 +143,7 @@ class CanvasController {
                 }
             }
         }
+        this.ctx.restore();
     }
 
     // These can be subclassed
@@ -160,7 +177,7 @@ class myCircle extends MyObject {
         this.draggable = true;
         this.fill = fill;
         this.stroke = stroke;
-        self.name = name;
+        this.name = name;
     }
 
     draw(ctx, selected) {
@@ -204,7 +221,7 @@ class myCircle extends MyObject {
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
     constructor( this_id ) {
-        super( `#canvas-${this_id}` );
+        super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
         var me=this;            // record me, becuase this is overridden when the functions below execute
         this.this_id      = this_id;
@@ -225,6 +242,7 @@ class PlantTracerController extends CanvasController {
         // Wire up the rest
         $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {me.track_next_frame(e);});
     }
+
 
     // Handle keystrokes
     marker_name_input_handler (e) {
@@ -248,8 +266,10 @@ class PlantTracerController extends CanvasController {
 
     // new marker added
     add_marker_onclick_handler(e) {
-        this.add_circle( 50, 50, this.marker_name_input.val());
-        this.marker_name_input.val("");
+        if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
+            this.add_circle( 50, 50, this.marker_name_input.val());
+            this.marker_name_input.val("");
+        }
     }
 
     // available colors
@@ -257,7 +277,8 @@ class PlantTracerController extends CanvasController {
     // removing green (for obvious reasons)
     circle_colors = ['#ffe119', '#4363d8', '#f58231', '#911eb4',
                      '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#e6194b', ]
+                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+                     '#000075', '#808080', '#e6194b', ]
 
 
     // add a tracking circle with the next color
@@ -304,15 +325,12 @@ class PlantTracerController extends CanvasController {
                 annotations.push( {x:obj.x, y:obj.y, name:obj.name} );
             }
         }
-        console.log("annotations:",annotations);
-
         $.post('/api/put-frame-analysis', {frame_id:this.frame_id,
                                            api_key:api_key,
                                            engine_name:'MANUAL',
                                            engine_version:'1',
                                            annotations:JSON.stringify(annotations)})
             .done( function(data) {
-                console.log("response for put-frame-analysis:",data);
                 if (data['error']) {
                     alert("Error saving annotations: "+data);
                 }
@@ -336,22 +354,36 @@ class myImage extends MyObject {
 
         var theImage=this;
         this.draggable = false;
-        this.ctx = null;
+        this.ctx    = null;
+        this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
         this.img = new Image();
 
         // When the image is loaded, draw the entire stack again.
         this.img.onload = function() {
+            theImage.state = 1;
             if (theImage.ctx) {
                 ptc.redraw(1)
             }
         }
         this.draw = function (ctx) {
+            // See if this is the first time we have drawn in the context.
+            // If so,
             theImage.ctx = ctx;
-            ctx.drawImage(this.img, 0, 0);
-            console.log("drew image");
+            if (theImage.state > 0){
+                if (theImage.state==1){
+                    ptc.naturalWidth  = this.img.naturalWidth;
+                    ptc.naturalHeight = this.img.naturalHeight;
+                    theImage.state=2;
+                    ptc.set_zoom( 1.0 );
+                }
+                ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
+            }
         }
 
         // set the URL. It loads immediately if it is a here document.
+        // That will make onload run, but theImge.ctx won't be set.
+        // If the document is not a here document, then draw might be called before
+        // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
     }
 }
@@ -365,7 +397,8 @@ function create_new_div(frame_msec, msec_delta) {
 
     let div_html = div_template
         .replace('template', `${this_id}`)
-        .replace('<canvas ',`<canvas id='canvas-${this_id}' `)
+        .replace('canvas-id',`canvas-${this_id}`)
+        .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
     //console.log("div_html=",div_html);
     $( '#template' ).replaceWith( div_html );

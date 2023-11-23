@@ -37,14 +37,16 @@ annotated.
   <table class='float-container'>
     <tr><td class='message'>Message...</td></tr>
     <tr>
-      <td> <canvas width='320' height='320'> </canvas><br>
-        <label for="zoom">zoom:</label>
-        <select name="zoom">
-          <option value="100">100%</option>
-          <option value="150">150%</option>
-          <option value="200">200%</option>
-          <option value="300">300%</option>
-        </select>
+      <td> <canvas id="canvas-id" width='320' height='320'> </canvas><br>
+        <form>
+          <label for="zoom">zoom:</label>
+          <select id="zoom-id" name="zoom" class='zoom'>
+            <option value="100">100%</option>
+            <option value="150">150%</option>
+            <option value="200">200%</option>
+            <option value="300">300%</option>
+          </select>
+        </form>
       </td>
       <td>
         <table class="pure-table pure-table-horizontal pure-table-striped">
@@ -55,7 +57,7 @@ annotated.
           </tbody>
         </table>
         <hr>
-        <form class='pure-form pure-form-aligned'>
+        <form class='pure-form pure-form-aligned marker_form'>
           <fieldset>
             <legend>Add a marker to track a point</legend>
 
