@@ -29,7 +29,7 @@ var div_id_counter  = 0;
 var template_html   = null;
 
 class CanvasController {
-    constructor(canvas_selector) {      // html_id is where this canvas gets inserted
+    constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
 
@@ -58,10 +58,11 @@ class CanvasController {
         this.c.addEventListener('mouseup',   function(e) {me.mouseup_handler(e);}, false);
 
         // Catch the zoom change event
-        let s=$(zoom_selector);
-        s.on('change', function() {
-            me.set_zoom( $(this).val() / 100 );
-        });
+        if (zoom_selector) {
+            $(zoom_selector).on('change', function() {
+                me.set_zoom( $(this).val() / 100 );
+            });
+        }
     }
 
     // Selection Management
@@ -220,7 +221,7 @@ class myCircle extends MyObject {
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
     constructor( this_id ) {
-        super( `#canvas-${this_id}` );
+        super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
         var me=this;            // record me, becuase this is overridden when the functions below execute
         this.this_id      = this_id;
@@ -370,10 +371,10 @@ class myImage extends MyObject {
             theImage.ctx = ctx;
             if (theImage.state > 0){
                 if (theImage.state==1){
-                    mptc.naturalWidth  = this.img.naturalWidth;
-                    mptc.naturalHeight = this.img.naturalHeight;
+                    ptc.naturalWidth  = this.img.naturalWidth;
+                    ptc.naturalHeight = this.img.naturalHeight;
                     theImage.state=2;
-                    mptc.set_zoom( 1.0 );
+                    ptc.set_zoom( 1.0 );
                 }
                 ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
@@ -396,7 +397,8 @@ function create_new_div(frame_msec, msec_delta) {
 
     let div_html = div_template
         .replace('template', `${this_id}`)
-        .replace('<canvas ',`<canvas id='canvas-${this_id}' `)
+        .replace('canvas-id',`canvas-${this_id}`)
+        .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
     //console.log("div_html=",div_html);
     $( '#template' ).replaceWith( div_html );
