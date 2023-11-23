@@ -34,8 +34,8 @@ annotated.
 <h2 id='firsth2'>Movie Loading...</h2>
 
 <div id='template' >
-  <h3> Annotating Frame: <span id='frame_number'></span> </h3>
   <table class='float-container'>
+    <tr><td class='message'>Message...</td></tr>
     <tr>
       <td> <canvas width='320' height='320'> </canvas><br>
         <form>
@@ -70,6 +70,11 @@ annotated.
             <div class='pure-control-group'>
               <label> </label>
               <label class='add_marker_status'></label>
+            </div>
+
+            <div class='pure-control-group'>
+              <label></label>
+              <input class='track_next_frame_button pure-button pure-button-primary' type='button' value='track next frame'/>
             </div>
           </fieldset>
         </form>

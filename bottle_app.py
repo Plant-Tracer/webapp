@@ -552,7 +552,9 @@ def api_list_movies():
 #
 @bottle.route('/api/get-log', method=['POST'])
 def api_get_log():
-    """TODO: Add additional fields"""
+    """Get what log entries we can. get_user_id() provides access control.
+    TODO - add search capabilities.
+    """
     return {'error':False, 'logs': db.get_log(user_id=get_user_id()) }
 
 ##
