@@ -126,11 +126,11 @@ def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = auth.get_user_api_key()
     if api_key is None:
-        logging.warning("api_key is none")
+        logging.info("api_key is none")
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.warning("api_key %s is invalid",api_key)
+        logging.info("api_key %s is invalid",api_key)
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/error'})
     return userdict
 
@@ -138,7 +138,7 @@ def get_user_id():
     """Returns the user_id of the currently logged in user, or throws a response"""
     userdict = get_user_dict()
     if 'id' not in userdict:
-        logging.warning("no ID in userdict = %s", userdict)
+        logging.info("no ID in userdict = %s", userdict)
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     return userdict['id']
 
@@ -335,7 +335,7 @@ def api_register():
     email = request.forms.get('email')
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
-        logging.warning("email not valid: %s", email)
+        logging.info("email not valid: %s", email)
         return INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key(course_key=course_key):
@@ -354,7 +354,7 @@ def api_send_link():
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
-        logging.warning("email not valid: %s", email)
+        logging.info("email not valid: %s", email)
         return INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
@@ -554,7 +554,6 @@ def api_put_frame_analysis():
         engine_id = int(request.forms.get('engine_id'))
     except (TypeError,ValueError):
         engine_id = None
-    logging.warning("request.forms=%s keys=%s",request.forms,request.forms.keys())
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
         db.put_frame_analysis(frame_id=frame_id,
                               annotations=json.loads(request.forms.get('annotations')),
