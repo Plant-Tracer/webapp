@@ -53,8 +53,6 @@ def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
             return track_frame_cv2( cv2.imread(tf0.name), cv2.imread(tf1.name), np.array(points_array_in,dtype=np.float32))
 
 
-
-
 def track_movie(movie, apex_points):
     """
     Summary - takes in a movie(cap) and returns annotatted movie
@@ -62,8 +60,10 @@ def track_movie(movie, apex_points):
     takes the control points (apex_points)
     initializes parameters to pass to track_frame
     returns a list of points
-
+    TODO - What is movie? A filename? A movie?
     """
+    if movie:
+        raise RuntimeError("declare what movie is")
     video_coordinates = np.array(apex_points)
     p0 = apex_points
     cap = cv2.VideoCapture(movie)
@@ -71,6 +71,8 @@ def track_movie(movie, apex_points):
 
     # should be movie name + tracked
     output_video_path = 'tracked_movie.mp4'
+    if output_video_path:
+        raise RuntimeError("Rework this so that output_video_path is in a temporary directory")
 
     # Get video properties
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

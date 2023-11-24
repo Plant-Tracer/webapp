@@ -298,7 +298,9 @@ class PlantTracerController extends CanvasController {
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
                 obj.table_cell_id = ++cell_id_counter;
-                rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
+                rows += `<tr>` +
+                    `<td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td>` +
+                    `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
         }
@@ -319,10 +321,11 @@ class PlantTracerController extends CanvasController {
 
     put_frame_analysis() {
         var annotations = [];
+        annotations['trackpoints'] = []
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
-                annotations.push( {x:obj.x, y:obj.y, name:obj.name} );
+                annotations['trackpoints'].push( {x:obj.x, y:obj.y, name:obj.name} );
             }
         }
         $.post('/api/put-frame-analysis', {frame_id:this.frame_id,
@@ -410,14 +413,22 @@ function create_new_div(frame_msec, msec_delta) {
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
-                              analysis:true})
+                              analysis:true,
+                              track:true,
+                              engine_name:'NULL',
+                              engine_version:'0'
+                             })
         .done( function(json_value) {
             // We got data back consisting of the frame, frame_id, frame_msec and more...
             data = JSON.parse(json_value);
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
-            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} `);
+            ptc.analysis       = data.analysis
+            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} Track points:${ptc.analysis.trackpoints}`);
+            for (let pt of ptc.analysis['trackpoints']) {
+                ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+            }
             setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
         });
     ptc.redraw(3);               // initial drawing
