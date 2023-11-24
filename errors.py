@@ -1,5 +1,9 @@
 """JSON Error messages returned to client"""
 
+class E:
+    INVALID_TRACK_FRAME_MSEC = {'error': True, 'message': 'If track is true, then msec_delta must be +1'}
+
+
 
 INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
 INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
