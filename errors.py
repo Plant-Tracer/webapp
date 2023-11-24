@@ -1,11 +1,14 @@
 """JSON Error messages returned to client"""
 
+#pylint: disable=too-few-public-methods
 class E:
+    """Error constants"""
+    def __init__(self):
+        raise RuntimeError("Do not instantiate this class. It exists solely for its static constants.")
     INVALID_TRACK_FRAME_MSEC = {'error': True, 'message': 'If track is true, then msec_delta must be +1'}
+    INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
+#pylint: enable=too-few-public-methods
 
-
-
-INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
 INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
 INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
 INVALID_FRAME_ID = {'error': True, 'message': 'frame_id is invalid or missing'}
