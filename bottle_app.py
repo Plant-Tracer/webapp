@@ -62,7 +62,7 @@ import auth
 
 from lib.ctools import clogging
 from paths import view, STATIC_DIR
-from errors import E,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
+from errors import E
 import track_blockmatching
 
 __version__ = '0.0.1'
@@ -314,7 +314,7 @@ def api_check_api_key():
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': datetime_to_str(userdict)}
-    return E.INVALID_API_KEY
+    return E.E.INVALID_API_KEY
 
 
 @bottle.route('/api/get-logs', method=['POST'])
@@ -336,12 +336,12 @@ def api_register():
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
         logging.info("email not valid: %s", email)
-        return INVALID_EMAIL
+        return E.E.INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key(course_key=course_key):
-        return INVALID_COURSE_KEY
+        return E.INVALID_COURSE_KEY
     if db.remaining_course_registrations(course_key=course_key) < 1:
-        return NO_REMAINING_REGISTRATIONS
+        return E.NO_REMAINING_REGISTRATIONS
     name = request.forms.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
@@ -355,7 +355,7 @@ def api_send_link():
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
         logging.info("email not valid: %s", email)
-        return INVALID_EMAIL
+        return E.E.INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
@@ -366,12 +366,12 @@ def api_bulk_register():
     user_id   = get_user_id()
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not db.check_course_admin(course_id = course_id, user_id=user_id):
-        return INVALID_COURSE_ACCESS
+        return E.INVALID_COURSE_ACCESS
 
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     for email in email_addresses:
         if not validate_email(email, check_mx=CHECK_MX):
-            return INVALID_EMAIL
+            return E.E.INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
@@ -436,7 +436,7 @@ def api_new_frame():
                                    frame_data = frame_data)
         frame_id = res['frame_id']
         return {'error': False, 'frame_id': frame_id}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -471,15 +471,15 @@ def api_get_frame():
 
     track      = get('track')
     if track and (msec_delta != +1):
-        return E.INVALID_TRACK_FRAME_MSEC
+        return E.E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
-        return INVALID_FRAME_FORMAT
+        return E.INVALID_FRAME_FORMAT
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
 
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
         if not frame:
-            return INVALID_MOVIE_FRAME
+            return E.INVALID_MOVIE_FRAME
 
         if fmt=='jpeg':
             bottle.response.set_header('Content-Type', 'image/jpeg')
@@ -498,7 +498,7 @@ def api_get_frame():
 
         return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
@@ -561,7 +561,7 @@ def api_put_frame_analysis():
                               engine_name=request.forms.get('engine_name'),
                               engine_version=request.forms.get('engine_version'))
         return {'error': False, 'message':'Analysis recorded.'}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
@@ -573,7 +573,7 @@ def api_get_movie_data():
     if db.can_access_movie(user_id=get_user_id(), movie_id=auth.get_movie_id()):
         bottle.response.set_header('Content-Type', 'video/quicktime')
         return db.get_movie(movie_id=auth.get_movie_id())
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/delete-movie', method='POST')
@@ -586,7 +586,7 @@ def api_delete_movie():
         db.delete_movie(movie_id=request.forms.get('movie_id'),
                         delete=request.forms.get('delete', 1))
         return {'error': False}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/list-movies', method=['POST'])
