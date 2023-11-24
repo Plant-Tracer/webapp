@@ -16,6 +16,7 @@ pytest
 pytest-cov
 pytest-env
 pytest-html>=4.0.2
+pytest-xdist
 requests
 validate_email_address
 aiosmtplib

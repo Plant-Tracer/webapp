@@ -314,7 +314,7 @@ def api_check_api_key():
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': datetime_to_str(userdict)}
-    return E.E.INVALID_API_KEY
+    return E.INVALID_API_KEY
 
 
 @bottle.route('/api/get-logs', method=['POST'])

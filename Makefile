@@ -31,6 +31,11 @@ pytest:
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
+pytest-parallel:
+	make touch
+	$(PYTHON) -m pytest . -v -n auto --log-cli-level=INFO
+
+
 pytest-debug:
 	make touch
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
