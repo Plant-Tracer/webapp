@@ -60,9 +60,9 @@ import db
 import paths
 import auth
 
-from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import E,INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
+from paths import view, STATIC_DIR
+from errors import E,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
 import track_blockmatching
 
 __version__ = '0.0.1'
@@ -314,7 +314,7 @@ def api_check_api_key():
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': datetime_to_str(userdict)}
-    return INVALID_API_KEY
+    return E.INVALID_API_KEY
 
 
 @bottle.route('/api/get-logs', method=['POST'])

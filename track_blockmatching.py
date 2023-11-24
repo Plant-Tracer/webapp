@@ -1,11 +1,14 @@
+"""
+Implements blockmatching algorithm in OpenCV.
+"""
+
 # pylint: disable=no-member
 import json
 import argparse
-import io
+import tempfile
 
 import cv2
 import numpy as np
-import tempfile
 
 
 def track_frame_cv2(prev_frame, current_frame, point_array_in):
@@ -90,7 +93,9 @@ def track_movie(movie, apex_points):
         if not ret:
             break
 
-        p0, status, err = track_frame(prev_frame, current_frame, p0) #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+        ret = track_frame_cv2(prev_frame, current_frame, p0)
+        p0 = ret['point_array_out']
+        #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         video_coordinates = p0.tolist()
 
         # use the points to annotate the colored frames. write to colored tracked video
