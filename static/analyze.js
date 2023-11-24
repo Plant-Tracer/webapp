@@ -1,9 +1,20 @@
 // code for /analyze
 
-// See ideas from:
-// https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
-// https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
-// a bit more object oriented, but not massively so
+/***
+*
+Core idea from the following websites, but made object-oriented.
+ * https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
+ * https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
+
+Core idea:
+- templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
+- With this frame, annotations can be created. They are stored on the server.
+- On startup, the <div> is stored in a variable and a first one is instantiated.
+- Pressing 'track next frame' loads the next frame under the current frame, but the annotations come from applying the tracking API to the current anotations.
+- Pressing 'track next 10 frames' does the same, but for 10 frames.
+
+
+***/
 
 const DEFAULT_R = 10;           // default radius of the marker
 const DEFAULT_FRAMES = 20;      // default number of frames to show
@@ -11,23 +22,31 @@ const DEFAULT_WIDTH = 340;
 const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 
-/* MyCanvas Object - creates a canvas that can manage MyObjects */
+/* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
-var id_counter = 0;
+var cell_id_counter = 0;
+var div_id_counter  = 0;
+var template_html   = null;
 
-class MyCanvas {
-    constructor(canvas_selector) {      // html_id is where this canvas gets inserted
+class CanvasController {
+    constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         // const canvas_id = html_id + "-canvas";
         // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
 
         let canvas = $( canvas_selector );
-        this.c   = canvas[0];     // get the element
+        if (canvas == null) {
+            console.log("CanvasController: Cannot find canvas ",canvas_controller);
+            return;
+        } else {
+            console.log("CanvasController: canvas_selector=",canvas_selector);
+        }
 
-        //this.c = document.getElementById( 'canvas-1' );
+        this.c   = canvas[0];     // get the element
         this.ctx = this.c.getContext('2d');                  // the drawing context
 
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
+        this.zoom    = 1;                 // default zoom
 
         // Register my events.
         // We need to wrap them in lambdas and copy 'this' to 'me' because when the event triggers,
@@ -37,6 +56,13 @@ class MyCanvas {
         this.c.addEventListener('mousemove', function(e) {me.mousemove_handler(e);} , false);
         this.c.addEventListener('mousedown', function(e) {me.mousedown_handler(e);} , false);
         this.c.addEventListener('mouseup',   function(e) {me.mouseup_handler(e);}, false);
+
+        // Catch the zoom change event
+        if (zoom_selector) {
+            $(zoom_selector).on('change', function() {
+                me.set_zoom( $(this).val() / 100 );
+            });
+        }
     }
 
     // Selection Management
@@ -48,10 +74,8 @@ class MyCanvas {
 
     getMousePosition(e) {
         var rect = this.c.getBoundingClientRect();
-        return { x: Math.round(e.x) - rect.left,
-                 y: Math.round(e.y) - rect.top };
-        return { x: Math.max(0,Math.max(e.x - rect.left, rect.left)),
-                 y: Math.max(0,Math.min(e.y - rect.top, rect.top)) };
+        return { x: (Math.round(e.x) - rect.left) / this.zoom,
+                 y: (Math.round(e.y) - rect.top) / this.zoom };
     }
 
     mousedown_handler(e) {
@@ -94,12 +118,23 @@ class MyCanvas {
         this.object_move_finished(obj);
     }
 
+    set_zoom(factor) {
+        this.zoom = factor;
+        this.c.width = this.naturalWidth * factor;
+        this.c.height = this.naturalHeight * factor;
+        this.redraw();
+    }
+
     // Main drawing function:
-    redraw() {
+    redraw(v) {
         // clear canvas
+        console.log("redraw=",v);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
-        // draw the objects. Always draw the selected objects after  the unselected (so they are on top)
+        // draw the objects. Always draw the selected objects after
+        // the unselected (so they are on top)
+        this.ctx.save();
+        this.ctx.scale(this.zoom, this.zoom);
         for (let s = 0; s<2; s++){
             for (let i = 0; i< this.objects.length; i++){
                 let obj = this.objects[i];
@@ -108,6 +143,7 @@ class MyCanvas {
                 }
             }
         }
+        this.ctx.restore();
     }
 
     // These can be subclassed
@@ -116,7 +152,7 @@ class MyCanvas {
 }
 
 
-/* MyObject --- base object for MyCanvas system */
+/* MyObject --- base object for CanvasController system */
 class MyObject {
     constructor(x, y, name) {
         this.x = x;
@@ -141,7 +177,7 @@ class myCircle extends MyObject {
         this.draggable = true;
         this.fill = fill;
         this.stroke = stroke;
-        self.name = name;
+        this.name = name;
     }
 
     draw(ctx, selected) {
@@ -183,19 +219,30 @@ class myCircle extends MyObject {
 
 // This contains code specific for the planttracer project.
 // Create the canvas and wire up the buttons for add_marker button
-class MyPlantTracerCanvas extends MyCanvas {
-    constructor( div_selector ) {
-        super( div_selector + ' canvas' );
+class PlantTracerController extends CanvasController {
+    constructor( this_id ) {
+        super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        var me=this;
-        this.div_selector = div_selector;
-        this.marker_name_input = $(div_selector + ' input.marker_name_input');
-        this.add_marker_button = $(div_selector + ' input.add_marker_button');
-        this.add_marker_status = $(div_selector + ' label.add_marker_status');
+        var me=this;            // record me, becuase this is overridden when the functions below execute
+        this.this_id      = this_id;
+        this.frame_msec   = null; // don't know it yet, but I will
+        this.canvasId     = 0;
 
+        // add_marker_status shows error messages regarding the marker name
+        this.add_marker_status = $(`#${this_id} label.add_marker_status`);
+
+        // marker_name_input is the text field for the marker name
+        this.marker_name_input = $(`#${this_id} input.marker_name_input`);
         this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
+
+        // We need to be able to enable or display the add_marker button, so we record it
+        this.add_marker_button = $(`#${this_id} input.add_marker_button`);
         this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
+
+        // Wire up the rest
+        $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {me.track_next_frame(e);});
     }
+
 
     // Handle keystrokes
     marker_name_input_handler (e) {
@@ -219,8 +266,10 @@ class MyPlantTracerCanvas extends MyCanvas {
 
     // new marker added
     add_marker_onclick_handler(e) {
-        this.add_circle( 50, 50, this.marker_name_input.val());
-        this.marker_name_input.val("");
+        if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
+            this.add_circle( 50, 50, this.marker_name_input.val());
+            this.marker_name_input.val("");
+        }
     }
 
     // available colors
@@ -228,7 +277,8 @@ class MyPlantTracerCanvas extends MyCanvas {
     // removing green (for obvious reasons)
     circle_colors = ['#ffe119', '#4363d8', '#f58231', '#911eb4',
                      '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#e6194b', ]
+                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+                     '#000075', '#808080', '#e6194b', ]
 
 
     // add a tracking circle with the next color
@@ -247,13 +297,13 @@ class MyPlantTracerCanvas extends MyCanvas {
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
-                obj.table_cell_id = ++id_counter;
+                obj.table_cell_id = ++cell_id_counter;
                 rows += `<tr><td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td><td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
             }
         }
-        $(this.div_selector + ' tbody.marker_table_body').html( rows );
-        this.redraw();
+        $(`#${this.this_id} tbody.marker_table_body`).html( rows );
+        this.redraw(0);
     }
 
     // Subclassed methods
@@ -275,74 +325,119 @@ class MyPlantTracerCanvas extends MyCanvas {
                 annotations.push( {x:obj.x, y:obj.y, name:obj.name} );
             }
         }
-        console.log("annotations:",annotations);
-
         $.post('/api/put-frame-analysis', {frame_id:this.frame_id,
                                            api_key:api_key,
                                            engine_name:'MANUAL',
                                            engine_version:'1',
                                            annotations:JSON.stringify(annotations)})
             .done( function(data) {
-                console.log("response for put-frame-analysis:",data);
                 if (data['error']) {
                     alert("Error saving annotations: "+data);
                 }
             });
     }
+
+    // Request the next frame if we don't have it.
+    // If we do, track it.
+    track_next_frame() {
+        console.log(`track_next_frame. msec=${this.frame_msec}`);
+        create_new_div(this.frame_msec, +1); // get the next one
+    }
 }
 
 
 /* myImage Object - Draws an image (x,y) specified by the url */
-
 class myImage extends MyObject {
-    constructor(x, y, url, mptc) {
+    constructor(x, y, url, ptc) {
         super(x, y, url)
-        this.mptc = mptc;
+        this.ptc = ptc;
 
         var theImage=this;
         this.draggable = false;
-        this.ctx = null;
+        this.ctx    = null;
+        this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
         this.img = new Image();
 
         // When the image is loaded, draw the entire stack again.
         this.img.onload = function() {
+            theImage.state = 1;
             if (theImage.ctx) {
-                mptc.redraw()
+                ptc.redraw(1)
             }
         }
         this.draw = function (ctx) {
+            // See if this is the first time we have drawn in the context.
+            // If so,
             theImage.ctx = ctx;
-            ctx.drawImage(this.img, 0, 0);
+            if (theImage.state > 0){
+                if (theImage.state==1){
+                    ptc.naturalWidth  = this.img.naturalWidth;
+                    ptc.naturalHeight = this.img.naturalHeight;
+                    theImage.state=2;
+                    ptc.set_zoom( 1.0 );
+                }
+                ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
+            }
         }
 
         // set the URL. It loads immediately if it is a here document.
+        // That will make onload run, but theImge.ctx won't be set.
+        // If the document is not a here document, then draw might be called before
+        // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
     }
 }
 
 
+// Creates a new analysis div
+function create_new_div(frame_msec, msec_delta) {
+    let this_id  = div_id_counter++;
+    let this_sel = `#${this_id}`;
+    console.log("create_new_div this_id=",this_id,"this_sel=",this_sel);
 
-////////////////////////////////////////////////////////////////
-// Drag control
+    let div_html = div_template
+        .replace('template', `${this_id}`)
+        .replace('canvas-id',`canvas-${this_id}`)
+        .replace('zoom-id',`zoom-${this_id}`)
+        + "<div id='template'></div>";
+    //console.log("div_html=",div_html);
+    $( '#template' ).replaceWith( div_html );
 
+    console.log("create new ptc");
+    let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
+    $.post('/api/get-frame', {movie_id:movie_id,
+                              api_key:api_key,
+                              frame_msec:frame_msec,
+                              msec_delta:msec_delta,
+                              format:'json',
+                              analysis:true})
+        .done( function(json_value) {
+            // We got data back consisting of the frame, frame_id, frame_msec and more...
+            data = JSON.parse(json_value);
+            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+            ptc.frame_id       = data.frame_id;
+            ptc.frame_msec     = data.frame_msec;
+            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} `);
+            setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
+        });
+    ptc.redraw(3);               // initial drawing
+    return ptc;
+}
 
 // Called when the page is loaded
 function analyze_movie() {
 
-    // Say which movie it is and load the first frame
+    // Say which movie we are working on
     $('#firsth2').html(`Movie ${movie_id}`);
-    mptc = new MyPlantTracerCanvas('#template');
 
-    $.post('/api/get-frame', {movie_id:movie_id, api_key:api_key, frame_msec:0, msec_delta:0, format:'json', analysis:true})
-        .done( function(data) {
-            data = JSON.parse(data); // convert to JSON
-            console.log('data:',data);
-            mptc.objects.push( new myImage( 0, 0, data.data_url, mptc));
-            mptc.frame_id = data.frame_id;
-            setTimeout( function() {mptc.redraw()}, 10); // trigger a reload at 1 second just in case.
-        });
+    // capture the HTML of the <div id='#template'> into a new div
+    div_template = "<div id='template'>" + $('#template').html() + "</div>";
 
+    // erase the template div's contents, leaving an empty template at the end
+    $('#template').html('');
 
+    ptc = create_new_div(0, 0);           // create the first <div> and its controller
+
+    // Prime by loading the first frame of the movie.
     // Initial drawing
-    mptc.redraw();
 }
