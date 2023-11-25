@@ -5,7 +5,7 @@ from os.path import dirname,abspath
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from errors import E
+from constants import E
 from gravitropism import calculate_results_gravitropism
 
 

@@ -31,7 +31,7 @@ from PIL import Image
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
-
+from constants import MIME
 from endpoint_test import TEST_MOVIE_FILENAME
 import movietool
 import track_blockmatching
@@ -59,7 +59,7 @@ def test_extracted_jpeg_frames(extracted_jpeg_frames):
     # Make sure that the files exist and that they have the correct mime type
     for i in [0,1]:
         assert os.path.exists( frames[i] )
-        assert magic.from_file( frames[i], mime=True) == 'image/jpeg'
+        assert magic.from_file( frames[i], mime=True) == MIME.JPEG
 
 @pytest.mark.skip(reason='blocktrack.py is not operational yet')
 def test_blocktrack(extracted_jpeg_frames):
@@ -88,7 +88,7 @@ def test_track_frame_jpegs(extracted_jpeg_frames):
     for i in [0,1]:
         with open(frames[i],"rb") as f:
             jpegs.append(f.read())
-            assert magic.from_buffer( jpegs[i], mime=True) == 'image/jpeg'
+            assert magic.from_buffer( jpegs[i], mime=True) == MIME.JPEG
 
     point_array_in = [[279, 223]]
     res = track_blockmatching.track_frame_jpegs(jpegs[0], jpegs[1], point_array_in)

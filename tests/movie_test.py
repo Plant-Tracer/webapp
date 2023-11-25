@@ -30,6 +30,7 @@ import bottle_app
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
 from endpoint_test import TEST_MOVIE_FILENAME
+from constants import MIME
 
 @pytest.fixture
 def new_movie(new_user):
@@ -234,7 +235,7 @@ def test_movie_extract(new_movie_uploaded):
                         'msec_delta': '0'}):
         ret = bottle_app.api_get_frame()
     assert res0['frame_data'] == ret
-    assert magic.from_buffer(ret,mime=True)=='image/jpeg'
+    assert magic.from_buffer(ret,mime=True)== MIME.JPEG
 
     # get the frame with the JSON interface
     with boddle(params={"api_key": api_key,
@@ -310,6 +311,24 @@ def test_movie_extract(new_movie_uploaded):
     # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
     assert json.loads(analysis_stored[0]['annotations'])==annotations1
     assert json.loads(analysis_stored[1]['annotations'])==annotations2
+
+    # See if we can get the frame by id without the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    assert r2['frame_id'] == frame_id
+    assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
+    assert 'analysis' not in r2
+
+    # See if we can get the frame by id with the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=True)
+    assert 'analysis' in r2
+
+    # Validate the bottle interface
+
+    # See if we can get the frame by id without the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    assert 'analysis' not in r2
+    assert r2['frame_id'] == frame_id
+
 
     # Delete the analysis
     logging.info("deleting frame analsys engine_id %s name %s",analysis_stored[0]['engine_id'],analysis_stored[0]['engine_name'])
