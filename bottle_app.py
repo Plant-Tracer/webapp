@@ -64,7 +64,7 @@ from lib.ctools import clogging
 
 from paths import view, STATIC_DIR
 from constants import E,MIME
-import track_blockmatching
+import tracker
 
 __version__ = '0.0.1'
 
@@ -562,7 +562,7 @@ def api_track_frame():
 
     point_array_in = json.loads(request.forms.get('point_array'))
 
-    res = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    res = tracker.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
     return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 

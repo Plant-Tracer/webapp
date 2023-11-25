@@ -34,7 +34,7 @@ from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,D
 from constants import MIME
 from endpoint_test import TEST_MOVIE_FILENAME
 import movietool
-import track_blockmatching
+import tracker
 
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
 
@@ -91,7 +91,7 @@ def test_track_frame_jpegs(extracted_jpeg_frames):
             assert magic.from_buffer( jpegs[i], mime=True) == MIME.JPEG
 
     point_array_in = [[279, 223]]
-    res = track_blockmatching.track_frame_jpegs(jpegs[0], jpegs[1], point_array_in)
+    res = tracker.track_frame_jpegs(jpegs[0], jpegs[1], point_array_in)
 
     status_array = res['status_array']
     assert len(status_array) == 1
@@ -113,7 +113,7 @@ def test_track_frame_cv2_images(first_two_frames_as_cv2_images):
     """Test the track_frame_cv2 method by giving it two frames as NP arrays and validating its results"""
     photo0, photo1 = first_two_frames_as_cv2_images['images']
     point_array_in = np.array([[279, 223]], dtype=np.float32)
-    res = track_blockmatching.track_frame_cv2(photo0, photo1, point_array_in)
+    res = tracker.track_frame_cv2(photo0, photo1, point_array_in)
     logging.info("res=%s",json.dumps(res,default=str))
 
     status_array = res['status_array']
