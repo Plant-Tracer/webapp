@@ -451,7 +451,7 @@ def get_frame_id():
     frame_id = get('frame_id')
     analysis = get('analysis',False)
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return db.get_frame_id(frame_id=frame_id, analysis=analysis)
+        return  db.get_frame_id(frame_id=frame_id, analysis=analysis)
     return E.INVALID_FRAME_ACCESS
 
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -466,7 +466,7 @@ def api_get_frame():
 
     Tracking:
 
-    :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied
+    :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied to the frame at frame_msec AND the frame at frame_msec+delta.
     :param engine_name:    string description tracking engine to use. May be omitted to get default engine.
     :param engine_version: string to describe which version number of engine to use. May be omitted for default version.
     :return:
@@ -486,19 +486,20 @@ def api_get_frame():
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
 
+    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
         if not frame:
             return E.INVALID_MOVIE_FRAME
 
         if fmt=='jpeg':
+            # Can't get analysis if requesting jpeg format
             bottle.response.set_header('Content-Type', MIME.JPEG)
             logging.info("Return %d bytes",len(frame['frame_data']))
             return frame['frame_data']
 
         # JSON format; change frame_data into data_url
-        frame_data = frame['frame_data']
+        frame_data = frame['frame_data'] # JPEG format
         frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
         del frame['frame_data']
 
@@ -506,6 +507,18 @@ def api_get_frame():
         # contains metadata about the annotations and the JSON object of the annotations.
         if analysis:
             frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
+
+        # If tracking is requested, get the previous frame and run the tracking algorithm
+        if track:
+            frame0_data = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            if not frame0_data:
+                return E.INVALID_MOVIE_FRAME
+            if frame_data==frame0_data:
+                return E.TRACK_FRAMES_SAME
+
+            # We don't need the frame0_data...
+            # frame['data0_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame0_data).decode()}'
+
 
         return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
