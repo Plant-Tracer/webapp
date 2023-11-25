@@ -30,4 +30,5 @@ class E:
     INVALID_TRACK_FRAME_MSEC = {'error': True, 'message': 'If track is true, then msec_delta must be +1'}
     NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}
     NO_REMAINING_REGISTRATIONS = { 'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
+    TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}
 #pylint: enable=too-few-public-methods
