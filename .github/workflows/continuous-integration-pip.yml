@@ -93,6 +93,7 @@ jobs:
           make create_localdb
           make coverage
           make remove_localdb
+          ls -l
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
