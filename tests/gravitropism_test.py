@@ -5,7 +5,7 @@ from os.path import dirname,abspath
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from errors import CALC_RESULTS_PARAM_INVALID
+from errors import E
 from gravitropism import calculate_results_gravitropism
 
 
@@ -35,4 +35,4 @@ def test_calculate_two_points(x1, y1, x2, y2, time_elapsed, expected_results):
 def test_coordinates_type_error():
     with pytest.raises(TypeError) as e:
         calculate_results_gravitropism(1, 2, 3, 4, 0)
-        assert e.message == CALC_RESULTS_PARAM_INVALID['message']
+        assert e.message == E.CALC_RESULTS_PARAM_INVALID['message']
