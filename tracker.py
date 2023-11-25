@@ -9,14 +9,20 @@ import tempfile
 
 import cv2
 import numpy as np
+from constants import Engines
 
 
-def track_frame_cv2(prev_frame, current_frame, point_array_in):
+#pylint: disable=unused-argument
+def null_track_frame(*,frame0, frame1, trackpoints):
+    return {'point_array_out': trackpoints, 'status_array': None, 'err':None}
+#pylint: enable=unused-argument
+
+def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
-    :param: prev_frame    - cv2 image of the previous frame
-    :param: current_frame - cv2 image of the current frame
-    :param: point_array_in   - array of poins
+    :param: frame0    - cv2 image of the previous frame
+    :param: frame1 - cv2 image of the current frame
+    :param: trackpoints   - array of poins
     takes a     returns the new positions.
 
     """
@@ -24,18 +30,27 @@ def track_frame_cv2(prev_frame, current_frame, point_array_in):
     maxLevel=2
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
 
-    gray_prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-    gray_current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_prev_frame, gray_current_frame, point_array_in, None,
+    gray_frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
+    gray_frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+    point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
                                                winSize=winSize, maxLevel=maxLevel, criteria=criteria)
 
     return {'point_array_out': point_array_out, 'status_array': status_array, 'err': err}
 
-def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
+def track_frame(*, engine, frame0, frame1, trackpoints):
+    if engine==Engines.NULL:
+        return null_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
+    elif engine==Engines.CV2:
+        return cv2_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
+    else:
+        raise ValueError(f"No such engine: {engine}")
+
+
+def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     """
     :param: frame0_jpeg     - binary buffer containing a JPEG of previous frame
     :param: frame1_jpeg     - binary buffer containing a JPEG of current frame
-    :param: points_array_in - an array of points that is being tracked.
+    :param: trackpoints - an array of points that is being tracked.
     :return: a dictionary including:
        'points_array_out' - the input array of points
        'status' - a status message
@@ -45,28 +60,32 @@ def track_frame_jpegs(frame0_jpeg, frame1_jpeg, points_array_in):
     # https://www.geeksforgeeks.org/python-opencv-imdecode-function/
     # image0 = np.asarray(bytearray(frame0_jpeg))
     # image1 = np.asarray(bytearray(frame1_jpeg))
-    # return track_frame_cv2( image0, image1, points_array_in )
+    # return cv2_track_frame( image0, image1, trackpoints )
     with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
         with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
             tf0.write(frame0_jpeg)
             tf1.write(frame1_jpeg)
-            return track_frame_cv2( cv2.imread(tf0.name), cv2.imread(tf1.name), np.array(points_array_in,dtype=np.float32))
+            return track_frame( engine=engine, frame0=cv2.imread(tf0.name),
+                                frame1=cv2.imread(tf1.name), trackpoints=np.array(trackpoints,dtype=np.float32))
 
 
-def track_movie(movie, apex_points):
+def track_movie(*, engine, moviefile, trackpoints):
     """
     Summary - takes in a movie(cap) and returns annotatted movie
     takes a annotated frame (marked_frame) that has the apex annotated
-    takes the control points (apex_points)
+    takes the control points (trackpoints)
     initializes parameters to pass to track_frame
     returns a list of points
     TODO - What is movie? A filename? A movie?
     """
-    if movie:
+    if engine!=Engines.CV2:
+        raise RuntimeError("This only runs with CV2")
+
+    if moviefile:
         raise RuntimeError("declare what movie is")
-    video_coordinates = np.array(apex_points)
-    p0 = apex_points
-    cap = cv2.VideoCapture(movie)
+    video_coordinates = np.array(trackpoints)
+    p0 = trackpoints
+    cap = cv2.VideoCapture(moviefile)
     ret, current_frame = cap.read()
 
     # should be movie name + tracked
@@ -83,8 +102,8 @@ def track_movie(movie, apex_points):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
-    # mark the current_frame with the initial apex_points
-    for point in apex_points:
+    # mark the current_frame with the initial trackpoints
+    for point in trackpoints:
         x, y = point.ravel()
         tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)
         out.write(tracked_current_frame)
@@ -95,7 +114,7 @@ def track_movie(movie, apex_points):
         if not ret:
             break
 
-        ret = track_frame_cv2(prev_frame, current_frame, p0)
+        ret = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=p0)
         p0 = ret['point_array_out']
         #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         video_coordinates = p0.tolist()
@@ -115,8 +134,6 @@ def track_movie(movie, apex_points):
 if __name__ == "__main__":
 
     # the only requirement for calling track_movie() would be the "control points" and the movie
-
-
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -125,5 +142,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "--points_to_track", default='[[279, 223]]', help="list of points to track as json 2D array.")
     args = parser.parse_args()
-    apex_points = np.array(json.loads(args.points_to_track), dtype=np.float32)
-    track_movie(args.moviefile, apex_points)
+    trackpoints = np.array(json.loads(args.points_to_track), dtype=np.float32)
+    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints)
