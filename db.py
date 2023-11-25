@@ -518,7 +518,7 @@ def movie_frames_info(*,movie_id):
     """Gets information about movie frames"""
     ret = {}
     ret['count'] = dbfile.DBMySQL.csfr(
-        get_dbwriter(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
+        get_dbreader(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
     return ret
 
 @log
@@ -577,13 +577,28 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_data,
-                                    frame_data, frame_msec))
+                                   (movie_id, frame_msec, frame_data, frame_data, frame_msec))
     return {'frame_id':frame_id}
 
 
-# Get a frame; again, don't log
+def get_frame_id(*, frame_id, analysis=False):
+    """Get a frame by ID. Returns the frame, and optionally the analysis"""
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
+                              "SELECT *,id as frame_id from movie_frames where id=%s",
+                              (frame_id,),
+                              asDicts=True)
+    if len(ret)!=1:
+        return None
+    if analysis:
+        ret[0]['analysis'] = get_frame_analysis(frame_id=frame_id)
+    return ret[0]
+
 def get_frame(*, movie_id, frame_msec, msec_delta):
+    """Get a frame by movie_id and offset. Don't log this to prevent blowing up.
+    :param: movie_id - the movie_id wanted
+    :param: frame_msec - the frame we want
+    :param: msec_delta - offset from the frame we want. Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
+    """
     if msec_delta==0:
         delta = "frame_msec = %s "
     elif msec_delta>0:
@@ -594,7 +609,7 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
                               FROM movie_frames
                               WHERE movie_id=%s and {delta} LIMIT 1"""
     logging.debug("cmd = %s",cmd)
-    ret = dbfile.DBMySQL.csfr(get_dbreader(),cmd, (movie_id,frame_msec),asDicts=True)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, (movie_id,frame_msec), asDicts=True)
     if len(ret)>0:
         return ret[0]
     return None
