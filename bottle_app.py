@@ -60,6 +60,7 @@ import db
 import paths
 import auth
 
+import track_blockmatching
 from lib.ctools import clogging
 from paths import view, STATIC_DIR
 from errors import E
@@ -528,6 +529,40 @@ def api_track_frame():
         if len(frames[data_name]) > MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
         # Verify file type
+        mime_type = magic.from_buffer(frames[data_name],mime=True)
+        if mime_type not in ['image/jpeg']:
+            return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
+    # pylint: enable=unsupported-membership-test
+
+    point_array_in = json.loads(request.forms.get('point_array'))
+
+    res = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
+
+@bottle.route('/api/track-frame', method='POST')
+def api_track_frame():
+    """Takes 2 frames and a point array and engine name. Note that the frames are uploaded as POST fields, not as files.
+    Files do not need to be BASE64 encoded, becuase there is a nice out-of-band protocol for doing that.
+    However, we hvae seen that binary data sent in forms should be base64 encoded.
+    Because we are uploading two frames, it's easier to do as a base64-encoded FORM submission.
+    :param api_key: the user's api_key
+    :param frame0_base64_data: JPEG format frame
+    :param frame1_base64_data: JPEG format frame, assumed to be the next frame in a movie after frame0
+    :param point_array: array of points to track in frame0 coordinates in the form [(x1,y1), ...]
+    :param engine_name: string description tracking engine to use. May be omitted to get default engine.
+    :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
+    """
+
+    # pylint: disable=unsupported-membership-test
+    frames = {}
+    for i in [0,1]:
+        base64_data_name = f"frame{i}_base64_data"
+        data_name = f"frame{i}_data"
+        if base64_data_name not in request.forms:
+            return {'error': True, 'message': f'Parameter {base64_data_name} is required'}
+        frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
+        if len(frames[data_name]) > MAX_FILE_UPLOAD:
+            return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
         mime_type = magic.from_buffer(frames[data_name],mime=True)
         if mime_type not in ['image/jpeg']:
             return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}

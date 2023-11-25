@@ -45,6 +45,7 @@ def frames_matching_template(frame_template):
 def upload_frames(movie_id, template, fps):
     # Now upload each frame. Note that ffmpeg starts with frame 1, so we need to adjust.
 
+    ct = 0
     for (ct, fname) in enumerate(frames_matching_template(template)):
         frame_msec = (ct * 1000) // fps
         prev_frame_id = None
@@ -108,7 +109,7 @@ def extract_frames(*, movie_id, user_id):
             # Find the FPS and the duration
             fps = DEFAULT_FPS
             duration = None
-            m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stderr, re.MULTILINE)
+            m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stdout+stderr, re.MULTILINE)
             if m:
                 duration = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
                 logging.info("hms=%s:%s:%s duration=%s", m.group(1), m.group(2), m.group(3), duration)

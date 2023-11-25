@@ -23,16 +23,12 @@ import movietool
 import bottle_app
 import ctools.dbfile as dbfile
 
-MYDIR = dirname(abspath(__file__))
-
 MAX_ENROLLMENT = 10
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
 TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 TEST_ADMIN_NAME = 'Test User Name'
-
-MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
 # keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
