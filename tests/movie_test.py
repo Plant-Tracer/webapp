@@ -26,7 +26,6 @@ import lib.ctools.dbfile as dbfile
 import db
 import movietool
 import bottle_app
-from errors import INVALID_MOVIE_FRAME
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
