@@ -61,11 +61,10 @@ import paths
 import auth
 
 import track_blockmatching
-from paths import view, STATIC_DIR, TEMPLATE_DIR
 from lib.ctools import clogging
-from errors import INVALID_API_KEY,INVALID_EMAIL,INVALID_MOVIE_ACCESS,INVALID_MOVIE_FRAME,INVALID_COURSE_KEY,NO_REMAINING_REGISTRATIONS,INVALID_FRAME_FORMAT,INVALID_COURSE_ACCESS
-
-assert os.path.exists(TEMPLATE_DIR)
+from paths import view, STATIC_DIR
+from errors import E
+import track_blockmatching
 
 __version__ = '0.0.1'
 
@@ -128,11 +127,11 @@ def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = auth.get_user_api_key()
     if api_key is None:
-        logging.warning("api_key is none")
+        logging.info("api_key is none")
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.warning("api_key %s is invalid",api_key)
+        logging.info("api_key %s is invalid",api_key)
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/error'})
     return userdict
 
@@ -140,7 +139,7 @@ def get_user_id():
     """Returns the user_id of the currently logged in user, or throws a response"""
     userdict = get_user_dict()
     if 'id' not in userdict:
-        logging.warning("no ID in userdict = %s", userdict)
+        logging.info("no ID in userdict = %s", userdict)
         raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
     return userdict['id']
 
@@ -316,7 +315,7 @@ def api_check_api_key():
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': datetime_to_str(userdict)}
-    return INVALID_API_KEY
+    return E.INVALID_API_KEY
 
 
 @bottle.route('/api/get-logs', method=['POST'])
@@ -337,13 +336,13 @@ def api_register():
     email = request.forms.get('email')
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
-        logging.warning("email not valid: %s", email)
-        return INVALID_EMAIL
+        logging.info("email not valid: %s", email)
+        return E.E.INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key(course_key=course_key):
-        return INVALID_COURSE_KEY
+        return E.INVALID_COURSE_KEY
     if db.remaining_course_registrations(course_key=course_key) < 1:
-        return NO_REMAINING_REGISTRATIONS
+        return E.NO_REMAINING_REGISTRATIONS
     name = request.forms.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
@@ -356,8 +355,8 @@ def api_send_link():
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
-        logging.warning("email not valid: %s", email)
-        return INVALID_EMAIL
+        logging.info("email not valid: %s", email)
+        return E.E.INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
@@ -368,12 +367,12 @@ def api_bulk_register():
     user_id   = get_user_id()
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not db.check_course_admin(course_id = course_id, user_id=user_id):
-        return INVALID_COURSE_ACCESS
+        return E.INVALID_COURSE_ACCESS
 
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     for email in email_addresses:
         if not validate_email(email, check_mx=CHECK_MX):
-            return INVALID_EMAIL
+            return E.E.INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
@@ -438,7 +437,7 @@ def api_new_frame():
                                    frame_data = frame_data)
         frame_id = res['frame_id']
         return {'error': False, 'frame_id': frame_id}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -447,14 +446,21 @@ def api_get_frame():
     :param api_keuy:   authentication
     :param movie_id:   movie
     :param frame_msec: the frame specified
-    :param msec_delta:      0 - this frame; +1 - next frame; -1 is previous frame
+    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
     :param format:     jpeg - just get the image; json - get the image and json annotation
     :param analysis:   if true, return analysis as well. format must be json
+
+    Tracking:
+
+    :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied
+    :param engine_name:    string description tracking engine to use. May be omitted to get default engine.
+    :param engine_version: string to describe which version number of engine to use. May be omitted for default version.
     :return:
     """
     user_id    = get_user_id()
 
-    def get(key, default):
+    # define get(), which gets a variable from either the forms request or the query string
+    def get(key, default=None):
         return request.forms.get(key, request.query.get(key, default))
 
     movie_id   = int( get('movie_id',-1 ))
@@ -462,15 +468,19 @@ def api_get_frame():
     msec_delta = int( get('msec_delta',0 ))
 
     fmt        = get('format', 'jpeg').lower()
-    analysis   = get('analysis', None)
+    analysis   = get('analysis')
+
+    track      = get('track')
+    if track and (msec_delta != +1):
+        return E.E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
-        return INVALID_FRAME_FORMAT
+        return E.INVALID_FRAME_FORMAT
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
 
         frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
         if not frame:
-            return INVALID_MOVIE_FRAME
+            return E.INVALID_MOVIE_FRAME
 
         if fmt=='jpeg':
             bottle.response.set_header('Content-Type', 'image/jpeg')
@@ -489,7 +499,45 @@ def api_get_frame():
 
         return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
+
+@bottle.route('/api/track-frame', method='POST')
+def api_track_frame():
+    """Takes 2 frames and a point array and engine name. Note that the frames are uploaded as POST fields, not as files.
+    Files do not need to be BASE64 encoded, becuase there is a nice out-of-band protocol for doing that.
+    However, we have seen that binary data sent in forms should be base64 encoded.
+    Because we are uploading two frames, it's easier to do as a base64-encoded FORM submission.
+    TODO: allow frame0 or frame1 to be databases references, rather than uploads.
+    :param api_key: the user's api_key
+    :param frame0_base64_data: JPEG format frame
+    :param frame1_base64_data: JPEG format frame, assumed to be the next frame in a movie after frame0
+    :param point_array: array of points to track in frame0 coordinates in the form [(x1,y1), ...]
+    :param engine_name: string description tracking engine to use. May be omitted to get default engine.
+    :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
+    """
+
+    # pylint: disable=unsupported-membership-test
+    frames = {}
+    for i in [0,1]:
+        base64_data_name = f"frame{i}_base64_data"
+        data_name = f"frame{i}_data"
+
+        # Check for frame provided as base64-encoded data
+        if base64_data_name not in request.forms:
+            return {'error': True, 'message': f'Parameter {base64_data_name} is required'}
+        frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
+        if len(frames[data_name]) > MAX_FILE_UPLOAD:
+            return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
+        # Verify file type
+        mime_type = magic.from_buffer(frames[data_name],mime=True)
+        if mime_type not in ['image/jpeg']:
+            return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
+    # pylint: enable=unsupported-membership-test
+
+    point_array_in = json.loads(request.forms.get('point_array'))
+
+    res = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
@@ -521,7 +569,7 @@ def api_track_frame():
     # pylint: enable=unsupported-membership-test
 
     point_array_in = json.loads(request.forms.get('point_array'))
-   
+
     res = track_blockmatching.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
     return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
@@ -541,7 +589,6 @@ def api_put_frame_analysis():
         engine_id = int(request.forms.get('engine_id'))
     except (TypeError,ValueError):
         engine_id = None
-    logging.warning("request.forms=%s keys=%s",request.forms,request.forms.keys())
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
         db.put_frame_analysis(frame_id=frame_id,
                               annotations=json.loads(request.forms.get('annotations')),
@@ -549,7 +596,7 @@ def api_put_frame_analysis():
                               engine_name=request.forms.get('engine_name'),
                               engine_version=request.forms.get('engine_version'))
         return {'error': False, 'message':'Analysis recorded.'}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/get-movie-data', method=['POST','GET'])
@@ -561,7 +608,7 @@ def api_get_movie_data():
     if db.can_access_movie(user_id=get_user_id(), movie_id=auth.get_movie_id()):
         bottle.response.set_header('Content-Type', 'video/quicktime')
         return db.get_movie(movie_id=auth.get_movie_id())
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/delete-movie', method='POST')
@@ -574,7 +621,7 @@ def api_delete_movie():
         db.delete_movie(movie_id=request.forms.get('movie_id'),
                         delete=request.forms.get('delete', 1))
         return {'error': False}
-    return INVALID_MOVIE_ACCESS
+    return E.INVALID_MOVIE_ACCESS
 
 
 @bottle.route('/api/list-movies', method=['POST'])
