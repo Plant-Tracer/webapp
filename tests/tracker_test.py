@@ -31,7 +31,7 @@ from PIL import Image
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
-from constants import MIME
+from constants import MIME,Engines
 from endpoint_test import TEST_MOVIE_FILENAME
 import movietool
 import tracker
@@ -91,7 +91,7 @@ def test_track_frame_jpegs(extracted_jpeg_frames):
             assert magic.from_buffer( jpegs[i], mime=True) == MIME.JPEG
 
     point_array_in = [[279, 223]]
-    res = tracker.track_frame_jpegs(jpegs[0], jpegs[1], point_array_in)
+    res = tracker.track_frame_jpegs(engine=Engines.CV2,frame0_jpeg=jpegs[0], frame1_jpeg=jpegs[1],trackpoints= point_array_in)
 
     status_array = res['status_array']
     assert len(status_array) == 1
@@ -113,7 +113,7 @@ def test_track_frame_cv2_images(first_two_frames_as_cv2_images):
     """Test the track_frame_cv2 method by giving it two frames as NP arrays and validating its results"""
     photo0, photo1 = first_two_frames_as_cv2_images['images']
     point_array_in = np.array([[279, 223]], dtype=np.float32)
-    res = tracker.track_frame_cv2(photo0, photo1, point_array_in)
+    res = tracker.cv2_track_frame(frame0=photo0, frame1=photo1, trackpoints=point_array_in)
     logging.info("res=%s",json.dumps(res,default=str))
 
     status_array = res['status_array']
@@ -157,6 +157,7 @@ def test_api_track_frame(new_user, extracted_jpeg_frames):
     # point_array is a JSON-encoded array
     # All of these are uploaded as parameters, which are not JSON encoded by the API
     params['point_array'] = json.dumps([[279, 223]])
+    params['engine_name'] = 'CV2'
 
     # Now run the function and check the results
     logging.warning("params.keys()=%s",list(params.keys()))

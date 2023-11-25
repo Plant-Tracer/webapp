@@ -454,6 +454,7 @@ def get_frame_id():
         return  db.get_frame_id(frame_id=frame_id, analysis=analysis)
     return E.INVALID_FRAME_ACCESS
 
+#pylint: disable=too-many-return-statements
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
@@ -523,6 +524,7 @@ def api_get_frame():
         return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return E.INVALID_MOVIE_ACCESS
+#pylint: enable=too-many-return-statements
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
@@ -542,6 +544,7 @@ def api_track_frame():
 
     # pylint: disable=unsupported-membership-test
     frames = {}
+    engine_name = get('engine_name')
     for i in [0,1]:
         data_name = f"frame{i}_data"
         base64_data_name = f"frame{i}_base64_data"
@@ -562,7 +565,10 @@ def api_track_frame():
 
     point_array_in = json.loads(request.forms.get('point_array'))
 
-    res = tracker.track_frame_jpegs( frames['frame0_data'], frames['frame1_data'], point_array_in)
+    res = tracker.track_frame_jpegs( engine=engine_name,
+                                     frame0_jpeg=frames['frame0_data'],
+                                     frame1_jpeg=frames['frame1_data'],
+                                     trackpoints=point_array_in)
     return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 

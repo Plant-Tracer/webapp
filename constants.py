@@ -5,8 +5,9 @@ Constants are created in classes so we can import the class and don't have to im
 #pylint: disable=too-few-public-methods
 class Engines:
     """Engines"""
-    NULL_ENGINE = "NULL"
-    MANUAL_ENGINE = "MANUAL"        # analysis entered by a person
+    NULL = "NULL"
+    MANUAL = "MANUAL"        # analysis entered by a person
+    CV2 = "CV2"
 
 class MIME:
     """MIME Types"""
