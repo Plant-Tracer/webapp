@@ -393,6 +393,14 @@ class myImage extends MyObject {
     }
 }
 
+/***
+ * Find the best 'trackpoints' within the recs.
+ */
+function get_trackpoints(recs)
+{
+
+}
+
 
 /* create_new_div
  * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
@@ -415,13 +423,14 @@ function create_new_div(frame_msec, msec_delta) {
     $( '#template' ).replaceWith( div_html );
 
     let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
+    let track = msec_delta > 0 ? 1 : 0;
     $.post('/api/get-frame', {movie_id:movie_id,
                               api_key:api_key,
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
                               analysis:true,
-                              track: msec_delta > 0 ? true : false,
+                              track: track,
                               engine_name:'NULL',
                               engine_version:'0'
                              })
@@ -431,13 +440,19 @@ function create_new_div(frame_msec, msec_delta) {
                 alert(`error: ${data.message}`);
                 return;
             }
+            // Display the photo and metadata
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
             ptc.analysis       = data.analysis
-            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} Track points:${ptc.analysis.trackpoints}`);
-            for (let pt of ptc.analysis['trackpoints']) {
-                ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+            if (data.analysis) {
+                let trackpoints    = get_trackpoints(data.analysis);
+                console.log("analysis:",data.analysis);
+                console.log("trackpoints:",trackpoints);
+                $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} Track points:${ptc.analysis.trackpoints}`);
+                for (let pt of ptc.analysis['trackpoints']) {
+                    ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                }
             }
             setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
         });

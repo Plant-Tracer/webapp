@@ -63,7 +63,7 @@ import auth
 from lib.ctools import clogging
 
 from paths import view, STATIC_DIR
-from constants import E,MIME
+from constants import E,MIME,Engines
 import tracker
 
 __version__ = '0.0.1'
@@ -86,6 +86,7 @@ def expand_memfile_max():
 
 
 def datetime_to_str(obj):
+    """Given an object that might be a dictionary, convert all datetime objects to JSON strings"""
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # or str(obj) if you prefer
     elif isinstance(obj, dict):
@@ -491,54 +492,63 @@ def api_get_frame():
     movie_id   = int( get('movie_id',-1 ))
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
-    fmt        = get('format', 'jpeg').lower()
-    analysis   = get('analysis')
-    engine_name = get('engine_name')
+    fmt            = get('format', 'jpeg').lower()
+    analysis       = get('analysis')
+    engine_name    = get('engine_name')
     engine_version = get('engine_version')
 
-    track      = get('track')
+    track      = int(get('track'))
     if track and (msec_delta != +1):
         return E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
 
+    # Below, frame1 is the frame requested, and frame0, if computed, is the frame before frame1
+
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if not frame:
+        frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+        if not frame1:
             return E.INVALID_MOVIE_FRAME
 
         if fmt=='jpeg':
             # Can't get analysis if requesting jpeg format
             bottle.response.set_header('Content-Type', MIME.JPEG)
-            logging.info("Return %d bytes",len(frame['frame_data']))
-            return frame['frame_data']
+            logging.info("Return %d bytes",len(frame1['frame_data']))
+            return frame1['frame_data']
 
         # JSON format; change frame_data into data_url
-        frame_data = frame['frame_data'] # JPEG format
-        frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
-        del frame['frame_data']
+        frame1_data = frame1['frame_data'] # JPEG format
+        frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
+        del frame1['frame_data']
 
         # If analysis is requested, get a list of dictionaries from the database where each dictionary
         # contains metadata about the annotations and the JSON object of the annotations.
         if analysis:
-            frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
+            frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
 
         # If tracking is requested, get the previous frame and the trackpoints from that frame
         # and run the tracking algorithm.
         if track:
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            frame0_data = frame0_dict['frame_data']
+            frame0_id   = frame0_dict['frame_id']
             if frame0_dict is None:
                 return E.INVALID_MOVIE_FRAME
-            if frame_data==frame0_dict['frame_data']:
+            if frame0_data==frame1_data:
                 return E.TRACK_FRAMES_SAME
-            frame0_analysis    = db.get_frame_analysis(frame_id = frame_dict['frame_id']);
-            frame0_trackpoints = get_preferred_trackpoints(frame0_analysis);
+            frame0_analysis    = db.get_frame_analysis(frame_id = frame0_id)
+            frame0_trackpoints = get_preferred_trackpoints(frame0_analysis)
             if frame0_trackpoints:
-                tpr = tracker.track_frame(engine = engine_name, frame0=frame0_data, frame1=frame_data, trackpoints = frame0_trackpoints)
+                tpr = tracker.track_frame(engine = engine_name,
+                                          engine_version = engine_version,
+                                          frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
                 if tpr:
-                    frame['analysis']['trackpoints'] = tpr['trackpoints']
-        return json.dumps(frame, default=str)
+                    frame1['analysis']['trackpoints'] = tpr['trackpoints']
+        # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
+        # and returns MIME type of "application/json"
+        # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+        return datetime_to_str(frame1)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return E.INVALID_MOVIE_ACCESS
 #pylint: enable=too-many-return-statements
