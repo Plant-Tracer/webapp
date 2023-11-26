@@ -48,7 +48,7 @@ remove_localdb:
 	/bin/rm -f etc/actions_test.ini
 
 coverage:
-	$(PYTHON) -m pip install pytest pytest_cov
+	$(PYTHON) -m pip install codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:

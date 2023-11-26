@@ -2,8 +2,6 @@
 Test the various functions in the database involving movie creation.
 """
 
-from boddle import boddle
-
 import sys
 import os
 import uuid
@@ -19,14 +17,20 @@ import magic
 import json
 from os.path import abspath, dirname
 
+from boddle import boddle
+
 sys.path.append(dirname(dirname(abspath(__file__))))
+
+from paths import TEST_DATA_DIR
+import lib.ctools.dbfile as dbfile
 import db
 import movietool
 import bottle_app
-import ctools.dbfile as dbfile
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_FILENAME,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
+from endpoint_test import TEST_MOVIE_FILENAME
+from constants import MIME
 
 @pytest.fixture
 def new_movie(new_user):
@@ -38,12 +42,13 @@ def new_movie(new_user):
 
     movie_title = 'test movie title ' + str(uuid.uuid4())
 
-    logging.debug("new_movie fixture: Opening %s",MOVIE_FILENAME)
-    with open(MOVIE_FILENAME, "rb") as f:
+    logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
+    with open(TEST_MOVIE_FILENAME, "rb") as f:
         movie_data = f.read()
-    assert len(movie_data) == os.path.getsize(MOVIE_FILENAME)
+    assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
     assert len(movie_data) > 0
 
+    # This generates an error, which is why it needs to be caught with pytest.raises():
     logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
     with boddle(params={"api_key": api_key_invalid,
                         "title": movie_title,
@@ -53,6 +58,7 @@ def new_movie(new_user):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_new_movie()
 
+    # This does not raise an error
     logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
     with boddle(params={"api_key": api_key,
                         "title": movie_title,
@@ -229,7 +235,7 @@ def test_movie_extract(new_movie_uploaded):
                         'msec_delta': '0'}):
         ret = bottle_app.api_get_frame()
     assert res0['frame_data'] == ret
-    assert magic.from_buffer(ret,mime=True)=='image/jpeg'
+    assert magic.from_buffer(ret,mime=True)== MIME.JPEG
 
     # get the frame with the JSON interface
     with boddle(params={"api_key": api_key,
@@ -306,6 +312,24 @@ def test_movie_extract(new_movie_uploaded):
     assert json.loads(analysis_stored[0]['annotations'])==annotations1
     assert json.loads(analysis_stored[1]['annotations'])==annotations2
 
+    # See if we can get the frame by id without the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    assert r2['frame_id'] == frame_id
+    assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
+    assert 'analysis' not in r2
+
+    # See if we can get the frame by id with the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=True)
+    assert 'analysis' in r2
+
+    # Validate the bottle interface
+
+    # See if we can get the frame by id without the analysis
+    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    assert 'analysis' not in r2
+    assert r2['frame_id'] == frame_id
+
+
     # Delete the analysis
     logging.info("deleting frame analsys engine_id %s name %s",analysis_stored[0]['engine_id'],analysis_stored[0]['engine_name'])
     db.delete_frame_analysis(engine_id=analysis_stored[0]['engine_id'])
@@ -313,7 +337,6 @@ def test_movie_extract(new_movie_uploaded):
 
     # delete the analysis engine
     db.delete_analysis_engine(engine_name=engine_name)
-
 
 
 ################################################################
