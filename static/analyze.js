@@ -340,11 +340,13 @@ class PlantTracerController extends CanvasController {
             });
     }
 
-    // Request the next frame if we don't have it.
-    // If we do, track it.
+    /* track_next_fram() is called when the 'track next frame' button is clicked.
+     * Request the next frame if we don't have it.
+     * Ask for tracking.
+     */
     track_next_frame() {
-        console.log(`track_next_frame. msec=${this.frame_msec}`);
-        create_new_div(this.frame_msec, +1); // get the next one
+        // get the next frame and apply tracking logic
+        create_new_div(this.frame_msec, +1);
     }
 }
 
@@ -392,21 +394,26 @@ class myImage extends MyObject {
 }
 
 
-// Creates a new analysis div
+/* create_new_div
+ * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
+ * - Makes a call to get-frame to get the picture.
+ *
+ * If msec_delta>0, then we are getting the *next* frame, in which case we
+ * apply the tracking as well.
+ */
 function create_new_div(frame_msec, msec_delta) {
     let this_id  = div_id_counter++;
     let this_sel = `#${this_id}`;
     console.log("create_new_div this_id=",this_id,"this_sel=",this_sel);
 
+    /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
         .replace('template', `${this_id}`)
         .replace('canvas-id',`canvas-${this_id}`)
         .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
-    //console.log("div_html=",div_html);
     $( '#template' ).replaceWith( div_html );
 
-    console.log("create new ptc");
     let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
     $.post('/api/get-frame', {movie_id:movie_id,
                               api_key:api_key,
@@ -414,13 +421,16 @@ function create_new_div(frame_msec, msec_delta) {
                               msec_delta:msec_delta,
                               format:'json',
                               analysis:true,
-                              track:true,
+                              track: msec_delta > 0 ? true : false,
                               engine_name:'NULL',
                               engine_version:'0'
                              })
-        .done( function(json_value) {
+        .done( function(data) {
             // We got data back consisting of the frame, frame_id, frame_msec and more...
-            data = JSON.parse(json_value);
+            if (data.error) {
+                alert(`error: ${data.message}`);
+                return;
+            }
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
