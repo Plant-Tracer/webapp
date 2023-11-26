@@ -497,7 +497,7 @@ def api_get_frame():
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
 
-    track      = int(get('track'))
+    track      = int(get('track',0 ))
     if track and (msec_delta != +1):
         return E.INVALID_TRACK_FRAME_MSEC
 
