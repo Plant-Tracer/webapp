@@ -237,13 +237,15 @@ def test_movie_extract(new_movie_uploaded):
     assert res0['frame_data'] == ret
     assert magic.from_buffer(ret,mime=True)== MIME.JPEG
 
-    # get the frame with the JSON interface
+    # get the frame with the JSON interface.
+    # get_frame now relies on bottle to turn the dictionary into a JSON object, so boddle gets the raw dictionary and
+    # does not need json.loads
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json' }):
-        ret = json.loads(bottle_app.api_get_frame())
+        ret = bottle_app.api_get_frame()
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
     assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
@@ -253,7 +255,7 @@ def test_movie_extract(new_movie_uploaded):
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json'}):
-        ret = json.loads(bottle_app.api_get_frame())
+        ret = bottle_app.api_get_frame()
     assert 'analysis' not in ret
     frame_id = ret['frame_id']
 
@@ -304,7 +306,7 @@ def test_movie_extract(new_movie_uploaded):
                         'msec_delta': '0',
                         'format':'json',
                         'analysis':True}):
-        ret = json.loads(bottle_app.api_get_frame())
+        ret = bottle_app.api_get_frame()
     analysis_stored = ret['analysis']
     # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
     # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
