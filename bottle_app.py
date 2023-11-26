@@ -337,7 +337,7 @@ def api_register():
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
         logging.info("email not valid: %s", email)
-        return E.E.INVALID_EMAIL
+        return E.INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key(course_key=course_key):
         return E.INVALID_COURSE_KEY
@@ -356,7 +356,7 @@ def api_send_link():
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
         logging.info("email not valid: %s", email)
-        return E.E.INVALID_EMAIL
+        return E.INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
@@ -372,7 +372,7 @@ def api_bulk_register():
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     for email in email_addresses:
         if not validate_email(email, check_mx=CHECK_MX):
-            return E.E.INVALID_EMAIL
+            return E.INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
@@ -447,17 +447,31 @@ def get(key, default=None):
 
 @bottle.route('/api/get-frame-id', method=GET_POST)
 def get_frame_id():
-    """Verify that the user has rights to frame_id and then return it"""
+    """
+    get a frame using the frame_id.
+    Verify that the user has rights to frame_id and then return it. Minimal capabilities.
+    """
     frame_id = get('frame_id')
     analysis = get('analysis',False)
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
         return  db.get_frame_id(frame_id=frame_id, analysis=analysis)
     return E.INVALID_FRAME_ACCESS
 
+def get_preferred_trackpoints(recs):
+    """given a set of analyses associated with a frame, get the best one first"""
+    for preferred in Engines.PREFERRED_ORDER:
+        for rec in recs:
+            if rec['engine'] == preferred:
+                return rec['trackpoints']
+    # Couldn't find any
+    return None
+
 #pylint: disable=too-many-return-statements
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
+    Get a frame using search, optionally get analysis and perform tracking.
+
     :param api_keuy:   authentication
     :param movie_id:   movie
     :param frame_msec: the frame specified
@@ -477,13 +491,14 @@ def api_get_frame():
     movie_id   = int( get('movie_id',-1 ))
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
-
     fmt        = get('format', 'jpeg').lower()
     analysis   = get('analysis')
+    engine_name = get('engine_name')
+    engine_version = get('engine_version')
 
     track      = get('track')
     if track and (msec_delta != +1):
-        return E.E.INVALID_TRACK_FRAME_MSEC
+        return E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
@@ -509,18 +524,20 @@ def api_get_frame():
         if analysis:
             frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
 
-        # If tracking is requested, get the previous frame and run the tracking algorithm
+        # If tracking is requested, get the previous frame and the trackpoints from that frame
+        # and run the tracking algorithm.
         if track:
-            frame0_data = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-            if not frame0_data:
+            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            if frame0_dict is None:
                 return E.INVALID_MOVIE_FRAME
-            if frame_data==frame0_data:
+            if frame_data==frame0_dict['frame_data']:
                 return E.TRACK_FRAMES_SAME
-
-            # We don't need the frame0_data...
-            # frame['data0_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame0_data).decode()}'
-
-
+            frame0_analysis    = db.get_frame_analysis(frame_id = frame_dict['frame_id']);
+            frame0_trackpoints = get_preferred_trackpoints(frame0_analysis);
+            if frame0_trackpoints:
+                tpr = tracker.track_frame(engine = engine_name, frame0=frame0_data, frame1=frame_data, trackpoints = frame0_trackpoints)
+                if tpr:
+                    frame['analysis']['trackpoints'] = tpr['trackpoints']
         return json.dumps(frame, default=str)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return E.INVALID_MOVIE_ACCESS
