@@ -37,7 +37,7 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
 
     return {'point_array_out': point_array_out, 'status_array': status_array, 'err': err}
 
-def track_frame(*, engine, frame0, frame1, trackpoints):
+def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
     if engine==Engines.NULL:
         return null_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
     elif engine==Engines.CV2:

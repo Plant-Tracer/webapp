@@ -110,7 +110,7 @@ def logit(*, func_name, func_args, func_return):
         func_return = json.dumps(func_return, default=str)
 
     if len(func_return) > MAX_FUNC_RETURN_LOG:
-        func_return = json.dumps({'log_size':len(func_return), 'error':True})
+        func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
 
     logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s",
                   func_name, func_args, func_return, logging_policy)
@@ -645,7 +645,9 @@ def delete_analysis_engine_id(*, engine_id):
                         "DELETE from engines where id=%s",(engine_id,))
 
 def encode_json(d):
-    """Given json data, encode it as base64 and return as an SQL statement that processes it."""
+    """Given json data, encode it as base64 and return as an SQL
+    statement that processes it. We use this as a way of quoting a
+    JSON object that is then inserted into the database. (Other approaches for quoting failed.)"""
     djson = json.dumps(d)
     dlen  = len(djson)
     return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
