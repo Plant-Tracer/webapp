@@ -112,11 +112,9 @@ def logit(*, func_name, func_args, func_return):
     if len(func_return) > MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
 
-    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s",
-                  func_name, func_args, func_return, logging_policy)
+    logging.debug("%s(%s) = %s ", func_name, func_args, func_return)
 
     if LOG_DB in logging_policy:
-        logging.debug("LOG_DB in logging_policy")
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """INSERT INTO logs (
                                 time_t,
@@ -581,16 +579,33 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
     return {'frame_id':frame_id}
 
 
-def get_frame_id(*, frame_id, analysis=False):
-    """Get a frame by ID. Returns the frame, and optionally the analysis"""
+def get_frame_analysis(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a record.
+    Within that record, 'annotations' is a JSON string.
+    """
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
+                                         frame_id,engine_id,annotations,engines.name as engine_name,
+                                         engines.version AS engine_version FROM movie_frame_analysis
+                               LEFT JOIN engines ON engine_id=engines.id
+                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
+                               (frame_id,),
+                               asDicts=True)
+    # Now go through every annotations and decode the object
+    for r in ret:
+        r['annotations'] = json.loads(r['annotations'])
+    return ret
+
+def get_frame_id(*, frame_id, get_trackpoints=False):
+    """Get a frame by ID. Returns the frame."""
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               "SELECT *,id as frame_id from movie_frames where id=%s",
                               (frame_id,),
                               asDicts=True)
     if len(ret)!=1:
         return None
-    if analysis:
-        ret[0]['analysis'] = get_frame_analysis(frame_id=frame_id)
+    if get_trackpoints:
+        ret[0]['trackpoints'] = get_frame_analysis(frame_id=frame_id)
     return ret[0]
 
 def get_frame(*, movie_id, frame_msec, msec_delta):
@@ -613,19 +628,6 @@ def get_frame(*, movie_id, frame_msec, msec_delta):
     if len(ret)>0:
         return ret[0]
     return None
-
-def get_frame_analysis(*, frame_id):
-    """Returns a list of dictionaries where each dictonary represents a record.
-    Within that record, 'annotations' is a JSON string.
-    """
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
-                                         frame_id,engine_id,annotations,engines.name as engine_name,
-                                         engines.version AS engine_version FROM movie_frame_analysis
-                               LEFT JOIN engines ON engine_id=engines.id
-                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
-                               (frame_id,),
-                               asDicts=True)
 
 def get_analysis_engine_id(*, engine_name, engine_version):
     """Create an analysis engine if it does not exist, and return the engine_id"""

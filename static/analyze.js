@@ -92,7 +92,7 @@ class CanvasController {
                 this.c.style.cursor='crosshair';
             }
         }
-        this.redraw();
+        this.redraw(4);
     }
 
     mousemove_handler(e) {
@@ -393,15 +393,6 @@ class myImage extends MyObject {
     }
 }
 
-/***
- * Find the best 'trackpoints' within the recs.
- */
-function get_trackpoints(recs)
-{
-
-}
-
-
 /* create_new_div
  * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
  * - Makes a call to get-frame to get the picture.
@@ -429,7 +420,7 @@ function create_new_div(frame_msec, msec_delta) {
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
-                              analysis:true,
+                              analysis:1,
                               track: track,
                               engine_name:'NULL',
                               engine_version:'0'
@@ -444,14 +435,15 @@ function create_new_div(frame_msec, msec_delta) {
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
-            ptc.analysis       = data.analysis
+            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
             if (data.analysis) {
-                let trackpoints    = get_trackpoints(data.analysis);
                 console.log("analysis:",data.analysis);
-                console.log("trackpoints:",trackpoints);
-                $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} Track points:${ptc.analysis.trackpoints}`);
-                for (let pt of ptc.analysis['trackpoints']) {
-                    ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                for (let ana of data.analysis) {
+                    console.log("ana:",ana)
+                    for (let pt of ana.annotations) {
+                        console.log("pt:",pt);
+                        ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                    }
                 }
             }
             setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.

@@ -453,19 +453,24 @@ def get_frame_id():
     Verify that the user has rights to frame_id and then return it. Minimal capabilities.
     """
     frame_id = get('frame_id')
-    analysis = get('analysis',False)
+    trackpoints = int(get('trackpoints','0')) > 0
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, analysis=analysis)
+        return  db.get_frame_id(frame_id=frame_id, get_trackpoints=trackpoints)
     return E.INVALID_FRAME_ACCESS
 
-def get_preferred_trackpoints(recs):
-    """given a set of analyses associated with a frame, get the best one first"""
+def get_preferred_annotations(records):
+    """given a set of analyses associated with a frame, get the best one first.
+    currently ignores version.  Sometimes the trackpoints are stored inside a dictionary with the key 'trackpoints',
+    while other times they are the only annotations. This is annoying.Simson L Garfinkel
+    """
     for preferred in Engines.PREFERRED_ORDER:
-        for rec in recs:
-            if rec['engine'] == preferred:
-                return rec['trackpoints']
+        for rec in records:
+            if rec['engine_name'] == preferred:
+                return rec['annotations']
     # Couldn't find any
     return None
+
+
 
 #pylint: disable=too-many-return-statements
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -478,7 +483,7 @@ def api_get_frame():
     :param frame_msec: the frame specified
     :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
     :param format:     jpeg - just get the image; json - get the image and json annotation
-    :param analysis:   if true, return analysis as well. format must be json
+    :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
 
     Tracking:
 
@@ -493,7 +498,7 @@ def api_get_frame():
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
     fmt            = get('format', 'jpeg').lower()
-    analysis       = get('analysis')
+    analysis       = int(get('analysis',0))
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
 
@@ -533,18 +538,22 @@ def api_get_frame():
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
             frame0_data = frame0_dict['frame_data']
             frame0_id   = frame0_dict['frame_id']
+            frame0_trackpoints = None
             if frame0_dict is None:
                 return E.INVALID_MOVIE_FRAME
             if frame0_data==frame1_data:
                 return E.TRACK_FRAMES_SAME
-            frame0_analysis    = db.get_frame_analysis(frame_id = frame0_id)
-            frame0_trackpoints = get_preferred_trackpoints(frame0_analysis)
-            if frame0_trackpoints:
+            ana = db.get_frame_analysis(frame_id = frame0_id)
+            logging.debug("ana=%s",ana)
+            if ana:
+                frame0_trackpoints = [(r['x'],r['y']) for r in get_preferred_annotations(ana)]
+                logging.debug("frame0_trackpoints=%s",frame0_trackpoints)
                 tpr = tracker.track_frame(engine = engine_name,
                                           engine_version = engine_version,
                                           frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
+                logging.debug("tpr=%s",tpr)
                 if tpr:
-                    frame1['analysis']['trackpoints'] = tpr['trackpoints']
+                    frame1['trackpoints'] = tpr[tracker.POINT_ARRAY_OUT]
         # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
         # and returns MIME type of "application/json"
         # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
