@@ -27,7 +27,7 @@ from user_test import new_course, new_user, api_key
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-MOVIE_FILE_NAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
+TEST_MOVIE_FILENAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
 SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
 SKIP_ENDPOINT_TEST = False
 
@@ -144,12 +144,12 @@ def test_upload_movie_frame_by_frame(http_endpoint, api_key):
 def test_upload_movie_data(http_endpoint, api_key):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
     assert len(FRAME_FILES) > 0
-    with open(MOVIE_FILE_NAME, 'rb') as f:
+    with open(TEST_MOVE_FILENAME, 'rb') as f:
         movie_base64_data = base64.b64encode(f.read())
-        post_data = {'api_key': api_key,
-                     'title': 'Test Title at '+time.asctime(),
-                     'description': 'Test Upload',
-                     'movie_base64_data': movie_base64_data}
+    post_data = {'api_key': api_key,
+                 'title': 'Test Title at '+time.asctime(),
+                 'description': 'Test Upload',
+                 'movie_base64_data': movie_base64_data}
     r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
     assert res['error'] == False

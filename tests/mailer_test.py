@@ -33,8 +33,9 @@ This is a test message.
 guid = str(uuid.uuid4())
 
 
+@pytest.mark.skipif('TEST_USER_EMAIL' not in os.environ,reason='Environment not set up for sending email')
 def test_send_message(localmail_config):
-    TEST_USER_EMAIL    = os.environ['TEST_USER_EMAIL']
+    TEST_USER_EMAIL    = os.environ.get('TEST_USER_EMAIL','simsong+test-user-email@gmail.com')
     DO_NOT_REPLY_EMAIL = 'do-not-reply@planttracer.com'
 
     TO_ADDRS = [TEST_USER_EMAIL]
