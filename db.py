@@ -596,7 +596,7 @@ def get_frame_analysis(*, frame_id):
         r['annotations'] = json.loads(r['annotations'])
     return ret
 
-def get_frame_id(*, frame_id, get_trackpoints=False):
+def get_frame_id(*, frame_id, get_analysis=False):
     """Get a frame by ID. Returns the frame."""
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               "SELECT *,id as frame_id from movie_frames where id=%s",
@@ -604,8 +604,8 @@ def get_frame_id(*, frame_id, get_trackpoints=False):
                               asDicts=True)
     if len(ret)!=1:
         return None
-    if get_trackpoints:
-        ret[0]['trackpoints'] = get_frame_analysis(frame_id=frame_id)
+    if get_analysis:
+        ret[0]['analysis'] = get_frame_analysis(frame_id=frame_id)
     return ret[0]
 
 def get_frame(*, movie_id, frame_msec, msec_delta):

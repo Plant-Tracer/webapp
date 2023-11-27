@@ -436,6 +436,7 @@ function create_new_div(frame_msec, msec_delta) {
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
             $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
+            // Add points in the analysis
             if (data.analysis) {
                 console.log("analysis:",data.analysis);
                 for (let ana of data.analysis) {
@@ -444,6 +445,14 @@ function create_new_div(frame_msec, msec_delta) {
                         console.log("pt:",pt);
                         ptc.add_circle( pt['x'], pt['y'], pt['name'] );
                     }
+                }
+            }
+            // Add points that would be in the trackpoints array that was passed
+            if (data.trackpoints) {
+                console.log("trackpoints:",data.analysis);
+                for (let tp of data.trackpoints) {
+                    console.log("tp:",tp)
+                    ptc.add_circle( tp['x'], tp['y'], tp['name'] );
                 }
             }
             setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
