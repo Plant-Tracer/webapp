@@ -453,9 +453,9 @@ def get_frame_id():
     Verify that the user has rights to frame_id and then return it. Minimal capabilities.
     """
     frame_id = get('frame_id')
-    trackpoints = int(get('trackpoints','0')) > 0
+    analysis = int(get('analysis','0')) > 0
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, get_trackpoints=trackpoints)
+        return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
     return E.INVALID_FRAME_ACCESS
 
 def get_preferred_annotations(records):
@@ -546,14 +546,19 @@ def api_get_frame():
             ana = db.get_frame_analysis(frame_id = frame0_id)
             logging.debug("ana=%s",ana)
             if ana:
-                frame0_trackpoints = [(r['x'],r['y']) for r in get_preferred_annotations(ana)]
-                logging.debug("frame0_trackpoints=%s",frame0_trackpoints)
+                pa = get_preferred_annotations(ana)
+                frame0_tp_names    = [r['name'] for r in pa]
+                frame0_trackpoints = [(r['x'],r['y']) for r in pa]
+                logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
                 tpr = tracker.track_frame(engine = engine_name,
                                           engine_version = engine_version,
                                           frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
                 logging.debug("tpr=%s",tpr)
-                if tpr:
-                    frame1['trackpoints'] = tpr[tracker.POINT_ARRAY_OUT]
+                frame1['trackpoints'] = [{'x':trp[tracker.POINT_ARRAY_OUT][i][0],
+                                          'y':trp[tracker.POINT_ARRAY_OUT][i][1]
+                                          'name':frame0_tp_names[i]}
+                                         for i in range(len(frame0_tp_names))]
+
         # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
         # and returns MIME type of "application/json"
         # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
