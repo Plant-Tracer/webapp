@@ -720,10 +720,13 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
         if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
             raise KeyError(f'trackpoints element {tp} missing x, y or label')
         vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
-    args = ",".join(['%s']*len(vals))
+    args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
     dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
-    cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES ({args})"
-    dbfile.DBMySQL.csfr(get_dbwriter(),cmd,args)
+    if vals:
+        cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
+        logging.debug("cmd=%s",cmd)
+        logging.debug("args=%s  len=%s",args,len(args))
+        dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
 
 

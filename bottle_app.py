@@ -96,6 +96,9 @@ def datetime_to_str(obj):
     else:
         return obj
 
+def is_true(s):
+    return str(s)[0:1] in 'yY1tT'
+
 ################################################################
 # Bottle endpoints
 
@@ -498,12 +501,12 @@ def api_get_frame():
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
     fmt            = get('format', 'jpeg').lower()
-    analysis       = int(get('analysis',0))
+    get_analysis   = is_true(get('get_analysis'))
+    get_tracking   = is_true(get('get_tracking'))
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
 
-    track      = int(get('track',0 ))
-    if track and (msec_delta != +1):
+    if get_tracking and (msec_delta != +1):
         return E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
@@ -529,12 +532,12 @@ def api_get_frame():
 
         # If analysis is requested, get a list of dictionaries from the database where each dictionary
         # contains metadata about the annotations and the JSON object of the annotations.
-        if analysis:
+        if get_analysis:
             frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
 
         # If tracking is requested, get the previous frame and the trackpoints from that frame
         # and run the tracking algorithm.
-        if track:
+        if get_tracking:
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
             frame0_data = frame0_dict['frame_data']
             frame0_id   = frame0_dict['frame_id']
