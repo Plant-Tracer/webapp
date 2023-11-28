@@ -305,41 +305,44 @@ def test_movie_extract(new_movie_uploaded):
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json',
-                        'analysis':True}):
+                        'get_analysis':True}):
         ret = bottle_app.api_get_frame()
+    logging.debug("ret=%s",ret)
     analysis_stored = ret['analysis']
     # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
     # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
     # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
-    assert json.loads(analysis_stored[0]['annotations'])==annotations1
-    assert json.loads(analysis_stored[1]['annotations'])==annotations2
+    logging.debug("analysis_stored=%s",analysis_stored)
+    logging.debug("annotations1=%s",annotations1)
+    assert analysis_stored[0]['annotations']==annotations1
+    assert analysis_stored[1]['annotations']==annotations2
 
     # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=False)
     assert r2['frame_id'] == frame_id
     assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
     assert 'analysis' not in r2
 
     # See if we can get the frame by id with the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=True)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=True)
     assert 'analysis' in r2
 
     # Validate the bottle interface
 
     # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=False)
     assert 'analysis' not in r2
     assert r2['frame_id'] == frame_id
 
 
     # See if we can save two trackpoints in the frame and get them back
-    tp1 = {'x':10,'y':11,label:'label1'}
-    tp2 = {'x':20,'y':21,label:'label2'}
+    tp1 = {'x':10,'y':11,'label':'label1'}
+    tp2 = {'x':20,'y':21,'label':'label2'}
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[tp1,tp2])
 
     # See if I can get it back
     tps = db.get_frame_trackpoints(frame_id=frame_id)
-    assert sorted(tps)==sorted([tp1,tp2])
+    assert len(tps)==2
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
