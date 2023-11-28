@@ -200,6 +200,26 @@ CREATE TABLE `movie_frames` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `movie_trackpoints`
+--
+
+DROP TABLE IF EXISTS `movie_trackpoints`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `movie_trackpoints` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `frame_id` int NOT NULL,
+  `x` int NOT NULL,
+  `y` int NOT NULL,
+  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk1` (`frame_id`,`label`),
+  KEY `frame_id` (`frame_id`),
+  CONSTRAINT `movie_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `movies`
 --
 
@@ -218,15 +238,23 @@ CREATE TABLE `movies` (
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `length` int DEFAULT NULL,
+  `center_x` int DEFAULT NULL,
+  `center_y` int DEFAULT NULL,
+  `calib_x` float DEFAULT NULL,
+  `calib_y` float DEFAULT NULL,
+  `calib_user_id` int DEFAULT NULL,
+  `calib_time_t` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
   KEY `title` (`title`),
   KEY `course_id` (`course_id`),
+  KEY `movies_usr` (`calib_user_id`),
   FULLTEXT KEY `description` (`description`),
   FULLTEXT KEY `title_ft` (`title`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
+  CONSTRAINT `movies_usr` FOREIGN KEY (`calib_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
   CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
