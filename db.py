@@ -579,9 +579,10 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
     return {'frame_id':frame_id}
 
 
+
 def get_frame_analysis(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
-    Within that record, 'annotations' is a JSON string.
+    Within that record, 'annotations' is stored in the database as a JSON string, but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
     """
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                                """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
@@ -591,13 +592,24 @@ def get_frame_analysis(*, frame_id):
                                WHERE frame_id=%s ORDER BY engines.name,engines.version""",
                                (frame_id,),
                                asDicts=True)
-    # Now go through every annotations and decode the object
+    # Now go through every annotations cell and decode the object
     for r in ret:
         r['annotations'] = json.loads(r['annotations'])
     return ret
 
-def get_frame_id(*, frame_id, get_analysis=False):
-    """Get a frame by ID. Returns the frame."""
+def get_frame_trackpoints(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a trackpoint.
+    """
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               """
+                               SELECT id as movie_frame_trackpoints_id,
+                                      frame_id,x,y,label FROM movie_frame_trackpoints
+                               WHERE frame_id=%s""",
+                               (frame_id,),
+                               asDicts=True)
+
+def get_frame_id(*, frame_id, get_analysis=False, get_trackpoints=False):
+    """Get a frame by ID. Returns the frame, and optionally the analysis and the trackpoints"""
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               "SELECT *,id as frame_id from movie_frames where id=%s",
                               (frame_id,),
@@ -606,13 +618,16 @@ def get_frame_id(*, frame_id, get_analysis=False):
         return None
     if get_analysis:
         ret[0]['analysis'] = get_frame_analysis(frame_id=frame_id)
+    if get_trackpoints:
+        ret[0]['trackpoints'] = get_frame_trackpoints(frame_id=frame_id)
     return ret[0]
 
 def get_frame(*, movie_id, frame_msec, msec_delta):
     """Get a frame by movie_id and offset. Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted
     :param: frame_msec - the frame we want
-    :param: msec_delta - offset from the frame we want. Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
+    :param: msec_delta - offset from the frame we want.
+                         Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
     """
     if msec_delta==0:
         delta = "frame_msec = %s "
@@ -686,13 +701,30 @@ def put_frame_analysis(*,
 
     #
     # We use base64 encoding to get by the quoting problems.
-    #
+    # This means we need a format string, rather than a prepared statement.
+    # The int() and the ea() provide sufficient protection.
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         f"""INSERT INTO movie_frame_analysis
                         (frame_id, engine_id, annotations)
                         VALUES ({int(frame_id)},{int(engine_id)},{ea})
                         ON DUPLICATE KEY UPDATE
                         annotations={ea} """)
+
+def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+    """
+    :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
+    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    """
+    vals = []
+    for tp in trackpoints:
+        if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
+            raise KeyError(f'trackpoints element {tp} missing x, y or label')
+        vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
+    args = ",".join(['%s']*len(vals))
+    dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
+    cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES ({args})"
+    dbfile.DBMySQL.csfr(get_dbwriter(),cmd,args)
+
 
 
 
