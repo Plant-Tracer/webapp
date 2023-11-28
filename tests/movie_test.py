@@ -332,6 +332,21 @@ def test_movie_extract(new_movie_uploaded):
     assert r2['frame_id'] == frame_id
 
 
+    # See if we can save two trackpoints in the frame and get them back
+    tp1 = {'x':10,'y':11,label:'label1'}
+    tp2 = {'x':20,'y':21,label:'label2'}
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[tp1,tp2])
+
+    # See if I can get it back
+    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    assert sorted(tps)==sorted([tp1,tp2])
+
+    # Delete the trackpoints
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
+
+    # Make sure they are deleted
+    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
+
     # Delete the analysis
     logging.info("deleting frame analsys engine_id %s name %s",analysis_stored[0]['engine_id'],analysis_stored[0]['engine_name'])
     db.delete_frame_analysis(engine_id=analysis_stored[0]['engine_id'])

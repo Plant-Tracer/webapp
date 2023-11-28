@@ -39,6 +39,7 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
 
     return {POINT_ARRAY_OUT: point_array_out, 'status_array': status_array, 'err': err}
 
+#pylint: disable=unused-argument
 def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
     if engine==Engines.NULL:
         return null_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
@@ -46,6 +47,7 @@ def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
         return cv2_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
     else:
         raise ValueError(f"No such engine: {engine}")
+#pylint: enable=unused-argument
 
 
 def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):

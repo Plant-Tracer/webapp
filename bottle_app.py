@@ -554,8 +554,8 @@ def api_get_frame():
                                           engine_version = engine_version,
                                           frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
                 logging.debug("tpr=%s",tpr)
-                frame1['trackpoints'] = [{'x':trp[tracker.POINT_ARRAY_OUT][i][0],
-                                          'y':trp[tracker.POINT_ARRAY_OUT][i][1]
+                frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
+                                          'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
                                           'name':frame0_tp_names[i]}
                                          for i in range(len(frame0_tp_names))]
 
