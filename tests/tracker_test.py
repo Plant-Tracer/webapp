@@ -90,7 +90,8 @@ def test_track_frame_jpegs(extracted_jpeg_frames):
             jpegs.append(f.read())
             assert magic.from_buffer( jpegs[i], mime=True) == MIME.JPEG
 
-    point_array_in = [[279, 223]]
+    point_array_in = np.array([[279, 223]], dtype=np.float32)
+
     res = tracker.track_frame_jpegs(engine=Engines.CV2,frame0_jpeg=jpegs[0], frame1_jpeg=jpegs[1],trackpoints= point_array_in)
 
     status_array = res['status_array']

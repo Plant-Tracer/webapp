@@ -19,17 +19,16 @@ def null_track_frame(*,frame0, frame1, trackpoints):
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
-    Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
+    Summary - Takes the original marked marked_frame and new frame and returns location (point) of the frame that is annotated.
     :param: frame0    - cv2 image of the previous frame
     :param: frame1 - cv2 image of the current frame
-    :param: trackpoints   - array of poins
+    :param: trackpoints   - array of points
     takes a     returns the new positions.
 
     """
     winSize=(15, 15)
     maxLevel=2
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-
     gray_frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
     gray_frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
     point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
@@ -50,24 +49,16 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     """
     :param: frame0_jpeg     - binary buffer containing a JPEG of previous frame
     :param: frame1_jpeg     - binary buffer containing a JPEG of current frame
-    :param: trackpoints - an array of points that is being tracked.
+    :param: trackpoints - a numpy array of points that is being tracked.
     :return: a dictionary including:
        'points_array_out' - the input array of points
        'status' - a status message
        'error' - some kind of error message.
     """
-    # This should work, but it didn't. So we are going to put them in tempoary files...
-    # https://www.geeksforgeeks.org/python-opencv-imdecode-function/
-    # image0 = np.asarray(bytearray(frame0_jpeg))
-    # image1 = np.asarray(bytearray(frame1_jpeg))
-    # return cv2_track_frame( image0, image1, trackpoints )
-    with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
-        with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
-            tf0.write(frame0_jpeg)
-            tf1.write(frame1_jpeg)
-            return track_frame( engine=engine, frame0=cv2.imread(tf0.name),
-                                frame1=cv2.imread(tf1.name), trackpoints=np.array(trackpoints,dtype=np.float32))
-
+    # convert frame0_jpeg and frame1_jpeg into images (numpy array)
+    image0 = cv2.imdecode(np.frombuffer(frame0_jpeg, np.uint8), cv2.IMREAD_COLOR)
+    image1 = cv2.imdecode(np.frombuffer(frame1_jpeg, np.uint8), cv2.IMREAD_COLOR)
+    return cv2_track_frame(frame0=image0, frame1=image1, trackpoints=trackpoints )
 
 def track_movie(*, engine, moviefile, trackpoints):
     """
