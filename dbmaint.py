@@ -71,18 +71,17 @@ if __name__ == "__main__":
         dbwriter_user = 'dbwriter_' + args.createdb
         dbreader_password = str(uuid.uuid4())
         dbwriter_password = str(uuid.uuid4())
+        d.execute(f'DROP DATABASE IF EXISTS {args.createdb}')
         d.execute(f'CREATE DATABASE {args.createdb}')
         d.execute(f'USE {args.createdb}')
         with open(SCHEMA_FILE, 'r') as f:
             d.create_schema(f.read())
-        d.execute(
-            f'CREATE USER `{dbreader_user}`@`localhost` identified by "{dbreader_password}"')
-        d.execute(
-            f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`localhost`')
-        d.execute(
-            f'CREATE USER `{dbwriter_user}`@`localhost` identified by "{dbwriter_password}"')
-        d.execute(
-            f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`localhost`')
+        d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`localhost`')
+        d.execute( f'CREATE USER           `{dbreader_user}`@`localhost` identified by "{dbreader_password}"')
+        d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`localhost`')
+        d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`localhost`')
+        d.execute( f'CREATE USER           `{dbwriter_user}`@`localhost` identified by "{dbwriter_password}"')
+        d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`localhost`')
 
         def prn(k, v):
             print(f"{k}={v}")
