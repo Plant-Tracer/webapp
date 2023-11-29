@@ -413,15 +413,15 @@ function create_new_div(frame_msec, msec_delta) {
         + "<div id='template'></div>";
     $( '#template' ).replaceWith( div_html );
 
-    let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
+    // create a new PlantTracerController; we may need to save it in an array too
+    let ptc = new PlantTracerController( this_id );
     let track = msec_delta > 0 ? 1 : 0;
     $.post('/api/get-frame', {movie_id:movie_id,
                               api_key:api_key,
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
-                              analysis:1,
-                              track: track,
+                              get_tracking: track,
                               engine_name:'NULL',
                               engine_version:'0'
                              })

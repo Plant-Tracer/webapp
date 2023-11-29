@@ -80,7 +80,7 @@ if __name__ == "__main__":
         d.execute(
             f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`localhost`')
         d.execute(
-            f'CREATE USER `{dbwriter_user}`@`localhost` identified by "{dbreader_password}"')
+            f'CREATE USER `{dbwriter_user}`@`localhost` identified by "{dbwriter_password}"')
         d.execute(
             f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`localhost`')
 
@@ -97,8 +97,8 @@ if __name__ == "__main__":
 
         print("[dbwriter]")
         prn(MYSQL_HOST, localhost)
-        prn(MYSQL_USER, dbreader_user)
-        prn(MYSQL_PASSWORD, dbreader_password)
+        prn(MYSQL_USER, dbwriter_user)
+        prn(MYSQL_PASSWORD, dbwriter_password)
         prn(MYSQL_DATABASE, args.createdb)
 
         if cp:
