@@ -5,7 +5,6 @@ Implements blockmatching algorithm in OpenCV.
 # pylint: disable=no-member
 import json
 import argparse
-import tempfile
 
 import cv2
 import numpy as np
@@ -51,7 +50,7 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     :param: frame1_jpeg     - binary buffer containing a JPEG of current frame
     :param: trackpoints - a numpy array of points that is being tracked.
     :return: a dictionary including:
-       'points_array_out' - the input array of points
+       'points_array_out' - the input array of points (nparray)
        'status' - a status message
        'error' - some kind of error message.
     """
@@ -60,29 +59,25 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     image1 = cv2.imdecode(np.frombuffer(frame1_jpeg, np.uint8), cv2.IMREAD_COLOR)
     return cv2_track_frame(frame0=image0, frame1=image1, trackpoints=trackpoints )
 
-def track_movie(*, engine, moviefile, trackpoints):
+def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     """
-    Summary - takes in a movie(cap) and returns annotatted movie
+    Summary - takes in a movie(file) and returns annotated movie
     takes a annotated frame (marked_frame) that has the apex annotated
     takes the control points (trackpoints)
     initializes parameters to pass to track_frame
     returns a list of points
-    TODO - What is movie? A filename? A movie?
+    :param: engine - name of tracking engine
+    :param: moviefile - the name of a file to be tracked
+    :param: trackpoints - a point that will be where the tracker starts
+    :param: output_video_path - a mp4 file
     """
     if engine!=Engines.CV2:
         raise RuntimeError("This only runs with CV2")
 
-    if moviefile:
-        raise RuntimeError("declare what movie is")
     video_coordinates = np.array(trackpoints)
     p0 = trackpoints
     cap = cv2.VideoCapture(moviefile)
     ret, current_frame = cap.read()
-
-    # should be movie name + tracked
-    output_video_path = 'tracked_movie.mp4'
-    if output_video_path:
-        raise RuntimeError("Rework this so that output_video_path is in a temporary directory")
 
     # Get video properties
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -129,9 +124,11 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-        "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
+        "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file to be tracked')
     parser.add_argument(
         "--points_to_track", default='[[279, 223]]', help="list of points to track as json 2D array.")
+    parser.add_argument(
+        "--output_video_path", default='tracked_movie.mp4', help='tracked mpeg4 file')
     args = parser.parse_args()
     trackpoints = np.array(json.loads(args.points_to_track), dtype=np.float32)
-    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints)
+    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints, output_video_path=args.output_video_path)
