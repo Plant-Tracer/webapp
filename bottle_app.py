@@ -537,6 +537,7 @@ def api_get_frame():
 
         # If tracking is requested, get the previous frame and the trackpoints from that frame
         # and run the tracking algorithm.
+        #TODO CHANGE HERE
         if get_tracking:
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
             frame0_data = frame0_dict['frame_data']
