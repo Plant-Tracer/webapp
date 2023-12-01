@@ -59,10 +59,14 @@ def test_error():
 
 # Note: mocker magically works if pytest-mock is installed
 def test_api_key_null(mocker):
-    with boddle(params={}):
-        with pytest.raises(bottle.HTTPResponse) as e:
-            mocker.patch('auth.get_user_api_key', return_value=None)
-            res = bottle_app.func_list()
+    mocker.patch('auth.get_user_api_key', return_value=None)
+    with pytest.raises(bottle.HTTPResponse) as e:
+        with boddle(params={}):
+            res = bottle_app.func_list() # throws bottle.HTTPResponse
+        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
+
+    with pytest.raises(bottle.HTTPResponse) as e:
+        bottle_app.get_user_dict() # throws bottle.HTTPResponse
         assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
 
