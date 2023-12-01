@@ -57,7 +57,7 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     # convert frame0_jpeg and frame1_jpeg into images (numpy array)
     image0 = cv2.imdecode(np.frombuffer(frame0_jpeg, np.uint8), cv2.IMREAD_COLOR)
     image1 = cv2.imdecode(np.frombuffer(frame1_jpeg, np.uint8), cv2.IMREAD_COLOR)
-    return cv2_track_frame(frame0=image0, frame1=image1, trackpoints=trackpoints )
+    return cv2_track_frame(frame0=image0, frame1=image1, trackpoints=trackpoints)
 
 def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     """
@@ -130,5 +130,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_video_path", default='tracked_movie.mp4', help='tracked mpeg4 file')
     args = parser.parse_args()
-    trackpoints = np.array(json.loads(args.points_to_track), dtype=np.float32)
-    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints, output_video_path=args.output_video_path)
+    # trackpoints = np.array(json.loads(args.points_to_track), dtype=np.float32)
+    # track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints, output_video_path=args.output_video_path)
