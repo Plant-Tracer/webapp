@@ -45,11 +45,25 @@ def test_icon():
         res = bottle_app.favicon()
     assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
 
+#
+# Test various error conditions
+
 def test_error():
+    """Make sure authentication errors result in the session being expired and the cookie being cleared."""
     with boddle(params={}):
         res = bottle_app.func_error()
-    # TODO - we need to know that the response sent the clear-cooky header
     assert "Session expired - You have been logged out" in res
+    assert ('Set-Cookie: api_key=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+            in str(bottle.response))
+
+
+# Note: mocker magically works if pytest-mock is installed
+def test_api_key_null(mocker):
+    with boddle(params={}):
+        with pytest.raises(bottle.HTTPResponse) as e:
+            mocker.patch('auth.get_user_api_key', return_value=None)
+            res = bottle_app.func_list()
+        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
 
 ################################################################
