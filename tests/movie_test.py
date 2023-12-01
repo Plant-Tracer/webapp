@@ -265,6 +265,12 @@ def test_movie_extract(new_movie_uploaded):
     assert 'analysis' not in ret
     frame_id = ret['frame_id']
 
+    # Check to make sure get-frame-id works
+    with boddle(params={"api_key": api_key,
+                        "frame_id": frame_id}):
+        ret = bottle_app.get_frame_id()
+    assert ret['frame_data']==res0['frame_data']
+
     # Create a random engine and upload two analysis for it
     engine_name = "engine " + str(uuid.uuid4())[0:8]
     annotations1 = {'guid':str(uuid.uuid4()),
