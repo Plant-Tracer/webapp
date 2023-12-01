@@ -63,7 +63,7 @@ import auth
 from lib.ctools import clogging
 
 from paths import view, STATIC_DIR
-from constants import E,MIME
+from constants import E,MIME,Engines
 import tracker
 
 __version__ = '0.0.1'
@@ -86,6 +86,7 @@ def expand_memfile_max():
 
 
 def datetime_to_str(obj):
+    """Given an object that might be a dictionary, convert all datetime objects to JSON strings"""
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # or str(obj) if you prefer
     elif isinstance(obj, dict):
@@ -94,6 +95,14 @@ def datetime_to_str(obj):
         return [datetime_to_str(elem) for elem in obj]
     else:
         return obj
+
+def is_true(s):
+    return str(s)[0:1] in 'yY1tT'
+
+# define get(), which gets a variable from either the forms request or the query string
+def get(key, default=None):
+    return request.forms.get(key, request.query.get(key, default))
+
 
 ################################################################
 # Bottle endpoints
@@ -337,7 +346,7 @@ def api_register():
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
         logging.info("email not valid: %s", email)
-        return E.E.INVALID_EMAIL
+        return E.INVALID_EMAIL
     course_key = request.forms.get('course_key')
     if not db.validate_course_key(course_key=course_key):
         return E.INVALID_COURSE_KEY
@@ -356,7 +365,7 @@ def api_send_link():
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=CHECK_MX):
         logging.info("email not valid: %s", email)
-        return E.E.INVALID_EMAIL
+        return E.INVALID_EMAIL
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
@@ -372,7 +381,7 @@ def api_bulk_register():
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     for email in email_addresses:
         if not validate_email(email, check_mx=CHECK_MX):
-            return E.E.INVALID_EMAIL
+            return E.INVALID_EMAIL
         db.register_email(email=email, course_id=course_id, name="")
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
@@ -440,30 +449,30 @@ def api_new_frame():
     return E.INVALID_MOVIE_ACCESS
 
 
-# define get(), which gets a variable from either the forms request or the query string
-def get(key, default=None):
-    return request.forms.get(key, request.query.get(key, default))
-
-
 @bottle.route('/api/get-frame-id', method=GET_POST)
 def get_frame_id():
-    """Verify that the user has rights to frame_id and then return it"""
+    """
+    get a frame using the frame_id.
+    Verify that the user has rights to frame_id and then return it. Minimal capabilities.
+    """
     frame_id = get('frame_id')
-    analysis = get('analysis',False)
+    analysis = int(get('analysis','0')) > 0
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, analysis=analysis)
+        return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
     return E.INVALID_FRAME_ACCESS
 
 #pylint: disable=too-many-return-statements
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
+    Get a frame using search, optionally get analysis and perform tracking.
+
     :param api_keuy:   authentication
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
     :param format:     jpeg - just get the image; json - get the image and json annotation
-    :param analysis:   if true, return analysis as well. format must be json
+    :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
 
     Tracking:
 
@@ -477,51 +486,73 @@ def api_get_frame():
     movie_id   = int( get('movie_id',-1 ))
     frame_msec = int( get('frame_msec',0 ))
     msec_delta = int( get('msec_delta',0 ))
+    fmt            = get('format', 'jpeg').lower()
+    get_analysis   = is_true(get('get_analysis'))
+    get_tracking   = is_true(get('get_tracking'))
+    engine_name    = get('engine_name')
+    engine_version = get('engine_version')
 
-    fmt        = get('format', 'jpeg').lower()
-    analysis   = get('analysis')
-
-    track      = get('track')
-    if track and (msec_delta != +1):
-        return E.E.INVALID_TRACK_FRAME_MSEC
+    if get_tracking and (msec_delta != +1):
+        return E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
 
+    # Below, frame1 is the frame requested, and frame0, if computed, is the frame before frame1
+
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        frame = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if not frame:
+        frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+        if not frame1:
             return E.INVALID_MOVIE_FRAME
 
         if fmt=='jpeg':
             # Can't get analysis if requesting jpeg format
             bottle.response.set_header('Content-Type', MIME.JPEG)
-            logging.info("Return %d bytes",len(frame['frame_data']))
-            return frame['frame_data']
+            logging.info("Return %d bytes",len(frame1['frame_data']))
+            return frame1['frame_data']
 
         # JSON format; change frame_data into data_url
-        frame_data = frame['frame_data'] # JPEG format
-        frame['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
-        del frame['frame_data']
+        frame1_data = frame1['frame_data'] # JPEG format
+        frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
+        del frame1['frame_data']
 
         # If analysis is requested, get a list of dictionaries from the database where each dictionary
         # contains metadata about the annotations and the JSON object of the annotations.
-        if analysis:
-            frame['analysis'] = db.get_frame_analysis(frame_id=frame['frame_id'])
+        if get_analysis:
+            frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
 
-        # If tracking is requested, get the previous frame and run the tracking algorithm
-        if track:
-            frame0_data = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-            if not frame0_data:
+        # If tracking is requested, get the previous frame and the trackpoints from that frame
+        # and run the tracking algorithm.
+        # TO DO CHANGE HERE
+        if get_tracking:
+            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            frame0_data = frame0_dict['frame_data']
+            frame0_id   = frame0_dict['frame_id']
+            frame0_trackpoints = None
+            if frame0_dict is None:
                 return E.INVALID_MOVIE_FRAME
-            if frame_data==frame0_data:
+            if frame0_data==frame1_data:
                 return E.TRACK_FRAMES_SAME
+            ana = db.get_frame_analysis(frame_id = frame0_id)
+            logging.debug("ana=%s",ana)
+            if ana:
+                pa = get_preferred_annotations(ana)
+                frame0_tp_names    = [r['name'] for r in pa]
+                frame0_trackpoints = [(r['x'],r['y']) for r in pa]
+                logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
+                tpr = tracker.track_frame(engine = engine_name,
+                                          engine_version = engine_version,
+                                          frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
+                logging.debug("tpr=%s",tpr)
+                frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
+                                          'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
+                                          'name':frame0_tp_names[i]}
+                                         for i in range(len(frame0_tp_names))]
 
-            # We don't need the frame0_data...
-            # frame['data0_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame0_data).decode()}'
-
-
-        return json.dumps(frame, default=str)
+        # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
+        # and returns MIME type of "application/json"
+        # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+        return datetime_to_str(frame1)
     logging.info("User %s cannot access movie_id %s",user_id, movie_id)
     return E.INVALID_MOVIE_ACCESS
 #pylint: enable=too-many-return-statements
@@ -603,9 +634,9 @@ def api_get_movie_data():
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=auth.get_movie_id()):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get('movie_id')):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie(movie_id=auth.get_movie_id())
+        return db.get_movie_data(movie_id=get('movie_id'))
     return E.INVALID_MOVIE_ACCESS
 
 
@@ -643,7 +674,7 @@ def api_get_log():
 ##
 
 
-def converter(x):
+def bool_converter(x):
     if (x == 'null') or (x is None):
         return None
     return int(x)
@@ -651,8 +682,8 @@ def converter(x):
 
 @bottle.route('/api/get-metadata', method='POST')
 def api_get_metadata():
-    gmovie_id = converter(request.forms.get('get_movie_id'))
-    guser_id = converter(request.forms.get('get_user_id'))
+    gmovie_id = bool_converter(request.forms.get('get_movie_id'))
+    guser_id  = bool_converter(request.forms.get('get_user_id'))
 
     if (gmovie_id is None) and (guser_id is None):
         return {'error': True, 'result': 'Either get_movie_id or get_user_id is required'}
@@ -674,8 +705,8 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    set_movie_id = converter(request.forms.get('set_movie_id'))
-    set_user_id = converter(request.forms.get('set_user_id'))
+    set_movie_id = bool_converter(request.forms.get('set_movie_id'))
+    set_user_id  = bool_converter(request.forms.get('set_user_id'))
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}

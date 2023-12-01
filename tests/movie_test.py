@@ -116,8 +116,14 @@ def new_movie_uploaded(new_movie):
 def test_new_movie(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
     cfg = copy.copy(new_movie)
+    api_key = cfg[API_KEY]
     movie_id = cfg[MOVIE_ID]
     logging.info("movie_id=%s",movie_id)
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id}):
+        res = bottle_app.api_get_movie_data()
+    # res must be a movie
+    assert len(res)>0
 
 def test_new_movie_upload(new_movie_uploaded):
     """Create a new user, upload the movie, delete the movie, and shut down"""
@@ -237,13 +243,15 @@ def test_movie_extract(new_movie_uploaded):
     assert res0['frame_data'] == ret
     assert magic.from_buffer(ret,mime=True)== MIME.JPEG
 
-    # get the frame with the JSON interface
+    # get the frame with the JSON interface.
+    # get_frame now relies on bottle to turn the dictionary into a JSON object, so boddle gets the raw dictionary and
+    # does not need json.loads
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json' }):
-        ret = json.loads(bottle_app.api_get_frame())
+        ret = bottle_app.api_get_frame()
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
     assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
@@ -253,7 +261,7 @@ def test_movie_extract(new_movie_uploaded):
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json'}):
-        ret = json.loads(bottle_app.api_get_frame())
+        ret = bottle_app.api_get_frame()
     assert 'analysis' not in ret
     frame_id = ret['frame_id']
 
@@ -303,32 +311,50 @@ def test_movie_extract(new_movie_uploaded):
                         'frame_msec': '0',
                         'msec_delta': '0',
                         'format':'json',
-                        'analysis':True}):
-        ret = json.loads(bottle_app.api_get_frame())
+                        'get_analysis':True}):
+        ret = bottle_app.api_get_frame()
+    logging.debug("ret=%s",ret)
     analysis_stored = ret['analysis']
     # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
     # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
     # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
-    assert json.loads(analysis_stored[0]['annotations'])==annotations1
-    assert json.loads(analysis_stored[1]['annotations'])==annotations2
+    logging.debug("analysis_stored=%s",analysis_stored)
+    logging.debug("annotations1=%s",annotations1)
+    assert analysis_stored[0]['annotations']==annotations1
+    assert analysis_stored[1]['annotations']==annotations2
 
     # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=False)
     assert r2['frame_id'] == frame_id
     assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
     assert 'analysis' not in r2
 
     # See if we can get the frame by id with the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=True)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=True)
     assert 'analysis' in r2
 
     # Validate the bottle interface
 
     # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,analysis=False)
+    r2 = db.get_frame_id(frame_id=frame_id,get_analysis=False)
     assert 'analysis' not in r2
     assert r2['frame_id'] == frame_id
 
+
+    # See if we can save two trackpoints in the frame and get them back
+    tp1 = {'x':10,'y':11,'label':'label1'}
+    tp2 = {'x':20,'y':21,'label':'label2'}
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[tp1,tp2])
+
+    # See if I can get it back
+    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    assert len(tps)==2
+
+    # Delete the trackpoints
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
+
+    # Make sure they are deleted
+    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
 
     # Delete the analysis
     logging.info("deleting frame analsys engine_id %s name %s",analysis_stored[0]['engine_id'],analysis_stored[0]['engine_name'])
