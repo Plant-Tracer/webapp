@@ -116,8 +116,14 @@ def new_movie_uploaded(new_movie):
 def test_new_movie(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
     cfg = copy.copy(new_movie)
+    api_key = cfg[API_KEY]
     movie_id = cfg[MOVIE_ID]
     logging.info("movie_id=%s",movie_id)
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id}):
+        res = bottle_app.api_get_movie_data()
+    # res must be a movie
+    assert len(res)>0
 
 def test_new_movie_upload(new_movie_uploaded):
     """Create a new user, upload the movie, delete the movie, and shut down"""

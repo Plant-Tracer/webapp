@@ -99,6 +99,11 @@ def datetime_to_str(obj):
 def is_true(s):
     return str(s)[0:1] in 'yY1tT'
 
+# define get(), which gets a variable from either the forms request or the query string
+def get(key, default=None):
+    return request.forms.get(key, request.query.get(key, default))
+
+
 ################################################################
 # Bottle endpoints
 
@@ -444,11 +449,6 @@ def api_new_frame():
     return E.INVALID_MOVIE_ACCESS
 
 
-# define get(), which gets a variable from either the forms request or the query string
-def get(key, default=None):
-    return request.forms.get(key, request.query.get(key, default))
-
-
 @bottle.route('/api/get-frame-id', method=GET_POST)
 def get_frame_id():
     """
@@ -460,20 +460,6 @@ def get_frame_id():
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
         return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
     return E.INVALID_FRAME_ACCESS
-
-def get_preferred_annotations(records):
-    """given a set of analyses associated with a frame, get the best one first.
-    currently ignores version.  Sometimes the trackpoints are stored inside a dictionary with the key 'trackpoints',
-    while other times they are the only annotations. This is annoying.Simson L Garfinkel
-    """
-    for preferred in Engines.PREFERRED_ORDER:
-        for rec in records:
-            if rec['engine_name'] == preferred:
-                return rec['annotations']
-    # Couldn't find any
-    return None
-
-
 
 #pylint: disable=too-many-return-statements
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -648,9 +634,9 @@ def api_get_movie_data():
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=auth.get_movie_id()):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get('movie_id')):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie(movie_id=auth.get_movie_id())
+        return db.get_movie_data(movie_id=get('movie_id'))
     return E.INVALID_MOVIE_ACCESS
 
 
@@ -688,7 +674,7 @@ def api_get_log():
 ##
 
 
-def converter(x):
+def bool_converter(x):
     if (x == 'null') or (x is None):
         return None
     return int(x)
@@ -696,8 +682,8 @@ def converter(x):
 
 @bottle.route('/api/get-metadata', method='POST')
 def api_get_metadata():
-    gmovie_id = converter(request.forms.get('get_movie_id'))
-    guser_id = converter(request.forms.get('get_user_id'))
+    gmovie_id = bool_converter(request.forms.get('get_movie_id'))
+    guser_id  = bool_converter(request.forms.get('get_user_id'))
 
     if (gmovie_id is None) and (guser_id is None):
         return {'error': True, 'result': 'Either get_movie_id or get_user_id is required'}
@@ -719,8 +705,8 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    set_movie_id = converter(request.forms.get('set_movie_id'))
-    set_user_id = converter(request.forms.get('set_user_id'))
+    set_movie_id = bool_converter(request.forms.get('set_movie_id'))
+    set_user_id  = bool_converter(request.forms.get('set_user_id'))
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
