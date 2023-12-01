@@ -8,6 +8,7 @@ class Engines:
     NULL = "NULL"
     MANUAL = "MANUAL"        # analysis entered by a person
     CV2 = "CV2"
+    PREFERRED_ORDER = [MANUAL, CV2, NULL]
 
 class MIME:
     """MIME Types"""

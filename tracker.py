@@ -11,11 +11,13 @@ import cv2
 import numpy as np
 from constants import Engines
 
+POINT_ARRAY_OUT='point_array_out'
 
 #pylint: disable=unused-argument
 def null_track_frame(*,frame0, frame1, trackpoints):
-    return {'point_array_out': trackpoints, 'status_array': None, 'err':None}
+    return {POINT_ARRAY_OUT: trackpoints, 'status_array': None, 'err':None}
 #pylint: enable=unused-argument
+
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
@@ -35,15 +37,17 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
     point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
                                                winSize=winSize, maxLevel=maxLevel, criteria=criteria)
 
-    return {'point_array_out': point_array_out, 'status_array': status_array, 'err': err}
+    return {POINT_ARRAY_OUT: point_array_out, 'status_array': status_array, 'err': err}
 
-def track_frame(*, engine, frame0, frame1, trackpoints):
+#pylint: disable=unused-argument
+def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
     if engine==Engines.NULL:
         return null_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
     elif engine==Engines.CV2:
         return cv2_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
     else:
         raise ValueError(f"No such engine: {engine}")
+#pylint: enable=unused-argument
 
 
 def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
@@ -115,7 +119,7 @@ def track_movie(*, engine, moviefile, trackpoints):
             break
 
         ret = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=p0)
-        p0 = ret['point_array_out']
+        p0 = ret[POINT_ARRAY_OUT]
         #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         video_coordinates = p0.tolist()
 

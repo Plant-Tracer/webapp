@@ -92,7 +92,7 @@ class CanvasController {
                 this.c.style.cursor='crosshair';
             }
         }
-        this.redraw();
+        this.redraw(4);
     }
 
     mousemove_handler(e) {
@@ -340,11 +340,13 @@ class PlantTracerController extends CanvasController {
             });
     }
 
-    // Request the next frame if we don't have it.
-    // If we do, track it.
+    /* track_next_fram() is called when the 'track next frame' button is clicked.
+     * Request the next frame if we don't have it.
+     * Ask for tracking.
+     */
     track_next_frame() {
-        console.log(`track_next_frame. msec=${this.frame_msec}`);
-        create_new_div(this.frame_msec, +1); // get the next one
+        // get the next frame and apply tracking logic
+        create_new_div(this.frame_msec, +1);
     }
 }
 
@@ -391,43 +393,67 @@ class myImage extends MyObject {
     }
 }
 
-
-// Creates a new analysis div
+/* create_new_div
+ * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
+ * - Makes a call to get-frame to get the picture.
+ *
+ * If msec_delta>0, then we are getting the *next* frame, in which case we
+ * apply the tracking as well.
+ */
 function create_new_div(frame_msec, msec_delta) {
     let this_id  = div_id_counter++;
     let this_sel = `#${this_id}`;
     console.log("create_new_div this_id=",this_id,"this_sel=",this_sel);
 
+    /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
         .replace('template', `${this_id}`)
         .replace('canvas-id',`canvas-${this_id}`)
         .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
-    //console.log("div_html=",div_html);
     $( '#template' ).replaceWith( div_html );
 
-    console.log("create new ptc");
-    let ptc = new PlantTracerController( this_id );    // create a new PlantTracerController; we may need to save it in an array too
+    // create a new PlantTracerController; we may need to save it in an array too
+    let ptc = new PlantTracerController( this_id );
+    let track = msec_delta > 0 ? 1 : 0;
     $.post('/api/get-frame', {movie_id:movie_id,
                               api_key:api_key,
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
-                              analysis:true,
-                              track:true,
+                              get_tracking: track,
                               engine_name:'NULL',
                               engine_version:'0'
                              })
-        .done( function(json_value) {
+        .done( function(data) {
             // We got data back consisting of the frame, frame_id, frame_msec and more...
-            data = JSON.parse(json_value);
+            if (data.error) {
+                alert(`error: ${data.message}`);
+                return;
+            }
+            // Display the photo and metadata
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
-            ptc.analysis       = data.analysis
-            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec} Track points:${ptc.analysis.trackpoints}`);
-            for (let pt of ptc.analysis['trackpoints']) {
-                ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
+            // Add points in the analysis
+            if (data.analysis) {
+                console.log("analysis:",data.analysis);
+                for (let ana of data.analysis) {
+                    console.log("ana:",ana)
+                    for (let pt of ana.annotations) {
+                        console.log("pt:",pt);
+                        ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                    }
+                }
+            }
+            // Add points that would be in the trackpoints array that was passed
+            if (data.trackpoints) {
+                console.log("trackpoints:",data.analysis);
+                for (let tp of data.trackpoints) {
+                    console.log("tp:",tp)
+                    ptc.add_circle( tp['x'], tp['y'], tp['name'] );
+                }
             }
             setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
         });

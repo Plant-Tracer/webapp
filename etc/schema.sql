@@ -179,6 +179,26 @@ CREATE TABLE `movie_frame_analysis` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `movie_frame_trackpoints`
+--
+
+DROP TABLE IF EXISTS `movie_frame_trackpoints`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `movie_frame_trackpoints` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `frame_id` int NOT NULL,
+  `x` int NOT NULL,
+  `y` int NOT NULL,
+  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk1` (`frame_id`,`label`),
+  KEY `frame_id` (`frame_id`),
+  CONSTRAINT `movie_frame_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `movie_frames`
 --
 

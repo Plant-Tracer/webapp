@@ -27,11 +27,14 @@ BOTTlE_APP_INI_PATH = join(ROOT_DIR, 'bottle_app.ini')
 bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
 
 # Database credentials
-DBCREDENTIALS_PATH = join(HOME, 'planttracer.ini')
-if not os.path.exists(DBCREDENTIALS_PATH):
-    DBCREDENTIALS_PATH = join(HOME, 'plant_dev.ini')
-if not os.path.exists(DBCREDENTIALS_PATH):
-    DBCREDENTIALS_PATH = None
+if 'DBCREDENTIALS_PATH' in os.environ:
+    DBCREDENTIALS_PATH = os.environ['DBCREDENTIALS_PATH']
+else:
+    DBCREDENTIALS_PATH = join(HOME, 'planttracer.ini')
+    if not os.path.exists(DBCREDENTIALS_PATH):
+        DBCREDENTIALS_PATH = join(HOME, 'plant_dev.ini')
+    if not os.path.exists(DBCREDENTIALS_PATH):
+        DBCREDENTIALS_PATH = None
 
 DBREADER_BASH_PATH = join(HOME, 'plant_dev.bash')
 if not os.path.exists(DBREADER_BASH_PATH):
