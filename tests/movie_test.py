@@ -365,7 +365,7 @@ def test_movie_extract(new_movie_uploaded):
                         'get_trackpoints':True,
                         'engine_name':'NULL' }):
         ret = bottle_app.api_get_frame()
-    logging.debug("ret1=%s",ret)
+    logging.debug("ret1.trackpoints-engine=%s",ret['trackpoints-engine'])
     assert ret['trackpoints-engine'][0]==tp0
     assert ret['trackpoints-engine'][1]==tp1
 
@@ -376,9 +376,9 @@ def test_movie_extract(new_movie_uploaded):
                         'msec_delta': '1',
                         'format':'json',
                         'get_trackpoints':True,
-                        'engine':'CV2' }):
+                        'engine_name':'CV2' }):
         ret = bottle_app.api_get_frame()
-    logging.debug("ret2=%s",ret)
+    logging.debug("ret2.trackpoints=%s",ret['trackpoints-engine'])
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])

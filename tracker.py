@@ -6,10 +6,12 @@ Implements blockmatching algorithm in OpenCV.
 import json
 import argparse
 import tempfile
+import magic
+import logging
 
 import cv2
 import numpy as np
-from constants import Engines
+from constants import Engines,MIME
 
 POINT_ARRAY_OUT='point_array_out'
 
@@ -17,6 +19,10 @@ POINT_ARRAY_OUT='point_array_out'
 def null_track_frame(*,frame0, frame1, trackpoints):
     return {POINT_ARRAY_OUT: trackpoints, 'status_array': None, 'err':None}
 #pylint: enable=unused-argument
+
+
+def is_jpeg(buffer):
+    return magic.from_buffer(buffer,mime=True) in [ MIME.JPEG ]
 
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
@@ -65,12 +71,18 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     # image0 = np.asarray(bytearray(frame0_jpeg))
     # image1 = np.asarray(bytearray(frame1_jpeg))
     # return cv2_track_frame( image0, image1, trackpoints )
+    assert is_jpeg(frame0_jpeg)
+    assert is_jpeg(frame1_jpeg)
     with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
         with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
             tf0.write(frame0_jpeg)
             tf1.write(frame1_jpeg)
-            return track_frame( engine=engine, frame0=cv2.imread(tf0.name),
-                                frame1=cv2.imread(tf1.name), trackpoints=np.array(trackpoints,dtype=np.float32))
+            frame0 = cv2.imread(tf0.name)
+            frame1 = cv2.imread(tf1.name)
+            logging.debug("frame0=%s",frame0)
+            logging.debug("type(frame0)=%s",type(frame0))
+            return track_frame( engine=engine, frame0=frame0,
+                                frame1=frame1, trackpoints=np.array(trackpoints,dtype=np.float32))
 
 
 def track_movie(*, engine, moviefile, trackpoints):
