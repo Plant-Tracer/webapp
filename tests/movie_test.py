@@ -73,7 +73,6 @@ def new_movie(new_user):
     cfg[MOVIE_TITLE] = movie_title
 
     logging.debug("new_movie fixture: movie_id=%s",movie_id)
-    logging.debug("new_movie fixture: Make sure that the correct movie is actually in the database")
 
     retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
@@ -118,7 +117,6 @@ def test_new_movie(new_movie):
     cfg = copy.copy(new_movie)
     api_key = cfg[API_KEY]
     movie_id = cfg[MOVIE_ID]
-    logging.info("movie_id=%s",movie_id)
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_app.api_get_movie_data()
@@ -215,16 +213,12 @@ def test_movie_extract(new_movie_uploaded):
     # Grab three frames and see if they are correct
     res0 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 0)
     assert res0 is not None
-    logging.info("res0: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res0['movie_id'],res0['frame_msec'], sha256(res0['frame_data']))
     res1 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 1)
     assert res1 is not None
-    logging.info("res1: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res1['movie_id'],res1['frame_msec'], sha256(res1['frame_data']))
     res2 = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = 1)
     assert res2 is not None
-    logging.info("res2: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res2['movie_id'],res2['frame_msec'], sha256(res2['frame_data']))
     res0b = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = -1)
     assert res0b is not None
-    logging.info("res0b: movie_id-%s frame_msec=%s sha256(frame_data)=%s",res0b['movie_id'],res0b['frame_msec'], sha256(res0b['frame_data']))
     assert res0['frame_msec'] < res1['frame_msec']
     assert res1['frame_msec'] < res2['frame_msec']
     assert res0['frame_msec'] == res0b['frame_msec']
@@ -319,13 +313,10 @@ def test_movie_extract(new_movie_uploaded):
                         'format':'json',
                         'get_analysis':True}):
         ret = bottle_app.api_get_frame()
-    logging.debug("ret=%s",ret)
     analysis_stored = ret['analysis']
     # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
     # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
     # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
-    logging.debug("analysis_stored=%s",analysis_stored)
-    logging.debug("annotations1=%s",annotations1)
     assert analysis_stored[0]['annotations']==annotations1
     assert analysis_stored[1]['annotations']==annotations2
 
@@ -356,7 +347,6 @@ def test_movie_extract(new_movie_uploaded):
     assert len(tps)==2
 
     # Ask the API to track the trackpoints between frames!
-    logging.debug("ASKING FOR ENGINE NULL")
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
@@ -379,6 +369,13 @@ def test_movie_extract(new_movie_uploaded):
                         'engine_name':'CV2' }):
         ret = bottle_app.api_get_frame()
     logging.debug("ret2.trackpoints=%s",ret['trackpoints-engine'])
+    assert 9.0 < ret['trackpoints-engine'][0]['x'] < 10.0
+    assert 9.0 < ret['trackpoints-engine'][0]['y'] < 10.0
+    assert ret['trackpoints-engine'][0]['label'] == 'label1'
+
+    assert 18.0 < ret['trackpoints-engine'][1]['x'] < 19.0
+    assert 21.0 < ret['trackpoints-engine'][1]['y'] < 22.0
+    assert ret['trackpoints-engine'][1]['label'] == 'label2'
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])

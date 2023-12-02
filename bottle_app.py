@@ -548,13 +548,11 @@ def api_get_frame():
             if frame0_data==frame1_data:
                 return E.TRACK_FRAMES_SAME
             tpts = db.get_frame_trackpoints(frame_id=frame0_id)
-            logging.debug('tpts=%s',tpts)
             frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
             tpr = tracker.track_frame_jpegs(engine = engine_name,
                                             frame0_jpeg=frame0_data,
                                             frame1_jpeg=frame1_data,
                                             trackpoints = frame0_trackpoints)
-            logging.debug("tpr=%s",tpr)
             frame1['trackpoints-engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
                                              'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
                                              'label':tpts[i]['label']}
