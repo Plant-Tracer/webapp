@@ -5,10 +5,9 @@ Constants are created in classes so we can import the class and don't have to im
 #pylint: disable=too-few-public-methods
 class Engines:
     """Engines"""
-    NULL = "NULL"
-    MANUAL = "MANUAL"        # analysis entered by a person
-    CV2 = "CV2"
-    PREFERRED_ORDER = [MANUAL, CV2, NULL]
+    NULL = "NULL"               # points are copied from input to output
+    MANUAL = "MANUAL"           # analysis entered by a person
+    CV2 = "CV2"                 # first CV2 algorithm
 
 class MIME:
     """MIME Types"""
@@ -30,6 +29,7 @@ class E:
     INVALID_MOVIE_FRAME = { 'error': True, 'message': 'Could not retrieve the movie frame.'}
     INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
     INVALID_TRACK_FRAME_MSEC = {'error': True, 'message': 'If track is true, then msec_delta must be +1'}
+    INVALID_REQUEST_JPEG = {'error': True, 'message':'Invalid request when requesting JPEG'}
     NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}
     NO_REMAINING_REGISTRATIONS = { 'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
     TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}

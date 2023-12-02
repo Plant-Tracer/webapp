@@ -484,77 +484,86 @@ def api_get_frame():
     user_id    = get_user_id()
 
     movie_id   = int( get('movie_id',-1 ))
-    frame_msec = int( get('frame_msec',0 ))
-    msec_delta = int( get('msec_delta',0 ))
+    frame_msec = int( get('frame_msec',0 )) # location frame
+    msec_delta = int( get('msec_delta',0 )) # if +1, the frame following frame_msec
     fmt            = get('format', 'jpeg').lower()
     get_analysis   = is_true(get('get_analysis'))
-    get_tracking   = is_true(get('get_tracking'))
+    get_trackpoints   = is_true(get('get_trackpoints')) # get tracking for requested frame.
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
 
-    if get_tracking and (msec_delta != +1):
+    logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
+
+    if get_trackpoints and (msec_delta != +1):
         return E.INVALID_TRACK_FRAME_MSEC
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
 
-    # Below, frame1 is the frame requested, and frame0, if computed, is the frame before frame1
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        logging.info("User %s cannot access movie_id %s",user_id, movie_id)
+        return E.INVALID_MOVIE_ACCESS
 
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if not frame1:
-            return E.INVALID_MOVIE_FRAME
+    # Below:
+    # frame1 -- the frame requested
+    # frame0 --- if msec_delta=+1, the frame before frame1
+    #
 
-        if fmt=='jpeg':
-            # Can't get analysis if requesting jpeg format
-            bottle.response.set_header('Content-Type', MIME.JPEG)
-            logging.info("Return %d bytes",len(frame1['frame_data']))
-            return frame1['frame_data']
+    frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+    if not frame1:
+        logging.info("frame1 is invalid")
+        return E.INVALID_MOVIE_FRAME
 
-        # JSON format; change frame_data into data_url
-        frame1_data = frame1['frame_data'] # JPEG format
-        frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
-        del frame1['frame_data']
+    if fmt=='jpeg':
+        if get_analysis or get_trackpoints:
+            return E.INVALID_REQUEST_JPEG
 
-        # If analysis is requested, get a list of dictionaries from the database where each dictionary
-        # contains metadata about the annotations and the JSON object of the annotations.
-        if get_analysis:
-            frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
+        bottle.response.set_header('Content-Type', MIME.JPEG)
+        return frame1['frame_data']
 
-        # If tracking is requested, get the previous frame and the trackpoints from that frame
-        # and run the tracking algorithm.
-        # TO DO CHANGE HERE
-        #if get_tracking:
-        #    frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-        #    frame0_data = frame0_dict['frame_data']
-        #    frame0_id   = frame0_dict['frame_id']
-        #    frame0_trackpoints = None
-        #    if frame0_dict is None:
-        #        return E.INVALID_MOVIE_FRAME
-        #    if frame0_data==frame1_data:
-        #        return E.TRACK_FRAMES_SAME
-        #    ana = db.get_frame_analysis(frame_id = frame0_id)
-        #    logging.debug("ana=%s",ana)
-        #    if ana:
-        #        pa = get_preferred_annotations(ana)
-        #        frame0_tp_names    = [r['name'] for r in pa]
-        #        frame0_trackpoints = [(r['x'],r['y']) for r in pa]
-        #        logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
-        #        tpr = tracker.track_frame(engine = engine_name,
-        #                                  engine_version = engine_version,
-        #                                  frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
-        #        logging.debug("tpr=%s",tpr)
-        #        frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
-        #                                  'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
-        #                                  'name':frame0_tp_names[i]}
-        #                                 for i in range(len(frame0_tp_names))]
-        #
-        # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
-        # and returns MIME type of "application/json"
-        # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-        return datetime_to_str(frame1)
-    logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-    return E.INVALID_MOVIE_ACCESS
+    # JSON format; change frame_data into data_url
+    frame1_data = frame1['frame_data'] # JPEG format
+    frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
+    del frame1['frame_data']
+
+    # If analysis is requested, get a list of dictionaries from the database where each dictionary
+    # contains metadata about the annotations and the JSON object of the annotations.
+    if get_analysis:
+        frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
+
+    if get_trackpoints:
+        # Get the tracking from the database
+        logging.info("get_trackpoints")
+        frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
+
+        # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
+        logging.info("msec_delta=%s type(msec_type)=%s engine_name=%s",msec_delta, type(msec_delta),engine_name)
+        if msec_delta == +1 and (engine_name is not None):
+            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            frame0_data = frame0_dict['frame_data']
+            frame0_id   = frame0_dict['frame_id']
+            frame0_trackpoints = None
+            if frame0_dict is None:
+                return E.INVALID_MOVIE_FRAME
+            if frame0_data==frame1_data:
+                return E.TRACK_FRAMES_SAME
+            tpts = db.get_frame_trackpoints(frame_id=frame0_id)
+            logging.debug('tpts=%s',tpts)
+            frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
+            tpr = tracker.track_frame(engine = engine_name,
+                                      engine_version = engine_version,
+                                      frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
+            logging.debug("tpr=%s",tpr)
+            frame1['trackpoints-engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
+                                             'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
+                                             'label':tpts[i]['label']}
+                                            for i in range(len(tpts))]
+    #
+    # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
+    # and returns MIME type of "application/json"
+    # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+    logging.info("frame1=%s",frame1)
+    return datetime_to_str(frame1)
 #pylint: enable=too-many-return-statements
 
 @bottle.route('/api/track-frame', method='POST')
