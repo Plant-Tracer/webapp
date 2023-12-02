@@ -346,15 +346,39 @@ def test_movie_extract(new_movie_uploaded):
     assert 'analysis' not in r2
     assert r2['frame_id'] == frame_id
 
-
     # See if we can save two trackpoints in the frame and get them back
-    tp1 = {'x':10,'y':11,'label':'label1'}
-    tp2 = {'x':20,'y':21,'label':'label2'}
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[tp1,tp2])
+    tp0 = {'x':10,'y':11,'label':'label1'}
+    tp1 = {'x':20,'y':21,'label':'label2'}
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
     tps = db.get_frame_trackpoints(frame_id=frame_id)
     assert len(tps)==2
+
+    # Ask the API to track the trackpoints between frames!
+    logging.debug("ASKING FOR ENGINE NULL")
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '+1',
+                        'format':'json',
+                        'get_trackpoints':True,
+                        'engine_name':'NULL' }):
+        ret = bottle_app.api_get_frame()
+    logging.debug("ret1=%s",ret)
+    assert ret['trackpoints-engine'][0]==tp0
+    assert ret['trackpoints-engine'][1]==tp1
+
+    # Now track with CV2
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_msec': '0',
+                        'msec_delta': '1',
+                        'format':'json',
+                        'get_trackpoints':True,
+                        'engine':'CV2' }):
+        ret = bottle_app.api_get_frame()
+    logging.debug("ret2=%s",ret)
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
