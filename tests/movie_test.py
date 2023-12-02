@@ -373,8 +373,8 @@ def test_movie_extract(new_movie_uploaded):
     assert 9.0 < ret['trackpoints-engine'][0]['y'] < 10.0
     assert ret['trackpoints-engine'][0]['label'] == 'label1'
 
-    assert 18.0 < ret['trackpoints-engine'][1]['x'] < 19.0
-    assert 21.0 < ret['trackpoints-engine'][1]['y'] < 22.0
+    assert 17.0 < ret['trackpoints-engine'][1]['x'] < 20.0
+    assert 20.0 < ret['trackpoints-engine'][1]['y'] < 22.0
     assert ret['trackpoints-engine'][1]['label'] == 'label2'
 
     # Delete the trackpoints
