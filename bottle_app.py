@@ -449,105 +449,105 @@ def api_new_frame():
     return E.INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-frame-id', method=GET_POST)
-def get_frame_id():
+@BOTTLE.ROUTE('/API/GET-FRAME-ID', METHOD=GET_POST)
+DEF GET_FRAME_ID():
     """
-    get a frame using the frame_id.
-    Verify that the user has rights to frame_id and then return it. Minimal capabilities.
+    GET A FRAME USING THE FRAME_ID.
+    VERIFY THAT THE USER HAS RIGHTS TO FRAME_ID AND THEN RETURN IT. MINIMAL CAPABILITIES.
     """
-    frame_id = get('frame_id')
-    analysis = int(get('analysis','0')) > 0
-    if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
-    return E.INVALID_FRAME_ACCESS
+    FRAME_ID = GET('FRAME_ID')
+    ANALYSIS = INT(GET('ANALYSIS','0')) > 0
+    IF DB.CAN_ACCESS_FRAME(USER_ID = GET_USER_ID(), FRAME_ID=FRAME_ID):
+        RETURN  DB.GET_FRAME_ID(FRAME_ID=FRAME_ID, GET_ANALYSIS=ANALYSIS)
+    RETURN E.INVALID_FRAME_ACCESS
 
-#pylint: disable=too-many-return-statements
-@bottle.route('/api/get-frame', method=GET_POST)
-def api_get_frame():
+#PYLINT: DISABLE=TOO-MANY-RETURN-STATEMENTS
+@BOTTLE.ROUTE('/API/GET-FRAME', METHOD=GET_POST)
+DEF API_GET_FRAME():
     """
-    Get a frame using search, optionally get analysis and perform tracking.
+    GET A FRAME USING SEARCH, OPTIONALLY GET ANALYSIS AND PERFORM TRACKING.
 
-    :param api_keuy:   authentication
-    :param movie_id:   movie
-    :param frame_msec: the frame specified
-    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
-    :param format:     jpeg - just get the image; json - get the image and json annotation
-    :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
+    :PARAM API_KEUY:   AUTHENTICATION
+    :PARAM MOVIE_ID:   MOVIE
+    :PARAM FRAME_MSEC: THE FRAME SPECIFIED
+    :PARAM MSEC_DELTA: 0 - THIS FRAME; +1 - NEXT FRAME; -1 IS PREVIOUS FRAME
+    :PARAM FORMAT:     JPEG - JUST GET THE IMAGE; JSON - GET THE IMAGE AND JSON ANNOTATION
+    :PARAM ANNOTATIONS: IF TRUE, RETURN ALL OF THE ANNOTATIONS, WHICH IS AN ARRAY OF OBJECTS WHERE EACH HAS AN ENGINE_NAME, ENGINE_VERSION, AND A JSON ANNOTATIONS
 
-    Tracking:
+    TRACKING:
 
-    :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied to the frame at frame_msec AND the frame at frame_msec+delta.
-    :param engine_name:    string description tracking engine to use. May be omitted to get default engine.
-    :param engine_version: string to describe which version number of engine to use. May be omitted for default version.
-    :return:
+    :PARAM TRACK:          IF TRUE, THEN MSEC_DELTA MUST BE +1, AND SPECIFIES THAT FRAME TRACKING BE APPLIED TO THE FRAME AT FRAME_MSEC AND THE FRAME AT FRAME_MSEC+DELTA.
+    :PARAM ENGINE_NAME:    STRING DESCRIPTION TRACKING ENGINE TO USE. MAY BE OMITTED TO GET DEFAULT ENGINE.
+    :PARAM ENGINE_VERSION: STRING TO DESCRIBE WHICH VERSION NUMBER OF ENGINE TO USE. MAY BE OMITTED FOR DEFAULT VERSION.
+    :RETURN:
     """
-    user_id    = get_user_id()
+    USER_ID    = GET_USER_ID()
 
-    movie_id   = int( get('movie_id',-1 ))
-    frame_msec = int( get('frame_msec',0 ))
-    msec_delta = int( get('msec_delta',0 ))
-    fmt            = get('format', 'jpeg').lower()
-    get_analysis   = is_true(get('get_analysis'))
-    get_tracking   = is_true(get('get_tracking'))
-    engine_name    = get('engine_name')
-    engine_version = get('engine_version')
+    MOVIE_ID   = INT( GET('MOVIE_ID',-1 ))
+    FRAME_MSEC = INT( GET('FRAME_MSEC',0 ))
+    MSEC_DELTA = INT( GET('MSEC_DELTA',0 ))
+    FMT            = GET('FORMAT', 'JPEG').LOWER()
+    GET_ANALYSIS   = IS_TRUE(GET('GET_ANALYSIS'))
+    GET_TRACKING   = IS_TRUE(GET('GET_TRACKING'))
+    ENGINE_NAME    = GET('ENGINE_NAME')
+    ENGINE_VERSION = GET('ENGINE_VERSION')
 
-    if get_tracking and (msec_delta != +1):
-        return E.INVALID_TRACK_FRAME_MSEC
+    IF GET_TRACKING AND (MSEC_DELTA != +1):
+        RETURN E.INVALID_TRACK_FRAME_MSEC
 
-    if fmt not in ['jpeg', 'json']:
-        return E.INVALID_FRAME_FORMAT
+    IF FMT NOT IN ['JPEG', 'JSON']:
+        RETURN E.INVALID_FRAME_FORMAT
 
-    # Below, frame1 is the frame requested, and frame0, if computed, is the frame before frame1
+    # BELOW, FRAME1 IS THE FRAME REQUESTED, AND FRAME0, IF COMPUTED, IS THE FRAME BEFORE FRAME1
 
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if not frame1:
-            return E.INVALID_MOVIE_FRAME
+    IF DB.CAN_ACCESS_MOVIE(USER_ID=USER_ID, MOVIE_ID=MOVIE_ID):
+        FRAME1 = DB.GET_FRAME(MOVIE_ID=MOVIE_ID, FRAME_MSEC = FRAME_MSEC, MSEC_DELTA = MSEC_DELTA)
+        IF NOT FRAME1:
+            RETURN E.INVALID_MOVIE_FRAME
 
-        if fmt=='jpeg':
-            # Can't get analysis if requesting jpeg format
-            bottle.response.set_header('Content-Type', MIME.JPEG)
-            logging.info("Return %d bytes",len(frame1['frame_data']))
-            return frame1['frame_data']
+        IF FMT=='JPEG':
+            # CAN'T GET ANALYSIS IF REQUESTING JPEG FORMAT
+            BOTTLE.RESPONSE.SET_HEADER('CONTENT-TYPE', MIME.JPEG)
+            LOGGING.INFO("RETURN %D BYTES",LEN(FRAME1['FRAME_DATA']))
+            RETURN FRAME1['FRAME_DATA']
 
-        # JSON format; change frame_data into data_url
-        frame1_data = frame1['frame_data'] # JPEG format
-        frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
-        del frame1['frame_data']
+        # JSON FORMAT; CHANGE FRAME_DATA INTO DATA_URL
+        FRAME1_DATA = FRAME1['FRAME_DATA'] # JPEG FORMAT
+        FRAME1['DATA_URL'] = F'DATA:IMAGE/JPEG;BASE64,{BASE64.B64ENCODE(FRAME1_DATA).DECODE()}'
+        DEL FRAME1['FRAME_DATA']
 
-        # If analysis is requested, get a list of dictionaries from the database where each dictionary
-        # contains metadata about the annotations and the JSON object of the annotations.
-        if get_analysis:
-            frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
+        # IF ANALYSIS IS REQUESTED, GET A LIST OF DICTIONARIES FROM THE DATABASE WHERE EACH DICTIONARY
+        # CONTAINS METADATA ABOUT THE ANNOTATIONS AND THE JSON OBJECT OF THE ANNOTATIONS.
+        IF GET_ANALYSIS:
+            FRAME1['ANALYSIS'] = DB.GET_FRAME_ANALYSIS(FRAME_ID=FRAME1['FRAME_ID'])
 
-        # If tracking is requested, get the previous frame and the trackpoints from that frame
-        # and run the tracking algorithm.
+        # IF TRACKING IS REQUESTED, GET THE PREVIOUS FRAME AND THE TRACKPOINTS FROM THAT FRAME
+        # AND RUN THE TRACKING ALGORITHM.
         # TO DO CHANGE HERE
-        if get_tracking:
-            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-            frame0_data = frame0_dict['frame_data']
-            frame0_id   = frame0_dict['frame_id']
-            frame0_trackpoints = None
-            if frame0_dict is None:
-                return E.INVALID_MOVIE_FRAME
-            if frame0_data==frame1_data:
-                return E.TRACK_FRAMES_SAME
-            ana = db.get_frame_analysis(frame_id = frame0_id)
-            logging.debug("ana=%s",ana)
-            if ana:
-                pa = get_preferred_annotations(ana)
-                frame0_tp_names    = [r['name'] for r in pa]
-                frame0_trackpoints = [(r['x'],r['y']) for r in pa]
-                logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
-                tpr = tracker.track_frame(engine = engine_name,
-                                          engine_version = engine_version,
-                                          frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
-                logging.debug("tpr=%s",tpr)
-                frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
-                                          'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
-                                          'name':frame0_tp_names[i]}
-                                         for i in range(len(frame0_tp_names))]
+        #IF GET_TRACKING:
+        #    FRAME0_DICT = DB.GET_FRAME(MOVIE_ID=MOVIE_ID, FRAME_MSEC = FRAME_MSEC, MSEC_DELTA = 0)
+        #    FRAME0_DATA = FRAME0_DICT['FRAME_DATA']
+        #    FRAME0_ID   = FRAME0_DICT['FRAME_ID']
+        #    FRAME0_TRACKPOINTS = NONE
+        #    IF FRAME0_DICT IS NONE:
+        #        RETURN E.INVALID_MOVIE_FRAME
+        #    IF FRAME0_DATA==FRAME1_DATA:
+        #        RETURN E.TRACK_FRAMES_SAME
+        #    ANA = DB.GET_FRAME_ANALYSIS(FRAME_ID = FRAME0_ID)
+        #    LOGGING.DEBUG("ANA=%S",ANA)
+        #    IF ANA:
+        #        PA = GET_PREFERRED_ANNOTATIONS(ANA)
+        #        FRAME0_TP_NAMES    = [R['NAME'] FOR R IN PA]
+        #        FRAME0_TRACKPOINTS = [(R['X'],R['Y']) FOR R IN PA]
+        #        LOGGING.DEBUG("FRAME0_TP_NAMES=%S FRAME0_TRACKPOINTS=%S",FRAME0_TP_NAMES,FRAME0_TRACKPOINTS)
+        #        TPR = TRACKER.TRACK_FRAME(ENGINE = ENGINE_NAME,
+        #                                  ENGINE_VERSION = ENGINE_VERSION,
+        #                                  FRAME0=FRAME0_DATA, FRAME1=FRAME1_DATA, TRACKPOINTS = FRAME0_TRACKPOINTS)
+        #        LOGGING.DEBUG("TPR=%S",TPR)
+        #        FRAME1['TRACKPOINTS'] = [{'X':TPR[TRACKER.POINT_ARRAY_OUT][I][0],
+        #                                  'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
+        #                                  'name':frame0_tp_names[i]}
+        #                                 for i in range(len(frame0_tp_names))]
 
         # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
         # and returns MIME type of "application/json"
