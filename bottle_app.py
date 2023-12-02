@@ -550,9 +550,10 @@ def api_get_frame():
             tpts = db.get_frame_trackpoints(frame_id=frame0_id)
             logging.debug('tpts=%s',tpts)
             frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
-            tpr = tracker.track_frame(engine = engine_name,
-                                      engine_version = engine_version,
-                                      frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
+            tpr = tracker.track_frame_jpegs(engine = engine_name,
+                                            frame0_jpeg=frame0_data,
+                                            frame1_jpeg=frame1_data,
+                                            trackpoints = frame0_trackpoints)
             logging.debug("tpr=%s",tpr)
             frame1['trackpoints-engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
                                              'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
@@ -598,8 +599,7 @@ def api_track_frame():
         data_name = f"frame{i}_data"
         if len(frames[data_name]) > MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
-        mime_type = magic.from_buffer(frames[data_name],mime=True)
-        if mime_type not in [ MIME.JPEG ]:
+        if not tracker.is_jpeg(frames[data_name]):
             return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
