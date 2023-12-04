@@ -30,9 +30,6 @@ var template_html   = null;
 
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
-        // const canvas_id = html_id + "-canvas";
-        // $(html_id).html(`canvas: <canvas id='${canvas_id}' width="${DEFAULT_WIDTH}" height="${DEFAULT_HEIGHT}"></canvas>`);
-
         let canvas = $( canvas_selector );
         if (canvas == null) {
             console.log("CanvasController: Cannot find canvas ",canvas_controller);
@@ -128,7 +125,7 @@ class CanvasController {
     // Main drawing function:
     redraw(v) {
         // clear canvas
-        console.log("redraw=",v);
+        console.log(`redraw=${v} id=${this.c.id}`);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
         // draw the objects. Always draw the selected objects after
@@ -348,6 +345,7 @@ class PlantTracerController extends CanvasController {
         // get the next frame and apply tracking logic
         create_new_div(this.frame_msec, +1);
     }
+
 }
 
 
@@ -367,19 +365,18 @@ class myImage extends MyObject {
         this.img.onload = function() {
             theImage.state = 1;
             if (theImage.ctx) {
-                ptc.redraw('myImage constructor')
+                this.redraw('myImage constructor')
             }
         }
         this.draw = function (ctx) {
             // See if this is the first time we have drawn in the context.
-            // If so,
             theImage.ctx = ctx;
             if (theImage.state > 0){
                 if (theImage.state==1){
-                    ptc.naturalWidth  = this.img.naturalWidth;
-                    ptc.naturalHeight = this.img.naturalHeight;
-                    theImage.state=2;
-                    ptc.set_zoom( 1.0 );
+                    theImage.naturalWidth  = this.img.naturalWidth;
+                    theImage.naturalHeight = this.img.naturalHeight;
+                    theImage.state = 2;
+                    this.set_zoom( 1.0 );
                 }
                 ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
@@ -396,42 +393,6 @@ class myImage extends MyObject {
 /* update_div:
  * Callback when data arrives from /api/get-frame.
  */
-function get_frame_handler(data) {
-    // We got data back consisting of the frame, frame_id, frame_msec and more...
-    if (data.error) {
-        alert(`error: ${data.message}`);
-        return;
-    }
-    let this_id  = data.user_data;
-    let this_sel = `#${this_id}`;
-    console.log("get_frame_handler this_id=",this_id,"this_sel=",this_sel);
-
-    // Display the photo and metadata
-    ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
-    ptc.frame_id       = data.frame_id;
-    ptc.frame_msec     = data.frame_msec;
-    $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
-    // Add points in the analysis
-    if (data.analysis) {
-        console.log("analysis:",data.analysis);
-        for (let ana of data.analysis) {
-            console.log("ana:",ana)
-            for (let pt of ana.annotations) {
-                console.log("pt:",pt);
-                ptc.add_circle( pt['x'], pt['y'], pt['name'] );
-            }
-        }
-    }
-    // Add points that would be in the trackpoints array that was passed
-    if (data.trackpoints) {
-        console.log("trackpoints:",data.analysis);
-        for (let tp of data.trackpoints) {
-            console.log("tp:",tp)
-            ptc.add_circle( tp['x'], tp['y'], tp['name'] );
-        }
-    }
-    setTimeout( function() {ptc.redraw('timeout')}, 10); // trigger a reload at 1 second just in case.
-}
 
 /* create_new_div
  * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
@@ -443,7 +404,8 @@ function get_frame_handler(data) {
 function create_new_div(frame_msec, msec_delta) {
     let this_id  = div_id_counter++;
     let this_sel = `#${this_id}`;
-    console.log("create_new_div this_id=",this_id,"this_sel=",this_sel);
+    console.log(`create_new_div(frame_msec=${frame_msec},msec_delta=${msec_delta}) `+
+                `this_id=${this_id} this_sel={this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
@@ -465,9 +427,48 @@ function create_new_div(frame_msec, msec_delta) {
                               engine_name:'NULL',
                               engine_version:'0',
                               user_data:this_id
-                             }) .done( get_frame_handler );
+                             })
+        .done( function( data ) {
+            // We got data back consisting of the frame, frame_id, frame_msec and more...
+            if (data.error) {
+                alert(`error: ${data.message}`);
+                return;
+            }
+            let this_id  = data.user_data;
+            let this_sel = `#${this_id}`;
+            console.log(`get_frame_handler this_id=${this_id} this_sel=${this_sel}  ` +
+                        `data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
+
+            // Display the photo and metadata
+            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+            ptc.frame_id       = data.frame_id;
+            ptc.frame_msec     = data.frame_msec;
+            $(`#${this_id} td.message`).text(`Frame msec=${this.frame_msec} frame_id=${this.frame_id}`);
+
+            // Add points in the analysis
+            if (data.analysis) {
+                console.log("analysis:",data.analysis);
+                for (let ana of data.analysis) {
+                    console.log("ana:",ana)
+                    for (let pt of ana.annotations) {
+                        console.log("pt:",pt);
+                        ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                    }
+                }
+            }
+            // Add points that would be in the trackpoints array that was passed
+            if (data.trackpoints) {
+                console.log("trackpoints:",data.analysis);
+                for (let tp of data.trackpoints) {
+                    console.log("tp:",tp)
+                    this.add_circle( tp['x'], tp['y'], tp['name'] );
+                }
+            }
+            setTimeout( function() {
+                ptc.redraw('timeout');
+            }, 10); // trigger a reload at 1 second just in case.
+        });
     ptc.redraw('create_new_div');              // initial drawing
-    return ptc;
 }
 
 // Called when the page is loaded
