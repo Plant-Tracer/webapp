@@ -580,10 +580,11 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
 
 
 
-def get_frame_analysis(*, frame_id):
+def get_frame_annotations(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
     Within that record, 'annotations' is stored in the database as a JSON string, but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
     """
+
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                                """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
                                          frame_id,engine_id,annotations,engines.name as engine_name,
@@ -608,19 +609,25 @@ def get_frame_trackpoints(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def get_frame_id(*, frame_id, get_analysis=False, get_trackpoints=False):
-    """Get a frame by ID. Returns the frame, and optionally the analysis and the trackpoints"""
+def get_frame_id(*, frame_id, get_annotations=False, get_trackpoints=False):
+    """Get a frame by ID. Returns the frame from the movie_frames database as a dictionary.
+    Optionally returns two additional fields = ['annotations'] with the annotations and ['trackpoints'] with the trackpoints.
+    :param: frame_id - the frame to get
+    :param: get_annotations - return anotations in the 'annotations' slot
+    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
+    """
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
                               "SELECT *,id as frame_id from movie_frames where id=%s",
                               (frame_id,),
                               asDicts=True)
     if len(ret)!=1:
         return None
-    if get_analysis:
-        ret[0]['analysis'] = get_frame_analysis(frame_id=frame_id)
+    row = ret[0]
+    if get_annotations:
+        row['annotations'] = get_frame_annotations(frame_id=frame_id)
     if get_trackpoints:
-        ret[0]['trackpoints'] = get_frame_trackpoints(frame_id=frame_id)
-    return ret[0]
+        row['trackpoints'] = get_frame_trackpoints(frame_id=frame_id)
+    return row
 
 def get_frame(*, movie_id, frame_msec, msec_delta):
     """Get a frame by movie_id and offset. Don't log this to prevent blowing up.
@@ -669,7 +676,7 @@ def encode_json(d):
     dlen  = len(djson)
     return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
 
-def put_frame_analysis(*,
+def put_frame_annotations(*,
                        frame_id:int,
                        annotations:Optional[dict | list],
                        engine_id:Optional[int] =None,
@@ -729,11 +736,11 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
 
-
-
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
+    """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
     if (frame_id is None) and (engine_id is None):
         raise RuntimeError("frame_id and/or engine_id must not be None")
+
     cmd = "DELETE FROM movie_frame_analysis WHERE "
     args = []
     if frame_id:
@@ -746,13 +753,28 @@ def delete_frame_analysis(*, frame_id=None, engine_id=None):
         args.append(engine_id)
     dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
 
-def delete_analysis_engine(*, engine_name, version=None):
-    cmd = "DELETE FROM engines WHERE name=%s "
+    if frame_id is not None:
+        cmd = "DELETE FROM movie_trackpoints WHERE frame_id=%s"
+        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [frame_id,])
+
+
+def delete_analysis_engine(*, engine_name, version=None, recursive=None):
+    """Delete the analysis engine.
+    :param: engine_name - the engine to delete
+    :param: version - the version number to delete. If None, delete all versions.
+    :param: recursive - if True, delete all of the data that is tagged with this engine
+    """
     args = [engine_name]
+    where = "name=%s "
     if version:
         cmd += "AND version=%s "
         args.append(version)
-    dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
+    if recursive:
+        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_analysis where engine_id in (SELECT id from engines where {where})",args)
+        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_frame_analysis where engine_id in (SELECT id from engines where {where})",args)
+
+    dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from engines where {where}",args)
+
 
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(user_id, no_frames=False):
