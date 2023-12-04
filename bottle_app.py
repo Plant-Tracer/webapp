@@ -524,31 +524,31 @@ def api_get_frame():
         # If tracking is requested, get the previous frame and the trackpoints from that frame
         # and run the tracking algorithm.
         # TO DO CHANGE HERE
-        if get_tracking:
-            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-            frame0_data = frame0_dict['frame_data']
-            frame0_id   = frame0_dict['frame_id']
-            frame0_trackpoints = None
-            if frame0_dict is None:
-                return E.INVALID_MOVIE_FRAME
-            if frame0_data==frame1_data:
-                return E.TRACK_FRAMES_SAME
-            ana = db.get_frame_analysis(frame_id = frame0_id)
-            logging.debug("ana=%s",ana)
-            if ana:
-                pa = get_preferred_annotations(ana)
-                frame0_tp_names    = [r['name'] for r in pa]
-                frame0_trackpoints = [(r['x'],r['y']) for r in pa]
-                logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
-                tpr = tracker.track_frame(engine = engine_name,
-                                          engine_version = engine_version,
-                                          frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
-                logging.debug("tpr=%s",tpr)
-                frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
-                                          'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
-                                          'name':frame0_tp_names[i]}
-                                         for i in range(len(frame0_tp_names))]
-
+        #if get_tracking:
+        #    frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+        #    frame0_data = frame0_dict['frame_data']
+        #    frame0_id   = frame0_dict['frame_id']
+        #    frame0_trackpoints = None
+        #    if frame0_dict is None:
+        #        return E.INVALID_MOVIE_FRAME
+        #    if frame0_data==frame1_data:
+        #        return E.TRACK_FRAMES_SAME
+        #    ana = db.get_frame_analysis(frame_id = frame0_id)
+        #    logging.debug("ana=%s",ana)
+        #    if ana:
+        #        pa = get_preferred_annotations(ana)
+        #        frame0_tp_names    = [r['name'] for r in pa]
+        #        frame0_trackpoints = [(r['x'],r['y']) for r in pa]
+        #        logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
+        #        tpr = tracker.track_frame(engine = engine_name,
+        #                                  engine_version = engine_version,
+        #                                  frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
+        #        logging.debug("tpr=%s",tpr)
+        #        frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
+        #                                  'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
+        #                                  'name':frame0_tp_names[i]}
+        #                                 for i in range(len(frame0_tp_names))]
+        #
         # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
         # and returns MIME type of "application/json"
         # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()

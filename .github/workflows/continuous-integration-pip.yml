@@ -99,6 +99,6 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           files: ./coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
