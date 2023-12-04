@@ -551,6 +551,7 @@ def api_get_frame():
 
     # JSON format; change frame_data into data_url
     frame1_data = frame1['frame_data'] # JPEG format
+    frame1_id   = frame1['frame_id']
     frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
     del frame1['frame_data']
 
@@ -565,7 +566,7 @@ def api_get_frame():
         frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
 
         # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
-        # Those trackpoints get returned in ['trackpoints-engine']
+        # Those trackpoints get returned in ['trackpoints_engine']
         logging.info("msec_delta=%s type(msec_type)=%s engine_name=%s",msec_delta, type(msec_delta),engine_name)
         if msec_delta == +1 and (engine_name is not None):
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
@@ -574,7 +575,7 @@ def api_get_frame():
             frame0_trackpoints = None
             if frame0_dict is None:
                 return E.INVALID_MOVIE_FRAME
-            if frame0_data==frame1_data:
+            if frame0_id == frame1_id:
                 return E.TRACK_FRAMES_SAME
             tpts = db.get_frame_trackpoints(frame_id=frame0_id)
             frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
@@ -582,7 +583,7 @@ def api_get_frame():
                                             frame0_jpeg=frame0_data,
                                             frame1_jpeg=frame1_data,
                                             trackpoints = frame0_trackpoints)
-            frame1['trackpoints-engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
+            frame1['trackpoints_engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
                                              'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
                                              'label':tpts[i]['label']}
                                             for i in range(len(tpts))]
