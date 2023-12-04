@@ -62,6 +62,8 @@ import auth
 
 from lib.ctools import clogging
 
+import numpy as np
+
 from paths import view, STATIC_DIR
 from constants import E,MIME,Engines
 import tracker
@@ -93,6 +95,8 @@ def datetime_to_str(obj):
         return {k: datetime_to_str(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
         return [datetime_to_str(elem) for elem in obj]
+    elif isinstance(obj,(np.float64,np.float32,np.float16)):
+        return float(obj)
     else:
         return obj
 
