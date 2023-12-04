@@ -317,19 +317,18 @@ class PlantTracerController extends CanvasController {
     }
 
     put_trackpoints() {
-        var annotations = [];
-        annotations['trackpoints'] = []
+        var trackpoints = [];
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
-                annotations['trackpoints'].push( {x:obj.x, y:obj.y, name:obj.name} );
+                trackpoints.push( {x:obj.x, y:obj.y, label:obj.name} );
             }
         }
-        $.post('/api/put-frame-analysis', {frame_id:this.frame_id,
-                                           api_key:api_key,
-                                           engine_name:'MANUAL',
-                                           engine_version:'1',
-                                           annotations:JSON.stringify(annotations)})
+        console.log(`put_trackpoints: sending ${trackpoints.length} trackpoints for frame_id ${this.frame_id}`);
+        $.post('/api/put-frame-analysis',
+               {frame_id:this.frame_id,
+                api_key:api_key,
+                trackpoints:JSON.stringify(trackpoints)})
             .done( function(data) {
                 if (data['error']) {
                     alert("Error saving annotations: "+data);
@@ -345,7 +344,6 @@ class PlantTracerController extends CanvasController {
         // get the next frame and apply tracking logic
         create_new_div(this.frame_msec, +1);
     }
-
 }
 
 
@@ -365,7 +363,7 @@ class myImage extends MyObject {
         this.img.onload = function() {
             theImage.state = 1;
             if (theImage.ctx) {
-                this.redraw('myImage constructor')
+                ptc.redraw('myImage constructor')
             }
         }
         this.draw = function (ctx) {
@@ -417,13 +415,12 @@ function create_new_div(frame_msec, msec_delta) {
 
     // create a new PlantTracerController; we may need to save it in an array too
     let ptc = new PlantTracerController( this_id );
-    let track = msec_delta > 0 ? 1 : 0;
     $.post('/api/get-frame', {movie_id:movie_id,
                               api_key:api_key,
                               frame_msec:frame_msec,
                               msec_delta:msec_delta,
                               format:'json',
-                              get_tracking: track,
+                              get_trackpoints:1,
                               engine_name:'NULL',
                               engine_version:'0',
                               user_data:this_id
@@ -438,6 +435,7 @@ function create_new_div(frame_msec, msec_delta) {
             let this_sel = `#${this_id}`;
             console.log(`get_frame_handler this_id=${this_id} this_sel=${this_sel}  ` +
                         `data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
+            console.log("data=",data);
 
             // Display the photo and metadata
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
@@ -454,7 +452,7 @@ function create_new_div(frame_msec, msec_delta) {
                     console.log("ana:",ana)
                     for (let pt of ana.annotations) {
                         console.log("pt:",pt);
-                        ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+                        ptc.add_circle( pt['x'], pt['y'], pt['label'] );
                     }
                 }
             }
@@ -463,7 +461,7 @@ function create_new_div(frame_msec, msec_delta) {
                 console.log("trackpoints:",data.analysis);
                 for (let tp of data.trackpoints) {
                     console.log("tp:",tp)
-                    this.add_circle( tp['x'], tp['y'], tp['name'] );
+                    ptc.add_circle( tp['x'], tp['y'], tp['label'] );
                 }
             }
             setTimeout( function() {
