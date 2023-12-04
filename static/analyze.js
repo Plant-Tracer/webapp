@@ -237,7 +237,10 @@ class PlantTracerController extends CanvasController {
         this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
 
         // Wire up the rest
-        $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {me.track_next_frame(e);});
+        $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {
+            console.log("click input.track_next_frame_button");
+            me.track_next_frame(e);
+        } );
     }
 
 
@@ -264,7 +267,7 @@ class PlantTracerController extends CanvasController {
     // new marker added
     add_marker_onclick_handler(e) {
         if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
-            this.add_circle( 50, 50, this.marker_name_input.val());
+            this.insert_circle( 50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
         }
     }
@@ -279,7 +282,7 @@ class PlantTracerController extends CanvasController {
 
 
     // add a tracking circle with the next color
-    add_circle(x, y, name) {
+    insert_circle(x, y, name) {
         // Find out how many circles there are
         let count = 0;
         for (let i=0;i<this.objects.length;i++){
@@ -302,7 +305,19 @@ class PlantTracerController extends CanvasController {
             }
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
-        this.redraw('add_circle');
+        this.redraw('insert_circle');
+    }
+
+    // similar to insert_circle, but if a circle already exists with this name, just move it
+    upset_circle(x, y, name) {
+        for (let obj of this.objects) {
+            if (obj.name==name) {
+                obj.x = x;
+                obj.y = y;
+                return;
+            }
+        }
+        insert_circle(x, y, name);
     }
 
     // Subclassed methods
@@ -342,6 +357,7 @@ class PlantTracerController extends CanvasController {
      */
     track_next_frame() {
         // get the next frame and apply tracking logic
+        console.log("track_next_frame()");
         create_new_div(this.frame_msec, +1);
     }
 }
@@ -452,17 +468,23 @@ function create_new_div(frame_msec, msec_delta) {
                     console.log("ana:",ana)
                     for (let pt of ana.annotations) {
                         console.log("pt:",pt);
-                        ptc.add_circle( pt['x'], pt['y'], pt['label'] );
+                        ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
                     }
                 }
             }
             // Add points that would be in the trackpoints array that was passed
             if (data.trackpoints) {
-                console.log("trackpoints:",data.analysis);
                 for (let tp of data.trackpoints) {
                     console.log("tp:",tp)
-                    ptc.add_circle( tp['x'], tp['y'], tp['label'] );
+                    ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
                 }
+            }
+            if (data.trackpoints_engine) {
+                for (let tp of data.trackpoints_engine) {
+                    console.log("tp engine:",tp)
+                    ptc.upsert_circle( tp['x'], tp['y'], tp['label'] );
+                }
+                ptc.put_trackpoints(); // upload to the database
             }
             setTimeout( function() {
                 ptc.redraw('timeout');
