@@ -521,9 +521,6 @@ def api_get_frame():
 
     logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
 
-    if get_trackpoints and (msec_delta != +1):
-        return E.INVALID_TRACK_FRAME_MSEC
-
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
 
@@ -564,6 +561,7 @@ def api_get_frame():
         frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
 
         # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
+        # Those trackpoints get returned in ['trackpoints-engine']
         logging.info("msec_delta=%s type(msec_type)=%s engine_name=%s",msec_delta, type(msec_delta),engine_name)
         if msec_delta == +1 and (engine_name is not None):
             frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
