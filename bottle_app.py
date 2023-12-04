@@ -103,6 +103,32 @@ def is_true(s):
 def get(key, default=None):
     return request.forms.get(key, request.query.get(key, default))
 
+def get_json(key):
+    try:
+        return json.loads(request.forms.get(key))
+    except (TypeError,json.decoder.JSONDecodeError):
+        return None
+
+def get_int(key, default=None):
+    try:
+        return int(get(key))
+    except TypeError:
+        return default
+
+def get_float(key, default=None):
+    try:
+        return float(get(key))
+    except TypeError:
+        return default
+
+def get_bool(key, default=None):
+    v = get(key)
+    if v is None:
+        return default
+    try:
+        return v[0:1] in 'yYtT1'
+    except TypeError:
+        return False
 
 ################################################################
 # Bottle endpoints
@@ -456,9 +482,8 @@ def get_frame_id():
     Verify that the user has rights to frame_id and then return it. Minimal capabilities.
     """
     frame_id = get('frame_id')
-    analysis = int(get('analysis','0')) > 0
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
+        return  db.get_frame_id(frame_id=frame_id, get_annotations=get_bool('get_annotations'), get_trackpoints=get_bool('get_trackpoints'))
     return E.INVALID_FRAME_ACCESS
 
 #pylint: disable=too-many-return-statements
@@ -474,6 +499,7 @@ def api_get_frame():
     :param format:     jpeg - just get the image; json - get the image and json annotation
     :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
 
+    :param user_data: whatever is provided is returned in the response
     Tracking:
 
     :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied to the frame at frame_msec AND the frame at frame_msec+delta.
@@ -483,14 +509,15 @@ def api_get_frame():
     """
     user_id    = get_user_id()
 
-    movie_id   = int( get('movie_id',-1 ))
-    frame_msec = int( get('frame_msec',0 )) # location frame
-    msec_delta = int( get('msec_delta',0 )) # if +1, the frame following frame_msec
+    movie_id   = get_int('movie_id')
+    frame_msec = get_int('frame_msec',0 ) # location frame
+    msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt            = get('format', 'jpeg').lower()
-    get_analysis   = is_true(get('get_analysis'))
-    get_trackpoints   = is_true(get('get_trackpoints')) # get tracking for requested frame.
+    get_annotations   = get_bool('get_annotations')
+    get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
+    user_data      = get('user_data')
 
     logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
 
@@ -515,7 +542,7 @@ def api_get_frame():
         return E.INVALID_MOVIE_FRAME
 
     if fmt=='jpeg':
-        if get_analysis or get_trackpoints:
+        if get_annotations or get_trackpoints:
             return E.INVALID_REQUEST_JPEG
 
         bottle.response.set_header('Content-Type', MIME.JPEG)
@@ -526,10 +553,10 @@ def api_get_frame():
     frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
     del frame1['frame_data']
 
-    # If analysis is requested, get a list of dictionaries from the database where each dictionary
+    # If annotations are requested, get a list of dictionaries from the database where each dictionary
     # contains metadata about the annotations and the JSON object of the annotations.
-    if get_analysis:
-        frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
+    if get_annotations:
+        frame1['annotations'] = db.get_frame_annotations(frame_id=frame1['frame_id'])
 
     if get_trackpoints:
         # Get the tracking from the database
@@ -557,6 +584,7 @@ def api_get_frame():
                                              'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
                                              'label':tpts[i]['label']}
                                             for i in range(len(tpts))]
+    frame1['user_data'] = user_data
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
@@ -591,7 +619,7 @@ def api_track_frame():
         if base64_data_name in request.forms:
             frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
         elif frame_id_name in request.forms:
-            frames[data_name] = get_frame_id(frame_id=request.forms.get(frame_id_name))
+            frames[data_name] = db.get_frame_id(frame_id=request.forms.get(frame_id_name))
         else:
             return {'error': True, 'message': f'Parameter {base64_data_name} or {frame_id_name} is required'}
         data_name = f"frame{i}_data"
@@ -601,7 +629,7 @@ def api_track_frame():
             return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
-    point_array_in = json.loads(request.forms.get('point_array'))
+    point_array_in = get_json('point_array')
 
     res = tracker.track_frame_jpegs( engine=engine_name,
                                      frame0_jpeg=frames['frame0_data'],
@@ -618,19 +646,22 @@ def api_put_frame_analysis():
     :param: engine_id - the engine id (if you know it)
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
-    :param: analysis - JSON string, must be an array or a dictionary.
+    :param: annotations - JSON string, must be an array or a dictionary, if provided
+    :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    frame_id  = int(request.forms.get('frame_id',None))
-    try:
-        engine_id = int(request.forms.get('engine_id'))
-    except (TypeError,ValueError):
-        engine_id = None
+    frame_id  = get_int('frame_id')
+    engine_id = get_int('engine_id')
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
-        db.put_frame_analysis(frame_id=frame_id,
-                              annotations=json.loads(request.forms.get('annotations')),
-                              engine_id=engine_id,
-                              engine_name=request.forms.get('engine_name'),
-                              engine_version=request.forms.get('engine_version'))
+        annotations=get_json('annotations')
+        trackpoints=get_json('trackpoints')
+        if annotations is not None:
+            db.put_frame_annotations(frame_id=frame_id,
+                                     engine_id=engine_id,
+                                     annotations=annotations,
+                                     engine_name=request.forms.get('engine_name'),
+                                     engine_version=request.forms.get('engine_version'))
+        if trackpoints is not None:
+            db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
         return {'error': False, 'message':'Analysis recorded.'}
     return E.INVALID_MOVIE_ACCESS
 
@@ -641,9 +672,9 @@ def api_get_movie_data():
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get('movie_id')):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie_data(movie_id=get('movie_id'))
+        return db.get_movie_data(movie_id=get_int('movie_id'))
     return E.INVALID_MOVIE_ACCESS
 
 
@@ -653,9 +684,9 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        db.delete_movie(movie_id=request.forms.get('movie_id'),
-                        delete=request.forms.get('delete', 1))
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
+        db.delete_movie(movie_id=get_int('movie_id'),
+                        delete=get_bool('delete',True))
         return {'error': False}
     return E.INVALID_MOVIE_ACCESS
 
@@ -681,16 +712,10 @@ def api_get_log():
 ##
 
 
-def bool_converter(x):
-    if (x == 'null') or (x is None):
-        return None
-    return int(x)
-
-
 @bottle.route('/api/get-metadata', method='POST')
 def api_get_metadata():
-    gmovie_id = bool_converter(request.forms.get('get_movie_id'))
-    guser_id  = bool_converter(request.forms.get('get_user_id'))
+    gmovie_id = get_bool('get_movie_id')
+    guser_id  = get_bool('get_user_id')
 
     if (gmovie_id is None) and (guser_id is None):
         return {'error': True, 'result': 'Either get_movie_id or get_user_id is required'}
@@ -712,8 +737,8 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    set_movie_id = bool_converter(request.forms.get('set_movie_id'))
-    set_user_id  = bool_converter(request.forms.get('set_user_id'))
+    set_movie_id = get_int('set_movie_id')
+    set_user_id  = get_int('set_user_id')
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
@@ -721,8 +746,8 @@ def api_set_metadata():
     result = db.set_metadata(user_id=get_user_id(),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
-                             prop=request.forms.get('property'),
-                             value=request.forms.get('value'))
+                             prop=get('property'),
+                             value=get('value'))
 
     return {'error': False, 'result': result}
 
@@ -740,10 +765,10 @@ def api_list_users():
 ##
 @bottle.route('/api/add', method=['GET', 'POST'])
 def api_add():
-    a = request.forms.get('a')
-    b = request.forms.get('b')
+    a = get_float('a')
+    b = get_float('b')
     try:
-        return {'result': float(a)+float(b), 'error': False}
+        return {'result': a+b, 'error': False}
     except (TypeError, ValueError):
         return {'error': True, 'message': 'arguments malformed'}
 

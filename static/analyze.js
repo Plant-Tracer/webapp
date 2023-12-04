@@ -92,7 +92,7 @@ class CanvasController {
                 this.c.style.cursor='crosshair';
             }
         }
-        this.redraw(4);
+        this.redraw('mousedown_handler');
     }
 
     mousemove_handler(e) {
@@ -105,7 +105,7 @@ class CanvasController {
         // Update the position in the selected object
         this.selected.x = mousePosition.x;
         this.selected.y = mousePosition.y;
-        this.redraw();
+        this.redraw('mousemove_handler');
         this.object_did_move(this.selected);
     }
 
@@ -114,7 +114,7 @@ class CanvasController {
         var obj = this.selected;
         this.clear_selection();
         this.c.style.cursor='auto';
-        this.redraw();
+        this.redraw('mouseup_handler');
         this.object_move_finished(obj);
     }
 
@@ -122,7 +122,7 @@ class CanvasController {
         this.zoom = factor;
         this.c.width = this.naturalWidth * factor;
         this.c.height = this.naturalHeight * factor;
-        this.redraw();
+        this.redraw('set_zoom');
     }
 
     // Main drawing function:
@@ -305,7 +305,7 @@ class PlantTracerController extends CanvasController {
             }
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
-        this.redraw(0);
+        this.redraw('add_circle');
     }
 
     // Subclassed methods
@@ -316,10 +316,10 @@ class PlantTracerController extends CanvasController {
 
     // Movement finished; upload new annotations
     object_move_finished(obj) {
-        this.put_frame_analysis();
+        this.put_trackpoints();
     }
 
-    put_frame_analysis() {
+    put_trackpoints() {
         var annotations = [];
         annotations['trackpoints'] = []
         for (let i=0;i<this.objects.length;i++){
@@ -367,7 +367,7 @@ class myImage extends MyObject {
         this.img.onload = function() {
             theImage.state = 1;
             if (theImage.ctx) {
-                ptc.redraw(1)
+                ptc.redraw('myImage constructor')
             }
         }
         this.draw = function (ctx) {
@@ -391,6 +391,46 @@ class myImage extends MyObject {
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
     }
+}
+
+/* update_div:
+ * Callback when data arrives from /api/get-frame.
+ */
+function get_frame_handler(data) {
+    // We got data back consisting of the frame, frame_id, frame_msec and more...
+    if (data.error) {
+        alert(`error: ${data.message}`);
+        return;
+    }
+    let this_id  = data.user_data;
+    let this_sel = `#${this_id}`;
+    console.log("get_frame_handler this_id=",this_id,"this_sel=",this_sel);
+
+    // Display the photo and metadata
+    ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+    ptc.frame_id       = data.frame_id;
+    ptc.frame_msec     = data.frame_msec;
+    $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
+    // Add points in the analysis
+    if (data.analysis) {
+        console.log("analysis:",data.analysis);
+        for (let ana of data.analysis) {
+            console.log("ana:",ana)
+            for (let pt of ana.annotations) {
+                console.log("pt:",pt);
+                ptc.add_circle( pt['x'], pt['y'], pt['name'] );
+            }
+        }
+    }
+    // Add points that would be in the trackpoints array that was passed
+    if (data.trackpoints) {
+        console.log("trackpoints:",data.analysis);
+        for (let tp of data.trackpoints) {
+            console.log("tp:",tp)
+            ptc.add_circle( tp['x'], tp['y'], tp['name'] );
+        }
+    }
+    setTimeout( function() {ptc.redraw('timeout')}, 10); // trigger a reload at 1 second just in case.
 }
 
 /* create_new_div
@@ -423,41 +463,10 @@ function create_new_div(frame_msec, msec_delta) {
                               format:'json',
                               get_tracking: track,
                               engine_name:'NULL',
-                              engine_version:'0'
-                             })
-        .done( function(data) {
-            // We got data back consisting of the frame, frame_id, frame_msec and more...
-            if (data.error) {
-                alert(`error: ${data.message}`);
-                return;
-            }
-            // Display the photo and metadata
-            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
-            ptc.frame_id       = data.frame_id;
-            ptc.frame_msec     = data.frame_msec;
-            $(`#${this_id} td.message`).text(`Frame msec=${ptc.frame_msec}`);
-            // Add points in the analysis
-            if (data.analysis) {
-                console.log("analysis:",data.analysis);
-                for (let ana of data.analysis) {
-                    console.log("ana:",ana)
-                    for (let pt of ana.annotations) {
-                        console.log("pt:",pt);
-                        ptc.add_circle( pt['x'], pt['y'], pt['name'] );
-                    }
-                }
-            }
-            // Add points that would be in the trackpoints array that was passed
-            if (data.trackpoints) {
-                console.log("trackpoints:",data.analysis);
-                for (let tp of data.trackpoints) {
-                    console.log("tp:",tp)
-                    ptc.add_circle( tp['x'], tp['y'], tp['name'] );
-                }
-            }
-            setTimeout( function() {ptc.redraw(2)}, 10); // trigger a reload at 1 second just in case.
-        });
-    ptc.redraw(3);               // initial drawing
+                              engine_version:'0',
+                              user_data:this_id
+                             }) .done( get_frame_handler );
+    ptc.redraw('create_new_div');              // initial drawing
     return ptc;
 }
 
