@@ -373,10 +373,10 @@ class myImage extends MyObject {
             theImage.ctx = ctx;
             if (theImage.state > 0){
                 if (theImage.state==1){
-                    theImage.naturalWidth  = this.img.naturalWidth;
-                    theImage.naturalHeight = this.img.naturalHeight;
+                    ptc.naturalWidth  = this.img.naturalWidth;
+                    ptc.naturalHeight = this.img.naturalHeight;
                     theImage.state = 2;
-                    this.set_zoom( 1.0 );
+                    ptc.set_zoom( 1.0 );
                 }
                 ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
@@ -443,7 +443,9 @@ function create_new_div(frame_msec, msec_delta) {
             ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
             ptc.frame_id       = data.frame_id;
             ptc.frame_msec     = data.frame_msec;
-            $(`#${this_id} td.message`).text(`Frame msec=${this.frame_msec} frame_id=${this.frame_id}`);
+            $(`#${this_id} td.message`).text(
+                `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} `
+            );
 
             // Add points in the analysis
             if (data.analysis) {
