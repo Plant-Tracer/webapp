@@ -110,7 +110,7 @@ def test_upload_movie_frame_by_frame(http_endpoint, api_key):
 
     assert len(FRAME_FILES) > 0
     post_data = {'api_key': api_key, 'title': 'Test Title at ' +
-                 time.asctime(), 'description': 'Test Upload'}
+                 time.asctime(), 'description': 'test-upload'}
     r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()
     assert res['error'] == False
@@ -148,7 +148,7 @@ def test_upload_movie_data(http_endpoint, api_key):
         movie_base64_data = base64.b64encode(f.read())
     post_data = {'api_key': api_key,
                  'title': 'Test Title at '+time.asctime(),
-                 'description': 'Test Upload',
+                 'description': 'test-upload',
                  'movie_base64_data': movie_base64_data}
     r = requests.post(http_endpoint+'/api/new-movie', post_data)
     res = r.json()

@@ -39,8 +39,7 @@ def new_movie(new_user):
 
     api_key = cfg[API_KEY]
     api_key_invalid = api_key+"invalid"
-
-    movie_title = 'test movie title ' + str(uuid.uuid4())
+    movie_title = f'test-movie title {str(uuid.uuid4())}'
 
     logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
     with open(TEST_MOVIE_FILENAME, "rb") as f:
@@ -188,6 +187,9 @@ def test_movie_update_metadata(new_movie):
 
     # Try to publish the movie with the course admin's API key. This should work
 
+TEST_LABEL1 = 'test-label1'
+TEST_LABEL2 = 'test-label2'
+TEST_LABEL3 = 'test-label3'
 def test_movie_extract(new_movie_uploaded):
     """Try extracting movie frames and the frame-by-frame access"""
     cfg = copy.copy(new_movie_uploaded)
@@ -266,7 +268,7 @@ def test_movie_extract(new_movie_uploaded):
     assert ret['frame_data']==res0['frame_data']
 
     # Create a random engine and upload two analysis for it
-    engine_name = "engine " + str(uuid.uuid4())[0:8]
+    engine_name = "test-engine " + str(uuid.uuid4())[0:8]
     annotations1 = {'guid':str(uuid.uuid4()),
                  "key1": "value with 'single' quotes",
                  "key2": 'value with "double" quotes',
@@ -341,9 +343,9 @@ def test_movie_extract(new_movie_uploaded):
     assert r2['frame_id'] == frame_id
 
     # See if we can save two trackpoints in the frame and get them back
-    tp0 = {'x':10,'y':11,'label':'label1'}
-    tp1 = {'x':20,'y':21,'label':'label2'}
-    tp2 = {'x':25,'y':25,'label':'label3'}
+    tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
+    tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
+    tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
@@ -414,11 +416,11 @@ def test_movie_extract(new_movie_uploaded):
     logging.debug("ret2.trackpoints=%s",ret['trackpoints-engine'])
     assert 9.0 < ret['trackpoints-engine'][0]['x'] < 10.0
     assert 9.0 < ret['trackpoints-engine'][0]['y'] < 10.0
-    assert ret['trackpoints-engine'][0]['label'] == 'label1'
+    assert ret['trackpoints-engine'][0]['label'] == TEST_LABEL1
 
     assert 17.0 < ret['trackpoints-engine'][1]['x'] < 20.0
     assert 20.0 < ret['trackpoints-engine'][1]['y'] < 22.0
-    assert ret['trackpoints-engine'][1]['label'] == 'label2'
+    assert ret['trackpoints-engine'][1]['label'] == TEST_LABEL2
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])

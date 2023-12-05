@@ -309,7 +309,7 @@ class PlantTracerController extends CanvasController {
     }
 
     // similar to insert_circle, but if a circle already exists with this name, just move it
-    upset_circle(x, y, name) {
+    upsert_circle(x, y, name) {
         for (let obj of this.objects) {
             if (obj.name==name) {
                 obj.x = x;
@@ -317,7 +317,7 @@ class PlantTracerController extends CanvasController {
                 return;
             }
         }
-        insert_circle(x, y, name);
+        this.insert_circle(x, y, name);
     }
 
     // Subclassed methods
