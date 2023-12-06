@@ -27,6 +27,7 @@ const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
 var cell_id_counter = 0;
 var div_id_counter  = 0;
 var template_html   = null;
+const ENGINE = 'CV2';
 
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
@@ -50,14 +51,14 @@ class CanvasController {
         // 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
         var me=this;
-        this.c.addEventListener('mousemove', function(e) {me.mousemove_handler(e);} , false);
-        this.c.addEventListener('mousedown', function(e) {me.mousedown_handler(e);} , false);
-        this.c.addEventListener('mouseup',   function(e) {me.mouseup_handler(e);}, false);
+        this.c.addEventListener('mousemove', (e) => {this.mousemove_handler(e);} , false);
+        this.c.addEventListener('mousedown', (e) => {this.mousedown_handler(e);} , false);
+        this.c.addEventListener('mouseup',   (e) => {this.mouseup_handler(e);}, false);
 
         // Catch the zoom change event
         if (zoom_selector) {
-            $(zoom_selector).on('change', function() {
-                me.set_zoom( $(this).val() / 100 );
+            $(zoom_selector).on('change', (e) => {
+                this.set_zoom( $(this).val() / 100 );
             });
         }
     }
@@ -125,7 +126,8 @@ class CanvasController {
     // Main drawing function:
     redraw(v) {
         // clear canvas
-        console.log(`redraw=${v} id=${this.c.id}`);
+        // this is useful for tracking who called redraw, and how many times it is called, and when
+        // console.log(`redraw=${v} id=${this.c.id}`);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
         // draw the objects. Always draw the selected objects after
@@ -220,7 +222,6 @@ class PlantTracerController extends CanvasController {
     constructor( this_id ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        var me=this;            // record me, becuase this is overridden when the functions below execute
         this.this_id      = this_id;
         this.frame_msec   = null; // don't know it yet, but I will
         this.canvasId     = 0;
@@ -230,16 +231,17 @@ class PlantTracerController extends CanvasController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
-        this.marker_name_input.on('input',function(e) { me.marker_name_input_handler(e);});
+        this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
-        this.add_marker_button.on('click',function(e) { me.add_marker_onclick_handler(e);});
+        this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // Wire up the rest
-        $(`#${this_id}  input.track_next_frame_button`).on('click', function(e) {
-            console.log("click input.track_next_frame_button");
-            me.track_next_frame(e);
+        $(`#${this_id}  input.track_next_frame_button`).on('click', (event) => {
+            // Inside the event functions, 'this' refers to the DOM object. Annoying.
+            console.log("user clicked input.track_next_frame_button. this=",this);
+            this.track_next_frame(event);
         } );
     }
 
@@ -297,7 +299,7 @@ class PlantTracerController extends CanvasController {
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
-                obj.table_cell_id = ++cell_id_counter;
+                obj.table_cell_id = "td-" + (++cell_id_counter);
                 rows += `<tr>` +
                     `<td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td>` +
                     `<td>${obj.name}</td>` +
@@ -308,18 +310,6 @@ class PlantTracerController extends CanvasController {
         this.redraw('insert_circle');
     }
 
-    // similar to insert_circle, but if a circle already exists with this name, just move it
-    upsert_circle(x, y, name) {
-        for (let obj of this.objects) {
-            if (obj.name==name) {
-                obj.x = x;
-                obj.y = y;
-                return;
-            }
-        }
-        this.insert_circle(x, y, name);
-    }
-
     // Subclassed methods
     // Update the matrix location of the object the moved
     object_did_move(obj) {
@@ -328,10 +318,11 @@ class PlantTracerController extends CanvasController {
 
     // Movement finished; upload new annotations
     object_move_finished(obj) {
-        this.put_trackpoints();
+        this.put_trackpoints(this);
     }
 
-    put_trackpoints() {
+    // Return an array of JSON trackpoints
+    get_trackpoints() {
         var trackpoints = [];
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
@@ -339,12 +330,20 @@ class PlantTracerController extends CanvasController {
                 trackpoints.push( {x:obj.x, y:obj.y, label:obj.name} );
             }
         }
-        console.log(`put_trackpoints: sending ${trackpoints.length} trackpoints for frame_id ${this.frame_id}`);
+        return trackpoints;
+    }
+
+    json_trackpoints() {
+        return JSON.stringify(this.get_trackpoints());
+    }
+
+    put_trackpoints(ptc) {
+        console.log(`put_trackpoints: sending ${ptc.get_trackpoints().length} trackpoints for frame_id ${ptc.frame_id}`);
         $.post('/api/put-frame-analysis',
-               {frame_id:this.frame_id,
+               {frame_id:ptc.frame_id,
                 api_key:api_key,
-                trackpoints:JSON.stringify(trackpoints)})
-            .done( function(data) {
+                trackpoints:ptc.json_trackpoints()})
+            .done( (data) => {
                 if (data['error']) {
                     alert("Error saving annotations: "+data);
                 }
@@ -355,10 +354,10 @@ class PlantTracerController extends CanvasController {
      * Request the next frame if we don't have it.
      * Ask for tracking.
      */
-    track_next_frame() {
+    track_next_frame(event) {
         // get the next frame and apply tracking logic
-        console.log("track_next_frame()");
-        create_new_div(this.frame_msec, +1);
+        console.log("track_next_frame() this=",this,"event=",event);
+        create_new_div(this.frame_msec, +1, this.json_trackpoints());
     }
 }
 
@@ -376,7 +375,7 @@ class myImage extends MyObject {
         this.img = new Image();
 
         // When the image is loaded, draw the entire stack again.
-        this.img.onload = function() {
+        this.img.onload = (event) => {
             theImage.state = 1;
             if (theImage.ctx) {
                 ptc.redraw('myImage constructor')
@@ -415,11 +414,11 @@ class myImage extends MyObject {
  * If msec_delta>0, then we are getting the *next* frame, in which case we
  * apply the tracking as well.
  */
-function create_new_div(frame_msec, msec_delta) {
-    let this_id  = div_id_counter++;
-    let this_sel = `#${this_id}`;
+function create_new_div(frame_msec, msec_delta, json_trackpoints) {
+    let this_id  = "frame-" + (div_id_counter++);
+    let this_sel = `${this_id}`;
     console.log(`create_new_div(frame_msec=${frame_msec},msec_delta=${msec_delta}) `+
-                `this_id=${this_id} this_sel={this_sel}`);
+                `this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
@@ -427,70 +426,69 @@ function create_new_div(frame_msec, msec_delta) {
         .replace('canvas-id',`canvas-${this_id}`)
         .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
+    console.log("adding HTML:",div_html);
     $( '#template' ).replaceWith( div_html );
+    $( '#template' )[0].scrollIntoView();
+    console.log("json_trackpoints:",json_trackpoints);
 
     // create a new PlantTracerController; we may need to save it in an array too
-    let ptc = new PlantTracerController( this_id );
-    $.post('/api/get-frame', {movie_id:movie_id,
-                              api_key:api_key,
-                              frame_msec:frame_msec,
-                              msec_delta:msec_delta,
-                              format:'json',
-                              get_trackpoints:1,
-                              engine_name:'NULL',
-                              engine_version:'0',
-                              user_data:this_id
-                             })
-        .done( function( data ) {
-            // We got data back consisting of the frame, frame_id, frame_msec and more...
-            if (data.error) {
-                alert(`error: ${data.message}`);
-                return;
-            }
-            let this_id  = data.user_data;
-            let this_sel = `#${this_id}`;
-            console.log(`get_frame_handler this_id=${this_id} this_sel=${this_sel}  ` +
-                        `data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
-            console.log("data=",data);
+    let parms = {movie_id:movie_id,
+                 api_key:api_key,
+                 frame_msec:frame_msec,
+                 msec_delta:msec_delta,
+                 format:'json',
+                 save_trackpoints:json_trackpoints,
+                 get_trackpoints:1,
+                 engine_name:ENGINE,
+                 engine_version:'0',
+                 user_data:this_id
+                };
+    console.log("SEND:",parms);
+    $.post('/api/get-frame', parms).done( function( data ) {
+        // We got data back consisting of the frame, frame_id, frame_msec and more...
+        console.log('RECV:',data);
+        if (data.error) {
+            alert(`error: ${data.message}`);
+            return;
+        }
+        let this_id  = data.user_data;
+        let this_sel = `#${this_id}`;
+        let ptc = new PlantTracerController( this_id );
+        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
+        console.log("data=",data);
 
-            // Display the photo and metadata
-            ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
-            ptc.frame_id       = data.frame_id;
-            ptc.frame_msec     = data.frame_msec;
-            $(`#${this_id} td.message`).text(
-                `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} `
-            );
+        // Display the photo and metadata
+        ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+        ptc.frame_id       = data.frame_id;
+        ptc.frame_msec     = data.frame_msec;
+        $(`#${this_id} td.message`).text(
+            `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} `
+        );
 
-            // Add points in the analysis
-            if (data.analysis) {
-                console.log("analysis:",data.analysis);
-                for (let ana of data.analysis) {
-                    console.log("ana:",ana)
-                    for (let pt of ana.annotations) {
-                        console.log("pt:",pt);
-                        ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
-                    }
+        // Add points in the analysis
+        if (data.analysis) {
+            console.log("analysis:",data.analysis);
+            for (let ana of data.analysis) {
+                console.log("ana:",ana)
+                for (let pt of ana.annotations) {
+                    console.log("pt:",pt);
+                    ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
                 }
             }
-            // Add points that would be in the trackpoints array that was passed
-            if (data.trackpoints) {
-                for (let tp of data.trackpoints) {
-                    console.log("tp:",tp)
-                    ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
-                }
+        }
+        //
+        if (data.trackpoints_engine) {
+            for (let tp of data.trackpoints_engine) {
+                ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
             }
-            if (data.trackpoints_engine) {
-                for (let tp of data.trackpoints_engine) {
-                    console.log("tp engine:",tp)
-                    ptc.upsert_circle( tp['x'], tp['y'], tp['label'] );
-                }
-                ptc.put_trackpoints(); // upload to the database
+        } else if (data.trackpoints) {
+            for (let tp of data.trackpoints) {
+
+                ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
             }
-            setTimeout( function() {
-                ptc.redraw('timeout');
-            }, 10); // trigger a reload at 1 second just in case.
-        });
-    ptc.redraw('create_new_div');              // initial drawing
+        }
+        ptc.redraw('create_new_div');              // initial drawing
+    });
 }
 
 // Called when the page is loaded
@@ -505,8 +503,7 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = create_new_div(0, 0);           // create the first <div> and its controller
-
+    ptc = create_new_div(0, 0, "");           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }

@@ -33,4 +33,5 @@ class E:
     NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}
     NO_REMAINING_REGISTRATIONS = { 'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
     TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}
+    FRAME1_IS_NONE = {'error':True, 'message':'Frame1 in track_frame is None'}
 #pylint: enable=too-few-public-methods
