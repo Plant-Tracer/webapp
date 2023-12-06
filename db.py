@@ -524,6 +524,10 @@ def purge_movie_frames(*,movie_id):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_analysis where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_trackpoints where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
 
 @log
