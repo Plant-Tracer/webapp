@@ -400,9 +400,9 @@ def test_movie_extract(new_movie_uploaded):
                         'get_trackpoints':True,
                         'engine_name':Engines.NULL }):
         ret = bottle_app.api_get_frame()
-    logging.debug("ret1.trackpoints-engine=%s",ret['trackpoints-engine'])
-    assert ret['trackpoints-engine'][0]==tp0
-    assert ret['trackpoints-engine'][1]==tp1
+    logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
+    assert ret['trackpoints_engine'][0]==tp0
+    assert ret['trackpoints_engine'][1]==tp1
 
     # Now track with CV2
     with boddle(params={"api_key": api_key,
@@ -413,14 +413,14 @@ def test_movie_extract(new_movie_uploaded):
                         'get_trackpoints':True,
                         'engine_name':Engines.CV2 }):
         ret = bottle_app.api_get_frame()
-    logging.debug("ret2.trackpoints=%s",ret['trackpoints-engine'])
-    assert 9.0 < ret['trackpoints-engine'][0]['x'] < 10.0
-    assert 9.0 < ret['trackpoints-engine'][0]['y'] < 10.0
-    assert ret['trackpoints-engine'][0]['label'] == TEST_LABEL1
+    logging.debug("ret2.trackpoints=%s",ret['trackpoints_engine'])
+    assert 9.0 < ret['trackpoints_engine'][0]['x'] < 10.0
+    assert 9.0 < ret['trackpoints_engine'][0]['y'] < 10.0
+    assert ret['trackpoints_engine'][0]['label'] == TEST_LABEL1
 
-    assert 17.0 < ret['trackpoints-engine'][1]['x'] < 20.0
-    assert 20.0 < ret['trackpoints-engine'][1]['y'] < 22.0
-    assert ret['trackpoints-engine'][1]['label'] == TEST_LABEL2
+    assert 17.0 < ret['trackpoints_engine'][1]['x'] < 20.0
+    assert 20.0 < ret['trackpoints_engine'][1]['y'] < 22.0
+    assert ret['trackpoints_engine'][1]['label'] == TEST_LABEL2
 
     # Delete the trackpoints
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
