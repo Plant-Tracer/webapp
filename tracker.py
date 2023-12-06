@@ -21,6 +21,10 @@ def null_track_frame(*,frame0, frame1, trackpoints):
 #pylint: enable=unused-argument
 
 
+class ConversionError(RuntimeError):
+    def __init__(self,msg):
+        super().__init__(msg)
+
 def is_jpeg(buffer):
     return magic.from_buffer(buffer,mime=True) in [ MIME.JPEG ]
 
@@ -28,7 +32,7 @@ def is_jpeg(buffer):
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
-    :param: frame0    - cv2 image of the previous frame
+    :param: frame0 - cv2 image of the previous frame
     :param: frame1 - cv2 image of the current frame
     :param: trackpoints   - array of poins
     takes a     returns the new positions.
@@ -37,11 +41,15 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
     winSize=(15, 15)
     maxLevel=2
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-
-    gray_frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
-    gray_frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-    point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
-                                               winSize=winSize, maxLevel=maxLevel, criteria=criteria)
+    try:
+        gray_frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
+        gray_frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
+                                                                      winSize=winSize, maxLevel=maxLevel, criteria=criteria)
+    except cv2.error:
+        point_array_out = []
+        status_array = []
+        err = []
 
     return {POINT_ARRAY_OUT: point_array_out, 'status_array': status_array, 'err': err}
 
@@ -55,6 +63,16 @@ def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
         raise ValueError(f"No such engine: {engine}")
 #pylint: enable=unused-argument
 
+
+def cv2_jpeg_from_data(data):
+    assert is_jpeg(data)
+    with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
+        tf0.write(data)
+        frame = cv2.imread(tf0.name)
+        if frame is None:
+            logging.error("Cannot convert frame to JPEG")
+            raise ConversionError("Cannot convert frame0 to JPEG")
+        return frame
 
 def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     """
@@ -71,18 +89,14 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
     # image0 = np.asarray(bytearray(frame0_jpeg))
     # image1 = np.asarray(bytearray(frame1_jpeg))
     # return cv2_track_frame( image0, image1, trackpoints )
+
     assert is_jpeg(frame0_jpeg)
     assert is_jpeg(frame1_jpeg)
-    with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
-        with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf1:
-            tf0.write(frame0_jpeg)
-            tf1.write(frame1_jpeg)
-            frame0 = cv2.imread(tf0.name)
-            frame1 = cv2.imread(tf1.name)
-            logging.debug("frame0=%s",frame0)
-            logging.debug("type(frame0)=%s",type(frame0))
-            return track_frame( engine=engine, frame0=frame0,
-                                frame1=frame1, trackpoints=np.array(trackpoints,dtype=np.float32))
+
+    return track_frame( engine=engine,
+                        frame0=cv2_jpeg_from_data(frame0_jpeg),
+                        frame1=cv2_jpeg_from_data(frame1_jpeg),
+                        trackpoints=np.array(trackpoints,dtype=np.float32))
 
 
 def track_movie(*, engine, moviefile, trackpoints):

@@ -19,7 +19,9 @@ from tabulate import tabulate
 # pylint: disable=no-member
 
 import db
-from lib.ctools import clogging
+from lib.ctools import clogging,dbfile
+import tracker
+
 
 ROOT_USER = 0
 
@@ -122,6 +124,15 @@ def extract_frames(*, movie_id, user_id):
     # Save  Duration and FPS to database
     return count
 
+def test_frames(*,movie_id):
+    frames = dbfile.DBMySQL.csfr(db.get_dbreader(), "select id,frame_data from movie_frames where movie_id=%s order by 1",(movie_id,))
+    print("Frames: ",len(frames))
+    for (frame_id,frame_data) in frames:
+        print(f"frame_id={frame_id}")
+        conv = tracker.cv2_jpeg_from_data(frame_data)
+        print(f"   len(conv)={len(conv)}")
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Work with movies in the database",
@@ -139,6 +150,7 @@ if __name__ == "__main__":
                          help="extract all of the frames from all-movies "
                          "that do not have extracted frames for the given movie", action='store_true')
     parser.add_argument( "--purgeframes", help="purge the frames associated with a movie", type=int)
+    parser.add_argument( "--test", help="test converting all frames in a given movie to JPEG", type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -160,3 +172,6 @@ if __name__ == "__main__":
         print("Movies with no frames:",movies_with_no_frames)
         for movie_id in movies_with_no_frames:
             extract_frames(movie_id=movie_id, user_id=ROOT_USER)
+
+    if args.test:
+        test_frames(movie_id=args.test)

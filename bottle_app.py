@@ -517,6 +517,7 @@ def api_get_frame():
     frame_msec = get_int('frame_msec',0 ) # location frame
     msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt            = get('format', 'jpeg').lower()
+    save_trackpoints       = get_json('save_trackpoints')
     get_annotations   = get_bool('get_annotations')
     get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
     engine_name    = get('engine_name')
@@ -563,7 +564,13 @@ def api_get_frame():
     if get_trackpoints:
         # Get the tracking from the database
         logging.info("get_trackpoints")
-        frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
+
+        # See if trackpoints were provided. If so, save them and use them. If not, get them from frame_id
+        if isinstance(save_trackpoints,list):
+            db.put_frame_trackpoints(frame_id=frame1_id, trackpoints=save_trackpoints)
+            frame1['trackpoints'] = save_trackpoints
+        else:
+            frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
 
         # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
         # Those trackpoints get returned in ['trackpoints_engine']
@@ -577,16 +584,28 @@ def api_get_frame():
                 return E.INVALID_MOVIE_FRAME
             if frame0_id == frame1_id:
                 return E.TRACK_FRAMES_SAME
+            if frame1_data is None:
+                return E.FRAME1_IS_NONE
+            if not tracker.is_jpeg(frame0_data):
+                return {'error':True, 'message':'frame0 is not a jpeg'}
+            if not tracker.is_jpeg(frame1_data):
+                return {'error':True, 'message':'frame1 is not a jpeg'}
             tpts = db.get_frame_trackpoints(frame_id=frame0_id)
             frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
-            tpr = tracker.track_frame_jpegs(engine = engine_name,
-                                            frame0_jpeg=frame0_data,
-                                            frame1_jpeg=frame1_data,
-                                            trackpoints = frame0_trackpoints)
-            frame1['trackpoints_engine'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
-                                             'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
-                                             'label':tpts[i]['label']}
-                                            for i in range(len(tpts))]
+
+            try:
+                tpr = tracker.track_frame_jpegs(engine = engine_name,
+                                                frame0_jpeg=frame0_data,
+                                                frame1_jpeg=frame1_data,
+                                                trackpoints = frame0_trackpoints)
+                tpts_engine = tpr[tracker.POINT_ARRAY_OUT]
+                frame1['trackpoints_engine'] = [{'x':tpts_engine[i][0],
+                                                 'y':tpts_engine[i][1],
+                                                 'label':tpts[i]['label']}
+                                                for i in range(len(tpts_engine))]
+            except tracker.ConversionError as e:
+                logging.error("e=%s frame0_id=%s frame1_id=%s",e,frame0_id,frame1_id)
+
     frame1['user_data'] = user_data
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
