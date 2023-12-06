@@ -73,7 +73,7 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
                                 frame1=cv2.imread(tf1.name), trackpoints=np.array(trackpoints,dtype=np.float32))
 
 
-def track_movie(*, engine, moviefile, trackpoints):
+def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     """
     Summary - takes in a movie(cap) and returns annotatted movie
     takes a annotated frame (marked_frame) that has the apex annotated
@@ -85,22 +85,18 @@ def track_movie(*, engine, moviefile, trackpoints):
     if engine!=Engines.CV2:
         raise RuntimeError("This only runs with CV2")
 
-    if moviefile:
-        raise RuntimeError("declare what movie is")
     video_coordinates = np.array(trackpoints)
-    p0 = trackpoints
+    p0  = trackpoints
     cap = cv2.VideoCapture(moviefile)
     ret, current_frame = cap.read()
 
     # should be movie name + tracked
-    output_video_path = 'tracked_movie.mp4'
-    if output_video_path:
-        raise RuntimeError("Rework this so that output_video_path is in a temporary directory")
 
     # Get video properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps    = cap.get(cv2.CAP_PROP_FPS)
+    print(f"width: {width} height: {height} fps: {fps}  p0:{p0}")
 
     # Create a VideoWriter object to save the output video
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -126,7 +122,8 @@ def track_movie(*, engine, moviefile, trackpoints):
         # use the points to annotate the colored frames. write to colored tracked video
         for point in p0:
             x, y = point.ravel()
-            tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)# pylint: disable=no-member
+            tracked_current_frame = cv2.circle(current_frame,
+                                               (int(x), int(y)), 3, (0, 0, 255), -1)# pylint: disable=no-member
             # Save the frame to the output video
             out.write(tracked_current_frame)
 
@@ -141,10 +138,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser.add_argument('--engine',default='CV2')
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
-        "--points_to_track", default='[[279, 223]]', help="list of points to track as json 2D array.")
+        "--points_to_track", default='[[138, 86]]', help="list of points to track as json 2D array.")
+    parser.add_argument('--outfile',default='tracked_output.mp4')
     args = parser.parse_args()
-    trackpoints = np.array(json.loads(args.points_to_track), dtype=np.float32)
-    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints)
+    tpts = json.loads(args.points_to_track)
+    trackpoints = np.array(tpts, dtype=np.float32)
+    print("args.points_to_track=",args.points_to_track,tpts,trackpoints)
+    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints, output_video_path=args.outfile)
