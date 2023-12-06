@@ -58,7 +58,7 @@ class CanvasController {
         // Catch the zoom change event
         if (zoom_selector) {
             $(zoom_selector).on('change', (e) => {
-                this.set_zoom( $(this).val() / 100 );
+                this.set_zoom( $(zoom_selector).val() / 100 );
             });
         }
     }
