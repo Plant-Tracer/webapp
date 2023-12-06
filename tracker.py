@@ -132,8 +132,9 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     return video_coordinates
 
 
-if __name__ == "__main__":
+# The trackpoint is at (138,86) when the image is scaled to a width: 320 height: 240
 
+if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
