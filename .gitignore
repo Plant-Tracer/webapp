@@ -167,3 +167,4 @@ cython_debug/
 *.mbox
 */*.mbox
 localmail.mbox
+*.bash
