@@ -57,10 +57,13 @@ remove_localdb:
 	/bin/rm -f etc/credentials.ini
 
 coverage:
+	@echo  === start coverage installation ===
 	$(PYTHON) -m pip install codecov pytest pytest_cov
+	@echo  === start database connectivity test with dbreader_test ===
 	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
+	@echo  === start pytest with coverage test ===
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
+	@echo  === coverage test completed ===
 
 debug:
 	python bottle_app.py
