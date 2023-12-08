@@ -50,9 +50,9 @@ def new_course():
     """Fixture to create a new course and then delete it.
     New course creates a new course admin and a new user for it"""
 
-    course_key = str(uuid.uuid4())[0:32]
-    admin_email = TEST_ADMIN_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:4]+'@')
-    course_name = course_key + "course name"
+    course_key = 'test-'+str(uuid.uuid4())[0:32]
+    admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
+    course_name = f"test-{course_key} course name"
 
     ct = db.create_course(course_key=course_key,
                           course_name=course_name,
@@ -82,7 +82,7 @@ def new_user(new_course):
     """
     cfg = copy.copy(new_course)
 
-    user_email = TEST_USER_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:6]+'@')
+    user_email = TEST_USER_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:6]+'@')
     user_id = db.register_email(email=user_email,
                                 course_key=cfg[COURSE_KEY],
                                 name=TEST_USER_NAME)['user_id']
