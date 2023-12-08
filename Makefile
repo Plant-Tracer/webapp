@@ -50,7 +50,9 @@ pytest-quiet:
 
 create_localdb:
 	cat etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/credentials.ini
+	@echo Creating local database and writing results to etc/actions_test.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini
+	cat etc/actions_test.ini
 
 remove_localdb:
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
