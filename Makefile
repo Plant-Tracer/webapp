@@ -27,19 +27,22 @@ pylint:
 flake8:
 	flake8 $(PYLINT_FILES)
 
+#
+# In the tests below, we always test the database connectivity first
+# It makes no sense to run the tests otherwise
 pytest:
 	make touch
-	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG dbreader_test.py
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
 	make touch
-	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG dbreader_test.py
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 pytest-quiet:
 	make touch
-	$(PYTHON) -m pytest . --log-cli-level=DEBUG dbreader_test.py
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
