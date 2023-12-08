@@ -24,11 +24,15 @@ MYSQL_HOST = 'MYSQL_HOST'
 MYSQL_USER = 'MYSQL_USER'
 MYSQL_PASSWORD = 'MYSQL_PASSWORD'
 MYSQL_DATABASE = 'MYSQL_DATABASE'
-localhost = 'localhost'
+LOCALHOST = 'localhost'
 dbreader = 'dbreader'
 dbwriter = 'dbwriter'
 
 __version__ = '0.0.1'
+
+def hostnames():
+        hostname = socket.gethostname()
+        return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
 def clean(dbwriter):
     sizes = {}
@@ -107,16 +111,16 @@ if __name__ == "__main__":
         d.execute(f'USE {args.createdb}')
         with open(SCHEMA_FILE, 'r') as f:
             d.create_schema(f.read())
-        d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`localhost`')
-        d.execute( f'CREATE USER           `{dbreader_user}`@`localhost` identified by "{dbreader_password}"')
-        d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`localhost`')
-        d.execute( f'CREATE USER           `{dbwriter_user}`@`localhost` identified by "{dbwriter_password}"')
 
         # Now grant on all addresses
-        hostname = socket.gethostname()
-        for ipaddr in socket.gethostbyname_ex(hostname)[2] + ['localhost',hostname]:
+        for ipaddr in hostnames():
             print("granting dbreader and dbwriter access from ",ipaddr)
+            d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
+            d.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
             d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`{ipaddr}`')
+
+            d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
+            d.execute( f'CREATE USER           `{dbwriter_user}`@`{ipaddr}` identified by "{dbwriter_password}"')
             d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`{ipaddr}`')
 
         def prn(k, v):
@@ -125,13 +129,13 @@ if __name__ == "__main__":
             print("Contents for dbauth.ini:")
 
         print("[dbreader]")
-        prn(MYSQL_HOST, localhost)
+        prn(MYSQL_HOST, LOCALHOST)
         prn(MYSQL_USER, dbreader_user)
         prn(MYSQL_PASSWORD, dbreader_password)
         prn(MYSQL_DATABASE, args.createdb)
 
         print("[dbwriter]")
-        prn(MYSQL_HOST, localhost)
+        prn(MYSQL_HOST, LOCALHOST)
         prn(MYSQL_USER, dbwriter_user)
         prn(MYSQL_PASSWORD, dbwriter_password)
         prn(MYSQL_DATABASE, args.createdb)
@@ -139,14 +143,14 @@ if __name__ == "__main__":
         if cp:
             if dbreader not in cp:
                 cp.add_section(dbreader)
-            cp[dbreader][MYSQL_HOST] = localhost
+            cp[dbreader][MYSQL_HOST] = LOCALHOST
             cp[dbreader][MYSQL_USER] = dbreader_user
             cp[dbreader][MYSQL_PASSWORD] = dbreader_password
             cp[dbreader][MYSQL_DATABASE] = args.createdb
 
             if dbwriter not in cp:
                 cp.add_section(dbwriter)
-            cp[dbwriter][MYSQL_HOST] = localhost
+            cp[dbwriter][MYSQL_HOST] = LOCALHOST
             cp[dbwriter][MYSQL_USER] = dbwriter_user
             cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
             cp[dbwriter][MYSQL_DATABASE] = args.createdb
@@ -156,8 +160,9 @@ if __name__ == "__main__":
     if args.dropdb:
         dbreader_user = 'dbreader_' + args.dropdb
         dbwriter_user = 'dbwriter_' + args.dropdb
-        d.execute(f'DROP USER `{dbreader_user}`@`localhost`')
-        d.execute(f'DROP USER `{dbwriter_user}`@`localhost`')
+        for ipaddr in hostnames():
+            d.execute(f'DROP USER `{dbreader_user}`@`{ipaddr}`')
+            d.execute(f'DROP USER `{dbwriter_user}`@`{ipaddr}`')
         d.execute(f'DROP DATABASE {args.dropdb}')
 
     if args.clean:
