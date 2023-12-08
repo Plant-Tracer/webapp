@@ -113,6 +113,7 @@ if __name__ == "__main__":
             d.create_schema(f.read())
 
         # Now grant on all addresses
+        print("Hostnames:",hostnames())
         for ipaddr in hostnames():
             print("granting dbreader and dbwriter access from ",ipaddr)
             d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
