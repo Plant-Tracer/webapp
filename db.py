@@ -16,7 +16,8 @@ from typing import Optional
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_PATH, DBWRITER_BASH_PATH, TEMPLATE_DIR, DBCREDENTIALS_PATH, BOTTLE_APP_INI_PATH
+from paths import TEMPLATE_DIR,ROOT_DIR
+from constants import C
 
 from auth import get_user_api_key, get_user_ipaddr
 from lib.ctools import dbfile
@@ -47,36 +48,29 @@ LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
 
+def credentials_file():
+    if C.DBCREDENTIALS_PATH in os.environ:
+        return os.environ[C.DBCREDENTIALS_PATH]
+    else:
+        return os.path.join(ROOT_DIR, C.CREDENTIALS_INI)
+
+
 @functools.cache
 def get_dbreader():
     """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the DBCREDENTIALS file the DBWRITER_BASH_PATH if it exists.
-    2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
-    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbreader] section of the file etc/credentials.ini
     """
-    logging.debug("get_dbreader")
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
-        logging.info("authentication from %s", DBCREDENTIALS_PATH)
-        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
-    fname = DBREADER_BASH_PATH if os.path.exists(DBREADER_BASH_PATH) else None
-    logging.info("authentication from %s", fname)
-    return dbfile.DBMySQLAuth.FromBashEnvFile(fname)
+    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbreader')
 
 
 @functools.cache
 def get_dbwriter():
     """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the DBCREDENTIALS file the DBWRITER_BASH_PATH if it exists.
-    2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
-    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbwriter] section of the file etc/credentials.ini
     """
-
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
-        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbwriter')
-
-    fname = DBWRITER_BASH_PATH if os.path.exists(DBWRITER_BASH_PATH) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile(fname)
-
+    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbwriter')
 
 ################################################################
 # Logging
