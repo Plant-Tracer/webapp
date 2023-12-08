@@ -168,3 +168,5 @@ cython_debug/
 */*.mbox
 localmail.mbox
 *.mp4
+*.ini
+etc/github_actions_mysql_rootconfig.ini
