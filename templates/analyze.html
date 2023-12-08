@@ -37,7 +37,7 @@ annotated.
   <table class='float-container'>
     <tr><td class='message'>Loading frame...</td></tr>
     <tr>
-      <td> <canvas id="canvas-id" width='320' height='320'> </canvas><br>
+      <td> <canvas id="canvas-id" width='320' height='240'> </canvas><br>
         <form>
           <label for="zoom">zoom:</label>
           <select id="zoom-id" name="zoom" class='zoom'>
@@ -86,7 +86,6 @@ annotated.
 <script>
 var movie_id={{movie_id}};
 $( document ).ready( function() {
-    console.log("calling document ready function...");
     analyze_movie();
 });
 </script>

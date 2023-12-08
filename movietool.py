@@ -15,11 +15,15 @@ import subprocess
 from os.path import abspath,dirname
 
 from tabulate import tabulate
+import cv2
+import numpy as np
 
 # pylint: disable=no-member
 
 import db
-from lib.ctools import clogging
+from lib.ctools import clogging,dbfile
+import tracker
+
 
 ROOT_USER = 0
 
@@ -122,6 +126,74 @@ def extract_frames(*, movie_id, user_id):
     # Save  Duration and FPS to database
     return count
 
+def test_frames(*,movie_id):
+    frames = dbfile.DBMySQL.csfr(db.get_dbreader(), "select id,frame_data from movie_frames where movie_id=%s order by 1",(movie_id,))
+    print("Frames: ",len(frames))
+    for (frame_id,frame_data) in frames:
+        print(f"frame_id={frame_id}")
+        conv = tracker.cv2_jpeg_from_data(frame_data)
+        print(f"   len(conv)={len(conv)}")
+
+
+def extract_frames_cv2(*, movie_id, user_id):
+    """Download movie_id to a temporary file, extract all of the frames, and upload to the frames database.
+    Does not run if frames are already in the database
+    :return: count = number of frames uploaded.
+    """
+    db.purge_movie_frames(movie_id=movie_id)
+
+    metadata = db.get_movie_metadata(user_id=user_id, movie_id=movie_id)
+    logging.info("Movie %s metadata: %s",movie_id, metadata)
+
+    data = db.get_movie_data(movie_id=movie_id)
+    # This is necessary becuase cv2.VideoCapture cannot read from an in-memory buffer.
+    # See: https://github.com/opencv/opencv/issues/24400
+    with tempfile.NamedTemporaryFile(mode='ab') as tf:
+        logging.info("tempfile %s  movie size: %s written",tf.name,len(data))
+        tf.write(data)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+
+
+    fps    = cap.get(cv2.CAP_PROP_FPS)
+    print("FPS:",fps)
+    for ct in range(0,64000):
+        t0 = time.time()
+        r1, current_frame = cap.read()
+        if not r1:
+            break
+        (r2, jpeg) = cv2.imencode('.jpg', current_frame)
+        if not r2:
+            break
+        jpeg_data = jpeg.tobytes()
+        frame_msec = (ct * 1000) // fps
+        frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=jpeg_data)
+        t1 = time.time()
+        print("uploaded. frame_id=%s time to upload=%d" % (frame_id, t1-t0))
+        logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
+
+    return ct
+    with tempfile.TemporaryDirectory() as td:
+        template = os.path.join(td, JPEG_TEMPLATE)
+
+        (stdout,stderr) = extract_all_frames_from_file_with_ffmpeg(tf.name, template)
+
+        # Find the FPS and the duration
+        fps = DEFAULT_FPS
+        duration = None
+        m = re.search(r"Duration: (\d\d):(\d\d):(\d\d\.\d\d)",stdout+stderr, re.MULTILINE)
+        if m:
+            duration = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
+            logging.info("hms=%s:%s:%s duration=%s", m.group(1), m.group(2), m.group(3), duration)
+        m = re.search(r", (\d+) fps",stderr, re.MULTILINE)
+        if m:
+            fps = int( m.group(1))
+
+        count = upload_frames( movie_id, template, fps)
+    logging.info("Frames extracted: %s  duration: %s  fps:%s ",count, duration, fps)
+    # Save  Duration and FPS to database
+    return count
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Work with movies in the database",
@@ -139,6 +211,7 @@ if __name__ == "__main__":
                          help="extract all of the frames from all-movies "
                          "that do not have extracted frames for the given movie", action='store_true')
     parser.add_argument( "--purgeframes", help="purge the frames associated with a movie", type=int)
+    parser.add_argument( "--test", help="test converting all frames in a given movie to JPEG", type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -151,6 +224,8 @@ if __name__ == "__main__":
     if args.purgeframes:
         db.purge_movie_frames(movie_id=args.purgeframes)
 
+    extract_frames = extract_frames_cv2
+
     if args.extract:
         count = extract_frames(movie_id=args.extract, user_id=ROOT_USER)
         print("Frames extracted:",count)
@@ -160,3 +235,6 @@ if __name__ == "__main__":
         print("Movies with no frames:",movies_with_no_frames)
         for movie_id in movies_with_no_frames:
             extract_frames(movie_id=movie_id, user_id=ROOT_USER)
+
+    if args.test:
+        test_frames(movie_id=args.test)

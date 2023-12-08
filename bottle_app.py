@@ -62,6 +62,8 @@ import auth
 
 from lib.ctools import clogging
 
+import numpy as np
+
 from paths import view, STATIC_DIR
 from constants import E,MIME,Engines
 import tracker
@@ -93,6 +95,8 @@ def datetime_to_str(obj):
         return {k: datetime_to_str(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
         return [datetime_to_str(elem) for elem in obj]
+    elif isinstance(obj,(np.float64,np.float32,np.float16)):
+        return float(obj)
     else:
         return obj
 
@@ -103,6 +107,32 @@ def is_true(s):
 def get(key, default=None):
     return request.forms.get(key, request.query.get(key, default))
 
+def get_json(key):
+    try:
+        return json.loads(request.forms.get(key))
+    except (TypeError,json.decoder.JSONDecodeError):
+        return None
+
+def get_int(key, default=None):
+    try:
+        return int(get(key))
+    except TypeError:
+        return default
+
+def get_float(key, default=None):
+    try:
+        return float(get(key))
+    except TypeError:
+        return default
+
+def get_bool(key, default=None):
+    v = get(key)
+    if v is None:
+        return default
+    try:
+        return v[0:1] in 'yYtT1'
+    except TypeError:
+        return False
 
 ################################################################
 # Bottle endpoints
@@ -456,9 +486,8 @@ def get_frame_id():
     Verify that the user has rights to frame_id and then return it. Minimal capabilities.
     """
     frame_id = get('frame_id')
-    analysis = int(get('analysis','0')) > 0
     if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, get_analysis=analysis)
+        return  db.get_frame_id(frame_id=frame_id, get_annotations=get_bool('get_annotations'), get_trackpoints=get_bool('get_trackpoints'))
     return E.INVALID_FRAME_ACCESS
 
 #pylint: disable=too-many-return-statements
@@ -474,6 +503,7 @@ def api_get_frame():
     :param format:     jpeg - just get the image; json - get the image and json annotation
     :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
 
+    :param user_data: whatever is provided is returned in the response
     Tracking:
 
     :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied to the frame at frame_msec AND the frame at frame_msec+delta.
@@ -483,78 +513,106 @@ def api_get_frame():
     """
     user_id    = get_user_id()
 
-    movie_id   = int( get('movie_id',-1 ))
-    frame_msec = int( get('frame_msec',0 ))
-    msec_delta = int( get('msec_delta',0 ))
+    movie_id   = get_int('movie_id')
+    frame_msec = get_int('frame_msec',0 ) # location frame
+    msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt            = get('format', 'jpeg').lower()
-    get_analysis   = is_true(get('get_analysis'))
-    get_tracking   = is_true(get('get_tracking'))
+    save_trackpoints       = get_json('save_trackpoints')
+    get_annotations   = get_bool('get_annotations')
+    get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
+    user_data      = get('user_data')
 
-    if get_tracking and (msec_delta != +1):
-        return E.INVALID_TRACK_FRAME_MSEC
+    logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
 
-    # Below, frame1 is the frame requested, and frame0, if computed, is the frame before frame1
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        logging.info("User %s cannot access movie_id %s",user_id, movie_id)
+        return E.INVALID_MOVIE_ACCESS
 
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-        if not frame1:
-            return E.INVALID_MOVIE_FRAME
+    # Below:
+    # frame1 -- the frame requested
+    # frame0 --- if msec_delta=+1, the frame before frame1
+    #
 
-        if fmt=='jpeg':
-            # Can't get analysis if requesting jpeg format
-            bottle.response.set_header('Content-Type', MIME.JPEG)
-            logging.info("Return %d bytes",len(frame1['frame_data']))
-            return frame1['frame_data']
+    frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
+    if not frame1:
+        logging.info("frame1 is invalid")
+        return E.INVALID_MOVIE_FRAME
 
-        # JSON format; change frame_data into data_url
-        frame1_data = frame1['frame_data'] # JPEG format
-        frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
-        del frame1['frame_data']
+    if fmt=='jpeg':
+        if get_annotations or get_trackpoints:
+            return E.INVALID_REQUEST_JPEG
 
-        # If analysis is requested, get a list of dictionaries from the database where each dictionary
-        # contains metadata about the annotations and the JSON object of the annotations.
-        if get_analysis:
-            frame1['analysis'] = db.get_frame_analysis(frame_id=frame1['frame_id'])
+        bottle.response.set_header('Content-Type', MIME.JPEG)
+        return frame1['frame_data']
 
-        # If tracking is requested, get the previous frame and the trackpoints from that frame
-        # and run the tracking algorithm.
-        # TO DO CHANGE HERE
-        #if get_tracking:
-        #    frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-        #    frame0_data = frame0_dict['frame_data']
-        #    frame0_id   = frame0_dict['frame_id']
-        #    frame0_trackpoints = None
-        #    if frame0_dict is None:
-        #        return E.INVALID_MOVIE_FRAME
-        #    if frame0_data==frame1_data:
-        #        return E.TRACK_FRAMES_SAME
-        #    ana = db.get_frame_analysis(frame_id = frame0_id)
-        #    logging.debug("ana=%s",ana)
-        #    if ana:
-        #        pa = get_preferred_annotations(ana)
-        #        frame0_tp_names    = [r['name'] for r in pa]
-        #        frame0_trackpoints = [(r['x'],r['y']) for r in pa]
-        #        logging.debug("frame0_tp_names=%s frame0_trackpoints=%s",frame0_tp_names,frame0_trackpoints)
-        #        tpr = tracker.track_frame(engine = engine_name,
-        #                                  engine_version = engine_version,
-        #                                  frame0=frame0_data, frame1=frame1_data, trackpoints = frame0_trackpoints)
-        #        logging.debug("tpr=%s",tpr)
-        #        frame1['trackpoints'] = [{'x':tpr[tracker.POINT_ARRAY_OUT][i][0],
-        #                                  'y':tpr[tracker.POINT_ARRAY_OUT][i][1],
-        #                                  'name':frame0_tp_names[i]}
-        #                                 for i in range(len(frame0_tp_names))]
-        #
-        # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
-        # and returns MIME type of "application/json"
-        # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-        return datetime_to_str(frame1)
-    logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-    return E.INVALID_MOVIE_ACCESS
+    # JSON format; change frame_data into data_url
+    frame1_data = frame1['frame_data'] # JPEG format
+    frame1_id   = frame1['frame_id']
+    frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
+    del frame1['frame_data']
+
+    # If annotations are requested, get a list of dictionaries from the database where each dictionary
+    # contains metadata about the annotations and the JSON object of the annotations.
+    if get_annotations:
+        frame1['annotations'] = db.get_frame_annotations(frame_id=frame1['frame_id'])
+
+    if get_trackpoints:
+        # Get the tracking from the database
+        logging.info("get_trackpoints")
+
+        # See if trackpoints were provided. If so, save them and use them. If not, get them from frame_id
+        if isinstance(save_trackpoints,list):
+            db.put_frame_trackpoints(frame_id=frame1_id, trackpoints=save_trackpoints)
+            frame1['trackpoints'] = save_trackpoints
+        else:
+            frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
+
+        # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
+        # Those trackpoints get returned in ['trackpoints_engine']
+        logging.info("msec_delta=%s type(msec_type)=%s engine_name=%s",msec_delta, type(msec_delta),engine_name)
+        if msec_delta == +1 and (engine_name is not None):
+            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
+            frame0_data = frame0_dict['frame_data']
+            frame0_id   = frame0_dict['frame_id']
+            frame0_trackpoints = None
+            if frame0_dict is None:
+                return E.INVALID_MOVIE_FRAME
+            if frame0_id == frame1_id:
+                return E.TRACK_FRAMES_SAME
+            if frame1_data is None:
+                return E.FRAME1_IS_NONE
+            if not tracker.is_jpeg(frame0_data):
+                return {'error':True, 'message':'frame0 is not a jpeg'}
+            if not tracker.is_jpeg(frame1_data):
+                return {'error':True, 'message':'frame1 is not a jpeg'}
+            tpts = db.get_frame_trackpoints(frame_id=frame0_id)
+            frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
+
+            try:
+                tpr = tracker.track_frame_jpegs(engine = engine_name,
+                                                frame0_jpeg=frame0_data,
+                                                frame1_jpeg=frame1_data,
+                                                trackpoints = frame0_trackpoints)
+                tpts_engine = tpr[tracker.POINT_ARRAY_OUT]
+                frame1['trackpoints_engine'] = [{'x':tpts_engine[i][0],
+                                                 'y':tpts_engine[i][1],
+                                                 'label':tpts[i]['label']}
+                                                for i in range(len(tpts_engine))]
+            except tracker.ConversionError as e:
+                logging.error("e=%s frame0_id=%s frame1_id=%s",e,frame0_id,frame1_id)
+
+    frame1['user_data'] = user_data
+    #
+    # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
+    # and returns MIME type of "application/json"
+    # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+    logging.info("frame1=%s",frame1)
+    return datetime_to_str(frame1)
 #pylint: enable=too-many-return-statements
 
 @bottle.route('/api/track-frame', method='POST')
@@ -583,18 +641,17 @@ def api_track_frame():
         if base64_data_name in request.forms:
             frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
         elif frame_id_name in request.forms:
-            frames[data_name] = get_frame_id(frame_id=request.forms.get(frame_id_name))
+            frames[data_name] = db.get_frame_id(frame_id=request.forms.get(frame_id_name))
         else:
             return {'error': True, 'message': f'Parameter {base64_data_name} or {frame_id_name} is required'}
         data_name = f"frame{i}_data"
         if len(frames[data_name]) > MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
-        mime_type = magic.from_buffer(frames[data_name],mime=True)
-        if mime_type not in [ MIME.JPEG ]:
+        if not tracker.is_jpeg(frames[data_name]):
             return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
-    point_array_in = json.loads(request.forms.get('point_array'))
+    point_array_in = get_json('point_array')
 
     res = tracker.track_frame_jpegs( engine=engine_name,
                                      frame0_jpeg=frames['frame0_data'],
@@ -611,19 +668,22 @@ def api_put_frame_analysis():
     :param: engine_id - the engine id (if you know it)
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
-    :param: analysis - JSON string, must be an array or a dictionary.
+    :param: annotations - JSON string, must be an array or a dictionary, if provided
+    :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    frame_id  = int(request.forms.get('frame_id',None))
-    try:
-        engine_id = int(request.forms.get('engine_id'))
-    except (TypeError,ValueError):
-        engine_id = None
+    frame_id  = get_int('frame_id')
+    engine_id = get_int('engine_id')
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
-        db.put_frame_analysis(frame_id=frame_id,
-                              annotations=json.loads(request.forms.get('annotations')),
-                              engine_id=engine_id,
-                              engine_name=request.forms.get('engine_name'),
-                              engine_version=request.forms.get('engine_version'))
+        annotations=get_json('annotations')
+        trackpoints=get_json('trackpoints')
+        if annotations is not None:
+            db.put_frame_annotations(frame_id=frame_id,
+                                     engine_id=engine_id,
+                                     annotations=annotations,
+                                     engine_name=request.forms.get('engine_name'),
+                                     engine_version=request.forms.get('engine_version'))
+        if trackpoints is not None:
+            db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
         return {'error': False, 'message':'Analysis recorded.'}
     return E.INVALID_MOVIE_ACCESS
 
@@ -634,9 +694,9 @@ def api_get_movie_data():
     :param api_keuy:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get('movie_id')):
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie_data(movie_id=get('movie_id'))
+        return db.get_movie_data(movie_id=get_int('movie_id'))
     return E.INVALID_MOVIE_ACCESS
 
 
@@ -646,9 +706,9 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
-        db.delete_movie(movie_id=request.forms.get('movie_id'),
-                        delete=request.forms.get('delete', 1))
+    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
+        db.delete_movie(movie_id=get_int('movie_id'),
+                        delete=get_bool('delete',True))
         return {'error': False}
     return E.INVALID_MOVIE_ACCESS
 
@@ -674,16 +734,10 @@ def api_get_log():
 ##
 
 
-def bool_converter(x):
-    if (x == 'null') or (x is None):
-        return None
-    return int(x)
-
-
 @bottle.route('/api/get-metadata', method='POST')
 def api_get_metadata():
-    gmovie_id = bool_converter(request.forms.get('get_movie_id'))
-    guser_id  = bool_converter(request.forms.get('get_user_id'))
+    gmovie_id = get_bool('get_movie_id')
+    guser_id  = get_bool('get_user_id')
 
     if (gmovie_id is None) and (guser_id is None):
         return {'error': True, 'result': 'Either get_movie_id or get_user_id is required'}
@@ -705,8 +759,8 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    set_movie_id = bool_converter(request.forms.get('set_movie_id'))
-    set_user_id  = bool_converter(request.forms.get('set_user_id'))
+    set_movie_id = get_int('set_movie_id')
+    set_user_id  = get_int('set_user_id')
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
@@ -714,8 +768,8 @@ def api_set_metadata():
     result = db.set_metadata(user_id=get_user_id(),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
-                             prop=request.forms.get('property'),
-                             value=request.forms.get('value'))
+                             prop=get('property'),
+                             value=get('value'))
 
     return {'error': False, 'result': result}
 
@@ -733,10 +787,10 @@ def api_list_users():
 ##
 @bottle.route('/api/add', method=['GET', 'POST'])
 def api_add():
-    a = request.forms.get('a')
-    b = request.forms.get('b')
+    a = get_float('a')
+    b = get_float('b')
     try:
-        return {'result': float(a)+float(b), 'error': False}
+        return {'result': a+b, 'error': False}
     except (TypeError, ValueError):
         return {'error': True, 'message': 'arguments malformed'}
 

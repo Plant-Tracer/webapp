@@ -168,3 +168,4 @@ cython_debug/
 */*.mbox
 localmail.mbox
 *.bash
+*.mp4
