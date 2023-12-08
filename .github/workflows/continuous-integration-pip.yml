@@ -78,11 +78,11 @@ jobs:
 
       - name: Validate database access
         run: |
-          python3 -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+          python3 -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
       - name: Validate app framework
         run: |
-          python3 -m pytest . --log-cli-level=DEBUG tests/app_test.py -k test_templates
+          python3 -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
       - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
