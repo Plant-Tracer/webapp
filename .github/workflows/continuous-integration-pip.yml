@@ -73,26 +73,13 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
-          TEST_USER_EMAIL:  ${{ vars.TEST_USER_EMAIl }}
-          TEST_USER_APIKEY: ${{ secrets.TEST_USER_APIKEY }}
-          MYSQL_HOST:       ${{ secrets.MYSQL_HOST }}
-          MYSQL_DATABASE:   ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_USER:       ${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD:   ${{ secrets.MYSQL_PASSWORD }}
-          SMTP_USERNAME:    ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD:    ${{ secrets.SMTP_PASSWORD }}
-          SMTP_SERVER:      ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT:        ${{ secrets.SMTP_PORT }}
-          IMAP_USERNAME:    ${{ secrets.IMAP_USERNAME }}
-          IMAP_PASSWORD:    ${{ secrets.IMAP_PASSWORD }}
-          IMAP_SERVER:      ${{ secrets.IMAP_SERVER }}
 
         run: |
           cp -v etc/github_actions_mysql_rootconfig.ini $HOME
           export
-          make create_localdb
+          make create_localdb          # Create local database and put credentails in etc/actions_test.ini
           make coverage
-          make remove_localdb
+          make remove_localdb          # Delete the local database and the actions file
           ls -l
 
       - name: Upload to codecov.io
