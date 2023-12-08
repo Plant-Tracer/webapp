@@ -71,18 +71,25 @@ jobs:
         run: |
           make pylint
 
-      - name: Test with pytest and a functioning database (but only on Ubuntu)
+      - name: Create local MySQL database
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          make create_localdb
+
+      - name: Validate database access
+        run: |
+          python3 -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+
+      - name: Validate app framework
+        run: |
+          python3 -m pytest . --log-cli-level=DEBUG tests/app_test.py -k test_templates
+
+      - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
-
         run: |
-          cp -v etc/github_actions_mysql_rootconfig.ini $HOME
-          export
-          make create_localdb
           make coverage
-          make remove_localdb
-          ls -l
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
@@ -91,3 +98,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           files: ./coverage.xml
+
+      - name: Show files in directory
+        run: |
+          make coverage
+          ls -l
