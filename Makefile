@@ -33,16 +33,19 @@ flake8:
 pytest:
 	make touch
 	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
 	make touch
 	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 pytest-quiet:
 	make touch
 	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
