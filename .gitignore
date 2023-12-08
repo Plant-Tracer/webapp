@@ -169,3 +169,5 @@ cython_debug/
 localmail.mbox
 *.bash
 *.mp4
+*.ini
+etc/github_actions_mysql_rootconfig.ini

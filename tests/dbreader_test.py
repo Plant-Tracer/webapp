@@ -6,6 +6,8 @@ from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+import pymysql
+
 import db
 import ctools.dbfile as dbfile
 
@@ -19,11 +21,24 @@ def test_dbreader():
 # Make sure we can make a database connection
 def test_db_connection():
     dbreader = db.get_dbreader()
-    v = dbfile.DBMySQL.csfr(dbreader, "select version()")
+    try:
+        logging.debug("dbreader=%s",dbreader)
+        v = dbfile.DBMySQL.csfr(dbreader, "select version()")
+    except pymysql.err.OperationalError as e:
+        print("operational error: ",str(e),file=sys.stderr)
+        print("dbreader: ",str(dbreader),file=sys.stderr)
+        raise
     logging.info("MySQL Version %s",v[0][0])
     logging.info("dbreader: %s",dbreader)
 
     dbwriter = db.get_dbreader()
-    v = dbfile.DBMySQL.csfr(dbwriter, "select version()")
+    try:
+        logging.debug("dbwriter=%s",dbwriter)
+        v = dbfile.DBMySQL.csfr(dbwriter, "select version()")
+    except pymysql.err.OperationalError as e:
+        print("operational error: ",str(e),file=sys.stderr)
+        print("dbreader: ",str(dbreader),file=sys.stderr)
+        print("dbreader password: ",dbreader.password,file=sys.stderr)
+        raise
     logging.info("MySQL Version %s",v[0][0])
     logging.info("dbwriter: %s",dbwriter)

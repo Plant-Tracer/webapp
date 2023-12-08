@@ -10,6 +10,8 @@ jobs:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
         python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
+    # This makes it only run on pull_request unless it is running on main:
+    if: (github.event_name == 'pull_request' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref != 'refs/heads/main')
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
       mysql:
@@ -69,18 +71,25 @@ jobs:
         run: |
           make pylint
 
-      - name: Test with pytest and a functioning database (but only on Ubuntu)
+      - name: Create local MySQL database
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          make create_localdb
+
+      - name: Validate database access
+        run: |
+          python3 -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+
+      - name: Validate app framework
+        run: |
+          python3 -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
+
+      - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
-
         run: |
-          cp -v etc/github_actions_mysql_rootconfig.ini $HOME
-          export
-          make create_localdb          # Create local database and put credentails in etc/actions_test.ini
           make coverage
-          make remove_localdb          # Delete the local database and the actions file
-          ls -l
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
@@ -89,3 +98,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           files: ./coverage.xml
+
+      - name: Show files in directory
+        run: |
+          make coverage
+          ls -l

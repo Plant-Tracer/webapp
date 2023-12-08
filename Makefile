@@ -27,26 +27,36 @@ pylint:
 flake8:
 	flake8 $(PYLINT_FILES)
 
+#
+# In the tests below, we always test the database connectivity first
+# It makes no sense to run the tests otherwise
 pytest:
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 pytest-quiet:
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
+	cat etc/github_actions_mysql_rootconfig.ini
 	@echo Creating local database and writing results to etc/actions_test.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini
 	cat etc/actions_test.ini
 
 remove_localdb:
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/actions_test.ini
-	/bin/rm -f etc/actions_test.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
+	/bin/rm -f etc/credentials.ini
 
 coverage:
 	$(PYTHON) -m pip install codecov pytest pytest_cov

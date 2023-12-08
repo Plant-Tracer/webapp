@@ -611,7 +611,6 @@ def api_get_frame():
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-    logging.info("frame1=%s",frame1)
     return datetime_to_str(frame1)
 #pylint: enable=too-many-return-statements
 
