@@ -6,6 +6,7 @@ Database Management Tool for webapp
 import sys
 import os
 import configparser
+import subprocess
 
 import uuid
 import pymysql
@@ -113,8 +114,10 @@ if __name__ == "__main__":
             d.create_schema(f.read())
 
         # Now grant on all addresses
+        print("ifconfig -a:")
+        subprocess.call(['ifconfig','-a'])
         print("Hostnames:",hostnames())
-        for ipaddr in hostnames():
+        for ipaddr in hostnames() + ['%']:
             print("granting dbreader and dbwriter access from ",ipaddr)
             d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
             d.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
