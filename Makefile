@@ -58,6 +58,8 @@ remove_localdb:
 
 coverage:
 	$(PYTHON) -m pip install codecov pytest pytest_cov
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
