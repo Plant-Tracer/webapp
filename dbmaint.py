@@ -29,6 +29,34 @@ dbwriter = 'dbwriter'
 
 __version__ = '0.0.1'
 
+def clean(dbwriter):
+    sizes = {}
+    d = dbfile.DBMySQL(auth)
+    c = d.cursor()
+    c.execute('show tables')
+    for (table,) in c:
+        c2 = d.cursor()
+        c2.execute(f'select count(*) from {table}')
+        count = c2.fetchone()[0]
+        print(f"table {table:20} count: {count:,}")
+        sizes[table] = count
+    del_movies = "(select id from movies where user_id in (select id from users where name like 'Test%'))"
+    for table in ['movie_frame_analysis','movie_frame_trackpoints']:
+        cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+        print(cmd)
+        c.execute(cmd)
+    for table in ['movie_analysis','movie_data','movie_frames']:
+        cmd = f"delete from {table} where movie_id in {del_movies}"
+        print(cmd)
+        c.execute(cmd)
+    c.execute(f"delete from movie_frames where movie_id in {del_movies}")
+    c.execute(f"delete from movies where user_id in (select id from users where name like 'Test%')")
+    c.execute(f"delete from admins where course_id in (select id from courses where course_name like '%course name%')")
+    c.execute(f"delete from api_keys where user_id in (select id from users where name like 'Test%')")
+    c.execute(f"delete from users where name like 'Test%'")
+    c.execute(f"delete from courses where course_name like '%course name%'")
+    c.execute(f"delete from engines where name like 'engine %'")
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
@@ -44,6 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument(
         "--writeconfig",  help="specify the config.ini file to write.")
+    parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -123,3 +152,6 @@ if __name__ == "__main__":
         d.execute(f'DROP USER `{dbreader_user}`@`localhost`')
         d.execute(f'DROP USER `{dbwriter_user}`@`localhost`')
         d.execute(f'DROP DATABASE {args.dropdb}')
+
+    if args.clean:
+        clean(dbwriter)
