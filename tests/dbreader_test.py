@@ -22,6 +22,7 @@ def test_dbreader():
 def test_db_connection():
     dbreader = db.get_dbreader()
     try:
+        logging.debug("dbreader=%s",dbreader)
         v = dbfile.DBMySQL.csfr(dbreader, "select version()")
     except pymysql.err.OperationalError as e:
         print("operational error: ",str(e),file=sys.stderr)
@@ -32,6 +33,7 @@ def test_db_connection():
 
     dbwriter = db.get_dbreader()
     try:
+        logging.debug("dbwriter=%s",dbwriter)
         v = dbfile.DBMySQL.csfr(dbwriter, "select version()")
     except pymysql.err.OperationalError as e:
         print("operational error: ",str(e),file=sys.stderr)

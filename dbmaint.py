@@ -9,6 +9,7 @@ import configparser
 
 import uuid
 import pymysql
+import socket
 
 # pylint: disable=no-member
 
@@ -108,10 +109,15 @@ if __name__ == "__main__":
             d.create_schema(f.read())
         d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`localhost`')
         d.execute( f'CREATE USER           `{dbreader_user}`@`localhost` identified by "{dbreader_password}"')
-        d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`localhost`')
         d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`localhost`')
         d.execute( f'CREATE USER           `{dbwriter_user}`@`localhost` identified by "{dbwriter_password}"')
-        d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`localhost`')
+
+        # Now grant on all addresses
+        hostname = socket.gethostname()
+        for ipaddr in socket.gethostbyname_ex(hostname)[2] + ['localhost',hostname]:
+            print("granting dbreader and dbwriter access from ",ipaddr)
+            d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`{ipaddr}`')
+            d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`{ipaddr}`')
 
         def prn(k, v):
             print(f"{k}={v}")
