@@ -84,6 +84,7 @@ if __name__ == "__main__":
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
         sys.exit(0)
 
+    assert os.path.exists(args.rootfile)
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
     try:
         d = dbfile.DBMySQL(auth)
