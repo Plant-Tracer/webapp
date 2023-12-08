@@ -61,6 +61,7 @@ coverage:
 	$(PYTHON) -m pip install codecov pytest pytest_cov
 	@echo  === start database connectivity test with dbreader_test ===
 	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/app_test.py -k test_templates
 	@echo  === start pytest with coverage test ===
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 	@echo  === coverage test completed ===
