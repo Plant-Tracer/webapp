@@ -6,6 +6,9 @@ from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+import pymysql
+import pymysql.err
+
 import db
 import ctools.dbfile as dbfile
 
