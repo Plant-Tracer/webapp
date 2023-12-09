@@ -40,12 +40,9 @@ USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
-<<<<<<< HEAD
 ENGINE_ID = 'engine_id'
-=======
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
->>>>>>> origin/main
 
 ################################################################
 
@@ -167,8 +164,6 @@ def new_engine(new_movie):
     yield cfg
     db.delete_engine(engine_id=engine_id)
 
-=======
->>>>>>> origin/main
 ################################################################
 ## fixture tests
 ################################################################
@@ -192,8 +187,6 @@ def test_new_user(new_user):
 
     assert 'admin' in ret2
     assert 'courses' in ret3
-
-<<<<<<< HEAD
 
 def test_movie_upload(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
@@ -322,12 +315,8 @@ def test_new_movie_analysis(new_engine):
     # delete the created movie_analysis
     db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
 
-def test_get_logs():
-    """Incrementally test each part of the get_logs functions"""
-=======
 def test_get_logs(new_user):
     """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
->>>>>>> origin/main
     dbreader = db.get_dbreader()
     for security in [False,True]:
         logging.info("security=%s",security)
