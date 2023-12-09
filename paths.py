@@ -13,16 +13,16 @@ HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
 
-ROOT_DIR = dirname(abspath(__file__))
-STATIC_DIR = join(ROOT_DIR, 'static')
-TEMPLATE_DIR = join(ROOT_DIR, 'templates')
-TEST_DIR = join(ROOT_DIR, 'tests')
+ROOT_DIR      = dirname(abspath(__file__))
+STATIC_DIR    = join(ROOT_DIR, 'static')
+TEMPLATE_DIR  = join(ROOT_DIR, 'templates')
+TEST_DIR      = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR = join(ROOT_DIR, 'tests', 'data')
-SCHEMA_FILE = join(ROOT_DIR, 'etc', 'schema.sql')
-BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
-BOTTLE_APP_INI_PATH = join(ROOT_DIR, 'bottle_app.ini')
+SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
 
-BOTTlE_APP_INI_PATH = join(ROOT_DIR, 'bottle_app.ini')
+# used by test program:
+BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
+
 # Add the relative template path (since jinja2 doesn't like absolute paths)
 bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
 
