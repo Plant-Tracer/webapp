@@ -164,3 +164,11 @@ cython_debug/
 .DS_Store
 *.ini
 *.pid
+*.mbox
+*/*.mbox
+localmail.mbox
+*.bash
+*.mp4
+*.ini
+etc/github_actions_mysql_rootconfig.ini
+etc/credentials.ini

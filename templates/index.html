@@ -1,23 +1,23 @@
 {% extends 'base.html' %}
 
 {% block body %}
-<h2> Welcome Plan Tracer! </h2>
+<h2> Welcome Plant Tracer! </h2>
 
-<p>TODO: write welcome text</p>
+<p>A method to explore the genetics of plant movement</p>
 
 {% if api_key %}
-<i>You are logged in. you can...</i>
+<i>You are logged in. You can:</i>
 <ul>
-<li> <a href='/list'> List the movies that you can work with.</li>
-<li> <a href='/upload'> Upload a new movie</a></li>
+    <li><a href='/list'> List the movies that you can work with</li>
+    <li><a href='/upload'> Upload a new movie</a></li>
 </ul>
 
 {% else %}
-<i>You are not logged in, you can ...</i>
+<i>You are not logged in. You can:</i>
 
 <ul>
-<li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).</li>
-<li> <a href='/resend'> Resend your account login link</a></li>
+    <li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>)</li>
+    <li> <a href='/resend'> Resend your account login link</a></li>
 </ul>
 {% endif %}
 {% endblock %}

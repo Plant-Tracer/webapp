@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<script type="text/javascript" charset="utf8" src="static/analyze.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
+{% endblock %}
+
+
+{% block body %}
+
+<div id='message' class='alert'><b>{{message}}</b></div>
+
+<h1>Movie Frame Annotation</h1>
+This section of the web page frames from the movie, each one
+annotated.
+
+<style>
+.float-container {
+    padding: 2px;
+    border: 2px solid red;
+}
+
+.float-movie {
+    float: left;
+    padding: 2px;
+  }
+
+.float-controls {
+    float: left;
+    padding: 2px;
+  }
+</style>
+
+<h2 id='firsth2'>Movie Loading...</h2>
+
+<div id='template' >
+  <table class='float-container'>
+    <tr><td class='message'>Loading frame...</td></tr>
+    <tr>
+      <td> <canvas id="canvas-id" width='320' height='240'> </canvas><br>
+        <form>
+          <label for="zoom">zoom:</label>
+          <select id="zoom-id" name="zoom" class='zoom'>
+            <option value="100">100%</option>
+            <option value="150">150%</option>
+            <option value="200">200%</option>
+            <option value="300">300%</option>
+          </select>
+        </form>
+      </td>
+      <td>
+        <table class="pure-table pure-table-horizontal pure-table-striped">
+          <thead>
+            <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th></tr>
+          </thead>
+          <tbody class='marker_table_body'>
+          </tbody>
+        </table>
+        <hr>
+        <form class='pure-form pure-form-aligned marker_form'>
+          <fieldset>
+            <legend>Add a marker to track a point</legend>
+
+            <div class='pure-control-group'>
+              <label for='marker-name'>Name:</label>
+              <input class='marker_name_input' placeholder='Marker name' size='20' />
+              <input class='add_marker_button pure-button pure-button-primary' type='button' value='add marker' disabled/>
+            </div>
+
+            <div class='pure-control-group'>
+              <label> </label>
+              <label class='add_marker_status'></label>
+            </div>
+
+            <div class='pure-control-group'>
+              <label></label>
+              <input class='track_next_frame_button pure-button pure-button-primary' type='button' value='track next frame'/>
+            </div>
+          </fieldset>
+        </form>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<script>
+var movie_id={{movie_id}};
+$( document ).ready( function() {
+    analyze_movie();
+});
+</script>
+{% endblock %}

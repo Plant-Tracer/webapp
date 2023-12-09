@@ -1,3 +1,4 @@
+Twisted
 Pillow
 WebTest
 boddle
@@ -14,6 +15,9 @@ pymysql
 pytest
 pytest-cov
 pytest-env
+pytest-html>=4.0.2
+pytest-mock
 requests
 validate_email_address
 aiosmtplib
+tabulate

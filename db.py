@@ -10,12 +10,14 @@ import logging
 import json
 import sys
 import copy
+from typing import Optional
 #import inspect
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import DBREADER_BASH_PATH, DBWRITER_BASH_PATH, TEMPLATE_DIR, DBCREDENTIALS_PATH, BOTTLE_APP_INI_PATH
+from paths import TEMPLATE_DIR,ROOT_DIR
+from constants import C
 
 from auth import get_user_api_key, get_user_ipaddr
 from lib.ctools import dbfile
@@ -47,34 +49,29 @@ MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
 
 @functools.cache
+def credentials_file():
+    if C.DBCREDENTIALS_PATH in os.environ:
+        return os.environ[C.DBCREDENTIALS_PATH]
+    else:
+        return os.path.join(ROOT_DIR, C.CREDENTIALS_INI)
+
+
+@functools.cache
 def get_dbreader():
     """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the DBCREDENTIALS file the DBWRITER_BASH_PATH if it exists.
-    2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
-    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbreader] section of the file etc/credentials.ini
     """
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
-        logging.info("authentication from %s", DBCREDENTIALS_PATH)
-        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbreader')
-    fname = DBREADER_BASH_PATH if os.path.exists(DBREADER_BASH_PATH) else None
-    logging.info("authentication from %s", fname)
-    return dbfile.DBMySQLAuth.FromBashEnvFile(fname)
+    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbreader')
 
 
 @functools.cache
 def get_dbwriter():
     """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the DBCREDENTIALS file the DBWRITER_BASH_PATH if it exists.
-    2 - 'export VAR=VALUE' from the DBWRITER_BASH_PATH if it exists.
-    3 - From the environment variables MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbwriter] section of the file etc/credentials.ini
     """
-
-    if DBCREDENTIALS_PATH is not None and os.path.exists(BOTTLE_APP_INI_PATH):
-        return dbfile.DBMySQLAuth.FromConfigFile(DBCREDENTIALS_PATH, 'dbwriter')
-
-    fname = DBWRITER_BASH_PATH if os.path.exists(DBWRITER_BASH_PATH) else None
-    return dbfile.DBMySQLAuth.FromBashEnvFile(fname)
-
+    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbwriter')
 
 ################################################################
 # Logging
@@ -108,13 +105,11 @@ def logit(*, func_name, func_args, func_return):
         func_return = json.dumps(func_return, default=str)
 
     if len(func_return) > MAX_FUNC_RETURN_LOG:
-        func_return = json.dumps({'log_size':len(func_return), 'error':True})
+        func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
 
-    logging.debug("func_name=%s func_args=%s func_return=%s logging_policy=%s",
-                  func_name, func_args, func_return, logging_policy)
+    logging.debug("%s(%s) = %s ", func_name, func_args, func_return)
 
     if LOG_DB in logging_policy:
-        logging.debug("LOG_DB in logging_policy")
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """INSERT INTO logs (
                                 time_t,
@@ -251,7 +246,7 @@ def delete_user(email):
 
 @log
 def register_email(*, email, name, course_key=None, course_id=None):
-    """Register email for a given course
+    """Register email for a given course. Does not send the links.
     :param: email - user email
     :param: course_key - the key
     :return: dictionary of {'user_id':user_id} for user who is registered.
@@ -271,7 +266,9 @@ def register_email(*, email, name, course_key=None, course_id=None):
         course_id = res[0][0]
 
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE email=%s""",
+                               """INSERT INTO users (email, primary_course_id, name)
+                               VALUES (%s, %s, %s)
+                               ON DUPLICATE KEY UPDATE email=%s""",
                                (email, course_id, name, email))
     return {'user_id':user_id,'course_id':course_id}
 
@@ -288,22 +285,25 @@ def send_links(*, email, planttracer_endpoint):
         msg_env = NativeEnvironment().from_string(f.read())
     new_api_key = make_new_api_key(email=email)
 
-    if new_api_key:
-        msg = msg_env.render(to_addrs=",".join([email]),
-                             from_addr=PROJECT_EMAIL,
-                             planttracer_endpoint=planttracer_endpoint,
-                             api_key=new_api_key)
+    if not new_api_key:
+        logging.info("not in database: %s",email)
+        return
+    logging.info("sending new link to %s",email)
+    msg = msg_env.render(to_addrs=",".join([email]),
+                         from_addr=PROJECT_EMAIL,
+                         planttracer_endpoint=planttracer_endpoint,
+                         api_key=new_api_key)
 
-        DRY_RUN = False
-        SMTP_DEBUG = "No"
-        smtp_config = mailer.smtp_config_from_environ()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg
-                            )
+    DRY_RUN = False
+    SMTP_DEBUG = "No"
+    smtp_config = mailer.smtp_config_from_environ()
+    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    mailer.send_message(from_addr=PROJECT_EMAIL,
+                        to_addrs=TO_ADDRS,
+                        smtp_config=smtp_config,
+                        dry_run=DRY_RUN,
+                        msg=msg
+                        )
 
 ################ API KEY ################
 
@@ -462,20 +462,22 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie(*, movie_id):
+def get_movie_data(*, movie_id):
     """Returns the movie contents. Does no checking"""
+    logging.debug("movie_id=%s",movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))[0][0]
 
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
-    cmd = """SELECT * from movies WHERE
-                (user_id=%s OR
-                 course_id=(select primary_course_id from users where id=%s) OR
-                 course_id in (select course_id from admins where user_id=%s))"""
-    params = [user_id, user_id, user_id]
+    cmd = """SELECT *,id as movie_id from movies WHERE
+                ((user_id=%s) OR
+                (%s=0) OR
+                (course_id=(select primary_course_id from users where id=%s)) OR
+                (course_id in (select course_id from admins where user_id=%s))) """
+    params = [user_id, user_id, user_id, user_id]
     if movie_id:
-        cmd += " AND movie_id=%s"
+        cmd += " AND movies.id=%s"
         params.append(movie_id)
     return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
 
@@ -492,14 +494,49 @@ def can_access_movie(*, user_id, movie_id):
         (movie_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
+@log
+def can_access_frame(*, user_id, frame_id):
+    """Return if the user is allowed to access a specific frame"""
+    res = dbfile.DBMySQL.csfr(
+        get_dbreader(),
+        """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
+        (user_id=%s OR
+        course_id=(select primary_course_id from users where id=%s) OR
+        course_id in (select course_id from admins where user_id=%s))""",
+        (frame_id, user_id, user_id, user_id))
+    return res[0][0] > 0
+
+@log
+def movie_frames_info(*,movie_id):
+    """Gets information about movie frames"""
+    ret = {}
+    ret['count'] = dbfile.DBMySQL.csfr(
+        get_dbreader(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
+    return ret
+
+@log
+def purge_movie_frames(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_analysis where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_trackpoints where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie_data(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
 
 @log
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+    purge_movie_frames(movie_id=movie_id)
+    purge_movie_data(movie_id=movie_id)
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
@@ -537,26 +574,231 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_data,
-                                    frame_data, frame_msec))
+                                   (movie_id, frame_msec, frame_data, frame_data, frame_msec))
     return {'frame_id':frame_id}
 
 
+
+def get_frame_annotations(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a record.
+    Within that record, 'annotations' is stored in the database as a JSON string, but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
+    """
+
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
+                                         frame_id,engine_id,annotations,engines.name as engine_name,
+                                         engines.version AS engine_version FROM movie_frame_analysis
+                               LEFT JOIN engines ON engine_id=engines.id
+                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
+                               (frame_id,),
+                               asDicts=True)
+    # Now go through every annotations cell and decode the object
+    for r in ret:
+        r['annotations'] = json.loads(r['annotations'])
+    return ret
+
+def get_frame_trackpoints(*, frame_id):
+    """Returns a list of dictionaries where each dictonary represents a trackpoint.
+    """
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               """
+                               SELECT id as movie_frame_trackpoints_id,
+                                      frame_id,x,y,label FROM movie_frame_trackpoints
+                               WHERE frame_id=%s""",
+                               (frame_id,),
+                               asDicts=True)
+
+def get_frame_id(*, frame_id, get_annotations=False, get_trackpoints=False):
+    """Get a frame by ID. Returns the frame from the movie_frames database as a dictionary.
+    Optionally returns two additional fields = ['annotations'] with the annotations and ['trackpoints'] with the trackpoints.
+    :param: frame_id - the frame to get
+    :param: get_annotations - return anotations in the 'annotations' slot
+    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
+    """
+    ret = dbfile.DBMySQL.csfr(get_dbreader(),
+                              "SELECT *,id as frame_id from movie_frames where id=%s",
+                              (frame_id,),
+                              asDicts=True)
+    if len(ret)!=1:
+        return None
+    row = ret[0]
+    if get_annotations:
+        row['annotations'] = get_frame_annotations(frame_id=frame_id)
+    if get_trackpoints:
+        row['trackpoints'] = get_frame_trackpoints(frame_id=frame_id)
+    return row
+
+def get_frame(*, movie_id, frame_msec, msec_delta):
+    """Get a frame by movie_id and offset. Don't log this to prevent blowing up.
+    :param: movie_id - the movie_id wanted
+    :param: frame_msec - the frame we want
+    :param: msec_delta - offset from the frame we want.
+                         Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
+    """
+    if msec_delta==0:
+        delta = "frame_msec = %s "
+    elif msec_delta>0:
+        delta = "frame_msec > %s order by frame_msec "
+    else:
+        delta = "frame_msec < %s order by frame_msec DESC "
+    cmd = f"""SELECT movie_id, frame_msec, frame_data, id as frame_id
+                              FROM movie_frames
+                              WHERE movie_id=%s and {delta} LIMIT 1"""
+    logging.debug("cmd = %s",cmd)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, (movie_id,frame_msec), asDicts=True)
+    if len(ret)>0:
+        return ret[0]
+    return None
+
+def get_analysis_engine_id(*, engine_name, engine_version):
+    """Create an analysis engine if it does not exist, and return the engine_id"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO engines
+                        (`name`,version) VALUES (%s,%s)
+                        ON DUPLICATE KEY UPDATE name=%s""",
+                        (engine_name,engine_version,engine_name))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT id from engines
+                               WHERE `name`=%s and version=%s""",
+                               (engine_name,engine_version))[0][0]
+
+def delete_analysis_engine_id(*, engine_id):
+    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "DELETE from engines where id=%s",(engine_id,))
+
+def encode_json(d):
+    """Given json data, encode it as base64 and return as an SQL
+    statement that processes it. We use this as a way of quoting a
+    JSON object that is then inserted into the database. (Other approaches for quoting failed.)"""
+    djson = json.dumps(d)
+    dlen  = len(djson)
+    return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
+
+def put_frame_annotations(*,
+                       frame_id:int,
+                       annotations:Optional[dict | list],
+                       engine_id:Optional[int] =None,
+                       engine_name:Optional[str]=None,
+                       engine_version:Optional[str]=None, ):
+    """
+    :param: frame_id - integer with frame id
+    :param: annotations - a dictionary that will be escaped
+    :param: engine_id - engine_id to use
+    :param: engine_name - string of engine to use; create the engine_id if it doesn't exist
+    :param: engine_version - string of version to use.
+    """
+
+    if (engine_id is None) and ((engine_name is None) or (engine_version is None)):
+        raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
+    if (engine_name is None) and (engine_id is None):
+        raise RuntimeError("if engine_name is None, then engine_id must be provided.")
+    if (engine_id is not None) and (engine_name is not None):
+        raise RuntimeError("Both engine_name and engine_id may not be provided.")
+
+    # Get the engine_id if only engine_name is provided
+    if engine_id is None:
+        engine_id = get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
+
+    if (not isinstance(annotations,dict)) and (not isinstance(annotations,list)):
+        raise ValueError(f"annotations is type {type(annotations)}, should be type dict or list")
+
+    ea = encode_json(annotations)
+
+    #
+    # We use base64 encoding to get by the quoting problems.
+    # This means we need a format string, rather than a prepared statement.
+    # The int() and the ea() provide sufficient protection.
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        f"""INSERT INTO movie_frame_analysis
+                        (frame_id, engine_id, annotations)
+                        VALUES ({int(frame_id)},{int(engine_id)},{ea})
+                        ON DUPLICATE KEY UPDATE
+                        annotations={ea} """)
+
+def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+    """
+    :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
+    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    """
+    vals = []
+    for tp in trackpoints:
+        if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
+            raise KeyError(f'trackpoints element {tp} missing x, y or label')
+        vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
+    args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
+    dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
+    if vals:
+        cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
+        logging.debug("cmd=%s",cmd)
+        logging.debug("args=%s  len=%s",args,len(args))
+        dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
+
+
+def delete_frame_analysis(*, frame_id=None, engine_id=None):
+    """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
+    if (frame_id is None) and (engine_id is None):
+        raise RuntimeError("frame_id and/or engine_id must not be None")
+
+    cmd = "DELETE FROM movie_frame_analysis WHERE "
+    args = []
+    if frame_id:
+        cmd += "frame_id=%s "
+        args.append(frame_id)
+    if frame_id and engine_id:
+        cmd += " AND "
+    if engine_id:
+        cmd += " engine_id=%s"
+        args.append(engine_id)
+    dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
+
+    if frame_id is not None:
+        cmd = "DELETE FROM movie_trackpoints WHERE frame_id=%s"
+        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [frame_id,])
+
+
+def delete_analysis_engine(*, engine_name, version=None, recursive=None):
+    """Delete the analysis engine.
+    :param: engine_name - the engine to delete
+    :param: version - the version number to delete. If None, delete all versions.
+    :param: recursive - if True, delete all of the data that is tagged with this engine
+    """
+    args = [engine_name]
+    where = "name=%s "
+    if version:
+        cmd += "AND version=%s "
+        args.append(version)
+    if recursive:
+        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_analysis where engine_id in (SELECT id from engines where {where})",args)
+        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_frame_analysis where engine_id in (SELECT id from engines where {where})",args)
+
+    dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from engines where {where}",args)
+
+
 # Don't log this; we run list_movies every time the page is refreshed
-def list_movies(user_id):
+def list_movies(user_id, no_frames=False):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
+    :param: user_id - only list movies visible to user_id (0 for all movies)
+    :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
-                                          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
-                                FROM movies LEFT JOIN users ON movies.user_id = users.id
-                                WHERE (user_id=%s)
-                                OR
-                                (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
-                                OR
-                                (course_id in (SELECT course_id FROM admins WHERE user_id=%s))""",
-                              (user_id, user_id, user_id), asDicts=True)
+    cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
+          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
+          FROM movies LEFT JOIN users ON movies.user_id = users.id
+          WHERE
+          ((user_id=%s)
+            OR (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
+            OR (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
+            OR (%s=0)
+          )
+          """
+    args = [user_id, user_id, user_id, user_id]
+
+    if no_frames:
+        cmd += "AND (movies.id not in (select distinct movie_id from movie_frames)) "
+    cmd += " ORDER BY movies.id "
+
+    res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     return res
 
 ###

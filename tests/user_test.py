@@ -1,5 +1,5 @@
 """
-Test the various functions in the database involving user creation and movie creation
+Test the various functions in the database involving user creation.
 """
 
 from boddle import boddle
@@ -13,16 +13,15 @@ import base64
 import time
 import bottle
 import copy
-
+import hashlib
 from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 import db
+import movietool
 import bottle_app
 import ctools.dbfile as dbfile
-
-MYDIR = dirname(abspath(__file__))
 
 MAX_ENROLLMENT = 10
 
@@ -30,8 +29,6 @@ TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
 TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 TEST_ADMIN_NAME = 'Test User Name'
-
-MOVIE_FILENAME = os.path.join(MYDIR, "data", "2019-07-31 plantmovie.mov")
 
 # keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
@@ -43,7 +40,12 @@ USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
+<<<<<<< HEAD
 ENGINE_ID = 'engine_id'
+=======
+DBREADER = 'dbreader'
+DBWRITER = 'dbwriter'
+>>>>>>> origin/main
 
 ################################################################
 
@@ -52,9 +54,9 @@ def new_course():
     """Fixture to create a new course and then delete it.
     New course creates a new course admin and a new user for it"""
 
-    course_key = str(uuid.uuid4())[0:4]
-    admin_email = TEST_ADMIN_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:4]+'@')
-    course_name = course_key + "course name"
+    course_key = 'test-'+str(uuid.uuid4())[0:32]
+    admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
+    course_name = f"test-{course_key} course name"
 
     ct = db.create_course(course_key=course_key,
                           course_name=course_name,
@@ -68,7 +70,9 @@ def new_course():
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
            ADMIN_EMAIL:admin_email,
-           ADMIN_ID:admin_id
+           ADMIN_ID:admin_id,
+           DBREADER:db.get_dbreader(),
+           DBWRITER:db.get_dbwriter()
            }
     db.remove_course_admin(email=admin_email, course_key=course_key)
     db.delete_user(email=admin_email)
@@ -82,7 +86,7 @@ def new_user(new_course):
     """
     cfg = copy.copy(new_course)
 
-    user_email = TEST_USER_EMAIL.replace('@', '+'+str(uuid.uuid4())[0:6]+'@')
+    user_email = TEST_USER_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:6]+'@')
     user_id = db.register_email(email=user_email,
                                 course_key=cfg[COURSE_KEY],
                                 name=TEST_USER_NAME)['user_id']
@@ -105,6 +109,7 @@ def api_key(new_user):
     """Simple fixture that just returns a valid api_key"""
     yield new_user[API_KEY]
 
+<<<<<<< HEAD
 
 @pytest.fixture
 def new_movie(new_user):
@@ -162,12 +167,11 @@ def new_engine(new_movie):
     yield cfg
     db.delete_engine(engine_id=engine_id)
 
+=======
+>>>>>>> origin/main
 ################################################################
 ## fixture tests
 ################################################################
-
-
-
 
 def test_new_course(new_course):
     cfg = copy.copy(new_course)
@@ -189,6 +193,7 @@ def test_new_user(new_user):
     assert 'admin' in ret2
     assert 'courses' in ret3
 
+<<<<<<< HEAD
 
 def test_movie_upload(new_movie):
     """Create a new user, upload the movie, delete the movie, and shut down"""
@@ -319,6 +324,10 @@ def test_new_movie_analysis(new_engine):
 
 def test_get_logs():
     """Incrementally test each part of the get_logs functions"""
+=======
+def test_get_logs(new_user):
+    """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
+>>>>>>> origin/main
     dbreader = db.get_dbreader()
     for security in [False,True]:
         logging.info("security=%s",security)
@@ -329,6 +338,14 @@ def test_get_logs():
         db.get_logs( user_id=0, movie_id = 0, security=security)
         db.get_logs( user_id=0, log_user_id = 0, security=security)
         db.get_logs( user_id=0, ipaddr = "", security=security)
+
+    api_key = new_user[API_KEY]
+    user_id   = new_user['user_id']
+    with boddle(params={'api_key': api_key, 'user_id':user_id}):
+        res = bottle_app.api_get_logs()
+
+    # Turns out that there are no logs with this user, since the scaffolding calls register_email
+    # for the new_user with a NULL user_id....
 
 def test_course_list(new_user):
     cfg        = copy.copy(new_user)
@@ -401,17 +418,3 @@ def test_log_search_user(new_user):
 
     # We should have nothing with this IP address
     assert(len(db.get_logs( user_id=user_id, ipaddr="0.0.0.0"))==0)
-
-def test_log_search_movie(new_movie):
-    cfg        = copy.copy(new_movie)
-    api_key    = cfg[API_KEY]
-    movie_id   = cfg[MOVIE_ID]
-    movie_title= cfg[MOVIE_TITLE]
-
-    dbreader = db.get_dbreader()
-    res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
-    user_id = res[0][0]
-    res = db.get_logs( user_id=user_id, movie_id = movie_id)
-    logging.info("log entries for movie:")
-    for r in res:
-        logging.info("%s",r)

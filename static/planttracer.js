@@ -29,8 +29,8 @@ function register_func() {
     }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
     $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
-        .done(function(data) {
-            console.log("done data=",data);
+        .done( function(data) {
+            console.log("register data=",data);
             if (data.error){
                 $('#message').html(`<b>Error: ${data.message}`);
             } else {
@@ -157,7 +157,7 @@ function play_clicked( e ) {
     console.log('play_clicked=',e);
     const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid');
-    const url = `/api/get-movie?api_key=${api_key}&movie_id=${movie_id}`;
+    const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     var tr    = $(`#tr-${rowid}`).show();
     var td    = $(`#td-${rowid}`).show();
     var video = $(`#video-${rowid}`).show()
@@ -175,6 +175,11 @@ function hide_clicked( e ) {
     var tr    = $(`#tr-${rowid}`).hide();
     var td    = $(`#td-${rowid}`).hide();
     var video = $(`#video-${rowid}`).hide()
+}
+
+function analyze_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
+    window.location = `/analyze?movie_id=${movie_id}`;
 }
 
 ////////////////
@@ -327,8 +332,12 @@ function list_movies_data( movies ) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
                 tid += 1;
-                return `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>` +
-                    `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
+                // check to see if this is editable;
+                if (admin || user_id == m.user_id){
+                    r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
+                }
+                return r;
             }
             // This products the HTML for each <td> that has a checkbox
             function make_td_checkbox(property, value) {
@@ -362,14 +371,15 @@ function list_movies_data( movies ) {
             }
 
             var movieDate = new Date(m.date_uploaded * 1000);
-            var play      = `<input class='play' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
+            var analyze   = `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             var you       = (m.user_id == user_id) ? "you" : "";
 
             rows = `<tr class='${you}'>`
-                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} </td> <td> ${up_down} </td>`
-                + make_td_text(      "title", m.title) + make_td_text( "description", m.description);
+                + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} ${analyze} </td> <td> ${up_down} </td>`
+                + make_td_text( "title", m.title) + make_td_text( "description", m.description);
 
             rows += "<td>";
             rows += "Status: ";
@@ -380,6 +390,8 @@ function list_movies_data( movies ) {
             }
             rows += "<br/>";
 
+            // below, note that 'admin' is set by the page before this runs
+
             if (m.deleted) {
                 if (which==DELETED){
                     // Do we create an undelete delete button?
@@ -387,7 +399,7 @@ function list_movies_data( movies ) {
                 }
             } else {
                 // Do we create an unpublish button?
-                if ((m.published) && ((which==PUBLISHED || which==COURSE))){
+                if ((m.published) && ((which==PUBLISHED || which==COURSE)) && (m.user_id==user_id || admin)){
                     rows += make_action_button( UNPUBLISH_BUTTON );
                 }
                 // Do we create a publish button?
@@ -403,10 +415,10 @@ function list_movies_data( movies ) {
 
             // Now make the player row
             rows += `<tr    class='movie_player' id='tr-${rowid}'> `
-                + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
-                + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
-                + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
-                + `</tr>\n`;
+                  + `<td    class='movie_player' id='td-${rowid}' colspan='6' >`
+                  + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
+                  + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
+                  + `</tr>\n`;
             return rows;
         }
 

@@ -1,3 +1,8 @@
+"""
+Tests for the application
+"""
+
+
 import pytest
 import sys
 import os
@@ -15,10 +20,11 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import STATIC_DIR
+from paths import STATIC_DIR,TEST_DATA_DIR
 import bottle_app
 
-from user_test import new_course,new_user,new_movie,API_KEY
+from user_test import new_course,new_user,API_KEY
+from movie_test import new_movie
 
 def test_version():
     # With templates, res is just a string
@@ -31,8 +37,37 @@ def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
-        assert open(os.path.join(STATIC_DIR, 'test.txt'),
-                    'rb').read() == res.body.read()
+        assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == res.body.read()
+
+
+def test_icon():
+    with boddle(params={}):
+        res = bottle_app.favicon()
+    assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
+
+#
+# Test various error conditions
+
+def test_error():
+    """Make sure authentication errors result in the session being expired and the cookie being cleared."""
+    with boddle(params={}):
+        res = bottle_app.func_error()
+    assert "Session expired - You have been logged out" in res
+    assert ('Set-Cookie: api_key=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+            in str(bottle.response))
+
+
+# Note: mocker magically works if pytest-mock is installed
+def test_api_key_null(mocker):
+    mocker.patch('auth.get_user_api_key', return_value=None)
+    with pytest.raises(bottle.HTTPResponse) as e:
+        with boddle(params={}):
+            res = bottle_app.func_list() # throws bottle.HTTPResponse
+        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
+
+    with pytest.raises(bottle.HTTPResponse) as e:
+        bottle_app.get_user_dict() # throws bottle.HTTPResponse
+        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
 
 ################################################################

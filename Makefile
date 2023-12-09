@@ -27,32 +27,39 @@ pylint:
 flake8:
 	flake8 $(PYLINT_FILES)
 
+#
+# In the tests below, we always test the database connectivity first
+# It makes no sense to run the tests otherwise
 pytest:
-	make launch-local-mail
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=INFO
 
 pytest-debug:
-	make launch-local-mail
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
 
 pytest-quiet:
-	make launch-local-mail
 	make touch
+	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/actions_test.ini
-	cat etc/actions_test.ini
+	cat etc/github_actions_mysql_rootconfig.ini
+	@echo Creating local database and writing results to etc/credentials.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/credentials.ini
+	cat etc/credentials.ini
 
 remove_localdb:
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/actions_test.ini
-	/bin/rm -f etc/actions_test.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
+	/bin/rm -f etc/credentials.ini
 
 coverage:
-	make launch-local-mail
-	$(PYTHON) -m pip install pytest pytest_cov
+	$(PYTHON) -m pip install codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
@@ -61,21 +68,6 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
-################################################################
-## Local mail server
-
-LOCALMAIL_PID=twistd.pid
-LOCALMAIL_MBOX=/tmp/localmail.mbox
-kill-local-mail:
-	if [ -r $(LOCALMAIL_PID) ]; then echo kill -9 `cat $(LOCALMAIL_PID)` ; kill -9 `cat $(LOCALMAIL_PID)` ; /bin/rm -f $(LOCALMAIL_PID) ; fi
-	/bin/rm -f $(LOCALMAIL_MBOX)
-
-launch-local-mail:
-	make kill-local-mail
-	twistd localmail --imap 10001 --smtp 10002 --http 10003 --file $(LOCALMAIL_MBOX)
-
-dump-local-mail:
-	if [ -r $(LOCALMAIL_MBOX) ]; then echo == BEGIN EMAIL TRANSCRIPT == ; cat $(LOCALMAIL_MBOX) ; echo == END EMAIL TRANSCRIPT == ; fi
 
 ################################################################
 # Installations are used by the CI pipeline:
