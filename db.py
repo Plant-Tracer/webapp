@@ -48,6 +48,7 @@ LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
 
+@functools.cache
 def credentials_file():
     if C.DBCREDENTIALS_PATH in os.environ:
         return os.environ[C.DBCREDENTIALS_PATH]

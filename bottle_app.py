@@ -67,6 +67,7 @@ import numpy as np
 from paths import view, STATIC_DIR
 from constants import E,MIME,Engines
 import tracker
+import tests.dbreader_test
 
 __version__ = '0.0.1'
 
@@ -818,15 +819,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
     if args.dbcredentials:
-        if not os.path.exists(args.dbcredentials):
-            raise FileNotFoundError(args.dbcredentials)
-        paths.BOTTLE_APP_INI = args.dbcredentials
+        os.path.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+
+    # Now make sure that the credentials work
+    # We only do this with the standalone program
+    tests.dbreader_test.test_db_connection()
+
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
