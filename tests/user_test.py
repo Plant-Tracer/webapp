@@ -106,8 +106,6 @@ def api_key(new_user):
     """Simple fixture that just returns a valid api_key"""
     yield new_user[API_KEY]
 
-<<<<<<< HEAD
-
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it"""
