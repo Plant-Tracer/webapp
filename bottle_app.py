@@ -63,12 +63,12 @@ from lib.ctools import clogging
 import db
 import auth
 
-from paths import view, STATIC_DIR
+from paths import view, STATIC_DIR, TEST_DIR
 from constants import C,E,MIME
 import tracker
 
-sys.path.append(paths.TEST_DIR)
 
+sys.path.append(TEST_DIR)
 import dbreader_test
 
 __version__ = '0.0.1'
