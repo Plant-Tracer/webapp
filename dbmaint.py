@@ -7,10 +7,10 @@ import sys
 import os
 import configparser
 import subprocess
+import socket
 
 import uuid
 import pymysql
-import socket
 
 # pylint: disable=no-member
 
@@ -32,12 +32,12 @@ dbwriter = 'dbwriter'
 __version__ = '0.0.1'
 
 def hostnames():
-        hostname = socket.gethostname()
-        return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
+    hostname = socket.gethostname()
+    return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def clean(dbwriter):
+def clean():
     sizes = {}
-    d = dbfile.DBMySQL(auth)
+    d = dbfile.DBMySQL(db.get_dbwriter())
     c = d.cursor()
     c.execute('show tables')
     for (table,) in c:
@@ -56,12 +56,12 @@ def clean(dbwriter):
         print(cmd)
         c.execute(cmd)
     c.execute(f"delete from movie_frames where movie_id in {del_movies}")
-    c.execute(f"delete from movies where user_id in (select id from users where name like 'Test%')")
-    c.execute(f"delete from admins where course_id in (select id from courses where course_name like '%course name%')")
-    c.execute(f"delete from api_keys where user_id in (select id from users where name like 'Test%')")
-    c.execute(f"delete from users where name like 'Test%'")
-    c.execute(f"delete from courses where course_name like '%course name%'")
-    c.execute(f"delete from engines where name like 'engine %'")
+    c.execute( "delete from movies where user_id in (select id from users where name like 'Test%')")
+    c.execute( "delete from admins where course_id in (select id from courses where course_name like '%course name%')")
+    c.execute( "delete from api_keys where user_id in (select id from users where name like 'Test%')")
+    c.execute( "delete from users where name like 'Test%'")
+    c.execute( "delete from courses where course_name like '%course name%'")
+    c.execute( "delete from engines where name like 'engine %'")
 
 if __name__ == "__main__":
     import argparse
@@ -170,4 +170,4 @@ if __name__ == "__main__":
         d.execute(f'DROP DATABASE {args.dropdb}')
 
     if args.clean:
-        clean(dbwriter)
+        clean()
