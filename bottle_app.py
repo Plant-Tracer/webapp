@@ -63,13 +63,9 @@ from lib.ctools import clogging
 import db
 import auth
 
-from paths import view, STATIC_DIR, TEST_DIR
+from paths import view, STATIC_DIR
 from constants import C,E,MIME
 import tracker
-
-
-sys.path.append(TEST_DIR)
-import dbreader_test
 
 __version__ = '0.0.1'
 
@@ -836,6 +832,7 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
-    dbreader_test.test_db_connection()
+    from tests.dbreader_test import test_db_connection
+    test_db_connection()
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
