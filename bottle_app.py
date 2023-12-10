@@ -63,7 +63,7 @@ from lib.ctools import clogging
 import db
 import auth
 
-from paths import view, STATIC_DIR
+from paths import view, STATIC_DIR, ROOT_DIR
 from constants import C,E,MIME
 import tracker
 
@@ -832,6 +832,7 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
+    sys.path.append(ROOT_DIR)
     from tests.dbreader_test import test_db_connection
     test_db_connection()
 
