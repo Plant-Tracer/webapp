@@ -56,18 +56,20 @@ from validate_email_address import validate_email
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
 
-import db
-import paths
-import auth
+import numpy as np
 
 from lib.ctools import clogging
 
-import numpy as np
+import db
+import auth
 
 from paths import view, STATIC_DIR
-from constants import E,MIME,Engines
+from constants import C,E,MIME
 import tracker
-import tests.dbreader_test
+
+sys.path.append(paths.TEST_DIR)
+
+import dbreader_test
 
 __version__ = '0.0.1'
 
@@ -492,6 +494,8 @@ def get_frame_id():
     return E.INVALID_FRAME_ACCESS
 
 #pylint: disable=too-many-return-statements
+#pylint: disable=too-many-branches
+#pylint: disable=too-many-statements
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
@@ -522,7 +526,7 @@ def api_get_frame():
     get_annotations   = get_bool('get_annotations')
     get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
     engine_name    = get('engine_name')
-    engine_version = get('engine_version')
+    #engine_version = get('engine_version')
     user_data      = get('user_data')
 
     logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
@@ -614,6 +618,8 @@ def api_get_frame():
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
     return datetime_to_str(frame1)
 #pylint: enable=too-many-return-statements
+#pylint: enable=too-many-branches
+#pylint: enable=too-many-statements
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
@@ -648,7 +654,7 @@ def api_track_frame():
         if len(frames[data_name]) > MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
         if not tracker.is_jpeg(frames[data_name]):
-            return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
+            return {'error': True, 'message': f'magic.from_buffer({data_name})={magic.from_buffer(data_name,mime=True)} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
     point_array_in = get_json('point_array')
@@ -830,6 +836,6 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
-    tests.dbreader_test.test_db_connection()
+    dbreader_test.test_db_connection()
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
