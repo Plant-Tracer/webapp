@@ -12,6 +12,10 @@ Here is the simple user story for how a movie is uploaded and tracked.
    * `analyze.js` sends the trackpoints to the server with the `/api/put-frame-analysis` API call.
    * `analyze.js` displays `tracking...` to the user.
    * `analyze.js` runs the API call `/api/track-movie` which initiates server-side tracking from frame n=0.
+     - :param: api_key
+     - :param: movie_id
+     - :param: frame_start (frame number)  (trackpoints for this frame must be in the databse)
+     - :param:
 5. The `track-movie` API call does the following:
    * Runs `tracker.track_movie_from_db` which:
      - Creates a temporary file on the server file system for the movie.
