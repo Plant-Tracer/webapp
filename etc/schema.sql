@@ -88,7 +88,7 @@ DROP TABLE IF EXISTS `engines`;
 CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `version` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `version` varchar(256) COLLATE utf8mb4_general_ci DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
