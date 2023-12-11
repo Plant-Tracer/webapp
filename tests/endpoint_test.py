@@ -50,7 +50,10 @@ def http_endpoint():
     for want in ['server starting up', 'Listening on', 'Hit Ctrl-C to quit.']:
         line = p.stderr.readline()
         logging.info('%s', line)
-        assert want in line
+        if want not in line:
+            print("ERROR: line=%s",line,file=sys.stderr)
+            print("REMAINDER OF INPUT: %s",p.stderr.read(),file=sys.stderr)
+            raise RuntimeError("could not create http endpoint")
     http_endpoint_url = f'http://127.0.0.1:{port}'
     # Make sure it is working and retry up to 10 times
 
