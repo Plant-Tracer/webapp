@@ -808,14 +808,14 @@ def list_movies(user_id, no_frames=False):
 @log
 def create_new_movie_analysis(*, movie_id=None, engine_id=None, annotations=None):
     # TODO: validate movie_id?
-    if movie_id: 
+    if movie_id:
         movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                        """INSERT INTO movie_analysis (engine_id, annotations) VALUES (%s,%s)
                                         """,
                                        (engine_id, annotations))
 
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO movie_movie_analysis (movie_analysis_id, movie_id) VALUES (%s,%s)", 
+                            "INSERT INTO movie_movie_analysis (movie_analysis_id, movie_id) VALUES (%s,%s)",
                             (movie_analysis_id, movie_id))
         return {'movie_analysis_id': movie_analysis_id}
     else:
@@ -834,7 +834,7 @@ def delete_movie_analysis(movie_analysis_id=None):
 def create_new_engine(*, engine_name=None):
     if engine_name:
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO engine (name) VALUES (%s)
+                                   """INSERT INTO engines (name) VALUES (%s)
                                     """,
                                    ([engine_name]))
         res = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT id from engine where name=%s", (engine_name), asDicts=True)
