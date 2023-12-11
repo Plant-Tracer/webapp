@@ -44,6 +44,8 @@ ENGINE_ID = 'engine_id'
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
 
+from endpoint_test import TEST_MOVIE_FILENAME
+
 ################################################################
 
 @pytest.fixture
@@ -116,7 +118,7 @@ def new_movie(new_user):
 
     movie_title = 'test movie title ' + str(uuid.uuid4())
 
-    with open(MOVIE_FILENAME, "rb") as f:
+    with open(TEST_MOVIE_FILENAME, "rb") as f:
         movie_base64_data = base64.b64encode(f.read())
 
    # Try to uplaod the movie with an invalid key
