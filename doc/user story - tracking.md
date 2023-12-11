@@ -46,7 +46,9 @@ Here is the simple user story for how a movie is uploaded and tracked.
    - [ ] Clicking the button reloads the tracking system but starting with frame `frame_start`
 8. When the user is done, the user can click 'return to list' and go back to the list.  (There is no save button.)
 9. Now the user sees two movies - the original movie and the tracked movie.
-10. There is also a download button which downloads all of the trackpoints from the database as a CSV. The students will have to do the triangle math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
+10. There is also a download button which downloads all of the trackpoints from the database as a CSV.
+   - [ ] Implement a download button.
+   - [ ] The students will have to do the triangle math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
 
 
 Questions to be decided by team:
