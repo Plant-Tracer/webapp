@@ -766,7 +766,7 @@ def delete_analysis_engine(*, engine_name, version=None, recursive=None):
     args = [engine_name]
     where = "name=%s "
     if version:
-        cmd += "AND version=%s "
+        where += "AND version=%s "
         args.append(version)
     if recursive:
         dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_analysis where engine_id in (SELECT id from engines where {where})",args)
