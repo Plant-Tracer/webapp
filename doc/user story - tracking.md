@@ -21,7 +21,7 @@ Here is the simple user story for how a movie is uploaded and tracked.
    - [ ] `analyze.js` runs the API call `/api/track-movie` which initiates server-side tracking from frame n=0.
      - :param: api_key
      - :param: movie_id
-     - :param: frame_start (frame number)  (trackpoints for this frame must be in the databse)
+     - :param: frame_start (frame number)  (trackpoints for this frame must be in the database)
      - Possible return codes:
        - [ ] error True - Message - Only two ruler trackpoints may be specified
        - [ ] error True - Message - No plant trackpoints detected
@@ -38,15 +38,17 @@ Here is the simple user story for how a movie is uploaded and tracked.
      - [ ] Return OK to caller.
 6. When the tracking is done:
    - [ ] the `tracking...` is replaced with `movie tracked`
-   - [ ] The tracked movie appears underneath the original movie (UX principle: don't make unexpectec changes)
+   - [ ] The tracked movie appears underneath the original movie (UX principle: don't make unexpected changes)
    - [ ] A play button appears for the new movie.
 7. If the user notices that the tracking diverges from the video, they will be able to retrack from frame NN.
    - [ ] A text field 'frame #' is present.
-   - [ ] A button `anayze from frame #` is present.
+   - [ ] A button `analyze from frame #` is present.
    - [ ] Clicking the button reloads the tracking system but starting with frame `frame_start`
 8. When the user is done, the user can click 'return to list' and go back to the list.  (There is no save button.)
 9. Now the user sees two movies - the original movie and the tracked movie.
-10. There is also a download button which downloads all of the trackpoints from the database as a CSV. The students will have to do the triangel math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
+10. There is also a download button which downloads all of the trackpoints from the database as a CSV.
+   - [ ] Implement a download button.
+   - [ ] The students will have to do the triangle math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
 
 
 Questions to be decided by team:
