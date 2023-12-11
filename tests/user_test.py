@@ -22,6 +22,7 @@ import db
 import movietool
 import bottle_app
 import ctools.dbfile as dbfile
+from paths import TEST_DIR
 
 MAX_ENROLLMENT = 10
 
@@ -43,8 +44,7 @@ MOVIE_TITLE = 'movie_title'
 ENGINE_ID = 'engine_id'
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
-
-from endpoint_test import TEST_MOVIE_FILENAME
+TEST_MOVIE_FILENAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
 
 ################################################################
 

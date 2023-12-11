@@ -28,8 +28,7 @@ import movietool
 import bottle_app
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
-from endpoint_test import TEST_MOVIE_FILENAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
 
 @pytest.fixture

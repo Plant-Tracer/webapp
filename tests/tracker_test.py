@@ -30,9 +30,8 @@ from PIL import Image
 # get the first MOV
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
-from endpoint_test import TEST_MOVIE_FILENAME
 import movietool
 import tracker
 
