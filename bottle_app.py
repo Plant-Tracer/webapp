@@ -832,8 +832,11 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
-    sys.path.append(ROOT_DIR)
-    from tests.dbreader_test import test_db_connection
-    test_db_connection()
+    # the try/except is for when we run under a fixture, which messes up ROOT_DIR
+    try:
+        from tests.dbreader_test import test_db_connection
+        test_db_connection()
+    except ModuleNotFoundError:
+        pass
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
