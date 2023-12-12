@@ -21,3 +21,5 @@ requests
 validate_email_address
 aiosmtplib
 tabulate
+selenium
+pytest-selenium
