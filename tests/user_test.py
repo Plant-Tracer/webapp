@@ -158,11 +158,12 @@ def new_movie(new_user):
 def new_engine(new_movie):
     cfg = copy.copy(new_movie)
 
-    engine_name = 'STLK'
-    engine_id = db.create_new_engine(engine_name=engine_name)
+    engine_name = 'pytest-engine'
+    engine_version = 'VTest'
+    engine_id = db.get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
     cfg[ENGINE_ID] = engine_id
     yield cfg
-    db.delete_engine(engine_id=engine_id)
+    db.purge_engine(engine_id=engine_id)
 
 ################################################################
 ## fixture tests

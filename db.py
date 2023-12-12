@@ -806,48 +806,30 @@ def list_movies(user_id, no_frames=False):
 ###
 
 @log
-def create_new_movie_analysis(*, movie_id=None, engine_id=None, annotations=None):
-    # TODO: validate movie_id?
+def create_new_movie_analysis(*, movie_id, engine_id, annotations):
     if movie_id:
         movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                       """INSERT INTO movie_analysis (engine_id, annotations) VALUES (%s,%s)
-                                        """,
-                                       (engine_id, annotations))
-
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO movie_movie_analysis (movie_analysis_id, movie_id) VALUES (%s,%s)",
-                            (movie_analysis_id, movie_id))
+                                                """INSERT INTO movie_analysis (movie_id, engine_id, annotations) VALUES (%s,%s,%s)""",
+                                                (movie_id, engine_id, annotations))
         return {'movie_analysis_id': movie_analysis_id}
     else:
         return {'movie_analysis_id': None}
 
 @log
-def delete_movie_analysis(movie_analysis_id=None):
-    if movie_analysis_id is None:
-        return
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_movie_analysis WHERE movie_analysis_id=%s", ([movie_analysis_id]))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
+def delete_movie_analysis(*,movie_analysis_id):
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
 
 @log
-def create_new_engine(*, engine_name=None):
-    if engine_name:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO engines (name) VALUES (%s)
-                                    """,
-                                   ([engine_name]))
-        res = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT id from engine where name=%s", (engine_name), asDicts=True)
-        return res[0]["id"]
-    else:
-        return None
+def purge_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE engine_id=%s", ([engine_id]))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_analysis WHERE engine_id=%s", ([engine_id]))
+    delete_engine(engine_id=engine_id)
 
 @log
-def delete_engine(engine_id=None):
-    if engine_id is None:
-        return
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from engine WHERE id=%s", ([engine_id]))
+def delete_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from engines WHERE id=%s", ([engine_id]))
 
 ################################################################
 ## Logs
