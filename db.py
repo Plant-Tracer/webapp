@@ -801,6 +801,35 @@ def list_movies(user_id, no_frames=False):
     res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     return res
 
+###
+# Movie analysis
+###
+
+@log
+def create_new_movie_analysis(*, movie_id, engine_id, annotations):
+    if movie_id:
+        movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                                """INSERT INTO movie_analysis (movie_id, engine_id, annotations) VALUES (%s,%s,%s)""",
+                                                (movie_id, engine_id, annotations))
+        return {'movie_analysis_id': movie_analysis_id}
+    else:
+        return {'movie_analysis_id': None}
+
+@log
+def delete_movie_analysis(*,movie_analysis_id):
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
+
+@log
+def purge_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE engine_id=%s", ([engine_id]))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_analysis WHERE engine_id=%s", ([engine_id]))
+    delete_engine(engine_id=engine_id)
+
+@log
+def delete_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from engines WHERE id=%s", ([engine_id]))
 
 ################################################################
 ## Logs
