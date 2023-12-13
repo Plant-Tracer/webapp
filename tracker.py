@@ -36,7 +36,7 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
     :param: frame0 - cv2 image of the previous frame
     :param: frame1 - cv2 image of the current frame
     :param: trackpoints   - array of poins
-    takes a     returns the new positions.
+    :return: dict with point_array, status array, and error condition array
 
     """
     winSize=(15, 15)
@@ -100,14 +100,17 @@ def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
                         trackpoints=np.array(trackpoints,dtype=np.float32))
 
 
+
+RED = (0, 0, 255)
+BLACK = (0,0,0)
 def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     """
-    Summary - takes in a movie(cap) and returns annotatted movie
-    takes a annotated frame (marked_frame) that has the apex annotated
-    takes the control points (trackpoints)
-    initializes parameters to pass to track_frame
-    returns a list of points
-    TODO - What is movie? A filename? A movie?
+    Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
+    Draws frame numbers on each frame
+    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
+    :param: moviefile - an MP4 to track. CV2 cannot read movies from memory; this is a known problem.
+    :param: trackpoints - an array of (x,y) points to track.
+
     """
     if engine!=Engines.CV2:
         raise RuntimeError("This only runs with CV2")
@@ -135,24 +138,35 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
         tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)
         out.write(tracked_current_frame)
 
-    while ret:
+    # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
+    TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
+    TEXT_SCALE = 0.75
+    TEXT_THICKNESS = 2
+    TEXT = "0"
+
+
+    for frame_number in range(1_000_000):
         prev_frame = current_frame
         ret, current_frame = cap.read()
         if not ret:
             break
 
         ret = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=p0)
-        p0 = ret[POINT_ARRAY_OUT]
-        #, winSize=(15, 15), maxLevel=2, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+        p0  = ret[POINT_ARRAY_OUT]
         video_coordinates = p0.tolist()
 
         # use the points to annotate the colored frames. write to colored tracked video
         for point in p0:
             x, y = point.ravel()
-            tracked_current_frame = cv2.circle(current_frame,
-                                               (int(x), int(y)), 3, (0, 0, 255), -1)# pylint: disable=no-member
-            # Save the frame to the output video
-            out.write(tracked_current_frame)
+            cv2.circle(current_frame, (int(x), int(y)), 3, RED, -1) # pylint: disable=no-member
+
+        TEXT = str(frame_number)
+        WHITE = (255,255,255)
+        text_size, _ = cv2.getTextSize(TEXT, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
+        text_origin = ( 5, len(current_frame)-5)
+        cv2.rectangle(current_frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
+        cv2.putText(current_frame, TEXT, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
+        out.write(current_frame)
 
     cap.release()
     out.release()

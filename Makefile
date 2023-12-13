@@ -69,6 +69,11 @@ clean:
 	find . -name '*~' -exec rm {} \;
 
 
+tracker-demo:
+	/bin/rm -f outfile.mp4
+	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
+	open outfile.mp4
+
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:
