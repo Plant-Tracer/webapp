@@ -1,12 +1,15 @@
 Here is the simple user story for how a movie is uploaded and tracked.
 
+User Story
+=========
+
 1. User uploads a movie with the (existing) **upload** feature. Movie is uploaded as an MP4.  IMPLEMENTED
    - [ ]  If the user uploads a quicktime, convert it to an MP4 with ffpmeg: https://superuser.com/questions/1155186/convert-mov-video-to-mp4-with-ffmpeg.
 2. User clicks "analyze" on the movie list.  IMPLEMENTED
    * Screen clears and shows the first frame of the movie with the tools for adding and moving trackpoints.
    - [ ] `frame_start` is set to 0.
    - [ ] A text field with the frame number is shown.
-   - [ ] A new button `goto frame N` is available.
+   - [ ] A new button `goto frame N` is available.  We use frame number.
    - [ ] Requires update to get-frame API that gets frame N from the movie
    - [ ] Requires update to get-frame implementation to use Quicktime API to stream through the movie and choose the Nth frame.
 3. User identifies four points:
@@ -51,8 +54,27 @@ Here is the simple user story for how a movie is uploaded and tracked.
    - [ ] The students will have to do the triangle math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
 
 
-Questions to be decided by team:
+Note
+====
+
 
 1. Do we want to use frame numbers, or always use msec?
+   - frame number and msec are easy to calculate from each other, assuming a constant frame rate.
+   - If the frame rate is not constant, we need both.
+   - The original database of frames was to support frame uploading, not frame access.
+   - If we don't know the movie rate, then we only have frame number. So frame number should always be supported.
+
 2. Do we want to use movie time, or real time?
+   - We always use movie time, since we might not know real-time.
+
 3. If we are using real time, how do we get the scaling factor?
+
+
+
+Agenda:
+======
+- [ ] Implement /api/track-movie
+- [ ] Remove tracking code from get-frame and implement get-frame N code.
+- [ ] Implement updates to analyze.js for frame 0
+- [ ] Implement updates to analyze.js for frame N
+- [ ] Implement download of CSV file
