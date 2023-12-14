@@ -478,17 +478,6 @@ def api_new_frame():
     return E.INVALID_MOVIE_ACCESS
 
 
-@bottle.route('/api/get-frame-id', method=GET_POST)
-def get_frame_id():
-    """
-    get a frame using the frame_id.
-    Verify that the user has rights to frame_id and then return it. Minimal capabilities.
-    """
-    frame_id = get('frame_id')
-    if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        return  db.get_frame_id(frame_id=frame_id, get_annotations=get_bool('get_annotations'), get_trackpoints=get_bool('get_trackpoints'))
-    return E.INVALID_FRAME_ACCESS
-
 #pylint: disable=too-many-return-statements
 #pylint: disable=too-many-branches
 #pylint: disable=too-many-statements

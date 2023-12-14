@@ -144,7 +144,6 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     TEXT_THICKNESS = 2
     TEXT = "0"
 
-
     for frame_number in range(1_000_000):
         prev_frame = current_frame
         ret, current_frame = cap.read()
