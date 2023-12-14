@@ -581,7 +581,8 @@ def create_new_frame(*, movie_id, frame_msec, frame_data):
 
 def get_frame_annotations(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
-    Within that record, 'annotations' is stored in the database as a JSON string, but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
+    Within that record, 'annotations' is stored in the database as a JSON string,
+    but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
     """
 
     ret = dbfile.DBMySQL.csfr(get_dbreader(),

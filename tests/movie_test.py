@@ -262,8 +262,10 @@ def test_movie_extract(new_movie_uploaded):
 
     # Check to make sure get-frame-id works
     with boddle(params={"api_key": api_key,
-                        "frame_id": frame_id}):
-        ret = bottle_app.get_frame_id()
+                        "frame_id": frame_id,
+                        "format" : "json"
+                        }):
+        ret = bottle_app.api_get_frame()
     assert ret['frame_data']==res0['frame_data']
 
     # Create a random engine and upload two analysis for it

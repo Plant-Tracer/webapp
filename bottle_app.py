@@ -486,7 +486,8 @@ def api_get_frame():
     """
     Get a frame using search, optionally get analysis and perform tracking.
 
-    :param api_keuy:   authentication
+    :param api_key:   authentication
+    :param frame_id:   just get by frame_id
     :param movie_id:   movie
     :param frame_msec: the frame specified
     :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
@@ -503,6 +504,7 @@ def api_get_frame():
     """
     user_id    = get_user_id()
 
+    frame_id   = get_int('frame_id')
     movie_id   = get_int('movie_id')
     frame_msec = get_int('frame_msec',0 ) # location frame
     msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
@@ -518,6 +520,15 @@ def api_get_frame():
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
+
+
+    if movie_id is None and frame_id is not None:
+        if fmt != 'json':
+            return E.INVALID_FRAME_FORMAT
+        if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
+            return  db.get_frame_id(frame_id=frame_id, get_annotations=get_annotations, get_trackpoints=get_trackpoints)
+        return E.INVALID_FRAME_ACCESS
+
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
