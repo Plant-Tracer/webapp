@@ -88,7 +88,7 @@ DROP TABLE IF EXISTS `engines`;
 CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `version` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `version` varchar(256) COLLATE utf8mb4_general_ci DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -216,26 +216,6 @@ CREATE TABLE `movie_frames` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `i10` (`movie_id`,`frame_msec`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `movie_trackpoints`
---
-
-DROP TABLE IF EXISTS `movie_trackpoints`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `movie_trackpoints` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `frame_id` int NOT NULL,
-  `x` int NOT NULL,
-  `y` int NOT NULL,
-  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk1` (`frame_id`,`label`),
-  KEY `frame_id` (`frame_id`),
-  CONSTRAINT `movie_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
