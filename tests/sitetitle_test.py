@@ -14,7 +14,7 @@ import pytest_selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-PLANTTRACER_TITLE = 'Plant Tracer Plant Tracer'
+PLANTTRACER_TITLE = 'Plant Tracer'
 
 # test function illustrating the use of selenium package directly
 def test_sitetitle_just_selenium(http_endpoint):
