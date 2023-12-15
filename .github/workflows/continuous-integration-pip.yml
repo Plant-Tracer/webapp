@@ -43,10 +43,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: "create rootconfig.ini"
-        run: |
-          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --createroot='testrootpass'
-
       - name: "Configure ubuntu with ffmpeg"
         if: startsWith(matrix.os, 'ubuntu')
         uses: FedericoCarboni/setup-ffmpeg@v2
@@ -71,6 +67,10 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           make install-python-dependencies
+
+      - name: "create rootconfig.ini"
+        run: |
+          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --createroot='testrootpass'
 
       - name: Lint with pylint
         run: |
