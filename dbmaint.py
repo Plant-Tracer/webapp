@@ -76,8 +76,7 @@ if __name__ == "__main__":
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER are all set with a MySQL username that can issue the "CREATE DATABASE"command. Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
-    parser.add_argument(
-        "--writeconfig",  help="specify the config.ini file to write.")
+    parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
@@ -114,6 +113,7 @@ if __name__ == "__main__":
             d.create_schema(f.read())
 
         # Now grant on all addresses
+        print("Current interfaces and hostnames:")
         print("ifconfig -a:")
         subprocess.call(['ifconfig','-a'])
         print("Hostnames:",hostnames())
@@ -159,6 +159,7 @@ if __name__ == "__main__":
             cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
             cp[dbwriter][MYSQL_DATABASE] = args.createdb
             with open(args.writeconfig, 'w') as fp:
+                print("writing config to ",args.writeconfig)
                 cp.write(fp)
 
     if args.dropdb:
