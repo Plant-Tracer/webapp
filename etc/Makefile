@@ -14,6 +14,16 @@ database-dump.sql: Makefile ../Makefile
 	(source $$HOME/plant_dev.bash;mysqldump -h$$MYSQL_HOST -u$$MYSQL_USER -p$$MYSQL_PASSWORD --single-transaction --no-tablespaces $$MYSQL_DATABASE) > database-dump.sql
 	touch Makefile		# so we can repeat!
 
-ssh_priv_key:
+output-ssh_priv_key:
 	@echo here is the base64 encoded private key, for pasting into the GitHub secrets section
 	cat $$HOME/.ssh/id_ed25519 | openssl base64 -e
+
+switch-dreamhost:
+	/bin/rm -f credentials.ini
+	ln -s credentials-dreamhost.ini credentials.ini
+	ls -l *.ini
+
+switch-local:
+	/bin/rm -f credentials.ini
+	ln -s credentials-local.ini credentials.ini
+	ls -l *.ini

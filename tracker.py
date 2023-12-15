@@ -8,6 +8,7 @@ import argparse
 import tempfile
 import logging
 
+import db
 import magic
 import cv2
 import numpy as np
@@ -171,6 +172,32 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
     out.release()
     return video_coordinates
 
+
+def extract_frame(*, movie_id, frame_number, format):
+    """Download movie_id to a temporary file, find frame_number and return it in the request format.
+    """
+    with tempfile.NamedTemporaryFile(mode='ab') as tf:
+        data = db.get_movie_data(movie_id=movie_id)
+        tf.write(data)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+
+    # skip to frame_number (first frame is #0)
+    for fn in range(frame_number+1):
+        ret, frame = cap.read()
+        if not ret:
+            return None
+        if fn==frame_number:
+            if format=='CV2':
+                return frame
+            elif format=='jpeg':
+                with tempfile.NamedTemporaryFile(suffix='.jpg',mode='rwb') as tf:
+                    cv2.imwrite(tf.name, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                    tf.seek(0)
+                    return tf.read()
+            else:
+                raise ValueError("Invalid format: "+format)
+    raise RuntimeError("invalid frame_number")
 
 # The trackpoint is at (138,86) when the image is scaled to a width: 320 height: 240
 

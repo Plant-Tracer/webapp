@@ -24,7 +24,6 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
 import db
-import movietool
 import bottle_app
 
 # Get the fixtures from user_test
@@ -200,8 +199,18 @@ def test_movie_extract(new_movie_uploaded):
     # Before we start, movie_id should be a movie with no frames
     assert movie_id in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
 
-    frames = movietool.extract_frames(movie_id=movie_id, user_id=user_id)
-    assert frames>0
+    frame0 = tracker.extract_frame(movie_id = movie_id, frame_number=0, format='jpeg')
+    frame1 = tracker.extract_frame(movie_id = movie_id, frame_number=1, format='jpeg')
+    frame2 = tracker.extract_frame(movie_id = movie_id, frame_number=2, format='jpeg')
+
+    assert frame0 is not None
+    assert frame1 is not None
+    assert frame2 is not None
+    assert frame0 != frame1
+    assert frame1 != frame2
+    assert magic.from_buffer(frame0,mime=True)== MIME.JPEG
+    assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
+    assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
 
     # Now, it should not be in the list
     assert movie_id not in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
