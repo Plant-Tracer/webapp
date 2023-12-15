@@ -7,10 +7,10 @@ import sys
 import os
 import configparser
 import subprocess
+import socket
 
 import uuid
 import pymysql
-import socket
 
 # pylint: disable=no-member
 
@@ -32,12 +32,12 @@ dbwriter = 'dbwriter'
 __version__ = '0.0.1'
 
 def hostnames():
-        hostname = socket.gethostname()
-        return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
+    hostname = socket.gethostname()
+    return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def clean(dbwriter):
+def clean():
     sizes = {}
-    d = dbfile.DBMySQL(auth)
+    d = dbfile.DBMySQL(db.get_dbwriter())
     c = d.cursor()
     c.execute('show tables')
     for (table,) in c:
@@ -56,12 +56,12 @@ def clean(dbwriter):
         print(cmd)
         c.execute(cmd)
     c.execute(f"delete from movie_frames where movie_id in {del_movies}")
-    c.execute(f"delete from movies where user_id in (select id from users where name like 'Test%')")
-    c.execute(f"delete from admins where course_id in (select id from courses where course_name like '%course name%')")
-    c.execute(f"delete from api_keys where user_id in (select id from users where name like 'Test%')")
-    c.execute(f"delete from users where name like 'Test%'")
-    c.execute(f"delete from courses where course_name like '%course name%'")
-    c.execute(f"delete from engines where name like 'engine %'")
+    c.execute( "delete from movies where user_id in (select id from users where name like 'Test%')")
+    c.execute( "delete from admins where course_id in (select id from courses where course_name like '%course name%')")
+    c.execute( "delete from api_keys where user_id in (select id from users where name like 'Test%')")
+    c.execute( "delete from users where name like 'Test%'")
+    c.execute( "delete from courses where course_name like '%course name%'")
+    c.execute( "delete from engines where name like 'engine %'")
 
 if __name__ == "__main__":
     import argparse
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     required = parser.add_argument_group('required arguments')
 
     required.add_argument(
-        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
+        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument')
     parser.add_argument(
         "--sendlink", help="send link to the given email address, registering it if necessary.")
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
+    parser.add_argument("--createroot",help="create root config  with specified password")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -90,6 +91,23 @@ if __name__ == "__main__":
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
         sys.exit(0)
 
+    if args.writeconfig:
+        cp = configparser.ConfigParser()
+        cp.read(args.writeconfig)
+
+    if args.createroot:
+        if 'client' not in cp:
+            cp.add_section('client')
+        cp['client']['user']='root'
+        cp['client']['password']=args.createroot
+        cp['client']['host'] = 'localhost'
+        cp['client']['database'] = 'sys'
+        with open(args.writeconfig, 'w') as fp:
+            cp.write(fp)
+        print(args.writeconfig,"is written with a root configuration")
+        exit(0)
+
+    # The following all require a root config
     assert os.path.exists(args.rootconfig)
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
     try:
@@ -98,9 +116,7 @@ if __name__ == "__main__":
         print("Invalid auth: ", auth, file=sys.stderr)
         raise
 
-    if args.writeconfig:
-        cp = configparser.ConfigParser()
-        cp.read(args.writeconfig)
+
 
     if args.createdb:
         dbreader_user = 'dbreader_' + args.createdb
@@ -170,4 +186,4 @@ if __name__ == "__main__":
         d.execute(f'DROP DATABASE {args.dropdb}')
 
     if args.clean:
-        clean(dbwriter)
+        clean()

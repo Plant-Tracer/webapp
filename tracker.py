@@ -6,9 +6,9 @@ Implements blockmatching algorithm in OpenCV.
 import json
 import argparse
 import tempfile
-import magic
 import logging
 
+import magic
 import cv2
 import numpy as np
 from constants import Engines,MIME
@@ -22,6 +22,7 @@ def null_track_frame(*,frame0, frame1, trackpoints):
 
 
 class ConversionError(RuntimeError):
+    """Special error"""
     def __init__(self,msg):
         super().__init__(msg)
 

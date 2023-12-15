@@ -16,7 +16,6 @@ from os.path import abspath,dirname
 
 from tabulate import tabulate
 import cv2
-import numpy as np
 
 # pylint: disable=no-member
 
@@ -169,10 +168,9 @@ def extract_frames_cv2(*, movie_id, user_id):
         frame_msec = (ct * 1000) // fps
         frame_id = db.create_new_frame(movie_id=movie_id, frame_msec=frame_msec, frame_data=jpeg_data)
         t1 = time.time()
-        print("uploaded. frame_id=%s time to upload=%d" % (frame_id, t1-t0))
+        print(f"uploaded. frame_id={frame_id} time to upload={t1-t0}")
         logging.info("uploaded. frame_id=%s time to upload=%d", frame_id, t1-t0)
 
-    return ct
     with tempfile.TemporaryDirectory() as td:
         template = os.path.join(td, JPEG_TEMPLATE)
 

@@ -56,16 +56,15 @@ from validate_email_address import validate_email
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
 
-import db
-import paths
-import auth
+import numpy as np
 
 from lib.ctools import clogging
 
-import numpy as np
+import db
+import auth
 
-from paths import view, STATIC_DIR
-from constants import E,MIME,Engines
+from paths import view, STATIC_DIR, ROOT_DIR
+from constants import C,E,MIME
 import tracker
 
 __version__ = '0.0.1'
@@ -187,7 +186,7 @@ def get_user_id():
 # HTML Pages served with template system
 ################################################################
 
-def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
+def page_dict(title='', *, require_auth=False, logout=False):
     """Fill in data that goes to templates below and also set the cookie in a response
     :param: title - the title we should give the page
     :param: auth  - if true, the user must already be authenticated
@@ -491,6 +490,8 @@ def get_frame_id():
     return E.INVALID_FRAME_ACCESS
 
 #pylint: disable=too-many-return-statements
+#pylint: disable=too-many-branches
+#pylint: disable=too-many-statements
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
@@ -521,7 +522,7 @@ def api_get_frame():
     get_annotations   = get_bool('get_annotations')
     get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
     engine_name    = get('engine_name')
-    engine_version = get('engine_version')
+    #engine_version = get('engine_version')
     user_data      = get('user_data')
 
     logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
@@ -613,6 +614,8 @@ def api_get_frame():
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
     return datetime_to_str(frame1)
 #pylint: enable=too-many-return-statements
+#pylint: enable=too-many-branches
+#pylint: enable=too-many-statements
 
 @bottle.route('/api/track-frame', method='POST')
 def api_track_frame():
@@ -647,7 +650,7 @@ def api_track_frame():
         if len(frames[data_name]) > MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
         if not tracker.is_jpeg(frames[data_name]):
-            return {'error': True, 'message': f'magic.from_buffer({data_name})={mime_type} is not an allowable MIME type for frames'}
+            return {'error': True, 'message': f'magic.from_buffer({data_name})={magic.from_buffer(data_name,mime=True)} is not an allowable MIME type for frames'}
     # pylint: enable=unsupported-membership-test
 
     point_array_in = get_json('point_array')
@@ -716,7 +719,24 @@ def api_delete_movie():
 def api_list_movies():
     return {'error': False, 'movies': db.list_movies(get_user_id())}
 
+##
+# Movie analysis API
+#
+@bottle.route('/api/new-movie-analysis', method='POST')
+def api_new_movie_analysis():
+    """Creates a new movie analysis
+    :param api_key: the user's api_key
+    :param movie_id: The movie to associate this movie analysis with
+    :param engine_id: The nngine used to create the analyis
+    :param annotations: The movie analysis's annotations, that is, a JSON document containing analysis data
+    """
 
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=request.forms.get('movie_id'),
+                                   engine_id=request.forms.get('engine_id'),
+                                   annotations=request.forms.get(
+                                       'annotations')
+                                   )['movie_analysis_id']
+    return {'error': False, 'movie_analysis_id': movie_analysis_id}
 
 ##
 # Log API
@@ -818,15 +838,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
     if args.dbcredentials:
-        if not os.path.exists(args.dbcredentials):
-            raise FileNotFoundError(args.dbcredentials)
-        paths.BOTTLE_APP_INI = args.dbcredentials
+        os.path.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+
+    # Now make sure that the credentials work
+    # We only do this with the standalone program
+    # the try/except is for when we run under a fixture, which messes up ROOT_DIR
+    try:
+        from tests.dbreader_test import test_db_connection
+        test_db_connection()
+    except ModuleNotFoundError:
+        pass
+
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

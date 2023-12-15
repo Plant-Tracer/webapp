@@ -5,7 +5,6 @@
 # pylint: disable=unused-import
 from PIL import Image
 
-
 # pylint: disable=consider-using-f-string
 # pylint: disable=unused-argument
 def blocktrack(context, img):

@@ -27,7 +27,6 @@ from user_test import new_course, new_user, api_key
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-TEST_MOVIE_FILENAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
 SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
 SKIP_ENDPOINT_TEST = False
 
@@ -50,7 +49,10 @@ def http_endpoint():
     for want in ['server starting up', 'Listening on', 'Hit Ctrl-C to quit.']:
         line = p.stderr.readline()
         logging.info('%s', line)
-        assert want in line
+        if want not in line:
+            print("ERROR: line=%s",line,file=sys.stderr)
+            print("REMAINDER OF INPUT: %s",p.stderr.read(),file=sys.stderr)
+            raise RuntimeError("could not create http endpoint")
     http_endpoint_url = f'http://127.0.0.1:{port}'
     # Make sure it is working and retry up to 10 times
 
