@@ -19,6 +19,7 @@ BLACK = (0,0,0)
 TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_SCALE = 0.75
 TEXT_THICKNESS = 2
+TEXT_MARGIN = 5
 
 ## JPEG support
 
@@ -33,40 +34,63 @@ def is_jpeg(buffer):
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
-    :param: frame0 - cv2 image of the previous frame
-    :param: frame1 - cv2 image of the current frame
-    :param: trackpoints   - array of poins
-    :return: dict with point_array, status array, and error condition array
+    :param: frame0 - cv2 image of the previous frame in CV2 format
+    :param: frame1 - cv2 image of the current frame in CV2 format
+    :param: trackpoints  - array of trackpoints (dicts of x,y and label)
+    :return: array of trackpoints
 
     """
     winSize=(15, 15)
     maxLevel=2
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+    tpts = np.array([[pt['x'],pt['y']] for pt in trackpoints],dtype=np.float32)
+
     try:
         gray_frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
         gray_frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, trackpoints, None,
+        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, tpts, None,
                                                                       winSize=winSize, maxLevel=maxLevel, criteria=criteria)
+        trackpoints_out = []
+        for (i,pt) in enumerate(trackpoints):
+            if status_array[i]==1:
+                trackpoints_out.append({'x':point_array_out[i][0],
+                                        'y':point_array_out[i][1],
+                                        'status':int(status_array[i]),
+                                        'err':float(err[i]),
+                                        'label':pt['label']})
+        print("tpts=",tpts)
+        print("point_array_out=",point_array_out)
+        print("status_array=",status_array,"err=",err)
+        print("trackpoints_out=",trackpoints_out)
+        print("")
+
     except cv2.error:
-        point_array_out = []
-        status_array = []
-        err = []
+        trackpoints_out = []
 
-    return {POINT_ARRAY_OUT: point_array_out, 'status_array': status_array, 'err': err}
+    return trackpoints_out
 
-def cv2_label_frame(*, frame, trackpoints):
+def cv2_label_frame(*, frame, trackpoints, frame_label=None):
+    """
+    :param: frame - cv2 frame
+    :param: trackpoints - array of dicts
+    :param frame_label - if present, label for frame number (can be int or string)
+    """
+
+    width = len(frame)
+    height = len(frame[0])
+
     # use the points to annotate the colored frames. write to colored tracked video
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
     for point in trackpoints:
-        x, y = point.ravel()
-        cv2.circle(current_frame, (int(x), int(y)), 3, RED, -1) # pylint: disable=no-member
+        cv2.circle(frame, (int(point['x']), int(point['y'])), 3, RED, -1) # pylint: disable=no-member
 
-    text = str(frame_number)
-    WHITE = (255,255,255)
-    text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
-    text_origin = ( 5, len(current_frame)-5)
-    cv2.rectangle(current_frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
-    cv2.putText(current_frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
+    if frame_label is not None:
+        text = str(frame_label)
+        WHITE = (255,255,255)
+        text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
+        text_origin = ( TEXT_MARGIN, height-TEXT_MARGIN)
+        cv2.rectangle(frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
+        cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
 def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoints, moviefile_output):
@@ -83,8 +107,7 @@ def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoin
     if engine!=Engines.CV2:
         raise RuntimeError("This only runs with CV2")
 
-    video_coordinates = np.array(trackpoints)
-    p0  = trackpoints
+    points  = np.array([[pt['x'],pt['y']] for pt in input_trackpoints])
     cap = cv2.VideoCapture(moviefile_input)
     ret, current_frame = cap.read()
 
@@ -96,31 +119,24 @@ def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoin
     width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps    = cap.get(cv2.CAP_PROP_FPS)
-    print(f"width: {width} height: {height} fps: {fps}  p0:{p0}")
 
     # Create a VideoWriter object to save the output video
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(moviefile_output, fourcc, fps, (width, height))
 
-    # mark the current_frame with the initial trackpoints
-    for point in trackpoints:
-        x, y = point.ravel()
-        tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)
-        out.write(tracked_current_frame)
-
-
+    trackpoints = input_trackpoints
     for frame_number in range(1_000_000):
         prev_frame = current_frame
         ret, current_frame = cap.read()
         if not ret:
             break
 
-        ret = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=p0)
-        p0  = ret[POINT_ARRAY_OUT]
-        cv2_label_frame(frame=frame1, trackpoints=p0)
+        trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=trackpoints)
+        print("ret=",trackpoints)
+        cv2_label_frame(frame=current_frame, trackpoints=trackpoints, frame_label=frame_number)
 
         out.write(current_frame)
-        output_trackpoints.append(p0)
+        output_trackpoints.append(trackpoints)
 
     cap.release()
     out.release()
@@ -163,10 +179,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
-        "--points_to_track", default='[[138, 86]]', help="list of points to track as json 2D array.")
+        "--points_to_track", default='[{"x":138,"y":86,"label":"mypoint"}]', help="list of points to track as json 2D array.")
     parser.add_argument('--outfile',default='tracked_output.mp4')
     args = parser.parse_args()
-    tpts = json.loads(args.points_to_track)
-    trackpoints = np.array(tpts, dtype=np.float32)
-    print("args.points_to_track=",args.points_to_track,tpts,trackpoints)
-    track_movie(engine=args.engine, moviefile=args.moviefile, trackpoints=trackpoints, output_video_path=args.outfile)
+    trackpoints = json.loads(args.points_to_track)
+
+
+    res = track_movie(engine=args.engine, moviefile_input=args.moviefile, input_trackpoints=trackpoints, moviefile_output=args.outfile)
+    print("results:")
+    print(json.dumps(res,default=str,indent=4))

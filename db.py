@@ -569,15 +569,19 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
     return {'movie_id':movie_id}
 
 
+################################################################
+## frames
+################################################################
+
+
 # Don't log this; it will blow up the database when movies are updated
-def create_new_frame(*, movie_id, frame_msec, frame_data):
+def create_new_frame(*, movie_id, frame_number, frame_msec, frame_data):
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                    """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
                                        VALUES (%s,%s,%s)
                                        ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
                                    (movie_id, frame_msec, frame_data, frame_data, frame_msec))
     return {'frame_id':frame_id}
-
 
 
 def get_frame_annotations(*, frame_id):
@@ -624,7 +628,7 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=Non
     if frame_id is not None:
         where = 'WHERE id = %s '
         args  = [frame_id]
-    elif (movie_id is not None frame_msec is not None):
+    elif (movie_id is not None) and (frame_msec is not None):
         if msec_delta==0:
             where = "WHERE movie_id=%s AND frame_msec = %s "
             args = [movie_id, frame_msec]
@@ -733,7 +737,6 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
         logging.debug("cmd=%s",cmd)
         logging.debug("args=%s  len=%s",args,len(args))
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
-
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
     """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""

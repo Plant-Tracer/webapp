@@ -46,12 +46,14 @@ import json
 import datetime
 import logging
 import base64
+import copy
 from urllib.parse import urlparse
 
 import magic
 import bottle
 from bottle import request
 from validate_email_address import validate_email
+
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -601,14 +603,18 @@ def api_track_frame():
                                                description = movie_metadata['description'],
                                                movie_data = new_movie_data)
 
-            # Save the trackpoints.
-            # TODO - Make this faster a single transaction
-            for (frame_number,frame_trackpoints) in enumerate(output_trackpoints):
-                db.TODO
+            # Now write all of the trackpoints
+            for (frame_number, frame_trackpoints) in enumerate(output_trackpoints):
+                # Get the frame number if it exists
+                row = db.get_frame(movie_id=new_movie_id, frame_number=frame_number)
+                if row is not None:
+                    frame_id = row['frame_id']
+                else:
+                    frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number, frame_msec=None, frame_data=None)
+
+                db.put_frame_trackpoints(frame_id = frame_id, trakcpoints=frame_trackopints)
 
 
-            # Copy over trackpoints 0..(frame_start-1)
-            # Save the trackpoints frame_start..end
     return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 
