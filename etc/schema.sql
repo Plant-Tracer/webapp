@@ -208,6 +208,7 @@ DROP TABLE IF EXISTS `movie_frames`;
 CREATE TABLE `movie_frames` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
+  `frame_number` int DEFAULT NULL,
   `frame_msec` int NOT NULL,
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,

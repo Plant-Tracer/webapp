@@ -336,19 +336,19 @@ def test_movie_extract(new_movie_uploaded):
     engine_id   = ret['annotations'][0]['engine_id']
 
     # See if we can get the frame by id without the annotations
-    r2 = db.get_frame_id(frame_id=frame_id)
+    r2 = db.get_frame(frame_id=frame_id)
     assert r2['frame_id'] == frame_id
     assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
     assert 'annotations' not in r2
 
     # See if we can get the frame by id with the analysis
-    r2 = db.get_frame_id(frame_id=frame_id, get_annotations=True)
+    r2 = db.get_frame(frame_id=frame_id, get_annotations=True)
     assert 'annotations' in r2
 
     # Validate the bottle interface
 
     # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,get_annotations=False)
+    r2 = db.get_frame(frame_id=frame_id,get_annotations=False)
     assert 'annotations' not in r2
     assert r2['frame_id'] == frame_id
 

@@ -484,130 +484,61 @@ def api_new_frame():
 @bottle.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
-    Get a frame using search, optionally get analysis and perform tracking.
+    Get a frame and its annotation from a movie. Return from the frame database. If not there, grab it from the movie
 
     :param api_key:   authentication
-    :param frame_id:   just get by frame_id
     :param movie_id:   movie
-    :param frame_msec: the frame specified
-    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame
-    :param format:     jpeg - just get the image; json - get the image and json annotation
-    :param annotations: if true, return all of the annotations, which is an array of objects where each has an engine_name, engine_version, and a json annotations
+    :param frame_id:   just get by frame_id
+    :param frame_number: get the frame by frame_number (starting with 0)
+    :param frame_msec: the frame specified  (error if frame_id is specified)
+    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame  (error if frame_msec is not specified)
+    :param format:     jpeg - just get the image; json - get the image (default), json annotation and trackpoints
+                       jpeg format requires frame_id
 
-    :param user_data: whatever is provided is returned in the response
-    Tracking:
-
-    :param track:          if true, then msec_delta must be +1, and specifies that frame tracking be applied to the frame at frame_msec AND the frame at frame_msec+delta.
-    :param engine_name:    string description tracking engine to use. May be omitted to get default engine.
-    :param engine_version: string to describe which version number of engine to use. May be omitted for default version.
-    :return:
+    :return: - either the image (as a JPEG) or a JSON object.
     """
     user_id    = get_user_id()
 
     frame_id   = get_int('frame_id')
+    frame_id   = get_int('frame_number')
     movie_id   = get_int('movie_id')
     frame_msec = get_int('frame_msec',0 ) # location frame
     msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
-    fmt            = get('format', 'jpeg').lower()
-    save_trackpoints       = get_json('save_trackpoints')
-    get_annotations   = get_bool('get_annotations')
-    get_trackpoints= get_bool('get_trackpoints') # get tracking for requested frame.
-    engine_name    = get('engine_name')
-    #engine_version = get('engine_version')
-    user_data      = get('user_data')
-
-    logging.debug("engine_name=%s msec_delta=%s",engine_name,msec_delta)
+    fmt        = get('format', 'jpeg').lower()
 
     if fmt not in ['jpeg', 'json']:
         return E.INVALID_FRAME_FORMAT
-
-
-    if movie_id is None and frame_id is not None:
-        if fmt != 'json':
-            return E.INVALID_FRAME_FORMAT
-        if db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-            return  db.get_frame_id(frame_id=frame_id, get_annotations=get_annotations, get_trackpoints=get_trackpoints)
-        return E.INVALID_FRAME_ACCESS
-
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
         return E.INVALID_MOVIE_ACCESS
 
-    # Below:
-    # frame1 -- the frame requested
-    # frame0 --- if msec_delta=+1, the frame before frame1
-    #
-
-    frame1 = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = msec_delta)
-    if not frame1:
-        logging.info("frame1 is invalid")
-        return E.INVALID_MOVIE_FRAME
-
     if fmt=='jpeg':
-        if get_annotations or get_trackpoints:
-            return E.INVALID_REQUEST_JPEG
+        if (frame_id is None) or (frame_msec is not None) or (msec_delta is not None):
+            return E.INVALID_FRAME_FORMAT
+        if not db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
+            return E.INVALID_FRAME_ACCESS
+        return  db.get_frame(frame_id=frame_id, get_annotations=get_annotations, get_trackpoints=get_trackpoints)
 
-        bottle.response.set_header('Content-Type', MIME.JPEG)
-        return frame1['frame_data']
+    # See if get_frame can find the movie frame
+    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
+    if ret is None:
+        ret = {'movie_id':movie_id}
 
-    # JSON format; change frame_data into data_url
-    frame1_data = frame1['frame_data'] # JPEG format
-    frame1_id   = frame1['frame_id']
-    frame1['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
-    del frame1['frame_data']
+    if 'frame_data' not in ret:
+        # Get the frame from the movie
+        movie_data = db.get_movie_data(movie_id=movie_id)
+        ret['frame_data'] = tracker.extract_frame(movie_data, frame_number=frame_number, format='jpeg')
 
-    # If annotations are requested, get a list of dictionaries from the database where each dictionary
-    # contains metadata about the annotations and the JSON object of the annotations.
-    if get_annotations:
-        frame1['annotations'] = db.get_frame_annotations(frame_id=frame1['frame_id'])
+    if 'frame_data' in ret:
+        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
+        del frame1['frame_data']
 
-    if get_trackpoints:
-        # Get the tracking from the database
-        logging.info("get_trackpoints")
+    # if we have the frame_id, get the annotations and trackpoints
+    if frame_id is not None:
+        ret['annotations'] = db.get_frame_annotations(frame_id=frame1['frame_id'])
+        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
 
-        # See if trackpoints were provided. If so, save them and use them. If not, get them from frame_id
-        if isinstance(save_trackpoints,list):
-            db.put_frame_trackpoints(frame_id=frame1_id, trackpoints=save_trackpoints)
-            frame1['trackpoints'] = save_trackpoints
-        else:
-            frame1['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
-
-        # If the msec_delta=+1 and an engine is specified, run the tracking algorithm from the previous frame
-        # Those trackpoints get returned in ['trackpoints_engine']
-        logging.info("msec_delta=%s type(msec_type)=%s engine_name=%s",msec_delta, type(msec_delta),engine_name)
-        if msec_delta == +1 and (engine_name is not None):
-            frame0_dict = db.get_frame(movie_id=movie_id, frame_msec = frame_msec, msec_delta = 0)
-            frame0_data = frame0_dict['frame_data']
-            frame0_id   = frame0_dict['frame_id']
-            frame0_trackpoints = None
-            if frame0_dict is None:
-                return E.INVALID_MOVIE_FRAME
-            if frame0_id == frame1_id:
-                return E.TRACK_FRAMES_SAME
-            if frame1_data is None:
-                return E.FRAME1_IS_NONE
-            if not tracker.is_jpeg(frame0_data):
-                return {'error':True, 'message':'frame0 is not a jpeg'}
-            if not tracker.is_jpeg(frame1_data):
-                return {'error':True, 'message':'frame1 is not a jpeg'}
-            tpts = db.get_frame_trackpoints(frame_id=frame0_id)
-            frame0_trackpoints = [(t['x'],t['y']) for t in tpts]
-
-            try:
-                tpr = tracker.track_frame_jpegs(engine = engine_name,
-                                                frame0_jpeg=frame0_data,
-                                                frame1_jpeg=frame1_data,
-                                                trackpoints = frame0_trackpoints)
-                tpts_engine = tpr[tracker.POINT_ARRAY_OUT]
-                frame1['trackpoints_engine'] = [{'x':tpts_engine[i][0],
-                                                 'y':tpts_engine[i][1],
-                                                 'label':tpts[i]['label']}
-                                                for i in range(len(tpts_engine))]
-            except tracker.ConversionError as e:
-                logging.error("e=%s frame0_id=%s frame1_id=%s",e,frame0_id,frame1_id)
-
-    frame1['user_data'] = user_data
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
@@ -617,48 +548,67 @@ def api_get_frame():
 #pylint: enable=too-many-branches
 #pylint: enable=too-many-statements
 
-@bottle.route('/api/track-frame', method='POST')
+@bottle.route('/api/track-movie', method='POST')
 def api_track_frame():
-    """Takes 2 frames and a point array and engine name. Note that the frames are uploaded as POST fields, not as files.
-    Files do not need to be BASE64 encoded, becuase there is a nice out-of-band protocol for doing that.
-    However, we have seen that binary data sent in forms should be base64 encoded.
-    Because we are uploading two frames, it's easier to do as a base64-encoded FORM submission.
+    """Tracks a movie that has been uploaded.
     :param api_key: the user's api_key
-    :param frame0_base64_data: JPEG format frame
-    :param frame0_frame_id: instead of providing the JPEG, this is a reference to a frame in the database
-    :param frame1_base64_data: JPEG format frame, assumed to be the next frame in a movie after frame0
-    :param frame1_frame_id: instead of providing the JPEG, this is a reference to a frame in the database
-    :param point_array: array of points to track in frame0 coordinates in the form [(x1,y1), ...]
+    :param movie_id: the movie to track; a new movie will be created
+    :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
+    :return: dict['error'] = True/False
+             dict['message'] = message to display
     """
 
     # pylint: disable=unsupported-membership-test
-    frames = {}
     engine_name = get('engine_name')
-    for i in [0,1]:
-        data_name = f"frame{i}_data"
-        base64_data_name = f"frame{i}_base64_data"
-        frame_id_name = f"frame{i}_frame_id"
-        if base64_data_name in request.forms:
-            frames[data_name] = base64.b64decode(request.forms.get(base64_data_name))
-        elif frame_id_name in request.forms:
-            frames[data_name] = db.get_frame_id(frame_id=request.forms.get(frame_id_name))
-        else:
-            return {'error': True, 'message': f'Parameter {base64_data_name} or {frame_id_name} is required'}
-        data_name = f"frame{i}_data"
-        if len(frames[data_name]) > MAX_FILE_UPLOAD:
-            return {'error': True, 'message': f'len({data_name})={len(frames[data_name])} which is than larger than {MAX_FILE_UPLOAD} bytes.'}
-        if not tracker.is_jpeg(frames[data_name]):
-            return {'error': True, 'message': f'magic.from_buffer({data_name})={magic.from_buffer(data_name,mime=True)} is not an allowable MIME type for frames'}
-    # pylint: enable=unsupported-membership-test
+    engine_version = get('engine_version')
+    movie_id       = get_int('movie_id')
+    frame_start    = get_int('frame_start')
 
-    point_array_in = get_json('point_array')
 
-    res = tracker.track_frame_jpegs( engine=engine_name,
-                                     frame0_jpeg=frames['frame0_data'],
-                                     frame1_jpeg=frames['frame1_data'],
-                                     trackpoints=point_array_in)
+    # Get the trackpoints for frame_start
+    # write the movie
+    # Write the trackpoints
+    movie_data     = db.get_movie_data(movie_id=movie_id)           # Get the movie
+    movie_metadata = db.get_movie_metadata(movie_id=movie_id)[0]
+    trackpoints = db.get_movie_frame_trackpoints(movie_id=movie_id)  # get trackpoints for the movie
+
+    with tempfile.NamedTemporaryFile(suffix='.mp4',mode='rwb') as infile:
+        with tempfile.NamedTemporaryFile(suffix='.mp4', mode='rwb') as outfile:
+            infile.write(movie_data)
+            infile.seek(0)
+
+            # Track the movie
+            ret = tracker.track_movie(engine=engine, engine_version=engine_version,
+                                input_trackpoints=trackpoints[frame_start],
+                                moviefile_input = infile.name,
+                                moviefile_output = outfile.name)
+
+            # Compute the new trackpoints
+            outfile.seek(0)
+            new_movie_data = outfile.read()
+            output_trackpoints = trackpoints[0:frame_start] + ret['output_trackpoints']
+
+            # Save the movie
+            new_title = movie_metadata['title']
+            if new_title.ends_with("TRACKED"):
+                new_title += "+"
+            else:
+                new_title += " TRACKED"
+            new_movie_id = db.create_new_movie(user_id = movie_metadata['user_id'],
+                                               title = new_title,
+                                               description = movie_metadata['description'],
+                                               movie_data = new_movie_data)
+
+            # Save the trackpoints.
+            # TODO - Make this faster a single transaction
+            for (frame_number,frame_trackpoints) in enumerate(output_trackpoints):
+                db.TODO
+
+
+            # Copy over trackpoints 0..(frame_start-1)
+            # Save the trackpoints frame_start..end
     return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
 
 

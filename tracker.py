@@ -8,19 +8,19 @@ import argparse
 import tempfile
 import logging
 
-import db
 import magic
 import cv2
 import numpy as np
 from constants import Engines,MIME
 
 POINT_ARRAY_OUT='point_array_out'
+RED = (0, 0, 255)
+BLACK = (0,0,0)
+TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
+TEXT_SCALE = 0.75
+TEXT_THICKNESS = 2
 
-#pylint: disable=unused-argument
-def null_track_frame(*,frame0, frame1, trackpoints):
-    return {POINT_ARRAY_OUT: trackpoints, 'status_array': None, 'err':None}
-#pylint: enable=unused-argument
-
+## JPEG support
 
 class ConversionError(RuntimeError):
     """Special error"""
@@ -29,7 +29,6 @@ class ConversionError(RuntimeError):
 
 def is_jpeg(buffer):
     return magic.from_buffer(buffer,mime=True) in [ MIME.JPEG ]
-
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
@@ -55,62 +54,30 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
 
     return {POINT_ARRAY_OUT: point_array_out, 'status_array': status_array, 'err': err}
 
-#pylint: disable=unused-argument
-def track_frame(*, engine, engine_version=None, frame0, frame1, trackpoints):
-    if engine==Engines.NULL:
-        return null_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
-    elif engine==Engines.CV2:
-        return cv2_track_frame(frame0=frame0, frame1=frame1, trackpoints=trackpoints)
-    else:
-        raise ValueError(f"No such engine: {engine}")
-#pylint: enable=unused-argument
+def cv2_label_frame(*, frame, trackpoints):
+    # use the points to annotate the colored frames. write to colored tracked video
+    # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
+    for point in trackpoints:
+        x, y = point.ravel()
+        cv2.circle(current_frame, (int(x), int(y)), 3, RED, -1) # pylint: disable=no-member
+
+    text = str(frame_number)
+    WHITE = (255,255,255)
+    text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
+    text_origin = ( 5, len(current_frame)-5)
+    cv2.rectangle(current_frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
+    cv2.putText(current_frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def cv2_jpeg_from_data(data):
-    assert is_jpeg(data)
-    with tempfile.NamedTemporaryFile(suffix='.jpeg',mode='wb') as tf0:
-        tf0.write(data)
-        frame = cv2.imread(tf0.name)
-        if frame is None:
-            logging.error("Cannot convert frame to JPEG")
-            raise ConversionError("Cannot convert frame0 to JPEG")
-        return frame
-
-def track_frame_jpegs(*, engine, frame0_jpeg, frame1_jpeg, trackpoints):
-    """
-    :param: frame0_jpeg     - binary buffer containing a JPEG of previous frame
-    :param: frame1_jpeg     - binary buffer containing a JPEG of current frame
-    :param: trackpoints - an array of points that is being tracked.
-    :return: a dictionary including:
-       'points_array_out' - the input array of points
-       'status' - a status message
-       'error' - some kind of error message.
-    """
-    # This should work, but it didn't. So we are going to put them in tempoary files...
-    # https://www.geeksforgeeks.org/python-opencv-imdecode-function/
-    # image0 = np.asarray(bytearray(frame0_jpeg))
-    # image1 = np.asarray(bytearray(frame1_jpeg))
-    # return cv2_track_frame( image0, image1, trackpoints )
-
-    assert is_jpeg(frame0_jpeg)
-    assert is_jpeg(frame1_jpeg)
-
-    return track_frame( engine=engine,
-                        frame0=cv2_jpeg_from_data(frame0_jpeg),
-                        frame1=cv2_jpeg_from_data(frame1_jpeg),
-                        trackpoints=np.array(trackpoints,dtype=np.float32))
-
-
-
-RED = (0, 0, 255)
-BLACK = (0,0,0)
-def track_movie(*, engine, moviefile, trackpoints, output_video_path):
+def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoints, moviefile_output):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
     :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile - an MP4 to track. CV2 cannot read movies from memory; this is a known problem.
-    :param: trackpoints - an array of (x,y) points to track.
+    :param: trackpoints - an array of (x,y) points to track. [pt#][0], [pt#][1]
+    :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
+    :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
 
     """
     if engine!=Engines.CV2:
@@ -118,8 +85,10 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
 
     video_coordinates = np.array(trackpoints)
     p0  = trackpoints
-    cap = cv2.VideoCapture(moviefile)
+    cap = cv2.VideoCapture(moviefile_input)
     ret, current_frame = cap.read()
+
+    output_trackpoints = []
 
     # should be movie name + tracked
 
@@ -139,11 +108,6 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
         tracked_current_frame = cv2.circle(current_frame, (int(x), int(y)), 3, (0, 0, 255), -1)
         out.write(tracked_current_frame)
 
-    # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
-    TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
-    TEXT_SCALE = 0.75
-    TEXT_THICKNESS = 2
-    TEXT = "0"
 
     for frame_number in range(1_000_000):
         prev_frame = current_frame
@@ -153,32 +117,21 @@ def track_movie(*, engine, moviefile, trackpoints, output_video_path):
 
         ret = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=p0)
         p0  = ret[POINT_ARRAY_OUT]
-        video_coordinates = p0.tolist()
+        cv2_label_frame(frame=frame1, trackpoints=p0)
 
-        # use the points to annotate the colored frames. write to colored tracked video
-        for point in p0:
-            x, y = point.ravel()
-            cv2.circle(current_frame, (int(x), int(y)), 3, RED, -1) # pylint: disable=no-member
-
-        TEXT = str(frame_number)
-        WHITE = (255,255,255)
-        text_size, _ = cv2.getTextSize(TEXT, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
-        text_origin = ( 5, len(current_frame)-5)
-        cv2.rectangle(current_frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
-        cv2.putText(current_frame, TEXT, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
         out.write(current_frame)
+        output_trackpoints.append(p0)
 
     cap.release()
     out.release()
-    return video_coordinates
+    return {'output_trackpoints':output_trackpoints}
 
 
-def extract_frame(*, movie_id, frame_number, format):
+def extract_frame(*, movie_data, frame_number, format):
     """Download movie_id to a temporary file, find frame_number and return it in the request format.
     """
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
-        data = db.get_movie_data(movie_id=movie_id)
-        tf.write(data)
+        tf.write(movie_data)
         tf.flush()
         cap = cv2.VideoCapture(tf.name)
 
