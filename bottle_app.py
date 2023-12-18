@@ -521,9 +521,16 @@ def api_get_frame():
     if fmt=='jpeg':
         if frame_id is None:
             return E.INVALID_FRAME_FORMAT
-        if not db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-            return E.INVALID_FRAME_ACCESS
-        return  db.get_frame(frame_id=frame_id)
+        # Is there a frame we can access?
+        if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
+            row =  db.get_frame(frame_id=frame_id)
+            return row.get('frame_data',None)
+        # Is there a movie we can access?
+        if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
+                                       frame_number = frame_number,
+                                       fmt = 'jpeg')
+        return E.INVALID_FRAME_ACCESS
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
@@ -535,7 +542,6 @@ def api_get_frame():
         movie_data = db.get_movie_data(movie_id=movie_id)
         ret['frame_data'] = tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
 
-    frame_id = ret['frame_id']
     if 'frame_data' in ret:
         ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
         del ret['frame_data']

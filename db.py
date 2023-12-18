@@ -496,15 +496,16 @@ def can_access_movie(*, user_id, movie_id):
     return res[0][0] > 0
 
 @log
-def can_access_frame(*, user_id, frame_id):
-    """Return if the user is allowed to access a specific frame"""
+def can_access_frame(*, user_id, frame_id=None):
+    """Return if the user is allowed to access a specific frame.
+    """
     res = dbfile.DBMySQL.csfr(
-        get_dbreader(),
-        """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
-        (user_id=%s OR
-        course_id=(select primary_course_id from users where id=%s) OR
-        course_id in (select course_id from admins where user_id=%s))""",
-        (frame_id, user_id, user_id, user_id))
+            get_dbreader(),
+            """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
+            (user_id=%s OR
+            course_id=(select primary_course_id from users where id=%s) OR
+            course_id in (select course_id from admins where user_id=%s))""",
+            (frame_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
 @log
@@ -575,13 +576,24 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 
 # Don't log this; it will blow up the database when movies are updated
-def create_new_frame(*, movie_id, frame_number, frame_msec, frame_data):
-    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movie_frames (movie_id, frame_number,frame_msec, frame_data)
-                                       VALUES (%s,%s,%s,%s)
-                                       ON DUPLICATE KEY UPDATE frame_number=%s,frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_number, frame_msec, frame_data, frame_number, frame_msec,frame_data))
-    return {'frame_id':frame_id}
+def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data=None):
+    if frame_number is None and frame_msec is None:
+        raise ValueError("frame_number and frame_msec cannot both be None")
+    if frame_number is not None:
+        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                       """INSERT INTO movie_frames (movie_id, frame_number)
+                                       VALUES (%s,%s)
+                                       ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
+                                       (movie_id, frame_number, movie_id, frame_number))
+    else:
+        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                       """INSERT INTO movie_frames (movie_id, frame_msec)
+                                       VALUES (%s,%s)
+                                       ON DUPLICATE KEY UPDATE movie_id=%s, frame_msec=%s""",
+                                       (movie_id, frame_msec, movie_id, frame_msec))
+    if frame_data is not None:
+        dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(movie_data,frame_id))
+    return frame_id
 
 
 def get_frame_annotations(*, frame_id):
