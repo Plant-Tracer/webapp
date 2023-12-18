@@ -1,5 +1,7 @@
 # See https://docs.github.com/en/actions/guides/building-and-testing-python
 # 2020-02-20 slg - For Dreamhost, we are now using Python 3.9 and Ubuntu-18.04
+# There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of
+# RANDOM_PASSWORD
 name: CI (pip)
 on: [push, pull_request]
 
@@ -28,7 +30,6 @@ jobs:
           - 3306:3306
           # Before continuing, verify the mysql container is reachable from the ubuntu host
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
-
     timeout-minutes: 10
 
     steps:
@@ -67,6 +68,10 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           make install-python-dependencies
 
+      - name: "create rootconfig.ini"
+        run: |
+          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --createroot='testrootpass'
+
       - name: Lint with pylint
         run: |
           make pylint
@@ -74,6 +79,7 @@ jobs:
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
         run: |
+          echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
 
       - name: Validate database access

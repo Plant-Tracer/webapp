@@ -70,7 +70,7 @@ if __name__ == "__main__":
     required = parser.add_argument_group('required arguments')
 
     required.add_argument(
-        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument', required=True)
+        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument')
     parser.add_argument(
         "--sendlink", help="send link to the given email address, registering it if necessary.")
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
@@ -78,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
+    parser.add_argument("--createroot",help="create root config  with specified password")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -89,6 +90,23 @@ if __name__ == "__main__":
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
         sys.exit(0)
 
+    if args.writeconfig:
+        cp = configparser.ConfigParser()
+        cp.read(args.writeconfig)
+
+    if args.createroot:
+        if 'client' not in cp:
+            cp.add_section('client')
+        cp['client']['user']='root'
+        cp['client']['password']=args.createroot
+        cp['client']['host'] = 'localhost'
+        cp['client']['database'] = 'sys'
+        with open(args.writeconfig, 'w') as fp:
+            cp.write(fp)
+        print(args.writeconfig,"is written with a root configuration")
+        exit(0)
+
+    # The following all require a root config
     assert os.path.exists(args.rootconfig)
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
     try:
@@ -97,9 +115,7 @@ if __name__ == "__main__":
         print("Invalid auth: ", auth, file=sys.stderr)
         raise
 
-    if args.writeconfig:
-        cp = configparser.ConfigParser()
-        cp.read(args.writeconfig)
+
 
     if args.createdb:
         dbreader_user = 'dbreader_' + args.createdb
