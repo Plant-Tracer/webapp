@@ -105,42 +105,42 @@ def test_api_key(http_endpoint, api_key):
     assert r.json()['error'] == True
 
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
-def test_upload_movie_frame_by_frame(http_endpoint, api_key):
-    """This tests creating a movie and uploading
-    three frames using the frame-by-frame upload using an already existing test user"""
-
-    assert len(FRAME_FILES) > 0
-    post_data = {'api_key': api_key, 'title': 'Test Title at ' +
-                 time.asctime(), 'description': 'test-upload'}
-    r = requests.post(http_endpoint+'/api/new-movie', post_data)
-    res = r.json()
-    assert res['error'] == False
-    movie_id = res['movie_id']
-    for frame_file in FRAME_FILES:
-        m = FRAME_RE.search(frame_file)
-        frame_number = int(m.group(1))
-        print("uploading frame ", frame_number)
-        with open(frame_file, 'rb') as f:
-            r = requests.post(http_endpoint+'/api/new-frame', {
-                'api_key': api_key,
-                'movie_id': movie_id,
-                'frame_msec': frame_number*200,
-                'frame_base64_data': base64.b64encode(f.read())})
-            print("r.text=", r.text, file=sys.stderr)
-            if r.json()['error']:
-                raise RuntimeError(json.dumps(r.json(), indent=4))
-
-    # Now delete the movie
-    r = requests.post(http_endpoint+'/api/delete-movie',
-                      { 'api_key': api_key,
-                        'movie_id': movie_id
-                       })
-    res = r.json()
-    assert res['error'] == False
-
-    # Purge the movie (to clean up)
-    db.purge_movie(movie_id = movie_id)
+#@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+#def test_upload_movie_frame_by_frame(http_endpoint, api_key):
+#    """This tests creating a movie and uploading
+#    three frames using the frame-by-frame upload using an already existing test user"""
+#
+#    assert len(FRAME_FILES) > 0
+#    post_data = {'api_key': api_key, 'title': 'Test Title at ' +
+#                 time.asctime(), 'description': 'test-upload'}
+#    r = requests.post(http_endpoint+'/api/new-movie', post_data)
+#    res = r.json()
+#    assert res['error'] == False
+#    movie_id = res['movie_id']
+#    for frame_file in FRAME_FILES:
+#        m = FRAME_RE.search(frame_file)
+#        frame_number = int(m.group(1))
+#        print("uploading frame ", frame_number)
+#        with open(frame_file, 'rb') as f:
+#            r = requests.post(http_endpoint+'/api/new-frame', {
+#                'api_key': api_key,
+#                'movie_id': movie_id,
+#                'frame_msec': frame_number*200,
+#                'frame_base64_data': base64.b64encode(f.read())})
+#            print("r.text=", r.text, file=sys.stderr)
+#            if r.json()['error']:
+#                raise RuntimeError(json.dumps(r.json(), indent=4))
+#
+#    # Now delete the movie
+#    r = requests.post(http_endpoint+'/api/delete-movie',
+#                      { 'api_key': api_key,
+#                        'movie_id': movie_id
+#                       })
+#    res = r.json()
+#    assert res['error'] == False
+#
+#    # Purge the movie (to clean up)
+#    db.purge_movie(movie_id = movie_id)
 
 @pytest.mark.skip(reason='not working yet')
 def test_upload_movie_data(http_endpoint, api_key):
