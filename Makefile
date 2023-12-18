@@ -81,6 +81,7 @@ install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	which ffmpeg || sudo apt install ffmpeg
 	which chromium || sudo apt-get install -y chromium-browser
+	chromium --version
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-ubuntu.txt ]; then $(PYTHON) -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
