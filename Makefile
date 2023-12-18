@@ -49,12 +49,12 @@ pytest-quiet:
 	$(PYTHON) -m pytest . --log-cli-level=ERROR
 
 create_localdb:
-	cat etc/github_actions_mysql_rootconfig.ini
-	@echo Creating local database and writing results to etc/credentials.ini
+	@echo Creating local database and writing results to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/credentials.ini
 	cat etc/credentials.ini
 
 remove_localdb:
+	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
 	/bin/rm -f etc/credentials.ini
 

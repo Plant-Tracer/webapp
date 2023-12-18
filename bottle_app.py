@@ -186,7 +186,7 @@ def get_user_id():
 # HTML Pages served with template system
 ################################################################
 
-def page_dict(title='Plant Tracer', *, require_auth=False, logout=False):
+def page_dict(title='', *, require_auth=False, logout=False):
     """Fill in data that goes to templates below and also set the cookie in a response
     :param: title - the title we should give the page
     :param: auth  - if true, the user must already be authenticated
