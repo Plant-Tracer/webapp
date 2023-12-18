@@ -32,24 +32,23 @@ from PIL import Image
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
-import movietool
 import tracker
 
 # https://superuser.com/questions/984850/linux-how-to-extract-frames-from-a-video-lossless
 
-@pytest.fixture
-def extracted_jpeg_frames():
-    """Fixture that returns a dictionary containing two frames - 'frame0' and 'frame1'. Both are JPEGs"""
-    with tempfile.TemporaryDirectory() as td:
-        output_template = os.path.join(td, movietool.JPEG_TEMPLATE)
-        logging.info("output_template=%s",output_template)
-        (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
-        jpegs = movietool.frames_matching_template(output_template)
-        logging.info("extracted jpegs: %s",jpegs)
-        assert len(jpegs)>0
-        yield {'jpeg_file_names':jpegs}
-    logging.info("Done with frames; temporary directory deleted")
-
+#@pytest.fixture
+#def extracted_jpeg_frames():
+#    """Fixture that returns a dictionary containing two frames - 'frame0' and 'frame1'. Both are JPEGs"""
+#    with tempfile.TemporaryDirectory() as td:
+#        output_template = os.path.join(td, movietool.JPEG_TEMPLATE)
+#        logging.info("output_template=%s",output_template)
+#        (stdout,stderr) = movietool.extract_all_frames_from_file_with_ffmpeg(TEST_MOVIE_FILENAME, output_template)
+#        jpegs = movietool.frames_matching_template(output_template)
+#        logging.info("extracted jpegs: %s",jpegs)
+#        assert len(jpegs)>0
+#        yield {'jpeg_file_names':jpegs}
+#    logging.info("Done with frames; temporary directory deleted")
+#
 def test_extracted_jpeg_frames(extracted_jpeg_frames):
     """Test the fixture to make sure that it is good"""
     frames = extracted_jpeg_frames['jpeg_file_names']

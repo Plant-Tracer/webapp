@@ -6,7 +6,7 @@ Implements blockmatching algorithm in OpenCV.
 import json
 import argparse
 import tempfile
-import logging
+#import logging
 
 import magic
 import cv2
@@ -76,7 +76,7 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     :param frame_label - if present, label for frame number (can be int or string)
     """
 
-    width = len(frame)
+    #width = len(frame)
     height = len(frame[0])
 
     # use the points to annotate the colored frames. write to colored tracked video
@@ -93,7 +93,7 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoints, moviefile_output):
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -104,10 +104,10 @@ def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoin
     :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
 
     """
-    if engine!=Engines.CV2:
-        raise RuntimeError("This only runs with CV2")
+    if engine_name!=Engines.CV2:
+        raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
 
-    points  = np.array([[pt['x'],pt['y']] for pt in input_trackpoints])
+    #points  = np.array([[pt['x'],pt['y']] for pt in input_trackpoints])
     cap = cv2.VideoCapture(moviefile_input)
     ret, current_frame = cap.read()
 
@@ -143,8 +143,8 @@ def track_movie(*, engine, engine_version=None, moviefile_input, input_trackpoin
     return {'output_trackpoints':output_trackpoints}
 
 
-def extract_frame(*, movie_data, frame_number, format):
-    """Download movie_id to a temporary file, find frame_number and return it in the request format.
+def extract_frame(*, movie_data, frame_number, fmt):
+    """Download movie_id to a temporary file, find frame_number and return it in the request fmt.
     """
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
         tf.write(movie_data)
@@ -157,15 +157,15 @@ def extract_frame(*, movie_data, frame_number, format):
         if not ret:
             return None
         if fn==frame_number:
-            if format=='CV2':
+            if fmt=='CV2':
                 return frame
-            elif format=='jpeg':
-                with tempfile.NamedTemporaryFile(suffix='.jpg',mode='rwb') as tf:
+            elif fmt=='jpeg':
+                with tempfile.NamedTemporaryFile(suffix='.jpg',mode='w+b') as tf:
                     cv2.imwrite(tf.name, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                     tf.seek(0)
                     return tf.read()
             else:
-                raise ValueError("Invalid format: "+format)
+                raise ValueError("Invalid fmt: "+fmt)
     raise RuntimeError("invalid frame_number")
 
 # The trackpoint is at (138,86) when the image is scaled to a width: 320 height: 240
@@ -185,6 +185,6 @@ if __name__ == "__main__":
     trackpoints = json.loads(args.points_to_track)
 
 
-    res = track_movie(engine=args.engine, moviefile_input=args.moviefile, input_trackpoints=trackpoints, moviefile_output=args.outfile)
+    res = track_movie(engine_name=args.engine, moviefile_input=args.moviefile, input_trackpoints=trackpoints, moviefile_output=args.outfile)
     print("results:")
     print(json.dumps(res,default=str,indent=4))

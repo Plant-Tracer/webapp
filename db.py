@@ -577,10 +577,10 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 # Don't log this; it will blow up the database when movies are updated
 def create_new_frame(*, movie_id, frame_number, frame_msec, frame_data):
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
-                                       VALUES (%s,%s,%s)
-                                       ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_data, frame_data, frame_msec))
+                                   """INSERT INTO movie_frames (movie_id, frame_number,frame_msec, frame_data)
+                                       VALUES (%s,%s,%s,%s)
+                                       ON DUPLICATE KEY UPDATE frame_number=%s,frame_msec=%s, frame_data=%s""",
+                                   (movie_id, frame_number, frame_msec, frame_data, frame_number, frame_msec,frame_data))
     return {'frame_id':frame_id}
 
 
@@ -643,8 +643,8 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=Non
         args = [movie_id, frame_number]
     cmd = f"""SELECT movie_id, frame_msec, frame_data, frame_number, id as frame_id
                               FROM movie_frames {where} LIMIT 1"""
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, (movie_id,frame_msec), asDicts=True)
-    if len(ret)!=1:
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    if len(rows)!=1:
         return None
     row = rows[0]
     if get_annotations:

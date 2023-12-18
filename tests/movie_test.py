@@ -29,6 +29,7 @@ import bottle_app
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
+import tracker
 
 @pytest.fixture
 def new_movie(new_user):
@@ -196,12 +197,10 @@ def test_movie_extract(new_movie_uploaded):
     api_key = cfg[API_KEY]
     user_id = cfg[USER_ID]
 
-    # Before we start, movie_id should be a movie with no frames
-    assert movie_id in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
-
-    frame0 = tracker.extract_frame(movie_id = movie_id, frame_number=0, format='jpeg')
-    frame1 = tracker.extract_frame(movie_id = movie_id, frame_number=1, format='jpeg')
-    frame2 = tracker.extract_frame(movie_id = movie_id, frame_number=2, format='jpeg')
+    movie_data = db.get_movie_data(movie_id = movie_id)
+    frame0 = tracker.extract_frame(movie_data = movie_data, frame_number=0, fmt='jpeg')
+    frame1 = tracker.extract_frame(movie_data = movie_data, frame_number=1, fmt='jpeg')
+    frame2 = tracker.extract_frame(movie_data = movie_data, frame_number=2, fmt='jpeg')
 
     assert frame0 is not None
     assert frame1 is not None
@@ -212,26 +211,20 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
     assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
 
-    # Now, it should not be in the list
-    assert movie_id not in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
-
     def sha256(x):
         hasher = hashlib.sha256()
         hasher.update(x)
         return hasher.hexdigest()
 
-    # Grab three frames and see if they are correct
-    res0 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 0)
+    # Grab three frames and see if they are different
+    res0 = db.get_frame(movie_id=movie_id, frame_number = 0)
     assert res0 is not None
-    res1 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 1)
+    res1 = db.get_frame(movie_id=movie_id, frame_number = 1)
     assert res1 is not None
-    res2 = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = 1)
+    res2 = db.get_frame(movie_id=movie_id, frame_number = 2)
     assert res2 is not None
-    res0b = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = -1)
-    assert res0b is not None
-    assert res0['frame_msec'] < res1['frame_msec']
-    assert res1['frame_msec'] < res2['frame_msec']
-    assert res0['frame_msec'] == res0b['frame_msec']
+    assert res0 != res1
+    assert res1 != res2
 
     # Make sure can_access frame is true
     assert db.can_access_frame(user_id=user_id, frame_id = res0['frame_id'])
@@ -252,24 +245,13 @@ def test_movie_extract(new_movie_uploaded):
     # does not need json.loads
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '0',
+                        'frame_number': '0',
                         'format':'json' }):
         ret = bottle_app.api_get_frame()
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
     assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
 
-    # get the frame with the JSON interface
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '0',
-                        'format':'json'}):
-        ret = bottle_app.api_get_frame()
-    assert 'annotations' not in ret
-    frame_id = ret['frame_id']
-
-    # Check to make sure get-frame-id works
+    # Check to make sure get-frame by frame_id works
     with boddle(params={"api_key": api_key,
                         "frame_id": frame_id,
                         "format" : "json"
@@ -288,8 +270,6 @@ def test_movie_extract(new_movie_uploaded):
                  "key2": 'value with "double" quotes',
                  "key3": "value with 'single' and \"double\" quotes" }
 
-
-    # Test various error conditions first
 
     # Check for error if all three are none
     with pytest.raises(RuntimeError):

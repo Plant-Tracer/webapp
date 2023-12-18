@@ -46,7 +46,8 @@ import json
 import datetime
 import logging
 import base64
-import copy
+#import copy
+import tempfile
 from urllib.parse import urlparse
 
 import magic
@@ -65,8 +66,8 @@ from lib.ctools import clogging
 import db
 import auth
 
-from paths import view, STATIC_DIR, ROOT_DIR
-from constants import C,E,MIME
+from paths import view, STATIC_DIR
+from constants import C,E
 import tracker
 
 __version__ = '0.0.1'
@@ -472,8 +473,9 @@ def api_new_movie():
 def api_new_frame():
     if db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
         frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
-        res = db.create_new_frame( movie_id = request.forms.get('movie_id'),
-                                   frame_msec = request.forms.get('frame_msec'),
+        res = db.create_new_frame( movie_id = get_int('movie_id'),
+                                   frame_msec = get_int('frame_msec'),
+                                   frame_number = get_int('frame_number'),
                                    frame_data = frame_data)
         frame_id = res['frame_id']
         return {'error': False, 'frame_id': frame_id}
@@ -504,6 +506,7 @@ def api_get_frame():
     frame_id   = get_int('frame_id')
     frame_id   = get_int('frame_number')
     movie_id   = get_int('movie_id')
+    frame_number = get_int('frame_number')
     frame_msec = get_int('frame_msec',0 ) # location frame
     msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt        = get('format', 'jpeg').lower()
@@ -516,11 +519,11 @@ def api_get_frame():
         return E.INVALID_MOVIE_ACCESS
 
     if fmt=='jpeg':
-        if (frame_id is None) or (frame_msec is not None) or (msec_delta is not None):
+        if frame_id is None:
             return E.INVALID_FRAME_FORMAT
         if not db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
             return E.INVALID_FRAME_ACCESS
-        return  db.get_frame(frame_id=frame_id, get_annotations=get_annotations, get_trackpoints=get_trackpoints)
+        return  db.get_frame(frame_id=frame_id)
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
@@ -530,22 +533,23 @@ def api_get_frame():
     if 'frame_data' not in ret:
         # Get the frame from the movie
         movie_data = db.get_movie_data(movie_id=movie_id)
-        ret['frame_data'] = tracker.extract_frame(movie_data, frame_number=frame_number, format='jpeg')
+        ret['frame_data'] = tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
 
+    frame_id = ret['frame_id']
     if 'frame_data' in ret:
-        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame1_data).decode()}'
-        del frame1['frame_data']
+        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
+        del ret['frame_data']
 
     # if we have the frame_id, get the annotations and trackpoints
     if frame_id is not None:
-        ret['annotations'] = db.get_frame_annotations(frame_id=frame1['frame_id'])
-        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=frame1['frame_id'])
+        ret['annotations'] = db.get_frame_annotations(frame_id=frame_id)
+        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=frame_id)
 
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-    return datetime_to_str(frame1)
+    return datetime_to_str(ret)
 #pylint: enable=too-many-return-statements
 #pylint: enable=too-many-branches
 #pylint: enable=too-many-statements
@@ -573,7 +577,7 @@ def api_track_frame():
     # write the movie
     # Write the trackpoints
     movie_data     = db.get_movie_data(movie_id=movie_id)           # Get the movie
-    movie_metadata = db.get_movie_metadata(movie_id=movie_id)[0]
+    movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=None)[0]
     trackpoints = db.get_movie_frame_trackpoints(movie_id=movie_id)  # get trackpoints for the movie
 
     with tempfile.NamedTemporaryFile(suffix='.mp4',mode='rwb') as infile:
@@ -582,7 +586,7 @@ def api_track_frame():
             infile.seek(0)
 
             # Track the movie
-            ret = tracker.track_movie(engine=engine, engine_version=engine_version,
+            ret = tracker.track_movie(engine_name=engine_name, engine_version=engine_version,
                                 input_trackpoints=trackpoints[frame_start],
                                 moviefile_input = infile.name,
                                 moviefile_output = outfile.name)
@@ -612,10 +616,10 @@ def api_track_frame():
                 else:
                     frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number, frame_msec=None, frame_data=None)
 
-                db.put_frame_trackpoints(frame_id = frame_id, trakcpoints=frame_trackopints)
+                db.put_frame_trackpoints(frame_id = frame_id, trackpoints=frame_trackpoints)
 
 
-    return {'error': False, 'point_array_out': res['point_array_out'], 'status_array': res['status_array']}
+    return {'error': False, 'trackpoints': trackpoints}
 
 
 @bottle.route('/api/put-frame-analysis', method=['POST'])
@@ -720,8 +724,7 @@ def api_get_metadata():
     return {'error': False, 'result': db.get_metadata(user_id=get_user_id(),
                                                       get_movie_id=gmovie_id,
                                                       get_user_id=guser_id,
-                                                      property=request.forms.get(
-                                                          'property'),
+                                                      property=request.forms.get('property'),
                                                       value=request.forms.get('value'))}
 
 
