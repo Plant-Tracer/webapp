@@ -8,6 +8,8 @@ package and the other uses the selenium package directly.
 """
 
 import os
+import logging
+
 import pytest
 import pytest_selenium
 
@@ -28,7 +30,7 @@ def test_sitetitle_just_selenium(http_endpoint):
     options.add_argument("--window-size=1920,1080")  # Specify window size
     # per https://pytest-selenium.readthedocs.io/en/latest/user_guide.html#quick-start
     if 'CHROME_PATH' in os.environ:
-        print('CHROME_PATH='+os.environ['CHROME_PATH'])
+        logging.info('CHROME_PATH=%s',os.environ['CHROME_PATH'])
         options.binary_location = os.environ['CHROME_PATH']
 
     browser_driver = webdriver.Chrome(options = options) # TODO: externalize browser type, if possible
