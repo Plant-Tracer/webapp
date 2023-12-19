@@ -63,6 +63,15 @@ jobs:
         run: |
           make install-windows
 
+      - name: "Install Chrome"
+        id: setup-chrome  
+        uses: browser-actions/setup-chrome@v1.4.0
+        with:
+          chrome-version: stable        
+        run: |
+          echo Installed Chrome to ${{ steps.setup-chrome.outputs.chrome-path }}
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+
       - name: Update GITHUB_PATH and install dependencies
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
