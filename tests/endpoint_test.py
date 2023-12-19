@@ -61,6 +61,7 @@ def http_endpoint():
             HTTPAdapter(max_retries=Retry(total=10, backoff_factor=0.2)))
     r = s.get(http_endpoint_url+'/ver')
     logging.info("Server running. r=%s", r)
+    logging.info("r.ok "+r.ok)
     assert r.ok
     yield http_endpoint_url
     p.terminate()
