@@ -21,3 +21,4 @@ requests
 validate_email_address
 aiosmtplib
 tabulate
+pronounceable
