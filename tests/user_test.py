@@ -19,7 +19,7 @@ from os.path import abspath, dirname
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 import db
-import movietool
+#import movietool
 import bottle_app
 import ctools.dbfile as dbfile
 from paths import TEST_DIR

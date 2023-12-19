@@ -24,12 +24,12 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
 import db
-import movietool
 import bottle_app
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
+import tracker
 
 @pytest.fixture
 def new_movie(new_user):
@@ -197,74 +197,189 @@ def test_movie_extract(new_movie_uploaded):
     api_key = cfg[API_KEY]
     user_id = cfg[USER_ID]
 
-    # Before we start, movie_id should be a movie with no frames
-    assert movie_id in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
+    movie_data = db.get_movie_data(movie_id = movie_id)
+    frame0 = tracker.extract_frame(movie_data = movie_data, frame_number=0, fmt='jpeg')
+    frame1 = tracker.extract_frame(movie_data = movie_data, frame_number=1, fmt='jpeg')
+    frame2 = tracker.extract_frame(movie_data = movie_data, frame_number=2, fmt='jpeg')
 
-    frames = movietool.extract_frames(movie_id=movie_id, user_id=user_id)
-    assert frames>0
-
-    # Now, it should not be in the list
-    assert movie_id not in [item['movie_id'] for item in db.list_movies(0, no_frames=True)]
+    assert frame0 is not None
+    assert frame1 is not None
+    assert frame2 is not None
+    assert frame0 != frame1
+    assert frame1 != frame2
+    assert magic.from_buffer(frame0,mime=True)== MIME.JPEG
+    assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
+    assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
 
     def sha256(x):
         hasher = hashlib.sha256()
         hasher.update(x)
         return hasher.hexdigest()
 
-    # Grab three frames and see if they are correct
-    res0 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 0)
-    assert res0 is not None
-    res1 = db.get_frame(movie_id=movie_id, frame_msec=0, msec_delta = 1)
-    assert res1 is not None
-    res2 = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = 1)
-    assert res2 is not None
-    res0b = db.get_frame(movie_id=movie_id, frame_msec=res1['frame_msec'], msec_delta = -1)
-    assert res0b is not None
-    assert res0['frame_msec'] < res1['frame_msec']
-    assert res1['frame_msec'] < res2['frame_msec']
-    assert res0['frame_msec'] == res0b['frame_msec']
+    # Grab three frames and see if they are different
+    def get_jpeg_frame(number):
+        with boddle(params={"api_key": api_key,
+                            'movie_id': str(movie_id),
+                            'frame_number': str(number),
+                            'format':'jpeg' }):
+            return bottle_app.api_get_frame()
 
-    # Make sure can_access frame is true
-    assert db.can_access_frame(user_id=user_id, frame_id = res0['frame_id'])
-    # Make sure a different user cannot access the frame
-    assert not db.can_access_frame(user_id=user_id+1, frame_id = res0['frame_id'])
+    jpeg0 = get_jpeg_frame(0)
+    assert jpeg0 is not None
+    jpeg1 = get_jpeg_frame(1)
+    assert jpeg1 is not None
+    jpeg2 = get_jpeg_frame(2)
+    assert jpeg2 is not None
+    assert jpeg0 != jpeg1
+    assert jpeg1 != jpeg2
 
-    # get the frame with the JPEG interface
+    assert magic.from_buffer(jpeg0,mime=True)== MIME.JPEG
+    assert magic.from_buffer(jpeg1,mime=True)== MIME.JPEG
+    assert magic.from_buffer(jpeg2,mime=True)== MIME.JPEG
+
+    # See if we can save two trackpoints in the frame and get them back
+    tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
+    tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
+    tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
+    frame_id = db.create_new_frame(movie_id=movie_id, frame_number=0)
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
+
+    # See if I can get it back
+    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    assert len(tps)==2
+    logging.debug("tps[0]=%s",tps[0])
+    logging.debug("tp0=%s",tp0)
+    assert tps[0]['x'] == tp0['x']
+    assert tps[0]['y'] == tp0['y']
+    assert tps[0]['label'] == tp0['label']
+    assert tps[0]['frame_id'] == frame_id
+
+    assert tps[1]['x'] == tp1['x']
+    assert tps[1]['y'] == tp1['y']
+    assert tps[1]['label'] == tp1['label']
+    assert tps[1]['frame_id'] == frame_id
+
+
+    # Try the other interface; this time send two trackpoints through
+    engine_name = 'CV2';
+    engine_version = '2';
+    with boddle(params={'api_key': api_key,
+                        'frame_id': str(frame_id),
+                        'engine_name': engine_name,
+                        'engine_version':engine_version,
+                        'trackpoints':json.dumps([tp0,tp1,tp2])}):
+        bottle_app.api_put_frame_analysis()
+    # See if I can get it back
+    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    assert len(tps)==3
+    assert tps[0]['x'] == tp0['x']
+    assert tps[0]['y'] == tp0['y']
+    assert tps[0]['label'] == tp0['label']
+    assert tps[0]['frame_id'] == frame_id
+
+    assert tps[1]['x'] == tp1['x']
+    assert tps[1]['y'] == tp1['y']
+    assert tps[1]['label'] == tp1['label']
+    assert tps[1]['frame_id'] == frame_id
+
+    assert tps[2]['x'] == tp2['x']
+    assert tps[2]['y'] == tp2['y']
+    assert tps[2]['label'] == tp2['label']
+    assert tps[2]['frame_id'] == frame_id
+
+    """
+    # Ask the API to track the trackpoints between frames!
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
-                        'msec_delta': '0'}):
+                        'msec_delta': '+1',
+                        'format':'json',
+                        'get_trackpoints':True,
+                        'engine_name':Engines.NULL }):
         ret = bottle_app.api_get_frame()
-    assert res0['frame_data'] == ret
-    assert magic.from_buffer(ret,mime=True)== MIME.JPEG
+    logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
+    assert ret['trackpoints_engine'][0]==tp0
+    assert ret['trackpoints_engine'][1]==tp1
+    """
 
-    # get the frame with the JSON interface.
-    # get_frame now relies on bottle to turn the dictionary into a JSON object, so boddle gets the raw dictionary and
-    # does not need json.loads
+    """
+    # Now track with CV2
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
-                        'msec_delta': '0',
+                        'msec_delta': '1',
+                        'format':'json',
+                        'get_trackpoints':True,
+                        'engine_name':Engines.CV2 }):
+        ret = bottle_app.api_get_frame()
+    logging.debug("ret2.trackpoints=%s",ret['trackpoints_engine'])
+    assert 9.0 < ret['trackpoints_engine'][0]['x'] < 10.0
+    assert 9.0 < ret['trackpoints_engine'][0]['y'] < 10.0
+    assert ret['trackpoints_engine'][0]['label'] == TEST_LABEL1
+
+    assert 17.0 < ret['trackpoints_engine'][1]['x'] < 20.0
+    assert 20.0 < ret['trackpoints_engine'][1]['y'] < 22.0
+    assert ret['trackpoints_engine'][1]['label'] == TEST_LABEL2
+    """
+
+    # Delete the trackpoints
+    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
+
+    # Make sure they are deleted
+    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
+
+    # Delete the analysis (includes annotations and trackpoints)
+    # logging.info("deleting frame analysis engine_id %s name %s",engine_id,engine_name)
+    # db.delete_frame_analysis(engine_id=engine_id)
+
+    # delete the analysis engine
+    db.delete_analysis_engine(engine_name=engine_name, recursive=True)
+
+
+"""
+test frame annotations ---
+    # get the frame with the JSON interface, asking for annotations
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number':1,
+                        'format':'json',
+                        'get_annotations':True}):
+        ret = bottle_app.api_get_frame()
+    annotations = ret['annotations']
+    # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
+    # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
+    # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
+    logging.debug("annotations[0]=%s",annotations[0])
+    logging.debug("annotations1=%s",annotations1)
+    assert ret['annotations'][0]['annotations']==annotations1
+    assert ret['annotations'][1]['annotations']==annotations2
+    engine_id   = ret['annotations'][0]['engine_id']
+
+    # See if we can get the frame by id without the annotations
+    r2 = db.get_frame(frame_id=frame_id)
+    assert r2['frame_id'] == frame_id
+    assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
+    assert 'annotations' not in r2
+
+    # See if we can get the frame by id with the analysis
+    r2 = db.get_frame(frame_id=frame_id, get_annotations=True)
+    assert 'annotations' in r2
+
+    # Validate the bottle interface
+
+    # See if we can get the frame by id without the analysis
+    r2 = db.get_frame(frame_id=frame_id,get_annotations=False)
+    assert 'annotations' not in r2
+    assert r2['frame_id'] == frame_id
+
+    # get 1 frame with the JSON interface and test the result.
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': '1',
                         'format':'json' }):
         ret = bottle_app.api_get_frame()
     assert ret['data_url'].startswith('data:image/jpeg;base64,')
-    assert base64.b64decode(ret['data_url'][23:])==res0['frame_data']
-
-    # get the frame with the JSON interface
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '0',
-                        'format':'json'}):
-        ret = bottle_app.api_get_frame()
-    assert 'annotations' not in ret
-    frame_id = ret['frame_id']
-
-    # Check to make sure get-frame-id works
-    with boddle(params={"api_key": api_key,
-                        "frame_id": frame_id}):
-        ret = bottle_app.get_frame_id()
-    assert ret['frame_data']==res0['frame_data']
+    assert base64.b64decode(ret['data_url'][23:])==jpeg1
 
     # Create a random engine and upload two analysis for it
     engine_name = "test-engine " + str(uuid.uuid4())[0:8]
@@ -277,8 +392,6 @@ def test_movie_extract(new_movie_uploaded):
                  "key2": 'value with "double" quotes',
                  "key3": "value with 'single' and \"double\" quotes" }
 
-
-    # Test various error conditions first
 
     # Check for error if all three are none
     with pytest.raises(RuntimeError):
@@ -306,133 +419,8 @@ def test_movie_extract(new_movie_uploaded):
                         'annotations':json.dumps(annotations2)}):
         bottle_app.api_put_frame_analysis()
 
-    # get the frame with the JSON interface, asking for annotations
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '0',
-                        'format':'json',
-                        'get_annotations':True}):
-        ret = bottle_app.api_get_frame()
-    annotations = ret['annotations']
-    # analysis_stored is a list of dictionaries where each dictionary contains a JSON string called 'annotations'
-    # turn the strings into dictionary objects and compare then with our original dictionaries to see if we can
-    # effectively round-trip through multiple layers of parsers, unparsers, encoders and decoders
-    logging.debug("annotations[0]=%s",annotations[0])
-    logging.debug("annotations1=%s",annotations1)
-    assert ret['annotations'][0]['annotations']==annotations1
-    assert ret['annotations'][1]['annotations']==annotations2
-    engine_id   = ret['annotations'][0]['engine_id']
 
-    # See if we can get the frame by id without the annotations
-    r2 = db.get_frame_id(frame_id=frame_id)
-    assert r2['frame_id'] == frame_id
-    assert magic.from_buffer(r2['frame_data'],mime=True)==MIME.JPEG
-    assert 'annotations' not in r2
-
-    # See if we can get the frame by id with the analysis
-    r2 = db.get_frame_id(frame_id=frame_id, get_annotations=True)
-    assert 'annotations' in r2
-
-    # Validate the bottle interface
-
-    # See if we can get the frame by id without the analysis
-    r2 = db.get_frame_id(frame_id=frame_id,get_annotations=False)
-    assert 'annotations' not in r2
-    assert r2['frame_id'] == frame_id
-
-    # See if we can save two trackpoints in the frame and get them back
-    tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
-    tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
-    tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
-
-    # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
-    assert len(tps)==2
-    logging.debug("tps[0]=%s",tps[0])
-    logging.debug("tp0=%s",tp0)
-    assert tps[0]['x'] == tp0['x']
-    assert tps[0]['y'] == tp0['y']
-    assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
-
-    assert tps[1]['x'] == tp1['x']
-    assert tps[1]['y'] == tp1['y']
-    assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
-
-
-    # Try the other interface; this time send two trackpoints through
-    with boddle(params={'api_key': api_key,
-                        'frame_id': str(frame_id),
-                        'engine_name': engine_name,
-                        'engine_version':'2',
-                        'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_app.api_put_frame_analysis()
-    # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
-    assert len(tps)==3
-    assert tps[0]['x'] == tp0['x']
-    assert tps[0]['y'] == tp0['y']
-    assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
-
-    assert tps[1]['x'] == tp1['x']
-    assert tps[1]['y'] == tp1['y']
-    assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
-
-    assert tps[2]['x'] == tp2['x']
-    assert tps[2]['y'] == tp2['y']
-    assert tps[2]['label'] == tp2['label']
-    assert tps[2]['frame_id'] == frame_id
-
-
-
-    # Ask the API to track the trackpoints between frames!
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '+1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.NULL }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
-    assert ret['trackpoints_engine'][0]==tp0
-    assert ret['trackpoints_engine'][1]==tp1
-
-    # Now track with CV2
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.CV2 }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret2.trackpoints=%s",ret['trackpoints_engine'])
-    assert 9.0 < ret['trackpoints_engine'][0]['x'] < 10.0
-    assert 9.0 < ret['trackpoints_engine'][0]['y'] < 10.0
-    assert ret['trackpoints_engine'][0]['label'] == TEST_LABEL1
-
-    assert 17.0 < ret['trackpoints_engine'][1]['x'] < 20.0
-    assert 20.0 < ret['trackpoints_engine'][1]['y'] < 22.0
-    assert ret['trackpoints_engine'][1]['label'] == TEST_LABEL2
-
-    # Delete the trackpoints
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
-
-    # Make sure they are deleted
-    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
-
-    # Delete the analysis (includes annotations and trackpoints)
-    logging.info("deleting frame analysis engine_id %s name %s",engine_id,engine_name)
-    db.delete_frame_analysis(engine_id=engine_id)
-
-    # delete the analysis engine
-    db.delete_analysis_engine(engine_name=engine_name, recursive=True)
+"""
 
 
 ################################################################

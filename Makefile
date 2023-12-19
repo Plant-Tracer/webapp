@@ -32,21 +32,27 @@ flake8:
 # It makes no sense to run the tests otherwise
 pytest:
 	make touch
-	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py .
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest . -v --log-cli-level=INFO
+	$(PYTHON) -m pytest -v --log-cli-level=INFO .
+
+pytest-movie-test:
+	make touch
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/movie_test.py
 
 pytest-debug:
 	make touch
-	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest . -v --log-cli-level=DEBUG
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-quiet:
 	make touch
-	$(PYTHON) -m pytest . --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest . --log-cli-level=ERROR
+	$(PYTHON) -m pytest --log-cli-level=ERROR
 
 create_localdb:
 	@echo Creating local database and writing results to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
@@ -68,6 +74,11 @@ debug:
 clean:
 	find . -name '*~' -exec rm {} \;
 
+
+tracker-demo:
+	/bin/rm -f outfile.mp4
+	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
+	open outfile.mp4
 
 ################################################################
 # Installations are used by the CI pipeline:
