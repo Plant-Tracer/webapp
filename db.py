@@ -470,6 +470,7 @@ def get_movie_data(*, movie_id):
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
+    """Gets the metadata for all movies accessible by user_id or enumerated by movie_id"""
     cmd = """SELECT *,id as movie_id from movies WHERE
                 ((user_id=%s) OR
                 (%s=0) OR
@@ -495,15 +496,16 @@ def can_access_movie(*, user_id, movie_id):
     return res[0][0] > 0
 
 @log
-def can_access_frame(*, user_id, frame_id):
-    """Return if the user is allowed to access a specific frame"""
+def can_access_frame(*, user_id, frame_id=None):
+    """Return if the user is allowed to access a specific frame.
+    """
     res = dbfile.DBMySQL.csfr(
-        get_dbreader(),
-        """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
-        (user_id=%s OR
-        course_id=(select primary_course_id from users where id=%s) OR
-        course_id in (select course_id from admins where user_id=%s))""",
-        (frame_id, user_id, user_id, user_id))
+            get_dbreader(),
+            """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
+            (user_id=%s OR
+            course_id=(select primary_course_id from users where id=%s) OR
+            course_id in (select course_id from admins where user_id=%s))""",
+            (frame_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
 @log
@@ -568,20 +570,36 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
     return {'movie_id':movie_id}
 
 
-# Don't log this; it will blow up the database when movies are updated
-def create_new_frame(*, movie_id, frame_msec, frame_data):
-    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movie_frames (movie_id, frame_msec, frame_data)
-                                       VALUES (%s,%s,%s)
-                                       ON DUPLICATE KEY UPDATE frame_msec=%s, frame_data=%s""",
-                                   (movie_id, frame_msec, frame_data, frame_data, frame_msec))
-    return {'frame_id':frame_id}
+################################################################
+## frames
+################################################################
 
+
+# Don't log this; it will blow up the database when movies are updated
+def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data=None):
+    if frame_number is None and frame_msec is None:
+        raise ValueError("frame_number and frame_msec cannot both be None")
+    if frame_number is not None:
+        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                       """INSERT INTO movie_frames (movie_id, frame_number)
+                                       VALUES (%s,%s)
+                                       ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
+                                       (movie_id, frame_number, movie_id, frame_number))
+    else:
+        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                       """INSERT INTO movie_frames (movie_id, frame_msec)
+                                       VALUES (%s,%s)
+                                       ON DUPLICATE KEY UPDATE movie_id=%s, frame_msec=%s""",
+                                       (movie_id, frame_msec, movie_id, frame_msec))
+    if frame_data is not None:
+        dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(movie_data,frame_id))
+    return frame_id
 
 
 def get_frame_annotations(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
-    Within that record, 'annotations' is stored in the database as a JSON string, but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
+    Within that record, 'annotations' is stored in the database as a JSON string,
+    but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
     """
 
     ret = dbfile.DBMySQL.csfr(get_dbreader(),
@@ -598,7 +616,7 @@ def get_frame_annotations(*, frame_id):
     return ret
 
 def get_frame_trackpoints(*, frame_id):
-    """Returns a list of dictionaries where each dictonary represents a trackpoint.
+    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
     """
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                """
@@ -608,47 +626,45 @@ def get_frame_trackpoints(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def get_frame_id(*, frame_id, get_annotations=False, get_trackpoints=False):
-    """Get a frame by ID. Returns the frame from the movie_frames database as a dictionary.
-    Optionally returns two additional fields = ['annotations'] with the annotations and ['trackpoints'] with the trackpoints.
-    :param: frame_id - the frame to get
-    :param: get_annotations - return anotations in the 'annotations' slot
-    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
-    """
-    ret = dbfile.DBMySQL.csfr(get_dbreader(),
-                              "SELECT *,id as frame_id from movie_frames where id=%s",
-                              (frame_id,),
-                              asDicts=True)
-    if len(ret)!=1:
-        return None
-    row = ret[0]
-    if get_annotations:
-        row['annotations'] = get_frame_annotations(frame_id=frame_id)
-    if get_trackpoints:
-        row['trackpoints'] = get_frame_trackpoints(frame_id=frame_id)
-    return row
-
-def get_frame(*, movie_id, frame_msec, msec_delta):
-    """Get a frame by movie_id and offset. Don't log this to prevent blowing up.
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=None, msec_delta=None,
+              get_annotations=False, get_trackpoints=False):
+    """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted
     :param: frame_msec - the frame we want
     :param: msec_delta - offset from the frame we want.
                          Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
+    :param: get_annotations - return anotations in the 'annotations' slot
+    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
+    :return: returns a dictionary with the frame info
     """
-    if msec_delta==0:
-        delta = "frame_msec = %s "
-    elif msec_delta>0:
-        delta = "frame_msec > %s order by frame_msec "
+    if frame_id is not None:
+        where = 'WHERE id = %s '
+        args  = [frame_id]
+    elif (movie_id is not None) and (frame_msec is not None):
+        if msec_delta==0:
+            where = "WHERE movie_id=%s AND frame_msec = %s "
+            args = [movie_id, frame_msec]
+        elif msec_delta>0:
+            where = "WHERE movie_id=%s AND frame_msec > %s order by frame_msec "
+            args = [movie_id, frame_msec]
+        else:
+            where = "WHERE movie_id=%s AND frame_msec < %s order by frame_msec DESC "
+            args = [movie_id, frame_msec]
     else:
-        delta = "frame_msec < %s order by frame_msec DESC "
-    cmd = f"""SELECT movie_id, frame_msec, frame_data, id as frame_id
-                              FROM movie_frames
-                              WHERE movie_id=%s and {delta} LIMIT 1"""
-    logging.debug("cmd = %s",cmd)
-    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, (movie_id,frame_msec), asDicts=True)
-    if len(ret)>0:
-        return ret[0]
-    return None
+        where = "WHERE movie_id=%s AND frame_number=%s"
+        args = [movie_id, frame_number]
+    cmd = f"""SELECT movie_id, frame_msec, frame_data, frame_number, id as frame_id
+                              FROM movie_frames {where} LIMIT 1"""
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    if len(rows)!=1:
+        return None
+    row = rows[0]
+    if get_annotations:
+        row['annotations'] = get_frame_annotations(frame_id=row['frame_id'])
+    if get_trackpoints:
+        row['trackpoints'] = get_frame_trackpoints(frame_id=row['frame_id'])
+    return row
+
 
 def get_analysis_engine_id(*, engine_name, engine_version):
     """Create an analysis engine if it does not exist, and return the engine_id"""
@@ -733,7 +749,6 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
         logging.debug("cmd=%s",cmd)
         logging.debug("args=%s  len=%s",args,len(args))
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
-
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
     """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
