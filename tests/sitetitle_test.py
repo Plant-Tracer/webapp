@@ -25,7 +25,7 @@ def test_sitetitle_just_selenium(http_endpoint):
     logging.info("http_endpoint %s", http_endpoint)
 
     options = Options()
-    options.headless = True
+    options.add_argument("--headless")
     #
     # Following added per ChatGPT-4:
     options.add_argument("--no-sandbox")  # This option is often necessary in Docker or CI environments
