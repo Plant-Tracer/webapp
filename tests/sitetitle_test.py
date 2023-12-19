@@ -34,6 +34,7 @@ def test_sitetitle_just_selenium(http_endpoint):
         options.binary_location = os.environ['CHROME_PATH']
 
     browser_driver = webdriver.Chrome(options = options) # TODO: externalize browser type, if possible
+    logging.info("http_endpoint %s", http_endpoint)
     browser_driver.get(http_endpoint)
     assert browser_driver.title == PLANTTRACER_TITLE
     browser_driver.close()
