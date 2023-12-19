@@ -626,6 +626,19 @@ def get_frame_trackpoints(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
+def get_movie_trackpoints(*, movie_id):
+    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    """
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               """
+                               SELECT frame_number,frame_msec,x,y,label FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames on movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s
+                               ORDER BY frame_number,frame_msec
+                               """,
+                               (frame_id,),
+                               asDicts=True)
+
 def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=None, msec_delta=None,
               get_annotations=False, get_trackpoints=False):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
