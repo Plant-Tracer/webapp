@@ -67,7 +67,9 @@ jobs:
         id: setup-chrome  
         uses: browser-actions/setup-chrome@v1.4.0
         with:
-          chrome-version: stable        
+          chrome-version: stable
+
+      - name: "Show Chrome info"       
         run: |
           echo Installed Chrome to ${{ steps.setup-chrome.outputs.chrome-path }}
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
