@@ -44,7 +44,7 @@ pytest-movie-test:
 
 pytest-selenium:
 	make touch
-	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py -k test_sitetitle_just_selenium
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug:
 	make touch

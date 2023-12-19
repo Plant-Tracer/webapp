@@ -74,6 +74,9 @@ jobs:
           echo Installed Chrome to ${{ steps.setup-chrome.outputs.chrome-path }}
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
 
+      - name: Install chromedriver
+        uses: nanasess/setup-chromedriver@v2.2.1
+
       - name: Update GITHUB_PATH and install Python dependencies
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH

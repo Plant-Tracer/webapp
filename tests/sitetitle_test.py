@@ -48,7 +48,14 @@ def test_sitetitle_just_selenium(http_endpoint):
 # Using pytest-selenium requires the --driver command line argument to pytest
 # --driver may be specified in pytest.ini using addopts Configuration option
 #
+# At the moment, using pytest-selenium for PlantTracer isn't the first choice
+# It's harder to debug and there are no public examples of how to use the fixtures
+# in test modules. There are plenty of examples of just using selenium to
+# create one's own fixtures, so that's the direction for now.
+#
 # TODO: test should probably be headless, or at least clean up their browser processes
-def test_sitetitle_pytest_selenium(http_endpoint, chrome_options, selenium):
+
+@pytest.mark.skip(reason='not using pytest-selenium')
+def test_sitetitle_pytest_selenium(http_endpoint, selenium):
     selenium.get(http_endpoint) # TODO: externalize site URL
     assert selenium.title == PLANTTRACER_TITLE
