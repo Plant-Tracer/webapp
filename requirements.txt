@@ -21,3 +21,6 @@ requests
 validate_email_address
 aiosmtplib
 tabulate
+webdriver-manager
+selenium
+pytest-selenium
