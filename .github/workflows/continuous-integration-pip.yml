@@ -101,6 +101,10 @@ jobs:
         run: |
           python3 -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
+      - name: Run selenium tests
+        run: |
+          CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make pytest-selenium
+
       - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:

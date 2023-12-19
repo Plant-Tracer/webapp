@@ -42,6 +42,10 @@ pytest-movie-test:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/movie_test.py
 
+pytest-selenium:
+	make touch
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
+	
 pytest-debug:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
