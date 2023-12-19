@@ -209,7 +209,7 @@ if __name__ == "__main__":
     if args.clean:
         clean()
 
-    if args.create_course:
+    if args.createcourse:
         if not args.email:
             print("Must provide --email",file=sys.stderr)
             exit(1)
