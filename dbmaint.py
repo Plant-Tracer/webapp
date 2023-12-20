@@ -183,7 +183,7 @@ if __name__ == "__main__":
         with open(args.writeconfig, 'w') as fp:
             cp.write(fp)
         print(args.writeconfig,"is written with a root configuration")
-        exit(0)
+        sys.exit(0)
 
     # The following all require a root config
     assert os.path.exists(args.rootconfig)

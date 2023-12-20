@@ -33,7 +33,9 @@ import tracker
 
 @pytest.fixture
 def new_movie(new_user):
-    """Create a new movie_id and return it"""
+    """Create a new movie_id and return it.
+    When we are finished with the movie, purge it and all of its child data.
+    """
     cfg = copy.copy(new_user)
 
     api_key = cfg[API_KEY]
@@ -88,8 +90,7 @@ def new_movie(new_user):
     db.purge_movie(movie_id=movie_id)
 
 
-@pytest.fixture
-def new_movie_uploaded(new_movie):
+def test_new_movie(new_movie):
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
@@ -106,25 +107,12 @@ def new_movie_uploaded(new_movie):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_delete_movie()
 
-    yield cfg
-
-
-
-def test_new_movie(new_movie):
-    """Create a new user, upload the movie, delete the movie, and shut down"""
-    cfg = copy.copy(new_movie)
-    api_key = cfg[API_KEY]
-    movie_id = cfg[MOVIE_ID]
+    # Make sure that we can get data base the movie
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_app.api_get_movie_data()
     # res must be a movie
     assert len(res)>0
-
-def test_new_movie_upload(new_movie_uploaded):
-    """Create a new user, upload the movie, delete the movie, and shut down"""
-    data = db.get_movie_data(movie_id=new_movie_uploaded[MOVIE_ID])
-    logging.info("movie size: %s written",len(data))
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""
@@ -184,13 +172,12 @@ def test_movie_update_metadata(new_movie):
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['published'] == 0
 
-    # Try to publish the movie with the course admin's API key. This should work
 
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
 def test_movie_extract(new_movie_uploaded):
-    """Try extracting movie frames and the frame-by-frame access"""
+    """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie_uploaded)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
@@ -210,11 +197,6 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(frame0,mime=True)== MIME.JPEG
     assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
     assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
-
-    def sha256(x):
-        hasher = hashlib.sha256()
-        hasher.update(x)
-        return hasher.hexdigest()
 
     # Grab three frames and see if they are different
     def get_jpeg_frame(number):
@@ -237,7 +219,9 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(jpeg1,mime=True)== MIME.JPEG
     assert magic.from_buffer(jpeg2,mime=True)== MIME.JPEG
 
-    # See if we can save two trackpoints in the frame and get them back
+
+def test_track_point_annotations(new_movie_uploaded):
+    """See if we can save two trackpoints in the frame and get them back"""
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
@@ -287,8 +271,11 @@ def test_movie_extract(new_movie_uploaded):
     assert tps[2]['label'] == tp2['label']
     assert tps[2]['frame_id'] == frame_id
 
+
+def test_movie_tracking(new_movie_uploaded):
     """
-    # Ask the API to track the trackpoints between frames!
+    Load up our favorite trackpoint ask the API to track a movie!
+    """
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
                         'frame_msec': '0',
@@ -298,8 +285,11 @@ def test_movie_extract(new_movie_uploaded):
                         'engine_name':Engines.NULL }):
         ret = bottle_app.api_get_frame()
     logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
-    assert ret['trackpoints_engine'][0]==tp0
-    assert ret['trackpoints_engine'][1]==tp1
+    tpts = [{"x":275,"y":215,"label":"label1"},{"x":410,"y":175,"label":"label2"}]
+
+    TODO HERE YOU WERE
+
+
     """
 
     """

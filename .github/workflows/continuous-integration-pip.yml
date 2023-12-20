@@ -63,7 +63,21 @@ jobs:
         run: |
           make install-windows
 
-      - name: Update GITHUB_PATH and install dependencies
+      - name: "Install Chrome"
+        id: setup-chrome  
+        uses: browser-actions/setup-chrome@v1.4.0
+        with:
+          chrome-version: stable
+
+      - name: "Show Chrome info"       
+        run: |
+          echo Installed Chrome to ${{ steps.setup-chrome.outputs.chrome-path }}
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+
+      - name: Install chromedriver
+        uses: nanasess/setup-chromedriver@v2.2.1
+
+      - name: Update GITHUB_PATH and install Python dependencies
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           make install-python-dependencies
@@ -95,7 +109,7 @@ jobs:
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
         run: |
-          make coverage
+          CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')

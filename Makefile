@@ -42,6 +42,10 @@ pytest-movie-test:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/movie_test.py
 
+pytest-selenium:
+	make touch
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
+
 pytest-debug:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
@@ -91,6 +95,8 @@ install-python-dependencies:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	which ffmpeg || sudo apt install ffmpeg
+	#which chromium || sudo apt-get install -y chromium-browser
+	#chromium --version
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-ubuntu.txt ]; then $(PYTHON) -m pip install --user -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
@@ -102,6 +108,7 @@ install-macos:
 	brew install python3
 	brew install libmagic
 	brew install ffmpeg
+	# brew install chromium --no-quarantine
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-macos.txt ]; then $(PYTHON) -m pip install --user -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	if [ -r requirements.txt ]; then $(PYTHON) -m pip install --user -r requirements.txt ; else echo no requirements.txt ; fi
