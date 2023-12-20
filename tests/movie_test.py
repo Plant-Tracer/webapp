@@ -176,9 +176,9 @@ def test_movie_update_metadata(new_movie):
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
-def test_movie_extract(new_movie_uploaded):
+def test_movie_extract(new_movie):
     """Try extracting individual movie frames"""
-    cfg = copy.copy(new_movie_uploaded)
+    cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
@@ -220,8 +220,14 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(jpeg2,mime=True)== MIME.JPEG
 
 
-def test_track_point_annotations(new_movie_uploaded):
+def test_track_point_annotations(new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
+    cfg = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    user_id = cfg[USER_ID]
+
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
@@ -272,58 +278,48 @@ def test_track_point_annotations(new_movie_uploaded):
     assert tps[2]['frame_id'] == frame_id
 
 
-def test_movie_tracking(new_movie_uploaded):
+def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
     """
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '+1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.NULL }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
+    cfg = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    user_id = cfg[USER_ID]
     tpts = [{"x":275,"y":215,"label":"label1"},{"x":410,"y":175,"label":"label2"}]
 
-    TODO HERE YOU WERE
+    # get frame_id with the api_new_frame
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': '0'}):
+        ret = bottle_app.api_new_frame()
+    logging.debug("ret=%s",ret)
+    assert ret['error']==False
+    frame_id = int(ret['frame_id'])
 
+    # save the trackpoints
+    with boddle(params={"api_key": api_key,
+                        'movie_id': str(movie_id),
+                        'frame_id': str(frame_id),
+                        'trackpoints' : tpts,
+                        'frame_number': '0'}):
+        ret = bottle_app.api_put_frame_analysis()
+    logging.debug("ret=%s",ret)
+    assert ret['error']==False
 
-    """
-
-    """
     # Now track with CV2
     with boddle(params={"api_key": api_key,
                         'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.CV2 }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret2.trackpoints=%s",ret['trackpoints_engine'])
-    assert 9.0 < ret['trackpoints_engine'][0]['x'] < 10.0
-    assert 9.0 < ret['trackpoints_engine'][0]['y'] < 10.0
-    assert ret['trackpoints_engine'][0]['label'] == TEST_LABEL1
-
-    assert 17.0 < ret['trackpoints_engine'][1]['x'] < 20.0
-    assert 20.0 < ret['trackpoints_engine'][1]['y'] < 22.0
-    assert ret['trackpoints_engine'][1]['label'] == TEST_LABEL2
-    """
-
-    # Delete the trackpoints
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
-
-    # Make sure they are deleted
-    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
-
-    # Delete the analysis (includes annotations and trackpoints)
-    # logging.info("deleting frame analysis engine_id %s name %s",engine_id,engine_name)
-    # db.delete_frame_analysis(engine_id=engine_id)
-
-    # delete the analysis engine
-    db.delete_analysis_engine(engine_name=engine_name, recursive=True)
+                        'frame_start': '0',
+                        'engine_name':Engines.CV2,
+                        'engine_version':0 }):
+        ret = bottle_app.api_track_movie()
+    logging.debug("ret=%s",ret)
+    assert ret['error']==False
+    assert 'trackpoints' in ret
+    assert isinstance(ret['trackpoints'],list)
+    assert 'new_movie_id' in ret
 
 
 """
@@ -382,7 +378,6 @@ test frame annotations ---
                  "key2": 'value with "double" quotes',
                  "key3": "value with 'single' and \"double\" quotes" }
 
-
     # Check for error if all three are none
     with pytest.raises(RuntimeError):
         db.put_frame_annotations(frame_id=frame_id, annotations=annotations1)
@@ -408,10 +403,7 @@ test frame annotations ---
                         'engine_version':'2',
                         'annotations':json.dumps(annotations2)}):
         bottle_app.api_put_frame_analysis()
-
-
 """
-
 
 ################################################################
 ## support functions

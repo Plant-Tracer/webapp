@@ -567,7 +567,7 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
                             (movie_id, movie_data))
-    return {'movie_id':movie_id}
+    return movie_id
 
 
 ################################################################
@@ -577,6 +577,11 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 # Don't log this; it will blow up the database when movies are updated
 def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data=None):
+    """Get the frame id specified by movie_id and either frame_number of frame_msec.
+    if frame_data is provided, update. Otherwise just return the frame_id.
+    NOTE: Currently does not check for frames that have b oth frame_number and frame_msec set.
+    """
+
     if frame_number is None and frame_msec is None:
         raise ValueError("frame_number and frame_msec cannot both be None")
     if frame_number is not None:
