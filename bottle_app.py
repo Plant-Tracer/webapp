@@ -540,8 +540,8 @@ def api_track_movie():
     """Tracks a movie that has been uploaded.
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
-    :param track_start: the frame to start tracking; frames 0..(track_start-1) have track points copied.
-    :param retrack_movie_id: - If true, grab trackpoints from 0..(track_start-1) from this movie.
+    :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
+    :param retrack_movie_id: - If true, grab trackpoints from 0..(frame_start-1) from this movie.
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
@@ -555,9 +555,9 @@ def api_track_movie():
 
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
-    track_start    = get_int('track_start')
+    frame_start    = get_int('frame_start')
 
-    # Get the trackpoints for track_start
+    # Get the trackpoints for frame_start
     # write the movie
     # Write the trackpoints
     movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
@@ -565,13 +565,17 @@ def api_track_movie():
     # Find trackpoints we are tracking or retracking
     # If this is the first time the movie is tracked, we will likely just get the first frame.
     # If we are retracking, we will get all of the frames that were tracked.
-    retrack_movie_id = get_int('retrack_movie_id', movie_id)
-    input_trackpoints    = db.get_movie_trackpoints(movie_id=retrack_movie_id)
+    retrack_movie_id  = get_int('retrack_movie_id', movie_id)
+    logging.debug("movie_id=%s retrack_movie_id=%s",movie_id,retrack_movie_id)
+    input_trackpoints = db.get_movie_trackpoints(movie_id=retrack_movie_id)
+
+    if len(input_trackpoints)==0:
+        return E.NO_TRACKPOINTS
 
     # Write the movie to a tempfile, because OpenCV has to read movies from files.
     with tempfile.NamedTemporaryFile(suffix='.mp4',mode='wb') as infile:
         infile.write( db.get_movie_data(movie_id=movie_id) )
-        infile.flush(0)
+        infile.flush()
 
         # Create an output file, becuase OpenCV has to write movies to files
         with tempfile.NamedTemporaryFile(suffix='.mp4', mode='rb') as outfile:
@@ -585,8 +589,8 @@ def api_track_movie():
                                       moviefile_output = outfile.name)
 
             # Compute the new trackpoints
-            new_movie_data = outfile.read()
-            output_trackpoints = ret['output_trackpoints']
+            new_movie_data       = outfile.read()
+            output_trackpoints   = ret['output_trackpoints']
             output_frame_numbers = sorted(set([tp['frame_number'] for tp in output_trackpoints]))
 
             # Save the movie
@@ -601,11 +605,11 @@ def api_track_movie():
                                                movie_data = new_movie_data)
 
             # Now write all of the trackpoints (this is unfortunately O(n^2) and pretty inefficient.)
-            for (frame_number, frame_trackpoints) in enumerate(output_trackpoints):
+            for frame_number in output_frame_numbers:
                 frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number)
-                db.put_frame_trackpoints(frame_id = frame_id, trackpoints=[tp for tp in frame_trackpoints if tp['frame_number']==frame_number])
+                db.put_frame_trackpoints(frame_id = frame_id, trackpoints=[tp for tp in output_trackpoints if tp['frame_number']==frame_number])
 
-    return {'error': False, 'trackpoints': trackpoints,'new_movie_id':new_movie_id}
+    return {'error': False, 'output_trackpoints': output_trackpoints,'new_movie_id':new_movie_id}
 
 ##
 # Movie analysis API
@@ -734,23 +738,21 @@ def api_put_frame_analysis():
     Writes analysis and trackpoints for specific frames; frame_id is required
     :param: frame_id - the frame.
     :param: api_key  - the api_key
-    :param: engine_id - the engine id (if you know it)
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
     frame_id  = get_int('frame_id')
-    engine_id = get_int('engine_id')
     if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
         annotations=get_json('annotations')
         trackpoints=get_json('trackpoints')
+        logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
         if annotations is not None:
             db.put_frame_annotations(frame_id=frame_id,
-                                     engine_id=engine_id,
                                      annotations=annotations,
-                                     engine_name=request.forms.get('engine_name'),
-                                     engine_version=request.forms.get('engine_version'))
+                                     engine_name=get('engine_name'),
+                                     engine_version=get('engine_version'))
         if trackpoints is not None:
             db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
         return {'error': False, 'message':'Analysis recorded.'}

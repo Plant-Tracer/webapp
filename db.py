@@ -641,7 +641,7 @@ def get_movie_trackpoints(*, movie_id):
                                WHERE movie_id=%s
                                ORDER BY frame_number,frame_msec
                                """,
-                               (frame_id,),
+                               (movie_id,),
                                asDicts=True)
 
 def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=None, msec_delta=None,
@@ -764,8 +764,7 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
     dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
     if vals:
         cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
-        logging.debug("cmd=%s",cmd)
-        logging.debug("args=%s  len=%s",args,len(args))
+        logging.debug("cmd=%s vals=%s",cmd,vals)
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
