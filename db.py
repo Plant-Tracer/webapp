@@ -274,7 +274,7 @@ def register_email(*, email, name, course_key=None, course_id=None):
 
 
 @log
-def send_links(*, email, planttracer_endpoint):
+def send_links(*, email, planttracer_endpoint, new_api_key):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
     PROJECT_EMAIL = 'admin@planttracer.com'
 
@@ -283,7 +283,6 @@ def send_links(*, email, planttracer_endpoint):
     TO_ADDRS = [email]
     with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
-    new_api_key = make_new_api_key(email=email)
 
     if not new_api_key:
         logging.info("not in database: %s",email)
@@ -304,6 +303,7 @@ def send_links(*, email, planttracer_endpoint):
                         dry_run=DRY_RUN,
                         msg=msg
                         )
+    return new_api_key
 
 ################ API KEY ################
 

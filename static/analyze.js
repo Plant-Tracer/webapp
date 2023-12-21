@@ -10,9 +10,7 @@ Core idea:
 - templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
 - With this frame, annotations can be created. They are stored on the server.
 - On startup, the <div> is stored in a variable and a first one is instantiated.
-- Pressing 'track next frame' loads the next frame under the current frame, but the annotations come from applying the tracking API to the current anotations.
-- Pressing 'track next 10 frames' does the same, but for 10 frames.
-
+- Pressing 'track to end of movie' asks the server to track from here to the end of the movie.
 
 ***/
 
@@ -222,8 +220,8 @@ class PlantTracerController extends CanvasController {
     constructor( this_id ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        this.this_id      = this_id;
-        this.frame_msec   = null; // don't know it yet, but I will
+        this.this_id       = this_id;
+        this.frame_number  = 0; // default to the first frame
         this.canvasId     = 0;
 
         // add_marker_status shows error messages regarding the marker name
@@ -357,7 +355,7 @@ class PlantTracerController extends CanvasController {
     track_next_frame(event) {
         // get the next frame and apply tracking logic
         console.log("track_next_frame() this=",this,"event=",event);
-        create_new_div(this.frame_msec, +1, this.json_trackpoints());
+        create_new_div(this.frame_number + 1, this.json_trackpoints());
     }
 }
 
@@ -409,16 +407,13 @@ class myImage extends MyObject {
 
 /* create_new_div
  * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
- * - Makes a call to get-frame to get the picture.
- *
- * If msec_delta>0, then we are getting the *next* frame, in which case we
- * apply the tracking as well.
+ * - Makes a call to get-frame to get the frame
+ *   - callback gets the frame and trackpoints; it draws them and sets up the event loops to draw more.
  */
-function create_new_div(frame_msec, msec_delta, json_trackpoints) {
+function create_new_div(frame_number, json_trackpoints) {
     let this_id  = "frame-" + (div_id_counter++);
     let this_sel = `${this_id}`;
-    console.log(`create_new_div(frame_msec=${frame_msec},msec_delta=${msec_delta}) `+
-                `this_id=${this_id} this_sel=${this_sel}`);
+    console.log(`create_new_div: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
@@ -432,27 +427,19 @@ function create_new_div(frame_msec, msec_delta, json_trackpoints) {
     console.log("json_trackpoints:",json_trackpoints);
 
     // create a new PlantTracerController; we may need to save it in an array too
-    let parms = {movie_id:movie_id,
-                 api_key:api_key,
-                 frame_msec:frame_msec,
-                 msec_delta:msec_delta,
-                 format:'json',
-                 save_trackpoints:json_trackpoints,
-                 get_trackpoints:1,
-                 engine_name:ENGINE,
-                 engine_version:'0',
-                 user_data:this_id
-                };
-    console.log("SEND:",parms);
-    $.post('/api/get-frame', parms).done( function( data ) {
-        // We got data back consisting of the frame, frame_id, frame_msec and more...
+    let get_frame_parms = {
+        api_key:api_key,
+        movie_id:movie_id,
+        frame_number:frame_number,
+        format:'json',
+    };
+    console.log("SEND get_frame_params:",get_frame_parms);
+    $.post('/api/get-frame', get_frame_parms).done( function( data ) {
         console.log('RECV:',data);
         if (data.error) {
             alert(`error: ${data.message}`);
             return;
         }
-        let this_id  = data.user_data;
-        let this_sel = `#${this_id}`;
         let ptc = new PlantTracerController( this_id );
         console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
         console.log("data=",data);
@@ -461,9 +448,7 @@ function create_new_div(frame_msec, msec_delta, json_trackpoints) {
         ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
         ptc.frame_id       = data.frame_id;
         ptc.frame_msec     = data.frame_msec;
-        $(`#${this_id} td.message`).text(
-            `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} `
-        );
+        $(`#${this_id} td.message`).text( `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} ` );
 
         // Add points in the analysis
         if (data.analysis) {
@@ -503,7 +488,7 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = create_new_div(0, 0, "");           // create the first <div> and its controller
+    ptc = create_new_div(0, "");           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }

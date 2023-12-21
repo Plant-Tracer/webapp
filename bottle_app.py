@@ -68,6 +68,7 @@ import auth
 
 from paths import view, STATIC_DIR
 from constants import C,E
+import mailer
 import tracker
 
 __version__ = '0.0.1'
@@ -386,8 +387,13 @@ def api_register():
         return E.NO_REMAINING_REGISTRATIONS
     name = request.forms.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
-    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
-    return {'error': False, 'message': 'Registration key sent to '+email}
+    new_api_key = db.make_new_api_key(email=email)
+    link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
+    try:
+        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    except mailer.InvalidMailerConfiguration:
+        return {'error':True, 'message':'Mailer not properly configured.'+link_html}
+    return {'error': False, 'message': 'Registration key sent to '+email+link_html}
 
 @bottle.route('/api/resend-link', method=GET_POST)
 def api_send_link():
@@ -678,10 +684,9 @@ def api_get_frame():
     """
     user_id    = get_user_id()
 
-    frame_id   = get_int('frame_id')
-    frame_id   = get_int('frame_number')
-    movie_id   = get_int('movie_id')
-    frame_number = get_int('frame_number')
+    frame_id       = get_int('frame_id')
+    frame_number   = get_int('frame_number')
+    movie_id       = get_int('movie_id')
     frame_msec = get_int('frame_msec',0 ) # location frame
     msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt        = get('format', 'jpeg').lower()
@@ -712,19 +717,24 @@ def api_get_frame():
     if ret is None:
         ret = {'movie_id':movie_id}
 
+    # Now ret is a dictonary
+    # If we do not have a frame_id, get one.
+    if 'frame_id' not in ret:
+        ret['frame_id'] = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
+
+    # If we do not have frame_data, extract it from the movie
     if 'frame_data' not in ret:
-        # Get the frame from the movie
-        movie_data = db.get_movie_data(movie_id=movie_id)
-        ret['frame_data'] = tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
+        ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+                                                  frame_number=frame_number,
+                                                  fmt='jpeg')
 
-    if 'frame_data' in ret:
-        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
-        del ret['frame_data']
+    # Convert the frame_data to a data URL
+    ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
+    del ret['frame_data']
 
-    # if we have the frame_id, get the annotations and trackpoints
-    if frame_id is not None:
-        ret['annotations'] = db.get_frame_annotations(frame_id=frame_id)
-        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=frame_id)
+    # Get any frame annotations and trackpoints
+    ret['annotations'] = db.get_frame_annotations(frame_id=ret['frame_id'])
+    ret['trackpoints'] = db.get_frame_trackpoints(frame_id=ret['frame_id'])
 
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on

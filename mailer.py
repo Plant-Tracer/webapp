@@ -20,6 +20,10 @@ SMTP_DEBUG = 'SMTP_DEBUG'
 SMTP_DEBUG_DEFAULT = "NO"
 SMTP_NO_TLS = 'SMTP_NO_TLS'
 
+class InvalidMailerConfiguration(RuntimeError):
+    def __init__(self):
+        super().__init__()
+
 
 def send_message(*,
                  from_addr: str,
@@ -53,11 +57,15 @@ def send_message(*,
 
 
 def smtp_config_from_environ():
-    return {SMTP_HOST:     os.environ[SMTP_HOST],
-            SMTP_USERNAME: os.environ[SMTP_USERNAME],
-            SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
-            SMTP_PORT:     int(os.environ[SMTP_PORT])
-            }
+    try:
+        return {SMTP_HOST:     os.environ[SMTP_HOST],
+                SMTP_USERNAME: os.environ[SMTP_USERNAME],
+                SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
+                SMTP_PORT:     int(os.environ[SMTP_PORT])
+                }
+    except KeyError:
+        pass
+    raise InvalidMailerConfiguration()
 
 
 IMAP_HOST = 'IMAP_HOST'
