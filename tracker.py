@@ -93,56 +93,6 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output):
-    """
-    Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
-    Draws frame numbers on each frame
-    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
-    :param: moviefile - an MP4 to track. CV2 cannot read movies from memory; this is a known problem.
-    :param: trackpoints - an array of (x,y) points to track. [pt#][0], [pt#][1]
-    :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
-    :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
-
-    """
-    if engine_name!=Engines.CV2:
-        raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
-
-    #points  = np.array([[pt['x'],pt['y']] for pt in input_trackpoints])
-    cap = cv2.VideoCapture(moviefile_input)
-    ret, current_frame = cap.read()
-
-    output_trackpoints = []
-
-    # should be movie name + tracked
-
-    # Get video properties
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps    = cap.get(cv2.CAP_PROP_FPS)
-
-    # Create a VideoWriter object to save the output video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(moviefile_output, fourcc, fps, (width, height))
-
-    trackpoints = input_trackpoints
-    for frame_number in range(1_000_000):
-        prev_frame = current_frame
-        ret, current_frame = cap.read()
-        if not ret:
-            break
-
-        trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=trackpoints)
-        print("ret=",trackpoints)
-        cv2_label_frame(frame=current_frame, trackpoints=trackpoints, frame_label=frame_number)
-
-        out.write(current_frame)
-        output_trackpoints.append(trackpoints)
-
-    cap.release()
-    out.release()
-    return {'output_trackpoints':output_trackpoints}
-
-
 def extract_frame(*, movie_data, frame_number, fmt):
     """Download movie_id to a temporary file, find frame_number and return it in the request fmt.
     """
@@ -168,6 +118,61 @@ def extract_frame(*, movie_data, frame_number, fmt):
                 raise ValueError("Invalid fmt: "+fmt)
     raise RuntimeError("invalid frame_number")
 
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_untracked=None, moviefile_output, frame_start=0):
+    """
+    Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
+    Draws frame numbers on each frame
+    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
+    :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
+    :param: moviefile_output - file name of the tracked output, with annotations.
+    :param: trackpoints - a list of dictionaries {'x', 'y', 'label', 'frame_number'} to track.  Those before frame_start will be copied to the output.
+    :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
+    :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
+
+    """
+    if engine_name!=Engines.CV2:
+        raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
+
+    cap = cv2.VideoCapture(moviefile_input)
+    ret, current_frame = cap.read()
+
+    # should be movie name + tracked
+
+    # Get video properties
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps    = cap.get(cv2.CAP_PROP_FPS)
+
+    # Create a VideoWriter object to save the output video
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(moviefile_output, fourcc, fps, (width, height))
+
+    output_trackpoints = []
+    for frame_number in range(1_000_000):
+        prev_frame = current_frame
+        ret, current_frame = cap.read()
+        if not ret:
+            break
+
+        # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
+        if frame_number <= frame_start:
+            current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+
+        # If this is a frame to track, then track it
+        if frame_number >= frame_start:
+            current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
+
+        # Label the output and write it
+        cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
+        out.write(current_frame)
+
+        # Add the trackpionts to the output list, giving each a frame number
+        output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+    cap.release()
+    out.release()
+    return {'output_trackpoints':output_trackpoints}
+
+
 # The trackpoint is at (138,86) when the image is scaled to a width: 320 height: 240
 
 if __name__ == "__main__":
@@ -182,8 +187,11 @@ if __name__ == "__main__":
         "--points_to_track", default='[{"x":138,"y":86,"label":"mypoint"}]', help="list of points to track as json 2D array.")
     parser.add_argument('--outfile',default='tracked_output.mp4')
     args = parser.parse_args()
-    trackpoints = json.loads(args.points_to_track)
 
+    # Get the trackpoints
+    trackpoints = json.loads(args.points_to_track)
+    # Make sure every trackpoint is for frame 0
+    trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
 
     res = track_movie(engine_name=args.engine, moviefile_input=args.moviefile, input_trackpoints=trackpoints, moviefile_output=args.outfile)
     print("results:")

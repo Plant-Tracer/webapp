@@ -19,12 +19,10 @@ from os.path import abspath, dirname
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 import db
-#import movietool
+import dbmaint
 import bottle_app
 import ctools.dbfile as dbfile
 from paths import TEST_DIR
-
-MAX_ENROLLMENT = 10
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
@@ -57,22 +55,18 @@ def new_course():
     admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
     course_name = f"test-{course_key} course name"
 
-    ct = db.create_course(course_key=course_key,
-                          course_name=course_name,
-                          max_enrollment=MAX_ENROLLMENT)['course_id']
-
-    admin_id = db.register_email(email=admin_email, course_key=course_key, name=TEST_ADMIN_NAME)['user_id']
-
-    logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
-    db.make_course_admin(email=admin_email, course_key=course_key)
+    admin_id = dbmaint.create_course(course_key = course_key,
+                                     admin_email = admin_email,
+                                     admin_name = 'Dr. Admin',
+                                     course_name = course_name)
 
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
            DBREADER:db.get_dbreader(),
-           DBWRITER:db.get_dbwriter()
-           }
+           DBWRITER:db.get_dbwriter() }
+
     db.remove_course_admin(email=admin_email, course_key=course_key)
     db.delete_user(email=admin_email)
     ct = db.delete_course(course_key=course_key)

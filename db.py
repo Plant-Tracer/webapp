@@ -567,7 +567,7 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
                             (movie_id, movie_data))
-    return {'movie_id':movie_id}
+    return movie_id
 
 
 ################################################################
@@ -577,6 +577,11 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 # Don't log this; it will blow up the database when movies are updated
 def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data=None):
+    """Get the frame id specified by movie_id and either frame_number of frame_msec.
+    if frame_data is provided, update. Otherwise just return the frame_id.
+    NOTE: Currently does not check for frames that have b oth frame_number and frame_msec set.
+    """
+
     if frame_number is None and frame_msec is None:
         raise ValueError("frame_number and frame_msec cannot both be None")
     if frame_number is not None:
@@ -624,6 +629,19 @@ def get_frame_trackpoints(*, frame_id):
                                       frame_id,x,y,label FROM movie_frame_trackpoints
                                WHERE frame_id=%s""",
                                (frame_id,),
+                               asDicts=True)
+
+def get_movie_trackpoints(*, movie_id):
+    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    """
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               """
+                               SELECT frame_number,frame_msec,x,y,label FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames on movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s
+                               ORDER BY frame_number,frame_msec
+                               """,
+                               (movie_id,),
                                asDicts=True)
 
 def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=None, msec_delta=None,
@@ -746,8 +764,7 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
     dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
     if vals:
         cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
-        logging.debug("cmd=%s",cmd)
-        logging.debug("args=%s  len=%s",args,len(args))
+        logging.debug("cmd=%s vals=%s",cmd,vals)
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):

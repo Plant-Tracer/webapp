@@ -33,7 +33,9 @@ import tracker
 
 @pytest.fixture
 def new_movie(new_user):
-    """Create a new movie_id and return it"""
+    """Create a new movie_id and return it.
+    When we are finished with the movie, purge it and all of its child data.
+    """
     cfg = copy.copy(new_user)
 
     api_key = cfg[API_KEY]
@@ -48,7 +50,7 @@ def new_movie(new_user):
 
     # This generates an error, which is why it needs to be caught with pytest.raises():
     logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
-    with boddle(params={"api_key": api_key_invalid,
+    with boddle(params={'api_key': api_key_invalid,
                         "title": movie_title,
                         "description": "test movie description",
                         "movie_base64_data": base64.b64encode(movie_data)}):
@@ -58,7 +60,7 @@ def new_movie(new_user):
 
     # This does not raise an error
     logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
-    with boddle(params={"api_key": api_key,
+    with boddle(params={'api_key': api_key,
                         "title": movie_title,
                         "description": "test movie description",
                         "movie_base64_data": base64.b64encode(movie_data)}):
@@ -84,12 +86,12 @@ def new_movie(new_user):
         res = bottle_app.api_delete_movie()
     assert res['error'] == False
 
-    logging.debug("Purge the movie that we have deleted")
+    logging.debug("new_movie fixture: Purge the movie that we have deleted")
     db.purge_movie(movie_id=movie_id)
+    logging.debug("new_movie fixture: done")
 
 
-@pytest.fixture
-def new_movie_uploaded(new_movie):
+def test_new_movie(new_movie):
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
@@ -106,25 +108,12 @@ def new_movie_uploaded(new_movie):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_delete_movie()
 
-    yield cfg
-
-
-
-def test_new_movie(new_movie):
-    """Create a new user, upload the movie, delete the movie, and shut down"""
-    cfg = copy.copy(new_movie)
-    api_key = cfg[API_KEY]
-    movie_id = cfg[MOVIE_ID]
+    # Make sure that we can get data base the movie
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_app.api_get_movie_data()
     # res must be a movie
     assert len(res)>0
-
-def test_new_movie_upload(new_movie_uploaded):
-    """Create a new user, upload the movie, delete the movie, and shut down"""
-    data = db.get_movie_data(movie_id=new_movie_uploaded[MOVIE_ID])
-    logging.info("movie size: %s written",len(data))
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""
@@ -184,14 +173,13 @@ def test_movie_update_metadata(new_movie):
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['published'] == 0
 
-    # Try to publish the movie with the course admin's API key. This should work
 
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
-def test_movie_extract(new_movie_uploaded):
-    """Try extracting movie frames and the frame-by-frame access"""
-    cfg = copy.copy(new_movie_uploaded)
+def test_movie_extract(new_movie):
+    """Try extracting individual movie frames"""
+    cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
@@ -211,14 +199,9 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
     assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
 
-    def sha256(x):
-        hasher = hashlib.sha256()
-        hasher.update(x)
-        return hasher.hexdigest()
-
     # Grab three frames and see if they are different
     def get_jpeg_frame(number):
-        with boddle(params={"api_key": api_key,
+        with boddle(params={'api_key': api_key,
                             'movie_id': str(movie_id),
                             'frame_number': str(number),
                             'format':'jpeg' }):
@@ -237,7 +220,15 @@ def test_movie_extract(new_movie_uploaded):
     assert magic.from_buffer(jpeg1,mime=True)== MIME.JPEG
     assert magic.from_buffer(jpeg2,mime=True)== MIME.JPEG
 
-    # See if we can save two trackpoints in the frame and get them back
+
+def test_track_point_annotations(new_movie):
+    """See if we can save two trackpoints in the frame and get them back"""
+    cfg = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    user_id = cfg[USER_ID]
+
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
@@ -287,59 +278,72 @@ def test_movie_extract(new_movie_uploaded):
     assert tps[2]['label'] == tp2['label']
     assert tps[2]['frame_id'] == frame_id
 
-    """
-    # Ask the API to track the trackpoints between frames!
-    with boddle(params={"api_key": api_key,
-                        'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '+1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.NULL }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret1.trackpoints_engine=%s",ret['trackpoints_engine'])
-    assert ret['trackpoints_engine'][0]==tp0
-    assert ret['trackpoints_engine'][1]==tp1
-    """
 
+def test_movie_tracking(new_movie):
     """
+    Load up our favorite trackpoint ask the API to track a movie!
+    """
+    cfg      = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key  = cfg[API_KEY]
+    user_id  = cfg[USER_ID]
+    tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
+
+    # get frame_id with the api_new_frame
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': '0'}):
+        ret = bottle_app.api_new_frame()
+    logging.debug("new frame ret=%s",ret)
+    assert ret['error']==False
+    frame_id = int(ret['frame_id'])
+
+    # save the trackpoints
+    with boddle(params={'api_key': api_key,
+                        'frame_id': str(frame_id),
+                        'trackpoints' : json.dumps(tpts),
+                        'frame_number': '0'}):
+        ret = bottle_app.api_put_frame_analysis()
+    logging.debug("save trackpoints ret=%s",ret)
+    assert ret['error']==False
+
     # Now track with CV2
-    with boddle(params={"api_key": api_key,
+    with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_msec': '0',
-                        'msec_delta': '1',
-                        'format':'json',
-                        'get_trackpoints':True,
-                        'engine_name':Engines.CV2 }):
-        ret = bottle_app.api_get_frame()
-    logging.debug("ret2.trackpoints=%s",ret['trackpoints_engine'])
-    assert 9.0 < ret['trackpoints_engine'][0]['x'] < 10.0
-    assert 9.0 < ret['trackpoints_engine'][0]['y'] < 10.0
-    assert ret['trackpoints_engine'][0]['label'] == TEST_LABEL1
+                        'frame_start': '0',
+                        'engine_name':Engines.CV2,
+                        'engine_version':0 }):
+        ret = bottle_app.api_track_movie()
+    logging.debug("track movie ret=%s",ret)
+    assert ret['error']==False
+    # Extract the trackpoints
+    output_trackpoints = ret['output_trackpoints']
+    new_movie_id       = ret['new_movie_id']
+    assert len(output_trackpoints)>90
 
-    assert 17.0 < ret['trackpoints_engine'][1]['x'] < 20.0
-    assert 20.0 < ret['trackpoints_engine'][1]['y'] < 22.0
-    assert ret['trackpoints_engine'][1]['label'] == TEST_LABEL2
-    """
+    # Download the trackpoints as as CSV
+    with boddle(params={'api_key': api_key,
+                        'movie_id': new_movie_id}):
+        ret = bottle_app.api_download_movie_trackpoints()
+    lines = ret.split("\n")
+    assert "track1 x" in lines[0]
+    assert "track1 y" in lines[0]
+    assert "track2 x" in lines[0]
+    assert "track2 y" in lines[0]
+    assert "track1 x" not in lines[2]
+    assert len(lines) > 50
 
-    # Delete the trackpoints
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[])
+    # Purge the new movie
+    db.purge_movie( movie_id=new_movie_id )
 
-    # Make sure they are deleted
-    assert db.get_frame_trackpoints(frame_id=frame_id)==[]
 
-    # Delete the analysis (includes annotations and trackpoints)
-    # logging.info("deleting frame analysis engine_id %s name %s",engine_id,engine_name)
-    # db.delete_frame_analysis(engine_id=engine_id)
-
-    # delete the analysis engine
-    db.delete_analysis_engine(engine_name=engine_name, recursive=True)
 
 
 """
 test frame annotations ---
     # get the frame with the JSON interface, asking for annotations
-    with boddle(params={"api_key": api_key,
+    with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_number':1,
                         'format':'json',
@@ -373,7 +377,7 @@ test frame annotations ---
     assert r2['frame_id'] == frame_id
 
     # get 1 frame with the JSON interface and test the result.
-    with boddle(params={"api_key": api_key,
+    with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_number': '1',
                         'format':'json' }):
@@ -391,7 +395,6 @@ test frame annotations ---
                  "key1": "value with 'single' quotes",
                  "key2": 'value with "double" quotes',
                  "key3": "value with 'single' and \"double\" quotes" }
-
 
     # Check for error if all three are none
     with pytest.raises(RuntimeError):
@@ -418,10 +421,7 @@ test frame annotations ---
                         'engine_version':'2',
                         'annotations':json.dumps(annotations2)}):
         bottle_app.api_put_frame_analysis()
-
-
 """
-
 
 ################################################################
 ## support functions
@@ -430,7 +430,7 @@ test frame annotations ---
 
 def movie_list(api_key):
     """Return a list of the movies"""
-    with boddle(params={"api_key": api_key}):
+    with boddle(params={'api_key': api_key}):
         res = bottle_app.api_list_movies()
     assert res['error'] == False
     return res['movies']

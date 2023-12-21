@@ -40,4 +40,6 @@ class E:
     NO_REMAINING_REGISTRATIONS = { 'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
     TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}
     FRAME1_IS_NONE = {'error':True, 'message':'Frame1 in track_frame is None'}
+    NO_TRACKPOINTS = {'error':True, 'message':'No trackpoints provided for tracking operation'}
+
 #pylint: enable=too-few-public-methods

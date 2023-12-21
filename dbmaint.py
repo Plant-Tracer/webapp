@@ -8,6 +8,7 @@ import os
 import configparser
 import subprocess
 import socket
+import logging
 
 import uuid
 import pymysql
@@ -18,6 +19,7 @@ import db
 from paths import TEMPLATE_DIR, SCHEMA_FILE
 from lib.ctools import clogging
 from lib.ctools import dbfile
+from pronounceable import generate_word
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -28,6 +30,8 @@ MYSQL_DATABASE = 'MYSQL_DATABASE'
 LOCALHOST = 'localhost'
 dbreader = 'dbreader'
 dbwriter = 'dbwriter'
+
+DEFAULT_MAX_ENROLLMENT = 10
 
 __version__ = '0.0.1'
 
@@ -63,6 +67,77 @@ def clean():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
+def create_db(args):
+    dbreader_user = 'dbreader_' + args.createdb
+    dbwriter_user = 'dbwriter_' + args.createdb
+    dbreader_password = str(uuid.uuid4())
+    dbwriter_password = str(uuid.uuid4())
+    d.execute(f'DROP DATABASE IF EXISTS {args.createdb}')
+    d.execute(f'CREATE DATABASE {args.createdb}')
+    d.execute(f'USE {args.createdb}')
+    with open(SCHEMA_FILE, 'r') as f:
+        d.create_schema(f.read())
+
+    # Now grant on all addresses
+    print("Current interfaces and hostnames:")
+    print("ifconfig -a:")
+    subprocess.call(['ifconfig','-a'])
+    print("Hostnames:",hostnames())
+    for ipaddr in hostnames() + ['%']:
+        print("granting dbreader and dbwriter access from ",ipaddr)
+        d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
+        d.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
+        d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`{ipaddr}`')
+
+        d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
+        d.execute( f'CREATE USER           `{dbwriter_user}`@`{ipaddr}` identified by "{dbwriter_password}"')
+        d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`{ipaddr}`')
+
+    def prn(k, v):
+        print(f"{k}={v}")
+    if sys.stdout.isatty():
+        print("Contents for dbauth.ini:")
+
+    print("[dbreader]")
+    prn(MYSQL_HOST, LOCALHOST)
+    prn(MYSQL_USER, dbreader_user)
+    prn(MYSQL_PASSWORD, dbreader_password)
+    prn(MYSQL_DATABASE, args.createdb)
+
+    print("[dbwriter]")
+    prn(MYSQL_HOST, LOCALHOST)
+    prn(MYSQL_USER, dbwriter_user)
+    prn(MYSQL_PASSWORD, dbwriter_password)
+    prn(MYSQL_DATABASE, args.createdb)
+
+    if cp:
+        if dbreader not in cp:
+            cp.add_section(dbreader)
+        cp[dbreader][MYSQL_HOST] = LOCALHOST
+        cp[dbreader][MYSQL_USER] = dbreader_user
+        cp[dbreader][MYSQL_PASSWORD] = dbreader_password
+        cp[dbreader][MYSQL_DATABASE] = args.createdb
+
+        if dbwriter not in cp:
+            cp.add_section(dbwriter)
+        cp[dbwriter][MYSQL_HOST] = LOCALHOST
+        cp[dbwriter][MYSQL_USER] = dbwriter_user
+        cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
+        cp[dbwriter][MYSQL_DATABASE] = args.createdb
+        with open(args.writeconfig, 'w') as fp:
+            print("writing config to ",args.writeconfig)
+            cp.write(fp)
+
+def create_course(*, course_key, course_name, admin_email, admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT):
+    db.create_course(course_key = course_key,
+                     course_name = course_name,
+                     max_enrollment = max_enrollment
+                     )
+    admin_id = db.register_email(email=admin_email, course_key=course_key, name=admin_name)['user_id']
+    db.make_course_admin(email=admin_email, course_key=course_key)
+    logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
+    return admin_id
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
@@ -79,6 +154,10 @@ if __name__ == "__main__":
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--createroot",help="create root config  with specified password")
+    parser.add_argument("--createcourse",help="Create a course and register --admin as the administrator",action='store_true')
+    parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
+    parser.add_argument("--admin_name",help="Specify the name of the course administrator")
+    parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -116,67 +195,8 @@ if __name__ == "__main__":
         raise
 
 
-
     if args.createdb:
-        dbreader_user = 'dbreader_' + args.createdb
-        dbwriter_user = 'dbwriter_' + args.createdb
-        dbreader_password = str(uuid.uuid4())
-        dbwriter_password = str(uuid.uuid4())
-        d.execute(f'DROP DATABASE IF EXISTS {args.createdb}')
-        d.execute(f'CREATE DATABASE {args.createdb}')
-        d.execute(f'USE {args.createdb}')
-        with open(SCHEMA_FILE, 'r') as f:
-            d.create_schema(f.read())
-
-        # Now grant on all addresses
-        print("Current interfaces and hostnames:")
-        print("ifconfig -a:")
-        subprocess.call(['ifconfig','-a'])
-        print("Hostnames:",hostnames())
-        for ipaddr in hostnames() + ['%']:
-            print("granting dbreader and dbwriter access from ",ipaddr)
-            d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
-            d.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
-            d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`{ipaddr}`')
-
-            d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
-            d.execute( f'CREATE USER           `{dbwriter_user}`@`{ipaddr}` identified by "{dbwriter_password}"')
-            d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`{ipaddr}`')
-
-        def prn(k, v):
-            print(f"{k}={v}")
-        if sys.stdout.isatty():
-            print("Contents for dbauth.ini:")
-
-        print("[dbreader]")
-        prn(MYSQL_HOST, LOCALHOST)
-        prn(MYSQL_USER, dbreader_user)
-        prn(MYSQL_PASSWORD, dbreader_password)
-        prn(MYSQL_DATABASE, args.createdb)
-
-        print("[dbwriter]")
-        prn(MYSQL_HOST, LOCALHOST)
-        prn(MYSQL_USER, dbwriter_user)
-        prn(MYSQL_PASSWORD, dbwriter_password)
-        prn(MYSQL_DATABASE, args.createdb)
-
-        if cp:
-            if dbreader not in cp:
-                cp.add_section(dbreader)
-            cp[dbreader][MYSQL_HOST] = LOCALHOST
-            cp[dbreader][MYSQL_USER] = dbreader_user
-            cp[dbreader][MYSQL_PASSWORD] = dbreader_password
-            cp[dbreader][MYSQL_DATABASE] = args.createdb
-
-            if dbwriter not in cp:
-                cp.add_section(dbwriter)
-            cp[dbwriter][MYSQL_HOST] = LOCALHOST
-            cp[dbwriter][MYSQL_USER] = dbwriter_user
-            cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
-            cp[dbwriter][MYSQL_DATABASE] = args.createdb
-            with open(args.writeconfig, 'w') as fp:
-                print("writing config to ",args.writeconfig)
-                cp.write(fp)
+        create_db(args)
 
     if args.dropdb:
         dbreader_user = 'dbreader_' + args.dropdb
@@ -188,3 +208,14 @@ if __name__ == "__main__":
 
     if args.clean:
         clean()
+
+    if args.createcourse:
+        if not args.email:
+            print("Must provide --email",file=sys.stderr)
+            exit(1)
+        course_key = "-".join([generate_word(),generate_word(),generate_word()])
+        create_course(course_key = course_key,
+                      course_name = args.create_course,
+                      admin_email = args.admin_email,
+                      admin_name = args.admin_name,
+                      max_enrollment = args.max_enrollment)
