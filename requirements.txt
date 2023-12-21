@@ -23,4 +23,3 @@ aiosmtplib
 tabulate
 webdriver-manager
 selenium
-pytest-selenium
