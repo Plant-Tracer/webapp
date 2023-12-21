@@ -492,7 +492,7 @@ def api_download_movie_trackpoints():
         trackpoint_dicts = db.get_movie_trackpoints(movie_id=get_int('movie_id'))
         numbers  = sorted(set([tp['frame_number'] for tp in trackpoint_dicts]))
         labels = sorted(set([tp['label'] for tp in trackpoint_dicts])) # get all labels
-        data   = set()
+        data   = dict()
         # Now get the (x,y) for each time/label pair
         for tp in trackpoint_dicts:
             data[ (tp['frame_number'],tp['label']) ] = tp
