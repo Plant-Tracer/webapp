@@ -24,4 +24,3 @@ tabulate
 pronounceable
 webdriver-manager
 selenium
-pytest-selenium
