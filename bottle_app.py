@@ -746,27 +746,27 @@ def api_get_frame():
 def api_put_frame_analysis():
     """
     Writes analysis and trackpoints for specific frames; frame_id is required
-    :param: frame_id - the frame.
     :param: api_key  - the api_key
+    :param: frame_id - the frame.
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
     frame_id  = get_int('frame_id')
-    if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
-        annotations=get_json('annotations')
-        trackpoints=get_json('trackpoints')
-        logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
-        if annotations is not None:
-            db.put_frame_annotations(frame_id=frame_id,
-                                     annotations=annotations,
-                                     engine_name=get('engine_name'),
-                                     engine_version=get('engine_version'))
-        if trackpoints is not None:
-            db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
-        return {'error': False, 'message':'Analysis recorded.'}
-    return E.INVALID_MOVIE_ACCESS
+    if not db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
+        return {'error':False, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
+    annotations=get_json('annotations')
+    trackpoints=get_json('trackpoints')
+    logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
+    if annotations is not None:
+        db.put_frame_annotations(frame_id=frame_id,
+                                 annotations=annotations,
+                                 engine_name=get('engine_name'),
+                                 engine_version=get('engine_version'))
+    if trackpoints is not None:
+        db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
+    return {'error': False, 'message':'Analysis recorded.'}
 
 
 ################################################################

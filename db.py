@@ -501,11 +501,13 @@ def can_access_frame(*, user_id, frame_id=None):
     """
     res = dbfile.DBMySQL.csfr(
             get_dbreader(),
-            """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s) AND
-            (user_id=%s OR
-            course_id=(select primary_course_id from users where id=%s) OR
-            course_id in (select course_id from admins where user_id=%s))""",
-            (frame_id, user_id, user_id, user_id))
+            """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s)
+            AND ( (user_id=%s) OR
+                  (course_id=(select primary_course_id from users where id=%s)) OR
+                  (course_id in (select course_id from admins where user_id=%s)) OR
+                  (%s = 0) )
+            """,
+            (frame_id, user_id, user_id, user_id, user_id))
     return res[0][0] > 0
 
 @log

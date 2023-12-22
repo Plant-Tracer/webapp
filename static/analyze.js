@@ -235,12 +235,10 @@ class PlantTracerController extends CanvasController {
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
-        // Wire up the rest
-        $(`#${this_id}  input.track_next_frame_button`).on('click', (event) => {
-            // Inside the event functions, 'this' refers to the DOM object. Annoying.
-            console.log("user clicked input.track_next_frame_button. this=",this);
-            this.track_next_frame(event);
-        } );
+        // We need to be able to enable or display the
+        this.track_to_end_button = $(`#${this_id} input.track_to_end`);
+        this.track_to_end_button.on('click', (event) => {this.track_to_end(event);});
+        this.track_to_end_button.prop('disabled',true); // disable it until we have a marker added.
     }
 
 
@@ -306,6 +304,9 @@ class PlantTracerController extends CanvasController {
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
         this.redraw('insert_circle');
+
+        // Finally enable the track-to-end button
+        this.track_to_end_button.prop('disabled',false);
     }
 
     // Subclassed methods
@@ -336,26 +337,27 @@ class PlantTracerController extends CanvasController {
     }
 
     put_trackpoints(ptc) {
-        console.log(`put_trackpoints: sending ${ptc.get_trackpoints().length} trackpoints for frame_id ${ptc.frame_id}`);
-        $.post('/api/put-frame-analysis',
-               {frame_id:ptc.frame_id,
-                api_key:api_key,
-                trackpoints:ptc.json_trackpoints()})
-            .done( (data) => {
-                if (data['error']) {
-                    alert("Error saving annotations: "+data);
-                }
-            });
+        let put_frame_analysis_params = {
+            api_key:api_key,
+            frame_id:ptc.frame_id,
+            trackpoints:ptc.json_trackpoints()
+        }
+        console.log("put_trackpoints: ptc=",ptc,"params=",put_frame_analysis_params);
+        $.post('/api/put-frame-analysis', put_frame_analysis_params).done( (data) => {
+            if (data.error) {
+                alert("Error saving annotations: "+data.message);
+            }
+        });
     }
 
-    /* track_next_fram() is called when the 'track next frame' button is clicked.
-     * Request the next frame if we don't have it.
-     * Ask for tracking.
+    /* track_to_end() is called when the 'track to end' button is clicked.
+     * It tracks on the server, then displays the new movie and offers to download a CSV file.
      */
-    track_next_frame(event) {
+    track_to_end(event) {
         // get the next frame and apply tracking logic
-        console.log("track_next_frame() this=",this,"event=",event);
-        create_new_div(this.frame_number + 1, this.json_trackpoints());
+        console.log("track_to_end");
+        alert("implement me");
+        //create_new_div(this.frame_number + 1, this.json_trackpoints());
     }
 }
 
