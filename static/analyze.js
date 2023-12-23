@@ -364,7 +364,9 @@ class PlantTracerController extends CanvasController {
         const track_params = {
             api_key:api_key,
             movie_id:this.movie_id,
-            frame_start:this.frame_number
+            frame_start:this.frame_number,
+            engine_name:'CV2',
+            engine_version:'1.0'
         };
         console.log("params:",track_params);
         $.post('/api/track-movie', track_params).done( (data) => {

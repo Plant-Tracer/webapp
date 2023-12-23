@@ -616,7 +616,8 @@ def api_track_movie():
                     db.put_frame_trackpoints(frame_id = frame_id,
                                              trackpoints=output_trackpoints_by_frame[frame_number])
 
-    return {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'new_movie_id':new_movie_id}
+    ret = {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'new_movie_id':new_movie_id}
+    return datetime_to_str(ret)
 
 ##
 # Movie analysis API
