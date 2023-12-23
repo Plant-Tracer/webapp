@@ -650,7 +650,7 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
     else:
         where = "WHERE movie_id=%s AND frame_number=%s"
         args = [movie_id, frame_number]
-    cmd = f"""SELECT id as frame_id,movie_id, frame_number, frame_data FROM movie_frames {where} LIMIT 1"""
+    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data FROM movie_frames {where} LIMIT 1"""
     rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     if len(rows)!=1:
         return None

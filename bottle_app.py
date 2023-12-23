@@ -678,8 +678,9 @@ def api_get_frame():
                        // todo - frame_id - just get the frame_id
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
-      movie_id
-      frame_id
+      movie_id     - the movie (always returned)
+      frame_id     - the id of the frame (always returned)
+      frame_number - the number of the frame (always returned)
       annotations - a JSON object of annotations from the databsae.
       trackpoints - a list of the trackpoints
     """
@@ -712,19 +713,22 @@ def api_get_frame():
         return E.INVALID_FRAME_ACCESS
 
     # See if get_frame can find the movie frame
-    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id)
+    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_number=frame_number)
     logging.debug("ret=%s",ret)
-    if ret is None:
-        ret = {'movie_id':movie_id}
+    if ret:
+        # Get any frame annotations and trackpoints
+        ret['annotations'] = db.get_frame_annotations(frame_id=ret['frame_id'])
+        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=ret['frame_id'])
 
-    # Now ret is a dictonary
-    # If we do not have a frame_id, get one.
-    if 'frame_id' not in ret:
-        ret['frame_id'] = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
-        print("frame_id=",ret)
+    else:
+        # plant_dev is not in the database, so we need to make it
+        frame_id = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
+        ret = {'movie_id':movie_id,
+               'frame_id':frame_id,
+               'frame_number':frame_number}
 
-    # If we do not have frame_data, extract it from the movie
-    if 'frame_data' not in ret:
+    # If we do not have frame_data, extract it from the movie (but don't store in database)
+    if ret.get('frame_data',None) is None:
         ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
                                                   frame_number=frame_number,
                                                   fmt='jpeg')
@@ -733,15 +737,10 @@ def api_get_frame():
     ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
     del ret['frame_data']
 
-    # Get any frame annotations and trackpoints
-    ret['annotations'] = db.get_frame_annotations(frame_id=ret['frame_id'])
-    ret['trackpoints'] = db.get_frame_trackpoints(frame_id=ret['frame_id'])
-
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-    logging.debug("api_get_frame ret=%s",ret)
     return datetime_to_str(ret)
 
 @bottle.route('/api/put-frame-analysis', method=POST)

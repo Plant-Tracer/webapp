@@ -340,12 +340,13 @@ class PlantTracerController extends CanvasController {
     }
 
     put_trackpoints(ptc) {
+        // If we are putting the frame, we already have the frame_id
+        console.log("put_trackpoints. this=",this,"ptc=",ptc);
         let put_frame_analysis_params = {
-            api_key : api_key,
+            api_key  : api_key,
             frame_id : ptc.frame_id,
             trackpoints:ptc.json_trackpoints()
         }
-        console.log("frame_number=",this.frame_number,"movie_id=",this.movie_id);
         console.log("put_trackpoints: ptc=",ptc,"params=",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
@@ -430,17 +431,17 @@ class myImage extends MyObject {
  * Callback when data arrives from /api/get-frame.
  */
 
-/* create_new_div
+/* append_new_ptc
  * - creates the <div> that includes the canvas and is controlled by the PlantTracerController.
  * - Makes a call to get-frame to get the frame
  *   - callback gets the frame and trackpoints; it draws them and sets up the event loops to draw more.
  */
 // the id for the frame that is created.
 // each frame is for a specific movie
-function create_new_div(movie_id, frame_number, json_trackpoints) {
+function append_new_ptc(movie_id, frame_number) {
     let this_id  = "template-" + (div_id_counter++);
     let this_sel = `${this_id}`;
-    console.log(`create_new_div: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
+    console.log(`append_new_ptc: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
@@ -448,12 +449,11 @@ function create_new_div(movie_id, frame_number, json_trackpoints) {
         .replace('canvas-id',`canvas-${this_id}`)
         .replace('zoom-id',`zoom-${this_id}`)
         + "<div id='template'></div>";
-    console.log("adding HTML:",div_html);
     $( '#template' ).replaceWith( div_html );
     $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
-    console.log("json_trackpoints:",json_trackpoints);
 
-    // create a new PlantTracerController; we may need to save it in an array too
+    // get the request frame of the movie. When it comes back, use it to populate
+    // a new PlantTracerController.
     const get_frame_parms = {
         api_key :api_key,
         movie_id:movie_id,
@@ -468,14 +468,14 @@ function create_new_div(movie_id, frame_number, json_trackpoints) {
             return;
         }
         let ptc = new PlantTracerController( this_id );
-        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_id=${data.frame_id} `);
-        console.log("data=",data);
+        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_number=${data.frame_number} `);
+        console.log("*** data=",data);
 
         // Display the photo and metadata
         ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
         ptc.movie_id       = data.movie_id;
-        ptc.frame_id       = data.frame_id;
-        $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_id=${ptc.frame_id} ` );
+        ptc.frame_number   = data.frame_number;
+        $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_number=${ptc.frame_number} ` );
 
         // Add points in the analysis
         if (data.analysis) {
@@ -499,7 +499,7 @@ function create_new_div(movie_id, frame_number, json_trackpoints) {
                 ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
             }
         }
-        ptc.redraw('create_new_div');              // initial drawing
+        ptc.redraw('append_new_ptc');              // initial drawing
     });
 }
 
@@ -515,7 +515,7 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = create_new_div(movie_id, 0, "");           // create the first <div> and its controller
+    ptc = append_new_ptc(movie_id, 0);           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }

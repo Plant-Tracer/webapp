@@ -209,7 +209,6 @@ CREATE TABLE `movie_frames` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
   `frame_number` int NOT NULL,
-  `frame_msec` int DEFAULT NULL,
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
