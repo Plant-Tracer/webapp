@@ -331,7 +331,7 @@ def test_movie_tracking(new_movie):
     # Extract the trackpoints
     output_trackpoints_by_frame = ret['output_trackpoints_by_frame']
     new_movie_id       = ret['new_movie_id']
-    assert len(output_trackpoints)>20
+    assert len(output_trackpoints_by_frame)>20
     assert len(output_trackpoints_by_frame[0])==2
 
     # Download the trackpoints as as CSV and make sure it is formatted okay
