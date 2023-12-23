@@ -6,7 +6,8 @@ Implements blockmatching algorithm in OpenCV.
 import json
 import argparse
 import tempfile
-#import logging
+import subprocess
+import logging
 
 import magic
 import cv2
@@ -143,33 +144,38 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
-    # Create a VideoWriter object to save the output video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(moviefile_output, fourcc, fps, (width, height))
+    # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
 
-    output_trackpoints = []
-    for frame_number in range(1_000_000):
-        prev_frame = current_frame
-        ret, current_frame = cap.read()
-        if not ret:
-            break
+        output_trackpoints = []
+        for frame_number in range(1_000_000):
+            prev_frame = current_frame
+            ret, current_frame = cap.read()
+            if not ret:
+                break
 
-        # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
-        if frame_number <= frame_start:
-            current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+            # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
+            if frame_number <= frame_start:
+                current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
 
-        # If this is a frame to track, then track it
-        if frame_number >= frame_start:
-            current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
+            # If this is a frame to track, then track it
+            if frame_number >= frame_start:
+                current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
 
-        # Label the output and write it
-        cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
-        out.write(current_frame)
+            # Label the output and write it
+            cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
+            out.write(current_frame)
 
-        # Add the trackpionts to the output list, giving each a frame number
-        output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
-    cap.release()
-    out.release()
+            # Add the trackpionts to the output list, giving each a frame number
+            output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+        cap.release()
+        out.release()
+
+        # Finally, use ffmpeg to transcode the output to a proper mp4 file
+        subprocess.call(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',tf.name,'-vcodec','h264',moviefile_output])
+
     return {'output_trackpoints':output_trackpoints}
 
 
