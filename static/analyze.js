@@ -362,8 +362,8 @@ class PlantTracerController extends CanvasController {
         console.log("track_to_end");
         const track_params = {
             api_key:api_key,
-            movie_id:movie_id,
-            frame_start:frame_number
+            movie_id:this.movie_id,
+            frame_start:this.frame_number
         };
         console.log("params:",track_params);
         $.post('/api/track-movie', track_params).done( (data) => {
@@ -468,14 +468,13 @@ function create_new_div(movie_id, frame_number, json_trackpoints) {
             return;
         }
         let ptc = new PlantTracerController( this_id );
-        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_id=${data.frame_id} data.frame_msec=${data.frame_msec}`);
+        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_id=${data.frame_id} `);
         console.log("data=",data);
 
         // Display the photo and metadata
         ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
         ptc.movie_id       = data.movie_id;
         ptc.frame_id       = data.frame_id;
-        ptc.frame_msec     = data.frame_msec;
         $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_id=${ptc.frame_id} ` );
 
         // Add points in the analysis

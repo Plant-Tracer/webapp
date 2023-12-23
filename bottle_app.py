@@ -649,7 +649,6 @@ def api_new_frame():
     :param: api_key  - api_key
     :param: movie_id - the movie
     :param: frame_number - the frame to create
-    :param: frame_msec   - the frame to create (do not provide if frame_number is provided)
     :param: frame_data - if provided, it's uploaded; otherwise we just enter the frame into the dfatabase if it doesn't exist
     :return: frame_id - that's what we care about
 
@@ -661,7 +660,6 @@ def api_new_frame():
     except TypeError:
         frame_data = None
     frame_id = db.create_new_frame( movie_id = get_int('movie_id'),
-                               frame_msec = get_int('frame_msec'),
                                frame_number = get_int('frame_number'),
                                frame_data = frame_data)
     return {'error': False, 'frame_id': frame_id}
@@ -675,8 +673,6 @@ def api_get_frame():
     :param movie_id:   movie
     :param frame_id:   just get by frame_id
     :param frame_number: get the frame by frame_number (starting with 0)
-    :param frame_msec: the frame specified  (error if frame_id is specified)
-    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame  (error if frame_msec is not specified)
     :param format:     jpeg - just get the image;
                        json (default) - get the image (default), json annotation and trackpoints
                        // todo - frame_id - just get the frame_id
@@ -691,8 +687,6 @@ def api_get_frame():
     frame_id     = get_int('frame_id')
     frame_number = get_int('frame_number')
     movie_id     = get_int('movie_id')
-    frame_msec   = get_int('frame_msec',0 ) # location frame
-    msec_delta   = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
     fmt          = get('format', 'jpeg').lower()
 
     logging.debug("api_get_frame fmt=%s movie_id=%s frame_number=%s",fmt,movie_id,frame_number)
@@ -718,7 +712,7 @@ def api_get_frame():
         return E.INVALID_FRAME_ACCESS
 
     # See if get_frame can find the movie frame
-    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
+    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id)
     logging.debug("ret=%s",ret)
     if ret is None:
         ret = {'movie_id':movie_id}

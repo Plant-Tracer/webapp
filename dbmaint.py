@@ -205,6 +205,9 @@ if __name__ == "__main__":
     if args.create_course:
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
+        if not args.admin_name:
+            print("Must provide --admin_name",file=sys.stderr)
+        if not args.admin_email or not args.admin_name:
             exit(1)
         course_key = "-".join([generate_word(),generate_word(),generate_word()])
         create_course(course_key = course_key,
@@ -213,6 +216,7 @@ if __name__ == "__main__":
                       admin_name = args.admin_name,
                       max_enrollment = args.max_enrollment)
         print(f"course_key: {course_key}")
+        exit(0)
 
     if args.report:
         report()

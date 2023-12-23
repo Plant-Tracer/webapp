@@ -578,30 +578,18 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
 
 
 # Don't log this; it will blow up the database when movies are updated
-def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data=None):
-    """Get the frame id specified by movie_id and either frame_number of frame_msec.
+def create_new_frame(*, movie_id, frame_number, frame_data=None):
+    """Get the frame id specified by movie_id and frame_number.
     if frame_data is provided, update. Otherwise just return the frame_id.
-    NOTE: Currently does not check for frames that have b oth frame_number and frame_msec set.
     """
 
-    if frame_number is None and frame_msec is None:
-        raise ValueError("frame_number and frame_msec cannot both be None")
-    if frame_number is not None:
-        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                       """INSERT INTO movie_frames (movie_id, frame_number)
-                                       VALUES (%s,%s)
-                                       ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
-                                       (movie_id, frame_number, movie_id, frame_number))
-        logging.info("point1. frame_id=%s",frame_id)
-    else:
-        frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                       """INSERT INTO movie_frames (movie_id, frame_msec)
-                                       VALUES (%s,%s)
-                                       ON DUPLICATE KEY UPDATE movie_id=%s, frame_msec=%s""",
-                                       (movie_id, frame_msec, movie_id, frame_msec))
-        logging.info("point2. frame_id=%s",frame_id)
-    if frame_data is not None:
-        dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(movie_data,frame_id))
+    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                   """INSERT INTO movie_frames (movie_id, frame_number)
+                                   VALUES (%s,%s)
+                                   ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
+                                   (movie_id, frame_number, movie_id, frame_number))
+    if frame_data:
+        dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(frame_data,frame_id))
     return frame_id
 
 
@@ -640,21 +628,18 @@ def get_movie_trackpoints(*, movie_id):
     """
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                """
-                               SELECT frame_number,frame_msec,x,y,label FROM movie_frame_trackpoints
+                               SELECT frame_number,x,y,label FROM movie_frame_trackpoints
                                LEFT JOIN movie_frames on movie_frame_trackpoints.frame_id = movie_frames.id
                                WHERE movie_id=%s
-                               ORDER BY frame_number,frame_msec
+                               ORDER BY frame_number
                                """,
                                (movie_id,),
                                asDicts=True)
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=None, msec_delta=None,
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
               get_annotations=False, get_trackpoints=False):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted
-    :param: frame_msec - the frame we want
-    :param: msec_delta - offset from the frame we want.
-                         Specify 0 to get the frame, +1 to get the next frame, -1 to get the previous frame.
     :param: get_annotations - return anotations in the 'annotations' slot
     :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
     :return: returns a dictionary with the frame info
@@ -662,21 +647,10 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None, frame_msec=Non
     if frame_id is not None:
         where = 'WHERE id = %s '
         args  = [frame_id]
-    elif (movie_id is not None) and (frame_msec is not None):
-        if msec_delta==0:
-            where = "WHERE movie_id=%s AND frame_msec = %s "
-            args = [movie_id, frame_msec]
-        elif msec_delta>0:
-            where = "WHERE movie_id=%s AND frame_msec > %s order by frame_msec "
-            args = [movie_id, frame_msec]
-        else:
-            where = "WHERE movie_id=%s AND frame_msec < %s order by frame_msec DESC "
-            args = [movie_id, frame_msec]
     else:
         where = "WHERE movie_id=%s AND frame_number=%s"
         args = [movie_id, frame_number]
-    cmd = f"""SELECT movie_id, frame_msec, frame_data, frame_number, id as frame_id
-                              FROM movie_frames {where} LIMIT 1"""
+    cmd = f"""SELECT id as frame_id,movie_id, frame_number, frame_data FROM movie_frames {where} LIMIT 1"""
     rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     if len(rows)!=1:
         return None
