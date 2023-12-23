@@ -208,15 +208,13 @@ DROP TABLE IF EXISTS `movie_frames`;
 CREATE TABLE `movie_frames` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
-  `frame_number` int DEFAULT NULL,
+  `frame_number` int NOT NULL,
   `frame_msec` int DEFAULT NULL,
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `not_null_constraint` int GENERATED ALWAYS AS (coalesce(`frame_number`,`frame_msec`)) VIRTUAL NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `i10` (`movie_id`,`frame_msec`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -247,6 +245,9 @@ CREATE TABLE `movies` (
   `calib_y` float DEFAULT NULL,
   `calib_user_id` int DEFAULT NULL,
   `calib_time_t` int DEFAULT NULL,
+  `fps` decimal(5,2) DEFAULT NULL,
+  `width` int DEFAULT NULL,
+  `height` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),

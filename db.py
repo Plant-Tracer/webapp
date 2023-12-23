@@ -592,12 +592,14 @@ def create_new_frame(*, movie_id, frame_number=None, frame_msec=None, frame_data
                                        VALUES (%s,%s)
                                        ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
                                        (movie_id, frame_number, movie_id, frame_number))
+        logging.info("point1. frame_id=%s",frame_id)
     else:
         frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                        """INSERT INTO movie_frames (movie_id, frame_msec)
                                        VALUES (%s,%s)
                                        ON DUPLICATE KEY UPDATE movie_id=%s, frame_msec=%s""",
                                        (movie_id, frame_msec, movie_id, frame_msec))
+        logging.info("point2. frame_id=%s",frame_id)
     if frame_data is not None:
         dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(movie_data,frame_id))
     return frame_id

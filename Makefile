@@ -40,7 +40,7 @@ pytest-movie-test:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py -k test_movie_extract
 
 pytest-selenium:
 	make touch

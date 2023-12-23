@@ -49,6 +49,7 @@ import base64
 #import copy
 import tempfile
 from urllib.parse import urlparse
+from collections import defaultdict
 
 import magic
 import bottle
@@ -547,7 +548,6 @@ def api_track_movie():
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
     :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
-    :param retrack_movie_id: - If true, grab trackpoints from 0..(frame_start-1) from this movie.
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
@@ -569,11 +569,8 @@ def api_track_movie():
     movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
 
     # Find trackpoints we are tracking or retracking
-    # If this is the first time the movie is tracked, we will likely just get the first frame.
-    # If we are retracking, we will get all of the frames that were tracked.
-    retrack_movie_id  = get_int('retrack_movie_id', movie_id)
-    logging.debug("movie_id=%s retrack_movie_id=%s",movie_id,retrack_movie_id)
-    input_trackpoints = db.get_movie_trackpoints(movie_id=retrack_movie_id)
+    input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
+    logging.debug("input_trackpoints=%s",input_trackpoints)
 
     if len(input_trackpoints)==0:
         return E.NO_TRACKPOINTS
@@ -597,7 +594,9 @@ def api_track_movie():
             # Compute the new trackpoints
             new_movie_data       = outfile.read()
             output_trackpoints   = ret['output_trackpoints']
-            output_frame_numbers = sorted(set([tp['frame_number'] for tp in output_trackpoints]))
+            output_trackpoints_by_frame = defaultdict(list)
+            for tp in output_trackpoints:
+                output_trackpoints_by_frame[tp['frame_number']].append(tp)
 
             # Save the movie
             new_title = movie_metadata['title']
@@ -610,12 +609,14 @@ def api_track_movie():
                                                description = movie_metadata['description'],
                                                movie_data = new_movie_data)
 
-            # Now write all of the trackpoints (this is unfortunately O(n^2) and pretty inefficient.)
-            for frame_number in output_frame_numbers:
-                frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number)
-                db.put_frame_trackpoints(frame_id = frame_id, trackpoints=[tp for tp in output_trackpoints if tp['frame_number']==frame_number])
+            # Now write all of the trackpoints by frame that were after those tracked:
+            for frame_number in output_trackpoints_by_frame.keys():
+                if frame_number >= frame_start:
+                    frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number)
+                    db.put_frame_trackpoints(frame_id = frame_id,
+                                             trackpoints=output_trackpoints_by_frame[frame_number])
 
-    return {'error': False, 'output_trackpoints': output_trackpoints,'new_movie_id':new_movie_id}
+    return {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'new_movie_id':new_movie_id}
 
 ##
 # Movie analysis API
@@ -680,18 +681,23 @@ def api_get_frame():
                        json (default) - get the image (default), json annotation and trackpoints
                        // todo - frame_id - just get the frame_id
 
-    :return: - either the image (as a JPEG) or a JSON object.
+    :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
+      movie_id
+      frame_id
+      annotations - a JSON object of annotations from the databsae.
+      trackpoints - a list of the trackpoints
     """
-    user_id    = get_user_id()
+    user_id      = get_user_id()
+    frame_id     = get_int('frame_id')
+    frame_number = get_int('frame_number')
+    movie_id     = get_int('movie_id')
+    frame_msec   = get_int('frame_msec',0 ) # location frame
+    msec_delta   = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
+    fmt          = get('format', 'jpeg').lower()
 
-    frame_id       = get_int('frame_id')
-    frame_number   = get_int('frame_number')
-    movie_id       = get_int('movie_id')
-    frame_msec = get_int('frame_msec',0 ) # location frame
-    msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
-    fmt        = get('format', 'jpeg').lower()
-
+    logging.debug("api_get_frame fmt=%s movie_id=%s frame_number=%s",fmt,movie_id,frame_number)
     if fmt not in ['jpeg', 'json']:
+        logging.info("fmt is not in jpeg or json")
         return E.INVALID_FRAME_FORMAT
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
@@ -699,9 +705,7 @@ def api_get_frame():
         return E.INVALID_MOVIE_ACCESS
 
     if fmt=='jpeg':
-        if frame_id is None:
-            return E.INVALID_FRAME_FORMAT
-        # Is there a frame we can access?
+        # is frame_id provided?
         if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
             row =  db.get_frame(frame_id=frame_id)
             return row.get('frame_data',None)
@@ -710,10 +714,12 @@ def api_get_frame():
             return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
                                        frame_number = frame_number,
                                        fmt = 'jpeg')
+        logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
         return E.INVALID_FRAME_ACCESS
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
+    logging.debug("ret=%s",ret)
     if ret is None:
         ret = {'movie_id':movie_id}
 
@@ -721,6 +727,7 @@ def api_get_frame():
     # If we do not have a frame_id, get one.
     if 'frame_id' not in ret:
         ret['frame_id'] = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
+        print("frame_id=",ret)
 
     # If we do not have frame_data, extract it from the movie
     if 'frame_data' not in ret:
@@ -740,6 +747,7 @@ def api_get_frame():
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+    logging.debug("api_get_frame ret=%s",ret)
     return datetime_to_str(ret)
 
 @bottle.route('/api/put-frame-analysis', method=POST)
@@ -753,8 +761,11 @@ def api_put_frame_analysis():
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
+    logging.debug("put_frame_analysis")
     frame_id  = get_int('frame_id')
+    logging.debug("frame_id=%s",frame_id)
     if not db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
+        logging.debug("user %s cannot access frame_id %s",get_user_id(), frame_id)
         return {'error':False, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')

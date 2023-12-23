@@ -133,8 +133,9 @@ def report():
     dbreader = db.get_dbreader()
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled from courses
+                               """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
                                right join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
+                               right join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
                                order by 1,2""",
                                get_column_names=headers)
     print(tabulate(rows,headers=headers))

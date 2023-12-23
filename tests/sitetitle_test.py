@@ -28,8 +28,6 @@ def on_dreamhost():
         hosts = f.read().lower()
         return hosts.count("dreamhost")>1
 
-
-
 # test function illustrating the use of selenium package directly
 @pytest.mark.skipif(on_dreamhost(), reason='Selenium test does not work on dreamhost')
 def test_sitetitle_just_selenium(http_endpoint):

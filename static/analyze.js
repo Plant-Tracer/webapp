@@ -1,16 +1,16 @@
 // code for /analyze
 
 /***
-*
-Core idea from the following websites, but made object-oriented.
+ *
+ Core idea from the following websites, but made object-oriented.
  * https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
  * https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
 
-Core idea:
-- templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
-- With this frame, annotations can be created. They are stored on the server.
-- On startup, the <div> is stored in a variable and a first one is instantiated.
-- Pressing 'track to end of movie' asks the server to track from here to the end of the movie.
+ Core idea:
+ - templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
+ - With this frame, annotations can be created. They are stored on the server.
+ - On startup, the <div> is stored in a variable and a first one is instantiated.
+ - Pressing 'track to end of movie' asks the server to track from here to the end of the movie.
 
 ***/
 
@@ -43,12 +43,14 @@ class CanvasController {
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
         this.zoom    = 1;                 // default zoom
+        this.movie_id = null;             // the movie being analyzed
+        this.tracked_movie_id = null;     // the id of the tracked movie
 
         // Register my events.
-        // We need to wrap them in lambdas and copy 'this' to 'me' because when the event triggers,
-        // 'this' points to the HTML element that generated the event.
+        // We use '=>' rather than lambda becuase '=>' wraps the current environment (including this),
+        // whereas 'lambda' does not.
+        // Prior, I assigned this to `me`. Without =>, 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
-        var me=this;
         this.c.addEventListener('mousemove', (e) => {this.mousemove_handler(e);} , false);
         this.c.addEventListener('mousedown', (e) => {this.mousedown_handler(e);} , false);
         this.c.addEventListener('mouseup',   (e) => {this.mouseup_handler(e);}, false);
@@ -229,7 +231,8 @@ class PlantTracerController extends CanvasController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
-        this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
+        console.log("this.marker_name_input=",this.marker_name_input);
+        this.marker_name_input.on('input', (event) => { console.log('this=',this,'event=',event);this.marker_name_input_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
@@ -299,7 +302,7 @@ class PlantTracerController extends CanvasController {
                 rows += `<tr>` +
                     `<td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td>` +
                     `<td>${obj.name}</td>` +
-                    `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td></tr>`;
+                    `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td><td>🚫</td></tr>`;
             }
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
@@ -338,12 +341,13 @@ class PlantTracerController extends CanvasController {
 
     put_trackpoints(ptc) {
         let put_frame_analysis_params = {
-            api_key:api_key,
-            frame_id:ptc.frame_id,
+            api_key : api_key,
+            frame_id : ptc.frame_id,
             trackpoints:ptc.json_trackpoints()
         }
+        console.log("frame_number=",this.frame_number,"movie_id=",this.movie_id);
         console.log("put_trackpoints: ptc=",ptc,"params=",put_frame_analysis_params);
-        $.post('/api/put-frame-analysis', put_frame_analysis_params).done( (data) => {
+        $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
                 alert("Error saving annotations: "+data.message);
             }
@@ -356,8 +360,27 @@ class PlantTracerController extends CanvasController {
     track_to_end(event) {
         // get the next frame and apply tracking logic
         console.log("track_to_end");
-        alert("implement me");
-        //create_new_div(this.frame_number + 1, this.json_trackpoints());
+        const track_params = {
+            api_key:api_key,
+            movie_id:movie_id,
+            frame_start:frame_number
+        };
+        console.log("params:",track_params);
+        $.post('/api/track-movie', track_params).done( (data) => {
+            console.log("RECV:",data);
+        });
+    }
+
+    // go to the previous frame in the tracker interface
+    prev_frame(event) {
+    }
+
+    // go to the next frame in the tracker interface
+    next_frame(event) {
+    }
+
+    // go to the specified frame in the tracker interface
+    goto_frame(event) {
     }
 }
 
@@ -412,8 +435,10 @@ class myImage extends MyObject {
  * - Makes a call to get-frame to get the frame
  *   - callback gets the frame and trackpoints; it draws them and sets up the event loops to draw more.
  */
-function create_new_div(frame_number, json_trackpoints) {
-    let this_id  = "frame-" + (div_id_counter++);
+// the id for the frame that is created.
+// each frame is for a specific movie
+function create_new_div(movie_id, frame_number, json_trackpoints) {
+    let this_id  = "template-" + (div_id_counter++);
     let this_sel = `${this_id}`;
     console.log(`create_new_div: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
@@ -425,18 +450,18 @@ function create_new_div(frame_number, json_trackpoints) {
         + "<div id='template'></div>";
     console.log("adding HTML:",div_html);
     $( '#template' ).replaceWith( div_html );
-    $( '#template' )[0].scrollIntoView();
+    $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
     console.log("json_trackpoints:",json_trackpoints);
 
     // create a new PlantTracerController; we may need to save it in an array too
-    let get_frame_parms = {
-        api_key:api_key,
+    const get_frame_parms = {
+        api_key :api_key,
         movie_id:movie_id,
         frame_number:frame_number,
         format:'json',
     };
     console.log("SEND get_frame_params:",get_frame_parms);
-    $.post('/api/get-frame', get_frame_parms).done( function( data ) {
+    $.post('/api/get-frame', get_frame_parms).done( (data) => {
         console.log('RECV:',data);
         if (data.error) {
             alert(`error: ${data.message}`);
@@ -448,9 +473,10 @@ function create_new_div(frame_number, json_trackpoints) {
 
         // Display the photo and metadata
         ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
+        ptc.movie_id       = data.movie_id;
         ptc.frame_id       = data.frame_id;
         ptc.frame_msec     = data.frame_msec;
-        $(`#${this_id} td.message`).text( `Frame msec=${ptc.frame_msec} frame_id=${ptc.frame_id} ` );
+        $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_id=${ptc.frame_id} ` );
 
         // Add points in the analysis
         if (data.analysis) {
@@ -490,7 +516,7 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = create_new_div(0, "");           // create the first <div> and its controller
+    ptc = create_new_div(movie_id, 0, "");           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }
