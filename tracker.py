@@ -77,8 +77,8 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     :param frame_label - if present, label for frame number (can be int or string)
     """
 
-    #width = len(frame)
-    height = len(frame[0])
+    height = len(frame)
+    width = len(frame[0])
 
     # use the points to annotate the colored frames. write to colored tracked video
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
