@@ -488,8 +488,8 @@ def api_get_movie_data():
         return db.get_movie_data(movie_id=get_int('movie_id'))
     return E.INVALID_MOVIE_ACCESS
 
-@bottle.route('/api/download-movie-trackpoints',method=GET_POST)
-def api_download_movie_trackpoints():
+@bottle.route('/api/get-movie-trackpoints',method=GET_POST)
+def api_get_movie_trackpoints():
     """Downloads the movie trackpoints as a CSV
     :param api_keuy:   authentication
     :param movie_id:   movie
@@ -520,6 +520,7 @@ def api_download_movie_trackpoints():
                     except KeyError:
                         f.write(",,")
                 f.write("\n")
+            bottle.response.set_header('Content-Type', 'text/csv')
             return f.getvalue()
     return E.INVALID_MOVIE_ACCESS
 
@@ -604,7 +605,7 @@ def api_track_movie():
                 new_title += "+"
             else:
                 new_title += " TRACKED"
-            new_movie_id = db.create_new_movie(user_id = get_user_id(),
+            tracked_movie_id = db.create_new_movie(user_id = get_user_id(),
                                                title = new_title,
                                                description = movie_metadata['description'],
                                                movie_data = new_movie_data)
@@ -612,11 +613,11 @@ def api_track_movie():
             # Now write all of the trackpoints by frame that were after those tracked:
             for frame_number in output_trackpoints_by_frame.keys():
                 if frame_number >= frame_start:
-                    frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number)
+                    frame_id = db.create_new_frame(movie_id=tracked_movie_id, frame_number=frame_number)
                     db.put_frame_trackpoints(frame_id = frame_id,
                                              trackpoints=output_trackpoints_by_frame[frame_number])
 
-    ret = {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'new_movie_id':new_movie_id}
+    ret = {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'tracked_movie_id':tracked_movie_id}
     return datetime_to_str(ret)
 
 ##

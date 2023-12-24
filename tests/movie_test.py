@@ -330,14 +330,14 @@ def test_movie_tracking(new_movie):
     assert ret['error']==False
     # Extract the trackpoints
     output_trackpoints_by_frame = ret['output_trackpoints_by_frame']
-    new_movie_id       = ret['new_movie_id']
+    tracked_movie_id       = ret['tracked_movie_id']
     assert len(output_trackpoints_by_frame)>20
     assert len(output_trackpoints_by_frame[0])==2
 
     # Download the trackpoints as as CSV and make sure it is formatted okay
     with boddle(params={'api_key': api_key,
-                        'movie_id': new_movie_id}):
-        ret = bottle_app.api_download_movie_trackpoints()
+                        'movie_id': tracked_movie_id}):
+        ret = bottle_app.api_get_movie_trackpoints()
     lines = ret.split("\n")
     assert "track1 x" in lines[0]
     assert "track1 y" in lines[0]
@@ -347,7 +347,7 @@ def test_movie_tracking(new_movie):
     assert len(lines) > 50
 
     # Purge the new movie
-    db.purge_movie( movie_id=new_movie_id )
+    db.purge_movie( movie_id=tracked_movie_id )
 
 
 

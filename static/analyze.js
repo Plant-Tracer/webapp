@@ -69,19 +69,19 @@ class CanvasController {
     }
 
     getMousePosition(e) {
-        var rect = this.c.getBoundingClientRect();
+        let rect = this.c.getBoundingClientRect();
         return { x: (Math.round(e.x) - rect.left) / this.zoom,
                  y: (Math.round(e.y) - rect.top) / this.zoom };
     }
 
     mousedown_handler(e) {
-        var mousePosition = this.getMousePosition(e);
+        let mousePosition = this.getMousePosition(e);
         // if an object is selected, unselect it
         this.clear_selection();
 
         // find the object clicked in
-        for (var i = 0; i < this.objects.length; i++) {
-            var obj = this.objects[i];
+        for (let i = 0; i < this.objects.length; i++) {
+            let obj = this.objects[i];
             if (obj.draggable && obj.contains_point( mousePosition)) {
                 this.selected = obj;
                 // change the cursor to crosshair if something is selected
@@ -107,7 +107,7 @@ class CanvasController {
 
     mouseup_handler(e) {
         // if an object is selected, unselect and change back the cursor
-        var obj = this.selected;
+        let obj = this.selected;
         this.clear_selection();
         this.c.style.cursor='auto';
         this.redraw('mouseup_handler');
@@ -200,10 +200,10 @@ class myCircle extends MyObject {
 
     contains_point(pt) {
         // return true if the point (x,y) is inside the circle
-        var areaX = pt.x - this.x;
-        var areaY = pt.y - this.y;
+        let areaX = pt.x - this.x;
+        let areaY = pt.y - this.y;
         //return true if x^2 + y^2 <= radius squared.
-        var contained = areaX * areaX + areaY * areaY <= this.r * this.r;
+        let contained = areaX * areaX + areaY * areaY <= this.r * this.r;
         return contained;
     }
 
@@ -329,7 +329,7 @@ class PlantTracerController extends CanvasController {
 
     // Return an array of JSON trackpoints
     get_trackpoints() {
-        var trackpoints = [];
+        let trackpoints = [];
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
             if (obj.constructor.name == myCircle.name){
@@ -382,9 +382,16 @@ class PlantTracerController extends CanvasController {
         console.log("params:",track_params);
         $.post('/api/track-movie', track_params).done( (data) => {
             console.log("RECV:",data);
-            this.video.show();
-            let url   = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.new_movie_id}`;
-            this.video.html(`<source src='${url}' type='video/mp4'>`);
+            if (data.error) {
+                alert("Tracking error: "+data.message);
+            } else {
+                this.tracked_movie_id = data.tracked_movie_id;
+                const movie_url       = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
+                const trackpoints_url = `/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
+                this.video.show();
+                this.video.html(`<source src='${movie_url}' type='video/mp4'>`);
+                $(`#${this.this_id} span.download_link`).html(`<a href='${trackpoints_url} download='Movie ${data.movie_id} trackpoints.csv'>Download trackpoints</a>`);
+            }
         });
     }
 
@@ -408,7 +415,7 @@ class myImage extends MyObject {
         super(x, y, url)
         this.ptc = ptc;
 
-        var theImage=this;
+        let theImage=this;
         this.draggable = false;
         this.ctx    = null;
         this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
