@@ -43,8 +43,6 @@ class CanvasController {
         this.selected = null,             // the selected object
         this.objects = [];                // the objects
         this.zoom    = 1;                 // default zoom
-        this.movie_id = null;             // the movie being analyzed
-        this.tracked_movie_id = null;     // the id of the tracked movie
 
         // Register my events.
         // We use '=>' rather than lambda becuase '=>' wraps the current environment (including this),
@@ -224,7 +222,13 @@ class PlantTracerController extends CanvasController {
 
         this.this_id       = this_id;
         this.frame_number  = 0; // default to the first frame
-        this.canvasId     = 0;
+        this.canvasId         = 0;
+        this.movie_id        = null;             // the movie being analyzed
+        this.tracked_movie_id = null;     // the id of the tracked movie
+        this.video = $(`#${this.this_id} video`);
+
+        this.video.hide();
+
 
         // add_marker_status shows error messages regarding the marker name
         this.add_marker_status = $(`#${this_id} label.add_marker_status`);
@@ -357,6 +361,13 @@ class PlantTracerController extends CanvasController {
 
     /* track_to_end() is called when the 'track to end' button is clicked.
      * It tracks on the server, then displays the new movie and offers to download a CSV file.
+     * Here are some pages for notes about playing the video:
+     * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
+     * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
+     * https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Video_player_styling_basics
+     * https://blog.logrocket.com/creating-customizing-html5-video-player-css/
+     * https://freshman.tech/custom-html5-video/
+     * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end(event) {
         // get the next frame and apply tracking logic
@@ -371,6 +382,9 @@ class PlantTracerController extends CanvasController {
         console.log("params:",track_params);
         $.post('/api/track-movie', track_params).done( (data) => {
             console.log("RECV:",data);
+            this.video.show();
+            let url   = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.new_movie_id}`;
+            this.video.html(`<source src='${url}' type='video/mp4'>`);
         });
     }
 

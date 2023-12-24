@@ -59,12 +59,6 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
                                         'status':int(status_array[i]),
                                         'err':float(err[i]),
                                         'label':pt['label']})
-        print("tpts=",tpts)
-        print("point_array_out=",point_array_out)
-        print("status_array=",status_array,"err=",err)
-        print("trackpoints_out=",trackpoints_out)
-        print("")
-
     except cv2.error:
         trackpoints_out = []
 
