@@ -1,8 +1,8 @@
 -- MySQL dump 10.13  Distrib 8.0.28, for macos11 (arm64)
 --
--- Host: mysql.simson.net    Database: planttracer_dev
+-- Host: localhost    Database: planttracer_local
 -- ------------------------------------------------------
--- Server version	8.0.28-0ubuntu0.20.04.3
+-- Server version	8.0.28
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -45,7 +45,7 @@ DROP TABLE IF EXISTS `api_keys`;
 CREATE TABLE `api_keys` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `api_key` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `api_key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `first_used_at` int DEFAULT NULL,
   `last_used_at` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -68,9 +68,9 @@ DROP TABLE IF EXISTS `courses`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `courses` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `course_key` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
-  `course_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `course_section` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `course_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `course_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `course_section` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `max_enrollment` int NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -88,7 +88,7 @@ DROP TABLE IF EXISTS `engines`;
 CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `version` varchar(256) COLLATE utf8mb4_general_ci DEFAULT '',
+  `version` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -104,10 +104,10 @@ DROP TABLE IF EXISTS `logs`;
 CREATE TABLE `logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `time_t` int NOT NULL DEFAULT (unix_timestamp()),
-  `ipaddr` varchar(39) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ipaddr` varchar(39) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `apikey_id` int DEFAULT NULL,
   `user_id` int DEFAULT NULL,
-  `func_name` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `func_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `func_args` json DEFAULT NULL,
   `func_return` json DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -148,7 +148,7 @@ DROP TABLE IF EXISTS `movie_data`;
 CREATE TABLE `movie_data` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
-  `movie_sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `movie_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `movie_data` mediumblob NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -208,15 +208,12 @@ DROP TABLE IF EXISTS `movie_frames`;
 CREATE TABLE `movie_frames` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
-  `frame_number` int DEFAULT NULL,
-  `frame_msec` int DEFAULT NULL,
+  `frame_number` int NOT NULL,
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `not_null_constraint` int GENERATED ALWAYS AS (coalesce(`frame_number`,`frame_msec`)) VIRTUAL NOT NULL,
+  `frame_sha256` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `i10` (`movie_id`,`frame_msec`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -231,8 +228,8 @@ DROP TABLE IF EXISTS `movies`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movies` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `description` text COLLATE utf8mb4_general_ci,
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
   `user_id` int DEFAULT NULL,
   `course_id` int NOT NULL,
@@ -240,13 +237,16 @@ CREATE TABLE `movies` (
   `deleted` int DEFAULT '0',
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `length` int DEFAULT NULL,
   `center_x` int DEFAULT NULL,
   `center_y` int DEFAULT NULL,
   `calib_x` float DEFAULT NULL,
   `calib_y` float DEFAULT NULL,
   `calib_user_id` int DEFAULT NULL,
   `calib_time_t` int DEFAULT NULL,
+  `fps` decimal(5,2) DEFAULT NULL,
+  `width` int DEFAULT NULL,
+  `height` int DEFAULT NULL,
+  `total_frames` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
@@ -272,10 +272,10 @@ DROP TABLE IF EXISTS `objects`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `objects` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `data` mediumblob,
-  `url` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `url` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -289,8 +289,8 @@ DROP TABLE IF EXISTS `users`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `primary_course_id` int NOT NULL,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
   `enabled` int DEFAULT '1',

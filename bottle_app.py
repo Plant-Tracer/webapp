@@ -49,6 +49,7 @@ import base64
 #import copy
 import tempfile
 from urllib.parse import urlparse
+from collections import defaultdict
 
 import magic
 import bottle
@@ -68,6 +69,7 @@ import auth
 
 from paths import view, STATIC_DIR
 from constants import C,E
+import mailer
 import tracker
 
 __version__ = '0.0.1'
@@ -89,14 +91,14 @@ def expand_memfile_max():
     bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
 
 
-def datetime_to_str(obj):
+def fix_types(obj):
     """Given an object that might be a dictionary, convert all datetime objects to JSON strings"""
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # or str(obj) if you prefer
     elif isinstance(obj, dict):
-        return {k: datetime_to_str(v) for k, v in obj.items()}
+        return {k: fix_types(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
-        return [datetime_to_str(elem) for elem in obj]
+        return [fix_types(elem) for elem in obj]
     elif isinstance(obj,(np.float64,np.float32,np.float16)):
         return float(obj)
     else:
@@ -355,7 +357,7 @@ def api_check_api_key():
 
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
-        return {'error': False, 'userinfo': datetime_to_str(userdict)}
+        return {'error': False, 'userinfo': fix_types(userdict)}
     return E.INVALID_API_KEY
 
 
@@ -386,8 +388,13 @@ def api_register():
         return E.NO_REMAINING_REGISTRATIONS
     name = request.forms.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
-    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
-    return {'error': False, 'message': 'Registration key sent to '+email}
+    new_api_key = db.make_new_api_key(email=email)
+    link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
+    try:
+        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    except mailer.InvalidMailerConfiguration:
+        return {'error':True, 'message':'Mailer not properly configured.'+link_html}
+    return {'error': False, 'message': 'Registration key sent to '+email+link_html}
 
 @bottle.route('/api/resend-link', method=GET_POST)
 def api_send_link():
@@ -463,28 +470,50 @@ def api_new_movie():
         logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), MAX_FILE_UPLOAD)
         return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
 
+    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+    logging.debug("movie_metadata=%s",movie_metadata)
     movie_id = db.create_new_movie(user_id=get_user_id(),
                                    title=request.forms.get('title'),
                                    description=request.forms.get('description'),
-                                   movie_data=movie_data)
+                                   movie_data=movie_data,
+                                   movie_metadata = movie_metadata)
     return {'error': False, 'movie_id': movie_id}
 
 
 @bottle.route('/api/get-movie-data', method=GET_POST)
 def api_get_movie_data():
     """
-    :param api_keuy:   authentication
+    :param api_key:   authentication
     :param movie_id:   movie
+    :return: returns the raw movie data as a quicktime
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
+    movie_id = get_int('movie_id')
+    if db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie_data(movie_id=get_int('movie_id'))
+        return db.get_movie_data(movie_id=movie_id)
     return E.INVALID_MOVIE_ACCESS
 
-@bottle.route('/api/download-movie-trackpoints',method=GET_POST)
-def api_download_movie_trackpoints():
+@bottle.route('/api/get-movie-metadata', method=GET_POST)
+def api_get_movie_metadata():
+    """
+    Gets the metadata for a specific movie and its last tracked frame
+    :param api_key:   authentication
+    :param movie_id:   movie
+    """
+    movie_id = get_int('movie_id')
+    user_id = get_user_id()
+    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+        metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
+        return {'error':False, 'metadata':fix_types(metadata)}
+
+
+    return E.INVALID_MOVIE_ACCESS
+
+@bottle.route('/api/get-movie-trackpoints',method=GET_POST)
+def api_get_movie_trackpoints():
     """Downloads the movie trackpoints as a CSV
-    :param api_keuy:   authentication
+    :param api_key:   authentication
     :param movie_id:   movie
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
@@ -513,6 +542,7 @@ def api_download_movie_trackpoints():
                     except KeyError:
                         f.write(",,")
                 f.write("\n")
+            bottle.response.set_header('Content-Type', 'text/csv')
             return f.getvalue()
     return E.INVALID_MOVIE_ACCESS
 
@@ -541,11 +571,12 @@ def api_track_movie():
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
     :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
-    :param retrack_movie_id: - If true, grab trackpoints from 0..(frame_start-1) from this movie.
     :param engine_name: string description tracking engine to use. May be omitted to get default engine.
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
              dict['message'] = message to display
+             dict['tracked_movie_id'] = movie_id of tracked movie
+             dict['frame_start'] = where the tracking started
     """
 
     # pylint: disable=unsupported-membership-test
@@ -557,17 +588,9 @@ def api_track_movie():
     engine_version = get('engine_version')
     frame_start    = get_int('frame_start')
 
-    # Get the trackpoints for frame_start
-    # write the movie
-    # Write the trackpoints
-    movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
-
     # Find trackpoints we are tracking or retracking
-    # If this is the first time the movie is tracked, we will likely just get the first frame.
-    # If we are retracking, we will get all of the frames that were tracked.
-    retrack_movie_id  = get_int('retrack_movie_id', movie_id)
-    logging.debug("movie_id=%s retrack_movie_id=%s",movie_id,retrack_movie_id)
-    input_trackpoints = db.get_movie_trackpoints(movie_id=retrack_movie_id)
+    input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
+    logging.debug("input_trackpoints=%s",input_trackpoints)
 
     if len(input_trackpoints)==0:
         return E.NO_TRACKPOINTS
@@ -580,36 +603,47 @@ def api_track_movie():
         # Create an output file, becuase OpenCV has to write movies to files
         with tempfile.NamedTemporaryFile(suffix='.mp4', mode='rb') as outfile:
 
-            # Track the movie
-            ret = tracker.track_movie(engine_name=engine_name,
+            # Track (or retrack) the movie and create the tracked movie
+            # This creates an output file that has the trackpoints animated
+            # and an array of all the trackpoints
+            tracked = tracker.track_movie(engine_name=engine_name,
                                       engine_version=engine_version,
                                       input_trackpoints = input_trackpoints,
-                                      frame_start = frame_start,
+                                      frame_start      = frame_start,
                                       moviefile_input  = infile.name,
                                       moviefile_output = outfile.name)
 
-            # Compute the new trackpoints
-            new_movie_data       = outfile.read()
-            output_trackpoints   = ret['output_trackpoints']
-            output_frame_numbers = sorted(set([tp['frame_number'] for tp in output_trackpoints]))
-
-            # Save the movie
-            new_title = movie_metadata['title']
+            # Save the movie with updated metadata
+            new_movie_data = outfile.read()
+            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
+            new_title      = movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
-            new_movie_id = db.create_new_movie(user_id = get_user_id(),
+            tracked_movie_id = db.create_new_movie(user_id = get_user_id(),
                                                title = new_title,
                                                description = movie_metadata['description'],
                                                movie_data = new_movie_data)
 
-            # Now write all of the trackpoints (this is unfortunately O(n^2) and pretty inefficient.)
-            for frame_number in output_frame_numbers:
-                frame_id = db.create_new_frame(movie_id=new_movie_id, frame_number=frame_number)
-                db.put_frame_trackpoints(frame_id = frame_id, trackpoints=[tp for tp in output_trackpoints if tp['frame_number']==frame_number])
+    # Get new trackpoints for each frame
+    output_trackpoints   = tracked['output_trackpoints']
+    output_trackpoints_by_frame = defaultdict(list)
+    for tp in output_trackpoints:
+        output_trackpoints_by_frame[tp['frame_number']].append(tp)
 
-    return {'error': False, 'output_trackpoints': output_trackpoints,'new_movie_id':new_movie_id}
+    # Write all of the trackpoints by frame that were re-tracked
+    for frame_number in output_trackpoints_by_frame.keys():
+        if frame_number >= frame_start:
+            frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
+            db.put_frame_trackpoints(frame_id = frame_id,
+                                     trackpoints=output_trackpoints_by_frame[frame_number])
+
+    # We return all the trackpoints to the client, although the client currently doesn't use them
+    ret = {'error': False,
+           'frame_start':frame_start,
+           'tracked_movie_id':tracked_movie_id}
+    return fix_types(ret)
 
 ##
 # Movie analysis API
@@ -642,7 +676,6 @@ def api_new_frame():
     :param: api_key  - api_key
     :param: movie_id - the movie
     :param: frame_number - the frame to create
-    :param: frame_msec   - the frame to create (do not provide if frame_number is provided)
     :param: frame_data - if provided, it's uploaded; otherwise we just enter the frame into the dfatabase if it doesn't exist
     :return: frame_id - that's what we care about
 
@@ -654,9 +687,9 @@ def api_new_frame():
     except TypeError:
         frame_data = None
     frame_id = db.create_new_frame( movie_id = get_int('movie_id'),
-                               frame_msec = get_int('frame_msec'),
                                frame_number = get_int('frame_number'),
                                frame_data = frame_data)
+    assert isinstance( frame_id, int)
     return {'error': False, 'frame_id': frame_id}
 
 @bottle.route('/api/get-frame', method=GET_POST)
@@ -668,25 +701,29 @@ def api_get_frame():
     :param movie_id:   movie
     :param frame_id:   just get by frame_id
     :param frame_number: get the frame by frame_number (starting with 0)
-    :param frame_msec: the frame specified  (error if frame_id is specified)
-    :param msec_delta: 0 - this frame; +1 - next frame; -1 is previous frame  (error if frame_msec is not specified)
     :param format:     jpeg - just get the image;
                        json (default) - get the image (default), json annotation and trackpoints
                        // todo - frame_id - just get the frame_id
 
-    :return: - either the image (as a JPEG) or a JSON object.
+    :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
+      error        = true or false
+      message      - the message if there is an error
+      movie_id     - the movie (always returned)
+      frame_id     - the id of the frame (always returned)
+      frame_number - the number of the frame (always returned)
+      last_tracked_frame - the frame number of the highest frame with trackpoints
+      annotations - a JSON object of annotations from the databsae.
+      trackpoints - a list of the trackpoints
     """
-    user_id    = get_user_id()
-
-    frame_id   = get_int('frame_id')
-    frame_id   = get_int('frame_number')
-    movie_id   = get_int('movie_id')
+    user_id      = get_user_id()
+    frame_id     = get_int('frame_id')
     frame_number = get_int('frame_number')
-    frame_msec = get_int('frame_msec',0 ) # location frame
-    msec_delta = get_int('msec_delta',0 ) # if +1, the frame following frame_msec
-    fmt        = get('format', 'jpeg').lower()
+    movie_id     = get_int('movie_id')
+    fmt          = get('format', 'jpeg').lower()
 
+    logging.debug("api_get_frame fmt=%s movie_id=%s frame_number=%s",fmt,movie_id,frame_number)
     if fmt not in ['jpeg', 'json']:
+        logging.info("fmt is not in jpeg or json")
         return E.INVALID_FRAME_FORMAT
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
@@ -694,9 +731,7 @@ def api_get_frame():
         return E.INVALID_MOVIE_ACCESS
 
     if fmt=='jpeg':
-        if frame_id is None:
-            return E.INVALID_FRAME_FORMAT
-        # Is there a frame we can access?
+        # is frame_id provided?
         if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
             row =  db.get_frame(frame_id=frame_id)
             return row.get('frame_data',None)
@@ -705,58 +740,74 @@ def api_get_frame():
             return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
                                        frame_number = frame_number,
                                        fmt = 'jpeg')
+        logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
         return E.INVALID_FRAME_ACCESS
 
     # See if get_frame can find the movie frame
-    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_msec=frame_msec, msec_delta=msec_delta)
-    if ret is None:
-        ret = {'movie_id':movie_id}
+    ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_number=frame_number)
+    logging.debug("ret=%s",ret)
+    if ret:
+        # Get any frame annotations and trackpoints
+        ret['annotations'] = db.get_frame_annotations(frame_id=ret['frame_id'])
+        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=ret['frame_id'])
 
-    if 'frame_data' not in ret:
-        # Get the frame from the movie
-        movie_data = db.get_movie_data(movie_id=movie_id)
-        ret['frame_data'] = tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
+    else:
+        # plant_dev is not in the database, so we need to make it
+        frame_id = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
+        ret = {'movie_id':movie_id,
+               'frame_id':frame_id,
+               'frame_number':frame_number}
 
-    if 'frame_data' in ret:
-        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
-        del ret['frame_data']
+    # If we do not have frame_data, extract it from the movie (but don't store in database)
+    if ret.get('frame_data',None) is None:
+        ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+                                                  frame_number=frame_number,
+                                                  fmt='jpeg')
 
-    # if we have the frame_id, get the annotations and trackpoints
-    if frame_id is not None:
-        ret['annotations'] = db.get_frame_annotations(frame_id=frame_id)
-        ret['trackpoints'] = db.get_frame_trackpoints(frame_id=frame_id)
+    # Convert the frame_data to a data URL
+    ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
+    del ret['frame_data']
 
+    ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
+    ret['error'] = False
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-    return datetime_to_str(ret)
+    return fix_types(ret)
 
 @bottle.route('/api/put-frame-analysis', method=POST)
 def api_put_frame_analysis():
     """
     Writes analysis and trackpoints for specific frames; frame_id is required
-    :param: frame_id - the frame.
     :param: api_key  - the api_key
+    :param: frame_id - the frame.
+    :param: movie_id - the movie
+    :param: frame_number - the the frame
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
+    logging.debug("put_frame_analysis. frame_id=%s movie_id=%s  frame_number=%s",get_int('frame_id'),get_int('movie_id'),get_int('frame_number'))
     frame_id  = get_int('frame_id')
-    if db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
-        annotations=get_json('annotations')
-        trackpoints=get_json('trackpoints')
-        logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
-        if annotations is not None:
-            db.put_frame_annotations(frame_id=frame_id,
-                                     annotations=annotations,
-                                     engine_name=get('engine_name'),
-                                     engine_version=get('engine_version'))
-        if trackpoints is not None:
-            db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
-        return {'error': False, 'message':'Analysis recorded.'}
-    return E.INVALID_MOVIE_ACCESS
+    if frame_id is None:
+        frame_id = db.create_new_frame(movie_id=get_int('movie_id'), frame_number=get_int('frame_number'))
+        logging.debug("frame_id is %s",frame_id)
+    if not db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
+        logging.debug("user %s cannot access frame_id %s",get_user_id(), frame_id)
+        return {'error':True, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
+    annotations=get_json('annotations')
+    trackpoints=get_json('trackpoints')
+    logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
+    if annotations is not None:
+        db.put_frame_annotations(frame_id=frame_id,
+                                 annotations=annotations,
+                                 engine_name=get('engine_name'),
+                                 engine_version=get('engine_version'))
+    if trackpoints is not None:
+        db.put_frame_trackpoints(frame_id=frame_id, trackpoints=trackpoints)
+    return {'error': False, 'message':'Analysis recorded.'}
 
 
 ################################################################

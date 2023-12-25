@@ -6,7 +6,8 @@ Implements blockmatching algorithm in OpenCV.
 import json
 import argparse
 import tempfile
-#import logging
+import subprocess
+import logging
 
 import magic
 import cv2
@@ -58,12 +59,6 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
                                         'status':int(status_array[i]),
                                         'err':float(err[i]),
                                         'label':pt['label']})
-        print("tpts=",tpts)
-        print("point_array_out=",point_array_out)
-        print("status_array=",status_array,"err=",err)
-        print("trackpoints_out=",trackpoints_out)
-        print("")
-
     except cv2.error:
         trackpoints_out = []
 
@@ -76,8 +71,8 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     :param frame_label - if present, label for frame number (can be int or string)
     """
 
-    #width = len(frame)
-    height = len(frame[0])
+    frame_height = len(frame)
+    frame_width = len(frame[0])
 
     # use the points to annotate the colored frames. write to colored tracked video
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
@@ -85,13 +80,31 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
         cv2.circle(frame, (int(point['x']), int(point['y'])), 3, RED, -1) # pylint: disable=no-member
 
     if frame_label is not None:
+        # Label in upper right hand corner
         text = str(frame_label)
         WHITE = (255,255,255)
         text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
-        text_origin = ( TEXT_MARGIN, height-TEXT_MARGIN)
+        text_origin = ( frame_width - text_size[0] - TEXT_MARGIN, text_size[1]+TEXT_MARGIN)
         cv2.rectangle(frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
+
+def extract_movie_metadata(*, movie_data):
+    """Use OpenCV to get the movie metadata"""
+    with tempfile.NamedTemporaryFile(mode='ab') as tf:
+        tf.write(movie_data)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+        total_frames = 0
+        while True:
+            ret, last_frame = cap.read()
+            if not ret:
+                break
+            total_frames += 1
+    return {'total_frames':total_frames,
+            'width':int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            'height':int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            'fps':cap.get(cv2.CAP_PROP_FPS)}
 
 def extract_frame(*, movie_data, frame_number, fmt):
     """Download movie_id to a temporary file, find frame_number and return it in the request fmt.
@@ -143,33 +156,38 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
-    # Create a VideoWriter object to save the output video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(moviefile_output, fourcc, fps, (width, height))
+    # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
 
-    output_trackpoints = []
-    for frame_number in range(1_000_000):
-        prev_frame = current_frame
-        ret, current_frame = cap.read()
-        if not ret:
-            break
+        output_trackpoints = []
+        for frame_number in range(1_000_000):
+            prev_frame = current_frame
+            ret, current_frame = cap.read()
+            if not ret:
+                break
 
-        # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
-        if frame_number <= frame_start:
-            current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+            # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
+            if frame_number <= frame_start:
+                current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
 
-        # If this is a frame to track, then track it
-        if frame_number >= frame_start:
-            current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
+            # If this is a frame to track, then track it
+            if frame_number >= frame_start:
+                current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
 
-        # Label the output and write it
-        cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
-        out.write(current_frame)
+            # Label the output and write it
+            cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
+            out.write(current_frame)
 
-        # Add the trackpionts to the output list, giving each a frame number
-        output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
-    cap.release()
-    out.release()
+            # Add the trackpionts to the output list, giving each a frame number
+            output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+        cap.release()
+        out.release()
+
+        # Finally, use ffmpeg to transcode the output to a proper mp4 file
+        subprocess.call(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',tf.name,'-vcodec','h264',moviefile_output])
+
     return {'output_trackpoints':output_trackpoints}
 
 

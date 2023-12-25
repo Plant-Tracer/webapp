@@ -10,6 +10,9 @@ schema.sql: Makefile ../Makefile
 	touch Makefile		# so we can repeat!
 	git diff schema.sql
 
+schema-local.sql: Makefile ../Makefile
+	mysqldump --defaults-extra-file=credentials-local.ini -d --single-transaction --no-tablespaces planttracer_local | sed 's/ AUTO_INCREMENT=[0-9]*//g' | grep -v 'Dump completed on' > schema-local.sql
+
 database-dump.sql: Makefile ../Makefile
 	(source $$HOME/plant_dev.bash;mysqldump -h$$MYSQL_HOST -u$$MYSQL_USER -p$$MYSQL_PASSWORD --single-transaction --no-tablespaces $$MYSQL_DATABASE) > database-dump.sql
 	touch Makefile		# so we can repeat!

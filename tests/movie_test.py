@@ -186,18 +186,18 @@ def test_movie_extract(new_movie):
     user_id = cfg[USER_ID]
 
     movie_data = db.get_movie_data(movie_id = movie_id)
-    frame0 = tracker.extract_frame(movie_data = movie_data, frame_number=0, fmt='jpeg')
-    frame1 = tracker.extract_frame(movie_data = movie_data, frame_number=1, fmt='jpeg')
-    frame2 = tracker.extract_frame(movie_data = movie_data, frame_number=2, fmt='jpeg')
+    assert magic.from_buffer(movie_data,mime=True)==MIME.MP4
+    def get_movie_data_jpeg(frame_number):
+        data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
+        logging.debug("len(data)=%s",len(data))
+        assert magic.from_buffer(data,mime=True)==MIME.JPEG
+        return data
 
-    assert frame0 is not None
-    assert frame1 is not None
-    assert frame2 is not None
-    assert frame0 != frame1
-    assert frame1 != frame2
-    assert magic.from_buffer(frame0,mime=True)== MIME.JPEG
-    assert magic.from_buffer(frame1,mime=True)== MIME.JPEG
-    assert magic.from_buffer(frame2,mime=True)== MIME.JPEG
+    frame0 = get_movie_data_jpeg(0)
+    frame1 = get_movie_data_jpeg(1)
+    frame2 = get_movie_data_jpeg(2)
+
+    assert frame0 != frame1 != frame2
 
     # Grab three frames and see if they are different
     def get_jpeg_frame(number):
@@ -205,20 +205,32 @@ def test_movie_extract(new_movie):
                             'movie_id': str(movie_id),
                             'frame_number': str(number),
                             'format':'jpeg' }):
-            return bottle_app.api_get_frame()
+            r =  bottle_app.api_get_frame()
+            assert isinstance(r,dict) is False
+            assert magic.from_buffer(r,mime=True)==MIME.JPEG
+            return r
 
     jpeg0 = get_jpeg_frame(0)
-    assert jpeg0 is not None
     jpeg1 = get_jpeg_frame(1)
-    assert jpeg1 is not None
     jpeg2 = get_jpeg_frame(2)
-    assert jpeg2 is not None
-    assert jpeg0 != jpeg1
-    assert jpeg1 != jpeg2
+    assert jpeg0 != jpeg1 != jpeg2
 
-    assert magic.from_buffer(jpeg0,mime=True)== MIME.JPEG
-    assert magic.from_buffer(jpeg1,mime=True)== MIME.JPEG
-    assert magic.from_buffer(jpeg2,mime=True)== MIME.JPEG
+    # Grab three frames with metadata
+    def get_jpeg_json(frame_number):
+        with boddle(params={'api_key': api_key,
+                            'movie_id': str(movie_id),
+                            'frame_number': str(frame_number),
+                            'format':'json' }):
+            ret =  bottle_app.api_get_frame()
+            logging.debug("2. ret=%s",ret)
+            logging.debug("2. movie_id=%s frame_number=%s ret[frame_id]=%s",movie_id,frame_number,ret['frame_id'])
+            assert isinstance(ret,dict) is True
+            return ret
+    r0 = get_jpeg_json(0)
+    r1 = get_jpeg_json(1)
+    r2 = get_jpeg_json(2)
+    assert r0['frame_id'] != r1['frame_id'] != r2['frame_id']
+
 
 
 def test_track_point_annotations(new_movie):
@@ -317,15 +329,14 @@ def test_movie_tracking(new_movie):
         ret = bottle_app.api_track_movie()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
-    # Extract the trackpoints
-    output_trackpoints = ret['output_trackpoints']
-    new_movie_id       = ret['new_movie_id']
-    assert len(output_trackpoints)>90
+    assert isinstance(ret['tracked_movie_id'],int)
+    tracked_movie_id = ret['tracked_movie_id']
 
-    # Download the trackpoints as as CSV
+    # Download the trackpoints as as CSV and make sure it is formatted okay.
+    # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
-                        'movie_id': new_movie_id}):
-        ret = bottle_app.api_download_movie_trackpoints()
+                        'movie_id': movie_id}):
+        ret = bottle_app.api_get_movie_trackpoints()
     lines = ret.split("\n")
     assert "track1 x" in lines[0]
     assert "track1 y" in lines[0]
@@ -335,9 +346,7 @@ def test_movie_tracking(new_movie):
     assert len(lines) > 50
 
     # Purge the new movie
-    db.purge_movie( movie_id=new_movie_id )
-
-
+    db.purge_movie( movie_id=tracked_movie_id )
 
 
 """

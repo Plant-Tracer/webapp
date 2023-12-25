@@ -12,6 +12,7 @@ import logging
 
 import uuid
 import pymysql
+from tabulate import tabulate
 
 # pylint: disable=no-member
 
@@ -128,6 +129,24 @@ def create_db(args):
             print("writing config to ",args.writeconfig)
             cp.write(fp)
 
+def report():
+    dbreader = db.get_dbreader()
+    headers = []
+    rows = dbfile.DBMySQL.csfr(dbreader,
+                               """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
+                               right join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
+                               right join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
+                               order by 1,2""",
+                               get_column_names=headers)
+    print(tabulate(rows,headers=headers))
+    print("\n")
+
+    headers = []
+    rows = dbfile.DBMySQL.csfr(dbreader,
+                               """SELECT * from movies order by id""",get_column_names=headers)
+    print(tabulate(rows,headers=headers))
+
+
 def create_course(*, course_key, course_name, admin_email, admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT):
     db.create_course(course_key = course_key,
                      course_name = course_name,
@@ -154,10 +173,13 @@ if __name__ == "__main__":
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--createroot",help="create root config  with specified password")
-    parser.add_argument("--createcourse",help="Create a course and register --admin as the administrator",action='store_true')
+    parser.add_argument("--create_course",help="Create a course and register --admin as the administrator",action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
+    parser.add_argument("--report",help="print a report of the database",action='store_true')
+    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
+    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -185,15 +207,46 @@ if __name__ == "__main__":
         print(args.writeconfig,"is written with a root configuration")
         sys.exit(0)
 
+    if args.clean:
+        clean()
+
+    if args.create_course:
+        if not args.admin_email:
+            print("Must provide --admin_email",file=sys.stderr)
+        if not args.admin_name:
+            print("Must provide --admin_name",file=sys.stderr)
+        if not args.admin_email or not args.admin_name:
+            exit(1)
+        course_key = "-".join([generate_word(),generate_word(),generate_word()])
+        create_course(course_key = course_key,
+                      course_name = args.create_course,
+                      admin_email = args.admin_email,
+                      admin_name = args.admin_name,
+                      max_enrollment = args.max_enrollment)
+        print(f"course_key: {course_key}")
+        exit(0)
+
+    if args.report:
+        report()
+        exit(0)
+
+    if args.purge_movie:
+        db.purge_movie(movie_id=args.purge_movie)
+        exit(0)
+
     # The following all require a root config
-    assert os.path.exists(args.rootconfig)
+    if args.rootconfig is None:
+        print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
+        exit(1)
+    if not os.path.exists(args.rootconfig):
+        print("File not found: ",args.rootconfig,file=sys.stderr)
+        exit(1)
     auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
     try:
         d = dbfile.DBMySQL(auth)
     except pymysql.err.OperationalError:
         print("Invalid auth: ", auth, file=sys.stderr)
         raise
-
 
     if args.createdb:
         create_db(args)
@@ -205,17 +258,3 @@ if __name__ == "__main__":
             d.execute(f'DROP USER `{dbreader_user}`@`{ipaddr}`')
             d.execute(f'DROP USER `{dbwriter_user}`@`{ipaddr}`')
         d.execute(f'DROP DATABASE {args.dropdb}')
-
-    if args.clean:
-        clean()
-
-    if args.createcourse:
-        if not args.email:
-            print("Must provide --email",file=sys.stderr)
-            exit(1)
-        course_key = "-".join([generate_word(),generate_word(),generate_word()])
-        create_course(course_key = course_key,
-                      course_name = args.create_course,
-                      admin_email = args.admin_email,
-                      admin_name = args.admin_name,
-                      max_enrollment = args.max_enrollment)

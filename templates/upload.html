@@ -1,3 +1,5 @@
+<!-- -*- mode: html -*- -->
+
 {% extends 'base.html' %}
 
 {% block body %}
@@ -15,9 +17,28 @@
 
 <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
 
-<label for='title'>Title:</label>             <input type='text' id='movie-title'       name='title' onkeydown='check_upload_metadata()'></br>
-<label for='description'>Description:</label> <input type='text' id='movie-description' name='description' onkeydown='check_upload_metadata()'> </br>
-<input id='movie-file' type="file" onchange="upload_movie(this)" disabled='true'></br>
+
+<form class='pure-form pure-form-aligned'>
+<fieldset>
+<div class='pure-control-group'>
+  <label for='title'>Title:</label>
+  <input type='text' id='movie-title'       name='title' onkeydown='check_upload_metadata()'>
+  <span class="pure-form-message-inline">required</span>
+</div>
+
+<div class='pure-control-group'>
+     <label for='description'>Description:</label>
+     <input type='text' id='movie-description' name='description' onkeydown='check_upload_metadata()'>
+     <span class="pure-form-message-inline">required</span>
+</div>
+<div class='pure-control-group'>
+  <label for='movie-file'>Click to upload file:</label>
+  <input id='movie-file' type="file" onchange="upload_movie(this)" disabled='true'>
+  <span class="pure-form-message-inline">required</span>
+</div>
+</fieldset>
+</form>
+
 <p><div id='message'></div></p>
 
 <h2>Done uploading?</h2>
