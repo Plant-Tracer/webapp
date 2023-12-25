@@ -606,7 +606,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                         ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s{a3}""",
                         args)
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
-                                   (movie_id, frame_number))
+                                   (movie_id, frame_number))[0][0]
     return frame_id
 
 

@@ -186,6 +186,7 @@ def test_movie_extract(new_movie):
     user_id = cfg[USER_ID]
 
     movie_data = db.get_movie_data(movie_id = movie_id)
+    assert magic.from_buffer(movie_data,mime=True)==MIME.MP4
     def get_movie_data_jpeg(frame_number):
         data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
         logging.debug("len(data)=%s",len(data))
@@ -328,15 +329,13 @@ def test_movie_tracking(new_movie):
         ret = bottle_app.api_track_movie()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
-    # Extract the trackpoints
-    output_trackpoints_by_frame = ret['output_trackpoints_by_frame']
-    tracked_movie_id       = ret['tracked_movie_id']
-    assert len(output_trackpoints_by_frame)>20
-    assert len(output_trackpoints_by_frame[0])==2
+    assert isinstance(ret['tracked_movie_id'],int)
+    tracked_movie_id = ret['tracked_movie_id']
 
-    # Download the trackpoints as as CSV and make sure it is formatted okay
+    # Download the trackpoints as as CSV and make sure it is formatted okay.
+    # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
-                        'movie_id': tracked_movie_id}):
+                        'movie_id': movie_id}):
         ret = bottle_app.api_get_movie_trackpoints()
     lines = ret.split("\n")
     assert "track1 x" in lines[0]
@@ -348,8 +347,6 @@ def test_movie_tracking(new_movie):
 
     # Purge the new movie
     db.purge_movie( movie_id=tracked_movie_id )
-
-
 
 
 """

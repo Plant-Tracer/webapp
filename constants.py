@@ -18,6 +18,7 @@ class Engines:
 class MIME:
     """MIME Types"""
     JPEG = 'image/jpeg'
+    MP4 = 'video/quicktime'
 
 class E:
     """Error constants"""

@@ -421,7 +421,7 @@ class PlantTracerController extends CanvasController {
 
                 // Set up a download link for the trackpoints
                 $(`#${this.this_id} span.download_link`).html(
-                    `<a href='${trackpoints_url} download='Movie ${data.movie_id} trackpoints.csv'>Download trackpoints</a>`
+                    `<a href='${trackpoints_url}' download='Movie ${this.movie_id} trackpoints.csv'>Download trackpoints</a>`
                 );
 
                 // redraw the current frame

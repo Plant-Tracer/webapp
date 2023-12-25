@@ -485,11 +485,12 @@ def api_get_movie_data():
     """
     :param api_key:   authentication
     :param movie_id:   movie
+    :return: returns the raw movie data as a quicktime
     """
     movie_id = get_int('movie_id')
     if db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return {'error':False, 'metadata':db.get_movie_data(movie_id=movie_id)}
+        return db.get_movie_data(movie_id=movie_id)
     return E.INVALID_MOVIE_ACCESS
 
 @bottle.route('/api/get-movie-metadata', method=GET_POST)
@@ -688,6 +689,7 @@ def api_new_frame():
     frame_id = db.create_new_frame( movie_id = get_int('movie_id'),
                                frame_number = get_int('frame_number'),
                                frame_data = frame_data)
+    assert isinstance( frame_id, int)
     return {'error': False, 'frame_id': frame_id}
 
 @bottle.route('/api/get-frame', method=GET_POST)
