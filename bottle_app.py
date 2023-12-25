@@ -91,14 +91,14 @@ def expand_memfile_max():
     bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
 
 
-def datetime_to_str(obj):
+def fix_types(obj):
     """Given an object that might be a dictionary, convert all datetime objects to JSON strings"""
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()  # or str(obj) if you prefer
     elif isinstance(obj, dict):
-        return {k: datetime_to_str(v) for k, v in obj.items()}
+        return {k: fix_types(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
-        return [datetime_to_str(elem) for elem in obj]
+        return [fix_types(elem) for elem in obj]
     elif isinstance(obj,(np.float64,np.float32,np.float16)):
         return float(obj)
     else:
@@ -357,7 +357,7 @@ def api_check_api_key():
 
     userdict = db.validate_api_key(auth.get_user_api_key())
     if userdict:
-        return {'error': False, 'userinfo': datetime_to_str(userdict)}
+        return {'error': False, 'userinfo': fix_types(userdict)}
     return E.INVALID_API_KEY
 
 
@@ -483,18 +483,36 @@ def api_new_movie():
 @bottle.route('/api/get-movie-data', method=GET_POST)
 def api_get_movie_data():
     """
-    :param api_keuy:   authentication
+    :param api_key:   authentication
     :param movie_id:   movie
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
+    movie_id = get_int('movie_id')
+    if db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
         bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie_data(movie_id=get_int('movie_id'))
+        return {'error':False, 'metadata':db.get_movie_data(movie_id=movie_id)}
+    return E.INVALID_MOVIE_ACCESS
+
+@bottle.route('/api/get-movie-metadata', method=GET_POST)
+def api_get_movie_metadata():
+    """
+    Gets the metadata for a specific movie and its last tracked frame
+    :param api_key:   authentication
+    :param movie_id:   movie
+    """
+    movie_id = get_int('movie_id')
+    user_id = get_user_id()
+    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+        metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
+        return {'error':False, 'metadata':fix_types(metadata)}
+
+
     return E.INVALID_MOVIE_ACCESS
 
 @bottle.route('/api/get-movie-trackpoints',method=GET_POST)
 def api_get_movie_trackpoints():
     """Downloads the movie trackpoints as a CSV
-    :param api_keuy:   authentication
+    :param api_key:   authentication
     :param movie_id:   movie
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
@@ -624,7 +642,7 @@ def api_track_movie():
     ret = {'error': False,
            'frame_start':frame_start,
            'tracked_movie_id':tracked_movie_id}
-    return datetime_to_str(ret)
+    return fix_types(ret)
 
 ##
 # Movie analysis API
@@ -686,6 +704,8 @@ def api_get_frame():
                        // todo - frame_id - just get the frame_id
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
+      error        = true or false
+      message      - the message if there is an error
       movie_id     - the movie (always returned)
       frame_id     - the id of the frame (always returned)
       frame_number - the number of the frame (always returned)
@@ -747,11 +767,12 @@ def api_get_frame():
     del ret['frame_data']
 
     ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
+    ret['error'] = False
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
     # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
-    return datetime_to_str(ret)
+    return fix_types(ret)
 
 @bottle.route('/api/put-frame-analysis', method=POST)
 def api_put_frame_analysis():

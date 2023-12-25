@@ -470,18 +470,22 @@ def get_movie_data(*, movie_id):
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
-    """Gets the metadata for all movies accessible by user_id or enumerated by movie_id"""
+    """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
+    This is used for the movie list.
+    """
+
     cmd = """SELECT *,id as movie_id from movies WHERE
                 ((user_id=%s) OR
                 (%s=0) OR
                 (course_id=(select primary_course_id from users where id=%s)) OR
-                (course_id in (select course_id from admins where user_id=%s))) """
+                (course_id in (select course_id from admins where user_id=%s)))
+    """
     params = [user_id, user_id, user_id, user_id]
     if movie_id:
         cmd += " AND movies.id=%s"
         params.append(movie_id)
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
 
+    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
 
 @log
 def can_access_movie(*, user_id, movie_id):

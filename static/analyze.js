@@ -217,17 +217,33 @@ class myCircle extends MyObject {
 // This contains code specific for the planttracer project.
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
-    constructor( this_id ) {
+    constructor( this_id, movie_id, frame_number, movie_metadata ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
+        console.log("movie_metadata:",movie_metadata);
+
         this.this_id         = this_id;
-        this.frame_number    = 0; // default to the first frame
         this.canvasId        = 0;
-        this.movie_id        = null;             // the movie being analyzed
-        this.tracked_movie_id = null;     // the id of the tracked movie
-        this.last_tracked_frame = null;
+        this.movie_id        = movie_id;             // the movie being analyzed
+        this.frame_number    = frame_number; // default to the first frame
+        this.movie_metadata  = movie_metadata
+        this.last_tracked_frame = movie_metadata.last_tracked_frame;
+        this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
         this.video = $(`#${this.this_id} video`);
 
+        // Size the canvas and video player if we know the sizes
+        if (this.movie_metadata.width && this.movie_metadata.height) {
+            $(`#${this.this_id} canvas`).attr('width',this.movie_metadata.width);
+            $(`#${this.this_id} canvas`).attr('height',this.movie_metadata.height);
+            $(`#${this.this_id} video`).attr('width',this.movie_metadata.width);
+            $(`#${this.this_id} video`).attr('height',this.movie_metadata.height);
+        }
+
+        if (this.last_tracked_frame > 0 ){
+            $(`#${this.this_id} input.track_button`).val( 'retrack movie' );
+        }
+
+        // Hide the video until we will retrack
         this.video.hide();
 
         // add_marker_status shows error messages regarding the marker name
@@ -243,7 +259,7 @@ class PlantTracerController extends CanvasController {
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the
-        this.track_button = $(`#${this_id} input.track_to_end`);
+        this.track_button = $(`#${this_id} input.track_button`);
         this.track_button.on('click', (event) => {this.track_to_end(event);});
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
@@ -396,7 +412,6 @@ class PlantTracerController extends CanvasController {
             } else {
                 // Set our variables
                 this.tracked_movie_id = data.tracked_movie_id;
-                this.movie_frames     = data.movie_frames;
                 const movie_url       = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
                 const trackpoints_url = `/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
 
@@ -423,7 +438,7 @@ class PlantTracerController extends CanvasController {
 
     // Change the frame
     goto_frame( frame ) {
-        console.log("frame=",frame,"movie_frames=",this.movie_frames,"last_tracked_frame=",this.last_tracked_frame,this.last_tracked_frame===null);
+        console.log("frame=",frame,"last_tracked_frame=",this.last_tracked_frame,this.last_tracked_frame===null);
         if (this.last_tracked_frame === null){
             return;
         }
@@ -433,8 +448,8 @@ class PlantTracerController extends CanvasController {
         }
 
         frame = Math.max(frame,0);
-        frame = Math.min(frame,this.movie_frames-1);
-        console.log("frame=",frame);
+        frame = Math.min(frame,this.movie_metadata.total_frames-1);
+        frame = Math.min(frame,this.last_tracked_frame);
         this.frame_number_field.val( frame );
         this.frame_number = frame;
         const get_frame_params = {
@@ -471,7 +486,9 @@ class PlantTracerController extends CanvasController {
         this.theImage = new myImage( 0, 0, data.data_url, this)
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
-        $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
+        if (data.frame_number>0){
+            $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
+        }
 
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
@@ -549,21 +566,28 @@ function append_new_ptc(movie_id, frame_number) {
     $( '#template' ).replaceWith( div_html );
     $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
 
-    // Create the new PlantTracerController
-    let ptc = new PlantTracerController( this_id );
-    ptc.movie_id       = movie_id;
-    ptc.frame_number   = frame_number;
+    // Get the movie metadata.
+    // When we have it, create the plant tracer controller
+    $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
+        // Create the new PlantTracerController
+        console.log("data:",data);
+        if (data.error==true) {
+            alert(data.message);
+            return;
+        }
+        let ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
 
-    // get the request frame of the movie. When it comes back, use it to populate
-    // a new PlantTracerController.
-    const get_frame_params = {
-        api_key :api_key,
-        movie_id:movie_id,
-        frame_number:frame_number,
-        format:'json',
-    };
-    console.log("SEND get_frame_params:",get_frame_params);
-    $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data);});
+        // get the request frame of the movie. When it comes back, use it to populate
+        // a new PlantTracerController.
+        const get_frame_params = {
+            api_key :api_key,
+            movie_id:movie_id,
+            frame_number:frame_number,
+            format:'json',
+        };
+        console.log("SEND get_frame_params:",get_frame_params);
+        $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data); });
+    });
 }
 
 // Called when the page is loaded
