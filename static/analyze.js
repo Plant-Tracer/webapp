@@ -225,6 +225,7 @@ class PlantTracerController extends CanvasController {
         this.canvasId        = 0;
         this.movie_id        = null;             // the movie being analyzed
         this.tracked_movie_id = null;     // the id of the tracked movie
+        this.last_tracked_frame = null;
         this.video = $(`#${this.this_id} video`);
 
         this.video.hide();
@@ -242,17 +243,18 @@ class PlantTracerController extends CanvasController {
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the
-        this.track_to_end_button = $(`#${this_id} input.track_to_end`);
-        this.track_to_end_button.on('click', (event) => {this.track_to_end(event);});
-        this.track_to_end_button.prop('disabled',true); // disable it until we have a marker added.
+        this.track_button = $(`#${this_id} input.track_to_end`);
+        this.track_button.on('click', (event) => {this.track_to_end(event);});
+        this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
-        this.prev_button = $(`#${this.this_id} input.frame_prev`);
-        this.next_button = $(`#${this.this_id} input.frame_next`);
-        this.frame_field = $(`#${this.this_id} input.frame_number`);
+        this.frame_number_field = $(`#${this.this_id} input.frame_number`);
 
-        this.prev_button.on('click', (event) => {this.goto_frame( this.frame_number-1);});
-        this.next_button.on('click', (event) => {this.goto_frame( this.frame_number+1);});
-        this.frame_field.on('input', (event) => {this.goto_frame( this.frame_field.val());});
+        // Wire up the movement buttons
+        console.log("this.this_id=",this.this_id);
+        $(`#${this.this_id} input.frame_prev10`).on('click', (event) => {this.goto_frame( this.frame_number-10);});
+        $(`#${this.this_id} input.frame_prev`).on('click', (event) => {this.goto_frame( this.frame_number-1);});
+        $(`#${this.this_id} input.frame_next`).on('click', (event) => {this.goto_frame( this.frame_number+1);});
+        $(`#${this.this_id} input.frame_next10`).on('click', (event) => {this.goto_frame( this.frame_number+10);});
     }
 
 
@@ -320,7 +322,7 @@ class PlantTracerController extends CanvasController {
         this.redraw('insert_circle');
 
         // Finally enable the track-to-end button
-        this.track_to_end_button.prop('disabled',false);
+        this.track_button.prop('disabled',false);
     }
 
     // Subclassed methods
@@ -403,24 +405,37 @@ class PlantTracerController extends CanvasController {
                 this.video.html(`<source src='${movie_url}' type='video/mp4'>`);
 
                 // Set up a download link for the trackpoints
-                $(`#${this.this_id} span.download_link`).html(`<a href='${trackpoints_url} download='Movie ${data.movie_id} trackpoints.csv'>Download trackpoints</a>`);
+                $(`#${this.this_id} span.download_link`).html(
+                    `<a href='${trackpoints_url} download='Movie ${data.movie_id} trackpoints.csv'>Download trackpoints</a>`
+                );
 
-                // Change the top video so that it can go to the end.
-                this.prev_button.prop('disabled',false);
-                this.next_button.prop('disabled',false);
-                this.frame_field.prop('disabled',false);
-                this.frame_field.attr('max', this.movie_frames);
+                // redraw the current frame
+                const get_frame_params = {
+                    api_key :api_key,
+                    movie_id:this.movie_id,
+                    frame_number:this.frame_number,
+                    format:'json',
+                };
+                $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
             }
         });
     }
 
     // Change the frame
     goto_frame( frame ) {
-        console.log("frame=",frame,"movie_frames=",this.movie_frames);
-        if (frame<0 || frame>=this.movie_frames) {
-            return;             // out of range
+        console.log("frame=",frame,"movie_frames=",this.movie_frames,"last_tracked_frame=",this.last_tracked_frame,this.last_tracked_frame===null);
+        if (this.last_tracked_frame === null){
+            return;
         }
-        this.frame_field.val( frame );
+        // Make sure it is in range
+        if (frame == NaN) {
+            frame = 0;
+        }
+
+        frame = Math.max(frame,0);
+        frame = Math.min(frame,this.movie_frames-1);
+        console.log("frame=",frame);
+        this.frame_number_field.val( frame );
         this.frame_number = frame;
         const get_frame_params = {
             api_key :api_key,
@@ -431,6 +446,11 @@ class PlantTracerController extends CanvasController {
         $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
         // And load the frame number
     }
+
+    /***
+     * get_frame_handler() is called as a callback from the /api/get-frame call.
+     * It sets the frame visible in the top of the component and sets up the rest of the GUI to match.
+     */
     get_frame_handler( data ) {
         console.log('RECV get_frame_handler:',data);
         if (data.error) {
@@ -439,17 +459,19 @@ class PlantTracerController extends CanvasController {
         }
         // process the /api/get-frame response
         this.last_tracked_frame = data.last_tracked_frame;
-        // Change the top video so that it can go to the end.
-        this.prev_button.prop('disabled',false);
-        this.next_button.prop('disabled',false);
-        this.frame_field.prop('disabled',false);
-        this.frame_field.attr('max', data.last_tracked_frame);
-        this.frame_field.val( data.frame_number );
+        if (this.last_tracked_frame === null){
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',true);
+        } else {
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',false);
+            this.frame_number_field.attr('max', data.last_tracked_frame);
+        }
+        this.frame_number_field.val( data.frame_number );
+        // Add the markers to the image and draw them in the table
         this.objects = [];      // clear the array
         this.theImage = new myImage( 0, 0, data.data_url, this)
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
-        //$(`#${this.this_id} td.message`).text( `movie_id=${this.movie_id} frame_number=${this.frame_number} ` );
+        $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
 
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {

@@ -1,3 +1,4 @@
+<!-- -*- mode: html -*- -->
 {% extends 'base.html' %}
 
 {% block head %}
@@ -10,9 +11,7 @@
 
 <div id='message' class='alert'><b>{{message}}</b></div>
 
-<h1>Movie Frame Annotation</h1>
-This section of the web page frames from the movie, each one
-annotated.
+<h1>Plant Movie Analyzer</h1>
 
 <style>
 .float-container {
@@ -53,9 +52,11 @@ annotated.
             <option value="200">200%</option>
             <option value="300">300%</option>
           </select>
-          <input type='button' value='<-' class='frame_prev' disabled/>
-          <input type='number' value='0'  class='frame_number' placeholder='frame' size='6' min='0' max='0' disabled/>
-          <input type='button' value='->' class='frame_next' disabled/>
+          <input id='frame_prev10' type='button' value='⬅️  10' class='frame_prev10 frame_movement' disabled/>
+          <input type='button' value='⬅️ ' class='frame_prev frame_movement' disabled/>
+          <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='0' disabled/>
+          <input type='button' value='➡️ ' class='frame_next frame_movement' disabled/>
+          <input type='button' value='➡️  10' class='frame_next10 frame_movement' disabled/>
         </form>
       </td>
       <td>
@@ -84,7 +85,7 @@ annotated.
 
             <div class='pure-control-group'>
               <label></label>
-              <input class='track_to_end pure-button pure-button-primary' type='button' value='track to end of movie'/>
+              <input class='track_button pure-button pure-button-primary' type='button' value='track movie'/>
             </div>
           </fieldset>
         </form>

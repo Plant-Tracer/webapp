@@ -139,6 +139,12 @@ def report():
                                order by 1,2""",
                                get_column_names=headers)
     print(tabulate(rows,headers=headers))
+    print("\n")
+
+    headers = []
+    rows = dbfile.DBMySQL.csfr(dbreader,
+                               """SELECT * from movies order by id""",get_column_names=headers)
+    print(tabulate(rows,headers=headers))
 
 
 def create_course(*, course_key, course_name, admin_email, admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT):
@@ -172,6 +178,8 @@ if __name__ == "__main__":
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
+    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
+    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",type=int)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -220,6 +228,10 @@ if __name__ == "__main__":
 
     if args.report:
         report()
+        exit(0)
+
+    if args.purge_movie:
+        db.purge_movie(movie_id=args.purge_movie)
         exit(0)
 
     # The following all require a root config

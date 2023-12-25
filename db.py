@@ -553,7 +553,7 @@ def delete_movie(*,movie_id, delete=1):
 
 
 @log
-def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
+def create_new_movie(*, user_id, title=None, description=None, movie_data=None, movie_metadata=None):
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -569,6 +569,12 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None):
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
                             (movie_id, movie_data))
+    if movie_metadata:
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
+                            "WHERE id = %s",
+                            list(movie_metadata.values()) + [movie_id])
+
     return movie_id
 
 
@@ -652,8 +658,7 @@ def last_tracked_frame(*, movie_id):
                                LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
                                WHERE movie_id=%s
                                """,
-                               (movie_id,),
-                               asDicts=True)
+                               (movie_id,))[0][0]
 
 def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
               get_annotations=False, get_trackpoints=False):
@@ -757,9 +762,9 @@ def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
         if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
             raise KeyError(f'trackpoints element {tp} missing x, y or label')
         vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
-    args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
     dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
     if vals:
+        args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
         cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
         logging.debug("cmd=%s vals=%s",cmd,vals)
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)

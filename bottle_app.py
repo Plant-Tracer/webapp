@@ -470,10 +470,13 @@ def api_new_movie():
         logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), MAX_FILE_UPLOAD)
         return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
 
+    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+    logging.debug("movie_metadata=%s",movie_metadata)
     movie_id = db.create_new_movie(user_id=get_user_id(),
                                    title=request.forms.get('title'),
                                    description=request.forms.get('description'),
-                                   movie_data=movie_data)
+                                   movie_data=movie_data,
+                                   movie_metadata = movie_metadata)
     return {'error': False, 'movie_id': movie_id}
 
 
@@ -553,9 +556,8 @@ def api_track_movie():
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
              dict['message'] = message to display
-             dict['movie_frames'] = number of frames in the movie
-             dict['output_trackpoints_by_frame'] = dictionary of lists of trackpoint dictionaries
              dict['tracked_movie_id'] = movie_id of tracked movie
+             dict['frame_start'] = where the tracking started
     """
 
     # pylint: disable=unsupported-membership-test
@@ -566,11 +568,6 @@ def api_track_movie():
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
     frame_start    = get_int('frame_start')
-
-    # Get the trackpoints for frame_start
-    # write the movie
-    # Write the trackpoints
-    movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
 
     # Find trackpoints we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
@@ -587,23 +584,20 @@ def api_track_movie():
         # Create an output file, becuase OpenCV has to write movies to files
         with tempfile.NamedTemporaryFile(suffix='.mp4', mode='rb') as outfile:
 
-            # Track the movie
-            ret = tracker.track_movie(engine_name=engine_name,
+            # Track (or retrack) the movie and create the tracked movie
+            # This creates an output file that has the trackpoints animated
+            # and an array of all the trackpoints
+            tracked = tracker.track_movie(engine_name=engine_name,
                                       engine_version=engine_version,
                                       input_trackpoints = input_trackpoints,
-                                      frame_start = frame_start,
+                                      frame_start      = frame_start,
                                       moviefile_input  = infile.name,
                                       moviefile_output = outfile.name)
 
-            # Compute the new trackpoints
-            new_movie_data       = outfile.read()
-            output_trackpoints   = ret['output_trackpoints']
-            output_trackpoints_by_frame = defaultdict(list)
-            for tp in output_trackpoints:
-                output_trackpoints_by_frame[tp['frame_number']].append(tp)
-
-            # Save the movie
-            new_title = movie_metadata['title']
+            # Save the movie with updated metadata
+            new_movie_data = outfile.read()
+            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
+            new_title      = movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
@@ -613,16 +607,22 @@ def api_track_movie():
                                                description = movie_metadata['description'],
                                                movie_data = new_movie_data)
 
-            # Now write all of the trackpoints by frame that were after those tracked:
-            for frame_number in output_trackpoints_by_frame.keys():
-                if frame_number >= frame_start:
-                    frame_id = db.create_new_frame(movie_id=tracked_movie_id, frame_number=frame_number)
-                    db.put_frame_trackpoints(frame_id = frame_id,
-                                             trackpoints=output_trackpoints_by_frame[frame_number])
+    # Get new trackpoints for each frame
+    output_trackpoints   = tracked['output_trackpoints']
+    output_trackpoints_by_frame = defaultdict(list)
+    for tp in output_trackpoints:
+        output_trackpoints_by_frame[tp['frame_number']].append(tp)
 
+    # Write all of the trackpoints by frame that were re-tracked
+    for frame_number in output_trackpoints_by_frame.keys():
+        if frame_number >= frame_start:
+            frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
+            db.put_frame_trackpoints(frame_id = frame_id,
+                                     trackpoints=output_trackpoints_by_frame[frame_number])
+
+    # We return all the trackpoints to the client, although the client currently doesn't use them
     ret = {'error': False,
-           'output_trackpoints_by_frame': output_trackpoints_by_frame,
-           'movie_frames':max(output_trackpoints_by_frame.keys()),
+           'frame_start':frame_start,
            'tracked_movie_id':tracked_movie_id}
     return datetime_to_str(ret)
 

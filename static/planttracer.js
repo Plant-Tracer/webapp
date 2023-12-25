@@ -117,7 +117,11 @@ async function upload_movie(inp)
             const body = await r.json();
             console.log('body=',body);
             if (body.error==false ){
-                $('#message').html(`Movie ${body.movie_id} successfully uploaded. <a href='/list?api_key=${api_key}'>List movies</a>`);
+                $('#message').html(`<p>Movie ${body.movie_id} successfully uploaded.</p>`+
+                                   `<p>First frame:</p>` +
+                                   `<img src="/api/get-frame?api_key=${api_key}&movie_id=${body.movie_id}&frame_number=0&format=jpeg">`+
+                                   `<p><a href='/analyze?movie_id=${body.movie_id}'>Track movie ${body.movie_id}</a>`+
+                                   `   <a href='/list?api_key=${api_key}'>List all movies</a></p>`);
                 $('#movie-title').val('');
                 $('#movie-description').val('');
                 $('#movie-file').val('');
@@ -426,6 +430,7 @@ function list_movies_data( movies ) {
             mlist.forEach( m => ( h += movie_html(m) ));
         } else {
             h += '<tr><td><i>No movies</i></td></tr>';
+            h += '<tr><td><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
 
         h += "</tbody>";
