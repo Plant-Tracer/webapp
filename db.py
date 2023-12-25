@@ -635,10 +635,22 @@ def get_movie_trackpoints(*, movie_id):
     """
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                """
-                               SELECT frame_number,x,y,label FROM movie_frame_trackpoints
-                               LEFT JOIN movie_frames on movie_frame_trackpoints.frame_id = movie_frames.id
+                               SELECT frame_number,x,y,label
+                               FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
                                WHERE movie_id=%s
                                ORDER BY frame_number
+                               """,
+                               (movie_id,),
+                               asDicts=True)
+
+def last_tracked_frame(*, movie_id):
+    """Return the last tracked frame_number of the movie"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT max(movie_frames.frame_number)
+                               FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s
                                """,
                                (movie_id,),
                                asDicts=True)

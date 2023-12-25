@@ -422,7 +422,41 @@ class PlantTracerController extends CanvasController {
         }
         this.frame_field.val( frame );
         this.frame_number = frame;
+        const get_frame_params = {
+            api_key :api_key,
+            movie_id:this.movie_id,
+            frame_number:this.frame_number,
+            format:'json',
+        };
+        $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
         // And load the frame number
+    }
+    get_frame_handler( data ) {
+        console.log('RECV get_frame_handler:',data);
+        if (data.error) {
+            alert(`error: ${data.message}`);
+            return;
+        }
+        // process the /api/get-frame response
+        this.last_tracked_frame = data.last_tracked_frame;
+        // Change the top video so that it can go to the end.
+        this.prev_button.prop('disabled',false);
+        this.next_button.prop('disabled',false);
+        this.frame_field.prop('disabled',false);
+        this.frame_field.attr('max', data.last_tracked_frame);
+        this.frame_field.val( data.frame_number );
+        this.objects = [];      // clear the array
+        this.theImage = new myImage( 0, 0, data.data_url, this)
+        this.objects.push(this.theImage );
+        $(`#${this.this_id} td.message`).text( ' ' );
+        //$(`#${this.this_id} td.message`).text( `movie_id=${this.movie_id} frame_number=${this.frame_number} ` );
+
+        if (data.trackpoints) {
+            for (let tp of data.trackpoints) {
+                this.insert_circle( tp['x'], tp['y'], tp['label'] );
+            }
+        }
+        this.redraw('append_new_ptc');              // initial drawing
     }
 }
 
@@ -500,49 +534,14 @@ function append_new_ptc(movie_id, frame_number) {
 
     // get the request frame of the movie. When it comes back, use it to populate
     // a new PlantTracerController.
-    const get_frame_parms = {
+    const get_frame_params = {
         api_key :api_key,
         movie_id:movie_id,
         frame_number:frame_number,
         format:'json',
     };
-    console.log("SEND get_frame_params:",get_frame_parms);
-    $.post('/api/get-frame', get_frame_parms).done( (data) => {
-        console.log('RECV:',data);
-        if (data.error) {
-            alert(`error: ${data.message}`);
-            return;
-        }
-
-        // Display the photo and metadata
-        ptc.theImage = new myImage( 0, 0, data.data_url, ptc)
-        ptc.objects.push(ptc.theImage );
-        $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_number=${ptc.frame_number} ` );
-
-        // Add points in the analysis
-        //if (data.analysis) {
-        //    console.log("analysis:",data.analysis);
-        //    for (let ana of data.analysis) {
-        //        console.log("ana:",ana)
-        //        for (let pt of ana.annotations) {
-        //            console.log("pt:",pt);
-        //            ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
-        //        }
-        //    }
-        //}
-        //
-        if (data.trackpoints_engine) {
-            for (let tp of data.trackpoints_engine) {
-                ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
-            }
-        } else if (data.trackpoints) {
-            for (let tp of data.trackpoints) {
-
-                ptc.insert_circle( tp['x'], tp['y'], tp['label'] );
-            }
-        }
-        ptc.redraw('append_new_ptc');              // initial drawing
-    });
+    console.log("SEND get_frame_params:",get_frame_params);
+    $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data);});
 }
 
 // Called when the page is loaded

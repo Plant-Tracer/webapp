@@ -689,6 +689,7 @@ def api_get_frame():
       movie_id     - the movie (always returned)
       frame_id     - the id of the frame (always returned)
       frame_number - the number of the frame (always returned)
+      last_tracked_frame - the frame number of the highest frame with trackpoints
       annotations - a JSON object of annotations from the databsae.
       trackpoints - a list of the trackpoints
     """
@@ -745,6 +746,7 @@ def api_get_frame():
     ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
     del ret['frame_data']
 
+    ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
     #
     # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
