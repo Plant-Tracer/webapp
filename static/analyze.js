@@ -220,15 +220,14 @@ class PlantTracerController extends CanvasController {
     constructor( this_id ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        this.this_id       = this_id;
-        this.frame_number  = 0; // default to the first frame
-        this.canvasId         = 0;
+        this.this_id         = this_id;
+        this.frame_number    = 0; // default to the first frame
+        this.canvasId        = 0;
         this.movie_id        = null;             // the movie being analyzed
         this.tracked_movie_id = null;     // the id of the tracked movie
         this.video = $(`#${this.this_id} video`);
 
         this.video.hide();
-
 
         // add_marker_status shows error messages regarding the marker name
         this.add_marker_status = $(`#${this_id} label.add_marker_status`);
@@ -236,7 +235,7 @@ class PlantTracerController extends CanvasController {
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
         console.log("this.marker_name_input=",this.marker_name_input);
-        this.marker_name_input.on('input', (event) => { console.log('this=',this,'event=',event);this.marker_name_input_handler(event);});
+        this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
@@ -246,6 +245,14 @@ class PlantTracerController extends CanvasController {
         this.track_to_end_button = $(`#${this_id} input.track_to_end`);
         this.track_to_end_button.on('click', (event) => {this.track_to_end(event);});
         this.track_to_end_button.prop('disabled',true); // disable it until we have a marker added.
+
+        this.prev_button = $(`#${this.this_id} input.frame_prev`);
+        this.next_button = $(`#${this.this_id} input.frame_next`);
+        this.frame_field = $(`#${this.this_id} input.frame_number`);
+
+        this.prev_button.on('click', (event) => {this.goto_frame( this.frame_number-1);});
+        this.next_button.on('click', (event) => {this.goto_frame( this.frame_number+1);});
+        this.frame_field.on('input', (event) => {this.goto_frame( this.frame_field.val());});
     }
 
 
@@ -324,7 +331,7 @@ class PlantTracerController extends CanvasController {
 
     // Movement finished; upload new annotations
     object_move_finished(obj) {
-        this.put_trackpoints(this);
+        this.put_trackpoints();
     }
 
     // Return an array of JSON trackpoints
@@ -343,15 +350,15 @@ class PlantTracerController extends CanvasController {
         return JSON.stringify(this.get_trackpoints());
     }
 
-    put_trackpoints(ptc) {
+    put_trackpoints() {
         // If we are putting the frame, we already have the frame_id
-        console.log("put_trackpoints. this=",this,"ptc=",ptc);
         let put_frame_analysis_params = {
-            api_key  : api_key,
-            frame_id : ptc.frame_id,
-            trackpoints:ptc.json_trackpoints()
+            api_key      : api_key,
+            movie_id     : this.movie_id,
+            frame_number : this.frame_number,
+            trackpoints  : this.json_trackpoints()
         }
-        console.log("put_trackpoints: ptc=",ptc,"params=",put_frame_analysis_params);
+        console.log("put-frame-analysis: ",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
                 alert("Error saving annotations: "+data.message);
@@ -385,26 +392,37 @@ class PlantTracerController extends CanvasController {
             if (data.error) {
                 alert("Tracking error: "+data.message);
             } else {
+                // Set our variables
                 this.tracked_movie_id = data.tracked_movie_id;
+                this.movie_frames     = data.movie_frames;
                 const movie_url       = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
                 const trackpoints_url = `/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
+
+                // Show the tracked movie
                 this.video.show();
                 this.video.html(`<source src='${movie_url}' type='video/mp4'>`);
+
+                // Set up a download link for the trackpoints
                 $(`#${this.this_id} span.download_link`).html(`<a href='${trackpoints_url} download='Movie ${data.movie_id} trackpoints.csv'>Download trackpoints</a>`);
+
+                // Change the top video so that it can go to the end.
+                this.prev_button.prop('disabled',false);
+                this.next_button.prop('disabled',false);
+                this.frame_field.prop('disabled',false);
+                this.frame_field.attr('max', this.movie_frames);
             }
         });
     }
 
-    // go to the previous frame in the tracker interface
-    prev_frame(event) {
-    }
-
-    // go to the next frame in the tracker interface
-    next_frame(event) {
-    }
-
-    // go to the specified frame in the tracker interface
-    goto_frame(event) {
+    // Change the frame
+    goto_frame( frame ) {
+        console.log("frame=",frame,"movie_frames=",this.movie_frames);
+        if (frame<0 || frame>=this.movie_frames) {
+            return;             // out of range
+        }
+        this.frame_field.val( frame );
+        this.frame_number = frame;
+        // And load the frame number
     }
 }
 
@@ -475,6 +493,11 @@ function append_new_ptc(movie_id, frame_number) {
     $( '#template' ).replaceWith( div_html );
     $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
 
+    // Create the new PlantTracerController
+    let ptc = new PlantTracerController( this_id );
+    ptc.movie_id       = movie_id;
+    ptc.frame_number   = frame_number;
+
     // get the request frame of the movie. When it comes back, use it to populate
     // a new PlantTracerController.
     const get_frame_parms = {
@@ -490,27 +513,23 @@ function append_new_ptc(movie_id, frame_number) {
             alert(`error: ${data.message}`);
             return;
         }
-        let ptc = new PlantTracerController( this_id );
-        console.log(`*** this_id=${this_id} this_sel=${this_sel} data.frame_number=${data.frame_number} `);
-        console.log("*** data=",data);
 
         // Display the photo and metadata
-        ptc.objects.push( new myImage( 0, 0, data.data_url, ptc));
-        ptc.movie_id       = data.movie_id;
-        ptc.frame_number   = data.frame_number;
+        ptc.theImage = new myImage( 0, 0, data.data_url, ptc)
+        ptc.objects.push(ptc.theImage );
         $(`#${this_id} td.message`).text( `movie_id=${ptc.movie_id} frame_number=${ptc.frame_number} ` );
 
         // Add points in the analysis
-        if (data.analysis) {
-            console.log("analysis:",data.analysis);
-            for (let ana of data.analysis) {
-                console.log("ana:",ana)
-                for (let pt of ana.annotations) {
-                    console.log("pt:",pt);
-                    ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
-                }
-            }
-        }
+        //if (data.analysis) {
+        //    console.log("analysis:",data.analysis);
+        //    for (let ana of data.analysis) {
+        //        console.log("ana:",ana)
+        //        for (let pt of ana.annotations) {
+        //            console.log("pt:",pt);
+        //            ptc.insert_circle( pt['x'], pt['y'], pt['label'] );
+        //        }
+        //    }
+        //}
         //
         if (data.trackpoints_engine) {
             for (let tp of data.trackpoints_engine) {

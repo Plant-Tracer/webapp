@@ -583,13 +583,20 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     if frame_data is provided, update. Otherwise just return the frame_id.
     """
 
-    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movie_frames (movie_id, frame_number)
-                                   VALUES (%s,%s)
-                                   ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s""",
-                                   (movie_id, frame_number, movie_id, frame_number))
-    if frame_data:
-        dbfile.DBMySQL.csfr(get_dbwriter,"UPDATE movie_frames set frame_data=%s where id=%s",(frame_data,frame_id))
+    args = (movie_id, frame_number, movie_id, frame_number)
+    a1 = a2 = a3 = ""
+    if frame_data is not None:
+        a1 = ", frame_data"
+        a2 = ",%s"
+        a3 = ",frame_data=%s"
+        args = (movie_id, frame_number, frame_data, movie_id, frame_number,frame_dat)
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
+                        VALUES (%s,%s{a2})
+                        ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s{a3}""",
+                        args)
+    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
+                                   (movie_id, frame_number))
     return frame_id
 
 

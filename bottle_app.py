@@ -553,6 +553,9 @@ def api_track_movie():
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
              dict['message'] = message to display
+             dict['movie_frames'] = number of frames in the movie
+             dict['output_trackpoints_by_frame'] = dictionary of lists of trackpoint dictionaries
+             dict['tracked_movie_id'] = movie_id of tracked movie
     """
 
     # pylint: disable=unsupported-membership-test
@@ -617,7 +620,10 @@ def api_track_movie():
                     db.put_frame_trackpoints(frame_id = frame_id,
                                              trackpoints=output_trackpoints_by_frame[frame_number])
 
-    ret = {'error': False, 'output_trackpoints_by_frame': output_trackpoints_by_frame,'tracked_movie_id':tracked_movie_id}
+    ret = {'error': False,
+           'output_trackpoints_by_frame': output_trackpoints_by_frame,
+           'movie_frames':max(output_trackpoints_by_frame.keys()),
+           'tracked_movie_id':tracked_movie_id}
     return datetime_to_str(ret)
 
 ##
@@ -751,17 +757,21 @@ def api_put_frame_analysis():
     Writes analysis and trackpoints for specific frames; frame_id is required
     :param: api_key  - the api_key
     :param: frame_id - the frame.
+    :param: movie_id - the movie
+    :param: frame_number - the the frame
     :param: engine_name - the engine name (if you don't; new engine_id created automatically)
     :param: engine_version - the engine version.
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    logging.debug("put_frame_analysis")
+    logging.debug("put_frame_analysis. frame_id=%s movie_id=%s  frame_number=%s",get_int('frame_id'),get_int('movie_id'),get_int('frame_number'))
     frame_id  = get_int('frame_id')
-    logging.debug("frame_id=%s",frame_id)
+    if frame_id is None:
+        frame_id = db.create_new_frame(movie_id=get_int('movie_id'), frame_number=get_int('frame_number'))
+        logging.debug("frame_id is %s",frame_id)
     if not db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
         logging.debug("user %s cannot access frame_id %s",get_user_id(), frame_id)
-        return {'error':False, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
+        return {'error':True, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')
     logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
