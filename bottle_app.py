@@ -53,6 +53,7 @@ from collections import defaultdict
 
 import magic
 import bottle
+import smtplib
 from bottle import request
 from validate_email_address import validate_email
 
@@ -393,7 +394,11 @@ def api_register():
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
     except mailer.InvalidMailerConfiguration:
+        logging.error("Mailer reports Mailer not properly configured.")
         return {'error':True, 'message':'Mailer not properly configured.'+link_html}
+    except smtplib.SMTPAuthenticationError:
+        logging.error("Mailer reports smtplib.SMTPAuthenticationError.")
+        return {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
     return {'error': False, 'message': 'Registration key sent to '+email+link_html}
 
 @bottle.route('/api/resend-link', method=GET_POST)

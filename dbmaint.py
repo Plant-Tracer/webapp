@@ -16,6 +16,7 @@ from tabulate import tabulate
 
 # pylint: disable=no-member
 
+import mailer
 import db
 from paths import TEMPLATE_DIR, SCHEMA_FILE
 from lib.ctools import clogging
@@ -165,15 +166,15 @@ if __name__ == "__main__":
 
     required.add_argument(
         "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument')
-    parser.add_argument(
-        "--sendlink", help="send link to the given email address, registering it if necessary.")
+    parser.add_argument("--sendlink", help="send link to the given email address, registering it if necessary.")
+    parser.add_argument("--mailer_config", help="print mailer configuration",action='store_true')
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER are all set with a MySQL username that can issue the "CREATE DATABASE"command. Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--createroot",help="create root config  with specified password")
-    parser.add_argument("--create_course",help="Create a course and register --admin as the administrator",action='store_true')
+    parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
@@ -184,6 +185,10 @@ if __name__ == "__main__":
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
+
+    if args.mailer_config:
+        print("mailer config:",mailer.smtp_config_from_environ())
+        exit(0)
 
     if args.sendlink:
         if not args.planttracer_endpoint:
