@@ -30,9 +30,13 @@ flake8:
 #
 # In the tests below, we always test the database connectivity first
 # It makes no sense to run the tests otherwise
+pytest-db:
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
+
 pytest:
 	make touch
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py .
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
