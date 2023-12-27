@@ -19,7 +19,8 @@ from validate_email_address import validate_email
 from paths import TEMPLATE_DIR,ROOT_DIR
 from constants import C
 
-from auth import get_user_api_key, get_user_ipaddr
+import auth
+from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 import mailer
 
@@ -47,31 +48,6 @@ logging_policy.add(LOG_DB)
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
-
-@functools.cache
-def credentials_file():
-    if C.DBCREDENTIALS_PATH in os.environ:
-        return os.environ[C.DBCREDENTIALS_PATH]
-    else:
-        return os.path.join(ROOT_DIR, C.CREDENTIALS_INI)
-
-
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbreader] section of the file etc/credentials.ini
-    """
-    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbreader')
-
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbwriter] section of the file etc/credentials.ini
-    """
-    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbwriter')
 
 ################################################################
 # Logging

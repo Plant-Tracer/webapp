@@ -18,6 +18,7 @@ from os.path import abspath, dirname
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+from auth import get_dbreader,get_dbwriter
 import db
 import dbmaint
 import bottle_app
@@ -64,8 +65,8 @@ def new_course():
            COURSE_NAME:course_name,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
-           DBREADER:db.get_dbreader(),
-           DBWRITER:db.get_dbwriter() }
+           DBREADER:get_dbreader(),
+           DBWRITER:get_dbwriter() }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
     db.delete_user(email=admin_email)
@@ -286,7 +287,7 @@ def get_movie(api_key, movie_id):
     logging.error("len(movies)=%s", len(movies))
     for movie in movies:
         logging.error("%s", str(movie))
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
     logging.error("Full database: (dbreader: %s)", dbreader)
     for movie in dbfile.DBMySQL.csfr(dbreader, "select * from movies", (), asDicts=True):
         logging.error("%s", str(movie))
@@ -312,7 +313,7 @@ def test_new_movie_analysis(new_engine):
 
 def test_get_logs(new_user):
     """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
     for security in [False,True]:
         logging.info("security=%s",security)
         db.get_logs( user_id=0 , security=security)
@@ -368,7 +369,7 @@ def test_log_search_user(new_user):
     api_key    = cfg[API_KEY]
 
     user_id  = db.validate_api_key(api_key)['user_id']
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
 
     ret = db.get_logs( user_id=user_id )
     logging.info("search for user_email=%s user_id=%s returns %s logs",user_email,user_id, len(ret))
