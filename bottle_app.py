@@ -390,6 +390,9 @@ def api_register():
     name = request.forms.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
     new_api_key = db.make_new_api_key(email=email)
+    if not new_api_key:
+        logging.info("email not in database: %s",email)
+        return E.INVALID_EMAIL
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
@@ -410,7 +413,15 @@ def api_send_link():
     if not validate_email(email, check_mx=CHECK_MX):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
-    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
+    new_api_key = db.make_new_api_key(email=email)
+    if not new_api_key:
+        logging.info("email not in database: %s",email)
+        return E.INVALID_EMAIL
+    try:
+        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    except mailer.InvalidMailerConfiguration as e:
+        logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
+        return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
 @bottle.route('/api/bulk-register', method=POST)
@@ -423,11 +434,15 @@ def api_bulk_register():
         return E.INVALID_COURSE_ACCESS
 
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
-    for email in email_addresses:
-        if not validate_email(email, check_mx=CHECK_MX):
-            return E.INVALID_EMAIL
-        db.register_email(email=email, course_id=course_id, name="")
-        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
+    try:
+        for email in email_addresses:
+            if not validate_email(email, check_mx=CHECK_MX):
+                return E.INVALID_EMAIL
+            db.register_email(email=email, course_id=course_id, name="")
+            db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
+    except mailer.InvalidMailerConfiguration as e:
+        logging.error("invalid mailer configuration: %s",e)
+        return E.INVALID_MAILER_CONFIGURATION
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
 
 ################################################################

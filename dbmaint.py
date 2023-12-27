@@ -18,6 +18,7 @@ from tabulate import tabulate
 
 import mailer
 import db
+from auth import get_dbreader,get_dbwriter
 from paths import TEMPLATE_DIR, SCHEMA_FILE
 from lib.ctools import clogging
 from lib.ctools import dbfile
@@ -43,7 +44,7 @@ def hostnames():
 
 def clean():
     sizes = {}
-    d = dbfile.DBMySQL(db.get_dbwriter())
+    d = dbfile.DBMySQL(get_dbwriter())
     c = d.cursor()
     c.execute('show tables')
     for (table,) in c:
@@ -131,7 +132,7 @@ def create_db(args):
             cp.write(fp)
 
 def report():
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
                                """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses

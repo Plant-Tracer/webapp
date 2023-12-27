@@ -41,5 +41,6 @@ class E:
     TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}
     FRAME1_IS_NONE = {'error':True, 'message':'Frame1 in track_frame is None'}
     NO_TRACKPOINTS = {'error':True, 'message':'No trackpoints provided for tracking operation'}
+    INVALID_MAILER_CONFIGURATION = {'error':True, 'message':'Invalid mailer configuration. Please review error.log on server for more information'}
 
 #pylint: enable=too-few-public-methods

@@ -26,6 +26,8 @@ import lib.ctools.dbfile as dbfile
 import db
 import bottle_app
 
+from auth import get_dbreader,get_dbwriter
+
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
 from constants import MIME,Engines
@@ -456,7 +458,7 @@ def get_movie(api_key, movie_id):
     logging.error("len(movies)=%s", len(movies))
     for movie in movies:
         logging.error("%s", str(movie))
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
     logging.error("Full database: (dbreader: %s)", dbreader)
     for movie in dbfile.DBMySQL.csfr(dbreader, "select * from movies", (), asDicts=True):
         logging.error("%s", str(movie))
@@ -469,7 +471,7 @@ def test_log_search_movie(new_movie):
     movie_id   = cfg[MOVIE_ID]
     movie_title= cfg[MOVIE_TITLE]
 
-    dbreader = db.get_dbreader()
+    dbreader = get_dbreader()
     res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
     user_id = res[0][0]
     res = db.get_logs( user_id=user_id, movie_id = movie_id)
