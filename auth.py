@@ -1,6 +1,9 @@
 """Authentication Layer
 
 This layer is necessarily customized to bottle.
+This provides for all authentication in the planttracer system:
+* Database authentication
+* Mailer authentication
 """
 import functools
 import configparser
