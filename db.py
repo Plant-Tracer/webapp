@@ -284,9 +284,6 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
 
-    if not new_api_key:
-        logging.info("not in database: %s",email)
-        return
     logging.info("sending new link to %s",email)
     msg = msg_env.render(to_addrs=",".join([email]),
                          from_addr=PROJECT_EMAIL,
@@ -295,7 +292,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = mailer.smtp_config_from_environ()
+    smtp_config = auth.smtp_config()
     smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
     mailer.send_message(from_addr=PROJECT_EMAIL,
                         to_addrs=TO_ADDRS,

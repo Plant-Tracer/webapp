@@ -56,18 +56,6 @@ def send_message(*,
         smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
 
 
-def smtp_config_from_environ():
-    try:
-        return {SMTP_HOST:     os.environ[SMTP_HOST],
-                SMTP_USERNAME: os.environ[SMTP_USERNAME],
-                SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
-                SMTP_PORT:     int(os.environ[SMTP_PORT])
-                }
-    except KeyError:
-        pass
-    raise InvalidMailerConfiguration()
-
-
 IMAP_HOST = 'IMAP_HOST'
 IMAP_PORT = 'IMAP_PORT'
 IMAP_USERNAME = 'IMAP_USERNAME'

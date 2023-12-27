@@ -2,15 +2,32 @@
 
 This layer is necessarily customized to bottle.
 """
+import functools
+import configparser
 import bottle
 from bottle import request
 
+import paths
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
 
 
 ################################################################
-# Authentication API
+# Authentication configuration - for server
+##
+
+
+@functools.cache
+def smtp_config():
+    cp = configparser.ConfigParser()
+    cp.read( paths.CREDENTIALS_FILE )
+    for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
+        assert key in cp['smtp']
+    return cp['smtp']
+
+
+################################################################
+# Authentication API - for clients
 ##
 
 
