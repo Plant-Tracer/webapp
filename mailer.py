@@ -16,14 +16,15 @@ SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'
 SMTP_PORT = 'SMTP_PORT'
 SMTP_PORT_DEFAULT = 587
-SMTP_DEBUG = 'SMTP_DEBUG'
-SMTP_DEBUG_DEFAULT = "NO"
 SMTP_NO_TLS = 'SMTP_NO_TLS'
+SMTP_DEBUG = False
 
-class InvalidMailerConfiguration(RuntimeError):
-    def __init__(self):
+class InvalidMailerConfiguration(Exception):
+    def __init__(self, msg):
         super().__init__()
-
+        self.msg = msg
+    def __repr__(self):
+        return "InvalidMailerConfiguration: "+self.msg
 
 def send_message(*,
                  from_addr: str,
@@ -42,8 +43,10 @@ def send_message(*,
         return
 
     port = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
-    debug = smtp_config.get(SMTP_DEBUG, SMTP_DEBUG_DEFAULT)[0] in 'yYtT1'
+    debug = SMTP_DEBUG
 
+    logging.error("smtp_config=%s",smtp_config)
+    logging.error("smtp_config=%s",dict(smtp_config))
     with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
         logging.info("sending mail to %s with SMTP", ",".join(to_addrs))
         if debug:
@@ -54,18 +57,6 @@ def send_message(*,
         smtp.ehlo()
         smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
         smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
-
-
-def smtp_config_from_environ():
-    try:
-        return {SMTP_HOST:     os.environ[SMTP_HOST],
-                SMTP_USERNAME: os.environ[SMTP_USERNAME],
-                SMTP_PASSWORD: os.environ[SMTP_PASSWORD],
-                SMTP_PORT:     int(os.environ[SMTP_PORT])
-                }
-    except KeyError:
-        pass
-    raise InvalidMailerConfiguration()
 
 
 IMAP_HOST = 'IMAP_HOST'

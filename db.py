@@ -10,6 +10,7 @@ import logging
 import json
 import sys
 import copy
+import smtplib
 from typing import Optional
 #import inspect
 
@@ -19,7 +20,8 @@ from validate_email_address import validate_email
 from paths import TEMPLATE_DIR,ROOT_DIR
 from constants import C
 
-from auth import get_user_api_key, get_user_ipaddr
+import auth
+from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 import mailer
 
@@ -48,31 +50,6 @@ LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
 
-@functools.cache
-def credentials_file():
-    if C.DBCREDENTIALS_PATH in os.environ:
-        return os.environ[C.DBCREDENTIALS_PATH]
-    else:
-        return os.path.join(ROOT_DIR, C.CREDENTIALS_INI)
-
-
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbreader] section of the file etc/credentials.ini
-    """
-    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbreader')
-
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbwriter] section of the file etc/credentials.ini
-    """
-    return dbfile.DBMySQLAuth.FromConfigFile(credentials_file(), 'dbwriter')
-
 ################################################################
 # Logging
 ################################################################
@@ -99,10 +76,8 @@ def logit(*, func_name, func_args, func_return):
     if 'movie_data' in func_args and func_args['movie_data'] is not None:
         func_args['movie_data'] = f"({len(func_args['movie_data'])} bytes)"
 
-    if not isinstance(func_args, str):
-        func_args = json.dumps(func_args, default=str)
-    if not isinstance(func_return, str):
-        func_return = json.dumps(func_return, default=str)
+    func_args   = json.dumps(func_args, default=str)
+    func_return = json.dumps(func_return, default=str)
 
     if len(func_return) > MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
@@ -284,9 +259,6 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
 
-    if not new_api_key:
-        logging.info("not in database: %s",email)
-        return
     logging.info("sending new link to %s",email)
     msg = msg_env.render(to_addrs=",".join([email]),
                          from_addr=PROJECT_EMAIL,
@@ -295,14 +267,16 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = mailer.smtp_config_from_environ()
+    smtp_config = auth.smtp_config()
     smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-    mailer.send_message(from_addr=PROJECT_EMAIL,
-                        to_addrs=TO_ADDRS,
-                        smtp_config=smtp_config,
-                        dry_run=DRY_RUN,
-                        msg=msg
-                        )
+    try:
+        mailer.send_message(from_addr=PROJECT_EMAIL,
+                            to_addrs=TO_ADDRS,
+                            smtp_config=smtp_config,
+                            dry_run=DRY_RUN,
+                            msg=msg)
+    except smtplib.SMTPAuthenticationError:
+        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config)))
     return new_api_key
 
 ################ API KEY ################

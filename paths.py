@@ -13,12 +13,15 @@ HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
 
-ROOT_DIR      = dirname(abspath(__file__))
-STATIC_DIR    = join(ROOT_DIR, 'static')
-TEMPLATE_DIR  = join(ROOT_DIR, 'templates')
-TEST_DIR      = join(ROOT_DIR, 'tests')
-TEST_DATA_DIR = join(ROOT_DIR, 'tests', 'data')
-SCHEMA_FILE   = join(ROOT_DIR, 'etc', 'schema.sql')
+ROOT_DIR         = dirname(abspath(__file__))
+STATIC_DIR       = join(ROOT_DIR, 'static')
+ETC_DIR          = join(ROOT_DIR, 'static')
+TEMPLATE_DIR     = join(ROOT_DIR, 'templates')
+TEST_DIR         = join(ROOT_DIR, 'tests')
+TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')
+SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
+CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials.ini')
+
 
 # used by test program:
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')

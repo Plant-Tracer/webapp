@@ -2,15 +2,51 @@
 
 This layer is necessarily customized to bottle.
 """
+import functools
+import configparser
 import bottle
 from bottle import request
 
+import paths
+
+from lib.ctools import dbfile
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
 
 
 ################################################################
-# Authentication API
+# Authentication configuration - for server
+##
+
+
+@functools.cache
+def smtp_config():
+    cp = configparser.ConfigParser()
+    cp.read( paths.CREDENTIALS_FILE )
+    for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
+        assert key in cp['smtp']
+    return cp['smtp']
+
+@functools.cache
+def get_dbreader():
+    """Get the dbreader authentication info from:
+    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbreader] section of the file etc/credentials.ini
+    """
+    return dbfile.DBMySQLAuth.FromConfigFile(paths.CREDENTIALS_FILE, 'dbreader')
+
+
+@functools.cache
+def get_dbwriter():
+    """Get the dbwriter authentication info from:
+    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
+    2 - the [dbwriter] section of the file etc/credentials.ini
+    """
+    return dbfile.DBMySQLAuth.FromConfigFile(paths.CREDENTIALS_FILE, 'dbwriter')
+
+
+################################################################
+# Authentication API - for clients
 ##
 
 
