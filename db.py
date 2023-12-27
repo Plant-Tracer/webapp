@@ -10,6 +10,7 @@ import logging
 import json
 import sys
 import copy
+import smtplib
 from typing import Optional
 #import inspect
 
@@ -75,10 +76,8 @@ def logit(*, func_name, func_args, func_return):
     if 'movie_data' in func_args and func_args['movie_data'] is not None:
         func_args['movie_data'] = f"({len(func_args['movie_data'])} bytes)"
 
-    if not isinstance(func_args, str):
-        func_args = json.dumps(func_args, default=str)
-    if not isinstance(func_return, str):
-        func_return = json.dumps(func_return, default=str)
+    func_args   = json.dumps(func_args, default=str)
+    func_return = json.dumps(func_return, default=str)
 
     if len(func_return) > MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
@@ -270,12 +269,14 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     SMTP_DEBUG = "No"
     smtp_config = auth.smtp_config()
     smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-    mailer.send_message(from_addr=PROJECT_EMAIL,
-                        to_addrs=TO_ADDRS,
-                        smtp_config=smtp_config,
-                        dry_run=DRY_RUN,
-                        msg=msg
-                        )
+    try:
+        mailer.send_message(from_addr=PROJECT_EMAIL,
+                            to_addrs=TO_ADDRS,
+                            smtp_config=smtp_config,
+                            dry_run=DRY_RUN,
+                            msg=msg)
+    except smtplib.SMTPAuthenticationError:
+        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config)))
     return new_api_key
 
 ################ API KEY ################

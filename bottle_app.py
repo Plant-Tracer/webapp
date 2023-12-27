@@ -415,7 +415,7 @@ def api_send_link():
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
     except mailer.InvalidMailerConfiguration as e:
-        logging.error("invalid mailer configuration: %s",e)
+        logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
