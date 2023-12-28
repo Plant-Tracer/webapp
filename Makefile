@@ -57,8 +57,9 @@ pytest-debug:
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-quiet:
+	@echo quietly make pytest and stop at the firt error
 	make touch
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
