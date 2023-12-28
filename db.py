@@ -797,7 +797,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
     cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
-          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id
+          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id,orig_movie
           FROM movies LEFT JOIN users ON movies.user_id = users.id
           WHERE
           ((user_id=%s)

@@ -582,7 +582,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=POST)
 def api_list_movies():
-    return {'error': False, 'movies': db.list_movies(get_user_id())}
+    return {'error': False, 'movies': db.list_movies(user_id=get_user_id())}
 
 
 @bottle.route('/api/track-movie', method='POST')
