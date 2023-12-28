@@ -788,11 +788,12 @@ def delete_analysis_engine(*, engine_name, version=None, recursive=None):
 
 
 # Don't log this; we run list_movies every time the page is refreshed
-def list_movies(*,user_id, movie_id=None, no_frames=False):
+def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
     :param: user_id - only list movies visible to user_id (0 for all movies)
     :param: movie_id - if provided, only use this movie
+    :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
     :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
     cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
@@ -808,8 +809,12 @@ def list_movies(*,user_id, movie_id=None, no_frames=False):
     args = [user_id, user_id, user_id, user_id]
 
     if movie_id:
-        cmd += " AND movies.id==%s "
+        cmd += " AND movies.id=%s "
         args.append(movie_id)
+
+    if orig_movie:
+        cmd += " AND movies.orig_movie=%s "
+        args.append(orig_movie)
 
     if no_frames:
         cmd += " AND (movies.id not in (select distinct movie_id from movie_frames)) "

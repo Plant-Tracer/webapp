@@ -315,7 +315,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-    function movies_fill_div( div, which, mlist ) {
+    function movies_fill_div( div, which, mlist, offer_upload ) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -428,7 +428,7 @@ function list_movies_data( movies ) {
 
         if (mlist.length>0){
             mlist.forEach( m => ( h += movie_html(m) ));
-        } else {
+        } else if (offser_upload) {
             h += '<tr><td><i>No movies</i></td></tr>';
             h += '<tr><td><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
@@ -437,10 +437,10 @@ function list_movies_data( movies ) {
         h += "</table>";
         div.html(h);
     }
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)));
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)));
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
+    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)), false);
+    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)), true);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)), false);
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)), false);
     $('.movie_player').hide();
 }
 
