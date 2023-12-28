@@ -758,9 +758,12 @@ def api_get_frame():
             return row.get('frame_data',None)
         # Is there a movie we can access?
         if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
-                                       frame_number = frame_number,
-                                       fmt = 'jpeg')
+            try:
+                return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
+                                             frame_number = frame_number,
+                                             fmt = 'jpeg')
+            except ValueError as e:
+                return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
         logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
         return E.INVALID_FRAME_ACCESS
 
@@ -781,9 +784,14 @@ def api_get_frame():
 
     # If we do not have frame_data, extract it from the movie (but don't store in database)
     if ret.get('frame_data',None) is None:
-        ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
-                                                  frame_number=frame_number,
-                                                  fmt='jpeg')
+        logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
+        try:
+            ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+                                                      frame_number=frame_number,
+                                                      fmt='jpeg')
+        except ValueError as e:
+            return {'error':True,
+                    'message':f'frame number {frame_number} is out of range'}
 
     # Convert the frame_data to a data URL
     ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
