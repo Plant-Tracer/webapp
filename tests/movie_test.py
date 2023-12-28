@@ -334,6 +334,10 @@ def test_movie_tracking(new_movie):
     assert isinstance(ret['tracked_movie_id'],int)
     tracked_movie_id = ret['tracked_movie_id']
 
+    # Make sure orig_movie was set
+    new_movie_row = db.list_movies(user_id=0, movie_id=tracked_movie_id)
+    assert new_movie_row[0]['orig_movie'] == movie_id
+
     # Download the trackpoints as as CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,

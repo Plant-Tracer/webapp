@@ -642,9 +642,10 @@ def api_track_movie():
             else:
                 new_title += " TRACKED"
             tracked_movie_id = db.create_new_movie(user_id = get_user_id(),
-                                               title = new_title,
-                                               description = movie_metadata['description'],
-                                               movie_data = new_movie_data)
+                                                   title = new_title,
+                                                   description = movie_metadata['description'],
+                                                   orig_movie = movie_id,
+                                                   movie_data = new_movie_data)
 
     # Get new trackpoints for each frame
     output_trackpoints   = tracked['output_trackpoints']

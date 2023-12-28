@@ -531,7 +531,7 @@ def delete_movie(*,movie_id, delete=1):
 
 
 @log
-def create_new_movie(*, user_id, title=None, description=None, movie_data=None, movie_metadata=None):
+def create_new_movie(*, user_id, title=None, description=None, movie_data=None, movie_metadata=None, orig_movie=None):
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -540,9 +540,9 @@ def create_new_movie(*, user_id, title=None, description=None, movie_data=None, 
         raise RuntimeError(f"user_id={user_id} len(res)={len(res)} res={res}")
     primary_course_id = res[0][0]
     movie_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movies (title,description,user_id,course_id) VALUES (%s,%s,%s,%s)
+                                   """INSERT INTO movies (title,description,user_id,course_id,orig_movie) VALUES (%s,%s,%s,%s,%s)
                                     """,
-                                   (title, description, user_id, primary_course_id))
+                                   (title, description, user_id, primary_course_id,orig_movie))
     if movie_data:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
@@ -788,10 +788,11 @@ def delete_analysis_engine(*, engine_name, version=None, recursive=None):
 
 
 # Don't log this; we run list_movies every time the page is refreshed
-def list_movies(user_id, no_frames=False):
+def list_movies(*,user_id, movie_id=None, no_frames=False):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
     :param: user_id - only list movies visible to user_id (0 for all movies)
+    :param: movie_id - if provided, only use this movie
     :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
     cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
@@ -806,8 +807,12 @@ def list_movies(user_id, no_frames=False):
           """
     args = [user_id, user_id, user_id, user_id]
 
+    if movie_id:
+        cmd += " AND movies.id==%s "
+        args.append(movie_id)
+
     if no_frames:
-        cmd += "AND (movies.id not in (select distinct movie_id from movie_frames)) "
+        cmd += " AND (movies.id not in (select distinct movie_id from movie_frames)) "
     cmd += " ORDER BY movies.id "
 
     res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
