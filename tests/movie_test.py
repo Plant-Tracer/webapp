@@ -187,6 +187,8 @@ def test_movie_extract(new_movie):
 
     movie_data = db.get_movie_data(movie_id = movie_id)
     assert magic.from_buffer(movie_data,mime=True)==MIME.MP4
+
+    # Grab three frames with the tracker and make sure they are different
     def get_movie_data_jpeg(frame_number):
         data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
         logging.debug("len(data)=%s",len(data))
@@ -199,7 +201,7 @@ def test_movie_extract(new_movie):
 
     assert frame0 != frame1 != frame2
 
-    # Grab three frames and see if they are different
+    # Grab three frames with the API and see if they are different
     def get_jpeg_frame(number):
         with boddle(params={'api_key': api_key,
                             'movie_id': str(movie_id),
@@ -214,6 +216,23 @@ def test_movie_extract(new_movie):
     jpeg1 = get_jpeg_frame(1)
     jpeg2 = get_jpeg_frame(2)
     assert jpeg0 != jpeg1 != jpeg2
+
+    # Make sure it properly handles frames out-of-range
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': str(-1),
+                        'format':'json' }):
+        r =  bottle_app.api_get_frame()
+    assert r['error']==True
+    assert 'out of range' in r['message']
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': str(1_000_000),
+                        'format':'json' }):
+        r =  bottle_app.api_get_frame()
+    assert r['error']==True
+    assert 'out of range' in r['message']
 
     # Grab three frames with metadata
     def get_jpeg_json(frame_number):

@@ -118,7 +118,7 @@ def extract_frame(*, movie_data, frame_number, fmt):
     for fn in range(frame_number+1):
         ret, frame = cap.read()
         if not ret:
-            return None
+            raise ValueError(f"invalid frame_number {frame_number}")
         if fn==frame_number:
             if fmt=='CV2':
                 return frame
@@ -129,7 +129,7 @@ def extract_frame(*, movie_data, frame_number, fmt):
                     return tf.read()
             else:
                 raise ValueError("Invalid fmt: "+fmt)
-    raise RuntimeError("invalid frame_number")
+    raise ValueError(f"invalid frame_number {frame_number}")
 
 def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_untracked=None, moviefile_output, frame_start=0):
     """

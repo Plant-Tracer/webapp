@@ -438,7 +438,7 @@ class PlantTracerController extends CanvasController {
 
     // Change the frame
     goto_frame( frame ) {
-        console.log("frame=",frame,"last_tracked_frame=",this.last_tracked_frame,this.last_tracked_frame===null);
+        console.log(`frame=${frame} last_tracked_frame=${this.last_tracked_frame} is it null? ${this.last_tracked_frame===null}`);
         if (this.last_tracked_frame === null){
             return;
         }
