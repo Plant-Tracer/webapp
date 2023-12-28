@@ -18,7 +18,7 @@ const DEFAULT_R = 10;           // default radius of the marker
 const DEFAULT_FRAMES = 20;      // default number of frames to show
 const DEFAULT_WIDTH = 340;
 const DEFAULT_HEIGHT= 340;
-const MIN_MARKER_NAME_LEN = 5;  // markers must be this long
+const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -252,6 +252,7 @@ class PlantTracerController extends CanvasController {
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
         this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
+        this.marker_name_input.on('keydown', (event) => { if (event.keyCode=13) this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
@@ -303,7 +304,7 @@ class PlantTracerController extends CanvasController {
     // available colors
     // https://sashamaps.net/docs/resources/20-colors/
     // removing green (for obvious reasons)
-    circle_colors = ['#ffe119', '#4363d8', '#f58231', '#911eb4',
+    circle_colors = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
                      '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
                      '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
                      '#000075', '#808080', '#e6194b', ]
@@ -319,7 +320,12 @@ class PlantTracerController extends CanvasController {
 
         let color = this.circle_colors[count];
         this.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
+        this.create_marker_table();
+        // Finally enable the track-to-end button
+        this.track_button.prop('disabled',false);
+    }
 
+    create_marker_table() {
         // Generate the HTML for the table body
         let rows = '';
         for (let i=0;i<this.objects.length;i++){
@@ -327,16 +333,25 @@ class PlantTracerController extends CanvasController {
             if (obj.constructor.name == myCircle.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 rows += `<tr>` +
-                    `<td style="color:${obj.fill};text-align:center;font-size:32px;position:relative;line-height:0px;">●</td>` +
+                    `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
-                    `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td><td>🚫</td></tr>`;
+                    `<td id="${obj.table_cell_id}">${obj.loc()}</td><td>n/a</td><td class="del-row" object_index="${i}" >🚫</td></tr>`;
             }
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
         this.redraw('insert_circle');
 
-        // Finally enable the track-to-end button
-        this.track_button.prop('disabled',false);
+        // wire up the delete object method
+        $(`#${this.this_id} .del-row`).on('click', (event) => {this.del_row(event.target.getAttribute('object_index'));});
+        $(`#${this.this_id} .del-row`).css('cursor','default');
+    }
+
+    // Delete a row and update the server
+    del_row(i) {
+        console.log("delete row ",i,"and redraw the matrix");
+        this.objects.splice(i,1);
+        this.create_marker_table();
+        this.put_trackpoints();
     }
 
     // Subclassed methods
@@ -492,6 +507,14 @@ class PlantTracerController extends CanvasController {
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
                 this.insert_circle( tp['x'], tp['y'], tp['label'] );
+            }
+        } else {
+            if (data.frame_number==0) {
+                // Add the initial trackpoints
+                this.insert_circle( 20, 20, 'apex');
+                this.insert_circle( 20, 50, 'ruler 0 mm');
+                this.insert_circle( 20, 80, 'ruler 20 mm');
+                $(`#${this.this_id} td.message`).html("Place the three markers.")
             }
         }
         this.redraw('append_new_ptc');              // initial drawing
