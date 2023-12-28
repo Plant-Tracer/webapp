@@ -220,12 +220,12 @@ class PlantTracerController extends CanvasController {
     constructor( this_id, movie_id, frame_number, movie_metadata ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        console.log("movie_metadata:",movie_metadata);
+        //console.log("movie_metadata:",movie_metadata);
 
         this.this_id         = this_id;
         this.canvasId        = 0;
-        this.movie_id        = movie_id;             // the movie being analyzed
-        this.frame_number    = frame_number; // default to the first frame
+        this.movie_id        = movie_id;       // the movie being analyzed
+        this.frame_number    = frame_number; //
         this.movie_metadata  = movie_metadata
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
@@ -251,7 +251,6 @@ class PlantTracerController extends CanvasController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
-        console.log("this.marker_name_input=",this.marker_name_input);
         this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
@@ -263,13 +262,12 @@ class PlantTracerController extends CanvasController {
         this.track_button.on('click', (event) => {this.track_to_end(event);});
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
-        this.frame_number_field = $(`#${this.this_id} input.frame_number`);
+        this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
 
         // Wire up the movement buttons
-        console.log("this.this_id=",this.this_id);
         $(`#${this.this_id} input.frame_prev10`).on('click', (event) => {this.goto_frame( this.frame_number-10);});
-        $(`#${this.this_id} input.frame_prev`).on('click', (event) => {this.goto_frame( this.frame_number-1);});
-        $(`#${this.this_id} input.frame_next`).on('click', (event) => {this.goto_frame( this.frame_number+1);});
+        $(`#${this.this_id} input.frame_prev`)  .on('click', (event) => {this.goto_frame( this.frame_number-1);});
+        $(`#${this.this_id} input.frame_next`)  .on('click', (event) => {this.goto_frame( this.frame_number+1);});
         $(`#${this.this_id} input.frame_next10`).on('click', (event) => {this.goto_frame( this.frame_number+10);});
     }
 
@@ -376,7 +374,7 @@ class PlantTracerController extends CanvasController {
             frame_number : this.frame_number,
             trackpoints  : this.json_trackpoints()
         }
-        console.log("put-frame-analysis: ",put_frame_analysis_params);
+        //console.log("put-frame-analysis: ",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
                 alert("Error saving annotations: "+data.message);
@@ -396,7 +394,7 @@ class PlantTracerController extends CanvasController {
      */
     track_to_end(event) {
         // get the next frame and apply tracking logic
-        console.log("track_to_end");
+        //console.log("track_to_end");
         const track_params = {
             api_key:api_key,
             movie_id:this.movie_id,
@@ -404,9 +402,9 @@ class PlantTracerController extends CanvasController {
             engine_name:'CV2',
             engine_version:'1.0'
         };
-        console.log("params:",track_params);
+        //console.log("params:",track_params);
         $.post('/api/track-movie', track_params).done( (data) => {
-            console.log("RECV:",data);
+            //console.log("RECV:",data);
             if (data.error) {
                 alert("Tracking error: "+data.message);
             } else {
@@ -438,7 +436,7 @@ class PlantTracerController extends CanvasController {
 
     // Change the frame
     goto_frame( frame ) {
-        console.log(`frame=${frame} last_tracked_frame=${this.last_tracked_frame} is it null? ${this.last_tracked_frame===null}`);
+        //console.log(`frame=${frame} last_tracked_frame=${this.last_tracked_frame} movie_metadata.total_frames=${this.movie_metadata.total_frames}`);
         if (this.last_tracked_frame === null){
             return;
         }
@@ -447,9 +445,9 @@ class PlantTracerController extends CanvasController {
             frame = 0;
         }
 
-        frame = Math.max(frame,0);
-        frame = Math.min(frame,this.movie_metadata.total_frames-1);
-        frame = Math.min(frame,this.last_tracked_frame);
+        if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) frame=this.movie_metadata.total_frames-1;
+        if (frame>this.last_tracked_frame) frame=this.last_tracked_frame-1;
+        if (frame<0) frame=0;
         this.frame_number_field.val( frame );
         this.frame_number = frame;
         const get_frame_params = {
@@ -467,7 +465,7 @@ class PlantTracerController extends CanvasController {
      * It sets the frame visible in the top of the component and sets up the rest of the GUI to match.
      */
     get_frame_handler( data ) {
-        console.log('RECV get_frame_handler:',data);
+        //console.log('RECV get_frame_handler:',data);
         if (data.error) {
             alert(`error: ${data.message}`);
             return;
@@ -481,6 +479,7 @@ class PlantTracerController extends CanvasController {
             this.frame_number_field.attr('max', data.last_tracked_frame);
         }
         this.frame_number_field.val( data.frame_number );
+        //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
         this.objects = [];      // clear the array
         this.theImage = new myImage( 0, 0, data.data_url, this)
@@ -555,7 +554,7 @@ class myImage extends MyObject {
 function append_new_ptc(movie_id, frame_number) {
     let this_id  = "template-" + (div_id_counter++);
     let this_sel = `${this_id}`;
-    console.log(`append_new_ptc: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
+    //console.log(`append_new_ptc: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
@@ -570,7 +569,7 @@ function append_new_ptc(movie_id, frame_number) {
     // When we have it, create the plant tracer controller
     $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
         // Create the new PlantTracerController
-        console.log("data:",data);
+        //console.log("data:",data);
         if (data.error==true) {
             alert(data.message);
             return;
@@ -585,7 +584,7 @@ function append_new_ptc(movie_id, frame_number) {
             frame_number:frame_number,
             format:'json',
         };
-        console.log("SEND get_frame_params:",get_frame_params);
+        //console.log("SEND get_frame_params:",get_frame_params);
         $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data); });
     });
 }
