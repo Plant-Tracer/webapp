@@ -582,7 +582,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=POST)
 def api_list_movies():
-    return {'error': False, 'movies': db.list_movies(get_user_id())}
+    return {'error': False, 'movies': db.list_movies(user_id=get_user_id())}
 
 
 @bottle.route('/api/track-movie', method='POST')
@@ -601,8 +601,15 @@ def api_track_movie():
 
     # pylint: disable=unsupported-membership-test
     movie_id       = get_int('movie_id')
-    if not db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
+    user_id        = get_user_id()
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
+
+    # Make sure we are not tracking a movie that is not an original movie
+    movie_row = db.list_movies(user_id=user_id, movie_id=movie_id)
+    assert len(movie_row)==1
+    if movie_row[0]['orig_movie'] is not None:
+        return E.MUST_TRACK_ORIG_MOVIE
 
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
@@ -635,16 +642,23 @@ def api_track_movie():
 
             # Save the movie with updated metadata
             new_movie_data = outfile.read()
-            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
+            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
             new_title      = movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
-            tracked_movie_id = db.create_new_movie(user_id = get_user_id(),
-                                               title = new_title,
-                                               description = movie_metadata['description'],
-                                               movie_data = new_movie_data)
+            tracked_movie_id = db.create_new_movie(user_id = user_id,
+                                                   title = new_title,
+                                                   description = movie_metadata['description'],
+                                                   orig_movie = movie_id,
+                                                   movie_data = new_movie_data)
+            # purge the other movies that have been tracked for this one
+            to_purge = db.list_movies(user_id = user_id, orig_movie = movie_id)
+            for movie in to_purge:
+                if movie['movie_id'] != tracked_movie_id:
+                    db.purge_movie(movie_id=movie['movie_id'])
+
 
     # Get new trackpoints for each frame
     output_trackpoints   = tracked['output_trackpoints']

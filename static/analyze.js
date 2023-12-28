@@ -301,6 +301,10 @@ class PlantTracerController extends CanvasController {
         }
     }
 
+    update_status(msg) {
+        $(`#${this.this_id} td.message`).html(msg);
+    }
+
     // available colors
     // https://sashamaps.net/docs/resources/20-colors/
     // removing green (for obvious reasons)
@@ -418,8 +422,10 @@ class PlantTracerController extends CanvasController {
             engine_version:'1.0'
         };
         //console.log("params:",track_params);
+        this.update_status("Tracking movie...");
         $.post('/api/track-movie', track_params).done( (data) => {
             //console.log("RECV:",data);
+            this.update_status("");
             if (data.error) {
                 alert("Tracking error: "+data.message);
             } else {
@@ -514,7 +520,7 @@ class PlantTracerController extends CanvasController {
                 this.insert_circle( 20, 20, 'apex');
                 this.insert_circle( 20, 50, 'ruler 0 mm');
                 this.insert_circle( 20, 80, 'ruler 20 mm');
-                $(`#${this.this_id} td.message`).html("Place the three markers.")
+                this.update_status("Place the three markers.");
             }
         }
         this.redraw('append_new_ptc');              // initial drawing
