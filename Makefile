@@ -44,7 +44,7 @@ pytest-movie-test:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py -k test_movie_extract
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py -k test_movie_extract --maxfail=1
 
 pytest-selenium:
 	make touch
@@ -53,6 +53,13 @@ pytest-selenium:
 pytest-debug:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
+
+pytest-debug1:
+	@echo run in debug mode but stop on first error
+	make touch
+	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
