@@ -428,9 +428,11 @@ function list_movies_data( movies ) {
 
         if (mlist.length>0){
             mlist.forEach( m => ( h += movie_html(m) ));
-        } else if (offer_upload) {
+        } else {
             h += '<tr><td><i>No movies</i></td></tr>';
-            h += '<tr><td><a href="/upload">Click here to upload a movie</a></td></tr>';
+        }
+        if (offer_upload) {
+            h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
 
         h += "</tbody>";
