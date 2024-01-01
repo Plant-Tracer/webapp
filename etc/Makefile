@@ -6,15 +6,20 @@ known_hosts:
 	ssh-keyscan downloads.digitalcorpora.org > known_hosts
 
 schema.sql:
-	mysqldump --defaults-extra-file=$$HOME/plant_dev.ini -d --single-transaction --no-tablespaces planttracer_dev | sed 's/ AUTO_INCREMENT=[0-9]*//g' | grep -v 'Dump completed on' > schema.sql
+	mysqldump --defaults-extra-file=credentials.ini         \
+            -d --single-transaction --no-tablespaces planttracer_dev \
+	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
+	    | grep -v 'character_set_client' \
+	    | grep -v 'Dump completed on' > schema.sql
 	touch Makefile		# so we can repeat!
 	git diff schema.sql
 
 schema-local.sql:
-	mysqldump --defaults-extra-file=credentials-local.ini -d --single-transaction --no-tablespaces planttracer_local | sed 's/ AUTO_INCREMENT=[0-9]*//g' | grep -v 'Dump completed on' > schema-local.sql
-
-install-schema:
-	echo Warn
+	mysqldump --defaults-extra-file=credentials-local.ini \
+            -d --single-transaction --no-tablespaces planttracer_local \
+	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
+	    | grep -v 'character_set_client' \
+	    | grep -v 'Dump completed on' > schema-local.sql
 
 database-dump.sql: Makefile ../Makefile
 	(source $$HOME/plant_dev.bash;mysqldump -h$$MYSQL_HOST -u$$MYSQL_USER -p$$MYSQL_PASSWORD --single-transaction --no-tablespaces $$MYSQL_DATABASE) > database-dump.sql
