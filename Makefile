@@ -82,7 +82,8 @@ remove_localdb:
 	/bin/rm -f etc/credentials.ini
 
 coverage:
-	$(PYTHON) -m pip    --no-warn-script-location install codecov pytest pytest_cov
+	$(PYTHON) -m pip install --upgrade pip
+	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
