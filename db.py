@@ -463,7 +463,7 @@ def get_movie_metadata(*,user_id, movie_id):
 
 @log
 def can_access_movie(*, user_id, movie_id):
-    """Return if the user is allowed to access the movie"""
+    """Return if the user is allowed to access the movie."""
     res = dbfile.DBMySQL.csfr(
         get_dbreader(),
         """select count(*) from movies WHERE id=%s AND

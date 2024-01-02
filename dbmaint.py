@@ -70,7 +70,7 @@ def clean():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-def create_db(args):
+def create_db(args, cp):
     dbreader_user = 'dbreader_' + args.createdb
     dbwriter_user = 'dbwriter_' + args.createdb
     dbreader_password = str(uuid.uuid4())
@@ -197,8 +197,8 @@ if __name__ == "__main__":
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
         sys.exit(0)
 
+    cp = configparser.ConfigParser()
     if args.writeconfig:
-        cp = configparser.ConfigParser()
         cp.read(args.writeconfig)
 
     if args.createroot:
@@ -255,7 +255,7 @@ if __name__ == "__main__":
         raise
 
     if args.createdb:
-        create_db(args)
+        create_db(args, cp)
 
     if args.dropdb:
         dbreader_user = 'dbreader_' + args.dropdb
