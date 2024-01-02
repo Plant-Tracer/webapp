@@ -35,6 +35,8 @@ dbreader = 'dbreader'
 dbwriter = 'dbwriter'
 
 DEFAULT_MAX_ENROLLMENT = 10
+DEMO_EMAIL = 'demo@planttracer.com'
+DEMO_NAME  = 'Plant Tracer Demo Account'
 
 __version__ = '0.0.1'
 
@@ -149,14 +151,19 @@ def report():
     print(tabulate(rows,headers=headers))
 
 
-def create_course(*, course_key, course_name, admin_email, admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT):
+def create_course(*, course_key, course_name, admin_email,
+                  admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,
+                  create_demo = False):
     db.create_course(course_key = course_key,
                      course_name = course_name,
-                     max_enrollment = max_enrollment
-                     )
+                     max_enrollment = max_enrollment)
     admin_id = db.register_email(email=admin_email, course_key=course_key, name=admin_name)['user_id']
     db.make_course_admin(email=admin_email, course_key=course_key)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
+
+    if create_demo:
+        db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=True)
+
     return admin_id
 
 if __name__ == "__main__":
@@ -166,16 +173,22 @@ if __name__ == "__main__":
     required = parser.add_argument_group('required arguments')
 
     required.add_argument(
-        "--rootconfig", help='specify config file with MySQL database root credentials in [client] section. Format is the same as the mysql --defaults-extra-file= argument')
+        "--rootconfig",
+        help='specify config file with MySQL database root credentials in [client] section. '
+        'Format is the same as the mysql --defaults-extra-file= argument')
     parser.add_argument("--sendlink", help="send link to the given email address, registering it if necessary.")
     parser.add_argument("--mailer_config", help="print mailer configuration",action='store_true')
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
-    parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER are all set with a MySQL username that can issue the "CREATE DATABASE"command. Outputs setenv for DBREADER and DBWRITER')
+    parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. '
+                        'Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER '
+                        'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
+                        'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
-    parser.add_argument("--createroot",help="create root config  with specified password")
+    parser.add_argument("--createroot",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
+    parser.add_argument('--create_demo',help='If create_course is specified, also create a demo user')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
@@ -228,6 +241,7 @@ if __name__ == "__main__":
                       course_name = args.create_course,
                       admin_email = args.admin_email,
                       admin_name = args.admin_name,
+                      create_root = args.create_root,
                       max_enrollment = args.max_enrollment)
         print(f"course_key: {course_key}")
         exit(0)

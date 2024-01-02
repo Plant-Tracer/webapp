@@ -59,7 +59,8 @@ def new_course():
     admin_id = dbmaint.create_course(course_key = course_key,
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
-                                     course_name = course_name)
+                                     course_name = course_name,
+                                     create_demo = True)
 
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
@@ -169,6 +170,13 @@ def test_new_course(new_course):
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
     logging.info("Created course %s", course_key)
+
+    # Check the demo
+    with boddle() :
+        res = bottle_api.api_check_demo()
+
+    assert len(res)==1
+    assert res[0]['email']==dbmain.DEMO_EMAIL
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)

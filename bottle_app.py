@@ -939,6 +939,14 @@ def api_list_users():
     return {**{'error': False}, **db.list_users(user_id=get_user_id())}
 
 
+##
+## Is there a demo account? If so, return the key.
+## An API that goes to a SQL query is so common I should be able to code it explicitly...
+##
+@bottle.route('/api/list-demo',method=GET_POST)
+def api_check_demo():
+    return db.check_demo()
+
 ################################################################
 ##
 ## Demo and debug
