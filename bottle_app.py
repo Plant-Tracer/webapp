@@ -291,10 +291,19 @@ def func_analyze():
     """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
     return page_dict('Analyze Movie', require_auth=True)
 
+##
+## Login page includes the api keys of all the demo users.
+##
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    return page_dict('Login')
+    demo_users = db.list_demo_users()
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+
+    return {**page_dict('Login'),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
@@ -938,14 +947,6 @@ def api_set_metadata():
 def api_list_users():
     return {**{'error': False}, **db.list_users(user_id=get_user_id())}
 
-
-##
-## Is there a demo account? If so, return the key.
-## An API that goes to a SQL query is so common I should be able to code it explicitly...
-##
-@bottle.route('/api/list-demo',method=GET_POST)
-def api_check_demo():
-    return db.check_demo()
 
 ################################################################
 ##

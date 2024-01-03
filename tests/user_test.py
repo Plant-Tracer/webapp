@@ -172,11 +172,11 @@ def test_new_course(new_course):
     logging.info("Created course %s", course_key)
 
     # Check the demo
-    with boddle() :
-        res = bottle_api.api_check_demo()
-
-    assert len(res)==1
-    assert res[0]['email']==dbmain.DEMO_EMAIL
+    res = db.list_demo_users()
+    logging.debug("res=%s",res)
+    assert len(res)>=1
+    assert res[0]['email']==dbmaint.DEMO_EMAIL
+    assert res[0]['api_key'] is not None
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)

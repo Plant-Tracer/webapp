@@ -220,8 +220,8 @@ def delete_user(email):
 ################ REGISTRATION ################
 
 @log
-def register_email(*, email, name, course_key=None, course_id=None, demo_user=False):
-    """Register email for a given course. Does not send the links.
+def register_email(*, email, name, course_key=None, course_id=None, demo_user=0):
+    """Register a new user as identified by their email address for a given course. Does not make an api_key or send the links with the api_key.
     :param: email - user email
     :param: course_key - the key
     :param: course_id  - the course
@@ -242,12 +242,11 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=Fa
             raise InvalidCourse_Key(course_key)
         course_id = res[0][0]
 
-    demo = 0 if not demo_user else 1
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
                                """INSERT INTO users (email, primary_course_id, name, demo)
                                VALUES (%s, %s, %s, %s)
                                ON DUPLICATE KEY UPDATE email=%s""",
-                               (email, course_id, name, email, demo))
+                                   (email, course_id, name, demo_user, email))
     return {'user_id':user_id,'course_id':course_id}
 
 @log
@@ -347,11 +346,11 @@ def list_admins():
                                "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
                                asDicts=True)
 
-def list_demo():
-    """Returns a list of all demo accounts. This can be downloaded without authentication!"""
+def list_demo_users():
+    """Returns a list of all demo accounts and their API keys. This can be downloaded without authentication!"""
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select *,users.id as user_id from users where demo=1",
-                               asDicts=True)
+                               "select *,users.id as user_id from users left join api_keys on api_keys.user_id=users.id where demo=1 and api_keys.enabled=1",
+                               asDicts=True,debug=True)
 
 
 #########################
