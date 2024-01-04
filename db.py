@@ -200,21 +200,34 @@ def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
 
 ################ RENAME AND DELETE ################
 @log
-def rename_user(user_id, email, new_email):
+def rename_user(*,user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
     dbfile.DBMySQL.csfr(get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
                         (email, user_id, new_email))
 
 
 @log
-def delete_user(email):
-    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+def delete_user(*,email):
+    """Delete a user specified by email address.
+    :param: email - the email address
+    - First deletes the user's API keys
+    - Next deletes all of the user's admin bits
+    - Finally deletes the user
+
+    Note: this will fail if the user has any outstanding movies (referrential integrity). In that case, the user should simply be disabled.
+    Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+    Deletes all of the users
     Also deletes the user from any courses where they may be an admin.
     """
-    dbfile.DBMySQL.csfr(get_dbwriter(
-    ), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
+    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                               "SELECT id from movies where user_id in (select id from users where email=%s)",
+                               (email,))
+    if rows:
+        raise RuntimeError(f"user {email} has outstanding movies")
+
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
 ################ REGISTRATION ################
