@@ -72,7 +72,9 @@ def clean():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-def create_db(args, cp):
+
+
+def createdb(args, cp):
     dbreader_user = 'dbreader_' + args.createdb
     dbwriter_user = 'dbwriter_' + args.createdb
     dbreader_password = str(uuid.uuid4())
@@ -185,6 +187,7 @@ if __name__ == "__main__":
                         'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig", help="specify the config.ini file to read")
+    parser.add_argument("--load_schema", help="Load the schema into the database specified in the readconfig using the dbwriter user",action='store_true')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
@@ -214,6 +217,18 @@ if __name__ == "__main__":
     cp = configparser.ConfigParser()
     if args.readconfig:
         cp.read(args.readconfig)
+        if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
+            raise RuntimeError("dbreader and dbwriter do not address the same database")
+
+        if args.load_schema:
+            dbwriter_section = cp['dbwriter']
+            print(f"Creating schema from {SCHEMA_FILE} using {dbwriter_section}")
+            with open(SCHEMA_FILE, 'r') as f:
+                auth = dbfile.DBMySQLAuth.FromConfig(dbwriter_section)
+                d = dbfile.DBMySQL(auth)
+                d.create_schema(f.read())
+            print("done")
+            sys.exit(0)
 
     if args.create_root:
         if 'client' not in cp:
@@ -271,7 +286,7 @@ if __name__ == "__main__":
         raise
 
     if args.createdb:
-        create_db(args, cp)
+        createdb(args, cp)
 
     if args.dropdb:
         dbreader_user = 'dbreader_' + args.dropdb
