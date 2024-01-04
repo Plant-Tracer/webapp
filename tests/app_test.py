@@ -21,6 +21,7 @@ from boddle import boddle
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import STATIC_DIR,TEST_DATA_DIR
+import db
 import bottle_app
 
 from user_test import new_course,new_user,API_KEY
@@ -73,20 +74,32 @@ def test_api_key_null(mocker):
 ################################################################
 # Validate HTML produced by templates below.
 # https://stackoverflow.com/questions/35538/validate-xhtml-in-python
-def validate_html(html):
-    '''If lxml can properly parse the html, return the lxml representation.
-    Otherwise raise.'''
-    try:
-        return etree.fromstring(html, etree.HTMLParser())
-    except etree.XMLSyntaxError as e:
-        print("invalid html:", file=sys.stderr)
-        for (ct, line) in enumerate(html.split("\n"), 1):
-            print(ct, line, file=sys.stderr)
-        raise
-    assert "404 Not Found" not in data
-
 def test_templates(new_user):
     api_key = new_user[API_KEY]
+
+    def dump_lines(text):
+        for (ct, line) in enumerate(text.split("\n"), 1):
+            print(ct, line, file=sys.stderr)
+
+    def validate_html(html, include_text=None, exclude_text=None):
+        '''If lxml can properly parse the html, return the lxml representation.
+        Otherwise raise.'''
+        try:
+            doc = etree.fromstring(html, etree.HTMLParser())
+            if include_text is not None:
+                if include_text not in html:
+                    dump_lines(html)
+                    raise RuntimeError(f"'{include_text}' not in text  {new_user}")
+            if exclude_text is not None:
+                if exclude_text in html:
+                    dump_lines(html)
+                    raise RuntimeError(f"'{exclude_text}' in text {new_user}")
+            return
+        except etree.XMLSyntaxError as e:
+            print("invalid html:", file=sys.stderr)
+            dump_lines(html)
+            raise
+        assert "404 Not Found" not in data
 
     # Test templates without an API_KEY
     with boddle(params={}):
@@ -114,7 +127,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
         validate_html(bottle_app.func_audit())
-        validate_html(bottle_app.func_list())
+        validate_html(bottle_app.func_list(), exclude_text='Demo mode')
         validate_html(bottle_app.func_login())
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
@@ -123,6 +136,11 @@ def test_templates(new_user):
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
         validate_html(bottle_app.func_ver())
+
+    # Test template to see if demo text appears
+    demo_key = db.list_demo_users()[0]['api_key']
+    with boddle(params={'api_key': demo_key}):
+        validate_html(bottle_app.func_list(), include_text='Demo mode')
 
 def test_check_api_key(new_user):
     api_key = new_user[API_KEY]

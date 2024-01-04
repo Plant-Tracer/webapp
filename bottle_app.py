@@ -198,10 +198,10 @@ def get_user_id(allow_demo=True):
 ################################################################
 
 def page_dict(title='', *, require_auth=False, logout=False):
-    """Fill in data that goes to templates below and also set the cookie in a response
+    """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
-    :param: auth  - if true, the user must already be authenticated
-    :param: logout - if true, log out the user
+    :param: require_auth  - if true, the user must already be authenticated, or throws an error
+    :param: logout - if true, force the user to log out by issuing a clear-cookie command
     """
     o = urlparse(request.url)
     api_key = auth.get_user_api_key()
@@ -225,11 +225,13 @@ def page_dict(title='', *, require_auth=False, logout=False):
     else:
         user_name  = None
         user_email = None
-        user_demo  = None
+        user_demo  = 0
         user_id    = None
         user_primary_course_id = None
         primary_course_name = None
         admin = None
+
+    logging.debug("user_demo=%s",user_demo)
 
     try:
         movie_id = int(request.query.get('movie_id'))
