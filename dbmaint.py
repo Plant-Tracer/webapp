@@ -184,6 +184,7 @@ if __name__ == "__main__":
                         'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
                         'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
+    parser.add_argument("--readconfig", help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
@@ -211,8 +212,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     cp = configparser.ConfigParser()
-    if args.writeconfig:
-        cp.read(args.writeconfig)
+    if args.readconfig:
+        cp.read(args.readconfig)
 
     if args.create_root:
         if 'client' not in cp:
