@@ -366,7 +366,8 @@ def test_course_list(new_user):
         res = bottle_app.api_list_users()
     assert res['error'] is False
     users2 = res['users']
-    assert len(users2)==2
+    # There is the user and the admin; there may also be a demo user
+    assert len(users2) in [2,3]
     assert users1[0]['name'] == users2[0]['name']
     assert users1[0]['email'] == users2[0]['email']
 
