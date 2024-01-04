@@ -1,13 +1,13 @@
--- MySQL dump 10.13  Distrib 5.7.40, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 8.2.0, for macos13 (arm64)
 --
--- Host: mysql.simson.net    Database: planttracer_dev
+-- Host: localhost    Database: pt_local
 -- ------------------------------------------------------
--- Server version	8.0.28-0ubuntu0.20.04.3
+-- Server version	8.2.0
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
@@ -40,7 +40,7 @@ DROP TABLE IF EXISTS `api_keys`;
 CREATE TABLE `api_keys` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `api_key` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `api_key` varchar(255) NOT NULL,
   `first_used_at` int DEFAULT NULL,
   `last_used_at` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,9 +60,9 @@ CREATE TABLE `api_keys` (
 DROP TABLE IF EXISTS `courses`;
 CREATE TABLE `courses` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `course_key` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
-  `course_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `course_section` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `course_key` varchar(64) NOT NULL,
+  `course_name` varchar(64) DEFAULT NULL,
+  `course_section` varchar(64) DEFAULT NULL,
   `max_enrollment` int NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -76,8 +76,8 @@ CREATE TABLE `courses` (
 DROP TABLE IF EXISTS `engines`;
 CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `version` varchar(256) COLLATE utf8mb4_general_ci DEFAULT '',
+  `name` varchar(255) NOT NULL,
+  `version` varchar(256) DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -90,10 +90,10 @@ DROP TABLE IF EXISTS `logs`;
 CREATE TABLE `logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `time_t` int NOT NULL DEFAULT (unix_timestamp()),
-  `ipaddr` varchar(39) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ipaddr` varchar(39) DEFAULT NULL,
   `apikey_id` int DEFAULT NULL,
   `user_id` int DEFAULT NULL,
-  `func_name` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `func_name` varchar(128) DEFAULT NULL,
   `func_args` json DEFAULT NULL,
   `func_return` json DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -128,7 +128,7 @@ DROP TABLE IF EXISTS `movie_data`;
 CREATE TABLE `movie_data` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
-  `movie_sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `movie_sha256` varchar(64) DEFAULT NULL,
   `movie_data` mediumblob NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -164,7 +164,7 @@ CREATE TABLE `movie_frame_trackpoints` (
   `frame_id` int NOT NULL,
   `x` int NOT NULL,
   `y` int NOT NULL,
-  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `label` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk1` (`frame_id`,`label`),
   KEY `frame_id` (`frame_id`),
@@ -183,7 +183,7 @@ CREATE TABLE `movie_frames` (
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `frame_sha256` varchar(256) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
@@ -196,8 +196,8 @@ CREATE TABLE `movie_frames` (
 DROP TABLE IF EXISTS `movies`;
 CREATE TABLE `movies` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `description` text COLLATE utf8mb4_general_ci,
+  `title` varchar(255) NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
   `user_id` int DEFAULT NULL,
   `course_id` int NOT NULL,
@@ -238,10 +238,10 @@ CREATE TABLE `movies` (
 DROP TABLE IF EXISTS `objects`;
 CREATE TABLE `objects` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sha256` varchar(64) DEFAULT NULL,
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `data` mediumblob,
-  `url` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `url` varchar(1024) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -252,11 +252,11 @@ CREATE TABLE `objects` (
 DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
   `primary_course_id` int NOT NULL,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
-  `enabled` int NOT NULL DEFAULT '1',
+  `enabled` int DEFAULT '1',
   `links_sent_without_acknowledgement` int NOT NULL DEFAULT '0',
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `demo` int NOT NULL DEFAULT '0',

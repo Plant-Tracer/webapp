@@ -13,4 +13,13 @@ the second link below to resend it:
 <li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).</li>
 <li> <a href='/resend'> Resend your account login link</a></li>
 </ul>
+
+{% if demo_api_key %}
+<h2>Demo</h2>
+<p>This server has a demo that lets you track a plant video!</p>
+<ul>
+  <li> <a href='/list?api_key={{demo_api_key}}'>list demo movies</a></li>
+</ul>
+{% endif %}
+
 {% endblock %}

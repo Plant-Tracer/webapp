@@ -7,8 +7,9 @@ known_hosts:
 
 schema.sql:
 	mysqldump --defaults-extra-file=credentials.ini         \
-            -d --single-transaction --no-tablespaces planttracer_dev \
+            -d --single-transaction --no-tablespaces $$(bash database_name) \
 	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
+	    | sed 's/CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci //g' \
 	    | grep -v 'character_set_client' \
 	    | grep -v 'Dump completed on' > schema.sql
 	touch Makefile		# so we can repeat!

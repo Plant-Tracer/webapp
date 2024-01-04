@@ -200,30 +200,45 @@ def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
 
 ################ RENAME AND DELETE ################
 @log
-def rename_user(user_id, email, new_email):
+def rename_user(*,user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
     dbfile.DBMySQL.csfr(get_dbwriter(), "UPDATE users SET email=%s where id=%s AND email=%s",
                         (email, user_id, new_email))
 
 
 @log
-def delete_user(email):
-    """Delete a user. A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+def delete_user(*,email):
+    """Delete a user specified by email address.
+    :param: email - the email address
+    - First deletes the user's API keys
+    - Next deletes all of the user's admin bits
+    - Finally deletes the user
+
+    Note: this will fail if the user has any outstanding movies (referrential integrity). In that case, the user should simply be disabled.
+    Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+    Deletes all of the users
     Also deletes the user from any courses where they may be an admin.
     """
-    dbfile.DBMySQL.csfr(get_dbwriter(
-    ), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
+    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                               "SELECT id from movies where user_id in (select id from users where email=%s)",
+                               (email,))
+    if rows:
+        raise RuntimeError(f"user {email} has outstanding movies")
+
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
+    dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM users WHERE email=%s", (email,))
 
 
 ################ REGISTRATION ################
 
 @log
-def register_email(*, email, name, course_key=None, course_id=None):
-    """Register email for a given course. Does not send the links.
+def register_email(*, email, name, course_key=None, course_id=None, demo_user=0):
+    """Register a new user as identified by their email address for a given course. Does not make an api_key or send the links with the api_key.
     :param: email - user email
     :param: course_key - the key
+    :param: course_id  - the course
+    :param: demo_user  - True if this is a demo user
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
@@ -241,12 +256,11 @@ def register_email(*, email, name, course_key=None, course_id=None):
         course_id = res[0][0]
 
     user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name)
-                               VALUES (%s, %s, %s)
+                               """INSERT INTO users (email, primary_course_id, name, demo)
+                               VALUES (%s, %s, %s, %s)
                                ON DUPLICATE KEY UPDATE email=%s""",
-                               (email, course_id, name, email))
+                                   (email, course_id, name, demo_user, email))
     return {'user_id':user_id,'course_id':course_id}
-
 
 @log
 def send_links(*, email, planttracer_endpoint, new_api_key):
@@ -345,6 +359,12 @@ def list_admins():
                                "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
                                asDicts=True)
 
+def list_demo_users():
+    """Returns a list of all demo accounts and their API keys. This can be downloaded without authentication!"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select *,users.id as user_id from users left join api_keys on api_keys.user_id=users.id where demo=1 and api_keys.enabled=1",
+                               asDicts=True,debug=True)
+
 
 #########################
 ### Course Management ###
@@ -377,9 +397,16 @@ def delete_course(*,course_key):
 
 @log
 def make_course_admin(*, email, course_key=None, course_id=None):
+    """make a course administrator.
+    :param email: email address of the administrator
+    :param course_key: - if specified, use this course_key
+    :param course_id: - if specified, use this course_id
+    Note - either course_key or course_id must be None, but both may not be none
+    """
     user_id = lookup_user(email=email)['user_id']
     logging.info("make_course_admin. email=%s user_id=%s",email,user_id)
 
+    assert ((course_key is None) and (course_id is not None)) or ((course_key is not None) and (course_id is None))
     if course_key and course_id is None:
         course_id = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT id from courses WHERE course_key=%s",(course_key,))[0][0]
         logging.info("course_id=%s",course_id)
@@ -392,7 +419,8 @@ def make_course_admin(*, email, course_key=None, course_id=None):
 @log
 def remove_course_admin(*, email, course_key=None, course_id=None):
     if course_id:
-        dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE course_id=%s and user_id in (select id from users where email=%s)",
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "DELETE FROM admins WHERE course_id=%s and user_id in (select id from users where email=%s)",
                             (course_id, email))
     if course_key:
         dbfile.DBMySQL.csfr(get_dbwriter(),

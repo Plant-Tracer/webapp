@@ -190,10 +190,10 @@ def get_user_id(allow_demo=True):
 ################################################################
 
 def page_dict(title='', *, require_auth=False, logout=False):
-    """Fill in data that goes to templates below and also set the cookie in a response
+    """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
-    :param: auth  - if true, the user must already be authenticated
-    :param: logout - if true, log out the user
+    :param: require_auth  - if true, the user must already be authenticated, or throws an error
+    :param: logout - if true, force the user to log out by issuing a clear-cookie command
     """
     o = urlparse(request.url)
     api_key = auth.get_user_api_key()
@@ -217,11 +217,13 @@ def page_dict(title='', *, require_auth=False, logout=False):
     else:
         user_name  = None
         user_email = None
-        user_demo  = None
+        user_demo  = 0
         user_id    = None
         user_primary_course_id = None
         primary_course_name = None
         admin = None
+
+    logging.debug("user_demo=%s",user_demo)
 
     try:
         movie_id = int(request.query.get('movie_id'))
@@ -283,10 +285,19 @@ def func_analyze():
     """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
     return page_dict('Analyze Movie', require_auth=True)
 
+##
+## Login page includes the api keys of all the demo users.
+##
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    return page_dict('Login')
+    demo_users = db.list_demo_users()
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+
+    return {**page_dict('Login'),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
