@@ -7,7 +7,6 @@ coverage
 cryptography
 jinja2
 localmail
-lxml
 opencv-python
 py3DNS
 pylint

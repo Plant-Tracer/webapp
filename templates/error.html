@@ -6,8 +6,6 @@
 
 <p> Your session has expired and you have been logged out. </p>
 
-<ul>
-<li> <a href='/register'> Register for a new account</a> (you must have a <b>course key</b>).</li>
-<li> <a href='/resend'> Resend your account login link</a></li>
-</ul>
+{% include 'register_resend.html' %}
+{% include 'demo.html' %}
 {% endblock %}

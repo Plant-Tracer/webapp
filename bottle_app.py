@@ -164,11 +164,11 @@ def get_user_dict():
     api_key = auth.get_user_api_key()
     if api_key is None:
         logging.info("api_key is none")
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(body='', status=511, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid",api_key)
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/error'})
+        raise bottle.HTTPResponse(body='', status=511, headers={ 'Location': '/error'})
     return userdict
 
 def get_user_id(allow_demo=True):
@@ -178,10 +178,11 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if 'id' not in userdict:
         logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(body='user_id is not valid', status=303, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
     if userdict['demo'] and allow_demo!=True:
         logging.info("demo account blocks requeted action")
-        raise bottle.HTTPResponse(body='demo accounts not allowed to execute requested action.', status=303, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
+                                  status=503, headers={ 'Location': '/'})
     return userdict['id']
 
 
@@ -190,10 +191,10 @@ def get_user_id(allow_demo=True):
 ################################################################
 
 def page_dict(title='', *, require_auth=False, logout=False):
-    """Fill in data that goes to templates below and also set the cookie in a response
+    """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
-    :param: auth  - if true, the user must already be authenticated
-    :param: logout - if true, log out the user
+    :param: require_auth  - if true, the user must already be authenticated, or throws an error
+    :param: logout - if true, force the user to log out by issuing a clear-cookie command
     """
     o = urlparse(request.url)
     api_key = auth.get_user_api_key()
@@ -217,7 +218,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
     else:
         user_name  = None
         user_email = None
-        user_demo  = None
+        user_demo  = 0
         user_id    = None
         user_primary_course_id = None
         primary_course_name = None
@@ -252,7 +253,13 @@ GET_POST = [GET,POST]
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
-    return page_dict()
+    demo_users = db.list_demo_users()
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+        logging.debug("demo_api_key=%s",demo_api_key)
+    return {**page_dict(),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/error', method=GET_POST)
 @view('error.html')
@@ -283,10 +290,20 @@ def func_analyze():
     """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
     return page_dict('Analyze Movie', require_auth=True)
 
+##
+## Login page includes the api keys of all the demo users.
+##
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    return page_dict('Login')
+    demo_users = db.list_demo_users()
+    logging.debug("demo_users=%s",demo_users)
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+
+    return {**page_dict('Login'),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
@@ -839,12 +856,12 @@ def api_put_frame_analysis():
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    logging.debug("put_frame_analysis. frame_id=%s movie_id=%s  frame_number=%s",get_int('frame_id'),get_int('movie_id'),get_int('frame_number'))
     frame_id  = get_int('frame_id')
-    user_id   = get_user_id(allow_demo=False)
+    user_id   = get_user_id(allow_demo=True)
+    logging.debug("put_frame_analysis. frame_id=%s user_id=%s",frame_id,user_id)
     if frame_id is None:
         frame_id = db.create_new_frame(movie_id=get_int('movie_id'), frame_number=get_int('frame_number'))
-        logging.debug("frame_id is %s",frame_id)
+        logging.debug("frame_id is now %s",frame_id)
     if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
         logging.debug("user %s cannot access frame_id %s",user_id, frame_id)
         return {'error':True, 'message':f'User {user_id} cannot access frame_id={frame_id}'}
