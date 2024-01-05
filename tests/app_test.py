@@ -100,8 +100,12 @@ def test_templates(new_user):
             dump_lines(html)
             with open("/tmp/invalid.html","w") as f:
                 f.write(html)
-            print("xmllint:")
-            subprocess.call(['xmllint','/tmp/invalid.html'])
+            try:
+                # Run xmllint if it is present, but don't generate an error if it is not
+                print("xmllint:")
+                subprocess.call(['xmllint','/tmp/invalid.html'])
+            except FileNotFoundError:
+                pass
             raise
         assert "404 Not Found" not in data
 
