@@ -101,7 +101,7 @@ def test_templates(new_user):
         assert "404 Not Found" not in data
 
     # Test the test infrastructure
-    with pytest.raises(etree.XMLSyntaxError):
+    with pytest.raises(xml.etree.ElementTree.ParseError):
         validate_html("<a><b> this is invalid HTML</a></b>")
 
     with pytest.raises(RuntimeError):
