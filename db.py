@@ -255,12 +255,16 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
             raise InvalidCourse_Key(course_key)
         course_id = res[0][0]
 
-    user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name, demo)
-                               VALUES (%s, %s, %s, %s)
-                               ON DUPLICATE KEY UPDATE email=%s""",
-                                   (email, course_id, name, demo_user, email))
-    return {'user_id':user_id,'course_id':course_id}
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO users (email, primary_course_id, name, demo)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE email=%s""",
+                        (email, course_id, name, demo_user, email))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "SELECT *,id as user_id, primary_course_id as course_id from users where email=%s",
+                               (email,),
+                               asDicts=True)[0]
+
 
 @log
 def send_links(*, email, planttracer_endpoint, new_api_key):

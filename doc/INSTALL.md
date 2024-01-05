@@ -23,6 +23,20 @@ Installation
 
     $ make install-ubuntu
 
-3. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`.
+4. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`.
 
-4. Now you need to create the database. This should be pretty automatic:
+5. Now you need to create the database. This should be pretty automatic:
+
+   $ python dbmaint.py --readconfig etc/credentials.ini --load_schema
+
+6. Run the self-tests
+
+   $ make pytest-quiet
+
+7. Create your first course! If you want, give it a demo account too:
+
+   $ python dbmaint.py --create_course "Demo Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--create_demo]
+   course_key: leact-skio-proih
+   $
+
+8. You have a course key! If the demo account is made, you have that too.

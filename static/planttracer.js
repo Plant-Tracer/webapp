@@ -338,7 +338,7 @@ function list_movies_data( movies ) {
                 tid += 1;
                 var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
-                if (admin || user_id == m.user_id){
+                if ((admin || user_id == m.user_id) && user_demo==0) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
                 }
                 return r;
@@ -376,7 +376,7 @@ function list_movies_data( movies ) {
 
             var movieDate = new Date(m.date_uploaded * 1000);
             var play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
-            var analyze   = `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
+            var analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             var you       = (m.user_id == user_id) ? "you" : "";
