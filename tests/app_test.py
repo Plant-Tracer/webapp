@@ -9,6 +9,7 @@ import os
 import bottle
 import logging
 import json
+import subprocess
 
 from os.path import abspath, dirname
 
@@ -95,8 +96,12 @@ def test_templates(new_user):
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
         except xml.etree.ElementTree.ParseError as e:
-            logging.error("invalid html:")
+            logging.error("invalid html written to /tmp/invalid.html")
             dump_lines(html)
+            with open("/tmp/invalid.html","w") as f:
+                f.write(html)
+            print("xmllint:")
+            subprocess.call(['xmllint','/tmp/invalid.html'])
             raise
         assert "404 Not Found" not in data
 
@@ -128,7 +133,7 @@ def test_templates(new_user):
             bottle_app.func_upload()
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_users()
-        validate_html(bottle_app.func_ver())
+        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
 
 
     # Test templates to see if they work with an API key
@@ -144,7 +149,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_tos())
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
-        validate_html(bottle_app.func_ver())
+        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
 
     # Test template to see if demo text appears
     demo_key = db.list_demo_users()[0]['api_key']
