@@ -207,7 +207,7 @@ def rename_user(*,user_id, email, new_email):
 
 
 @log
-def delete_user(*,email):
+def delete_user(*,email,purge_movies=False):
     """Delete a user specified by email address.
     :param: email - the email address
     - First deletes the user's API keys
@@ -223,7 +223,11 @@ def delete_user(*,email):
                                "SELECT id from movies where user_id in (select id from users where email=%s)",
                                (email,))
     if rows:
-        raise RuntimeError(f"user {email} has outstanding movies")
+        if not purge_movies:
+            raise RuntimeError(f"user {email} has outstanding movies")
+        # This is not the most efficient, but there probably aren't that many movies to purge
+        for (movie_id,) in rows:
+            purge_movie(movie_id=movie_id)
 
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
