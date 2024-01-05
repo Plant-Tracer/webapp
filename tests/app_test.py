@@ -12,7 +12,7 @@ import json
 
 from os.path import abspath, dirname
 
-from lxml import etree
+import xml.etree.ElementTree
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
@@ -79,13 +79,12 @@ def test_templates(new_user):
 
     def dump_lines(text):
         for (ct, line) in enumerate(text.split("\n"), 1):
-            print(ct, line, file=sys.stderr)
+            logging.error("%s: %s",ct, line)
 
     def validate_html(html, include_text=None, exclude_text=None):
-        '''If lxml can properly parse the html, return the lxml representation.
-        Otherwise raise.'''
+        '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
         try:
-            doc = etree.fromstring(html, etree.HTMLParser())
+            doc = xml.etree.ElementTree.fromstring(html)
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
@@ -95,11 +94,21 @@ def test_templates(new_user):
                     dump_lines(html)
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
-        except etree.XMLSyntaxError as e:
-            print("invalid html:", file=sys.stderr)
+        except xml.etree.ElementTree.ParseError as e:
+            logging.error("invalid html:")
             dump_lines(html)
             raise
         assert "404 Not Found" not in data
+
+    # Test the test infrastructure
+    with pytest.raises(etree.XMLSyntaxError):
+        validate_html("<a><b> this is invalid HTML</a></b>")
+
+    with pytest.raises(RuntimeError):
+        validate_html("<p>one two three</p>",include_text="four")
+
+    with pytest.raises(RuntimeError):
+        validate_html("<p>one two three</p>",exclude_text="two")
 
     # Test templates without an API_KEY
     with boddle(params={}):
