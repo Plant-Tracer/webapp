@@ -22,6 +22,7 @@ from fixtures.localmail_config import localmail_config
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
+import db
 import mailer
 from mailer import InvalidEmail
 
@@ -38,10 +39,10 @@ FAKE_SENDER     = 'do-not-reply@planttracer.com'
 def test_send_message(localmail_config):
     nonce = str(uuid.uuid4())
 
-    TO_ADDRS = [TEST_USER_EMAIL]
+    TO_ADDRS = [FAKE_USER_EMAIL]
     msg_env = NativeEnvironment().from_string(MSG)
     msg = msg_env.render(to_addrs=",".join(TO_ADDRS),
-                         from_addr=TEST_USER_EMAIL,
+                         from_addr=FAKE_USER_EMAIL,
                          guid=nonce)
 
     DRY_RUN = False
