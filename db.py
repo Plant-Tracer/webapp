@@ -31,13 +31,13 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class InvalidEmail(RuntimeError):
+class InvalidEmail(Exception):
     """Exception thrown in email is invalid"""
 
-class InvalidAPI_Key(RuntimeError):
+class InvalidAPI_Key(Exception):
     """ API Key is invalid """
 
-class InvalidCourse_Key(RuntimeError):
+class InvalidCourse_Key(Exception):
     """ API Key is invalid """
 
 LOG_DB = 'LOG_DB'
@@ -289,8 +289,11 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = auth.smtp_config()
-    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    try:
+        smtp_config = auth.smtp_config()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    except KeyError:
+        raise mailer.NoMailerConfig()
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
