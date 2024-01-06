@@ -23,6 +23,7 @@ from constants import C
 import auth
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
+from mailer import InvalidEmail
 import mailer
 
 if sys.version < '3.11':
@@ -30,9 +31,6 @@ if sys.version < '3.11':
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
-
-class InvalidEmail(RuntimeError):
-    """Exception thrown in email is invalid"""
 
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
