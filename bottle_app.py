@@ -438,6 +438,9 @@ def api_send_link():
         return E.INVALID_EMAIL
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    except mailer.NoMailerConfig as e:
+        logging.error("no mailer configuration")
+        return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
         logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
