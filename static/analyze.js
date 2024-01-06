@@ -356,7 +356,6 @@ class PlantTracerController extends CanvasController {
 
     // Delete a row and update the server
     del_row(i) {
-        console.log("delete row ",i,"and redraw the matrix");
         this.objects.splice(i,1);
         this.create_marker_table();
         this.put_trackpoints();
@@ -514,7 +513,6 @@ class PlantTracerController extends CanvasController {
             $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
-        console.log("hi mom",data,data.frame_number==0);
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
