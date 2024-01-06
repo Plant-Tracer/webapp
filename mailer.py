@@ -29,6 +29,9 @@ class InvalidMailerConfiguration(Exception):
     def __repr__(self):
         return "InvalidMailerConfiguration: "+self.msg
 
+class NoMailerConfig(Exception):
+    """ No mailer configured"""
+
 def send_message(*,
                  from_addr: str,
                  to_addrs: [str],

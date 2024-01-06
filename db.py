@@ -35,7 +35,7 @@ SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admin
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
-class InvalidCourse_Key(RuntimeError):
+class InvalidCourse_Key(Exception):
     """ API Key is invalid """
 
 LOG_DB = 'LOG_DB'
@@ -287,8 +287,11 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = auth.smtp_config()
-    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    try:
+        smtp_config = auth.smtp_config()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    except KeyError:
+        raise mailer.NoMailerConfig()
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
