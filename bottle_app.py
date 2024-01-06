@@ -164,11 +164,13 @@ def get_user_dict():
     api_key = auth.get_user_api_key()
     if api_key is None:
         logging.info("api_key is none")
-        raise bottle.HTTPResponse(body='', status=511, headers={ 'Location': '/'})
+        # This will redirect to the / and produce a "Session expired" message
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid",api_key)
-        raise bottle.HTTPResponse(body='', status=511, headers={ 'Location': '/error'})
+        # This will produce a "Session expired" message
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
     return userdict
 
 def get_user_id(allow_demo=True):
