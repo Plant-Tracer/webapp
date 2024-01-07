@@ -172,3 +172,4 @@ localmail.mbox
 *.ini
 etc/github_actions_mysql_rootconfig.ini
 etc/credentials.ini
+_build
