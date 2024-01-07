@@ -59,7 +59,8 @@ def new_course():
     admin_id = dbmaint.create_course(course_key = course_key,
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
-                                     course_name = course_name)
+                                     course_name = course_name,
+                                     create_demo = True)
 
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
@@ -69,7 +70,8 @@ def new_course():
            DBWRITER:get_dbwriter() }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
-    db.delete_user(email=admin_email)
+    db.delete_user(email=admin_email, purge_movies=True)
+    db.delete_user(email=dbmaint.DEMO_EMAIL, purge_movies=True)
     ct = db.delete_course(course_key=course_key)
     assert ct == 1                # returns number of courses deleted
 
@@ -169,6 +171,13 @@ def test_new_course(new_course):
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
     logging.info("Created course %s", course_key)
+
+    # Check the demo
+    res = db.list_demo_users()
+    logging.debug("res=%s",res)
+    assert len(res)>=1
+    assert res[0]['email']==dbmaint.DEMO_EMAIL
+    assert res[0]['api_key'] is not None
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)
@@ -357,7 +366,8 @@ def test_course_list(new_user):
         res = bottle_app.api_list_users()
     assert res['error'] is False
     users2 = res['users']
-    assert len(users2)==2
+    # There is the user and the admin; there may also be a demo user
+    assert len(users2) in [2,3]
     assert users1[0]['name'] == users2[0]['name']
     assert users1[0]['email'] == users2[0]['email']
 

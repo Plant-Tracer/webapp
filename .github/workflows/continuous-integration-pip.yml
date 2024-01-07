@@ -84,7 +84,7 @@ jobs:
 
       - name: "create rootconfig.ini"
         run: |
-          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --createroot='testrootpass'
+          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --create_root='testrootpass'
 
       - name: Lint with pylint
         run: |

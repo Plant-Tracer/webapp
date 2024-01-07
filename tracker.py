@@ -56,8 +56,8 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
             if status_array[i]==1:
                 trackpoints_out.append({'x':point_array_out[i][0],
                                         'y':point_array_out[i][1],
-                                        'status':int(status_array[i]),
-                                        'err':float(err[i]),
+                                        'status':int(status_array[i][0]),
+                                        'err':float(err[i][0]),
                                         'label':pt['label']})
     except cv2.error:
         trackpoints_out = []
