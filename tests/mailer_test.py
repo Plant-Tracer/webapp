@@ -25,6 +25,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 import db
 import mailer
 from mailer import InvalidEmail
+from db import InvalidCourse_Key
 
 MSG = """to: {{ to_addrs }}
 from: {{ from_addr }}
@@ -72,5 +73,9 @@ def test_send_message(localmail_config):
 
 
 def test_register_email():
+    """Some tests of the email registration software in db"""
     with pytest.raises(InvalidEmail):
-        db.register_email(email='invalid-email', name='invalid-name')
+        db.register_email(email='invalid-email', name='valid-name')
+
+    with pytest.raises(InvalidCourse_Key):
+        db.register_email(email='user@company.com', name='valid-name', course_key=None, course_id=None)
