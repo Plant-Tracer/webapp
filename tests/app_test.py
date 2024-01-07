@@ -9,10 +9,11 @@ import os
 import bottle
 import logging
 import json
+import subprocess
 
 from os.path import abspath, dirname
 
-from lxml import etree
+import xml.etree.ElementTree
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
@@ -21,6 +22,7 @@ from boddle import boddle
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import STATIC_DIR,TEST_DATA_DIR
+import db
 import bottle_app
 
 from user_test import new_course,new_user,API_KEY
@@ -73,20 +75,49 @@ def test_api_key_null(mocker):
 ################################################################
 # Validate HTML produced by templates below.
 # https://stackoverflow.com/questions/35538/validate-xhtml-in-python
-def validate_html(html):
-    '''If lxml can properly parse the html, return the lxml representation.
-    Otherwise raise.'''
-    try:
-        return etree.fromstring(html, etree.HTMLParser())
-    except etree.XMLSyntaxError as e:
-        print("invalid html:", file=sys.stderr)
-        for (ct, line) in enumerate(html.split("\n"), 1):
-            print(ct, line, file=sys.stderr)
-        raise
-    assert "404 Not Found" not in data
-
 def test_templates(new_user):
     api_key = new_user[API_KEY]
+
+    def dump_lines(text):
+        for (ct, line) in enumerate(text.split("\n"), 1):
+            logging.error("%s: %s",ct, line)
+
+    def validate_html(html, include_text=None, exclude_text=None):
+        '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
+        try:
+            doc = xml.etree.ElementTree.fromstring(html)
+            if include_text is not None:
+                if include_text not in html:
+                    dump_lines(html)
+                    raise RuntimeError(f"'{include_text}' not in text  {new_user}")
+            if exclude_text is not None:
+                if exclude_text in html:
+                    dump_lines(html)
+                    raise RuntimeError(f"'{exclude_text}' in text {new_user}")
+            return
+        except xml.etree.ElementTree.ParseError as e:
+            logging.error("invalid html written to /tmp/invalid.html")
+            dump_lines(html)
+            with open("/tmp/invalid.html","w") as f:
+                f.write(html)
+            try:
+                # Run xmllint if it is present, but don't generate an error if it is not
+                print("xmllint:")
+                subprocess.call(['xmllint','/tmp/invalid.html'])
+            except FileNotFoundError:
+                pass
+            raise
+        assert "404 Not Found" not in data
+
+    # Test the test infrastructure
+    with pytest.raises(xml.etree.ElementTree.ParseError):
+        validate_html("<a><b> this is invalid HTML</a></b>")
+
+    with pytest.raises(RuntimeError):
+        validate_html("<p>one two three</p>",include_text="four")
+
+    with pytest.raises(RuntimeError):
+        validate_html("<p>one two three</p>",exclude_text="two")
 
     # Test templates without an API_KEY
     with boddle(params={}):
@@ -106,7 +137,7 @@ def test_templates(new_user):
             bottle_app.func_upload()
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_users()
-        validate_html(bottle_app.func_ver())
+        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
 
 
     # Test templates to see if they work with an API key
@@ -114,7 +145,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
         validate_html(bottle_app.func_audit())
-        validate_html(bottle_app.func_list())
+        validate_html(bottle_app.func_list(), exclude_text='Demo mode')
         validate_html(bottle_app.func_login())
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
@@ -122,7 +153,12 @@ def test_templates(new_user):
         validate_html(bottle_app.func_tos())
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
-        validate_html(bottle_app.func_ver())
+        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
+
+    # Test template to see if demo text appears
+    demo_key = db.list_demo_users()[0]['api_key']
+    with boddle(params={'api_key': demo_key}):
+        validate_html(bottle_app.func_list(), include_text='Demo mode')
 
 def test_check_api_key(new_user):
     api_key = new_user[API_KEY]

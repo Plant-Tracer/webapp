@@ -510,11 +510,15 @@ class PlantTracerController extends CanvasController {
             $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
+        console.log("hi mom",data,data.frame_number==0);
+        let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
                 this.insert_circle( tp['x'], tp['y'], tp['label'] );
+                count += 1;
             }
-        } else {
+        }
+        if (count==0) {
             if (data.frame_number==0) {
                 // Add the initial trackpoints
                 this.insert_circle( 20, 20, 'apex');
