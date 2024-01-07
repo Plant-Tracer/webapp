@@ -77,5 +77,8 @@ def test_register_email():
     with pytest.raises(InvalidEmail):
         db.register_email(email='invalid-email', name='valid-name')
 
-    with pytest.raises(InvalidCourse_Key):
+    with pytest.raises(ValueError):
         db.register_email(email='user@company.com', name='valid-name', course_key=None, course_id=None)
+
+    with pytest.raises(InvalidCourse_Key):
+        db.register_email(email='user@company.com', name='valid-name', course_key='invalid-course-key', course_id=None)

@@ -247,7 +247,8 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     if not validate_email(email, check_mx=CHECK_MX):
         raise InvalidEmail(email)
 
-    assert not ((course_key is None) and (course_id is None))
+    if (course_key is None) and (course_id is None):
+        raise ValueError("Either the course_key or the course_id must be provided")
 
     # Get the course_id if not provided
     if not course_id:
