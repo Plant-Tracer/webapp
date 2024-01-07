@@ -19,6 +19,9 @@ SMTP_PORT_DEFAULT = 587
 SMTP_NO_TLS = 'SMTP_NO_TLS'
 SMTP_DEBUG = False
 
+class InvalidEmail(RuntimeError):
+    """Exception thrown in email is invalid"""
+
 class InvalidMailerConfiguration(Exception):
     def __init__(self, msg):
         super().__init__()
