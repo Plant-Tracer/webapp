@@ -13,7 +13,7 @@ jobs:
         python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     # This makes it only run on pull_request unless it is running on main:
-    if: (github.event_name == 'pull_request' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    if: (github.event_name == 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dreamhost-deploy' )) || (github.event_name == 'push' && github.ref != 'refs/heads/main')
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
       mysql:
@@ -64,12 +64,12 @@ jobs:
           make install-windows
 
       - name: "Install Chrome"
-        id: setup-chrome  
+        id: setup-chrome
         uses: browser-actions/setup-chrome@v1.4.0
         with:
           chrome-version: stable
 
-      - name: "Show Chrome info"       
+      - name: "Show Chrome info"
         run: |
           echo Installed Chrome to ${{ steps.setup-chrome.outputs.chrome-path }}
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
@@ -84,7 +84,7 @@ jobs:
 
       - name: "create rootconfig.ini"
         run: |
-          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --createroot='testrootpass'
+          python dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --create_root='testrootpass'
 
       - name: Lint with pylint
         run: |

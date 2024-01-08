@@ -42,5 +42,7 @@ class E:
     FRAME1_IS_NONE = {'error':True, 'message':'Frame1 in track_frame is None'}
     NO_TRACKPOINTS = {'error':True, 'message':'No trackpoints provided for tracking operation'}
     INVALID_MAILER_CONFIGURATION = {'error':True, 'message':'Invalid mailer configuration. Please review error.log on server for more information'}
+    MUST_TRACK_ORIG_MOVIE = {'error':True, 'message':'Must track original movies'}
+    NO_MAILER_CONFIGURATION = {'error':True, 'message':'Email cannot be sent as no mailer has been configured.'}
 
 #pylint: enable=too-few-public-methods

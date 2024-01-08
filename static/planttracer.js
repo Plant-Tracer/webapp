@@ -76,11 +76,11 @@ function check_upload_metadata()
 const UPLOAD_TIMEOUT_SECONDS = 20;
 async function upload_movie(inp)
 {
-    const title = $('#movie-title').val();
+    const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
 
-    console.log('title.length=',title.length);
-    if (title.length < 3) {
+    console.log('movie_title.length=',movie_title.length);
+    if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
         return;
     }
@@ -99,9 +99,9 @@ async function upload_movie(inp)
     }
     console.log('movieFile:',movieFile);
     let formData = new FormData();
-    formData.append("movie",    movieFile); // the movie itself
-    formData.append("api_key",  api_key); // on the upload form
-    formData.append("title",       title);
+    formData.append("movie",       movieFile); // the movie itself
+    formData.append("api_key",     api_key); // on the upload form
+    formData.append("title",       movie_title);
     formData.append("description", description);
 
     const ctrl = new AbortController();    // timeout
@@ -120,8 +120,8 @@ async function upload_movie(inp)
                 $('#message').html(`<p>Movie ${body.movie_id} successfully uploaded.</p>`+
                                    `<p>First frame:</p>` +
                                    `<img src="/api/get-frame?api_key=${api_key}&movie_id=${body.movie_id}&frame_number=0&format=jpeg">`+
-                                   `<p><a href='/analyze?movie_id=${body.movie_id}'>Track movie ${body.movie_id}</a>`+
-                                   `   <a href='/list?api_key=${api_key}'>List all movies</a></p>`);
+                                   `<p><a href='/analyze?movie_id=${body.movie_id}'>Track movie '${movie_title}' (${body.movie_id})</a> `+
+                                   `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
                 $('#movie-title').val('');
                 $('#movie-description').val('');
                 $('#movie-file').val('');
@@ -315,7 +315,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-    function movies_fill_div( div, which, mlist ) {
+    function movies_fill_div( div, which, mlist, offer_upload ) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -338,7 +338,7 @@ function list_movies_data( movies ) {
                 tid += 1;
                 var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
-                if (admin || user_id == m.user_id){
+                if ((admin || user_id == m.user_id) && user_demo==0) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> </td>\n`;
                 }
                 return r;
@@ -376,7 +376,7 @@ function list_movies_data( movies ) {
 
             var movieDate = new Date(m.date_uploaded * 1000);
             var play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
-            var analyze   = `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
+            var analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
             var up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             var you       = (m.user_id == user_id) ? "you" : "";
@@ -430,17 +430,19 @@ function list_movies_data( movies ) {
             mlist.forEach( m => ( h += movie_html(m) ));
         } else {
             h += '<tr><td><i>No movies</i></td></tr>';
-            h += '<tr><td><a href="/upload">Click here to upload a movie</a></td></tr>';
+        }
+        if (offer_upload) {
+            h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
 
         h += "</tbody>";
         h += "</table>";
         div.html(h);
     }
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)));
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)));
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)));
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)));
+    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)), false);
+    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)), true);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)), false);
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)), false);
     $('.movie_player').hide();
 }
 

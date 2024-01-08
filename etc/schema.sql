@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.28, for macos11 (arm64)
+-- MySQL dump 10.13  Distrib 8.2.0, for macos13 (arm64)
 --
--- Host: mysql.simson.net    Database: planttracer_dev
+-- Host: localhost    Database: pt_local
 -- ------------------------------------------------------
--- Server version	8.0.28-0ubuntu0.20.04.3
+-- Server version	8.2.0
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -20,8 +20,6 @@
 --
 
 DROP TABLE IF EXISTS `admins`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `admins` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
@@ -33,19 +31,16 @@ CREATE TABLE `admins` (
   CONSTRAINT `c1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `c2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `api_keys`
 --
 
 DROP TABLE IF EXISTS `api_keys`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `api_keys` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `api_key` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `api_key` varchar(255) NOT NULL,
   `first_used_at` int DEFAULT NULL,
   `last_used_at` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -57,57 +52,48 @@ CREATE TABLE `api_keys` (
   CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `enabled_chk` CHECK ((`enabled` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `courses`
 --
 
 DROP TABLE IF EXISTS `courses`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `courses` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `course_key` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
-  `course_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `course_section` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `course_key` varchar(64) NOT NULL,
+  `course_name` varchar(64) DEFAULT NULL,
+  `course_section` varchar(64) DEFAULT NULL,
   `max_enrollment` int NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `course_name` (`course_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `engines`
 --
 
 DROP TABLE IF EXISTS `engines`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `engines` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `version` varchar(256) COLLATE utf8mb4_general_ci DEFAULT '',
+  `name` varchar(255) NOT NULL,
+  `version` varchar(256) DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `env1` (`name`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `logs`
 --
 
 DROP TABLE IF EXISTS `logs`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `time_t` int NOT NULL DEFAULT (unix_timestamp()),
-  `ipaddr` varchar(39) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ipaddr` varchar(39) DEFAULT NULL,
   `apikey_id` int DEFAULT NULL,
   `user_id` int DEFAULT NULL,
-  `func_name` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `func_name` varchar(128) DEFAULT NULL,
   `func_args` json DEFAULT NULL,
   `func_return` json DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -116,15 +102,12 @@ CREATE TABLE `logs` (
   KEY `time_t` (`time_t`),
   KEY `ipaddr` (`ipaddr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movie_analysis`
 --
 
 DROP TABLE IF EXISTS `movie_analysis`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movie_analysis` (
   `id` int NOT NULL AUTO_INCREMENT,
   `engine_id` int NOT NULL,
@@ -136,34 +119,28 @@ CREATE TABLE `movie_analysis` (
   CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`),
   CONSTRAINT `mc1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movie_data`
 --
 
 DROP TABLE IF EXISTS `movie_data`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movie_data` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
-  `movie_sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `movie_sha256` varchar(64) DEFAULT NULL,
   `movie_data` mediumblob NOT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `movie_id` (`movie_id`),
   CONSTRAINT `ctr1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movie_frame_analysis`
 --
 
 DROP TABLE IF EXISTS `movie_frame_analysis`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movie_frame_analysis` (
   `id` int NOT NULL AUTO_INCREMENT,
   `frame_id` int NOT NULL,
@@ -176,35 +153,29 @@ CREATE TABLE `movie_frame_analysis` (
   CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
   CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movie_frame_trackpoints`
 --
 
 DROP TABLE IF EXISTS `movie_frame_trackpoints`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movie_frame_trackpoints` (
   `id` int NOT NULL AUTO_INCREMENT,
   `frame_id` int NOT NULL,
   `x` int NOT NULL,
   `y` int NOT NULL,
-  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `label` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk1` (`frame_id`,`label`),
   KEY `frame_id` (`frame_id`),
   CONSTRAINT `movie_frame_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movie_frames`
 --
 
 DROP TABLE IF EXISTS `movie_frames`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movie_frames` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
@@ -212,24 +183,21 @@ CREATE TABLE `movie_frames` (
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `frame_sha256` varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `frame_sha256` varchar(256) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `movies`
 --
 
 DROP TABLE IF EXISTS `movies`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `movies` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `description` text COLLATE utf8mb4_general_ci,
+  `title` varchar(255) NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
   `user_id` int DEFAULT NULL,
   `course_id` int NOT NULL,
@@ -262,48 +230,42 @@ CREATE TABLE `movies` (
   CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
   CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `objects`
 --
 
 DROP TABLE IF EXISTS `objects`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `objects` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `sha256` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sha256` varchar(64) DEFAULT NULL,
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `data` mediumblob,
-  `url` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `url` varchar(1024) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `users`
 --
 
 DROP TABLE IF EXISTS `users`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
   `primary_course_id` int NOT NULL,
   `created_at` int NOT NULL DEFAULT (unix_timestamp()),
   `enabled` int DEFAULT '1',
   `links_sent_without_acknowledgement` int NOT NULL DEFAULT '0',
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `demo` int NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   KEY `c4` (`primary_course_id`),
   CONSTRAINT `c4` FOREIGN KEY (`primary_course_id`) REFERENCES `courses` (`id`),
   CONSTRAINT `users_chk_1` CHECK (((0 <= `enabled`) <= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

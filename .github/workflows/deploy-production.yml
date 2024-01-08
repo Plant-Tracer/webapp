@@ -1,0 +1,38 @@
+# See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
+name: Deploy to Production
+concurrency: production
+
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  PROD_USER: ${{ secrets.PROD_USER }}
+  PROD_HOST: app.planttracer.com
+  DEMO_USER: ${{ secrets.DEMO_USER }}
+  DEMO_HOST: demo.planttracer.com
+
+jobs:
+  if_merged:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Load credentials"
+        run: |
+          mkdir $HOME/.ssh
+          chmod 700 $HOME/.ssh
+          base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" > $HOME/.ssh/newkey
+          chmod 600 $HOME/.ssh/newkey
+
+      - name: "Deploy to prod"
+        run: |
+          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $PROD_USER@$PROD_HOST \
+             "cd $PROD_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
+
+      - name: "Deploy to demo"
+        run: |
+          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEMO_USER@$DEMO_HOST \
+             "cd $DEMO_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"

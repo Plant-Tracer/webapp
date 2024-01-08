@@ -93,6 +93,8 @@ def expand_memfile_max():
 
 
 def fix_types(obj):
+    """Process JSON so that it dumps without `default=str`, since we can't
+    seem to get bottle to do that."""
     return json.loads(json.dumps(obj,default=str))
 
 def is_true(s):
@@ -162,19 +164,27 @@ def get_user_dict():
     api_key = auth.get_user_api_key()
     if api_key is None:
         logging.info("api_key is none")
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+        # This will redirect to the / and produce a "Session expired" message
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid",api_key)
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/error'})
+        # This will produce a "Session expired" message
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
     return userdict
 
-def get_user_id():
-    """Returns the user_id of the currently logged in user, or throws a response"""
+def get_user_id(allow_demo=True):
+    """Returns the user_id of the currently logged in user, or throws a response.
+    if allow_demo==False, then do not allow the user to be a demo user
+    """
     userdict = get_user_dict()
     if 'id' not in userdict:
         logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
+    if userdict['demo'] and allow_demo!=True:
+        logging.info("demo account blocks requeted action")
+        raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
+                                  status=503, headers={ 'Location': '/'})
     return userdict['id']
 
 
@@ -183,10 +193,10 @@ def get_user_id():
 ################################################################
 
 def page_dict(title='', *, require_auth=False, logout=False):
-    """Fill in data that goes to templates below and also set the cookie in a response
+    """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
-    :param: auth  - if true, the user must already be authenticated
-    :param: logout - if true, log out the user
+    :param: require_auth  - if true, the user must already be authenticated, or throws an error
+    :param: logout - if true, force the user to log out by issuing a clear-cookie command
     """
     o = urlparse(request.url)
     api_key = auth.get_user_api_key()
@@ -198,14 +208,20 @@ def page_dict(title='', *, require_auth=False, logout=False):
         user_dict = get_user_dict()
         user_name = user_dict['name']
         user_email = user_dict['email']
+        user_demo  = user_dict['demo']
         user_id = user_dict['id']
         user_primary_course_id = user_dict['primary_course_id']
         primary_course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
         admin = db.check_course_admin(user_id=user_id, course_id=user_primary_course_id)
+        # If this is a demo account, the user cannot be an admin
+        if user_demo:
+            assert not admin
+
     else:
-        user_name = None
+        user_name  = None
         user_email = None
-        user_id = None
+        user_demo  = 0
+        user_id    = None
         user_primary_course_id = None
         primary_course_name = None
         admin = None
@@ -222,6 +238,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
             'user_id': user_id,
             'user_name': user_name,
             'user_email': user_email,
+            'user_demo':  user_demo,
             'admin':admin,
             'user_primary_course_id': user_primary_course_id,
             'primary_course_name': primary_course_name,
@@ -238,15 +255,19 @@ GET_POST = [GET,POST]
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
-    return page_dict()
+    demo_users = db.list_demo_users()
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+        logging.debug("demo_api_key=%s",demo_api_key)
+    return {**page_dict(),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/error', method=GET_POST)
 @view('error.html')
 def func_error():
     auth.clear_cookie()
     return {}
-
-
 
 @bottle.route('/about', method=GET_POST)
 @view('about.html')
@@ -271,10 +292,20 @@ def func_analyze():
     """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
     return page_dict('Analyze Movie', require_auth=True)
 
+##
+## Login page includes the api keys of all the demo users.
+##
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    return page_dict('Login')
+    demo_users = db.list_demo_users()
+    logging.debug("demo_users=%s",demo_users)
+    demo_api_key = False
+    if len(demo_users)>0:
+        demo_api_key   = demo_users[0].get('api_key',False)
+
+    return {**page_dict('Login'),
+            **{'demo_api_key':demo_api_key}}
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
@@ -409,6 +440,9 @@ def api_send_link():
         return E.INVALID_EMAIL
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    except mailer.NoMailerConfig as e:
+        logging.error("no mailer configuration")
+        return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
         logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
@@ -451,6 +485,8 @@ def api_new_movie():
     """
 
     # pylint: disable=unsupported-membership-test
+    user_id    = get_user_id(allow_demo=False)    # require a valid user_id
+
     movie_data = None
     # First see if a file named movie was uploaded
     if 'movie' in request.files:
@@ -482,7 +518,7 @@ def api_new_movie():
 
     movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
     logging.debug("movie_metadata=%s",movie_metadata)
-    movie_id = db.create_new_movie(user_id=get_user_id(),
+    movie_id = db.create_new_movie(user_id=user_id,
                                    title=request.forms.get('title'),
                                    description=request.forms.get('description'),
                                    movie_data=movie_data,
@@ -563,7 +599,8 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
+    if db.can_access_movie(user_id=get_user_id(allow_demo=False),
+                           movie_id=get_int('movie_id')):
         db.delete_movie(movie_id=get_int('movie_id'),
                         delete=get_bool('delete',True))
         return {'error': False}
@@ -572,7 +609,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=POST)
 def api_list_movies():
-    return {'error': False, 'movies': db.list_movies(get_user_id())}
+    return {'error': False, 'movies': db.list_movies(user_id=get_user_id())}
 
 
 @bottle.route('/api/track-movie', method='POST')
@@ -591,8 +628,15 @@ def api_track_movie():
 
     # pylint: disable=unsupported-membership-test
     movie_id       = get_int('movie_id')
-    if not db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
+    user_id        = get_user_id(allow_demo=True)
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
+
+    # Make sure we are not tracking a movie that is not an original movie
+    movie_row = db.list_movies(user_id=user_id, movie_id=movie_id)
+    assert len(movie_row)==1
+    if movie_row[0]['orig_movie'] is not None:
+        return E.MUST_TRACK_ORIG_MOVIE
 
     engine_name    = get('engine_name')
     engine_version = get('engine_version')
@@ -625,16 +669,23 @@ def api_track_movie():
 
             # Save the movie with updated metadata
             new_movie_data = outfile.read()
-            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=get_user_id())[0]
+            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
             new_title      = movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
-            tracked_movie_id = db.create_new_movie(user_id = get_user_id(),
-                                               title = new_title,
-                                               description = movie_metadata['description'],
-                                               movie_data = new_movie_data)
+            tracked_movie_id = db.create_new_movie(user_id = user_id,
+                                                   title = new_title,
+                                                   description = movie_metadata['description'],
+                                                   orig_movie = movie_id,
+                                                   movie_data = new_movie_data)
+            # purge the other movies that have been tracked for this one
+            to_purge = db.list_movies(user_id = user_id, orig_movie = movie_id)
+            for movie in to_purge:
+                if movie['movie_id'] != tracked_movie_id:
+                    db.purge_movie(movie_id=movie['movie_id'])
+
 
     # Get new trackpoints for each frame
     output_trackpoints   = tracked['output_trackpoints']
@@ -667,11 +718,14 @@ def api_new_movie_analysis():
     :param annotations: The movie analysis's annotations, that is, a JSON document containing analysis data
     """
 
-    movie_analysis_id = db.create_new_movie_analysis(movie_id=request.forms.get('movie_id'),
-                                   engine_id=request.forms.get('engine_id'),
-                                   annotations=request.forms.get(
-                                       'annotations')
-                                   )['movie_analysis_id']
+    user_id  = get_user_id(allow_demo=False)
+    movie_id = request.forms.get('movie_id')
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        return E.INVALID_MOVIE_ACCESS
+
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
+                                                     engine_id=request.forms.get('engine_id'),
+                                                     annotations=request.forms.get('annotations'))['movie_analysis_id']
     return {'error': False, 'movie_analysis_id': movie_analysis_id}
 
 
@@ -690,7 +744,7 @@ def api_new_frame():
     :return: frame_id - that's what we care about
 
     """
-    if not db.can_access_movie(user_id=get_user_id(), movie_id=request.forms.get('movie_id')):
+    if not db.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=request.forms.get('movie_id')):
         return E.INVALID_MOVIE_ACCESS
     try:
         frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
@@ -725,7 +779,7 @@ def api_get_frame():
       annotations - a JSON object of annotations from the databsae.
       trackpoints - a list of the trackpoints
     """
-    user_id      = get_user_id()
+    user_id      = get_user_id(allow_demo=True)
     frame_id     = get_int('frame_id')
     frame_number = get_int('frame_number')
     movie_id     = get_int('movie_id')
@@ -747,9 +801,12 @@ def api_get_frame():
             return row.get('frame_data',None)
         # Is there a movie we can access?
         if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
-                                       frame_number = frame_number,
-                                       fmt = 'jpeg')
+            try:
+                return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
+                                             frame_number = frame_number,
+                                             fmt = 'jpeg')
+            except ValueError as e:
+                return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
         logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
         return E.INVALID_FRAME_ACCESS
 
@@ -770,9 +827,14 @@ def api_get_frame():
 
     # If we do not have frame_data, extract it from the movie (but don't store in database)
     if ret.get('frame_data',None) is None:
-        ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
-                                                  frame_number=frame_number,
-                                                  fmt='jpeg')
+        logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
+        try:
+            ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+                                                      frame_number=frame_number,
+                                                      fmt='jpeg')
+        except ValueError as e:
+            return {'error':True,
+                    'message':f'frame number {frame_number} is out of range'}
 
     # Convert the frame_data to a data URL
     ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
@@ -799,14 +861,15 @@ def api_put_frame_analysis():
     :param: annotations - JSON string, must be an array or a dictionary, if provided
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    logging.debug("put_frame_analysis. frame_id=%s movie_id=%s  frame_number=%s",get_int('frame_id'),get_int('movie_id'),get_int('frame_number'))
     frame_id  = get_int('frame_id')
+    user_id   = get_user_id(allow_demo=True)
+    logging.debug("put_frame_analysis. frame_id=%s user_id=%s",frame_id,user_id)
     if frame_id is None:
         frame_id = db.create_new_frame(movie_id=get_int('movie_id'), frame_number=get_int('frame_number'))
-        logging.debug("frame_id is %s",frame_id)
-    if not db.can_access_frame(user_id=get_user_id(), frame_id=frame_id):
-        logging.debug("user %s cannot access frame_id %s",get_user_id(), frame_id)
-        return {'error':True, 'message':f'User {get_user_id()} cannot access frame_id={frame_id}'}
+        logging.debug("frame_id is now %s",frame_id)
+    if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
+        logging.debug("user %s cannot access frame_id %s",user_id, frame_id)
+        return {'error':True, 'message':f'User {user_id} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')
     logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
@@ -870,7 +933,7 @@ def api_set_metadata():
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
 
-    result = db.set_metadata(user_id=get_user_id(),
+    result = db.set_metadata(user_id=get_user_id(allow_demo=False),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
                              prop=get('property'),
@@ -906,7 +969,6 @@ def api_add():
 ################################################################
 # Bottle App
 ##
-
 
 def app():
     """The application"""
