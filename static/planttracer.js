@@ -316,6 +316,10 @@ function list_movies_data( movies ) {
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
     function movies_fill_div( div, which, mlist, offer_upload ) {
+        if (user_demo) {        // don't allow upload if in demo mode.
+            offer_upload = false;
+        }
+
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
