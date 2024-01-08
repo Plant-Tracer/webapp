@@ -1,0 +1,30 @@
+# See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
+name: Deploy to Dev
+concurrency: production
+
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  DEV_USER: ${{ secrets.DEV_USER }}
+  DEV_HOST: dev.planttracer.com
+
+jobs:
+  if_merged:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Load Credentials"
+        run: |
+          eval $(ssh-agent)
+          base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
+          ssh-add -l
+
+      - name: "Deploy to dev"
+        run: |
+          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEV_USER@$DEV_HOST \
+             "cd $DEV_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
