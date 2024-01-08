@@ -37,7 +37,7 @@ This is a test message.
 FAKE_USER_EMAIL = 'fake-user@planttracer.com'
 FAKE_SENDER     = 'do-not-reply@planttracer.com'
 
-def test_send_message(localmail_config):
+def test_send_message(mailer_config):
     nonce = str(uuid.uuid4())
 
     TO_ADDRS = [FAKE_USER_EMAIL]
@@ -47,7 +47,7 @@ def test_send_message(localmail_config):
                          guid=nonce)
 
     DRY_RUN = False
-    smtp_config = localmail_config['smtp']
+    smtp_config = mailer_config['smtp']
     mailer.send_message(from_addr=FAKE_SENDER,
                         to_addrs=TO_ADDRS,
                         smtp_config=smtp_config,
