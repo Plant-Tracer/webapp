@@ -20,6 +20,8 @@ jobs:
 
       - name: "Deploy to dev"
         run: |
+          mkdir $HOME/.ssh
+          chmod 700 $HOME/.ssh
           base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" > $HOME/.ssh/newkey
           chmod 600 $HOME/.ssh/newkey
           ls -l $HOME/.ssh/
