@@ -23,7 +23,7 @@ jobs:
       - name: "Load Credentials"
         run: |
           eval $(ssh-agent)
-          base64 -d <<< "${{ secrets.PT_SSH_BASE64 }}" | ssh-add  -
+          base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" | ssh-add  -
           ssh-add -l
 
       - name: "Deploy to prod"
