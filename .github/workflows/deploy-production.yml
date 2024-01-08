@@ -30,9 +30,9 @@ jobs:
       - name: "Deploy to prod"
         run: |
           ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $PROD_USER@$PROD_HOST \
-             "cd $PROD_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
+             "cd $PROD_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
 
       - name: "Deploy to demo"
         run: |
           ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEMO_USER@$DEMO_HOST \
-             "cd $DEMO_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
+             "cd $DEMO_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
