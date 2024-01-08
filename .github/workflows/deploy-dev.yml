@@ -18,13 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: "Deploy to dev"
+      - name: "Load credentials"
         run: |
           mkdir $HOME/.ssh
           chmod 700 $HOME/.ssh
           base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" > $HOME/.ssh/newkey
           chmod 600 $HOME/.ssh/newkey
-          ls -l $HOME/.ssh/
-          ls -l $HOME/.ssh/newkey
-          ssh -v -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEV_USER@$DEV_HOST \
+
+      - name: "Deploy to dev"
+        run: |
+          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEV_USER@$DEV_HOST \
              "cd $DEV_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
