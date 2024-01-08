@@ -17,7 +17,7 @@ import threading
 
 from os.path import abspath, dirname, join
 
-from fixtures.localmail_config import localmail_config
+from fixtures.localmail_config import mailer_config
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -32,9 +32,10 @@ This is a test message.
 
 guid = str(uuid.uuid4())
 
+SEND_MAIL = ('TEST_PRODUCTION_EMAIL' in os.environ) or ('TEST_USER_EMAIL' in os.environ)
 
-@pytest.mark.skipif('TEST_USER_EMAIL' not in os.environ,reason='Environment not set up for sending email')
-def test_send_message(localmail_config):
+@pytest.mark.skipif(not SEND_MAIL,reason='Environment not set up for sending email')
+def test_send_and_receive_message(mailer_config):
     TEST_USER_EMAIL    = os.environ.get('TEST_USER_EMAIL','simsong+test-user-email@gmail.com')
     DO_NOT_REPLY_EMAIL = 'do-not-reply@planttracer.com'
 
@@ -45,7 +46,7 @@ def test_send_message(localmail_config):
                          guid=guid)
 
     DRY_RUN = False
-    smtp_config = localmail_config['smtp']
+    smtp_config = mailer_config['smtp']
     mailer.send_message(from_addr=DO_NOT_REPLY_EMAIL,
                         to_addrs=TO_ADDRS,
                         smtp_config=smtp_config,
@@ -59,7 +60,7 @@ def test_send_message(localmail_config):
         if guid in M['subject']:
             return mailer.DELETE
 
-    imap_config = localmail_config['imap']
+    imap_config = mailer_config['imap']
     for i in range(50):
         deleted = mailer.imap_inbox_scan(imap_config, cb)
         if deleted > 0:

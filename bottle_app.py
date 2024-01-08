@@ -93,17 +93,7 @@ def expand_memfile_max():
 
 
 def fix_types(obj):
-    """Given an object that might be a dictionary, convert all datetime objects to JSON strings"""
-    if isinstance(obj, datetime.datetime):
-        return obj.isoformat()  # or str(obj) if you prefer
-    elif isinstance(obj, dict):
-        return {k: fix_types(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [fix_types(elem) for elem in obj]
-    elif isinstance(obj,(np.float64,np.float32,np.float16)):
-        return float(obj)
-    else:
-        return obj
+    return json.loads(json.dumps(obj,default=str))
 
 def is_true(s):
     return str(s)[0:1] in 'yY1tT'

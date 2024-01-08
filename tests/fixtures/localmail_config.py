@@ -1,12 +1,19 @@
 import localmail
 import pytest
 import configparser
-from os.path import join,dirname,abspath
 import logging
 import threading
 import time
+import sys
+import os
+from os.path import join,dirname,abspath
 
-LOCALMAIL_CONFIG_FNAME = join( dirname(dirname(abspath(__file__))), "localmail_config.ini")
+sys.path.append(dirname(dirname(dirname(abspath(__file__)))))
+import paths
+
+MAIL_CONFIG = paths.PRODUCTION_CONFIG_FNAME if 'TEST_PRODUCTION_EMAIL' in os.environ else paths.LOCALMAIL_CONFIG_FNAME
+
+import paths
 
 def singleton(cls):
     instances = {}
@@ -36,7 +43,7 @@ class Localmail():
     """
     def __init__(self):
         localmail_config = configparser.ConfigParser()
-        localmail_config.read( LOCALMAIL_CONFIG_FNAME )
+        localmail_config.read( MAIL_CONFIG )
         if 'smtp' not in localmail_config:
             logging.error('LOCALMAIL FNAME: %s',FNAME)
             logging.error('LOCALMMAIL config: %s',localmail_config)
@@ -44,16 +51,21 @@ class Localmail():
 
         smtp_port = int(localmail_config['smtp']['smtp_port'])
         imap_port = int(localmail_config['imap']['imap_port'])
-        http_port = int(localmail_config['localmail']['http_port'])
-        logging.info("smtp_port=%s imap_port=%s http_port=%s",smtp_port,imap_port,http_port)
+        try:
+            http_port = int(localmail_config['localmail']['http_port'])
+        except KeyError:
+            http_port = None
+        try:
+            mailbox = localmail_config['localmail']['mailbox']
+        except KeyError:
+            http_port = None
+        logging.info("smtp_port=%s imap_port=%s http_port=%s",
+                     smtp_port,imap_port,http_port)
 
         mutex.acquire()
         thread = threading.Thread(
             target=localmail.run,
-            args=( smtp_port,
-                   imap_port,
-                   http_port,
-                   localmail_config['localmail']['mailbox'], report),
+            args=( smtp_port, imap_port, http_port, mailbox, report),
             daemon=True)
         thread.start()
         mutex.acquire(timeout=MAIL_TIMEOUT)
@@ -73,8 +85,7 @@ class Localmail():
             print(f.truncate())
 
 @pytest.fixture
-def localmail_config():
-
+def mailer_config():
     lm = Localmail()
     yield lm.localmail_config
     lm.dump_mailbox()

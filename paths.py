@@ -22,6 +22,8 @@ TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')
 SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
 CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials.ini')
 
+LOCALMAIL_CONFIG_FNAME  = join( ROOT_DIR, 'tests', "localmail_config.ini")
+PRODUCTION_CONFIG_FNAME = join( ROOT_DIR, 'etc', 'credentials.ini')
 
 # used by test program:
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
