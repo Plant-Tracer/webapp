@@ -18,7 +18,7 @@ import threading
 
 from os.path import abspath, dirname, join
 
-from fixtures.localmail_config import localmail_config
+from fixtures.localmail_config import mailer_config
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -60,7 +60,7 @@ def test_send_message(localmail_config):
         if nonce in M['subject']:
             return mailer.DELETE
 
-    imap_config = localmail_config['imap']
+    imap_config = mailer_config['imap']
     for i in range(50):
         deleted = mailer.imap_inbox_scan(imap_config, cb)
         if deleted > 0:
