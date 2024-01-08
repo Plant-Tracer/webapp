@@ -23,6 +23,7 @@ from constants import C
 import auth
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
+from mailer import InvalidEmail
 import mailer
 
 if sys.version < '3.11':
@@ -31,13 +32,10 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class InvalidEmail(RuntimeError):
-    """Exception thrown in email is invalid"""
-
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
-class InvalidCourse_Key(RuntimeError):
+class InvalidCourse_Key(Exception):
     """ API Key is invalid """
 
 LOG_DB = 'LOG_DB'
@@ -249,7 +247,8 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     if not validate_email(email, check_mx=CHECK_MX):
         raise InvalidEmail(email)
 
-    assert not ((course_key is None) and (course_id is None))
+    if (course_key is None) and (course_id is None):
+        raise ValueError("Either the course_key or the course_id must be provided")
 
     # Get the course_id if not provided
     if not course_id:
@@ -289,8 +288,11 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = auth.smtp_config()
-    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    try:
+        smtp_config = auth.smtp_config()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    except KeyError:
+        raise mailer.NoMailerConfig()
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
