@@ -23,6 +23,7 @@ from constants import C
 import auth
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
+from mailer import InvalidEmail
 import mailer
 
 if sys.version < '3.11':
@@ -31,13 +32,10 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class InvalidEmail(RuntimeError):
-    """Exception thrown in email is invalid"""
-
 class InvalidAPI_Key(RuntimeError):
     """ API Key is invalid """
 
-class InvalidCourse_Key(RuntimeError):
+class InvalidCourse_Key(Exception):
     """ API Key is invalid """
 
 LOG_DB = 'LOG_DB'
@@ -207,7 +205,7 @@ def rename_user(*,user_id, email, new_email):
 
 
 @log
-def delete_user(*,email):
+def delete_user(*,email,purge_movies=False):
     """Delete a user specified by email address.
     :param: email - the email address
     - First deletes the user's API keys
@@ -223,7 +221,11 @@ def delete_user(*,email):
                                "SELECT id from movies where user_id in (select id from users where email=%s)",
                                (email,))
     if rows:
-        raise RuntimeError(f"user {email} has outstanding movies")
+        if not purge_movies:
+            raise RuntimeError(f"user {email} has outstanding movies")
+        # This is not the most efficient, but there probably aren't that many movies to purge
+        for (movie_id,) in rows:
+            purge_movie(movie_id=movie_id)
 
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
@@ -245,7 +247,8 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     if not validate_email(email, check_mx=CHECK_MX):
         raise InvalidEmail(email)
 
-    assert not ((course_key is None) and (course_id is None))
+    if (course_key is None) and (course_id is None):
+        raise ValueError("Either the course_key or the course_id must be provided")
 
     # Get the course_id if not provided
     if not course_id:
@@ -255,12 +258,16 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
             raise InvalidCourse_Key(course_key)
         course_id = res[0][0]
 
-    user_id =  dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """INSERT INTO users (email, primary_course_id, name, demo)
-                               VALUES (%s, %s, %s, %s)
-                               ON DUPLICATE KEY UPDATE email=%s""",
-                                   (email, course_id, name, demo_user, email))
-    return {'user_id':user_id,'course_id':course_id}
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO users (email, primary_course_id, name, demo)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE email=%s""",
+                        (email, course_id, name, demo_user, email))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               "SELECT *,id as user_id, primary_course_id as course_id from users where email=%s",
+                               (email,),
+                               asDicts=True)[0]
+
 
 @log
 def send_links(*, email, planttracer_endpoint, new_api_key):
@@ -281,8 +288,11 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
 
     DRY_RUN = False
     SMTP_DEBUG = "No"
-    smtp_config = auth.smtp_config()
-    smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    try:
+        smtp_config = auth.smtp_config()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    except KeyError:
+        raise mailer.NoMailerConfig()
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,

@@ -19,7 +19,7 @@ from tabulate import tabulate
 import mailer
 import db
 from auth import get_dbreader,get_dbwriter
-from paths import TEMPLATE_DIR, SCHEMA_FILE
+from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR
 from lib.ctools import clogging
 from lib.ctools import dbfile
 from pronounceable import generate_word
@@ -37,6 +37,8 @@ dbwriter = 'dbwriter'
 DEFAULT_MAX_ENROLLMENT = 10
 DEMO_EMAIL = 'demo@planttracer.com'
 DEMO_NAME  = 'Plant Tracer Demo Account'
+DEMO_MOVIE_TITLE = 'Demo Movie #{ct}'
+DEMO_MOVIE_DESCRIPTION = 'Track this movie!'
 
 __version__ = '0.0.1'
 
@@ -140,8 +142,8 @@ def report():
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
                                """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
-                               right join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
-                               right join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
+                               left join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
+                               left join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
                                order by 1,2""",
                                get_column_names=headers)
     print(tabulate(rows,headers=headers))
@@ -164,8 +166,24 @@ def create_course(*, course_key, course_name, admin_email,
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
     if create_demo:
-        db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=1)
+        user_dir = db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=1)
+        user_id = user_dir['user_id']
+        print("user_dir=",user_dir)
         db.make_new_api_key(email=DEMO_EMAIL)
+        ct = 1
+        for fn in os.listdir(TEST_DATA_DIR):
+            (root,ext) = os.path.splitext(fn)
+            if ext in ['.mp4','.mov']:
+                with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+                    db.create_new_movie(user_id=user_id,
+                                        title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                        description=DEMO_MOVIE_DESCRIPTION,
+                                        movie_data = f.read())
+                ct += 1
+
+
+
+
     return admin_id
 
 if __name__ == "__main__":
@@ -192,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
-    parser.add_argument('--create_demo',help='If create_course is specified, also create a demo user',action='store_true')
+    parser.add_argument('--create_demo',help='If create_course is specified, also create a demo user and upload two ',action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)

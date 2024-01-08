@@ -70,8 +70,8 @@ def new_course():
            DBWRITER:get_dbwriter() }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
-    db.delete_user(email=admin_email)
-    db.delete_user(email=dbmaint.DEMO_EMAIL)
+    db.delete_user(email=admin_email, purge_movies=True)
+    db.delete_user(email=dbmaint.DEMO_EMAIL, purge_movies=True)
     ct = db.delete_course(course_key=course_key)
     assert ct == 1                # returns number of courses deleted
 

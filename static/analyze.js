@@ -251,8 +251,8 @@ class PlantTracerController extends CanvasController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
-        this.marker_name_input.on('input', (event) => { this.marker_name_input_handler(event);});
-        this.marker_name_input.on('keydown', (event) => { if (event.keyCode=13) this.add_marker_onclick_handler(event);});
+        this.marker_name_input.on('input',   (event) => { this.marker_name_input_handler(event);});
+        this.marker_name_input.on('keydown', (event) => { if (event.keyCode==13) this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(`#${this_id} input.add_marker_button`);
@@ -273,13 +273,17 @@ class PlantTracerController extends CanvasController {
     }
 
 
-    // Handle keystrokes
+    // on each change of input, validate the marker name
     marker_name_input_handler (e) {
         const val = this.marker_name_input.val();
+        // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
             this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
             this.add_marker_button.prop('disabled',true);
             return;
+        } else {
+            this.add_marker_status.text("");
+            this.add_marker_button.prop('enabled',true);
         }
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
@@ -352,7 +356,6 @@ class PlantTracerController extends CanvasController {
 
     // Delete a row and update the server
     del_row(i) {
-        console.log("delete row ",i,"and redraw the matrix");
         this.objects.splice(i,1);
         this.create_marker_table();
         this.put_trackpoints();
@@ -440,7 +443,7 @@ class PlantTracerController extends CanvasController {
 
                 // Set up a download link for the trackpoints
                 $(`#${this.this_id} span.download_link`).html(
-                    `<a href='${trackpoints_url}' download='Movie ${this.movie_id} trackpoints.csv'>Download trackpoints</a>`
+                    `<a href='${trackpoints_url}' download='Movie \#${this.movie_id} trackpoints.csv'>Download trackpoints</a>`
                 );
 
                 // redraw the current frame
@@ -510,17 +513,20 @@ class PlantTracerController extends CanvasController {
             $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
+        let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
                 this.insert_circle( tp['x'], tp['y'], tp['label'] );
+                count += 1;
             }
-        } else {
+        }
+        if (count==0) {
             if (data.frame_number==0) {
                 // Add the initial trackpoints
                 this.insert_circle( 20, 20, 'apex');
                 this.insert_circle( 20, 50, 'ruler 0 mm');
                 this.insert_circle( 20, 80, 'ruler 20 mm');
-                this.update_status("Place the three markers.");
+                this.update_status("Place the three markers. You can also create additional markers.");
             }
         }
         this.redraw('append_new_ptc');              // initial drawing
@@ -622,7 +628,7 @@ function append_new_ptc(movie_id, frame_number) {
 function analyze_movie() {
 
     // Say which movie we are working on
-    $('#firsth2').html(`Movie ${movie_id}`);
+    $('#firsth2').html(`Movie \#${movie_id}`);
 
     // capture the HTML of the <div id='#template'> into a new div
     div_template = "<div id='template'>" + $('#template').html() + "</div>";
