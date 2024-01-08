@@ -419,7 +419,10 @@ def api_register():
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
     except mailer.InvalidMailerConfiguration:
         logging.error("Mailer reports Mailer not properly configured.")
-        return {'error':True, 'message':'Mailer not properly configured.'+link_html}
+        return {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
+    except mailer.NoMailerConfiguration:
+        logging.error("Mailer reports no mailer configured.")
+        return {'error':True, 'message':'Mailer not properly configured (NoMailerConfiguration).'+link_html}
     except smtplib.SMTPAuthenticationError:
         logging.error("Mailer reports smtplib.SMTPAuthenticationError.")
         return {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
@@ -440,7 +443,7 @@ def api_send_link():
         return E.INVALID_EMAIL
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
-    except mailer.NoMailerConfig as e:
+    except mailer.NoMailerConfiguration as e:
         logging.error("no mailer configuration")
         return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
