@@ -21,10 +21,11 @@ jobs:
       - name: "Load Credentials"
         run: |
           eval $(ssh-agent)
+          base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" | openssl sha256
           base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" | ssh-add  -
           ssh-add -l
 
       - name: "Deploy to dev"
         run: |
-          ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEV_USER@$DEV_HOST \
+          ssh -v -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEV_USER@$DEV_HOST \
              "cd $DEV_HOST; python3 --version && git checkout main && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
