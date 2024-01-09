@@ -151,9 +151,12 @@ def report():
 
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT * from movies order by id""",get_column_names=headers)
+                               """SELECT id,title,created_at,user_id,course_id,published,deleted,date_uploaded,fps,width,height,total_frames from movies order by id""",get_column_names=headers)
     print(tabulate(rows,headers=headers))
-
+    print("\nDemo users:")
+    rows = dbfile.DBMySQL.csfr(dbreader,
+                               """SELECT id,name,email from users where demo=1""",get_column_names=headers)
+    print(tabulate(rows,headers=headers))
 
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,

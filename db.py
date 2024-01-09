@@ -292,7 +292,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
         smtp_config = auth.smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
     except KeyError:
-        raise mailer.NoMailerConfig()
+        raise mailer.NoMailerConfiguration()
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
