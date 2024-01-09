@@ -10,6 +10,7 @@ import bottle
 import logging
 import json
 import subprocess
+import uuid
 
 from os.path import abspath, dirname
 
