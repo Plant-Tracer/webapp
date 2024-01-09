@@ -574,13 +574,13 @@ def api_get_movie_trackpoints():
         frame_dicts    = defaultdict(dict)
 
         for tp in trackpoint_dicts:
-            frame_dicts[tp['frame_number']][tp['label']+'-x'] = tp['x']
-            frame_dicts[tp['frame_number']][tp['label']+'-y'] = tp['y']
+            frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
+            frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
 
         fieldnames = ['frame_number']
         for label in labels:
-            fieldnames.append(label+"-x")
-            fieldnames.append(label+"-y")
+            fieldnames.append(label+' x')
+            fieldnames.append(label+' y')
 
         # Now write it out with the dictwriter
         with io.StringIO() as f:
