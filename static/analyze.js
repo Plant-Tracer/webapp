@@ -229,7 +229,10 @@ class PlantTracerController extends CanvasController {
         this.movie_metadata  = movie_metadata
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
-        this.video = $(`#${this.this_id} video`);
+        this.video          = $(`#${this.this_id} video`);
+        this.download_link  = $(`#${this.this_id} .download_link`);
+
+        this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
         // Size the canvas and video player if we know the sizes
         if (this.movie_metadata.width && this.movie_metadata.height) {
@@ -239,11 +242,15 @@ class PlantTracerController extends CanvasController {
             $(`#${this.this_id} video`).attr('height',this.movie_metadata.height);
         }
 
+        // Hide the download link until we track or retrack
+        this.download_link.hide();
+
         if (this.last_tracked_frame > 0 ){
             $(`#${this.this_id} input.track_button`).val( 'retrack movie' );
+            this.download_link.show();
         }
 
-        // Hide the video until we will retrack
+        // Hide the video until we track or retrack retrack
         this.video.hide();
 
         // add_marker_status shows error messages regarding the marker name
@@ -426,6 +433,7 @@ class PlantTracerController extends CanvasController {
         };
         //console.log("params:",track_params);
         this.update_status("Tracking movie...");
+        this.video.hide();
         $.post('/api/track-movie', track_params).done( (data) => {
             //console.log("RECV:",data);
             this.update_status("");
@@ -434,17 +442,14 @@ class PlantTracerController extends CanvasController {
             } else {
                 // Set our variables
                 this.tracked_movie_id = data.tracked_movie_id;
-                const movie_url       = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
-                const trackpoints_url = `/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
+                const tracked_movie_url  = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
 
-                // Show the tracked movie
+                $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
+
+                // Show the tracked movie and the download link
+                this.video.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
                 this.video.show();
-                this.video.html(`<source src='${movie_url}' type='video/mp4'>`);
-
-                // Set up a download link for the trackpoints
-                $(`#${this.this_id} span.download_link`).html(
-                    `<a href='${trackpoints_url}' download='Movie \#${this.movie_id} trackpoints.csv'>Download trackpoints</a>`
-                );
+                this.download_link.show();
 
                 // redraw the current frame
                 const get_frame_params = {
