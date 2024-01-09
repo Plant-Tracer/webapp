@@ -96,14 +96,15 @@ def test_templates(new_user):
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
         except xml.etree.ElementTree.ParseError as e:
-            logging.error("invalid html written to /tmp/invalid.html")
             dump_lines(html)
-            with open("/tmp/invalid.html","w") as f:
+            invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'
+            logging.error(f"invalid html written to {invalid_fname}")
+            with open( invalid_fname,"w") as f:
                 f.write(html)
             try:
                 # Run xmllint if it is present, but don't generate an error if it is not
                 print("xmllint:")
-                subprocess.call(['xmllint','/tmp/invalid.html'])
+                subprocess.call(['xmllint',invalid_fname])
             except FileNotFoundError:
                 pass
             raise
