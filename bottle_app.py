@@ -645,7 +645,7 @@ def api_track_movie():
 
     # Find trackpoints we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
-    logging.debug("input_trackpoints=%s",input_trackpoints)
+    logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
 
     if len(input_trackpoints)==0:
         return E.NO_TRACKPOINTS
@@ -662,11 +662,11 @@ def api_track_movie():
             # This creates an output file that has the trackpoints animated
             # and an array of all the trackpoints
             tracked = tracker.track_movie(engine_name=engine_name,
-                                      engine_version=engine_version,
-                                      input_trackpoints = input_trackpoints,
-                                      frame_start      = frame_start,
-                                      moviefile_input  = infile.name,
-                                      moviefile_output = outfile.name)
+                                          engine_version=engine_version,
+                                          input_trackpoints = input_trackpoints,
+                                          frame_start      = frame_start,
+                                          moviefile_input  = infile.name,
+                                          moviefile_output = outfile.name)
 
             # Save the movie with updated metadata
             new_movie_data = outfile.read()
@@ -873,7 +873,7 @@ def api_put_frame_analysis():
         return {'error':True, 'message':f'User {user_id} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')
-    logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
+    logging.debug("put_frame_analysis. frame_id=%s annotations=%s trackpoints=%s",frame_id,annotations,trackpoints)
     if annotations is not None:
         db.put_frame_annotations(frame_id=frame_id,
                                  annotations=annotations,
