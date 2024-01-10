@@ -15,9 +15,18 @@
 </ul>
 
 {% else %}
-<i>You are not logged in. You can:</i>
 
-{% include 'register_resend.html' %}
+  {% if demo_api_key %}
+    {% include 'demo.html' %}
+     <hr/>
+      You may also log into this server if you have an account.
+    {% else %}
+      <i>You are not logged in. You can:</i>
+      To log into the PlantTracer website, you need to click on the account
+      login link sent by this website. You get the link by registering for a new account by
+      clicking the link below. If you have already registered, please use
+      the second link below to resend it:
+  {% endif %}
+  {% include 'register_resend.html' %}
 {% endif %}
-{% include 'demo.html' %}
 {% endblock %}
