@@ -48,6 +48,7 @@ import logging
 import base64
 import csv
 import tempfile
+import subprocess
 from urllib.parse import urlparse
 from collections import defaultdict
 
@@ -56,7 +57,6 @@ import bottle
 import smtplib
 from bottle import request
 from validate_email_address import validate_email
-
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -85,7 +85,8 @@ MAX_FILE_UPLOAD = 1024*1024*16
 
 CHECK_MX = False                # True didn't work
 
-
+################################################################
+## Utility
 def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",
                  bottle.BaseRequest.MEMFILE_MAX, MAX_FILE_UPLOAD)
@@ -100,6 +101,19 @@ def fix_types(obj):
 def is_true(s):
     return str(s)[0:1] in 'yY1tT'
 
+def git_head_time():
+    try:
+        return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
+    except:
+        return ""
+
+def git_last_commit():
+    try:
+        return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
+    except:
+        return ""
+
+################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
     return request.forms.get(key, request.query.get(key, default))
@@ -245,7 +259,9 @@ def page_dict(title='', *, require_auth=False, logout=False):
             'title':'Plant Tracer '+title,
             'hostname':o.hostname,
             'movie_id':movie_id,
-            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD}
+            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD,
+            'git_head_time':git_head_time(),
+            'git_last_commit':git_last_commit()}
 
 GET='GET'
 POST='POST'
@@ -267,7 +283,7 @@ def func_root():
 @view('error.html')
 def func_error():
     auth.clear_cookie()
-    return {}
+    return page_dict('Error')
 
 @bottle.route('/about', method=GET_POST)
 @view('about.html')
