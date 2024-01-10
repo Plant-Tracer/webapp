@@ -72,19 +72,21 @@ input[type=checkbox] {
 <h2>Your Movies</h2>
 <p>(<a href="/upload">click here to upload a new movie</a>)</p>
 <h3>Published</h3>
-<p class='instructions'><i>Published movies can be viewed by anyone in your course. Uncheck the box under 'published' to unpublish the movie. Check the box under 'deleted' to delete the movie.</i></p>
+<p class='instructions'><i>Published movies can be viewed by anyone in
+    your course. Click the 'unpublish' button to unpublish a
+    movie. Click the 'delete' button to delete a movie.</i></p>
 <div class='mtable' id='your-published-movies'></div>
 
 <h3>Unpublished</h3>
-<p class='instructions'><i>Unpublished movies can only be published by a course instructor. Check the box under 'deleted' to delete a movie.</i></p>
+<p class='instructions'><i>Unpublished movies can only be seen by you
+    and the course instructor. Only the course instructor can
+    published a movie. Click the 'delete' button to delete a movie.</i></p>
 <div class='mtable' id='your-unpublished-movies'></div>
 
 <h3> Course movies for {{primary_course_name}}</h3>
-<p class='instructions'><i>These are the course movies available to
-    you.</i></p>
-<p class='instructions'> Students can only see their own movies and published movies,
-    while the course admin can see all of the movies. Students can
-  unpublish, delete or undelete their own movies.</p>
+<p class='instructions'><i>These are the course movies available to you from other students in your course.</i></p>
+<p class='instructions'> Students can only see the published movies of
+    other students, while the course admin can see all of the movies. </p>
 
 {% if admin %}
 <p class='instructions'>Admins can publish or unpublish movies by checking or unchecking

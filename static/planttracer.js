@@ -316,6 +316,10 @@ function list_movies_data( movies ) {
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
     function movies_fill_div( div, which, mlist, offer_upload ) {
+        if (user_demo) {        // don't allow upload if in demo mode.
+            offer_upload = false;
+        }
+
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -396,7 +400,10 @@ function list_movies_data( movies ) {
 
             // below, note that 'admin' is set by the page before this runs
 
-            if (m.deleted) {
+            // Create the action buttons if not user demo
+            if (user_demo) {
+                rows += '<i> demo user </i>';
+            } else if (m.deleted) {
                 if (which==DELETED){
                     // Do we create an undelete delete button?
                     rows += make_action_button( UNDELETE_BUTTON );
@@ -441,7 +448,7 @@ function list_movies_data( movies ) {
     }
     movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)), false);
     movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id)), false);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id && m['user_id']!=user_id)), false);
     movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)), false);
     $('.movie_player').hide();
 }

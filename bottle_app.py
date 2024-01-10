@@ -46,7 +46,7 @@ import json
 import datetime
 import logging
 import base64
-#import copy
+import csv
 import tempfile
 from urllib.parse import urlparse
 from collections import defaultdict
@@ -419,7 +419,10 @@ def api_register():
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
     except mailer.InvalidMailerConfiguration:
         logging.error("Mailer reports Mailer not properly configured.")
-        return {'error':True, 'message':'Mailer not properly configured.'+link_html}
+        return {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
+    except mailer.NoMailerConfiguration:
+        logging.error("Mailer reports no mailer configured.")
+        return {'error':True, 'message':'Mailer not properly configured (NoMailerConfiguration).'+link_html}
     except smtplib.SMTPAuthenticationError:
         logging.error("Mailer reports smtplib.SMTPAuthenticationError.")
         return {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
@@ -440,7 +443,7 @@ def api_send_link():
         return E.INVALID_EMAIL
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
-    except mailer.NoMailerConfig as e:
+    except mailer.NoMailerConfiguration as e:
         logging.error("no mailer configuration")
         return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
@@ -563,31 +566,29 @@ def api_get_movie_trackpoints():
     :param movie_id:   movie
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
-        bottle.response.set_header('Content-Type', 'text/csv')
+        # get_movie_trackpoints() returns a dictionary for each trackpoint.
+        # we want a dictionary for each frame_number
         trackpoint_dicts = db.get_movie_trackpoints(movie_id=get_int('movie_id'))
-        numbers  = sorted(set([tp['frame_number'] for tp in trackpoint_dicts]))
-        labels = sorted(set([tp['label'] for tp in trackpoint_dicts])) # get all labels
-        data   = dict()
-        # Now get the (x,y) for each time/label pair
+        frame_numbers  = sorted(set([tp['frame_number'] for tp in trackpoint_dicts]))
+        labels         = sorted(set([tp['label'] for tp in trackpoint_dicts]))
+        frame_dicts    = defaultdict(dict)
+
         for tp in trackpoint_dicts:
-            data[ (tp['frame_number'],tp['label']) ] = tp
-        # Now generate the output
+            frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
+            frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
+
+        fieldnames = ['frame_number']
+        for label in labels:
+            fieldnames.append(label+' x')
+            fieldnames.append(label+' y')
+
+        # Now write it out with the dictwriter
         with io.StringIO() as f:
-            # write the header
-            f.write('frame')
-            for label in labels:
-                f.write(f',{label} x,{label} y')
-            f.write('\n')
-            # Now write each time
-            for num in numbers:
-                f.write(f"{num}")
-                for label in labels:
-                    try:
-                        tp = data[ (num,label) ]
-                        f.write(f",{tp['x']},{tp['y']}")
-                    except KeyError:
-                        f.write(",,")
-                f.write("\n")
+            writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
+            writer.writeheader()
+            for frame in frame_numbers:
+                frame_dicts[frame]['frame_number'] = frame
+                writer.writerow(frame_dicts[frame])
             bottle.response.set_header('Content-Type', 'text/csv')
             return f.getvalue()
     return E.INVALID_MOVIE_ACCESS
@@ -644,7 +645,7 @@ def api_track_movie():
 
     # Find trackpoints we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
-    logging.debug("input_trackpoints=%s",input_trackpoints)
+    logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
 
     if len(input_trackpoints)==0:
         return E.NO_TRACKPOINTS
@@ -661,11 +662,11 @@ def api_track_movie():
             # This creates an output file that has the trackpoints animated
             # and an array of all the trackpoints
             tracked = tracker.track_movie(engine_name=engine_name,
-                                      engine_version=engine_version,
-                                      input_trackpoints = input_trackpoints,
-                                      frame_start      = frame_start,
-                                      moviefile_input  = infile.name,
-                                      moviefile_output = outfile.name)
+                                          engine_version=engine_version,
+                                          input_trackpoints = input_trackpoints,
+                                          frame_start      = frame_start,
+                                          moviefile_input  = infile.name,
+                                          moviefile_output = outfile.name)
 
             # Save the movie with updated metadata
             new_movie_data = outfile.read()
@@ -872,7 +873,7 @@ def api_put_frame_analysis():
         return {'error':True, 'message':f'User {user_id} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')
-    logging.debug("put_frame_analysis. annotations=%s trackpoints=%s",annotations,trackpoints)
+    logging.debug("put_frame_analysis. frame_id=%s annotations=%s trackpoints=%s",frame_id,annotations,trackpoints)
     if annotations is not None:
         db.put_frame_annotations(frame_id=frame_id,
                                  annotations=annotations,
