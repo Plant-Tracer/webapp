@@ -11,7 +11,7 @@ env:
   DEV_HOST: dev.planttracer.com
 
 jobs:
-  if_merged:
+  deployment:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
