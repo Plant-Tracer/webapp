@@ -43,6 +43,7 @@ import sys
 import os
 import io
 import json
+import functools
 import datetime
 import logging
 import base64
@@ -101,12 +102,14 @@ def fix_types(obj):
 def is_true(s):
     return str(s)[0:1] in 'yY1tT'
 
+@functools.cache
 def git_head_time():
     try:
         return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
     except:
         return ""
 
+@functools.cache
 def git_last_commit():
     try:
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
