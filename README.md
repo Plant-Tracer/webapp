@@ -1,6 +1,6 @@
-Code Coverage: [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)<br/>
-Deploy Dev: ![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-dev.yml/badge.svg)<br/>
-Deploy Prod: ![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-production.yml/badge.svg?branch=deploy-dreamhost)
+[![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
+![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-dev.yml/badge.svg)<br/>
+![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-production.yml/badge.svg?branch=deploy-dreamhost)
 # webapp
 Client for web-based JavaScript app; Server for python-based backend
 
