@@ -13,7 +13,7 @@ jobs:
         python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     # This makes it only run on pull_request unless it is running on main:
-    if: (github.event_name == 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dreamhost-deploy' )) || (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    if: (github.event_name == 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy-dreamhost' )) || (github.event_name == 'push' && github.ref != 'refs/heads/main')
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
       mysql:

@@ -1,4 +1,7 @@
 [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
+
+Deploy Dev: ![example workflow](https://github.com/github/docs/actions/workflows/deploy-dev.yml/badge.svg)
+Deploy Prod: ![example workflow](https://github.com/github/docs/actions/workflows/deploy-production.yml?branch=deploy-dreamhost/badge.svg)
 # webapp
 Client for web-based JavaScript app; Server for python-based backend
 
@@ -10,7 +13,7 @@ The repo is designed to be check out as ~/app.planttracer.com/ on a Dreamhost us
 
 ## Linux
 
-This application was written with Linux as the target platform, and the Makefile is Linux-specific. 
+This application was written with Linux as the target platform, and the Makefile is Linux-specific.
 
 ## Windows
 It will run on Windows but not have all the features enabled compared to when it is run on Linux.
@@ -31,4 +34,3 @@ Most things should just work on MacOS as well, though that's not a specifically 
 ```
 brew install libmagic
 ```
-
