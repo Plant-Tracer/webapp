@@ -35,7 +35,6 @@ dbreader = 'dbreader'
 dbwriter = 'dbwriter'
 
 DEFAULT_MAX_ENROLLMENT = 10
-DEMO_EMAIL = 'demo@planttracer.com'
 DEMO_NAME  = 'Plant Tracer Demo Account'
 DEMO_MOVIE_TITLE = 'Demo Movie #{ct}'
 DEMO_MOVIE_DESCRIPTION = 'Track this movie!'
@@ -170,8 +169,7 @@ def report():
         print(tabulate(rows,headers=headers))
 
 def create_course(*, course_key, course_name, admin_email,
-                  admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,
-                  create_demo = False):
+                  admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
     db.create_course(course_key = course_key,
                      course_name = course_name,
                      max_enrollment = max_enrollment)
@@ -179,10 +177,10 @@ def create_course(*, course_key, course_name, admin_email,
     db.make_course_admin(email=admin_email, course_key=course_key)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
-    if create_demo:
-        user_dir = db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=1)
+    if demo_email:
+        user_dir = db.register_email(email=demo_email, course_key = course_key, name=DEMO_NAME, demo_user=1)
         user_id = user_dir['user_id']
-        db.make_new_api_key(email=DEMO_EMAIL)
+        db.make_new_api_key(email=demo_email)
         ct = 1
         for fn in os.listdir(TEST_DATA_DIR):
             (root,ext) = os.path.splitext(fn)
@@ -223,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
-    parser.add_argument('--create_demo',help='If create_course is specified, also create a demo user and upload two ',action='store_true')
+    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
@@ -291,7 +289,7 @@ if __name__ == "__main__":
                       admin_email = args.admin_email,
                       admin_name = args.admin_name,
                       max_enrollment = args.max_enrollment,
-                      create_demo = args.create_demo
+                      demo_email = args.demo_email
                       )
         print(f"course_key: {course_key}")
         exit(0)
