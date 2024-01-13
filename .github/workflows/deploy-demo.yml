@@ -1,5 +1,5 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
-name: Deploy to Production
+name: Deploy to demo.planttracer.com
 concurrency: deploy-demo
 
 on:
