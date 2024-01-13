@@ -151,12 +151,23 @@ def report():
 
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,title,created_at,user_id,course_id,published,deleted,date_uploaded,fps,width,height,total_frames from movies order by id""",get_column_names=headers)
+                               """SELECT id,title,created_at,user_id,course_id,published,deleted,
+                                         date_uploaded,fps,width,height,total_frames
+                                  FROM movies
+                                  ORDER BY id
+                               """,get_column_names=headers)
     print(tabulate(rows,headers=headers))
-    print("\nDemo users:")
-    rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,name,email from users where demo=1""",get_column_names=headers)
-    print(tabulate(rows,headers=headers))
+
+    for demo in (0,1):
+        print("\nDemo users:" if demo==1 else "\nRegular Users:")
+        rows = dbfile.DBMySQL.csfr(dbreader,
+                                   """SELECT id,name,email,B.ct as movie_count
+                                   FROM users LEFT JOIN
+                                        (SELECT user_id,COUNT(*) AS ct FROM movies GROUP BY user_id) B ON id=B.user_id
+                                   WHERE demo=%s""",
+                                   (demo,),
+                                   get_column_names=headers)
+        print(tabulate(rows,headers=headers))
 
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,
@@ -171,7 +182,6 @@ def create_course(*, course_key, course_name, admin_email,
     if create_demo:
         user_dir = db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=1)
         user_id = user_dir['user_id']
-        print("user_dir=",user_dir)
         db.make_new_api_key(email=DEMO_EMAIL)
         ct = 1
         for fn in os.listdir(TEST_DATA_DIR):
@@ -219,7 +229,9 @@ if __name__ == "__main__":
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
     parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",type=int)
+    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
+    parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
+
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
