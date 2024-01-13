@@ -1,14 +1,14 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
-name: Deploy to app.planttracer.com
-concurrency: deploy-production
+name: Deploy to demo.planttracer.com
+concurrency: deploy-demo
 
 on:
   pull_request:
     types: [closed]
 
 env:
-  PROD_USER: ${{ secrets.PROD_USER }}
-  PROD_HOST: app.planttracer.com
+  DEMO_USER: ${{ secrets.DEMO_USER }}
+  DEMO_HOST: demo.planttracer.com
 
 jobs:
   if_merged:
@@ -25,7 +25,7 @@ jobs:
           base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" > $HOME/.ssh/newkey
           chmod 600 $HOME/.ssh/newkey
 
-      - name: "Deploy to prod"
+      - name: "Deploy to demo"
         run: |
-          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $PROD_USER@$PROD_HOST \
-             "cd $PROD_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
+          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEMO_USER@$DEMO_HOST \
+             "cd $DEMO_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
