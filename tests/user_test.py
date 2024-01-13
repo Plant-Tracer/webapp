@@ -28,10 +28,12 @@ from paths import TEST_DIR
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
 TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
+TEST_DEMO_EMAIL  = 'demo+admin@gmail.com'        # completely bogus
 TEST_ADMIN_NAME = 'Test User Name'
 
 # keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
+DEMO_EMAIL = 'demo_mail'
 ADMIN_ID = 'admin_id'
 API_KEY  = 'api_key'
 COURSE_KEY = 'course_key'
@@ -54,24 +56,26 @@ def new_course():
 
     course_key = 'test-'+str(uuid.uuid4())[0:32]
     admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
+    demo_email  = TEST_DEMO_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
     course_name = f"test-{course_key} course name"
 
     admin_id = dbmaint.create_course(course_key = course_key,
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
                                      course_name = course_name,
-                                     create_demo = True)
+                                     demo_email = demo_email)
 
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
+           DEMO_EMAIL:demo_email,
            DBREADER:get_dbreader(),
            DBWRITER:get_dbwriter() }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
     db.delete_user(email=admin_email, purge_movies=True)
-    db.delete_user(email=dbmaint.DEMO_EMAIL, purge_movies=True)
+    db.delete_user(email=demo_email, purge_movies=True)
     ct = db.delete_course(course_key=course_key)
     assert ct == 1                # returns number of courses deleted
 
@@ -170,14 +174,16 @@ def test_new_course(new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
+    demo_email  = cfg[DEMO_EMAIL]
     logging.info("Created course %s", course_key)
 
-    # Check the demo
+    # Check the demo user got created
     res = db.list_demo_users()
-    logging.debug("res=%s",res)
+    logging.debug("len(res)=%s",len(res))
+    for (ct,r) in enumerate(res):
+        logging.debug("%s: %s",ct,r)
     assert len(res)>=1
-    assert res[0]['email']==dbmaint.DEMO_EMAIL
-    assert res[0]['api_key'] is not None
+    assert len([r for r in res if r['email']==demo_email and r['api_key'] is not None])>0
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)
