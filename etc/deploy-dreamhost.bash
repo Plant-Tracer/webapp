@@ -31,7 +31,7 @@ ssh $1 "echo hostname=\$(hostname) pwd=\$(pwd) \
     && make install-ubuntu \
     && make pytest-quiet \
     && cd .. \
-    && zip \$old.zip -r \$dir \
+    && zip \$old.zip -x '*/.git/*' -r \$dir \
     && mv \$dir \$old \
     && mv \$new \$dir \
     && /bin/rm -rf \$old \
