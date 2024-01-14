@@ -7,16 +7,17 @@ on:
     types: [closed]
 
 env:
-  DEMO_USER: ${{ secrets.DEMO_USER }}
-  DEMO_HOST: demo.planttracer.com
+  REMOTE_USER: ${{ secrets.DEMO_USER }}
+  REMOTE_HOST: demo.planttracer.com
+  BRANCH: deploy-dreamhost
 
 jobs:
   if_merged:
     if: (github.event.pull_request.merged == true) && (github.ref == 'refs/heads/deploy-dreamhost' )
     runs-on: ubuntu-latest
     steps:
-      #- name: Checkout
-      #  uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: "Load credentials"
         run: |
@@ -27,5 +28,6 @@ jobs:
 
       - name: "Deploy to demo"
         run: |
-          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEMO_USER@$DEMO_HOST \
-             "cd $DEMO_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
+          bash etc/deploy-dreamhost.bash \
+          "-i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $REMOTE_USER@$REMOTE_HOST" \
+          $REMOTE_HOST $BRANCH
