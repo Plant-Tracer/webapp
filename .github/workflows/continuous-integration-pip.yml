@@ -1,7 +1,6 @@
 # See https://docs.github.com/en/actions/guides/building-and-testing-python
 # 2020-02-20 slg - For Dreamhost, we are now using Python 3.9 and Ubuntu-18.04
-# There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of
-# RANDOM_PASSWORD
+# There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of RANDOM_PASSWORD
 name: CI (pip)
 on: [push, pull_request]
 
