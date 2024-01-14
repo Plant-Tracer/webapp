@@ -10,7 +10,7 @@ ROOT=$(dirname "$SCRIPTPATH")
 REPO=https://github.com/Plant-Tracer/webapp.git
 
 if [[ $# -ne 3  ]] ; then
-   echo usage: $SCRIPT '[host] [branch]'
+   echo usage: $SCRIPT '[host] [dir] [branch]'
    exit 1
 fi
 
