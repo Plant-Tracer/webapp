@@ -1,6 +1,6 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
-name: Deploy to Dev
-concurrency: production
+name: Deploy to dev.planttracer.com
+concurrency: deploy-dev
 
 on:
   pull_request:
@@ -12,11 +12,11 @@ env:
 
 jobs:
   deployment:
-    if: github.event.pull_request.merged == true
+    if: (github.event.pull_request.merged == true) && (github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      #- name: Checkout
+      #  uses: actions/checkout@v3
 
       - name: "Load credentials"
         run: |

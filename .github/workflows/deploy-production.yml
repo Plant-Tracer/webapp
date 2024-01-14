@@ -1,6 +1,6 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
-name: Deploy to Production
-concurrency: production
+name: Deploy to app.planttracer.com
+concurrency: deploy-production
 
 on:
   pull_request:
@@ -9,16 +9,14 @@ on:
 env:
   PROD_USER: ${{ secrets.PROD_USER }}
   PROD_HOST: app.planttracer.com
-  DEMO_USER: ${{ secrets.DEMO_USER }}
-  DEMO_HOST: demo.planttracer.com
 
 jobs:
-  if_merged:
-    if: github.event.pull_request.merged == true
+  if_deploy_dreamhost:
+    if: github.ref == 'refs/heads/deploy-dreamhost'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      #- name: Checkout
+      #  uses: actions/checkout@v3
 
       - name: "Load credentials"
         run: |
@@ -31,8 +29,3 @@ jobs:
         run: |
           ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $PROD_USER@$PROD_HOST \
              "cd $PROD_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
-
-      - name: "Deploy to demo"
-        run: |
-          ssh -i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $DEMO_USER@$DEMO_HOST \
-             "cd $DEMO_HOST; python3 --version && git checkout deploy-dreamhost && git pull --recurse-submodules && make install-ubuntu && make touch && make pytest"
