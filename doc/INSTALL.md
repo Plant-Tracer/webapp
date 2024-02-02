@@ -8,7 +8,7 @@ Requirements and Preparation
   * `[client]` which can modify the schema
   * `[dbreader]` which can read the database
   * `[dbwriter]` which can write the database.
-* python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
+* python3 installed. Verify that typing 'python' gives you python3. If it doesn't, make sure that your PATH is up-to-date.
 
 Installation
 ------------

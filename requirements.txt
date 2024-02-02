@@ -11,6 +11,7 @@ opencv-python
 py3DNS
 pylint
 pymysql
+pyopenssl>=24.0.0
 pytest
 pytest-cov
 pytest-env

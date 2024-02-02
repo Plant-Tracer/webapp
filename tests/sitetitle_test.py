@@ -19,7 +19,7 @@ from selenium.webdriver.chrome.options import Options
 
 PLANTTRACER_TITLE = 'Plant Tracer'
 
-@functools.cache
+@functools.lru_cache(maxsize=None)
 def on_dreamhost():
     """If we are running on dreamhost, the word 'dreamhost' is in /etc/hosts a lot.
     I can't find any other way to know if we are running on dreamhost.

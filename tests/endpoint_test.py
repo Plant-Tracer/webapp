@@ -19,6 +19,7 @@ import pytest
 import logging
 import subprocess
 import copy
+import signal
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -40,12 +41,20 @@ def next_port():
     return pt
 
 
+def timeout(sig, frm):
+  print("This is taking too long...")
+  sys.exit(1)
+
+
 @pytest.fixture
 def http_endpoint():
     """Create an endpoint running on localhost."""
     port = next_port()
     p = subprocess.Popen([sys.executable, BOTTLE_APP_PATH, '--port',
                          str(port)], stderr=subprocess.PIPE, encoding='utf-8')
+    signal.signal(signal.SIGALRM, timeout)
+    signal.alarm(10)
+
     for want in ['server starting up', 'Listening on', 'Hit Ctrl-C to quit.']:
         line = p.stderr.readline()
         logging.info('%s', line)
@@ -55,6 +64,8 @@ def http_endpoint():
             raise RuntimeError("could not create http endpoint")
     http_endpoint_url = f'http://127.0.0.1:{port}'
     # Make sure it is working and retry up to 10 times
+
+    signal.alarm(0)
 
     s = requests.Session()
     s.mount(http_endpoint_url+'/ver',

@@ -729,7 +729,7 @@ def encode_json(d):
 
 def put_frame_annotations(*,
                        frame_id:int,
-                       annotations:Optional[dict | list],
+                       annotations,  # :Optional[dict | list]
                        engine_id:Optional[int] =None,
                        engine_name:Optional[str]=None,
                        engine_version:Optional[str]=None, ):
@@ -768,7 +768,8 @@ def put_frame_annotations(*,
                         ON DUPLICATE KEY UPDATE
                         annotations={ea} """)
 
-def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+#def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, frame_id:int, trackpoints:list):
     """
     :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
