@@ -7,6 +7,7 @@ class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
     CREDENTIALS_INI = 'etc/credentials.ini'
+    MAX_FILE_UPLOAD = 1024*1024*16
 
 
 class Engines:
