@@ -33,7 +33,4 @@ python3 bottle_app.py
 
 ## MacOS
 
-Most things should just work on MacOS as well, though that's not a specifically targetted platform for either development or runtime. On MacOS, libmagic must be installed:
-```
-brew install libmagic
-```
+Most things should just work on MacOS as well, though that's not a specifically targetted platform for either development or runtime.

@@ -53,7 +53,7 @@ import subprocess
 from urllib.parse import urlparse
 from collections import defaultdict
 
-import magic
+import filetype
 import bottle
 import smtplib
 from bottle import request
@@ -77,12 +77,10 @@ import tracker
 __version__ = '0.0.1'
 
 DEFAULT_OFFSET = 0
-DEFAULT_ROW_COUNT = 1000000
 DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
-MAX_FILE_UPLOAD = 1024*1024*16
 
 CHECK_MX = False                # True didn't work
 
@@ -90,8 +88,8 @@ CHECK_MX = False                # True didn't work
 ## Utility
 def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",
-                 bottle.BaseRequest.MEMFILE_MAX, MAX_FILE_UPLOAD)
-    bottle.BaseRequest.MEMFILE_MAX = MAX_FILE_UPLOAD
+                 bottle.BaseRequest.MEMFILE_MAX, C.MAX_FILE_UPLOAD)
+    bottle.BaseRequest.MEMFILE_MAX = C.MAX_FILE_UPLOAD
 
 
 def fix_types(obj):
@@ -166,11 +164,11 @@ def get_bool(key, default=None):
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    response = bottle.static_file(
-        path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR, path)))
+    kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    mimetype = kind.mime if kind else 'text/plain'
+    response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
     return response
-
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
@@ -265,7 +263,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
             'title':'Plant Tracer '+title,
             'hostname':o.hostname,
             'movie_id':movie_id,
-            'MAX_FILE_UPLOAD': MAX_FILE_UPLOAD,
+            'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
             'git_head_time':git_head_time(),
             'git_last_commit':git_last_commit()}
 
@@ -519,8 +517,8 @@ def api_new_movie():
         with io.BytesIO() as f:
             request.files['movie'].save(f)
             movie_data = f.getvalue()
-            if len(movie_data) > MAX_FILE_UPLOAD:
-                return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+            if len(movie_data) > C.MAX_FILE_UPLOAD:
+                return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
         logging.debug("api_new_movie: movie uploaded as a file")
 
     # Now check to see if it is in the post
@@ -538,9 +536,9 @@ def api_new_movie():
         logging.debug("api_new_movie: movie_base64_data is None")
 
 
-    if (movie_data is not None) and (len(movie_data) > MAX_FILE_UPLOAD):
-        logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), MAX_FILE_UPLOAD)
-        return {'error': True, 'message': f'Upload larger than larger than {MAX_FILE_UPLOAD} bytes.'}
+    if (movie_data is not None) and (len(movie_data) > C.MAX_FILE_UPLOAD):
+        logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
+        return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
 
     movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
     logging.debug("movie_metadata=%s",movie_metadata)

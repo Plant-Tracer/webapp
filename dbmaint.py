@@ -1,6 +1,5 @@
 """
 Database Management Tool for webapp
-
 """
 
 import sys
@@ -248,6 +247,7 @@ if __name__ == "__main__":
     cp = configparser.ConfigParser()
     if args.readconfig:
         cp.read(args.readconfig)
+        print("config read from",args.readconfig)
         if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
             raise RuntimeError("dbreader and dbwriter do not address the same database")
 
@@ -261,7 +261,16 @@ if __name__ == "__main__":
             print("done")
             sys.exit(0)
 
+    if args.clean:
+        clean()
+
+    if args.report:
+        report()
+        exit(0)
+
+    print("args.create_root=",args.create_root)
     if args.create_root:
+        print(f"creating root with password '{args.create_root}'")
         if 'client' not in cp:
             cp.add_section('client')
         cp['client']['user']='root'
@@ -273,10 +282,8 @@ if __name__ == "__main__":
         print(args.writeconfig,"is written with a root configuration")
         sys.exit(0)
 
-    if args.clean:
-        clean()
-
     if args.create_course:
+        print("creating course...")
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
         if not args.admin_name:
@@ -294,15 +301,12 @@ if __name__ == "__main__":
         print(f"course_key: {course_key}")
         exit(0)
 
-    if args.report:
-        report()
-        exit(0)
-
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)
         exit(0)
 
     # The following all require a root config
+    print("using root config",args.rootconfig)
     if args.rootconfig is None:
         print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
         exit(1)
