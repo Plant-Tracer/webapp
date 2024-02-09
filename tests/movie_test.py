@@ -22,6 +22,7 @@ from boddle import boddle
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import TEST_DATA_DIR
+from constants import C
 import lib.ctools.dbfile as dbfile
 import db
 import bottle_app
@@ -59,6 +60,18 @@ def new_movie(new_user):
         bottle_app.expand_memfile_max()
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_new_movie()
+
+    # This generates an error --- movie too big
+    movie_data_big = b"*" * (C.MAX_FILE_UPLOAD + 1)
+    with boddle(params={'api_key': api_key_invalid,
+                        "title": movie_title,
+                        "description": "test movie description",
+                        "movie_base64_data": base64.b64encode(movie_data_big)}):
+        bottle_app.expand_memfile_max()
+        with pytest.raises(bottle.HTTPResponse):
+            res = bottle_app.api_new_movie()
+
+
 
     # This does not raise an error
     logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")

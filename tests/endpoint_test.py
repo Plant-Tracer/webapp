@@ -167,14 +167,3 @@ def test_upload_movie_data(http_endpoint, api_key):
 
     # Purge the movie (to clean up)
     db.purge_movie(movie_id = movie_id)
-
-    ################################################################
-    # Make sure that a reall big upload movie fails
-    movie_base64_data = base64.b64encode("*" * C.MAX_FILE_UPLOAD + 1)
-    post_data = {'api_key': api_key,
-                 'title': 'Test Title at '+time.asctime(),
-                 'description': 'test-upload',
-                 'movie_base64_data': movie_base64_data}
-    r = requests.post(http_endpoint+'/api/new-movie', post_data)
-    assert res['error'] == True
-    assert 'movie_id' not in res
