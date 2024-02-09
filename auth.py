@@ -32,6 +32,8 @@ def credentials_file():
 def smtp_config():
     cp = configparser.ConfigParser()
     cp.read( credentials_file() )
+    logging.error("credentials_file()=%s",credentials_file())
+    logging.error("cp=%s",cp)
     for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
         assert key in cp['smtp']
     return cp['smtp']
