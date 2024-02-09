@@ -18,9 +18,9 @@ if sys.version < '3.11':
 
 def test_credentials_file():
     os.environ['AWS'] = 'YES'
-    assert credentials_file == paths.AWS_CREDENTIALS_FILE
+    assert credentials_file() == basename(paths.AWS_CREDENTIALS_FILE)
     del os.environ['AWS']
-    assert credentials_file == paths.CREDENTIALS_FILE
+    assert credentials_file() == paths.CREDENTIALS_FILE
 
 def test_dbreader():
     dbreader = get_dbreader()
