@@ -1,6 +1,5 @@
 """
 Database Management Tool for webapp
-
 """
 
 import sys
