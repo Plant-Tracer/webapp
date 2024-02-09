@@ -10,13 +10,14 @@ PYLINT_THRESHOLD=9.5
 # Manage the virtual environment
 A   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
-PYTHON=$(A) ; python3.9
+PY=python3.11
+PYTHON=$(A) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
 venv/pyvenv.cfg:
-	python3.9 -m venv venv
+	$(PY) -m venv venv
 
 venv:
-	python3.9 -m venv venv
+	$(PY) -m venv venv
 
 ################################################################
 #
