@@ -6,6 +6,7 @@ bottle
 coverage
 cryptography
 jinja2
+filetype
 localmail
 opencv-python
 py3DNS

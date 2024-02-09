@@ -1,19 +1,19 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
-name: Deploy to app.planttracer.com
-concurrency: deploy-production
+name: Deploy to demo.planttracer.com
+concurrency: deploy-demo
 
 on:
   pull_request:
     types: [closed]
 
 env:
-  REMOTE_USER: ${{ secrets.PROD_USER }}
-  REMOTE_HOST: app.planttracer.com
+  REMOTE_USER: ${{ secrets.DEMO_USER }}
+  REMOTE_HOST: demo.planttracer.com
   BRANCH: deploy-dreamhost
 
 jobs:
-  if_deploy_dreamhost:
-    if: github.ref == 'refs/heads/deploy-dreamhost'
+  if_merged:
+    if: (github.event.pull_request.merged == true) && (github.ref == 'refs/heads/deploy-dreamhost' )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,7 +26,7 @@ jobs:
           base64 -d <<< "${{ secrets.PLANTTRACER_DEPLOY_PUB_BASE65 }}" > $HOME/.ssh/newkey
           chmod 600 $HOME/.ssh/newkey
 
-      - name: "Deploy to production"
+      - name: "Deploy to demo"
         run: |
           bash etc/deploy-dreamhost.bash \
           "-i $HOME/.ssh/newkey -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=etc/known_hosts $REMOTE_USER@$REMOTE_HOST" \

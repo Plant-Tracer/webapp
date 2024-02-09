@@ -1,6 +1,5 @@
 """
 Database Management Tool for webapp
-
 """
 
 import sys
@@ -35,7 +34,6 @@ dbreader = 'dbreader'
 dbwriter = 'dbwriter'
 
 DEFAULT_MAX_ENROLLMENT = 10
-DEMO_EMAIL = 'demo@planttracer.com'
 DEMO_NAME  = 'Plant Tracer Demo Account'
 DEMO_MOVIE_TITLE = 'Demo Movie #{ct}'
 DEMO_MOVIE_DESCRIPTION = 'Track this movie!'
@@ -151,16 +149,26 @@ def report():
 
     headers = []
     rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,title,created_at,user_id,course_id,published,deleted,date_uploaded,fps,width,height,total_frames from movies order by id""",get_column_names=headers)
-    print(tabulate(rows,headers=headers))
-    print("\nDemo users:")
-    rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,name,email from users where demo=1""",get_column_names=headers)
+                               """SELECT id,title,created_at,user_id,course_id,published,deleted,
+                                         date_uploaded,fps,width,height,total_frames
+                                  FROM movies
+                                  ORDER BY id
+                               """,get_column_names=headers)
     print(tabulate(rows,headers=headers))
 
+    for demo in (0,1):
+        print("\nDemo users:" if demo==1 else "\nRegular Users:")
+        rows = dbfile.DBMySQL.csfr(dbreader,
+                                   """SELECT id,name,email,B.ct as movie_count
+                                   FROM users LEFT JOIN
+                                        (SELECT user_id,COUNT(*) AS ct FROM movies GROUP BY user_id) B ON id=B.user_id
+                                   WHERE demo=%s""",
+                                   (demo,),
+                                   get_column_names=headers)
+        print(tabulate(rows,headers=headers))
+
 def create_course(*, course_key, course_name, admin_email,
-                  admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,
-                  create_demo = False):
+                  admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
     db.create_course(course_key = course_key,
                      course_name = course_name,
                      max_enrollment = max_enrollment)
@@ -168,11 +176,10 @@ def create_course(*, course_key, course_name, admin_email,
     db.make_course_admin(email=admin_email, course_key=course_key)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
-    if create_demo:
-        user_dir = db.register_email(email=DEMO_EMAIL, course_key = course_key, name=DEMO_NAME, demo_user=1)
+    if demo_email:
+        user_dir = db.register_email(email=demo_email, course_key = course_key, name=DEMO_NAME, demo_user=1)
         user_id = user_dir['user_id']
-        print("user_dir=",user_dir)
-        db.make_new_api_key(email=DEMO_EMAIL)
+        db.make_new_api_key(email=demo_email)
         ct = 1
         for fn in os.listdir(TEST_DATA_DIR):
             (root,ext) = os.path.splitext(fn)
@@ -213,13 +220,15 @@ if __name__ == "__main__":
     parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
-    parser.add_argument('--create_demo',help='If create_course is specified, also create a demo user and upload two ',action='store_true')
+    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
     parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",type=int)
+    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
+    parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
+
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -238,6 +247,7 @@ if __name__ == "__main__":
     cp = configparser.ConfigParser()
     if args.readconfig:
         cp.read(args.readconfig)
+        print("config read from",args.readconfig)
         if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
             raise RuntimeError("dbreader and dbwriter do not address the same database")
 
@@ -251,7 +261,16 @@ if __name__ == "__main__":
             print("done")
             sys.exit(0)
 
+    if args.clean:
+        clean()
+
+    if args.report:
+        report()
+        exit(0)
+
+    print("args.create_root=",args.create_root)
     if args.create_root:
+        print(f"creating root with password '{args.create_root}'")
         if 'client' not in cp:
             cp.add_section('client')
         cp['client']['user']='root'
@@ -263,10 +282,8 @@ if __name__ == "__main__":
         print(args.writeconfig,"is written with a root configuration")
         sys.exit(0)
 
-    if args.clean:
-        clean()
-
     if args.create_course:
+        print("creating course...")
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
         if not args.admin_name:
@@ -279,13 +296,9 @@ if __name__ == "__main__":
                       admin_email = args.admin_email,
                       admin_name = args.admin_name,
                       max_enrollment = args.max_enrollment,
-                      create_demo = args.create_demo
+                      demo_email = args.demo_email
                       )
         print(f"course_key: {course_key}")
-        exit(0)
-
-    if args.report:
-        report()
         exit(0)
 
     if args.purge_movie:
@@ -293,6 +306,7 @@ if __name__ == "__main__":
         exit(0)
 
     # The following all require a root config
+    print("using root config",args.rootconfig)
     if args.rootconfig is None:
         print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
         exit(1)
