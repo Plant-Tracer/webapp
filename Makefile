@@ -90,6 +90,7 @@ pytest-quiet:
 
 create_localdb:
 	@echo Creating local database and writing results to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
+	echo $(PYTHON) dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --create_root=$$MYSQL_ROOT_PASSWORD
 	$(PYTHON) dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --create_root=$$MYSQL_ROOT_PASSWORD
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --writeconfig etc/credentials.ini
 	@echo validating DB access
