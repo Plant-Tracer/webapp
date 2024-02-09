@@ -8,6 +8,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 import pymysql
 
+import paths
 from auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
 import db
 import ctools.dbfile as dbfile
