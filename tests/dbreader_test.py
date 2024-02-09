@@ -8,7 +8,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 import pymysql
 
-from auth import credentials_file,get_dbreader,get_dbwriter
+from auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
 import db
 import ctools.dbfile as dbfile
 
@@ -24,6 +24,11 @@ def test_credentials_file():
 def test_dbreader():
     dbreader = get_dbreader()
     assert dbreader is not None
+
+def test_smtp_config(mocker):
+    mocker.path("credentials_file", return_file= os.path.join(paths.TEST_DIR,'localmain_config.ini'))
+    cfg = smtp_config()
+    assert cfg['smtp_host']=='127.0.0.1'
 
 
 # Make sure we can make a database connection

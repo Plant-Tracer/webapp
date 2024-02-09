@@ -29,7 +29,6 @@ def credentials_file():
     else:
         return paths.CREDENTIALS_FILE
 
-@functools.cache
 def smtp_config():
     cp = configparser.ConfigParser()
     cp.read( credentials_file() )
