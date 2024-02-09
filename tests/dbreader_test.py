@@ -2,7 +2,7 @@ import sys
 import os
 import logging
 
-from os.path import abspath, dirname
+from os.path import abspath, dirname, basename
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -18,7 +18,7 @@ if sys.version < '3.11':
 
 def test_credentials_file():
     os.environ['AWS'] = 'YES'
-    assert credentials_file() == basename(paths.AWS_CREDENTIALS_FILE)
+    assert credentials_file() == paths.AWS_CREDENTIALS_FILE
     del os.environ['AWS']
     assert credentials_file() == paths.CREDENTIALS_FILE
 
