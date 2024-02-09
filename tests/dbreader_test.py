@@ -27,7 +27,7 @@ def test_dbreader():
     assert dbreader is not None
 
 def test_smtp_config(mocker):
-    mocker.path("credentials_file", return_file= os.path.join(paths.TEST_DIR,'localmain_config.ini'))
+    mocker.patch("credentials_file", return_file= os.path.join(paths.TEST_DIR,'localmain_config.ini'))
     cfg = smtp_config()
     assert cfg['smtp_host']=='127.0.0.1'
 
