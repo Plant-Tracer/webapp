@@ -77,6 +77,10 @@ pytest-debug1:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
+pytest-app-framework:
+	@echo validate app framework
+	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
+
 pytest-quiet:
 	@echo quietly make pytest and stop at the firt error
 	make touch
@@ -86,7 +90,10 @@ pytest-quiet:
 
 create_localdb:
 	@echo Creating local database and writing results to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --createdb actions_test --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --writeconfig etc/github_actions_mysql_rootconfig.ini --create_root=$$MYSQL_ROOT_PASSWORD
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --writeconfig etc/credentials.ini
+	@echo validating DB access
+	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
