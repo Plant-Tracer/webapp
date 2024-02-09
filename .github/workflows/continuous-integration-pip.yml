@@ -87,6 +87,8 @@ jobs:
 
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
+        env:
+          MYSQL_ROOT_PASSWORD: testrootpass
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
