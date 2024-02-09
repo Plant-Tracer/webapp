@@ -262,6 +262,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     if args.create_root:
+        print("creating root...")
         if 'client' not in cp:
             cp.add_section('client')
         cp['client']['user']='root'
@@ -277,6 +278,7 @@ if __name__ == "__main__":
         clean()
 
     if args.create_course:
+        print("creating course...")
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
         if not args.admin_name:
