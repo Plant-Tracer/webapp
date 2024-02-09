@@ -21,6 +21,7 @@ TEST_DIR         = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')
 SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
 CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials.ini')
+AWS_CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials-aws.ini')
 
 LOCALMAIL_CONFIG_FNAME  = join( ROOT_DIR, 'tests', "localmail_config.ini")
 PRODUCTION_CONFIG_FNAME = join( ROOT_DIR, 'etc', 'credentials.ini')

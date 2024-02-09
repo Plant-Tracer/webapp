@@ -53,7 +53,7 @@ import subprocess
 from urllib.parse import urlparse
 from collections import defaultdict
 
-import magic
+import filetype
 import bottle
 import smtplib
 from bottle import request
@@ -164,11 +164,11 @@ def get_bool(key, default=None):
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    response = bottle.static_file(
-        path, root=STATIC_DIR, mimetype=magic.from_file(os.path.join(STATIC_DIR, path)))
+    kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    mimetype = kind.mime if kind else 'text/plain'
+    response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
     return response
-
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():

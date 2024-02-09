@@ -6,7 +6,6 @@ Constants are created in classes so we can import the class and don't have to im
 class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
-    CREDENTIALS_INI = 'etc/credentials.ini'
     MAX_FILE_UPLOAD = 1024*1024*16
 
 

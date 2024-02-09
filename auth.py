@@ -22,10 +22,16 @@ COOKIE_MAXAGE = 60*60*24*180
 ##
 
 
+def credentials_file():
+    if 'AWS' in os.environ:
+        return paths.AWS_CREDENTIALS_FILE
+    else:
+        return paths.CREDENTIALS_FILE
+
 @functools.cache
 def smtp_config():
     cp = configparser.ConfigParser()
-    cp.read( paths.CREDENTIALS_FILE )
+    cp.read( credentials_file() )
     for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
         assert key in cp['smtp']
     return cp['smtp']
@@ -36,7 +42,7 @@ def get_dbreader():
     1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
     2 - the [dbreader] section of the file etc/credentials.ini
     """
-    return dbfile.DBMySQLAuth.FromConfigFile(paths.CREDENTIALS_FILE, 'dbreader')
+    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbreader')
 
 
 @functools.cache
@@ -45,7 +51,7 @@ def get_dbwriter():
     1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
     2 - the [dbwriter] section of the file etc/credentials.ini
     """
-    return dbfile.DBMySQLAuth.FromConfigFile(paths.CREDENTIALS_FILE, 'dbwriter')
+    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
 
 
 ################################################################
