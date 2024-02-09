@@ -261,7 +261,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     if args.create_root:
-        print("creating root...")
+        print(f"creating root with password '{args.create_root}'")
         if 'client' not in cp:
             cp.add_section('client')
         cp['client']['user']='root'
