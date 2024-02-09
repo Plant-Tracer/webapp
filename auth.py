@@ -9,6 +9,7 @@ import os
 import functools
 import configparser
 import bottle
+import logging
 from bottle import request
 
 import paths
@@ -32,8 +33,8 @@ def credentials_file():
 def smtp_config():
     cp = configparser.ConfigParser()
     cp.read( credentials_file() )
-    logging.error("credentials_file()=%s",credentials_file())
-    logging.error("cp=%s",cp)
+    logging.error("credentials_file()=%s",str(credentials_file()))
+    logging.error("cp.keys=%s",list(cp.keys()))
     for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
         assert key in cp['smtp']
     return cp['smtp']

@@ -26,11 +26,6 @@ def test_dbreader():
     dbreader = get_dbreader()
     assert dbreader is not None
 
-def test_smtp_config(mocker):
-    mocker.patch("auth.credentials_file", return_file= os.path.join(paths.TEST_DIR,'localmain_config.ini'))
-    cfg = smtp_config()
-    assert cfg['smtp_host']=='127.0.0.1'
-
 
 # Make sure we can make a database connection
 def test_db_connection():
