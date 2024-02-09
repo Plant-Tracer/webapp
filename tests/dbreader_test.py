@@ -8,16 +8,23 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 import pymysql
 
-from auth import get_dbreader,get_dbwriter
+from auth import credentials_file,get_dbreader,get_dbwriter
 import db
 import ctools.dbfile as dbfile
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
 
+def test_credentials_file():
+    os.environ['AWS'] = 'YES'
+    assert credentials_file == paths.AWS_CREDENTIALS_FILE
+    del os.environ['AWS']
+    assert credentials_file == paths.CREDENTIALS_FILE
+
 def test_dbreader():
     dbreader = get_dbreader()
     assert dbreader is not None
+
 
 # Make sure we can make a database connection
 def test_db_connection():
