@@ -20,7 +20,7 @@ It will run on Windows but not have all the features enabled compared to when it
 
 To run bottle_app.py on Windows (assuming no POSIX-compliant command line there):
 Prequisities:
-- Python 3.x (I think Python 3.9 is what we started with)
+- Python 3.11
 - pip or pip3
 ```
 pip install -r requirements.txt
@@ -31,3 +31,7 @@ python3 bottle_app.py
 ## MacOS
 
 Most things should just work on MacOS as well, though that's not a specifically targetted platform for either development or runtime.
+
+
+Future notes:
+https://ianwhitestone.work/zappa-zip-callbacks/
