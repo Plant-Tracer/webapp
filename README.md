@@ -36,3 +36,34 @@ Most things should just work on MacOS as well, though that's not a specifically 
 Future notes:
 https://ianwhitestone.work/zappa-zip-callbacks/
 
+
+
+The error you're encountering, ImportError: libGL.so.1: cannot open shared object file: No such file or directory, indicates a missing system dependency related to graphics libraries. Unfortunately, directly installing libraries like libGL.so.1 on Amazon Lambda isn't feasible due to its limited environment.
+
+ Here are some solutions for working with OpenCV and computer vision on Zappa and Lambda:
+
+ 1. Use opencv-python-headless:
+
+ This version of OpenCV, available on PyPI, builds without graphics dependencies like OpenGL. Install it in your requirements.txt:
+
+ opencv-python-headless
+ This is typically the preferred solution as it reduces your Lambda deployment size and avoids unnecessary dependencies.
+
+ 2. Consider alternative libraries:
+
+ If your application involves tasks not requiring extensive graphical processing, explore alternative libraries with smaller footprints and no graphics dependencies. Examples include:
+
+Pillow: For basic image manipulation.
+Tenserflow Lite: For deploying pre-trained machine learning models for tasks like object detection.
+ 3. Use AWS DeepLens instead of Lambda:
+
+ AWS DeepLens is a specialized service designed for deploying computer vision applications. It provides a complete environment with GPU support and pre-installed necessary libraries like OpenCV.
+
+ Additional considerations:
+
+Ensure your environment variables and any custom code are compatible with Lambda's limitations.
+Test your application thoroughly on a local machine before deploying to Lambda.
+Keep your Lambda functions optimized for performance and cost.
+ Remember to choose the solution that best fits your specific application requirements and constraints of the Lambda environment.
+
+

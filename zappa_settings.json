@@ -6,7 +6,7 @@
         "project_name": "planttracer-",
         "runtime": "python3.11",
         "timeout_seconds": 300,
-        "slim_handler":true,
+        "slim_handler":false,
         "domain":"app.planttracer.com",
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
         "exclude": ["*.mp4", "selenium", "*.dylib"],
@@ -22,7 +22,7 @@
         "runtime": "python3.11",
         "timeout_seconds": 300,
         "domain":"dev.planttracer.com",
-        "slim_handler":true,
+        "slim_handler":false,
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
         "exclude": ["*.mp4", "selenium", "*.dylib"],
         "environment_variables": {
