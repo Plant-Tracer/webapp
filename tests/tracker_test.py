@@ -8,7 +8,6 @@ import json
 import tempfile
 import glob
 import base64
-import magic
 
 from os.path import abspath, dirname
 

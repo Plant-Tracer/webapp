@@ -57,7 +57,6 @@ pytest-metadata==3.1.0
 pytest-mock==3.12.0
 python-dateutil==2.8.2
 python-dotenv==1.0.1
-python-magic==0.4.27
 python-slugify==8.0.4
 PyYAML==6.0.1
 regex==2023.12.25

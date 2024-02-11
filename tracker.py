@@ -9,7 +9,6 @@ import tempfile
 import subprocess
 import logging
 
-import magic
 import cv2
 import numpy as np
 from constants import Engines,MIME
@@ -28,9 +27,6 @@ class ConversionError(RuntimeError):
     """Special error"""
     def __init__(self,msg):
         super().__init__(msg)
-
-def is_jpeg(buffer):
-    return magic.from_buffer(buffer,mime=True) in [ MIME.JPEG ]
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """

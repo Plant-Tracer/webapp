@@ -9,7 +9,7 @@
         "slim_handler":true,
         "domain":"app.planttracer.com",
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "selenium"],
+        "exclude": ["*.mp4", "selenium", "*.dylib"],
         "environment_variables": {
             "AWS": "YES"
         }
@@ -24,7 +24,7 @@
         "domain":"dev.planttracer.com",
         "slim_handler":true,
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "selenium"],
+        "exclude": ["*.mp4", "selenium", "*.dylib"],
         "environment_variables": {
             "AWS": "YES"
         }
