@@ -84,6 +84,8 @@ LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript consol
 
 CHECK_MX = False                # True didn't work
 
+app = bottle.default_app()      # for Lambda
+
 ################################################################
 ## Utility
 def expand_memfile_max():
@@ -988,7 +990,7 @@ def api_add():
 # Bottle App
 ##
 
-def app():
+def passengers_app():
     """The application"""
     # Set up logging for a bottle app
     # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
