@@ -17,6 +17,7 @@ import json
 from os.path import abspath, dirname
 
 from boddle import boddle
+import filetype
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 

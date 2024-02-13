@@ -17,7 +17,7 @@ import paths
 from lib.ctools import dbfile
 API_KEY_COOKIE_NAME = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
-
+SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
 
 ################################################################
 # Authentication configuration - for server
@@ -31,11 +31,20 @@ def credentials_file():
         return paths.CREDENTIALS_FILE
 
 def smtp_config():
+    """Get the smtp config from the [smtp] section of a credentials file.
+    If the file specifies a AWS secret, get that.
+    """
     cp = configparser.ConfigParser()
     cp.read( credentials_file() )
-    for key in ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']:
+    section = cp['smtp']
+    if secret := get_aws_secret_for_section( section ) is not None:
+        for key in SMTP_ATTRIBS:
+            section[key] = secret[key]
+            return section
+
+    for key in SMTP_ATTRIBS:
         assert key in cp['smtp']
-    return cp['smtp']
+    return section
 
 @functools.cache
 def get_dbreader():
