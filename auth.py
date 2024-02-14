@@ -37,10 +37,8 @@ def smtp_config():
     cp = configparser.ConfigParser()
     cp.read( credentials_file() )
     section = cp['smtp']
-    if secret := get_aws_secret_for_section( section ) is not None:
-        for key in SMTP_ATTRIBS:
-            section[key] = secret[key]
-            return section
+    if (secret := dbfile.get_aws_secret_for_section( section )) is not None:
+        return secret
 
     for key in SMTP_ATTRIBS:
         assert key in cp['smtp']

@@ -51,8 +51,6 @@ def send_message(*,
     port = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
     debug = SMTP_DEBUG
 
-    logging.error("smtp_config=%s",smtp_config)
-    logging.error("smtp_config=%s",dict(smtp_config))
     with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
         logging.info("sending mail to %s with SMTP", ",".join(to_addrs))
         if debug:
