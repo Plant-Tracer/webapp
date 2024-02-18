@@ -25,6 +25,7 @@ AWS_CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials-aws.ini')
 
 LOCALMAIL_CONFIG_FNAME  = join( ROOT_DIR, 'tests', "localmail_config.ini")
 PRODUCTION_CONFIG_FNAME = join( ROOT_DIR, 'etc', 'credentials.ini')
+ETC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 
 # used by test program:
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')

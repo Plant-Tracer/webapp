@@ -9,10 +9,12 @@ import tempfile
 import subprocess
 import logging
 
+
 import cv2
 import numpy as np
 from constants import Engines,MIME
 
+from paths import ETC_FFMPEG
 POINT_ARRAY_OUT='point_array_out'
 RED = (0, 0, 255)
 BLACK = (0,0,0)
@@ -127,6 +129,17 @@ def extract_frame(*, movie_data, frame_number, fmt):
                 raise ValueError("Invalid fmt: "+fmt)
     raise ValueError(f"invalid frame_number {frame_number}")
 
+def cleanup_mp4(*,infile,outfile):
+    args = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
+    try:
+        subprocess.call(['ffmpeg'] + args)
+    except OSError as e:
+        if e.errno == os.errno.ENOENT:
+            subprocess.call([ETC_FFMPEG] + args)
+        else:
+            raise
+
+
 def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_untracked=None, moviefile_output, frame_start=0):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
@@ -181,8 +194,8 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
         cap.release()
         out.release()
 
-        # Finally, use ffmpeg to transcode the output to a proper mp4 file
-        subprocess.call(['ffmpeg','-y','-hide_banner','-loglevel','error','-i',tf.name,'-vcodec','h264',moviefile_output])
+        # Finally, use ffmpeg to transcode the output to a proper mp4 file (This shouldn't be necessary)
+        cleanup_mp4(infile=tf.name, outfile=moviefile_output)
 
     return {'output_trackpoints':output_trackpoints}
 
