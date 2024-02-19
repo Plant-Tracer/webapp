@@ -1,3 +1,5 @@
+ffmpeg downloaded from https://johnvansickle.com/ffmpeg/
+
 add database comments for each table.
 
 - primary_course_id remembers current course.  -> default_course_id

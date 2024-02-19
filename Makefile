@@ -107,6 +107,9 @@ coverage:
 debug:
 	python bottle_app.py
 
+freeze:
+	$(PYTHON) -m pip freeze > requirements.txt
+
 clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__

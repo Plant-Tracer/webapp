@@ -84,6 +84,8 @@ LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript consol
 
 CHECK_MX = False                # True didn't work
 
+app = bottle.default_app()      # for Lambda
+
 ################################################################
 ## Utility
 def expand_memfile_max():
@@ -104,14 +106,14 @@ def is_true(s):
 def git_head_time():
     try:
         return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
-    except:
+    except Exception:
         return ""
 
 @functools.cache
 def git_last_commit():
     try:
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
-    except:
+    except Exception:
         return ""
 
 ################################################################
@@ -199,7 +201,7 @@ def get_user_id(allow_demo=True):
     if 'id' not in userdict:
         logging.info("no ID in userdict = %s", userdict)
         raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
-    if userdict['demo'] and allow_demo!=True:
+    if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
         raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
                                   status=503, headers={ 'Location': '/'})
@@ -449,6 +451,20 @@ def api_register():
         return {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
     return {'error': False, 'message': 'Registration key sent to '+email+link_html}
 
+class EmailNotInDatabase(Exception):
+    """Handle error condition below"""
+    pass
+
+
+
+def send_link(*, email, planttracer_endpoint):
+    new_api_key = db.make_new_api_key(email=email)
+    if not new_api_key:
+        logging.info("email not in database: %s",email)
+        raise EmailNotInDatabase(email)
+    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+
+
 @bottle.route('/api/resend-link', method=GET_POST)
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
@@ -458,19 +474,18 @@ def api_send_link():
     if not validate_email(email, check_mx=CHECK_MX):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
-    new_api_key = db.make_new_api_key(email=email)
-    if not new_api_key:
-        logging.info("email not in database: %s",email)
-        return E.INVALID_EMAIL
     try:
-        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
-    except mailer.NoMailerConfiguration as e:
+        send_link(email=email, planttracer_endpoint=planttracer_endpoint)
+    except EmailNotInDatabase:
+        return E.INVALID_EMAIL
+    except mailer.NoMailerConfiguration:
         logging.error("no mailer configuration")
         return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
         logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
+
 
 @bottle.route('/api/bulk-register', method=POST)
 def api_bulk_register():
@@ -487,7 +502,12 @@ def api_bulk_register():
             if not validate_email(email, check_mx=CHECK_MX):
                 return E.INVALID_EMAIL
             db.register_email(email=email, course_id=course_id, name="")
-            db.send_links(email=email, planttracer_endpoint=planttracer_endpoint)
+            send_link(email=email, planttracer_endpoint=planttracer_endpoint)
+    except EmailNotInDatabase:
+        return E.INVALID_EMAIL
+    except mailer.NoMailerConfiguration:
+        logging.error("no mailer configuration")
+        return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
         logging.error("invalid mailer configuration: %s",e)
         return E.INVALID_MAILER_CONFIGURATION
@@ -716,11 +736,11 @@ def api_track_movie():
         output_trackpoints_by_frame[tp['frame_number']].append(tp)
 
     # Write all of the trackpoints by frame that were re-tracked
-    for frame_number in output_trackpoints_by_frame.keys():
+    for (frame_number,trackpoints) in output_trackpoints_by_frame.items():
         if frame_number >= frame_start:
             frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
             db.put_frame_trackpoints(frame_id = frame_id,
-                                     trackpoints=output_trackpoints_by_frame[frame_number])
+                                     trackpoints = trackpoints)
 
     # We return all the trackpoints to the client, although the client currently doesn't use them
     ret = {'error': False,
@@ -992,7 +1012,7 @@ def api_add():
 # Bottle App
 ##
 
-def app():
+def passengers_app():
     """The application"""
     # Set up logging for a bottle app
     # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine

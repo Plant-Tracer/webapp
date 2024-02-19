@@ -13,11 +13,11 @@ import time
 import bottle
 import copy
 import hashlib
-import magic
 import json
 from os.path import abspath, dirname
 
 from boddle import boddle
+import filetype
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -201,13 +201,13 @@ def test_movie_extract(new_movie):
     user_id = cfg[USER_ID]
 
     movie_data = db.get_movie_data(movie_id = movie_id)
-    assert magic.from_buffer(movie_data,mime=True)==MIME.MP4
+    assert filetype.guess(movie_data).mime==MIME.MP4
 
     # Grab three frames with the tracker and make sure they are different
     def get_movie_data_jpeg(frame_number):
         data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
         logging.debug("len(data)=%s",len(data))
-        assert magic.from_buffer(data,mime=True)==MIME.JPEG
+        assert filetype.guess(data).mime==MIME.JPEG
         return data
 
     frame0 = get_movie_data_jpeg(0)
@@ -224,7 +224,7 @@ def test_movie_extract(new_movie):
                             'format':'jpeg' }):
             r =  bottle_app.api_get_frame()
             assert isinstance(r,dict) is False
-            assert magic.from_buffer(r,mime=True)==MIME.JPEG
+            assert filetype.guess(r).mime==MIME.JPEG
             return r
 
     jpeg0 = get_jpeg_frame(0)
