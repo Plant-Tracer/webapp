@@ -8,8 +8,8 @@ This provides for all authentication in the planttracer system:
 import os
 import functools
 import configparser
+
 import bottle
-import logging
 from bottle import request
 
 import paths

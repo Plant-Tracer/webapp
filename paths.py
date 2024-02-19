@@ -15,7 +15,7 @@ if HOME is None:
 
 ROOT_DIR         = dirname(abspath(__file__))
 STATIC_DIR       = join(ROOT_DIR, 'static')
-ETC_DIR          = join(ROOT_DIR, 'static')
+ETC_DIR          = join(ROOT_DIR, 'etc')
 TEMPLATE_DIR     = join(ROOT_DIR, 'templates')
 TEST_DIR         = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')

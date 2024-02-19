@@ -29,6 +29,8 @@
         "slim_handler":true,
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
         "exclude": ["*.mp4", "selenium", "*.dylib"],
+        "ephemeral_storage" : {"Size":1024},
+        "num_retained_versions":5,
         "environment_variables": {
             "AWS": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",

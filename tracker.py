@@ -8,7 +8,8 @@ import argparse
 import tempfile
 import subprocess
 import logging
-
+import os
+import errno
 
 import cv2
 import numpy as np
@@ -134,7 +135,7 @@ def cleanup_mp4(*,infile,outfile):
     try:
         subprocess.call(['ffmpeg'] + args)
     except OSError as e:
-        if e.errno == os.errno.ENOENT:
+        if e.errno == errno.ENOENT:
             subprocess.call([ETC_FFMPEG] + args)
         else:
             raise
