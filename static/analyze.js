@@ -277,6 +277,22 @@ class PlantTracerController extends CanvasController {
         $(`#${this.this_id} input.frame_prev`)  .on('click', (event) => {this.goto_frame( this.frame_number-1);});
         $(`#${this.this_id} input.frame_next`)  .on('click', (event) => {this.goto_frame( this.frame_number+1);});
         $(`#${this.this_id} input.frame_next10`).on('click', (event) => {this.goto_frame( this.frame_number+10);});
+
+        $(`#${this.this_id} input.frame_number_field`).on('input', (event) => {
+            let new_frame = this.frame_number_field[0].value;
+            // turn '' into a "0"
+            if (new_frame=='') {
+                new_frame='0';
+                this.frame_number_field[0].value=new_frame;
+            }
+            // remove leading 0
+            if (new_frame.length == 2 && new_frame[0]=='0') {
+                new_frame = new_frame[1];
+                this.frame_number_field[0].value=new_frame;
+            }
+            console.log("input ",new_frame);
+            this.goto_frame( new_frame );
+        });
     }
 
 
@@ -474,8 +490,12 @@ class PlantTracerController extends CanvasController {
             frame = 0;
         }
 
-        if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) frame=this.movie_metadata.total_frames-1;
-        if (frame>this.last_tracked_frame) frame=this.last_tracked_frame-1;
+        if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) {
+            frame=this.movie_metadata.total_frames-1;
+        }
+        if (frame>this.last_tracked_frame) {
+            frame=this.last_tracked_frame-1;
+        }
         if (frame<0) frame=0;
         this.frame_number_field.val( frame );
         this.frame_number = frame;
