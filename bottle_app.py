@@ -136,7 +136,7 @@ def get_int(key, default=None):
 def get_float(key, default=None):
     try:
         return float(get(key))
-    except TypeError:
+    except (TypeError,ValueError):
         return default
 
 def get_bool(key, default=None):
@@ -145,8 +145,8 @@ def get_bool(key, default=None):
         return default
     try:
         return v[0:1] in 'yYtT1'
-    except TypeError:
-        return False
+    except (TypeError,ValueError):
+        return default
 
 ################################################################
 # Bottle endpoints

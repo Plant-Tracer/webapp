@@ -35,6 +35,22 @@ def test_version():
         res = bottle_app.func_ver()
         assert bottle_app.__version__ in res
 
+def test_is_true():
+    assert bottle_app.is_true("Y") is True
+    assert bottle_app.is_true("f") is False
+
+
+def test_get_float(mocker):
+    mocker.patch("bottle_app.get", return_value="3")
+    assert bottle_app.get_float("key")==3
+    mocker.patch("bottle_app.get", return_value="xxx")
+    assert bottle_app.get_float("key",default=4)==4
+
+def test_get_bool(mocker):
+    mocker.patch("bottle_app.get", return_value="YES")
+    assert bottle_app.get_bool("key")==True
+    mocker.patch("bottle_app.get", return_value="xxx")
+    assert bottle_app.get_bool("key",default=False)==False
 
 def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
