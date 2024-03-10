@@ -6,12 +6,14 @@ known_hosts:
 	ssh-keyscan downloads.digitalcorpora.org > known_hosts
 
 schema.sql:
-	mysqldump --defaults-extra-file=credentials.ini         \
+	grep -v '^database' credentials.ini > credentials-db.ini
+	mysqldump --defaults-extra-file=credentials-db.ini         \
             -d --single-transaction --no-tablespaces $$(bash database_name) \
 	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
 	    | sed 's/CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci //g' \
 	    | grep -v 'character_set_client' \
 	    | grep -v 'Dump completed on' > schema.sql
+	/bin/rm -f credentials-db.ini
 	touch Makefile		# so we can repeat!
 	git diff schema.sql
 

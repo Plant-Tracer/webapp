@@ -149,10 +149,8 @@ const UNDELETE_BUTTON='UNDELETE';
 
 // sounds for buttons
 var SOUNDS = [];
-SOUNDS[DELETE_BUTTON] = new Audio('static/pop-up-something-160353.mp3');
+SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
 SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
-
-
 
 ////////////////
 // PLAYBACK
@@ -324,7 +322,7 @@ function list_movies_data( movies ) {
         let h = "<table>";
         if (mlist.length > 0 ){
             h += "<thead>";
-            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>status and action</th> </tr>";
+            h += "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>Size</th> <th>Frames</th> <th>status and action</th> </tr>";
             h += "</thead>";
         }
         h+= "<tbody>";
@@ -387,7 +385,9 @@ function list_movies_data( movies ) {
 
             rows = `<tr class='${you}'>`
                 + `<td> ${movie_id} </td> <td class='${you}'> ${m.name} <br> ${play} ${analyze} </td> <td> ${up_down} </td>`
-                + make_td_text( "title", m.title) + make_td_text( "description", m.description);
+                + make_td_text( "title", m.title) + make_td_text( "description", m.description)
+                + `<td> ${m.total_bytes} </td> <td> ${m.total_frames}<td>` ;
+
 
             rows += "<td>";
             rows += "Status: ";
