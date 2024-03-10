@@ -216,6 +216,7 @@ CREATE TABLE `movies` (
   `width` int DEFAULT NULL,
   `height` int DEFAULT NULL,
   `total_frames` int DEFAULT NULL,
+  `total_bytes` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
