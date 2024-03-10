@@ -74,7 +74,7 @@ from constants import C,E
 import mailer
 import tracker
 
-__version__ = '0.0.1'
+__version__ = '0.9.0'
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -136,7 +136,7 @@ def get_int(key, default=None):
 def get_float(key, default=None):
     try:
         return float(get(key))
-    except TypeError:
+    except (TypeError,ValueError):
         return default
 
 def get_bool(key, default=None):
@@ -145,8 +145,8 @@ def get_bool(key, default=None):
         return default
     try:
         return v[0:1] in 'yYtT1'
-    except TypeError:
-        return False
+    except (TypeError,ValueError):
+        return default
 
 ################################################################
 # Bottle endpoints
@@ -266,6 +266,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
             'hostname':o.hostname,
             'movie_id':movie_id,
             'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
+            'version':__version__,
             'git_head_time':git_head_time(),
             'git_last_commit':git_last_commit()}
 

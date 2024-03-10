@@ -9,7 +9,9 @@
         "slim_handler":true,
         "domain":"app.planttracer.com",
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "selenium", "*.dylib"],
+        "exclude": ["*.mp4", "*.dylib"],
+        "exclude_glob": ["selenium/**/*", "tests/**/*"],
+        "ephemeral_storage" : {"Size":1024},
         "environment_variables": {
             "AWS": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
@@ -28,7 +30,8 @@
         "route53_enabled" : false,
         "slim_handler":true,
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "selenium", "*.dylib"],
+        "exclude": ["*.mp4", "*.dylib"],
+        "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "environment_variables": {
@@ -48,7 +51,9 @@
         "domain":"demo.planttracer.com",
         "slim_handler":true,
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "selenium", "*.dylib"],
+        "exclude": ["*.mp4", "*.dylib"],
+        "exclude_glob": ["selenium/**/*", "tests/**/*"],
+        "ephemeral_storage" : {"Size":1024},
         "environment_variables": {
             "AWS": "YES",
             "PLANTTRACER_DEMO":"YES",
