@@ -23,6 +23,7 @@ class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
 
 class InvalidMailerConfiguration(Exception):
+    """Note that the mailer configuration is missing"""
     def __init__(self, msg):
         super().__init__()
         self.msg = msg

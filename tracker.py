@@ -1,5 +1,6 @@
 """
 Implements blockmatching algorithm in OpenCV.
+Also implements support movie routines
 """
 
 # pylint: disable=no-member
@@ -7,15 +8,15 @@ import json
 import argparse
 import tempfile
 import subprocess
-import logging
 import os
 import errno
 
 import cv2
 import numpy as np
-from constants import Engines,MIME
+from constants import Engines
+import paths
 
-from paths import ETC_FFMPEG
+FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT='point_array_out'
 RED = (0, 0, 255)
 BLACK = (0,0,0)
@@ -28,8 +29,9 @@ TEXT_MARGIN = 5
 
 class ConversionError(RuntimeError):
     """Special error"""
-    def __init__(self,msg):
-        super().__init__(msg)
+
+class MovieCorruptError(RuntimeError):
+    """Special error"""
 
 def cv2_track_frame(*,frame0, frame1, trackpoints):
     """
@@ -58,7 +60,7 @@ def cv2_track_frame(*,frame0, frame1, trackpoints):
                                         'status':int(status_array[i][0]),
                                         'err':float(err[i][0]),
                                         'label':pt['label']})
-    except cv2.error:
+    except cv2.error:      # pylint: disable=catching-non-exception
         trackpoints_out = []
 
     return trackpoints_out
@@ -70,7 +72,7 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     :param frame_label - if present, label for frame number (can be int or string)
     """
 
-    frame_height = len(frame)
+    # frame_height = len(frame)
     frame_width = len(frame[0])
 
     # use the points to annotate the colored frames. write to colored tracked video
@@ -96,18 +98,26 @@ def extract_movie_metadata(*, movie_data):
         cap = cv2.VideoCapture(tf.name)
         total_frames = 0
         while True:
-            ret, last_frame = cap.read()
+            ret, frame = cap.read()
             if not ret:
                 break
+            if len(frame)==0:
+                raise MovieCorruptError()
+
             total_frames += 1
     return {'total_frames':total_frames,
+            'total_bytes':len(movie_data),
             'width':int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
             'height':int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
             'fps':cap.get(cv2.CAP_PROP_FPS)}
 
 def extract_frame(*, movie_data, frame_number, fmt):
     """Download movie_id to a temporary file, find frame_number and return it in the request fmt.
+    :param: movie_data - binary object of data
+    :param: frame_nubmer - frame to extract
+    :param: fmt - format wanted (should be CV2 or jpeg)
     """
+    assert fmt in ['CV2','jpeg']
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
         tf.write(movie_data)
         tf.flush()
@@ -131,17 +141,21 @@ def extract_frame(*, movie_data, frame_number, fmt):
     raise ValueError(f"invalid frame_number {frame_number}")
 
 def cleanup_mp4(*,infile,outfile):
+    """Given an import file, clean it up with ffmpeg"""
+    if not os.path.exists(infile):
+        raise FileNotFoundError(infile)
+    # If outfile exists, it will be overwritten
     args = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
     try:
-        subprocess.call(['ffmpeg'] + args)
+        subprocess.call([ FFMPEG_PATH ] + args)
     except OSError as e:
         if e.errno == errno.ENOENT:
-            subprocess.call([ETC_FFMPEG] + args)
+            subprocess.call([ FFMPEG_PATH ] + args)
         else:
             raise
 
 
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_untracked=None, moviefile_output, frame_start=0):
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame

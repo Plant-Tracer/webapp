@@ -44,25 +44,22 @@ import os
 import io
 import json
 import functools
-import datetime
 import logging
 import base64
 import csv
 import tempfile
 import subprocess
+import smtplib
 from urllib.parse import urlparse
 from collections import defaultdict
 
 import filetype
 import bottle
-import smtplib
 from bottle import request
 from validate_email_address import validate_email
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-
-import numpy as np
 
 from lib.ctools import clogging
 
@@ -106,14 +103,14 @@ def is_true(s):
 def git_head_time():
     try:
         return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
-    except Exception:
+    except subprocess.SubprocessError:
         return ""
 
 @functools.cache
 def git_last_commit():
     try:
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
-    except Exception:
+    except subprocess.SubprocessError:
         return ""
 
 ################################################################
@@ -437,20 +434,20 @@ def api_register():
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
         db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+        ret = {'error': False, 'message': 'Registration key sent to '+email+link_html}
     except mailer.InvalidMailerConfiguration:
         logging.error("Mailer reports Mailer not properly configured.")
-        return {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
+        ret =  {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
     except mailer.NoMailerConfiguration:
         logging.error("Mailer reports no mailer configured.")
-        return {'error':True, 'message':'Mailer not properly configured (NoMailerConfiguration).'+link_html}
+        ret =  {'error':True, 'message':'Mailer not properly configured (NoMailerConfiguration).'+link_html}
     except smtplib.SMTPAuthenticationError:
         logging.error("Mailer reports smtplib.SMTPAuthenticationError.")
-        return {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
-    return {'error': False, 'message': 'Registration key sent to '+email+link_html}
+        ret = {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
+    return ret
 
 class EmailNotInDatabase(Exception):
     """Handle error condition below"""
-    pass
 
 
 
@@ -607,8 +604,8 @@ def api_get_movie_trackpoints():
         # get_movie_trackpoints() returns a dictionary for each trackpoint.
         # we want a dictionary for each frame_number
         trackpoint_dicts = db.get_movie_trackpoints(movie_id=get_int('movie_id'))
-        frame_numbers  = sorted(set([tp['frame_number'] for tp in trackpoint_dicts]))
-        labels         = sorted(set([tp['label'] for tp in trackpoint_dicts]))
+        frame_numbers  = sorted( ( tp['frame_number'] for tp in trackpoint_dicts) )
+        labels         = sorted( ( tp['label'] for tp in trackpoint_dicts) )
         frame_dicts    = defaultdict(dict)
 
         for tp in trackpoint_dicts:
@@ -871,7 +868,7 @@ def api_get_frame():
             ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
                                                       frame_number=frame_number,
                                                       fmt='jpeg')
-        except ValueError as e:
+        except ValueError:
             return {'error':True,
                     'message':f'frame number {frame_number} is out of range'}
 
