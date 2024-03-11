@@ -46,9 +46,9 @@ def hostnames():
     hostname = socket.gethostname()
     return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def wipe_test_movies(dbwriter):
+def wipe_test_movies():
     sizes = {}
-    d = dbfile.DBMySQL(dbwriter)
+    d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
     c.execute('show tables')
     for (table,) in c:
@@ -135,7 +135,8 @@ def createdb(args, cp, d):
             print("writing config to ",args.writeconfig)
             cp.write(fp)
 
-def report(dbreader):
+def report():
+    dbreader = auth.get_dbreader()
     headers = []
     rows = csfr(dbreader,
                 """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
@@ -226,7 +227,6 @@ if __name__ == "__main__":
                         'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig", help="specify the config.ini file to read")
-    parser.add_argument("--load_schema", help="Load the schema into the database specified in the readconfig using the dbwriter user",action='store_true')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--wipe_test_movies', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
@@ -265,30 +265,9 @@ if __name__ == "__main__":
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint, new_api_key=new_api_key)
         sys.exit(0)
 
-    dbwriter = None
-    cp = configparser.ConfigParser()
-    if args.readconfig:
-        cp.read(args.readconfig)
-        print("config read from",args.readconfig)
-        if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
-            raise RuntimeError("dbreader and dbwriter do not address the same database")
-        dbreader = dbfile.DBMySQLAuth.FromConfig(cp['dbreader'])
-        dbwriter = dbfile.DBMySQLAuth.FromConfig(cp['dbwriter'])
-
-        if args.load_schema:
-            dbwriter_section = cp['dbwriter']
-            print(f"Creating schema from {SCHEMA_FILE} using {dbwriter_section}")
-            with open(SCHEMA_FILE, 'r') as f:
-                d = dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfig(dbwriter_section))
-                d.create_schema(f.read())
-            print("done")
-            sys.exit(0)
-    else:
-        dbwriter = auth.get_dbwriter()
-        dbreader = auth.get_dbreader()
-
     ################################################################
     ## Startup stuff
+    cp = configparser.ConfigParser()
     if args.create_root:
         print(f"creating root with password '{args.create_root}'")
         if 'client' not in cp:
@@ -297,10 +276,18 @@ if __name__ == "__main__":
         cp['client']['password']=args.create_root
         cp['client']['host'] = 'localhost'
         cp['client']['database'] = 'sys'
+
+
+    if args.readconfig:
+        cp.read(args.readconfig)
+        print("config read from",args.readconfig)
+        if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
+            raise RuntimeError("dbreader and dbwriter do not address the same database")
+
+    if args.writeconfig:
         with open(args.writeconfig, 'w') as fp:
             cp.write(fp)
-        print(args.writeconfig,"is written with a root configuration")
-        sys.exit(0)
+        print(args.writeconfig,"is written")
 
     if args.create_course:
         print("creating course...")
@@ -342,7 +329,7 @@ if __name__ == "__main__":
         d.execute(f'DROP DATABASE {args.dropdb}')
 
     if args.wipe_test_movies:
-        wipe_test_movies(dbwriter)
+        wipe_test_movies()
 
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)
@@ -351,7 +338,7 @@ if __name__ == "__main__":
     ## Maintenance
 
     if args.report:
-        report(dbreader)
+        report()
         sys.exit(0)
 
     if args.freshen:
