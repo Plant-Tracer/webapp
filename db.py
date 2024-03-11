@@ -482,7 +482,7 @@ def remaining_course_registrations(*,course_key):
 def get_movie_data(*, movie_id):
     """Returns the movie contents. Does no checking"""
     logging.debug("movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,),debug=True)
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))
     if len(rows)==1:
         assert len(rows[0])==1
         return rows[0][0]
