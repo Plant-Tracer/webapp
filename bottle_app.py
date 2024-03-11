@@ -183,9 +183,12 @@ def get_user_dict():
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.info("api_key %s is invalid",api_key)
+        logging.info("api_key %s ipaddr %s is invalid  request.url=%s",api_key,request.environ.get('REMOTE_ADDR'),request.url)
+        auth.clear_cookie()
         # This will produce a "Session expired" message
         auth.clear_cookie()
+        if request.url.endswith("/error"):
+            raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/logout'})
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
     return userdict
 
