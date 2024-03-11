@@ -13,7 +13,7 @@
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
         "environment_variables": {
-            "AWS": "YES",
+            "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
@@ -35,7 +35,7 @@
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "environment_variables": {
-            "AWS": "YES",
+            "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
@@ -55,7 +55,7 @@
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
         "environment_variables": {
-            "AWS": "YES",
+            "AWS_LAMBDA": "YES",
             "PLANTTRACER_DEMO":"YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",

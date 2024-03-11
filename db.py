@@ -2,7 +2,6 @@
 
 """Database code for Plant Tracer"""
 
-import functools
 import os
 import base64
 import uuid
@@ -17,8 +16,8 @@ from typing import Optional
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
-from paths import TEMPLATE_DIR,ROOT_DIR
-from constants import C
+from paths import TEMPLATE_DIR
+
 
 import auth
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
@@ -32,10 +31,16 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class InvalidAPI_Key(RuntimeError):
+class DB_Errors(RuntimeError):
+    """Base class for DB Errors"""
+
+class InvalidAPI_Key(DB_Errors):
     """ API Key is invalid """
 
-class InvalidCourse_Key(Exception):
+class InvalidCourse_Key(DB_Errors):
+    """ API Key is invalid """
+
+class InvalidMovie_Id(DB_Errors):
     """ API Key is invalid """
 
 LOG_DB = 'LOG_DB'
@@ -291,16 +296,16 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     try:
         smtp_config = auth.smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-    except KeyError:
-        raise mailer.NoMailerConfiguration()
+    except KeyError as e:
+        raise mailer.NoMailerConfiguration() from e
     try:
         mailer.send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
                             smtp_config=smtp_config,
                             dry_run=DRY_RUN,
                             msg=msg)
-    except smtplib.SMTPAuthenticationError:
-        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config)))
+    except smtplib.SMTPAuthenticationError as e:
+        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
     return new_api_key
 
 ################ API KEY ################
@@ -477,7 +482,12 @@ def remaining_course_registrations(*,course_key):
 def get_movie_data(*, movie_id):
     """Returns the movie contents. Does no checking"""
     logging.debug("movie_id=%s",movie_id)
-    return dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))[0][0]
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))
+    if len(rows)==1:
+        assert len(rows[0])==1
+        return rows[0][0]
+    raise InvalidMovie_Id(str(movie_id))
+
 
 
 @log
@@ -611,7 +621,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
         a1 = ", frame_data"
         a2 = ",%s"
         a3 = ",frame_data=%s"
-        args = (movie_id, frame_number, frame_data, movie_id, frame_number,frame_dat)
+        args = (movie_id, frame_number, frame_data, movie_id, frame_number, frame_data)
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
                         VALUES (%s,%s{a2})

@@ -8,30 +8,32 @@ import configparser
 import subprocess
 import socket
 import logging
+import json
+import paths
 
 import uuid
 import pymysql
 from tabulate import tabulate
+from pronounceable import generate_word
 
 # pylint: disable=no-member
 
-import mailer
 import db
-from auth import get_dbreader,get_dbwriter
+import tracker
+import auth
 from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR
 from lib.ctools import clogging
 from lib.ctools import dbfile
-from pronounceable import generate_word
+from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
+
+import mailer
 
 assert os.path.exists(TEMPLATE_DIR)
 
-MYSQL_HOST = 'MYSQL_HOST'
-MYSQL_USER = 'MYSQL_USER'
-MYSQL_PASSWORD = 'MYSQL_PASSWORD'
-MYSQL_DATABASE = 'MYSQL_DATABASE'
 LOCALHOST = 'localhost'
 dbreader = 'dbreader'
 dbwriter = 'dbwriter'
+csfr = DBMySQL.csfr
 
 DEFAULT_MAX_ENROLLMENT = 10
 DEMO_NAME  = 'Plant Tracer Demo Account'
@@ -44,9 +46,9 @@ def hostnames():
     hostname = socket.gethostname()
     return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def clean():
+def wipe_test_movies():
     sizes = {}
-    d = dbfile.DBMySQL(get_dbwriter())
+    d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
     c.execute('show tables')
     for (table,) in c:
@@ -72,9 +74,7 @@ def clean():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-
-
-def createdb(args, cp):
+def createdb(args, cp, d):
     dbreader_user = 'dbreader_' + args.createdb
     dbwriter_user = 'dbwriter_' + args.createdb
     dbreader_password = str(uuid.uuid4())
@@ -136,19 +136,19 @@ def createdb(args, cp):
             cp.write(fp)
 
 def report():
-    dbreader = get_dbreader()
+    dbreader = auth.get_dbreader()
     headers = []
-    rows = dbfile.DBMySQL.csfr(dbreader,
-                               """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
-                               left join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
-                               left join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
-                               order by 1,2""",
-                               get_column_names=headers)
+    rows = csfr(dbreader,
+                """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
+                left join (select primary_course_id,count(*) ct from users group by primary_course_id) A on id=A.primary_course_id
+                left join (select count(*) movie_count, course_id from movies group by course_id ) B on courses.id=B.course_id
+                order by 1,2""",
+                get_column_names=headers)
     print(tabulate(rows,headers=headers))
     print("\n")
 
     headers = []
-    rows = dbfile.DBMySQL.csfr(dbreader,
+    rows = csfr(dbreader,
                                """SELECT id,title,created_at,user_id,course_id,published,deleted,
                                          date_uploaded,fps,width,height,total_frames
                                   FROM movies
@@ -158,14 +158,36 @@ def report():
 
     for demo in (0,1):
         print("\nDemo users:" if demo==1 else "\nRegular Users:")
-        rows = dbfile.DBMySQL.csfr(dbreader,
-                                   """SELECT id,name,email,B.ct as movie_count
-                                   FROM users LEFT JOIN
-                                        (SELECT user_id,COUNT(*) AS ct FROM movies GROUP BY user_id) B ON id=B.user_id
-                                   WHERE demo=%s""",
-                                   (demo,),
-                                   get_column_names=headers)
+        rows = csfr(dbreader,
+                    """SELECT id,name,email,B.ct as movie_count
+                    FROM users LEFT JOIN
+                    (SELECT user_id,COUNT(*) AS ct FROM movies GROUP BY user_id) B ON id=B.user_id
+                    WHERE demo=%s""",
+                    (demo,),
+                    get_column_names=headers)
         print(tabulate(rows,headers=headers))
+
+def freshen():
+    dbwriter = auth.get_dbwriter()
+    print(f"Freshen({dbwriter})")
+    movies = csfr(dbwriter, "SELECT * from movies",(),asDicts=True)
+    for movie in movies:
+        movie_id = movie['id']
+        print(f"Movie {movie_id}  title: {movie['title']}")
+        if not movie['total_bytes']:
+            print("** needs refreshing...")
+            print(json.dumps(movie,default=str,indent=4))
+            try:
+                movie_data = db.get_movie_data(movie_id=movie_id)
+            except db.InvalidMovie_Id as e:
+                print("Cannot get movie data")
+                continue
+            assert movie_data is not None
+            movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+            print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
+            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata.keys() ]) + " WHERE id=%s"
+            args = list( movie_metadata.values()) + [movie_id]
+            csfr(dbwriter, cmd, args)
 
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
@@ -182,7 +204,7 @@ def create_course(*, course_key, course_name, admin_email,
         db.make_new_api_key(email=demo_email)
         ct = 1
         for fn in os.listdir(TEST_DATA_DIR):
-            (root,ext) = os.path.splitext(fn)
+            ext = os.path.splitext(fn)[1]
             if ext in ['.mp4','.mov']:
                 with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
                     db.create_new_movie(user_id=user_id,
@@ -190,11 +212,9 @@ def create_course(*, course_key, course_name, admin_email,
                                         description=DEMO_MOVIE_DESCRIPTION,
                                         movie_data = f.read())
                 ct += 1
-
-
-
-
     return admin_id
+
+
 
 if __name__ == "__main__":
     import argparse
@@ -215,12 +235,12 @@ if __name__ == "__main__":
                         'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig", help="specify the config.ini file to read")
-    parser.add_argument("--load_schema", help="Load the schema into the database specified in the readconfig using the dbwriter user",action='store_true')
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
-    parser.add_argument('--clean', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--wipe_test_movies', help='Remove the test data from the database', action='store_true')
     parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
-    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',action='store_true')
+    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
+                        action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
@@ -228,47 +248,34 @@ if __name__ == "__main__":
     parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
     parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
     parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
+    parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
 
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
+    if (args.rootconfig is None) and (args.createdb or args.dropdb):
+        print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
+        sys.exit(1)
+
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
-        exit(0)
+        sys.exit(0)
+
+    if args.readconfig:
+        paths.CREDENTIALS_FILE = paths.AWS_CREDENTIALS_FILE = args.readconfig
 
     if args.sendlink:
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
-        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint)
+        new_api_key = db.make_new_api_key(email=args.sendlink)
+        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint, new_api_key=new_api_key)
         sys.exit(0)
 
+    ################################################################
+    ## Startup stuff
     cp = configparser.ConfigParser()
-    if args.readconfig:
-        cp.read(args.readconfig)
-        print("config read from",args.readconfig)
-        if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
-            raise RuntimeError("dbreader and dbwriter do not address the same database")
-
-        if args.load_schema:
-            dbwriter_section = cp['dbwriter']
-            print(f"Creating schema from {SCHEMA_FILE} using {dbwriter_section}")
-            with open(SCHEMA_FILE, 'r') as f:
-                auth = dbfile.DBMySQLAuth.FromConfig(dbwriter_section)
-                d = dbfile.DBMySQL(auth)
-                d.create_schema(f.read())
-            print("done")
-            sys.exit(0)
-
-    if args.clean:
-        clean()
-
-    if args.report:
-        report()
-        exit(0)
-
-    print("args.create_root=",args.create_root)
     if args.create_root:
         print(f"creating root with password '{args.create_root}'")
         if 'client' not in cp:
@@ -277,10 +284,18 @@ if __name__ == "__main__":
         cp['client']['password']=args.create_root
         cp['client']['host'] = 'localhost'
         cp['client']['database'] = 'sys'
+
+
+    if args.readconfig:
+        cp.read(args.readconfig)
+        print("config read from",args.readconfig)
+        if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
+            raise RuntimeError("dbreader and dbwriter do not address the same database")
+
+    if args.writeconfig:
         with open(args.writeconfig, 'w') as fp:
             cp.write(fp)
-        print(args.writeconfig,"is written with a root configuration")
-        sys.exit(0)
+        print(args.writeconfig,"is written")
 
     if args.create_course:
         print("creating course...")
@@ -289,7 +304,7 @@ if __name__ == "__main__":
         if not args.admin_name:
             print("Must provide --admin_name",file=sys.stderr)
         if not args.admin_email or not args.admin_name:
-            exit(1)
+            sys.exit(1)
         course_key = "-".join([generate_word(),generate_word(),generate_word()])
         create_course(course_key = course_key,
                       course_name = args.create_course,
@@ -299,34 +314,41 @@ if __name__ == "__main__":
                       demo_email = args.demo_email
                       )
         print(f"course_key: {course_key}")
-        exit(0)
-
-    if args.purge_movie:
-        db.purge_movie(movie_id=args.purge_movie)
-        exit(0)
-
-    # The following all require a root config
-    print("using root config",args.rootconfig)
-    if args.rootconfig is None:
-        print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
-        exit(1)
-    if not os.path.exists(args.rootconfig):
-        print("File not found: ",args.rootconfig,file=sys.stderr)
-        exit(1)
-    auth = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
-    try:
-        d = dbfile.DBMySQL(auth)
-    except pymysql.err.OperationalError:
-        print("Invalid auth: ", auth, file=sys.stderr)
-        raise
+        sys.exit(0)
 
     if args.createdb:
-        createdb(args, cp)
+        if not os.path.exists(args.rootconfig):
+            print("File not found: ",args.rootconfig,file=sys.stderr)
+            sys.exit(1)
+        d = dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') )
+        createdb(args, cp, d)
+        sys.exit(0)
+
+    ################################################################
+    ## Cleanup
 
     if args.dropdb:
+        # Delete the database and the users created for the database
         dbreader_user = 'dbreader_' + args.dropdb
         dbwriter_user = 'dbwriter_' + args.dropdb
         for ipaddr in hostnames():
             d.execute(f'DROP USER `{dbreader_user}`@`{ipaddr}`')
             d.execute(f'DROP USER `{dbwriter_user}`@`{ipaddr}`')
         d.execute(f'DROP DATABASE {args.dropdb}')
+
+    if args.wipe_test_movies:
+        wipe_test_movies()
+
+    if args.purge_movie:
+        db.purge_movie(movie_id=args.purge_movie)
+
+    ################################################################
+    ## Maintenance
+
+    if args.report:
+        report()
+        sys.exit(0)
+
+    if args.freshen:
+        freshen()
+        sys.exit(0)
