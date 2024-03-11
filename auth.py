@@ -25,7 +25,7 @@ SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
 
 
 def credentials_file():
-    if 'AWS' in os.environ:
+    if paths.running_in_aws_lambda():
         return paths.AWS_CREDENTIALS_FILE
     else:
         return paths.CREDENTIALS_FILE

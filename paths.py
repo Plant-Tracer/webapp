@@ -27,7 +27,7 @@ AWS_CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials-aws.ini')
 
 LOCALMAIL_CONFIG_FNAME  = join( ROOT_DIR, 'tests', "localmail_config.ini")
 PRODUCTION_CONFIG_FNAME = join( ROOT_DIR, 'etc', 'credentials.ini')
-LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
+AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 
 # used by test program:
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
@@ -38,11 +38,11 @@ bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
 # Create the @view decorator to add template to the function output
 view = functools.partial(jinja2_view)
 
+def running_in_aws_lambda():
+    return 'AWS_LAMBDA' in os.environ
+
 def ffmpeg_path():
-    if sys.platform in ['linux','linux2']:
-        path = LINUX_STATIC_FFMPEG
+    if running_in_aws_lambda():
+        return AWS_LAMBDA_LINUX_STATIC_FFMPEG
     else:
-        path = shutil.which('ffmpeg')
-    if (path is None) or (not os.path.exists(path)):
-        raise FileNotFoundError("ffmpeg")
-    return path
+        return shutil.which('ffmpeg')
