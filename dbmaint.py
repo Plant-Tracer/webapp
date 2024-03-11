@@ -172,14 +172,22 @@ def freshen():
     print(f"Freshen({dbwriter})")
     movies = csfr(dbwriter, "SELECT * from movies",(),asDicts=True)
     for movie in movies:
-        print(f"Movie {movie['id']}  title: {movie['title']}")
+        movie_id = movie['id']
+        print(f"Movie {movie_id}  title: {movie['title']}")
         if not movie['total_bytes']:
             print("** needs refreshing...")
             print(json.dumps(movie,default=str,indent=4))
-            movie_data = db.get_movie_data(movie_id=movie['id'])
+            try:
+                movie_data = db.get_movie_data(movie_id=movie_id)
+            except db.InvalidMovie_Id as e:
+                print("Cannot get movie data")
+                continue
             assert movie_data is not None
             movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
             print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
+            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata.keys() ]) + " WHERE id=%s"
+            args = list( movie_metadata.values()) + [movie_id]
+            csfr(dbwriter, cmd, args)
 
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
