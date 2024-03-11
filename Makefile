@@ -105,7 +105,12 @@ coverage:
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
-	python bottle_app.py
+	@echo run bottle locally in debug mode
+	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+
+debug-local:
+	@echo run bottle locally in debug mode
+	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials-local.ini
 
 freeze:
 	$(PYTHON) -m pip freeze > requirements.txt
