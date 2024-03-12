@@ -5,3 +5,4 @@ ignore:
   - mailer.py
   - tests/mailer_test.py
   - dbmaint.py
+  - passengers_app.py

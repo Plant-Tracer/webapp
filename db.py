@@ -2,6 +2,10 @@
 
 """Database code for Plant Tracer"""
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-many-arguments
+
+
 import os
 import base64
 import uuid
@@ -11,7 +15,6 @@ import sys
 import copy
 import smtplib
 from typing import Optional
-#import inspect
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
@@ -341,7 +344,6 @@ def delete_api_key(api_key):
                                """DELETE FROM api_keys WHERE api_key=%s""",
                                (api_key,))
 
-
 @log
 def list_users(*, user_id):
     """Returns a dictionary with keys:
@@ -579,7 +581,8 @@ def delete_movie(*,movie_id, delete=1):
 
 
 @log
-def create_new_movie(*, user_id, title=None, description=None, movie_data=None, movie_metadata=None, orig_movie=None):
+def create_new_movie(*, user_id, title=None, description=None,
+                     movie_data=None, movie_metadata=None, orig_movie=None):
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -909,7 +912,8 @@ def delete_engine(*,engine_id):
 ################################################################
 
 # Do we need to log get_logs?
-def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None, course_key=None, movie_id=None, log_user_id=None,
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
+              course_key=None, movie_id=None, log_user_id=None,
               ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
     """get log entries (to which the user is entitled)
     :param: user_id    - the user who is initiating the query
