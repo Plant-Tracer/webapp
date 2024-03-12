@@ -65,6 +65,7 @@ from lib.ctools import clogging
 
 import db
 import auth
+from auth import get_dbreader
 
 from paths import view, STATIC_DIR
 from constants import C,E
@@ -209,16 +210,21 @@ def get_user_id(allow_demo=True):
 # HTML Pages served with template system
 ################################################################
 
-def page_dict(title='', *, require_auth=False, logout=False):
+def page_dict(title='', *, require_auth=False, logout=False, lookup=True):
     """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
     :param: require_auth  - if true, the user must already be authenticated, or throws an error
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
     """
+    logging.debug("page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     o = urlparse(request.url)
-    api_key = auth.get_user_api_key()
-    if api_key is None and require_auth is True:
-        raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+    if lookup:
+        api_key = auth.get_user_api_key()
+        if api_key is None and require_auth is True:
+            logging.debug("api_key is None and require_auth is True")
+            raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+    else:
+        api_key = None
 
     if (api_key is not None) and (logout is False):
         auth.set_cookie(api_key)
@@ -251,6 +257,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
     if logout:
         auth.clear_cookie()
 
+    logging.debug("returning dict")
     return {'api_key': api_key,
             'user_id': user_id,
             'user_name': user_name,
@@ -263,6 +270,7 @@ def page_dict(title='', *, require_auth=False, logout=False):
             'hostname':o.hostname,
             'movie_id':movie_id,
             'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
+            'dbreader_host':get_dbreader().host,
             'version':__version__,
             'git_head_time':git_head_time(),
             'git_last_commit':git_last_commit()}
@@ -275,7 +283,7 @@ GET_POST = [GET,POST]
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
-    print("/",file=sys.stderr)
+    logging.info("func_root")
     demo_users = db.list_demo_users()
     demo_api_key = False
     if len(demo_users)>0:
@@ -287,8 +295,9 @@ def func_root():
 @bottle.route('/error', method=GET_POST)
 @view('error.html')
 def func_error():
+    logging.debug("/error")
     auth.clear_cookie()
-    return page_dict('Error')
+    return page_dict('Error', lookup=False)
 
 @bottle.route('/about', method=GET_POST)
 @view('about.html')
@@ -649,7 +658,7 @@ def api_delete_movie():
 
 @bottle.route('/api/list-movies', method=POST)
 def api_list_movies():
-    return {'error': False, 'movies': db.list_movies(user_id=get_user_id())}
+    return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
 
 
 @bottle.route('/api/track-movie', method='POST')
@@ -1037,7 +1046,7 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     if args.dbcredentials:
-        os.path.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+        os.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
 
     # Now make sure that the credentials work
     # We only do this with the standalone program

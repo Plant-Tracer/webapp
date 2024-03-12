@@ -8,6 +8,7 @@ This provides for all authentication in the planttracer system:
 import os
 import functools
 import configparser
+import logging
 
 import bottle
 from bottle import request
@@ -79,6 +80,7 @@ def get_user_api_key():
     :return: None if user is not logged in
     """
 
+    logging.debug("get_user_api_key")
     # check the query string
     try:
         api_key = request.query.get(API_KEY_COOKIE_NAME, None)

@@ -844,8 +844,11 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
     :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
-    cmd = """SELECT movies.id as movie_id,title,description,movies.created_at as created_at,
-          user_id,course_id,published,deleted,date_uploaded,name,email,primary_course_id,orig_movie
+    cmd = """SELECT users.name as name,users.email as email,users.primary_course_id as primary_course_id,
+          movies.id as movie_id,title,description,movies.created_at as created_at,
+          user_id,course_id,published,deleted,date_uploaded,orig_movie,
+          center_x,center_y,calib_x,calib_y,calib_user_id,calib_time_t,
+          fps,width,height,total_frames,total_bytes
           FROM movies LEFT JOIN users ON movies.user_id = users.id
           WHERE
           ((user_id=%s)
