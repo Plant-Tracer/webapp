@@ -89,9 +89,10 @@ pytest-quiet:
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
 create_localdb:
-	@echo Creating local database and writing results to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD  --writeconfig etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --writeconfig etc/credentials.ini
+	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
+	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --upgradedb actions_test --loglevel DEBUG
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:

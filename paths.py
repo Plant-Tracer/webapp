@@ -24,6 +24,7 @@ TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')
 SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
 SCHEMA_TEMPLATE  = join(ROOT_DIR, 'etc', 'schema_{schema}.sql')
 SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
+SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
 CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials.ini')
 AWS_CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials-aws.ini')
 
