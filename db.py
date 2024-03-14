@@ -490,8 +490,6 @@ def get_movie_data(*, movie_id):
         return rows[0][0]
     raise InvalidMovie_Id(str(movie_id))
 
-
-
 @log
 def get_movie_metadata(*,user_id, movie_id):
     """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
