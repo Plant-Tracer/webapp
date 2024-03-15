@@ -39,6 +39,9 @@ export TEST_USER_APIKEY=****
 export TEST_USER_EMAIL=****
 """
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-many-return-statements
+
 import sys
 import os
 import io
@@ -1018,21 +1021,6 @@ def api_add():
 ################################################################
 # Bottle App
 ##
-
-def passengers_app():
-    """The application"""
-    # Set up logging for a bottle app
-    # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    # root.setLevel(logging.DEBUG)
-    hdlr = root.handlers[0]
-    fmt = logging.Formatter(clogging.LOG_FORMAT)
-    hdlr.setFormatter(fmt)
-
-    expand_memfile_max()
-    return bottle.default_app()
-
 
 if __name__ == "__main__":
     import argparse

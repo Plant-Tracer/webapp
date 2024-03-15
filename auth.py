@@ -5,7 +5,6 @@ This provides for all authentication in the planttracer system:
 * Database authentication
 * Mailer authentication
 """
-import os
 import functools
 import configparser
 import logging

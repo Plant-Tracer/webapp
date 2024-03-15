@@ -1,5 +1,6 @@
 """
-passenger_wsgi.py script to switch to python3 and use Bottle
+passenger_wsgi.py script to switch to python3 and use Bottle when running under passegers at Dreamhost.
+Note: After March 31, 2024 Dreamhost no longer supports Passengers, so this script may not work anymore.
 
 To reload:
 
@@ -11,6 +12,7 @@ $ make touch
 import sys
 import os
 import os.path
+import logging
 
 DESIRED_PYTHON = 'python3'
 HOME = os.getenv('HOME')
@@ -58,5 +60,15 @@ if 'IN_PASSENGER' in os.environ:
         os.execlp(DESIRED_PYTHON, DESIRED_PYTHON, *sys.argv)
     else:
         # If we get here, we are running under the DESIRED_PYTHON
+        # Set up logging for a bottle app
+        # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
+        # root.setLevel(logging.DEBUG)
         import bottle_app
-        application = bottle_app.passengers_app()
+        import ctools.clogging as clogging
+        bottle_app.expand_memfile_max()
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        hdlr = root.handlers[0]
+        fmt = logging.Formatter(clogging.LOG_FORMAT)
+        hdlr.setFormatter(fmt)
+        application = bottle_app.app

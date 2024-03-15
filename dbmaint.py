@@ -9,19 +9,23 @@ import subprocess
 import socket
 import logging
 import json
-import paths
+import re
+import glob
 
 import uuid
-import pymysql
+
 from tabulate import tabulate
 from pronounceable import generate_word
+
+import paths
+
 
 # pylint: disable=no-member
 
 import db
 import tracker
 import auth
-from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR
+from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
@@ -30,6 +34,7 @@ import mailer
 
 assert os.path.exists(TEMPLATE_DIR)
 
+SCHEMA_VERSION = 'schema_version'
 LOCALHOST = 'localhost'
 dbreader = 'dbreader'
 dbwriter = 'dbwriter'
@@ -41,6 +46,8 @@ DEMO_MOVIE_TITLE = 'Demo Movie #{ct}'
 DEMO_MOVIE_DESCRIPTION = 'Track this movie!'
 
 __version__ = '0.0.1'
+
+debug = False
 
 def hostnames():
     hostname = socket.gethostname()
@@ -74,66 +81,86 @@ def wipe_test_movies():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-def createdb(args, cp, d):
-    dbreader_user = 'dbreader_' + args.createdb
-    dbwriter_user = 'dbwriter_' + args.createdb
+def createdb(*,droot, createdb_name, write_config_fname, schema):
+    """Create a database named `createdb_name` where droot is a root connection to the database server.
+    Creadentials are stored in cp.
+    """
+    assert isinstance(createdb_name,str)
+    assert isinstance(write_config_fname,str)
+    print("createdb_name=",createdb_name)
+
+    print(f"createdb droot={droot} createdb_name={createdb_name} write_config_fname={write_config_fname} schema={schema}")
+    dbreader_user = 'dbreader_' + createdb_name
+    dbwriter_user = 'dbwriter_' + createdb_name
     dbreader_password = str(uuid.uuid4())
     dbwriter_password = str(uuid.uuid4())
-    d.execute(f'DROP DATABASE IF EXISTS {args.createdb}')
-    d.execute(f'CREATE DATABASE {args.createdb}')
-    d.execute(f'USE {args.createdb}')
-    with open(SCHEMA_FILE, 'r') as f:
-        d.create_schema(f.read())
+    c = droot.cursor()
+
+    c.execute(f'DROP DATABASE IF EXISTS {createdb_name}') # can't do %s because it gets quoted
+    c.execute(f'CREATE DATABASE {createdb_name}')
+    c.execute(f'USE {createdb_name}')
+
+    print("creating schema.")
+    with open(schema, 'r') as f:
+        droot.create_schema(f.read())
+    print("done")
 
     # Now grant on all addresses
-    print("Current interfaces and hostnames:")
-    print("ifconfig -a:")
+    if debug:
+        print("Current interfaces and hostnames:")
+        print("ifconfig -a:")
     subprocess.call(['ifconfig','-a'])
     print("Hostnames:",hostnames())
     for ipaddr in hostnames() + ['%']:
         print("granting dbreader and dbwriter access from ",ipaddr)
-        d.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
-        d.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
-        d.execute( f'GRANT SELECT on {args.createdb}.* to `{dbreader_user}`@`{ipaddr}`')
+        c.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
+        c.execute( f'CREATE USER           `{dbreader_user}`@`{ipaddr}` identified by "{dbreader_password}"')
+        c.execute( f'GRANT SELECT on {createdb_name}.* to `{dbreader_user}`@`{ipaddr}`')
 
-        d.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
-        d.execute( f'CREATE USER           `{dbwriter_user}`@`{ipaddr}` identified by "{dbwriter_password}"')
-        d.execute( f'GRANT ALL on {args.createdb}.* to `{dbwriter_user}`@`{ipaddr}`')
+        c.execute( f'DROP   USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
+        c.execute( f'CREATE USER           `{dbwriter_user}`@`{ipaddr}` identified by "{dbwriter_password}"')
+        c.execute( f'GRANT ALL on {createdb_name}.* to `{dbwriter_user}`@`{ipaddr}`')
 
-    def prn(k, v):
-        print(f"{k}={v}")
-    if sys.stdout.isatty():
-        print("Contents for dbauth.ini:")
-
-    print("[dbreader]")
-    prn(MYSQL_HOST, LOCALHOST)
-    prn(MYSQL_USER, dbreader_user)
-    prn(MYSQL_PASSWORD, dbreader_password)
-    prn(MYSQL_DATABASE, args.createdb)
-
-    print("[dbwriter]")
-    prn(MYSQL_HOST, LOCALHOST)
-    prn(MYSQL_USER, dbwriter_user)
-    prn(MYSQL_PASSWORD, dbwriter_password)
-    prn(MYSQL_DATABASE, args.createdb)
-
-    if cp:
+    if write_config_fname:
+        cp = configparser.ConfigParser()
         if dbreader not in cp:
             cp.add_section(dbreader)
         cp[dbreader][MYSQL_HOST] = LOCALHOST
         cp[dbreader][MYSQL_USER] = dbreader_user
         cp[dbreader][MYSQL_PASSWORD] = dbreader_password
-        cp[dbreader][MYSQL_DATABASE] = args.createdb
+        cp[dbreader][MYSQL_DATABASE] = createdb_name
 
         if dbwriter not in cp:
             cp.add_section(dbwriter)
         cp[dbwriter][MYSQL_HOST] = LOCALHOST
         cp[dbwriter][MYSQL_USER] = dbwriter_user
         cp[dbwriter][MYSQL_PASSWORD] = dbwriter_password
-        cp[dbwriter][MYSQL_DATABASE] = args.createdb
-        with open(args.writeconfig, 'w') as fp:
-            print("writing config to ",args.writeconfig)
+        cp[dbwriter][MYSQL_DATABASE] = createdb_name
+
+        with open(write_config_fname, 'w') as fp:
+            print("writing config to ",write_config_fname)
             cp.write(fp)
+    else:
+        # Didn't write to
+        if sys.stdout.isatty():
+            print("Contents for dbauth.ini:")
+
+        def prn(k, v):
+            print(f"{k}={v}")
+
+        print("[dbreader]")
+        prn(MYSQL_HOST, LOCALHOST)
+        prn(MYSQL_USER, dbreader_user)
+        prn(MYSQL_PASSWORD, dbreader_password)
+        prn(MYSQL_DATABASE, createdb_name)
+
+        print("[dbwriter]")
+        prn(MYSQL_HOST, LOCALHOST)
+        prn(MYSQL_USER, dbwriter_user)
+        prn(MYSQL_PASSWORD, dbwriter_password)
+        prn(MYSQL_DATABASE, createdb_name)
+
+
 
 def report():
     dbreader = auth.get_dbreader()
@@ -186,7 +213,7 @@ def freshen():
             assert movie_data is not None
             movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
             print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
-            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata.keys() ]) + " WHERE id=%s"
+            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata ]) + " WHERE id=%s"
             args = list( movie_metadata.values()) + [movie_id]
             csfr(dbwriter, cmd, args)
 
@@ -216,10 +243,53 @@ def create_course(*, course_key, course_name, admin_email,
     return admin_id
 
 
+################################################################
+## database schema management
+################################################################
+
+def current_source_schema():
+    """Returns the current schema of the app based on the highest number schema file"""
+    glob_template = SCHEMA_TEMPLATE.format(schema='*')
+    pat = re.compile("([0-9]+)[.]sql")
+    ver = 0
+    for p in glob.glob(glob_template):
+        m = pat.search(p)
+        ver = max( int(m.group(1)), ver)
+    return ver
+
+def schema_upgrade( dbcon, dbname ):
+    """Upgrade the schema to the current version.
+    NOTE: uses dbcon and not a dbreader/dbwriter
+    """
+    dbcon.execute(f"USE {dbname}")
+
+    max_version = current_source_schema()
+    logging.info("max_version=%s", max_version)
+    # First get the current schema version, upgrading from version 0 to 1 in the process
+    # if there is no metadata table
+    with open(SCHEMA1_FILE,'r') as f:
+        dbcon.create_schema(f.read())
+        logging.info("upgraded to %s",SCHEMA1_FILE)
+
+    def current_version():
+        cursor = dbcon.cursor()
+        cursor.execute(f"SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
+        return int(cursor.fetchone()[0])
+
+    cv = current_version()
+    logging.info("current database version: %s  max version: %s", cv , max_version)
+
+    for upgrade in range(cv+1, max_version+1):
+        logging.info("Upgrading from version %s to %s",cv, upgrade)
+        with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+            dbcon.create_schema(f.read())
+        cv += 1
+        logging.info("Current version now %s",current_version())
+        assert cv == current_version()
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
+    parser = argparse.ArgumentParser(description="Database Maintenance Program",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
 
@@ -230,15 +300,17 @@ if __name__ == "__main__":
     parser.add_argument("--sendlink", help="send link to the given email address, registering it if necessary.")
     parser.add_argument("--mailer_config", help="print mailer configuration",action='store_true')
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
-    parser.add_argument("--createdb", help='Create a new database and a dbreader and dbwriter user. Database must not exist. '
+    parser.add_argument("--createdb",
+                        help='Create a new database and a dbreader and dbwriter user. Database must not exist. '
                         'Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER '
                         'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
                         'Outputs setenv for DBREADER and DBWRITER')
+    parser.add_argument("--upgradedb", help='Upgrade a database schema')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
-    parser.add_argument("--readconfig", help="specify the config.ini file to read")
+    parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--wipe_test_movies', help='Remove the test data from the database', action='store_true')
-    parser.add_argument("--create_root",help="create a [client] section with a root username and the specified password")
+    parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
                         action='store_true')
@@ -250,15 +322,11 @@ if __name__ == "__main__":
     parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
     parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
     parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
-
+    parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
-
-    if (args.rootconfig is None) and (args.createdb or args.dropdb):
-        print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
-        sys.exit(1)
 
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
@@ -276,16 +344,43 @@ if __name__ == "__main__":
 
     ################################################################
     ## Startup stuff
+
+    if args.createdb or args.dropdb or args.upgradedb:
+        cp = configparser.ConfigParser()
+        if args.rootconfig is None:
+            print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
+            sys.exit(1)
+
+        with dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') ) as droot:
+            if args.createdb:
+                createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
+                sys.exit(0)
+
+            if args.upgradedb:
+                schema_upgrade(dbcon=droot, dbname=args.upgradedb)
+                sys.exit(0)
+
+            if args.dropdb:
+                # Delete the database and the users created for the database
+                dbreader_user = 'dbreader_' + args.dropdb
+                dbwriter_user = 'dbwriter_' + args.dropdb
+                c = droot.cursor()
+                for ipaddr in hostnames():
+                    c.execute(f'DROP USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
+                    c.execute(f'DROP USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
+                c.execute(f'DROP DATABASE IF EXISTS {args.dropdb}')
+        sys.exit(0)
+
+    # These all use existing databases
     cp = configparser.ConfigParser()
-    if args.create_root:
-        print(f"creating root with password '{args.create_root}'")
+    if args.create_client:
+        print(f"creating root with password '{args.create_client}'")
         if 'client' not in cp:
             cp.add_section('client')
         cp['client']['user']='root'
-        cp['client']['password']=args.create_root
+        cp['client']['password']=args.create_client
         cp['client']['host'] = 'localhost'
         cp['client']['database'] = 'sys'
-
 
     if args.readconfig:
         cp.read(args.readconfig)
@@ -317,25 +412,8 @@ if __name__ == "__main__":
         print(f"course_key: {course_key}")
         sys.exit(0)
 
-    if args.createdb:
-        if not os.path.exists(args.rootconfig):
-            print("File not found: ",args.rootconfig,file=sys.stderr)
-            sys.exit(1)
-        d = dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') )
-        createdb(args, cp, d)
-        sys.exit(0)
-
     ################################################################
     ## Cleanup
-
-    if args.dropdb:
-        # Delete the database and the users created for the database
-        dbreader_user = 'dbreader_' + args.dropdb
-        dbwriter_user = 'dbwriter_' + args.dropdb
-        for ipaddr in hostnames():
-            d.execute(f'DROP USER `{dbreader_user}`@`{ipaddr}`')
-            d.execute(f'DROP USER `{dbwriter_user}`@`{ipaddr}`')
-        d.execute(f'DROP DATABASE {args.dropdb}')
 
     if args.wipe_test_movies:
         wipe_test_movies()
