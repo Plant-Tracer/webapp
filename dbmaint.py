@@ -206,8 +206,9 @@ def freshen():
             print(json.dumps(movie,default=str,indent=4))
             try:
                 movie_data = db.get_movie_data(movie_id=movie_id)
-            except db.InvalidMovie_Id:
-                logging.info("Cannot get movie data")
+            except db.InvalidMovie_Id as e:
+                print(f"Cannot get movie data. Purging movie {movie_id}")
+                db.purge_movie(movie_id=movie_id)
                 continue
             assert movie_data is not None
             movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
