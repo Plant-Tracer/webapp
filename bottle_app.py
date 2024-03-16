@@ -108,14 +108,14 @@ def is_true(s):
 def git_head_time():
     try:
         return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
-    except subprocess.SubprocessError:
+    except (subprocess.SubprocessError,FileNotFoundError):
         return ""
 
 @functools.cache
 def git_last_commit():
     try:
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
-    except subprocess.SubprocessError:
+    except (subprocess.SubprocessError,FileNotFoundError):
         return ""
 
 ################################################################
