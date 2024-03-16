@@ -155,7 +155,7 @@ def cleanup_mp4(*,infile,outfile):
             raise
 
 
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0):
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -164,6 +164,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     :param: moviefile_output - file name of the tracked output, with annotations.
     :param: trackpoints - a list of dictionaries {'x', 'y', 'label', 'frame_number'} to track.  Those before frame_start will be copied to the output.
     :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
+    :param: callback - a function to callback with (callback_arg, output_trackpoints)
     :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
 
     """
@@ -171,7 +172,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
         raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
 
     cap = cv2.VideoCapture(moviefile_input)
-    ret, current_frame = cap.read()
+    ret, current_frame_data = cap.read()
 
     # should be movie name + tracked
 
@@ -187,25 +188,29 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
         output_trackpoints = []
         for frame_number in range(1_000_000):
-            prev_frame = current_frame
-            ret, current_frame = cap.read()
+            prev_frame_data = current_frame_data
+            ret, current_frame_data = cap.read()
             if not ret:
                 break
 
-            # Get the trackpoints for the current frame if this was previously tracked or is the first frame to track
+            # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
             if frame_number <= frame_start:
                 current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
 
-            # If this is a frame to track, then track it
-            if frame_number >= frame_start:
-                current_trackpoints = cv2_track_frame(frame0=prev_frame, frame1=current_frame, trackpoints=current_trackpoints)
+            # If this is after the starting frame, then track it
+            if frame_number > frame_start:
+                current_trackpoints = cv2_track_frame(frame0=prev_frame_data, frame1=current_frame_data, trackpoints=current_trackpoints)
 
             # Label the output and write it
-            cv2_label_frame(frame=current_frame, trackpoints=current_trackpoints, frame_label=frame_number)
-            out.write(current_frame)
+            cv2_label_frame(frame=current_frame_data, trackpoints=current_trackpoints, frame_label=frame_number)
+            out.write(current_frame_data)
 
             # Add the trackpionts to the output list, giving each a frame number
             output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+
+            # Call the callback if we have one
+            if callback is not None:
+                callback(output_trackpoints)
         cap.release()
         out.release()
 
