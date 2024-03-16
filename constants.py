@@ -7,6 +7,7 @@ class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
     MAX_FILE_UPLOAD = 1024*1024*16
+    NOTIFY_UPDATE_INTERVAL = 5.0
 
 
 class Engines:

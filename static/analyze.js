@@ -19,7 +19,7 @@ const DEFAULT_FRAMES = 20;      // default number of frames to show
 const DEFAULT_WIDTH = 340;
 const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const RETRACK_POLL_MS = 10;    // how quickly to pool for retracking
+const NOTIFY_UPDATE_INTERVAL = 5;    // how quickly to pool for retracking
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -338,28 +338,26 @@ class PlantTracerController extends CanvasController {
 
     // Update the status from the server
     update_status_from_server() {
-        counter += 1;
-        this.update_status("retrack counter: "+counter);
-        console.log("retrack counter=",counter);
+        this.update_status("Getting Movie Metadata...");
+        console.log(Date.now(),"Getting Movie Metadata...")
+        $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
+            console.log(Date.now(),"got = ",data)
+            if (data.error==false){
+                this.update_status(data.metadata.status);
+            }
+        });
     }
 
     // Set a timer to get the movie status from the server and put it in the status field
-    // during long operations. We use a timeout that sets another timeout rather than a timer
-    // because the server might take a long time, which would cause recursive timers.
+    // during long operations.
     // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
     start_update_timer() {
-        if (!this.status_timeout_id) {
-            this.status_timeout_id = setTimeout( () => {
-                this.update_status_from_server();
-                this.status_timeout_id = undefined;
-                this.start_update_timer();
-            }, RETRACK_POLL_MS);
-        }
+        this.status_interval_id = setInterval( () => this.update_status_from_server, NOTIFY_UPDATE_INTERVAL);
     }
 
     stop_update_timer() {
-        clearTimeout(this.status_timeout_id);
-        this.status_timeout_id = undefined;
+        clearInterval(this.status_timeout_id);
+        this.status_interval_id = undefined;
     }
 
 

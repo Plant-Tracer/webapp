@@ -64,7 +64,7 @@ if 'IN_PASSENGER' in os.environ:
         # https://stackoverflow.com/questions/2557168/how-do-i-change-the-default-format-of-log-messages-in-python-app-engine
         # root.setLevel(logging.DEBUG)
         import bottle_app
-        import ctools.clogging as clogging
+        from ctools import clogging
         bottle_app.expand_memfile_max()
         root = logging.getLogger()
         root.setLevel(logging.INFO)
