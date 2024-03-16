@@ -73,7 +73,7 @@ logit_DEBUG = False
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
     user_api_key = get_user_api_key()
-    user_ipaddr = get_user_ipaddr()
+    user_ipaddr  = get_user_ipaddr()
 
     # Make copies of func_args and func_return so we can modify without fear
     func_args = copy.copy(func_args)
@@ -156,6 +156,7 @@ def validate_api_key(api_key):
                               where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1""",
                               (api_key, ), asDicts=True)
 
+    logging.debug("validate_api_key(%s)=%s",api_key,ret)
     if ret:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
@@ -1006,11 +1007,10 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
 SET_MOVIE_METADATA = {
-    # title can be changed by the owner or the admin
+    # title, status and description can be changed by the owner or the admin
     'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
-
-    # description can be changed by owner or admin
     'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
+    'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1036,20 +1036,25 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     MAPPER = {0: 'FALSE', 1: 'TRUE'}
 
     if set_movie_id:
-        res = dbfile.DBMySQL.csfr(get_dbreader(
-        ), "SELECT %s in (select user_id from movies where id=%s)", (user_id, set_movie_id))
+        # We are changing metadata for a movie; make sure that this user is allowed to do so
+        res = dbfile.DBMySQL.csfr(
+            get_dbreader(),
+            """SELECT %s in (select user_id from movies where id=%s)""", (user_id, set_movie_id))
+        # Find out if the user is the owner of the movie
         is_owner = MAPPER[res[0][0]]
-
         res = dbfile.DBMySQL.csfr(get_dbreader(),
-                                  "SELECT %s in (select user_id from admins where course_id=(select course_id from movies where id=%s))",
+                                  """
+                                  SELECT %s IN (select user_id from admins
+                                                WHERE course_id=(select course_id
+                                               FROM movies WHERE id=%s))
+                                  """,
                                   (user_id, set_movie_id))
+        # Or if the user is the admin
         is_admin = MAPPER[res[0][0]]
-
-        cmd = SET_MOVIE_METADATA[prop].replace(
-            '@is_owner', is_owner).replace('@is_admin', is_admin)
-        args = [value, set_movie_id]
-
-        ret = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
+        # Create the command that updates the movie metadata if the user is the owner of the movie or admin
+        cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
+        args  = [value, set_movie_id]
+        ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
         return ret
 
     # Currently, users can only set their own data

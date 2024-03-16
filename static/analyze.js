@@ -19,12 +19,14 @@ const DEFAULT_FRAMES = 20;      // default number of frames to show
 const DEFAULT_WIDTH = 340;
 const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
+const RETRACK_POLL_MS = 10;    // how quickly to pool for retracking
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
 var template_html   = null;
+var counter = 0;
 const ENGINE = 'CV2';
 
 class CanvasController {
@@ -214,7 +216,7 @@ class myCircle extends MyObject {
 
 }
 
-// This contains code specific for the planttracer project.
+// The PlantTracerController is the box where we control the plant tracer functionality.
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
     constructor( this_id, movie_id, frame_number, movie_metadata ) {
@@ -231,6 +233,7 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
         this.video          = $(`#${this.this_id} video`);
         this.download_link  = $(`#${this.this_id} .download_link`);
+        this.status_div     = $(`#${this.this_id} .status`);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -328,9 +331,37 @@ class PlantTracerController extends CanvasController {
         }
     }
 
+    // Given a message, update the status message
     update_status(msg) {
-        $(`#${this.this_id} td.message`).html(msg);
+        $(`#${this.this_id} td.status_message`).html(msg);
     }
+
+    // Update the status from the server
+    update_status_from_server() {
+        counter += 1;
+        this.update_status("retrack counter: "+counter);
+        console.log("retrack counter=",counter);
+    }
+
+    // Set a timer to get the movie status from the server and put it in the status field
+    // during long operations. We use a timeout that sets another timeout rather than a timer
+    // because the server might take a long time, which would cause recursive timers.
+    // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
+    start_update_timer() {
+        if (!this.status_timeout_id) {
+            this.status_timeout_id = setTimeout( () => {
+                this.update_status_from_server();
+                this.status_timeout_id = undefined;
+                this.start_update_timer();
+            }, RETRACK_POLL_MS);
+        }
+    }
+
+    stop_update_timer() {
+        clearTimeout(this.status_timeout_id);
+        this.status_timeout_id = undefined;
+    }
+
 
     // available colors
     // https://sashamaps.net/docs/resources/20-colors/
@@ -427,7 +458,7 @@ class PlantTracerController extends CanvasController {
         });
     }
 
-    /* track_to_end() is called when the 'track to end' button is clicked.
+    /* track_to_end() is called when the track_button ('track to end') button is clicked.
      * It tracks on the server, then displays the new movie and offers to download a CSV file.
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
@@ -438,6 +469,7 @@ class PlantTracerController extends CanvasController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end(event) {
+
         // get the next frame and apply tracking logic
         //console.log("track_to_end");
         const track_params = {
@@ -450,8 +482,10 @@ class PlantTracerController extends CanvasController {
         //console.log("params:",track_params);
         this.update_status("Tracking movie...");
         this.video.hide();
+        this.start_update_timer();
         $.post('/api/track-movie', track_params).done( (data) => {
             //console.log("RECV:",data);
+            this.stop_update_timer();
             this.update_status("");
             if (data.error) {
                 alert("Tracking error: "+data.message);

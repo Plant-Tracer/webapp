@@ -295,17 +295,17 @@ def func_root():
     return {**page_dict(),
             **{'demo_api_key':demo_api_key}}
 
+@bottle.route('/about', method=GET_POST)
+@view('about.html')
+def func_about():
+    return page_dict('About')
+
 @bottle.route('/error', method=GET_POST)
 @view('error.html')
 def func_error():
     logging.debug("/error")
     auth.clear_cookie()
     return page_dict('Error', lookup=False)
-
-@bottle.route('/about', method=GET_POST)
-@view('about.html')
-def func_about():
-    return page_dict('About')
 
 @bottle.route('/audit', method=GET_POST)
 @view('audit.html')
@@ -664,6 +664,21 @@ def api_list_movies():
     return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
 
 
+class MovieTrackCallback:
+    """Service class to create a callback instance to update the movie status"""
+    def __init__(self, *, user_id, movie_id):
+        self.user_id = user_id
+        self.movie_id = movie_id
+
+    def notify(self, args):
+        min_frame = min( (obj['frame_number'] for obj in args) )
+        max_frame = max( (obj['frame_number'] for obj in args) )
+        message = f"Tracked frames {min_frame} to {max_frame}"
+        logging.debug("MovieTrackCallback %s",message)
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
+
+
+
 @bottle.route('/api/track-movie', method='POST')
 def api_track_movie():
     """Tracks a movie that has been uploaded.
@@ -712,12 +727,14 @@ def api_track_movie():
             # Track (or retrack) the movie and create the tracked movie
             # This creates an output file that has the trackpoints animated
             # and an array of all the trackpoints
+            mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
             tracked = tracker.track_movie(engine_name=engine_name,
                                           engine_version=engine_version,
                                           input_trackpoints = input_trackpoints,
                                           frame_start      = frame_start,
                                           moviefile_input  = infile.name,
-                                          moviefile_output = outfile.name)
+                                          moviefile_output = outfile.name,
+                                          callback = mtc.notify)
 
             # Save the movie with updated metadata
             new_movie_data = outfile.read()

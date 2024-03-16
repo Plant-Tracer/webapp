@@ -155,7 +155,7 @@ def cleanup_mp4(*,infile,outfile):
             raise
 
 
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0):
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -164,6 +164,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     :param: moviefile_output - file name of the tracked output, with annotations.
     :param: trackpoints - a list of dictionaries {'x', 'y', 'label', 'frame_number'} to track.  Those before frame_start will be copied to the output.
     :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
+    :param: callback - a function to callback with (callback_arg, output_trackpoints)
     :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
 
     """
@@ -206,6 +207,10 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
             # Add the trackpionts to the output list, giving each a frame number
             output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+
+            # Call the callback if we have one
+            if callback is not None:
+                callback(output_trackpoints)
         cap.release()
         out.release()
 
