@@ -38,6 +38,10 @@ from constants import MIME,Engines
 import tracker
 
 
+TEST_LABEL1 = 'test-label1'
+TEST_LABEL2 = 'test-label2'
+TEST_LABEL3 = 'test-label3'
+
 def test_track_point_annotations(new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)

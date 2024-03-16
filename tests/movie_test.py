@@ -189,9 +189,6 @@ def test_movie_update_metadata(new_movie):
     assert get_movie(api_key, movie_id)['published'] == 0
 
 
-TEST_LABEL1 = 'test-label1'
-TEST_LABEL2 = 'test-label2'
-TEST_LABEL3 = 'test-label3'
 def test_movie_extract(new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
