@@ -157,15 +157,13 @@ def test_movie_tracking(new_movie):
     sr = csv.DictReader(lines,delimiter=',')
     dictlines = [row for row in sr]
     # Make sure that the first line hasn't moved
-    assert dictlines[0]['track1 x']==275
-    assert dictlines[0]['track1 y']==215
-    assert dictlines[0]['track2 x']==410
-    assert dictlines[0]['track2 y']==175
+    assert (dictlines[0]['track1 x']=='275') and (dictlines[0]['track1 y']=='215')
+    assert (dictlines[0]['track2 x']=='410') and (dictlines[0]['track2 y']=='175')
 
-    # Make sure that the secon line has moved
-    assert dictlines[1]['track1 x']!=275
-    assert dictlines[1]['track1 y']!=215
+    # Make sure that the second frame has moved
+    assert not ((dictlines[1]['track1 x']=='275') and (dictlines[1]['track1 y']!='215'))
 
+    # Make sure we got a lot back
     assert len(lines) > 50
 
     # Purge the new movie
