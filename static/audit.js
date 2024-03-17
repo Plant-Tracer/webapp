@@ -1,4 +1,5 @@
-/*global api_key */
+/* jshint esversion: 8 */
+/* global api_key */
 
 ////////////////////////////////////////////////////////////////
 // page: /audit
@@ -11,12 +12,12 @@ function build_audit_table() {
     fetch('/api/get-logs', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
-                return
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
+                return;
             }
             console.log("data=",data);
-            let logs = data['logs'];
+            let logs = data.logs;
             console.log("logs=",logs);
             // get the columns
             var columns = [];

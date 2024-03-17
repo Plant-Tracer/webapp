@@ -1,3 +1,4 @@
+/* jshint esversion: 8 */
 // code for /analyze
 
 /***
@@ -31,6 +32,16 @@ var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
 const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
+
+// available colors
+// https://sashamaps.net/docs/resources/20-colors/
+// removing green (for obvious reasons)
+const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
+                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
+                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+                       '#000075', '#808080', '#e6194b', ];
+
+
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $( canvas_selector );
@@ -43,7 +54,7 @@ class CanvasController {
         this.ctx = this.c.getContext('2d');                  // the drawing context
 
         this.selected = null,             // the selected object
-        this.objects = [];                // the objects
+        this.objects = new Array();                // the objects
         this.zoom    = 1;                 // default zoom
 
         // Register my events.
@@ -196,7 +207,7 @@ class myCircle extends MyObject {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
         ctx.font = '18px sanserif';
-        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2)
+        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2);
         ctx.restore();
     }
 
@@ -211,7 +222,7 @@ class myCircle extends MyObject {
 
     // Return the location as an "x,y" string
     loc() {
-        return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")"
+        return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")";
     }
 
 }
@@ -228,7 +239,7 @@ class PlantTracerController extends CanvasController {
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed
         this.frame_number    = frame_number; //
-        this.movie_metadata  = movie_metadata
+        this.movie_metadata  = movie_metadata;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
         this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
@@ -334,9 +345,9 @@ class PlantTracerController extends CanvasController {
     // Update the status from the server
     update_tracked_movie_status_from_server() {
         this.tracked_movie_status.text("Getting Movie Metadata...");
-        console.log(Date.now(),"Getting Movie Metadata...")
+        console.log(Date.now(),"Getting Movie Metadata...");
         $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
-            console.log(Date.now(),"got = ",data)
+            console.log(Date.now(),"got = ",data);
             if (data.error==false){
                 this.tracked_movie_status.text(data.metadata.status);
             }
@@ -356,13 +367,6 @@ class PlantTracerController extends CanvasController {
     }
 
 
-    // available colors
-    // https://sashamaps.net/docs/resources/20-colors/
-    // removing green (for obvious reasons)
-    circle_colors = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
-                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
-                     '#000075', '#808080', '#e6194b', ]
 
 
     // add a tracking circle with the next color
@@ -373,7 +377,7 @@ class PlantTracerController extends CanvasController {
             if (this.objects[i].constructor.name == myCircle.name) count+=1;
         }
 
-        let color = this.circle_colors[count];
+        let color = CIRCLE_COLORS[count];
         this.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
         this.create_marker_table();
         // Finally enable the track-to-end button
@@ -442,7 +446,7 @@ class PlantTracerController extends CanvasController {
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
             trackpoints  : this.json_trackpoints()
-        }
+        };
         //console.log("put-frame-analysis: ",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
@@ -558,7 +562,7 @@ class PlantTracerController extends CanvasController {
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
         this.objects = [];      // clear the array
-        this.theImage = new myImage( 0, 0, data.data_url, this)
+        this.theImage = new myImage( 0, 0, data.data_url, this);
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
         if (data.frame_number>0){
@@ -568,7 +572,7 @@ class PlantTracerController extends CanvasController {
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
-                this.insert_circle( tp['x'], tp['y'], tp['label'] );
+                this.insert_circle( tp.x, tp.y, tp.label );
                 count += 1;
             }
         }
@@ -590,7 +594,7 @@ class PlantTracerController extends CanvasController {
 /* myImage Object - Draws an image (x,y) specified by the url */
 class myImage extends MyObject {
     constructor(x, y, url, ptc) {
-        super(x, y, url)
+        super(x, y, url);
         this.ptc = ptc;
 
         let theImage=this;
@@ -603,9 +607,10 @@ class myImage extends MyObject {
         this.img.onload = (_event) => {
             theImage.state = 1;
             if (theImage.ctx) {
-                ptc.redraw('myImage constructor')
+                ptc.redraw('myImage constructor');
             }
-        }
+        };
+
         this.draw = function (ctx) {
             // See if this is the first time we have drawn in the context.
             theImage.ctx = ctx;
@@ -618,7 +623,7 @@ class myImage extends MyObject {
                 }
                 ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
-        }
+        };
 
         // set the URL. It loads immediately if it is a here document.
         // That will make onload run, but theImge.ctx won't be set.
@@ -648,8 +653,7 @@ function append_new_ptc(movie_id, frame_number) {
     let div_html = div_template
         .replace('template', `${this_id}`)
         .replace('canvas-id',`canvas-${this_id}`)
-        .replace('zoom-id',`zoom-${this_id}`)
-        + "<div id='template'></div>";
+        .replace('zoom-id',`zoom-${this_id}`) + "<div id='template'></div>";
     $( '#template' ).replaceWith( div_html );
     $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
 

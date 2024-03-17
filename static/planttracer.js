@@ -1,3 +1,4 @@
+/* jshint esversion: 8 */
 /*global api_key */
 /*global admin */
 /*global user_id */
@@ -47,7 +48,7 @@ function register_func() {
                 $('#message').html(`<b>${data.message}</b>`);
             }})
         .fail( function(xhr, _status, _error) {
-            $('#message').html("POST error: "+xhr['responseText']);
+            $('#message').html("POST error: "+xhr.responseText);
             console.log("xhr:",xhr);
         });
 }
@@ -62,10 +63,10 @@ function resend_func() {
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
     $.post('/api/resend-link', {email:email, planttracer_endpoint:planttracer_endpoint})
         .done(function(data) {
-            $('#message').html('Response: ' + data['message']);
+            $('#message').html('Response: ' + data.message);
         })
         .fail(function(xhr, status, error) {
-            $('#message').html(`POST error: `+xhr['responseText']);
+            $('#message').html(`POST error: `+xhr.responseText);
             console.log("xhr:",xhr);
         });
 }
@@ -172,7 +173,7 @@ function play_clicked( e ) {
     const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     //var tr    = $(`#tr-${rowid}`).show();
     //var td    = $(`#td-${rowid}`).show();
-    var video = $(`#video-${rowid}`).show()
+    var video = $(`#video-${rowid}`).show();
     var vid = video.attr('id');
     //console.log('url=',url);
     //console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
@@ -185,7 +186,7 @@ function play_clicked( e ) {
 function hide_clicked( e ) {
     let rowid = e.getAttribute('x-rowid');
     let video = $(`#video-${rowid}`);
-    video.hide()
+    video.hide();
     //var tr    = $(`#tr-${rowid}`).hide();
     //var td    = $(`#td-${rowid}`).hide();
 }
@@ -220,8 +221,8 @@ function set_property(user_id, movie_id, property, value)
     fetch('/api/set-metadata', { method:"POST", body:formData})
         .then((response) => response.json())
         .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
             } else {
                 list_movies();
             }
@@ -318,7 +319,7 @@ const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title<
 
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
-    const UNPUBLISHED = 'unpublished'
+    const UNPUBLISHED = 'unpublished';
     const DELETED = 'deleted';
     const COURSE = 'course';
 
@@ -401,10 +402,11 @@ function list_movies_data( movies ) {
 
             const you_class = (m.user_id == user_id) ? "you" : "";
 
-            let rows = `<tr class='${you_class}'>`
-                + `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>`  // #1, #2, #3
-                + make_td_text( "title", m.title, "<br/>" + play + analyze ) + make_td_text( "description", m.description, '')  // #4 #5
-                + `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} <br> fps: ${m.fps} frames: ${m.total_frames} </td> ` ;  // #6
+            let rows = `<tr class='${you_class}'>` +
+                `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+                make_td_text( "title", m.title, "<br/>" + play + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
+                `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
+                `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
 
             rows += "<td> Status: "; // #7
             if (m.deleted) {
@@ -441,11 +443,11 @@ function list_movies_data( movies ) {
             rows += "</td></tr>\n"; // #7 end, <tr>
 
             // Now make the player row
-            rows += `<tr    class='movie_player' id='tr-${rowid}'> `
-                  + `<td    class='movie_player' id='td-${rowid}' colspan='7' >`
-                  + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
-                  + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
-                  + `</tr>\n`;
+            rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
+                `<td    class='movie_player' id='td-${rowid}' colspan='7' >` +
+                `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
+                `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`+
+                `</tr>\n`;
             return rows;
         }
 
@@ -465,10 +467,10 @@ function list_movies_data( movies ) {
         div.html(h);
     }
     // Create the four tables
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)), false);
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id && m['user_id']!=user_id)), false);
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)), false);
+    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1)), false);
+    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0)), true);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id && m.user_id!=user_id)), false);
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1)), false);
     $('.movie_player').hide();
 }
 
@@ -485,8 +487,8 @@ function list_movies() {
         .then((response) => response.json())
         .then((data) => {
             //console.log("data:",data);
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
             } else {
                 list_movies_data( data['movies'] );
                 $('#message').html('');
@@ -531,13 +533,13 @@ function list_users()
     fetch('/api/list-users', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
                 return;
             }
             var course_array = [];
-            data['courses'].forEach( course => (course_array[course.course_id] = course ));
-            list_users_data( data['users'], course_array);
+            data.courses.forEach( course => (course_array[course.course_id] = course ));
+            list_users_data( data.users, course_array);
         });
 }
 
