@@ -31,7 +31,7 @@ Array.prototype.move = function (old_index, new_index) {
 };
 draw();
 
- ================================================================
+// ================================================================
 function frame0_loaded(elem) {
     console.log('image loaded. setting up mouse movement');
     $('#frame0').mousemove(function(event){
@@ -44,7 +44,7 @@ function frame0_loaded(elem) {
 
 
 
-    old code:
+    //old code:
 
     const img = new Image();
     img.onload = function() {

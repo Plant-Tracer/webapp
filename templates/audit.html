@@ -1,12 +1,11 @@
 <!-- -*- mode: html -*- -->
 {% extends 'base.html' %}
 
-
-
 {% block script %}
 <!-- See https://datatables.net/download/ for info on datatables -->
 <link href="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.css" rel="stylesheet"/>
 <script src="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.js"></script>
+<script type="text/javascript" charset="utf8" src="static/audit.js"></script>
 {% endblock %}
 
 {% block body %}
@@ -28,23 +27,4 @@
 
 <table id='audit'></table>
 
-<!-- See https://stackoverflow.com/questions/33682122/datatables-generate-whole-table-from-json -->
-
-<script>
-var columns = [
-  { "data": "a-data", "title":"Column A" },
-  { "data": "b-data", "title":"Column B" },
-  { "data": "c-data", "title":"Column C" }
-  ];
-
-var data = [
- { "a-data":"This is A", "b-data":"This is B","c-data":"This is C"},
- { "a-data":"Something", "b-data":"Different","c-data":"Here"}
- ];
-
-
-$( document ).ready( function() {
-   build_audit_table();
-});
-</script>
 {% endblock %}

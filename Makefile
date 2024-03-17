@@ -126,6 +126,10 @@ tracker-debug:
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
 
+eslint:
+	for fname in static/*.js ; do npx eslint $$fname | sed "s/:[0-9][0-9]//" | sed "s=^ *=$$fname:=" | grep error ; done
+
+
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:

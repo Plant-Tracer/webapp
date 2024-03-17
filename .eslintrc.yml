@@ -1,11 +1,12 @@
-env: {
+env:
   browser: true,
   jquery: true,
   es2021: true
-}
-extends:
-  - eslint:recommended
-parserOptions: {
+
+extends: eslint:recommended
+
+parserOptions:
   ecmaVersion: latest
-}
-rules: {}
+
+rules:
+  "no-unused-vars": ["error", { "args": "all", "argsIgnorePattern" : "^_" }]

@@ -18,9 +18,9 @@
 /*global movie_id */
 
 const DEFAULT_R = 10;           // default radius of the marker
-const DEFAULT_FRAMES = 20;      // default number of frames to show
-const DEFAULT_WIDTH = 340;
-const DEFAULT_HEIGHT= 340;
+//const DEFAULT_FRAMES = 20;      // default number of frames to show
+//const DEFAULT_WIDTH = 340;
+//const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const NOTIFY_UPDATE_INTERVAL = 5;    // how quickly to pool for retracking
 
@@ -28,18 +28,15 @@ const NOTIFY_UPDATE_INTERVAL = 5;    // how quickly to pool for retracking
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
-var template_html   = null;
-var counter = 0;
+var div_template = '';          // will be set with the div template
 const ENGINE = 'CV2';
-
+const ENGINE_VERSION = '1.0';
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $( canvas_selector );
         if (canvas == null) {
-            console.log("CanvasController: Cannot find canvas ",canvas_controller);
+            console.log("CanvasController: Cannot find canvas=", canvas_selector);
             return;
-        } else {
-            console.log("CanvasController: canvas_selector=",canvas_selector);
         }
 
         this.c   = canvas[0];     // get the element
@@ -60,7 +57,7 @@ class CanvasController {
 
         // Catch the zoom change event
         if (zoom_selector) {
-            $(zoom_selector).on('change', (e) => {
+            $(zoom_selector).on('change', (_) => {
                 this.set_zoom( $(zoom_selector).val() / 100 );
             });
         }
@@ -110,7 +107,7 @@ class CanvasController {
         this.object_did_move(this.selected);
     }
 
-    mouseup_handler(e) {
+    mouseup_handler(_) {
         // if an object is selected, unselect and change back the cursor
         let obj = this.selected;
         this.clear_selection();
@@ -127,10 +124,10 @@ class CanvasController {
     }
 
     // Main drawing function:
-    redraw(v) {
+    redraw( _msg ) {
         // clear canvas
         // this is useful for tracking who called redraw, and how many times it is called, and when
-        // console.log(`redraw=${v} id=${this.c.id}`);
+        // console.log(`redraw=${msg} id=${this.c.id}`);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
         // draw the objects. Always draw the selected objects after
@@ -149,8 +146,8 @@ class CanvasController {
     }
 
     // These can be subclassed
-    object_did_move(obj) { }
-    object_move_finished(obj) { }
+    object_did_move( _obj) { }
+    object_move_finished( _obj) { }
 }
 
 
@@ -162,7 +159,7 @@ class MyObject {
         this.name = name;
     }
     // default - it never contains the point
-    contains_point(pt) {
+    contains_point(_pt) {
         return false;
     }
 }
@@ -279,12 +276,12 @@ class PlantTracerController extends CanvasController {
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
 
         // Wire up the movement buttons
-        $(`#${this.this_id} input.frame_prev10`).on('click', (event) => {this.goto_frame( this.frame_number-10);});
-        $(`#${this.this_id} input.frame_prev`)  .on('click', (event) => {this.goto_frame( this.frame_number-1);});
-        $(`#${this.this_id} input.frame_next`)  .on('click', (event) => {this.goto_frame( this.frame_number+1);});
-        $(`#${this.this_id} input.frame_next10`).on('click', (event) => {this.goto_frame( this.frame_number+10);});
+        $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
+        $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( this.frame_number-1);});
+        $(`#${this.this_id} input.frame_next`)  .on('click', (_event) => {this.goto_frame( this.frame_number+1);});
+        $(`#${this.this_id} input.frame_next10`).on('click', (_event) => {this.goto_frame( this.frame_number+10);});
 
-        $(`#${this.this_id} input.frame_number_field`).on('input', (event) => {
+        $(`#${this.this_id} input.frame_number_field`).on('input', (_event) => {
             let new_frame = this.frame_number_field[0].value;
             // turn '' into a "0"
             if (new_frame=='') {
@@ -303,7 +300,7 @@ class PlantTracerController extends CanvasController {
 
 
     // on each change of input, validate the marker name
-    marker_name_input_handler (e) {
+    marker_name_input_handler (_e) {
         const val = this.marker_name_input.val();
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
@@ -327,7 +324,7 @@ class PlantTracerController extends CanvasController {
     }
 
     // new marker added
-    add_marker_onclick_handler(e) {
+    add_marker_onclick_handler(_e) {
         if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
             this.insert_circle( 50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
@@ -418,7 +415,7 @@ class PlantTracerController extends CanvasController {
     }
 
     // Movement finished; upload new annotations
-    object_move_finished(obj) {
+    object_move_finished(_obj) {
         this.put_trackpoints();
     }
 
@@ -464,15 +461,15 @@ class PlantTracerController extends CanvasController {
      * https://freshman.tech/custom-html5-video/
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
-    track_to_end(event) {
+    track_to_end(_event) {
         // get the next frame and apply tracking logic
         console.log("track_to_end start");
         const track_params = {
             api_key:api_key,
             movie_id:this.movie_id,
             frame_start:this.frame_number,
-            engine_name:'CV2',
-            engine_version:'1.0'
+            engine_name: ENGINE,
+            engine_version: ENGINE_VERSION
         };
         //console.log("params:",track_params);
         this.tracked_movie_status("Tracking movie...");
@@ -516,7 +513,7 @@ class PlantTracerController extends CanvasController {
             return;
         }
         // Make sure it is in range
-        if (frame == NaN) {
+        if ( isNaN(frame)) {
             frame = 0;
         }
 
@@ -603,7 +600,7 @@ class myImage extends MyObject {
         this.img = new Image();
 
         // When the image is loaded, draw the entire stack again.
-        this.img.onload = (event) => {
+        this.img.onload = (_event) => {
             theImage.state = 1;
             if (theImage.ctx) {
                 ptc.redraw('myImage constructor')
@@ -644,7 +641,7 @@ class myImage extends MyObject {
 // each frame is for a specific movie
 function append_new_ptc(movie_id, frame_number) {
     let this_id  = "template-" + (div_id_counter++);
-    let this_sel = `${this_id}`;
+    //let this_sel = `${this_id}`;
     //console.log(`append_new_ptc: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
@@ -684,7 +681,7 @@ function append_new_ptc(movie_id, frame_number) {
 function analyze_movie() {
 
     // Say which movie we are working on
-    $('#firsth2').html(`Movie \#${movie_id}`);
+    $('#firsth2').html(`Movie #${movie_id}`);
 
     // capture the HTML of the <div id='#template'> into a new div
     div_template = "<div id='template'>" + $('#template').html() + "</div>";
@@ -692,7 +689,11 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = append_new_ptc(movie_id, 0);           // create the first <div> and its controller
+    append_new_ptc(movie_id, 0);           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }
+
+// Call analyze_move on load
+
+$( document ).ready( () => analyze_movie );
