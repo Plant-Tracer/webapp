@@ -14,6 +14,9 @@
 
 ***/
 
+/*global api_key */
+/*global movie_id */
+
 const DEFAULT_R = 10;           // default radius of the marker
 const DEFAULT_FRAMES = 20;      // default number of frames to show
 const DEFAULT_WIDTH = 340;
@@ -231,9 +234,10 @@ class PlantTracerController extends CanvasController {
         this.movie_metadata  = movie_metadata
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
-        this.video          = $(`#${this.this_id} video`);
-        this.download_link  = $(`#${this.this_id} .download_link`);
-        this.status_div     = $(`#${this.this_id} .status`);
+        this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
+        this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
+        this.add_marker_status    = $(`#${this_id} label.add_marker_status`);
+        this.download_link        = $(`#${this.this_id} .download_link`);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -254,10 +258,9 @@ class PlantTracerController extends CanvasController {
         }
 
         // Hide the video until we track or retrack retrack
-        this.video.hide();
+        this.tracked_movie.hide();
+        this.tracked_movie_status.hide();
 
-        // add_marker_status shows error messages regarding the marker name
-        this.add_marker_status = $(`#${this_id} label.add_marker_status`);
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
@@ -331,19 +334,14 @@ class PlantTracerController extends CanvasController {
         }
     }
 
-    // Given a message, update the status message
-    update_status(msg) {
-        $(`#${this.this_id} td.status_message`).html(msg);
-    }
-
     // Update the status from the server
-    update_status_from_server() {
-        this.update_status("Getting Movie Metadata...");
+    update_tracked_movie_status_from_server() {
+        this.tracked_movie_status.text("Getting Movie Metadata...");
         console.log(Date.now(),"Getting Movie Metadata...")
         $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
             console.log(Date.now(),"got = ",data)
             if (data.error==false){
-                this.update_status(data.metadata.status);
+                this.tracked_movie_status.text(data.metadata.status);
             }
         });
     }
@@ -352,7 +350,7 @@ class PlantTracerController extends CanvasController {
     // during long operations.
     // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
     start_update_timer() {
-        this.status_interval_id = setInterval( () => this.update_status_from_server, NOTIFY_UPDATE_INTERVAL);
+        this.status_interval_id = setInterval( () => this.update_tracked_movie_status_from_server, NOTIFY_UPDATE_INTERVAL);
     }
 
     stop_update_timer() {
@@ -467,9 +465,8 @@ class PlantTracerController extends CanvasController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end(event) {
-
         // get the next frame and apply tracking logic
-        //console.log("track_to_end");
+        console.log("track_to_end start");
         const track_params = {
             api_key:api_key,
             movie_id:this.movie_id,
@@ -478,15 +475,15 @@ class PlantTracerController extends CanvasController {
             engine_version:'1.0'
         };
         //console.log("params:",track_params);
-        this.update_status("Tracking movie...");
-        this.video.hide();
+        this.tracked_movie_status("Tracking movie...");
+        this.tracked_movie_status.show();
+        this.tracked_movie.hide();
         this.start_update_timer();
         $.post('/api/track-movie', track_params).done( (data) => {
             //console.log("RECV:",data);
             this.stop_update_timer();
-            this.update_status("");
             if (data.error) {
-                alert("Tracking error: "+data.message);
+                this.tracked_movie_status.text("Tracking error: "+data.message);
             } else {
                 // Set our variables
                 this.tracked_movie_id = data.tracked_movie_id;
@@ -495,8 +492,9 @@ class PlantTracerController extends CanvasController {
                 $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
 
                 // Show the tracked movie and the download link
-                this.video.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
-                this.video.show();
+                this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
+                this.tracked_movie_status.hide();
+                this.tracked_movie.show();
                 this.download_link.show();
 
                 // redraw the current frame
@@ -583,7 +581,8 @@ class PlantTracerController extends CanvasController {
                 this.insert_circle( 20, 20, 'apex');
                 this.insert_circle( 20, 50, 'ruler 0 mm');
                 this.insert_circle( 20, 80, 'ruler 20 mm');
-                this.update_status("Place the three markers. You can also create additional markers.");
+                this.add_marker_status.text("Place the three markers. You can also create additional markers.");
+                this.add_marker_status.show();
             }
         }
         this.redraw('append_new_ptc');              // initial drawing

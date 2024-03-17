@@ -15,7 +15,7 @@ from bottle import request
 import paths
 
 from lib.ctools import dbfile
-API_KEY_COOKIE_NAME = 'api_key'
+API_KEY_COOKIE_BASE = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
 SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
 
@@ -66,13 +66,18 @@ def get_dbwriter():
 # Authentication API - for clients
 ##
 
+@functools.cache
+def cookie_name():
+    """We append the database name to the cookie name to make development easier.
+    This way, the localhost: cookies can be for the prod, demo, or dev databases.
+    """
+    return API_KEY_COOKIE_BASE + "-" + get_dbreader().database
 
 def set_cookie(api_key):
-    bottle.response.set_cookie(API_KEY_COOKIE_NAME, api_key, path='/',
-                               max_age=COOKIE_MAXAGE)
+    bottle.response.set_cookie(cookie_name(), api_key, path='/', max_age=COOKIE_MAXAGE)
 
 def clear_cookie():
-    bottle.response.delete_cookie(API_KEY_COOKIE_NAME, path='/')
+    bottle.response.delete_cookie(cookie_name(), path='/')
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
@@ -82,7 +87,7 @@ def get_user_api_key():
     logging.debug("get_user_api_key")
     # check the query string
     try:
-        api_key = request.query.get(API_KEY_COOKIE_NAME, None)
+        api_key = request.query.get(cookie_name(), None)
         if api_key is not None:
             return api_key
     except KeyError:

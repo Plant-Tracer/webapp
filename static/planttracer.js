@@ -1,3 +1,8 @@
+/*global api_key */
+/*global movie_id */
+
+
+
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
 function add_func() {

@@ -49,7 +49,6 @@ line-height:0px;
 
 <div id='template' >
   <table class='float-container'>
-    <tr><td class='status_message'>Loading frame...</td><td>&nbsp;</td></tr>
     <tr> <!-- First row of analysis table: the movie being tracked-->
       <td>
         <canvas id="canvas-id" width='320' height='240'> </canvas></br>
@@ -79,17 +78,15 @@ line-height:0px;
         <hr>
         <form class='pure-form pure-form-aligned marker_form' action="javascript:void(0)" >
           <fieldset>
-            <legend>Add a marker to track a point</legend>
-
             <div class='pure-control-group'>
-              <label for='marker-name'>Name:</label>
-              <input class='marker_name_input' type='text'   placeholder='Marker name' size='20' />
-              <input class='add_marker_button pure-button pure-button-primary' type='button' value='add marker' disabled/>
+              <label for='marker-name'>New marker name:</label>
+              <input class='marker_name_input' type='text' placeholder='Marker name' size='20' />
+              <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
             </div>
 
             <div class='pure-control-group'>
               <label> </label>
-              <label class='add_marker_status'></label>
+              <label class='add_marker_status'></label> <!-- for errror messages -->
             </div>
 
             <div class='pure-control-group'>
@@ -108,7 +105,8 @@ line-height:0px;
       </td>
     </tr>
     <tr> <!-- Second row of analysis table: the tracked movie -->
-      <td> <video class='movie_player' width='320' height='240' controls playinline> </video><br>
+      <td> <video class='tracked_movie' width='320' height='240' controls playinline> </video><br>
+           <div class='tracked_movie_status'>Tracking movie status message...</div>
       </td>
     </tr>
   </table>

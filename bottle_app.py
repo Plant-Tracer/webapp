@@ -72,11 +72,9 @@ import auth
 from auth import get_dbreader
 
 from paths import view, STATIC_DIR
-from constants import C,E
+from constants import C,E,__version__
 import mailer
 import tracker
-
-__version__ = '0.9.0'
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
