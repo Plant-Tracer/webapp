@@ -25,6 +25,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import STATIC_DIR,TEST_DATA_DIR
 import db
 import bottle_app
+import auth
 
 from user_test import new_course,new_user,API_KEY
 from movie_test import new_movie
@@ -71,8 +72,9 @@ def test_error():
     """Make sure authentication errors result in the session being expired and the cookie being cleared."""
     with boddle(params={}):
         res = bottle_app.func_error()
+    cookie_name = auth.cookie_name()
     assert "Session expired - You have been logged out" in res
-    assert ('Set-Cookie: api_key=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+    assert (f'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
             in str(bottle.response))
 
 
