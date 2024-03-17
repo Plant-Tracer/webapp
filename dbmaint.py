@@ -273,7 +273,7 @@ def schema_upgrade( dbcon, dbname ):
 
     def current_version():
         cursor = dbcon.cursor()
-        cursor.execute(f"SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
+        cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
         return int(cursor.fetchone()[0])
 
     cv = current_version()

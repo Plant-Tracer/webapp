@@ -46,6 +46,7 @@ import sys
 import os
 import io
 import json
+import time
 import functools
 import logging
 import base64
@@ -664,20 +665,23 @@ def api_list_movies():
     return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
 
 
+# pylint: disable=too-few-public-methods
 class MovieTrackCallback:
     """Service class to create a callback instance to update the movie status"""
     def __init__(self, *, user_id, movie_id):
         self.user_id = user_id
         self.movie_id = movie_id
+        self.last     = 0
 
-    def notify(self, args):
-        min_frame = min( (obj['frame_number'] for obj in args) )
-        max_frame = max( (obj['frame_number'] for obj in args) )
+    def notify(self, arg):
+        min_frame = min( (obj['frame_number'] for obj in arg) )
+        max_frame = max( (obj['frame_number'] for obj in arg) )
         message = f"Tracked frames {min_frame} to {max_frame}"
-        logging.debug("MovieTrackCallback %s",message)
-        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
 
-
+        if time.time() < self.last + C.NOTIFY_UPDATE_INTERVAL:
+            logging.debug("MovieTrackCallback %s",message)
+            db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
+            self.last = time.time()
 
 @bottle.route('/api/track-movie', method='POST')
 def api_track_movie():
@@ -737,6 +741,7 @@ def api_track_movie():
                                           callback = mtc.notify)
 
             # Save the movie with updated metadata
+            db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='status', value='')
             new_movie_data = outfile.read()
             movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
             new_title      = movie_metadata['title']
