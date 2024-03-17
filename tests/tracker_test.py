@@ -22,7 +22,6 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
-import blocktrack
 import bottle_app
 import copy
 import db
