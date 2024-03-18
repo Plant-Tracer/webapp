@@ -445,7 +445,7 @@ function list_movies_data( movies ) {
             // Now make the player row
             rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
                 `<td    class='movie_player' id='td-${rowid}' colspan='7' >` +
-                `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
+                `<video class='movie_player' id='video-${rowid}' controls playsinline></video>` +
                 `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`+
                 `</tr>\n`;
             return rows;
@@ -469,7 +469,7 @@ function list_movies_data( movies ) {
     // Create the four tables
     movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1)), false);
     movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id && m.user_id!=user_id)), false);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id)), false);
     movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1)), false);
     $('.movie_player').hide();
 }
@@ -479,6 +479,7 @@ function list_movies_data( movies ) {
 // The functions after this implement the interactivity
 //
 function list_movies() {
+    console.log("list_movies");
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
@@ -493,7 +494,7 @@ function list_movies() {
                 $('#message').html('');
             }
         })
-        .catch(console.error)
+        .catch(console.error);
 }
 
 ////////////////////////////////////////////////////////////////
