@@ -23,7 +23,6 @@ const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_WIDTH = 340;
 //const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (in msec)
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -41,6 +40,7 @@ const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
                      '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
                        '#000075', '#808080', '#e6194b', ];
 
+var window_ptc = undefined;
 
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
@@ -269,7 +269,6 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie.hide();
         this.tracked_movie_status.hide();
 
-
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
         this.marker_name_input.on('input',   (event) => { this.marker_name_input_handler(event);});
@@ -341,33 +340,6 @@ class PlantTracerController extends CanvasController {
             this.marker_name_input.val("");
         }
     }
-
-    // Update the status from the server - migrate to a web worker.*** TODO*&
-    update_tracked_movie_status_from_server() {
-        console.log(Date.now(),"update_tracked_movie_status_from_server");
-        this.tracked_movie_status.text("Getting Movie Metadata...");
-        $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
-            console.log(Date.now(),"got = ",data);
-            if (data.error==false){
-                this.tracked_movie_status.text(data.metadata.status);
-            }
-        });
-    }
-
-    // Set a timer to get the movie status from the server and put it in the status field
-    // during long operations.
-    // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
-    start_update_timer() {
-        this.status_interval_id = setInterval( () => {this.update_tracked_movie_status_from_server()}, NOTIFY_UPDATE_INTERVAL);
-    }
-
-    stop_update_timer() {
-        clearInterval(this.status_interval_id);
-        this.status_interval_id = undefined;
-    }
-
-
-
 
     // add a tracking circle with the next color
     insert_circle(x, y, name) {
@@ -666,7 +638,7 @@ function append_new_ptc(movie_id, frame_number) {
             alert(data.message);
             return;
         }
-        let ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
+        window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
 
         // get the request frame of the movie. When it comes back, use it to populate
         // a new PlantTracerController.
@@ -677,7 +649,9 @@ function append_new_ptc(movie_id, frame_number) {
             format:'json',
         };
         //console.log("SEND get_frame_params:",get_frame_params);
-        $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data); });
+        $.post('/api/get-frame', get_frame_params).done( (data) => {
+            window_ptc.get_frame_handler( data );
+        });
     });
 }
 
@@ -700,6 +674,20 @@ function analyze_movie() {
 }
 
 // Call analyze_move on load
+const WEBWORKER_JS = document.currentScript.src.replace("analyze.js","analyze_webworker.js");
 $( document ).ready( function() {
     analyze_movie();
+
+    if (window.Worker) {
+        const myWorker = new Worker(WEBWORKER_JS);
+
+        myWorker.postMessage("hello world");
+        console.log('Message posted to worker');
+
+        myWorker.onmessage = function(e) {
+            console.log('Message received from worker=',e);
+        }
+    } else {
+        console.log("Your browser does not support web workers.");
+    }
 });

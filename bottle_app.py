@@ -166,7 +166,10 @@ def get_bool(key, default=None):
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    try:
+        kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    except FileNotFoundError:
+        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404)
     mimetype = kind.mime if kind else 'text/plain'
     response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
@@ -1059,7 +1062,7 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
-    # the try/except is for when we run under a fixture, which messes up ROOT_DIR
+    # the try/except is for when we run under a fixture in the pytest unit tests, which messes up ROOT_DIR
     try:
         from tests.dbreader_test import test_db_connection
         test_db_connection()
@@ -1067,17 +1070,12 @@ if __name__ == "__main__":
         pass
 
     if args.multi:
-        # https://stackoverflow.com/questions/28307981/how-to-launch-a-bottle-application-over-a-cherrypy-standalone-web-server
-        import cherrypy as cp
-        cp.config.update({'engine.autoreload_on' : True,
-                          'server.socket_host': '0.0.0.0',
-                          'server.socket_port': args.port})
-
-        cp.tree.graft(app, '/')
+        import wsgiserver
+        httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
         try:
-            cp.server.start()
+            httpd.serve_forever()
         except KeyboardInterrupt:
-            cp.server.stop()
-        sys.exit(0)
+            print("")
+            sys.exit(0)
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
