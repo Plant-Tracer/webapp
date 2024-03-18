@@ -244,7 +244,7 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
         this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
-        this.add_marker_status    = $(`#${this_id} label.add_marker_status`);
+        this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
@@ -476,7 +476,7 @@ class PlantTracerController extends CanvasController {
             engine_version: ENGINE_VERSION
         };
         //console.log("params:",track_params);
-        this.tracked_movie_status("Tracking movie...");
+        this.tracked_movie_status.text("Tracking movie...");
         this.tracked_movie_status.show();
         this.tracked_movie.hide();
         this.start_update_timer();
@@ -684,6 +684,7 @@ function append_new_ptc(movie_id, frame_number) {
 // Called when the page is loaded
 function analyze_movie() {
 
+    console.log("analyze_movie");
     // Say which movie we are working on
     $('#firsth2').html(`Movie #${movie_id}`);
 
@@ -699,5 +700,6 @@ function analyze_movie() {
 }
 
 // Call analyze_move on load
-
-$( document ).ready( () => analyze_movie );
+$( document ).ready( function() {
+    analyze_movie();
+});

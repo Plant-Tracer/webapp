@@ -34,5 +34,5 @@ function build_audit_table() {
 }
 
 $( document ).ready( function() {
-   build_audit_table();
+    build_audit_table();
 });
