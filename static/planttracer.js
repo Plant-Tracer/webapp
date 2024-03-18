@@ -486,11 +486,10 @@ function list_movies() {
     fetch('/api/list-movies', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            //console.log("data:",data);
             if (data.error!=false){
                 $('#message').html('error: '+data.message);
             } else {
-                list_movies_data( data['movies'] );
+                list_movies_data( data.movies );
                 $('#message').html('');
             }
         })
