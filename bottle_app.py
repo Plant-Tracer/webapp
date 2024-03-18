@@ -1049,6 +1049,7 @@ if __name__ == "__main__":
 
     parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
+    parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
@@ -1064,5 +1065,19 @@ if __name__ == "__main__":
         test_db_connection()
     except ModuleNotFoundError:
         pass
+
+    if args.multi:
+        # https://stackoverflow.com/questions/28307981/how-to-launch-a-bottle-application-over-a-cherrypy-standalone-web-server
+        import cherrypy as cp
+        cp.config.update({'engine.autoreload_on' : True,
+                          'server.socket_host': '0.0.0.0',
+                          'server.socket_port': args.port})
+
+        cp.tree.graft(app, '/')
+        try:
+            cp.server.start()
+        except KeyboardInterrupt:
+            cp.server.stop()
+        sys.exit(0)
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

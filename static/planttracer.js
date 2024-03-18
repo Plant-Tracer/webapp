@@ -8,6 +8,8 @@
 /*global user_demo */
 
 
+const PLAY_LABEL = 'play original';
+const PLAY_TRACKED_LABEL = 'play tracked';
 
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
@@ -166,19 +168,26 @@ SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked
-function play_clicked( e ) {
-    console.log('play_clicked=',e);
-    const movie_id = e.getAttribute('x-movie_id');
-    const rowid    = e.getAttribute('x-rowid');
+function play_clicked( e,movie_id ) {
+    console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
-    //var tr    = $(`#tr-${rowid}`).show();
-    //var td    = $(`#td-${rowid}`).show();
-    var video = $(`#video-${rowid}`).show();
-    var vid = video.attr('id');
+    //const movie_id = e.getAttribute('x-movie_id');
+    const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
+    $(`#tr-${rowid}`).show();
+    const td = $(`#td-${rowid}`);
+
+    // Delete any existing video player
+    td.html('');
+    // Create a new video player
+    td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
+            `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+    td.show();
+    const video = $(`#video-${rowid}`).show();
+    const vid   = video.attr('id');
     //console.log('url=',url);
     //console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
     //video.attr('src',url);
-    video.html(`<source src='${url}' type='video/mp4'>`);
+    //video.html(``);
     console.log('video=',video);
     document.getElementById( vid ).play();
 }
@@ -187,8 +196,8 @@ function hide_clicked( e ) {
     let rowid = e.getAttribute('x-rowid');
     let video = $(`#video-${rowid}`);
     video.hide();
-    //var tr    = $(`#tr-${rowid}`).hide();
-    //var td    = $(`#td-${rowid}`).hide();
+    $(`#tr-${rowid}`).hide();
+    $(`#td-${rowid}`).hide();
 }
 
 function analyze_clicked( e ) {
@@ -396,15 +405,21 @@ function list_movies_data( movies ) {
 
             // Get the metadata for the movie
             const movieDate = new Date(m.date_uploaded * 1000);
-            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
-            const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
+            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this,${movie_id})'>`;
+            let playt = '';
+            let analyze_label = 'analyze';
+            if (m.tracked_movie_id){
+                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this,${m.tracked_movie_id})'>`;
+                analyze_label = 're-analyze';
+            }
+            const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
             const up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             const you_class = (m.user_id == user_id) ? "you" : "";
 
             let rows = `<tr class='${you_class}'>` +
                 `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
-                make_td_text( "title", m.title, "<br/>" + play + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
+                make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
                 `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
                 `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
 
@@ -444,15 +459,15 @@ function list_movies_data( movies ) {
 
             // Now make the player row
             rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
-                `<td    class='movie_player' id='td-${rowid}' colspan='7' >` +
-                `<video class='movie_player' id='video-${rowid}' controls playsinline></video>` +
-                `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`+
+                `<td    class='movie_player' id='td-${rowid}' colspan='7' ></td>` +
                 `</tr>\n`;
             return rows;
         }
 
+        // main body of movies_fill_div follows
+
         if (mlist.length>0){
-            mlist.forEach( m => ( h += movie_html(m) ));
+            mlist.forEach( m => ( h += movie_html(m) )); // for each movie in the array, add its HTML (which is two <tr>)
         } else {
             h += '<tr><td><i>No movies</i></td></tr>';
         }
@@ -467,10 +482,10 @@ function list_movies_data( movies ) {
         div.html(h);
     }
     // Create the four tables
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1)), false);
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id)), false);
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1)), false);
+    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)), false);
+    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)), true);
+    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id && !m.orig_movie)), false);
+    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)), false);
     $('.movie_player').hide();
 }
 
@@ -490,6 +505,18 @@ function list_movies() {
             if (data.error!=false){
                 $('#message').html('error: '+data.message);
             } else {
+                // Make a map of each movie_id to its position in the array
+                var movie_map = new Array()
+                for (let movie of data.movies) {
+                    movie_map[movie.movie_id] = movie;
+                }
+                // Now for each movie that is tracked, set the property .tracked_movie_id in the source movie
+                for (let movie of data.movies) {
+                    if (movie.orig_movie) {
+                        movie_map[movie.orig_movie].tracked_movie_id = movie.movie_id;
+                    }
+                }
+
                 list_movies_data( data.movies );
                 $('#message').html('');
             }

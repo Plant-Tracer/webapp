@@ -107,7 +107,7 @@ coverage:
 
 debug:
 	@echo run bottle locally in debug mode
-	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-local:
 	@echo run bottle locally in debug mode

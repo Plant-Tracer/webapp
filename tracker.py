@@ -8,12 +8,14 @@ import json
 import argparse
 import tempfile
 import subprocess
+import logging
+import time
 import os
 import errno
 
 import cv2
 import numpy as np
-from constants import Engines
+from constants import Engines,C
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -182,6 +184,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    track_delay = float(os.environ.get(C.TRACK_DELAY,0))
     with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
@@ -211,6 +214,12 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
             # Call the callback if we have one
             if callback is not None:
                 callback(output_trackpoints)
+
+            ### DEBUG CODE
+            if track_delay:
+                logging.debug("TRACK DELAY %s",track_delay)
+                time.sleep(track_delay)
+
         cap.release()
         out.release()
 

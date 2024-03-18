@@ -23,7 +23,7 @@ const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_WIDTH = 340;
 //const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const NOTIFY_UPDATE_INTERVAL = 5;    // how quickly to pool for retracking
+const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (in msec)
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -342,10 +342,10 @@ class PlantTracerController extends CanvasController {
         }
     }
 
-    // Update the status from the server
+    // Update the status from the server - migrate to a web worker.*** TODO*&
     update_tracked_movie_status_from_server() {
+        console.log(Date.now(),"update_tracked_movie_status_from_server");
         this.tracked_movie_status.text("Getting Movie Metadata...");
-        console.log(Date.now(),"Getting Movie Metadata...");
         $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
             console.log(Date.now(),"got = ",data);
             if (data.error==false){
@@ -358,11 +358,11 @@ class PlantTracerController extends CanvasController {
     // during long operations.
     // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
     start_update_timer() {
-        this.status_interval_id = setInterval( () => this.update_tracked_movie_status_from_server, NOTIFY_UPDATE_INTERVAL);
+        this.status_interval_id = setInterval( () => {this.update_tracked_movie_status_from_server()}, NOTIFY_UPDATE_INTERVAL);
     }
 
     stop_update_timer() {
-        clearInterval(this.status_timeout_id);
+        clearInterval(this.status_interval_id);
         this.status_interval_id = undefined;
     }
 
