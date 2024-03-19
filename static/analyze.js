@@ -23,7 +23,7 @@ const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_WIDTH = 340;
 //const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const WEBWORKER_JS = document.currentScript.src.replace("analyze.js","analyze_webworker.js");
+const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -641,16 +641,14 @@ function append_new_ptc(movie_id, frame_number) {
 
         /* launch the webworker if we can */
         if (window.Worker) {
-            const myWorker = new Worker(WEBWORKER_JS);
-            console.log("window_ptc=",window_ptc);
-            myWorker.postMessage(movie_id);
-            console.log('Message posted to worker');
-
+            const myWorker = new Worker(STATUS_WORKER);
+            myWorker.postMessage( {movie_id:movie_id, api_key:api_key} );
             myWorker.onmessage = function(e) {
-                console.log('Message received from worker=',e);
+                console.log('Message received from STATUS_WORKER=',e);
+                this.tracked_movie_status.text( e.data );
             }
         } else {
-            console.log("Your browser does not support web workers.");
+            console.log("Your browser does not support web workers: status cannot be displayed");
         }
 
 
