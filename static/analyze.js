@@ -23,6 +23,7 @@ const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_WIDTH = 340;
 //const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
+const WEBWORKER_JS = document.currentScript.src.replace("analyze.js","analyze_webworker.js");
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -39,8 +40,6 @@ const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
                      '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
                      '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
                        '#000075', '#808080', '#e6194b', ];
-
-var window_ptc = undefined;
 
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
@@ -638,7 +637,22 @@ function append_new_ptc(movie_id, frame_number) {
             alert(data.message);
             return;
         }
-        window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
+        let window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
+
+        /* launch the webworker if we can */
+        if (window.Worker) {
+            const myWorker = new Worker(WEBWORKER_JS);
+            console.log("window_ptc=",window_ptc);
+            myWorker.postMessage(movie_id);
+            console.log('Message posted to worker');
+
+            myWorker.onmessage = function(e) {
+                console.log('Message received from worker=',e);
+            }
+        } else {
+            console.log("Your browser does not support web workers.");
+        }
+
 
         // get the request frame of the movie. When it comes back, use it to populate
         // a new PlantTracerController.
@@ -657,7 +671,6 @@ function append_new_ptc(movie_id, frame_number) {
 
 // Called when the page is loaded
 function analyze_movie() {
-
     console.log("analyze_movie");
     // Say which movie we are working on
     $('#firsth2').html(`Movie #${movie_id}`);
@@ -668,26 +681,12 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    append_new_ptc(movie_id, 0);           // create the first <div> and its controller
+    return append_new_ptc(movie_id, 0);           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }
 
 // Call analyze_move on load
-const WEBWORKER_JS = document.currentScript.src.replace("analyze.js","analyze_webworker.js");
 $( document ).ready( function() {
     analyze_movie();
-
-    if (window.Worker) {
-        const myWorker = new Worker(WEBWORKER_JS);
-
-        myWorker.postMessage("hello world");
-        console.log('Message posted to worker');
-
-        myWorker.onmessage = function(e) {
-            console.log('Message received from worker=',e);
-        }
-    } else {
-        console.log("Your browser does not support web workers.");
-    }
 });
