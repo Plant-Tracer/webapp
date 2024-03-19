@@ -1,0 +1,8 @@
+////////////////
+// DOWNLOAD
+// callback when the download button is clicked
+function download_clicked( e ) {
+    console.log("download ",e);
+    const movie_id = e.getAttribute('x-movie_id');
+
+}

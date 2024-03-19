@@ -69,7 +69,7 @@ function resend_func() {
         })
         .fail(function(xhr, status, error) {
             $('#message').html(`POST error: `+xhr.responseText);
-            console.log("xhr:",xhr);
+            console.log("xhr:",xhr,"status:",status,"error:",error);
         });
 }
 
@@ -168,7 +168,7 @@ SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked
-function play_clicked( e,movie_id ) {
+function play_clicked( e, movie_id ) {
     console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     //const movie_id = e.getAttribute('x-movie_id');
@@ -203,15 +203,6 @@ function hide_clicked( e ) {
 function analyze_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     window.location = `/analyze?movie_id=${movie_id}`;
-}
-
-////////////////
-// DOWNLOAD
-// callback when the download button is clicked
-function download_clicked( e ) {
-    console.log("download ",e);
-    const movie_id = e.getAttribute('x-movie_id');
-
 }
 
 ////////////////
@@ -337,7 +328,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-    function movies_fill_div( div, which, mlist, offer_upload ) {
+    function movies_fill_div( div, which, mlist) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -482,10 +473,14 @@ function list_movies_data( movies ) {
         div.html(h);
     }
     // Create the four tables
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)), false);
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id && !m.orig_movie)), false);
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)), false);
+    movies_fill_div( $('#your-published-movies'),
+                     PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)));
+    movies_fill_div( $('#your-unpublished-movies'),
+                     UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
+    movies_fill_div( $('#course-movies'),
+                     COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id && !m.orig_movie)));
+    movies_fill_div( $('#your-deleted-movies'),
+                     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
 }
 
