@@ -13,7 +13,7 @@ const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (i
 function start_update_timer(obj) {
     setInterval( () => {
         console.log(Date.now(),"update_tracked_movie_status_from_server obj=",obj);
-        const formData = new FormData()
+        const formData = new FormData();
         formData.append('api_key',obj.api_key);
         formData.append('movie_id',obj.movie_id);
         fetch('/api/get-movie-metadata', {

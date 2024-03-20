@@ -6,12 +6,16 @@
 // https://stackoverflow.com/questions/48408491/using-webworkers-jquery-returns-undefined
 
 onmessage = function(e) {
-    console.log("analyze_track_movie_workerr.js. e=",e);
-    $.post('/api/track-movie', e.data).done( (data) => {
-        if (data.error) {
-            this.tracked_movie_status.text("Tracking error: "+data.message);
-        } else {
-            postMessage(data);
-        }
-    });
+    console.log("analyze_track_movie_worker.js. e=",e);
+    const obj = e.data;
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(e.data)){
+        formData.append(key, value);
+    }
+    fetch('/api/track-movie', {
+        method:'POST',
+        body: formData
+    })
+        .then((response) => response.json())
+        .then((data) => postMessage(data));
 };

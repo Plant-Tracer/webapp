@@ -241,7 +241,6 @@ class PlantTracerController extends CanvasController {
         this.frame_number    = frame_number; //
         this.movie_metadata  = movie_metadata;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
-        this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
         this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
@@ -451,16 +450,18 @@ class PlantTracerController extends CanvasController {
             engine_name: ENGINE,
             engine_version: ENGINE_VERSION
         };
-        movie_tracker_worker.onmessage = function(e) {
+        movie_tracker_worker.onmessage = (e) => {
             // Got the tracked movie back!
-            this.tracked_movie_id = e.data.tracked_movie_id;
-            // Show the tracked movie and the download link
-            this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
+            if (e.data.error) {
+                this.tracked_movie_status.text("Tracking error: "+data.message);
+                return;
+            }
+            const tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${e.data.tracked_movie_id}`;
+            this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`); // download link for it
             this.tracked_movie_status.hide();
             this.tracked_movie.show();
-            this.tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${e.data.tracked_movie_id}`;
             this.download_link.show();
-            $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
+            $(`#${this.this_id} input.track_button`).val( `retrack movie.` ); // change from 'track movie' to 'retrack movie'
 
             // redraw the current frame
             const get_frame_params = {

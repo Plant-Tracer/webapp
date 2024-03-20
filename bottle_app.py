@@ -678,11 +678,11 @@ class MovieTrackCallback:
         self.last     = 0
 
     def notify(self, arg):
-        min_frame = min( (obj['frame_number'] for obj in arg) )
         max_frame = max( (obj['frame_number'] for obj in arg) )
-        message = f"Tracked frames {min_frame} to {max_frame}"
+        total_frames = self.movie_metadata['total_frames']
+        message = f"Tracked frames {max_frame} of {total_frames}"
 
-        if time.time() < self.last + C.NOTIFY_UPDATE_INTERVAL:
+        if time.time() > self.last + C.NOTIFY_UPDATE_INTERVAL:
             logging.debug("MovieTrackCallback %s",message)
             db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
             self.last = time.time()
@@ -736,6 +736,7 @@ def api_track_movie():
             # This creates an output file that has the trackpoints animated
             # and an array of all the trackpoints
             mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
+            mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
             tracked = tracker.track_movie(engine_name=engine_name,
                                           engine_version=engine_version,
                                           input_trackpoints = input_trackpoints,
@@ -747,15 +748,14 @@ def api_track_movie():
             # Save the movie with updated metadata
             db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='status', value='')
             new_movie_data = outfile.read()
-            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
-            new_title      = movie_metadata['title']
+            new_title      = mtc.movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
             tracked_movie_id = db.create_new_movie(user_id = user_id,
                                                    title = new_title,
-                                                   description = movie_metadata['description'],
+                                                   description = mtc.movie_metadata['description'],
                                                    orig_movie = movie_id,
                                                    movie_data = new_movie_data)
             # purge the other movies that have been tracked for this one
