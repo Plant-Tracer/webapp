@@ -6,3 +6,4 @@ ignore:
   - tests/mailer_test.py
   - dbmaint.py
   - passengers_app.py
+  - wsgiserver.py
