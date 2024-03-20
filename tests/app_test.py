@@ -53,11 +53,18 @@ def test_get_bool(mocker):
     mocker.patch("bottle_app.get", return_value="xxx")
     assert bottle_app.get_bool("key",default=False)==False
 
+
 def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
         assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == res.body.read()
+
+    # Test file not found
+    with pytest.raises(bottle.HTTPResponse) as e:
+        with boddle(params={}):
+            res = bottle_app.static_path('test_not_vound.txt')
+
 
 
 def test_icon():
@@ -84,11 +91,9 @@ def test_api_key_null(mocker):
     with pytest.raises(bottle.HTTPResponse) as e:
         with boddle(params={}):
             res = bottle_app.func_list() # throws bottle.HTTPResponse
-        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
     with pytest.raises(bottle.HTTPResponse) as e:
         bottle_app.get_user_dict() # throws bottle.HTTPResponse
-        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
 
 ################################################################
