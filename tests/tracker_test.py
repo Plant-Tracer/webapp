@@ -99,6 +99,13 @@ def test_track_point_annotations(new_movie):
     assert tps[2]['frame_id'] == frame_id
 
 
+def test cleanup_mp4():
+    with pytest.raise(FileNotFoundError):
+        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
+
+
+
+
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
