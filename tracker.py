@@ -148,7 +148,7 @@ def cleanup_mp4(*,infile,outfile):
     # Make sure infile and FFMPEG_PATH exist
     for p in [infile, FFMPEG_PATH]:
         if not os.path.exists(p):
-        raise FileNotFoundError(p)
+            raise FileNotFoundError(p)
 
     # If outfile exists, it will be overwritten
     args = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
