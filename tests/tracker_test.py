@@ -99,8 +99,8 @@ def test_track_point_annotations(new_movie):
     assert tps[2]['frame_id'] == frame_id
 
 
-def test cleanup_mp4():
-    with pytest.raise(FileNotFoundError):
+def test_cleanup_mp4():
+    with pytest.raises(FileNotFoundError):
         tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
 
 
