@@ -12,15 +12,23 @@ const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (i
 // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
 function start_update_timer(obj) {
     setInterval( () => {
-        console.log(Date.now(),"update_tracked_movie_status_from_server movie_id=",obj.movie_id);
-        $.post('/api/get-movie-metadata', {api_key:obj.api_key, movie_id:obj.movie_id}).done( (data) => {
-            console.log(Date.now(),"got = ",data);
-            if (data.error==false){
-                // Send the status back to the UX
-                postMessage(data.metadata.status);
-            }
-        });
-    }, NOTIFY_UPDATE_INTERVAL);
+        console.log(Date.now(),"update_tracked_movie_status_from_server obj=",obj);
+        const formData = new FormData()
+        formData.append('api_key',obj.api_key);
+        formData.append('movie_id',obj.movie_id);
+        fetch('/api/get-movie-metadata', {
+            method:'POST',
+            body: formData
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                console.log(Date.now(),"got = ",data);
+                if (data.error==false){
+                    // Send the status back to the UX
+                    postMessage(data.metadata);
+                }
+            })
+    },NOTIFY_UPDATE_INTERVAL);
 }
 
 onmessage = function(e) {

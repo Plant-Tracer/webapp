@@ -444,18 +444,23 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_status.text("Tracking movie...");
         this.tracked_movie_status.show();
         let movie_tracker_worker = new Worker(TRACK_MOVIE_WORKER);
+        let movie_tracker_args = {
+            api_key:api_key,
+            movie_id:this.movie_id,
+            frame_start:this.frame_number,
+            engine_name: ENGINE,
+            engine_version: ENGINE_VERSION
+        };
         movie_tracker_worker.onmessage = function(e) {
             // Got the tracked movie back!
             this.tracked_movie_id = e.data.tracked_movie_id;
-            const tracked_movie_url  = ;
-
-            $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
             // Show the tracked movie and the download link
             this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
             this.tracked_movie_status.hide();
             this.tracked_movie.show();
             this.tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${e.data.tracked_movie_id}`;
             this.download_link.show();
+            $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
 
             // redraw the current frame
             const get_frame_params = {
@@ -467,14 +472,8 @@ class PlantTracerController extends CanvasController {
             $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
             movie_tracker_worker.terminate();
         };
-        // Track the movie
-        movie_tracker_worker.postMessage( {
-            api_key:api_key,
-            movie_id:this.movie_id,
-            frame_start:this.frame_number,
-            engine_name: ENGINE,
-            engine_version: ENGINE_VERSION
-        });
+        // Track the movie - parameters for the call
+        movie_tracker_worker.postMessage( movie_tracker_args );
     }
 
     // Change the frame
@@ -638,10 +637,10 @@ function append_new_ptc(movie_id, frame_number) {
         /* launch the webworker if we can */
         if (window.Worker) {
             const myWorker = new Worker(STATUS_WORKER);
-            myWorker.onmessage = function(e) {
-                console.log('Message received from STATUS_WORKER=',e);
-                this.tracked_movie_status.text( e.data );
-            }
+            console.log("AAA this.tracked_movie_status=",window_ptc.tracked_movie_status);
+            myWorker.onmessage = (e) => {
+                window_ptc.tracked_movie_status.text( e.data.status );
+            };
             myWorker.postMessage( {movie_id:movie_id, api_key:api_key} );
         } else {
             alert("Your browser does not support web workers. You cannot track movies.");

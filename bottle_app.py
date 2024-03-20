@@ -119,6 +119,8 @@ def git_last_commit():
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
+    logging.debug("%s request.forms.get(%s)=%s",request.forms.keys(),key,request.forms.get(key))
+    logging.debug("%s request.query.get(%s)=%s",request.query.keys(),key,request.query.get(key))
     return request.forms.get(key, request.query.get(key, default))
 
 def get_json(key):
@@ -602,8 +604,9 @@ def api_get_movie_metadata():
     :param api_key:   authentication
     :param movie_id:   movie
     """
-    movie_id = get_int('movie_id')
     user_id = get_user_id()
+    movie_id = get_int('movie_id')
+    logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
         metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
         metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
