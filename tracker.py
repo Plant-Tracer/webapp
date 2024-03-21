@@ -214,7 +214,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
                 callback(output_trackpoints)
 
             ### DEBUG CODE
-            if track_delay:
+p            if track_delay:
                 logging.debug("TRACK DELAY %s",track_delay)
                 time.sleep(track_delay)
 
@@ -226,7 +226,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
     return {'output_trackpoints':output_trackpoints}
 
-def tracker_make_args():
+if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -250,6 +250,3 @@ def tracker_make_args():
                       input_trackpoints=trackpoints, moviefile_output=args.outfile)
     print("results:")
     print(json.dumps(res,default=str,indent=4))
-
-if __name__ == "__main__":
-    tracker_main()
