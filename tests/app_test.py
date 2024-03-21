@@ -40,7 +40,6 @@ def test_is_true():
     assert bottle_app.is_true("Y") is True
     assert bottle_app.is_true("f") is False
 
-
 def test_get_float(mocker):
     mocker.patch("bottle_app.get", return_value="3")
     assert bottle_app.get_float("key")==3
@@ -52,6 +51,8 @@ def test_get_bool(mocker):
     assert bottle_app.get_bool("key")==True
     mocker.patch("bottle_app.get", return_value="xxx")
     assert bottle_app.get_bool("key",default=False)==False
+    mocker.patch("bottle_app.get", return_value=3.4)
+    assert bottle_app.get_bool("key",default=True)==True
 
 
 def test_static_path():
