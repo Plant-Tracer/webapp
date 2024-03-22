@@ -214,7 +214,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
                 callback(output_trackpoints)
 
             ### DEBUG CODE
-p            if track_delay:
+            if track_delay:
                 logging.debug("TRACK DELAY %s",track_delay)
                 time.sleep(track_delay)
 
