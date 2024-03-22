@@ -226,7 +226,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
     return {'output_trackpoints':output_trackpoints}
 
-# pragma: no cover
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
