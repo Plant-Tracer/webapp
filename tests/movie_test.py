@@ -123,12 +123,21 @@ def test_new_movie(new_movie):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_app.api_delete_movie()
 
-    # Make sure that we can get data base the movie
+    # Make sure that we can get data for the movie
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_app.api_get_movie_data()
-    # res must be a movie
+    # res must be a movie. We should validate it.
     assert len(res)>0
+
+    # Make sure that we can get the metadata
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id}):
+        res = bottle_app.api_get_movie_metadata()
+    assert res['error']==False
+    assert res['metadata']['title'] == movie_title
+
+
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""

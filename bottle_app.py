@@ -72,11 +72,9 @@ import auth
 from auth import get_dbreader
 
 from paths import view, STATIC_DIR
-from constants import C,E
+from constants import C,E,__version__
 import mailer
 import tracker
-
-__version__ = '0.9.0'
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -121,6 +119,8 @@ def git_last_commit():
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
+    logging.debug("%s request.forms.get(%s)=%s",request.forms.keys(),key,request.forms.get(key))
+    logging.debug("%s request.query.get(%s)=%s",request.query.keys(),key,request.query.get(key))
     return request.forms.get(key, request.query.get(key, default))
 
 def get_json(key):
@@ -168,7 +168,10 @@ def get_bool(key, default=None):
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    try:
+        kind = filetype.guess(os.path.join(STATIC_DIR,path))
+    except FileNotFoundError:
+        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404)
     mimetype = kind.mime if kind else 'text/plain'
     response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
@@ -601,8 +604,9 @@ def api_get_movie_metadata():
     :param api_key:   authentication
     :param movie_id:   movie
     """
-    movie_id = get_int('movie_id')
     user_id = get_user_id()
+    movie_id = get_int('movie_id')
+    logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
     if db.can_access_movie(user_id=user_id, movie_id=movie_id):
         metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
         metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
@@ -674,11 +678,11 @@ class MovieTrackCallback:
         self.last     = 0
 
     def notify(self, arg):
-        min_frame = min( (obj['frame_number'] for obj in arg) )
         max_frame = max( (obj['frame_number'] for obj in arg) )
-        message = f"Tracked frames {min_frame} to {max_frame}"
+        total_frames = self.movie_metadata['total_frames']
+        message = f"Tracked frames {max_frame} of {total_frames}"
 
-        if time.time() < self.last + C.NOTIFY_UPDATE_INTERVAL:
+        if time.time() > self.last + C.NOTIFY_UPDATE_INTERVAL:
             logging.debug("MovieTrackCallback %s",message)
             db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
             self.last = time.time()
@@ -732,6 +736,7 @@ def api_track_movie():
             # This creates an output file that has the trackpoints animated
             # and an array of all the trackpoints
             mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
+            mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
             tracked = tracker.track_movie(engine_name=engine_name,
                                           engine_version=engine_version,
                                           input_trackpoints = input_trackpoints,
@@ -743,15 +748,14 @@ def api_track_movie():
             # Save the movie with updated metadata
             db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='status', value='')
             new_movie_data = outfile.read()
-            movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
-            new_title      = movie_metadata['title']
+            new_title      = mtc.movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
             tracked_movie_id = db.create_new_movie(user_id = user_id,
                                                    title = new_title,
-                                                   description = movie_metadata['description'],
+                                                   description = mtc.movie_metadata['description'],
                                                    orig_movie = movie_id,
                                                    movie_data = new_movie_data)
             # purge the other movies that have been tracked for this one
@@ -1051,6 +1055,7 @@ if __name__ == "__main__":
 
     parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
+    parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
@@ -1060,11 +1065,20 @@ if __name__ == "__main__":
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
-    # the try/except is for when we run under a fixture, which messes up ROOT_DIR
+    # the try/except is for when we run under a fixture in the pytest unit tests, which messes up ROOT_DIR
     try:
         from tests.dbreader_test import test_db_connection
         test_db_connection()
     except ModuleNotFoundError:
         pass
+
+    if args.multi:
+        import wsgiserver
+        httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("")
+            sys.exit(0)
 
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

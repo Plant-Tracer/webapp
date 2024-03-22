@@ -1,3 +1,4 @@
+/* jshint esversion: 8 */
 // code for /analyze
 
 /***
@@ -14,36 +15,46 @@
 
 ***/
 
+/*global api_key */
+/*global movie_id */
+
 const DEFAULT_R = 10;           // default radius of the marker
-const DEFAULT_FRAMES = 20;      // default number of frames to show
-const DEFAULT_WIDTH = 340;
-const DEFAULT_HEIGHT= 340;
+//const DEFAULT_FRAMES = 20;      // default number of frames to show
+//const DEFAULT_WIDTH = 340;
+//const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const NOTIFY_UPDATE_INTERVAL = 5;    // how quickly to pool for retracking
+const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
+const TRACK_MOVIE_WORKER = document.currentScript.src.replace("analyze.js","analyze_track_movie_worker.js");
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
-var template_html   = null;
-var counter = 0;
+var div_template = '';          // will be set with the div template
 const ENGINE = 'CV2';
+const ENGINE_VERSION = '1.0';
+
+// available colors
+// https://sashamaps.net/docs/resources/20-colors/
+// removing green (for obvious reasons)
+const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
+                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
+                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+                       '#000075', '#808080', '#e6194b', ];
 
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $( canvas_selector );
         if (canvas == null) {
-            console.log("CanvasController: Cannot find canvas ",canvas_controller);
+            console.log("CanvasController: Cannot find canvas=", canvas_selector);
             return;
-        } else {
-            console.log("CanvasController: canvas_selector=",canvas_selector);
         }
 
         this.c   = canvas[0];     // get the element
         this.ctx = this.c.getContext('2d');                  // the drawing context
 
         this.selected = null,             // the selected object
-        this.objects = [];                // the objects
+        this.objects = new Array();                // the objects
         this.zoom    = 1;                 // default zoom
 
         // Register my events.
@@ -57,7 +68,7 @@ class CanvasController {
 
         // Catch the zoom change event
         if (zoom_selector) {
-            $(zoom_selector).on('change', (e) => {
+            $(zoom_selector).on('change', (_) => {
                 this.set_zoom( $(zoom_selector).val() / 100 );
             });
         }
@@ -107,7 +118,7 @@ class CanvasController {
         this.object_did_move(this.selected);
     }
 
-    mouseup_handler(e) {
+    mouseup_handler(_) {
         // if an object is selected, unselect and change back the cursor
         let obj = this.selected;
         this.clear_selection();
@@ -124,10 +135,10 @@ class CanvasController {
     }
 
     // Main drawing function:
-    redraw(v) {
+    redraw( _msg ) {
         // clear canvas
         // this is useful for tracking who called redraw, and how many times it is called, and when
-        // console.log(`redraw=${v} id=${this.c.id}`);
+        // console.log(`redraw=${msg} id=${this.c.id}`);
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);
 
         // draw the objects. Always draw the selected objects after
@@ -146,8 +157,8 @@ class CanvasController {
     }
 
     // These can be subclassed
-    object_did_move(obj) { }
-    object_move_finished(obj) { }
+    object_did_move( _obj) { }
+    object_move_finished( _obj) { }
 }
 
 
@@ -159,7 +170,7 @@ class MyObject {
         this.name = name;
     }
     // default - it never contains the point
-    contains_point(pt) {
+    contains_point(_pt) {
         return false;
     }
 }
@@ -196,7 +207,7 @@ class myCircle extends MyObject {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
         ctx.font = '18px sanserif';
-        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2)
+        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2);
         ctx.restore();
     }
 
@@ -211,7 +222,7 @@ class myCircle extends MyObject {
 
     // Return the location as an "x,y" string
     loc() {
-        return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")"
+        return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")";
     }
 
 }
@@ -228,12 +239,12 @@ class PlantTracerController extends CanvasController {
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed
         this.frame_number    = frame_number; //
-        this.movie_metadata  = movie_metadata
+        this.movie_metadata  = movie_metadata;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
-        this.tracked_movie_id = null;     // the id of the tracked movie after the track button is clicked
-        this.video          = $(`#${this.this_id} video`);
-        this.download_link  = $(`#${this.this_id} .download_link`);
-        this.status_div     = $(`#${this.this_id} .status`);
+        this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
+        this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
+        this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
+        this.download_link        = $(`#${this.this_id} .download_link`);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -254,10 +265,8 @@ class PlantTracerController extends CanvasController {
         }
 
         // Hide the video until we track or retrack retrack
-        this.video.hide();
-
-        // add_marker_status shows error messages regarding the marker name
-        this.add_marker_status = $(`#${this_id} label.add_marker_status`);
+        this.tracked_movie.hide();
+        this.tracked_movie_status.hide();
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
@@ -276,12 +285,12 @@ class PlantTracerController extends CanvasController {
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
 
         // Wire up the movement buttons
-        $(`#${this.this_id} input.frame_prev10`).on('click', (event) => {this.goto_frame( this.frame_number-10);});
-        $(`#${this.this_id} input.frame_prev`)  .on('click', (event) => {this.goto_frame( this.frame_number-1);});
-        $(`#${this.this_id} input.frame_next`)  .on('click', (event) => {this.goto_frame( this.frame_number+1);});
-        $(`#${this.this_id} input.frame_next10`).on('click', (event) => {this.goto_frame( this.frame_number+10);});
+        $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
+        $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( this.frame_number-1);});
+        $(`#${this.this_id} input.frame_next`)  .on('click', (_event) => {this.goto_frame( this.frame_number+1);});
+        $(`#${this.this_id} input.frame_next10`).on('click', (_event) => {this.goto_frame( this.frame_number+10);});
 
-        $(`#${this.this_id} input.frame_number_field`).on('input', (event) => {
+        $(`#${this.this_id} input.frame_number_field`).on('input', (_event) => {
             let new_frame = this.frame_number_field[0].value;
             // turn '' into a "0"
             if (new_frame=='') {
@@ -300,7 +309,7 @@ class PlantTracerController extends CanvasController {
 
 
     // on each change of input, validate the marker name
-    marker_name_input_handler (e) {
+    marker_name_input_handler (_e) {
         const val = this.marker_name_input.val();
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
@@ -324,51 +333,12 @@ class PlantTracerController extends CanvasController {
     }
 
     // new marker added
-    add_marker_onclick_handler(e) {
+    add_marker_onclick_handler(_e) {
         if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
             this.insert_circle( 50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
         }
     }
-
-    // Given a message, update the status message
-    update_status(msg) {
-        $(`#${this.this_id} td.status_message`).html(msg);
-    }
-
-    // Update the status from the server
-    update_status_from_server() {
-        this.update_status("Getting Movie Metadata...");
-        console.log(Date.now(),"Getting Movie Metadata...")
-        $.post('/api/get-movie-metadata', {api_key:api_key, movie_id:movie_id}).done( (data) => {
-            console.log(Date.now(),"got = ",data)
-            if (data.error==false){
-                this.update_status(data.metadata.status);
-            }
-        });
-    }
-
-    // Set a timer to get the movie status from the server and put it in the status field
-    // during long operations.
-    // See https://developer.mozilla.org/en-US/docs/Web/API/setInterval
-    start_update_timer() {
-        this.status_interval_id = setInterval( () => this.update_status_from_server, NOTIFY_UPDATE_INTERVAL);
-    }
-
-    stop_update_timer() {
-        clearInterval(this.status_timeout_id);
-        this.status_interval_id = undefined;
-    }
-
-
-    // available colors
-    // https://sashamaps.net/docs/resources/20-colors/
-    // removing green (for obvious reasons)
-    circle_colors = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
-                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
-                     '#000075', '#808080', '#e6194b', ]
-
 
     // add a tracking circle with the next color
     insert_circle(x, y, name) {
@@ -378,7 +348,7 @@ class PlantTracerController extends CanvasController {
             if (this.objects[i].constructor.name == myCircle.name) count+=1;
         }
 
-        let color = this.circle_colors[count];
+        let color = CIRCLE_COLORS[count];
         this.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
         this.create_marker_table();
         // Finally enable the track-to-end button
@@ -420,7 +390,7 @@ class PlantTracerController extends CanvasController {
     }
 
     // Movement finished; upload new annotations
-    object_move_finished(obj) {
+    object_move_finished(_obj) {
         this.put_trackpoints();
     }
 
@@ -447,7 +417,7 @@ class PlantTracerController extends CanvasController {
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
             trackpoints  : this.json_trackpoints()
-        }
+        };
         //console.log("put-frame-analysis: ",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
@@ -466,49 +436,45 @@ class PlantTracerController extends CanvasController {
      * https://freshman.tech/custom-html5-video/
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
-    track_to_end(event) {
-
+    track_to_end(_event) {
         // get the next frame and apply tracking logic
-        //console.log("track_to_end");
-        const track_params = {
+        console.log("track_to_end start");
+        this.tracked_movie.hide();
+        this.tracked_movie_status.text("Tracking movie...");
+        this.tracked_movie_status.show();
+        let movie_tracker_worker = new Worker(TRACK_MOVIE_WORKER);
+        let movie_tracker_args = {
             api_key:api_key,
             movie_id:this.movie_id,
             frame_start:this.frame_number,
-            engine_name:'CV2',
-            engine_version:'1.0'
+            engine_name: ENGINE,
+            engine_version: ENGINE_VERSION
         };
-        //console.log("params:",track_params);
-        this.update_status("Tracking movie...");
-        this.video.hide();
-        this.start_update_timer();
-        $.post('/api/track-movie', track_params).done( (data) => {
-            //console.log("RECV:",data);
-            this.stop_update_timer();
-            this.update_status("");
-            if (data.error) {
-                alert("Tracking error: "+data.message);
-            } else {
-                // Set our variables
-                this.tracked_movie_id = data.tracked_movie_id;
-                const tracked_movie_url  = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.tracked_movie_id}`;
-
-                $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
-
-                // Show the tracked movie and the download link
-                this.video.html(`<source src='${tracked_movie_url}' type='video/mp4'>`);
-                this.video.show();
-                this.download_link.show();
-
-                // redraw the current frame
-                const get_frame_params = {
-                    api_key :api_key,
-                    movie_id:this.movie_id,
-                    frame_number:this.frame_number,
-                    format:'json',
-                };
-                $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
+        movie_tracker_worker.onmessage = (e) => {
+            // Got the tracked movie back!
+            if (e.data.error) {
+                this.tracked_movie_status.text("Tracking error: "+data.message);
+                return;
             }
-        });
+            const tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${e.data.tracked_movie_id}`;
+            this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`); // download link for it
+            this.tracked_movie_status.hide();
+            this.tracked_movie.show();
+            this.download_link.show();
+            $(`#${this.this_id} input.track_button`).val( `retrack movie.` ); // change from 'track movie' to 'retrack movie'
+
+            // redraw the current frame
+            const get_frame_params = {
+                api_key :api_key,
+                movie_id:this.movie_id,
+                frame_number:this.frame_number,
+                format:'json',
+            };
+            $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
+            movie_tracker_worker.terminate();
+        };
+        // Track the movie - parameters for the call
+        movie_tracker_worker.postMessage( movie_tracker_args );
     }
 
     // Change the frame
@@ -518,7 +484,7 @@ class PlantTracerController extends CanvasController {
             return;
         }
         // Make sure it is in range
-        if (frame == NaN) {
+        if ( isNaN(frame)) {
             frame = 0;
         }
 
@@ -563,7 +529,7 @@ class PlantTracerController extends CanvasController {
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
         this.objects = [];      // clear the array
-        this.theImage = new myImage( 0, 0, data.data_url, this)
+        this.theImage = new myImage( 0, 0, data.data_url, this);
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
         if (data.frame_number>0){
@@ -573,7 +539,7 @@ class PlantTracerController extends CanvasController {
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
-                this.insert_circle( tp['x'], tp['y'], tp['label'] );
+                this.insert_circle( tp.x, tp.y, tp.label );
                 count += 1;
             }
         }
@@ -583,7 +549,8 @@ class PlantTracerController extends CanvasController {
                 this.insert_circle( 20, 20, 'apex');
                 this.insert_circle( 20, 50, 'ruler 0 mm');
                 this.insert_circle( 20, 80, 'ruler 20 mm');
-                this.update_status("Place the three markers. You can also create additional markers.");
+                this.add_marker_status.text("Place the three markers. You can also create additional markers.");
+                this.add_marker_status.show();
             }
         }
         this.redraw('append_new_ptc');              // initial drawing
@@ -594,7 +561,7 @@ class PlantTracerController extends CanvasController {
 /* myImage Object - Draws an image (x,y) specified by the url */
 class myImage extends MyObject {
     constructor(x, y, url, ptc) {
-        super(x, y, url)
+        super(x, y, url);
         this.ptc = ptc;
 
         let theImage=this;
@@ -604,12 +571,13 @@ class myImage extends MyObject {
         this.img = new Image();
 
         // When the image is loaded, draw the entire stack again.
-        this.img.onload = (event) => {
+        this.img.onload = (_event) => {
             theImage.state = 1;
             if (theImage.ctx) {
-                ptc.redraw('myImage constructor')
+                ptc.redraw('myImage constructor');
             }
-        }
+        };
+
         this.draw = function (ctx) {
             // See if this is the first time we have drawn in the context.
             theImage.ctx = ctx;
@@ -622,7 +590,7 @@ class myImage extends MyObject {
                 }
                 ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
-        }
+        };
 
         // set the URL. It loads immediately if it is a here document.
         // That will make onload run, but theImge.ctx won't be set.
@@ -645,15 +613,14 @@ class myImage extends MyObject {
 // each frame is for a specific movie
 function append_new_ptc(movie_id, frame_number) {
     let this_id  = "template-" + (div_id_counter++);
-    let this_sel = `${this_id}`;
+    //let this_sel = `${this_id}`;
     //console.log(`append_new_ptc: frame_number=${frame_number} this_id=${this_id} this_sel=${this_sel}`);
 
     /* Create the <div> and a new #template. Replace the current #template with the new one. */
     let div_html = div_template
         .replace('template', `${this_id}`)
         .replace('canvas-id',`canvas-${this_id}`)
-        .replace('zoom-id',`zoom-${this_id}`)
-        + "<div id='template'></div>";
+        .replace('zoom-id',`zoom-${this_id}`) + "<div id='template'></div>";
     $( '#template' ).replaceWith( div_html );
     $( '#template' )[0].scrollIntoView(); // scrolls so that the next template slot (which is empty) is in view
 
@@ -666,7 +633,20 @@ function append_new_ptc(movie_id, frame_number) {
             alert(data.message);
             return;
         }
-        let ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
+        let window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
+
+        /* launch the webworker if we can */
+        if (window.Worker) {
+            const myWorker = new Worker(STATUS_WORKER);
+            console.log("AAA this.tracked_movie_status=",window_ptc.tracked_movie_status);
+            myWorker.onmessage = (e) => {
+                window_ptc.tracked_movie_status.text( e.data.status );
+            };
+            myWorker.postMessage( {movie_id:movie_id, api_key:api_key} );
+        } else {
+            alert("Your browser does not support web workers. You cannot track movies.");
+        }
+
 
         // get the request frame of the movie. When it comes back, use it to populate
         // a new PlantTracerController.
@@ -677,15 +657,17 @@ function append_new_ptc(movie_id, frame_number) {
             format:'json',
         };
         //console.log("SEND get_frame_params:",get_frame_params);
-        $.post('/api/get-frame', get_frame_params).done( (data) => { ptc.get_frame_handler( data); });
+        $.post('/api/get-frame', get_frame_params).done( (data) => {
+            window_ptc.get_frame_handler( data );
+        });
     });
 }
 
 // Called when the page is loaded
 function analyze_movie() {
-
+    console.log("analyze_movie");
     // Say which movie we are working on
-    $('#firsth2').html(`Movie \#${movie_id}`);
+    $('#firsth2').html(`Movie #${movie_id}`);
 
     // capture the HTML of the <div id='#template'> into a new div
     div_template = "<div id='template'>" + $('#template').html() + "</div>";
@@ -693,7 +675,12 @@ function analyze_movie() {
     // erase the template div's contents, leaving an empty template at the end
     $('#template').html('');
 
-    ptc = append_new_ptc(movie_id, 0);           // create the first <div> and its controller
+    return append_new_ptc(movie_id, 0);           // create the first <div> and its controller
     // Prime by loading the first frame of the movie.
     // Initial drawing
 }
+
+// Call analyze_move on load
+$( document ).ready( function() {
+    analyze_movie();
+});

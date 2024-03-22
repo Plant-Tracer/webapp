@@ -8,12 +8,14 @@ import json
 import argparse
 import tempfile
 import subprocess
+import logging
+import time
 import os
 import errno
 
 import cv2
 import numpy as np
-from constants import Engines
+from constants import Engines,C
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -142,17 +144,15 @@ def extract_frame(*, movie_data, frame_number, fmt):
 
 def cleanup_mp4(*,infile,outfile):
     """Given an import file, clean it up with ffmpeg"""
-    if not os.path.exists(infile):
-        raise FileNotFoundError(infile)
+
+    # Make sure infile and FFMPEG_PATH exist
+    for p in [infile, FFMPEG_PATH]:
+        if not os.path.exists(p):
+            raise FileNotFoundError(p)
+
     # If outfile exists, it will be overwritten
     args = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
-    try:
-        subprocess.call([ FFMPEG_PATH ] + args)
-    except OSError as e:
-        if e.errno == errno.ENOENT:
-            subprocess.call([ FFMPEG_PATH ] + args)
-        else:
-            raise
+    subprocess.call([ FFMPEG_PATH ] + args)
 
 
 def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0, callback=None):
@@ -182,6 +182,7 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    track_delay = float(os.environ.get(C.TRACK_DELAY,0))
     with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
@@ -211,6 +212,12 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
             # Call the callback if we have one
             if callback is not None:
                 callback(output_trackpoints)
+
+            ### DEBUG CODE
+            if track_delay:
+                logging.debug("TRACK DELAY %s",track_delay)
+                time.sleep(track_delay)
+
         cap.release()
         out.release()
 
@@ -218,9 +225,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
         cleanup_mp4(infile=tf.name, outfile=moviefile_output)
 
     return {'output_trackpoints':output_trackpoints}
-
-
-# The trackpoint is at (138,86) when the image is scaled to a width: 320 height: 240
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
@@ -231,7 +235,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
-        "--points_to_track", default='[{"x":138,"y":86,"label":"mypoint"}]', help="list of points to track as json 2D array.")
+        "--points_to_track", default='[{"x":138,"y":86,"label":"mypoint"}]',
+        help="list of points to track as json 2D array.")
     parser.add_argument('--outfile',default='tracked_output.mp4')
     args = parser.parse_args()
 
@@ -240,6 +245,8 @@ if __name__ == "__main__":
     # Make sure every trackpoint is for frame 0
     trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
 
-    res = track_movie(engine_name=args.engine, moviefile_input=args.moviefile, input_trackpoints=trackpoints, moviefile_output=args.outfile)
+    res = track_movie(engine_name=args.engine,
+                      moviefile_input=args.moviefile,
+                      input_trackpoints=trackpoints, moviefile_output=args.outfile)
     print("results:")
     print(json.dumps(res,default=str,indent=4))

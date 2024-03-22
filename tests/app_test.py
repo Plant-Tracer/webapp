@@ -25,6 +25,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from paths import STATIC_DIR,TEST_DATA_DIR
 import db
 import bottle_app
+import auth
 
 from user_test import new_course,new_user,API_KEY
 from movie_test import new_movie
@@ -39,7 +40,6 @@ def test_is_true():
     assert bottle_app.is_true("Y") is True
     assert bottle_app.is_true("f") is False
 
-
 def test_get_float(mocker):
     mocker.patch("bottle_app.get", return_value="3")
     assert bottle_app.get_float("key")==3
@@ -51,12 +51,21 @@ def test_get_bool(mocker):
     assert bottle_app.get_bool("key")==True
     mocker.patch("bottle_app.get", return_value="xxx")
     assert bottle_app.get_bool("key",default=False)==False
+    mocker.patch("bottle_app.get", return_value=3.4)
+    assert bottle_app.get_bool("key",default=True)==True
+
 
 def test_static_path():
     # Without templates, res is an HTTP response object with .body and .header and stuff
     with boddle(params={}):
         res = bottle_app.static_path('test.txt')
         assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == res.body.read()
+
+    # Test file not found
+    with pytest.raises(bottle.HTTPResponse) as e:
+        with boddle(params={}):
+            res = bottle_app.static_path('test_not_vound.txt')
+
 
 
 def test_icon():
@@ -71,8 +80,9 @@ def test_error():
     """Make sure authentication errors result in the session being expired and the cookie being cleared."""
     with boddle(params={}):
         res = bottle_app.func_error()
+    cookie_name = auth.cookie_name()
     assert "Session expired - You have been logged out" in res
-    assert ('Set-Cookie: api_key=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+    assert (f'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
             in str(bottle.response))
 
 
@@ -82,11 +92,9 @@ def test_api_key_null(mocker):
     with pytest.raises(bottle.HTTPResponse) as e:
         with boddle(params={}):
             res = bottle_app.func_list() # throws bottle.HTTPResponse
-        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
     with pytest.raises(bottle.HTTPResponse) as e:
         bottle_app.get_user_dict() # throws bottle.HTTPResponse
-        assert e.value.status[0:3]=='303' and e.value.headers=={'Location':'/'}
 
 
 ################################################################

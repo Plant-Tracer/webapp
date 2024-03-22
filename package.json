@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "jslint": "^0.12.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-jquery": "^3.0.2",
+    "eslint-formatter-friendly": "^7.0.0"
+  }
+}

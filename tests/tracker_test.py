@@ -22,7 +22,6 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
-import blocktrack
 import bottle_app
 import copy
 import db
@@ -98,6 +97,13 @@ def test_track_point_annotations(new_movie):
     assert tps[2]['y'] == tp2['y']
     assert tps[2]['label'] == tp2['label']
     assert tps[2]['frame_id'] == frame_id
+
+
+def test_cleanup_mp4():
+    with pytest.raises(FileNotFoundError):
+        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
+
+
 
 
 def test_movie_tracking(new_movie):

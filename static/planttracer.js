@@ -1,3 +1,16 @@
+/* jshint esversion: 8 */
+/*global api_key */
+/*global admin */
+/*global user_id */
+/*global user_primary_course_id */
+/*global planttracer_endpoint */
+/*global MAX_FILE_UPLOAD */
+/*global user_demo */
+
+
+const PLAY_LABEL = 'play original';
+const PLAY_TRACKED_LABEL = 'play tracked';
+
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
 function add_func() {
@@ -36,8 +49,8 @@ function register_func() {
             } else {
                 $('#message').html(`<b>${data.message}</b>`);
             }})
-        .fail(function(xhr, status, error) {
-            $('#message').html(`POST error: `+xhr['responseText']);
+        .fail( function(xhr, _status, _error) {
+            $('#message').html("POST error: "+xhr.responseText);
             console.log("xhr:",xhr);
         });
 }
@@ -52,11 +65,11 @@ function resend_func() {
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
     $.post('/api/resend-link', {email:email, planttracer_endpoint:planttracer_endpoint})
         .done(function(data) {
-            $('#message').html('Response: ' + data['message']);
+            $('#message').html('Response: ' + data.message);
         })
         .fail(function(xhr, status, error) {
-            $('#message').html(`POST error: `+xhr['responseText']);
-            console.log("xhr:",xhr);
+            $('#message').html(`POST error: `+xhr.responseText);
+            console.log("xhr:",xhr,"status:",status,"error:",error);
         });
 }
 
@@ -105,7 +118,7 @@ async function upload_movie(inp)
     formData.append("description", description);
 
     const ctrl = new AbortController();    // timeout
-    const timeoutId = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
+    setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
 
     try {
         let r = await fetch('/api/new-movie',
@@ -155,42 +168,41 @@ SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked
-function play_clicked( e ) {
-    console.log('play_clicked=',e);
-    const movie_id = e.getAttribute('x-movie_id');
-    const rowid    = e.getAttribute('x-rowid');
+function play_clicked( e, movie_id ) {
+    console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
-    var tr    = $(`#tr-${rowid}`).show();
-    var td    = $(`#td-${rowid}`).show();
-    var video = $(`#video-${rowid}`).show()
-    var vid = video.attr('id');
+    //const movie_id = e.getAttribute('x-movie_id');
+    const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
+    $(`#tr-${rowid}`).show();
+    const td = $(`#td-${rowid}`);
+
+    // Delete any existing video player
+    td.html('');
+    // Create a new video player
+    td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
+            `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+    td.show();
+    const video = $(`#video-${rowid}`).show();
+    const vid   = video.attr('id');
     //console.log('url=',url);
     //console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
     //video.attr('src',url);
-    video.html(`<source src='${url}' type='video/mp4'>`);
+    //video.html(``);
     console.log('video=',video);
     document.getElementById( vid ).play();
 }
 
 function hide_clicked( e ) {
-    var rowid = e.getAttribute('x-rowid');
-    var tr    = $(`#tr-${rowid}`).hide();
-    var td    = $(`#td-${rowid}`).hide();
-    var video = $(`#video-${rowid}`).hide()
+    let rowid = e.getAttribute('x-rowid');
+    let video = $(`#video-${rowid}`);
+    video.hide();
+    $(`#tr-${rowid}`).hide();
+    $(`#td-${rowid}`).hide();
 }
 
 function analyze_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     window.location = `/analyze?movie_id=${movie_id}`;
-}
-
-////////////////
-// DOWNLOAD
-// callback when the download button is clicked
-function download_clicked( e ) {
-    console.log("download ",e);
-    const movie_id = e.getAttribute('x-movie_id');
-
 }
 
 ////////////////
@@ -209,8 +221,8 @@ function set_property(user_id, movie_id, property, value)
     fetch('/api/set-metadata', { method:"POST", body:formData})
         .then((response) => response.json())
         .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
             } else {
                 list_movies();
             }
@@ -235,7 +247,7 @@ function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
     const target = e.getAttribute('x-target-id'); // name of the target
     console.log('target=',target);
-    t = document.getElementById(target);       // element of the target
+    const t = document.getElementById(target);       // element of the target
     console.log('t=',t);
     const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
@@ -270,7 +282,7 @@ function row_pencil_clicked( e ) {
         }
     });
     // Click somewhere else to finish editing
-    t.addEventListener('blur', function(e) {
+    t.addEventListener('blur', function(_e) {
         finished_editing();
     });
 }
@@ -281,7 +293,7 @@ function action_button_clicked( e ) {
     const property = e.getAttribute('x-property');
     const value    = e.getAttribute('x-value');
     const kind     = e.getAttribute('value');
-    sound = SOUNDS[ kind ];
+    const sound = SOUNDS[ kind ];
     console.log('kind=',kind,'sound=',sound);
     if (sound) {
         sound.play();
@@ -307,7 +319,7 @@ const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title<
 
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
-    const UNPUBLISHED = 'unpublished'
+    const UNPUBLISHED = 'unpublished';
     const DELETED = 'deleted';
     const COURSE = 'course';
 
@@ -316,7 +328,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-    function movies_fill_div( div, which, mlist, offer_upload ) {
+    function movies_fill_div( div, which, mlist) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -350,7 +362,7 @@ function list_movies_data( movies ) {
             // This products the HTML for each <td> that has a checkbox.
             // Clicking the checkbox calls row_checkbox_clicked(this) to change the property on the server
             // and initiate a redraw
-            function make_td_checkbox(property, value) {
+            function _make_td_checkbox(property, value) {
                 // for debugging:
                 // return `<td> ${property} = ${value} </td>`;
                 tid += 1;
@@ -361,6 +373,8 @@ function list_movies_data( movies ) {
 
             // action buttons are HTML buttons that when clicked change the metadata in a predictable way.
             function make_action_button( kind ) {
+                let nval = undefined;
+                let prop = undefined;
                 if (kind==PUBLISH_BUTTON) {
                     prop = 'published';
                     nval = 1;
@@ -382,16 +396,23 @@ function list_movies_data( movies ) {
 
             // Get the metadata for the movie
             const movieDate = new Date(m.date_uploaded * 1000);
-            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='play' onclick='play_clicked(this)'>`;
-            const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='analyze' onclick='analyze_clicked(this)'>`;
+            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this,${movie_id})'>`;
+            let playt = '';
+            let analyze_label = 'analyze';
+            if (m.tracked_movie_id){
+                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this,${m.tracked_movie_id})'>`;
+                analyze_label = 're-analyze';
+            }
+            const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
             const up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             const you_class = (m.user_id == user_id) ? "you" : "";
 
-            rows = `<tr class='${you_class}'>`
-                + `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>`  // #1, #2, #3
-                + make_td_text( "title", m.title, "<br/>" + play + analyze ) + make_td_text( "description", m.description, '')  // #4 #5
-                + `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} <br> fps: ${m.fps} frames: ${m.total_frames} </td> ` ;  // #6
+            let rows = `<tr class='${you_class}'>` +
+                `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+                make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
+                `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
+                `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
 
             rows += "<td> Status: "; // #7
             if (m.deleted) {
@@ -428,16 +449,16 @@ function list_movies_data( movies ) {
             rows += "</td></tr>\n"; // #7 end, <tr>
 
             // Now make the player row
-            rows += `<tr    class='movie_player' id='tr-${rowid}'> `
-                  + `<td    class='movie_player' id='td-${rowid}' colspan='7' >`
-                  + `<video class='movie_player' id='video-${rowid}' controls playsinline></video>`
-                  + `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'></td>`
-                  + `</tr>\n`;
+            rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
+                `<td    class='movie_player' id='td-${rowid}' colspan='7' ></td>` +
+                `</tr>\n`;
             return rows;
         }
 
+        // main body of movies_fill_div follows
+
         if (mlist.length>0){
-            mlist.forEach( m => ( h += movie_html(m) ));
+            mlist.forEach( m => ( h += movie_html(m) )); // for each movie in the array, add its HTML (which is two <tr>)
         } else {
             h += '<tr><td><i>No movies</i></td></tr>';
         }
@@ -452,10 +473,14 @@ function list_movies_data( movies ) {
         div.html(h);
     }
     // Create the four tables
-    movies_fill_div( $('#your-published-movies'),   PUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==1)), false);
-    movies_fill_div( $('#your-unpublished-movies'), UNPUBLISHED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==0)), true);
-    movies_fill_div( $('#course-movies'),           COURSE, movies.filter( m => (m['course_id']==user_primary_course_id && m['user_id']!=user_id)), false);
-    movies_fill_div( $('#your-deleted-movies'),     DELETED, movies.filter( m => (m['user_id']==user_id && m['published']==0 && m['deleted']==1)), false);
+    movies_fill_div( $('#your-published-movies'),
+                     PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)));
+    movies_fill_div( $('#your-unpublished-movies'),
+                     UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
+    movies_fill_div( $('#course-movies'),
+                     COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id && !m.orig_movie)));
+    movies_fill_div( $('#your-deleted-movies'),
+                     DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
 }
 
@@ -464,6 +489,7 @@ function list_movies_data( movies ) {
 // The functions after this implement the interactivity
 //
 function list_movies() {
+    console.log("list_movies");
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
@@ -471,47 +497,27 @@ function list_movies() {
     fetch('/api/list-movies', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            //console.log("data:",data);
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
             } else {
-                list_movies_data( data['movies'] );
+                // Make a map of each movie_id to its position in the array
+                var movie_map = new Array()
+                for (let movie of data.movies) {
+                    movie_map[movie.movie_id] = movie;
+                }
+                // Now for each movie that is tracked, set the property .tracked_movie_id in the source movie
+                for (let movie of data.movies) {
+                    if (movie.orig_movie) {
+                        movie_map[movie.orig_movie].tracked_movie_id = movie.movie_id;
+                    }
+                }
+
+                list_movies_data( data.movies );
                 $('#message').html('');
             }
         })
-        .catch(console.error)
+        .catch(console.error);
 }
-
-////////////////////////////////////////////////////////////////
-// page: /audit
-// This could fill in the table with search keys; right now we just search for everything
-function build_audit_table() {
-    let formData = new FormData();
-    formData.append("api_key",  api_key); // on the upload form
-    fetch('/api/get-logs', { method:"POST", body:formData })
-        .then((response) => response.json())
-        .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
-                return
-            }
-            console.log("data=",data);
-            let logs = data['logs'];
-            console.log("logs=",logs);
-            // get the columns
-            var columns = [];
-            for (const key in logs[0]) {
-                //console.log(`${key}: ${logs{key}}`);
-                columns.push( {'data':key, 'title':key } );
-            }
-            // make the data displayable
-            $('#audit').DataTable( {
-                columns: columns,
-                data: logs
-            });
-        });
-}
-
 
 ////////////////////////////////////////////////////////////////
 /// page: /users
@@ -535,7 +541,7 @@ function list_users_data( users, course_array ) {
         }
         ret +=  `<tr><td>${user.name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
         return ret;
-    };
+    }
     users.forEach( user => ( h+= user_html(user) ));
     h += '</tbody>';
     div.html(h);
@@ -549,13 +555,13 @@ function list_users()
     fetch('/api/list-users', { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
-            if (data['error']!=false){
-                $('#message').html('error: '+data['message']);
+            if (data.error!=false){
+                $('#message').html('error: '+data.message);
                 return;
             }
             var course_array = [];
-            data['courses'].forEach( course => (course_array[course.course_id] = course ));
-            list_users_data( data['users'], course_array);
+            data.courses.forEach( course => (course_array[course.course_id] = course ));
+            list_users_data( data.users, course_array);
         });
 }
 

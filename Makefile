@@ -107,7 +107,11 @@ coverage:
 
 debug:
 	@echo run bottle locally in debug mode
-	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+
+debug-multi:
+	@echo run bottle locally in debug mode
+	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-local:
 	@echo run bottle locally in debug mode
@@ -125,6 +129,10 @@ tracker-debug:
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
+
+eslint:
+	(cd static;make eslint)
+
 
 ################################################################
 # Installations are used by the CI pipeline:

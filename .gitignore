@@ -176,3 +176,4 @@ _build
 activate
 *.zip
 *.gz
+node_modules

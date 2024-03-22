@@ -3,11 +3,15 @@ Constants are created in classes so we can import the class and don't have to im
 """
 
 #pylint: disable=too-few-public-methods
+
+__version__ = '0.9.2'
+
 class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
     MAX_FILE_UPLOAD = 1024*1024*16
     NOTIFY_UPDATE_INTERVAL = 5.0
+    TRACK_DELAY = 'TRACK_DELAY'
 
 
 class Engines:
