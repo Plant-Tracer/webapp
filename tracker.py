@@ -11,7 +11,6 @@ import subprocess
 import logging
 import time
 import os
-import errno
 
 import cv2
 import numpy as np

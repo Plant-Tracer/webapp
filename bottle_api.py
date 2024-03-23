@@ -5,18 +5,24 @@ API
 import time
 import json
 import bottle
-from bottle import request
 import logging
 import sys
+import subprocess
+import smtplib
+import tempfile
+import base64
 import functools
+import io
+import csv
+from collections import defaultdict
 
 
+from validate_email_address import validate_email
+from bottle import request
 
 import db
 import auth
-from auth import get_dbreader
 
-from paths import view, STATIC_DIR
 from constants import C,E,__version__,GET,POST,GET_POST
 import mailer
 import tracker
@@ -82,11 +88,43 @@ def get_bool(key, default=None):
     except (TypeError,ValueError):
         return default
 
+def get_user_id(allow_demo=True):
+    """Returns the user_id of the currently logged in user, or throws a response.
+    if allow_demo==False, then do not allow the user to be a demo user
+    """
+    userdict = get_user_dict()
+    if 'id' not in userdict:
+        logging.info("no ID in userdict = %s", userdict)
+        raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
+    if userdict['demo'] and not allow_demo:
+        logging.info("demo account blocks requeted action")
+        raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
+                                  status=503, headers={ 'Location': '/'})
+    return userdict['id']
+
+
 def fix_types(obj):
     """Process JSON so that it dumps without `default=str`, since we can't
     seem to get bottle to do that."""
     return json.loads(json.dumps(obj,default=str))
 
+
+def get_user_dict():
+    """Returns the user_id of the currently logged in user, or throws a response"""
+    api_key = auth.get_user_api_key()
+    if api_key is None:
+        logging.info("api_key is none")
+        # This will redirect to the / and produce a "Session expired" message
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
+    userdict = db.validate_api_key(api_key)
+    if not userdict:
+        logging.info("api_key %s ipaddr %s is invalid  request.url=%s",api_key,request.environ.get('REMOTE_ADDR'),request.url)
+        auth.clear_cookie()
+        # This will produce a "Session expired" message
+        if request.url.endswith("/error"):
+            raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/logout'})
+        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
+    return userdict
 
 ################################################################
 # /api URLs
@@ -168,7 +206,7 @@ def api_send_link():
     email = request.forms.get('email')
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
     logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
-    if not validate_email(email, check_mx=CHECK_MX):
+    if not validate_email(email, check_mx=C.CHECK_MX):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
     try:
@@ -196,7 +234,7 @@ def api_bulk_register():
     email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     try:
         for email in email_addresses:
-            if not validate_email(email, check_mx=CHECK_MX):
+            if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
             db.register_email(email=email, course_id=course_id, name="")
             send_link(email=email, planttracer_endpoint=planttracer_endpoint)
@@ -358,6 +396,7 @@ class MovieTrackCallback:
     def __init__(self, *, user_id, movie_id):
         self.user_id = user_id
         self.movie_id = movie_id
+        self.movie_metadata = None
         self.last     = 0
 
     def notify(self, arg):
@@ -654,7 +693,7 @@ def api_get_log():
     """Get what log entries we can. get_user_id() provides access control.
     TODO - add search capabilities.
     """
-    return {'error':False, 'logs': db.get_log(user_id=get_user_id()) }
+    return {'error':False, 'logs': db.get_logs(user_id=get_user_id()) }
 
 ##
 # Metadata
@@ -664,6 +703,8 @@ def api_get_log():
 ################################################################
 ## Metdata Management (movies and users, it's a common API!)
 
+"""
+db.get_metadata() not implemented ye.
 @api.route('/api/get-metadata', method='POST')
 def api_get_metadata():
     gmovie_id = get_bool('get_movie_id')
@@ -677,6 +718,7 @@ def api_get_metadata():
                                                       get_user_id=guser_id,
                                                       property=request.forms.get('property'),
                                                       value=request.forms.get('value'))}
+"""
 
 
 @api.route('/api/set-metadata', method='POST')

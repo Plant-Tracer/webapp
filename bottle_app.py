@@ -44,23 +44,12 @@ export TEST_USER_EMAIL=****
 
 import sys
 import os
-import io
-import json
-import time
-import functools
 import logging
-import base64
-import csv
-import tempfile
-import subprocess
-import smtplib
 from urllib.parse import urlparse
-from collections import defaultdict
 
 import filetype
 import bottle
 from bottle import request
-from validate_email_address import validate_email
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -72,13 +61,10 @@ import auth
 from auth import get_dbreader
 
 from paths import view, STATIC_DIR
-from constants import C,E,__version__,GET,POST,GET_POST
+from constants import C,__version__,GET,POST,GET_POST
 
 import bottle_api
-from bottle_api import expand_memfile_max,is_true,git_head_time,git_last_commit,get,get_json,get_int,get_float,get_bool,fix_types
-
-import mailer
-import tracker
+from bottle_api import git_head_time,git_last_commit,get_user_dict
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -86,7 +72,6 @@ MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 
-CHECK_MX = False                # True didn't work
 
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
@@ -111,8 +96,8 @@ app.mount('/api', bottle_api.api)
 def static_path(path):
     try:
         kind = filetype.guess(os.path.join(STATIC_DIR,path))
-    except FileNotFoundError:
-        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404)
+    except FileNotFoundError as e:
+        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404) from e
     mimetype = kind.mime if kind else 'text/plain'
     response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
@@ -121,38 +106,6 @@ def static_path(path):
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
     return static_path('favicon.ico')
-
-def get_user_dict():
-    """Returns the user_id of the currently logged in user, or throws a response"""
-    api_key = auth.get_user_api_key()
-    if api_key is None:
-        logging.info("api_key is none")
-        # This will redirect to the / and produce a "Session expired" message
-        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
-    userdict = db.validate_api_key(api_key)
-    if not userdict:
-        logging.info("api_key %s ipaddr %s is invalid  request.url=%s",api_key,request.environ.get('REMOTE_ADDR'),request.url)
-        auth.clear_cookie()
-        # This will produce a "Session expired" message
-        if request.url.endswith("/error"):
-            raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/logout'})
-        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
-    return userdict
-
-def get_user_id(allow_demo=True):
-    """Returns the user_id of the currently logged in user, or throws a response.
-    if allow_demo==False, then do not allow the user to be a demo user
-    """
-    userdict = get_user_dict()
-    if 'id' not in userdict:
-        logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
-    if userdict['demo'] and not allow_demo:
-        logging.info("demo account blocks requeted action")
-        raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
-                                  status=503, headers={ 'Location': '/'})
-    return userdict['id']
-
 
 ################################################################
 # HTML Pages served with template system

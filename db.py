@@ -16,6 +16,8 @@ import copy
 import smtplib
 from typing import Optional
 
+import requests
+
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
@@ -637,7 +639,7 @@ def create_new_movie(*, user_id, title=None, description=None,
     if movie_data_sha256:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
-                            (movie_id, movie_sha256))
+                            (movie_id, movie_data_sha256))
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO objects (sha256, data, url) values (%s, %s, %s)",
                             (movie_data_sha256- movie_data, movie_data_url))
@@ -959,11 +961,10 @@ def delete_engine(*,engine_id):
 ## Logs
 ################################################################
 
-# Do we need to log get_logs?
 def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
               course_key=None, movie_id=None, log_user_id=None,
               ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
-    """get log entries (to which the user is entitled)
+    """get log entries (to which the user is entitled) - Implements /api/get-log
     :param: user_id    - the user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
     :param: end_time   - the last log entry to provide (time_t)
