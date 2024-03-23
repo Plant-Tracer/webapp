@@ -18,6 +18,8 @@ class C:
     TRACK_DELAY = 'TRACK_DELAY'
     CHECK_MX = False                # True didn't work
     DEFAULT_GET_TIMEOUT = 10
+    YES = 'YES'
+    NO = 'NO'
 
 
 class Engines:

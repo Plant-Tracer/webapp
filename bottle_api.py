@@ -141,7 +141,7 @@ def api_check_api_key():
     return E.INVALID_API_KEY
 
 
-@api.route('/api/get-logs', method=POST)
+@api.route('/get-logs', method=POST)
 def api_get_logs():
     """Get logs and return in JSON. The database function does all of the security checks, but we need to have a valid user."""
     kwargs = {}
@@ -153,7 +153,7 @@ def api_get_logs():
     logs    = db.get_logs(user_id=get_user_id(),**kwargs)
     return {'error':False, 'logs': logs}
 
-@api.route('/api/register', method=GET_POST)
+@api.route('/register', method=GET_POST)
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
@@ -191,7 +191,6 @@ class EmailNotInDatabase(Exception):
     """Handle error condition below"""
 
 
-
 def send_link(*, email, planttracer_endpoint):
     new_api_key = db.make_new_api_key(email=email)
     if not new_api_key:
@@ -200,12 +199,12 @@ def send_link(*, email, planttracer_endpoint):
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
 
 
-@api.route('/api/resend-link', method=GET_POST)
+@api.route('/resend-link', method=GET_POST)
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.forms.get('email')
     planttracer_endpoint = request.forms.get('planttracer_endpoint')
-    logging.info("/api/resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
+    logging.info("resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=C.CHECK_MX):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
@@ -222,7 +221,7 @@ def api_send_link():
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
 
-@api.route('/api/bulk-register', method=POST)
+@api.route('/bulk-register', method=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
     course_id =  int(request.forms.get('course_id'))
@@ -254,7 +253,7 @@ def api_bulk_register():
 ##
 
 
-@api.route('/api/new-movie', method='POST')
+@api.route('/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
     :param api_key: the user's api_key
@@ -305,7 +304,7 @@ def api_new_movie():
     return {'error': False, 'movie_id': movie_id}
 
 
-@api.route('/api/get-movie-data', method=GET_POST)
+@api.route('/get-movie-data', method=GET_POST)
 def api_get_movie_data():
     """
     :param api_key:   authentication
@@ -318,7 +317,7 @@ def api_get_movie_data():
         return db.get_movie_data(movie_id=movie_id)
     return E.INVALID_MOVIE_ACCESS
 
-@api.route('/api/get-movie-metadata', method=GET_POST)
+@api.route('/get-movie-metadata', method=GET_POST)
 def api_get_movie_metadata():
     """
     Gets the metadata for a specific movie and its last tracked frame
@@ -336,11 +335,12 @@ def api_get_movie_metadata():
 
     return E.INVALID_MOVIE_ACCESS
 
-@api.route('/api/get-movie-trackpoints',method=GET_POST)
+@api.route('/get-movie-trackpoints',method=GET_POST)
 def api_get_movie_trackpoints():
     """Downloads the movie trackpoints as a CSV
     :param api_key:   authentication
     :param movie_id:   movie
+    :param: format - 'xlsx' or 'json'
     """
     if db.can_access_movie(user_id=get_user_id(), movie_id=get_int('movie_id')):
         # get_movie_trackpoints() returns a dictionary for each trackpoint.
@@ -349,6 +349,10 @@ def api_get_movie_trackpoints():
         frame_numbers  = sorted( ( tp['frame_number'] for tp in trackpoint_dicts) )
         labels         = sorted( ( tp['label'] for tp in trackpoint_dicts) )
         frame_dicts    = defaultdict(dict)
+
+        if get('format')=='json':
+            return fix_types({'error':'False',
+                              'trackpoint_dicts':trackpoint_dicts})
 
         for tp in trackpoint_dicts:
             frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
@@ -371,7 +375,7 @@ def api_get_movie_trackpoints():
     return E.INVALID_MOVIE_ACCESS
 
 
-@api.route('/api/delete-movie', method='POST')
+@api.route('/delete-movie', method='POST')
 def api_delete_movie():
     """ delete a movie
     :param movie_id: the id of the movie to delete
@@ -385,7 +389,7 @@ def api_delete_movie():
     return E.INVALID_MOVIE_ACCESS
 
 
-@api.route('/api/list-movies', method=POST)
+@api.route('/list-movies', method=POST)
 def api_list_movies():
     return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
 
@@ -409,7 +413,7 @@ class MovieTrackCallback:
             db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
             self.last = time.time()
 
-@api.route('/api/track-movie', method='POST')
+@api.route('/track-movie', method='POST')
 def api_track_movie():
     """Tracks a movie that has been uploaded.
     :param api_key: the user's api_key
@@ -509,7 +513,7 @@ def api_track_movie():
 ##
 # Movie analysis API
 #
-@api.route('/api/new-movie-analysis', method=POST)
+@api.route('/new-movie-analysis', method=POST)
 def api_new_movie_analysis():
     """Creates a new movie analysis
     :param api_key: the user's api_key
@@ -532,7 +536,7 @@ def api_new_movie_analysis():
 ################################################################
 ### Frame API
 
-@api.route('/api/new-frame', method=POST)
+@api.route('/new-frame', method=POST)
 def api_new_frame():
     """Create a new frame and return its frame_id.
     If frame exists, just update the frame_data (if frame data is provided).
@@ -573,7 +577,7 @@ def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
     return E.INVALID_FRAME_ACCESS
 
 
-@api.route('/api/get-frame', method=GET_POST)
+@api.route('/get-frame', method=GET_POST)
 def api_get_frame():
     """
     Get a frame and its annotation from a movie. Return from the frame database. If not there, grab it from the movie
@@ -656,7 +660,7 @@ def api_get_frame():
     # without having to call JSON.parse()
     return fix_types(ret)
 
-@api.route('/api/put-frame-analysis', method=POST)
+@api.route('/put-frame-analysis', method=POST)
 def api_put_frame_analysis():
     """
     Writes analysis and trackpoints for specific frames; frame_id is required
@@ -696,7 +700,7 @@ def api_put_frame_analysis():
 ##
 # Log API
 #
-@api.route('/api/get-log', method=POST)
+@api.route('/get-log', method=POST)
 def api_get_log():
     """Get what log entries we can. get_user_id() provides access control.
     TODO - add search capabilities.
@@ -713,7 +717,7 @@ def api_get_log():
 
 """
 db.get_metadata() not implemented ye.
-@api.route('/api/get-metadata', method='POST')
+@api.route('/get-metadata', method='POST')
 def api_get_metadata():
     gmovie_id = get_bool('get_movie_id')
     guser_id  = get_bool('get_user_id')
@@ -729,7 +733,7 @@ def api_get_metadata():
 """
 
 
-@api.route('/api/set-metadata', method='POST')
+@api.route('/set-metadata', method='POST')
 def api_set_metadata():
     """ set some aspect of the metadata
     :param api_key: authorization key

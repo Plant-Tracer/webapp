@@ -393,7 +393,8 @@ def list_demo_users():
 
 def lookup_course(*, course_id):
     try:
-        return dbfile.DBMySQL.csfr(get_dbreader(), "select * from courses where id=%s", (course_id,), asDicts=True)[0]
+        return dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT * FROM courses WHERE id=%s", (course_id,), asDicts=True)[0]
     except IndexError:
         return {}
 
@@ -403,7 +404,8 @@ def create_course(*, course_key, course_name, max_enrollment, course_section=Non
     """Create a new course
     :return: course_id of the new course
     """
-    ret = dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
+    ret = dbfile.DBMySQL.csfr(get_dbwriter(),
+                              "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
                               (course_key, course_name, max_enrollment, course_section))
     return {'course_id':ret}
 

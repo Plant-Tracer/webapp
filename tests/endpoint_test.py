@@ -1,12 +1,17 @@
-"""endpoint_test.py - these tests use http to a running endpoint.
+"""endpoint_test.py - these tests use http to a running endpoint. Largely tests /api
 
-The fixutre allows that running endpoint to be one that is running locally.
+Environment variables:
+
+SKIP_ENDPOINT_TEST = "YES" to skip the tests in this file.
+ENDPOINT_URL       = If defined, use the specified endpoint, rather than the one specified by the fixture
+
+The fixture allows that running endpoint to be one that is running locally.
+Most of these tests should be able to call the tests in movie_test.py
 """
 
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
-import requests
-from paths import TEST_DIR, BOTTLE_APP_PATH
+import logging
+import subprocess
+import copy
 import sys
 import os
 from os.path import dirname, abspath
@@ -15,21 +20,27 @@ import re
 import time
 import json
 import base64
+from urllib3.util import Retry
+
+from requests.adapters import HTTPAdapter
+import requests
+
 import pytest
-import logging
-import subprocess
-import copy
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
 import db
+from paths import TEST_DIR, BOTTLE_APP_PATH
+import user_test
 from user_test import new_course, new_user, api_key
 from constants import C,E,__version__,GET,POST,GET_POST
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
-SKIP_ENDPOINT_TEST = False
+ENDPOINT_URL = 'ENDPOINT_URL'
+SKIP_ENDPOINT_TEST = 'SKIP_ENDPOINT_TEST'
+
+should_skip_endpoint_test = (os.environ.get(SKIP_ENDPOINT_TEST, C.NO) == C.YES)
 
 HTTP_PORT = 8008
 
@@ -39,6 +50,10 @@ def next_port():
     HTTP_PORT += 1
     return pt
 
+#
+# This fixture creates a local webserver and services it with the app in the parent directory.
+# It yields the URL of the endpoint.
+# For testing other endpoints, we
 
 @pytest.fixture
 def http_endpoint():
@@ -73,7 +88,7 @@ def http_endpoint():
         p.kill()
         p.wait()
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
 def test_ver(http_endpoint):
     r = requests.post(http_endpoint+'/ver')
     assert r.status_code == 200
@@ -83,7 +98,7 @@ def test_ver(http_endpoint):
     assert r.status_code == 404
 
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
 def test_ver(http_endpoint):
     r = requests.get(http_endpoint+'/api/ver')
     assert r.status_code == 200
@@ -92,7 +107,7 @@ def test_ver(http_endpoint):
     assert val['sys_version'] == sys.version
 
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
 def test_add(http_endpoint):
     r = requests.post(http_endpoint+'/api/add', {'a': 10, 'b': 20})
     print("r=",r)
@@ -101,7 +116,7 @@ def test_add(http_endpoint):
     assert r.json() == {'result': 30, 'error': False}
 
 
-@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
 def test_api_key(http_endpoint, api_key):
     r = requests.post(http_endpoint+'/api/check-api_key',
                       {'api_key': api_key})
@@ -116,8 +131,27 @@ def test_api_key(http_endpoint, api_key):
     assert r.status_code == 200
     assert r.json()['error'] == True
 
+@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
+def test_api_get_logs(http_endpoint, new_user):
+    api_key = new_user[user_test.API_KEY]
+    user_id = new_user[user_test.USER_ID]
 
-#@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+    r = requests.post(http_endpoint+'/api/get-logs',
+                      {'api_key': api_key, 'log_user_id' : user_id})
+    if (r.status_code != 200):
+        raise RuntimeError(f"r.status_code={r.status_code}  r.text={r.text}")
+    assert r.status_code == 200
+    obj = r.json()
+    assert obj['error'] == False
+    assert 'logs' in obj
+
+
+# need /api/register
+# need /api/resend-link
+# need /api/bulk-register
+
+
+#@pytest.mark.skipif(should_skip_endpoint_test, reason='SKIP_ENDPOINT_TEST set')
 #def test_upload_movie_frame_by_frame(http_endpoint, api_key):
 #    """This tests creating a movie and uploading
 #    three frames using the frame-by-frame upload using an already existing test user"""
@@ -178,3 +212,13 @@ def test_upload_movie_data(http_endpoint, api_key):
 
     # Purge the movie (to clean up)
     db.purge_movie(movie_id = movie_id)
+
+# need /api/get-movie-data
+# need /api/get-movie-metadata
+# need /api/get-movie-trackpoints
+# need /api/delete-movie
+# need /api/track-movie
+# need /api/new-movie-analysis
+# need /api/new-frame
+# need /api/get-frame
+# need /api/put-frame-analysis

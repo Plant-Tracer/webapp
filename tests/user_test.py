@@ -60,6 +60,7 @@ def new_course():
     demo_email  = TEST_DEMO_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
     course_name = f"test-{course_key} course name"
 
+    # Use dbmaint's create_course so that the demo movies will be created
     admin_id = dbmaint.create_course(course_key = course_key,
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
@@ -185,6 +186,9 @@ def test_new_course(new_course):
         logging.debug("%s: %s",ct,r)
     assert len(res)>=1
     assert len([r for r in res if r['email']==demo_email and r['api_key'] is not None])>0
+
+    # Check to make sure that the correct number of course enrollment remains
+    assert db.remaining_course_registrations(course_key=course_key) == dbmaint.DEFAULT_MAX_ENROLLMENT - 2
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)
