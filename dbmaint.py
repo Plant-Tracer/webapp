@@ -81,6 +81,7 @@ def wipe_test_movies():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
+# pylint: disable=too-many-statements
 def createdb(*,droot, createdb_name, write_config_fname, schema):
     """Create a database named `createdb_name` where droot is a root connection to the database server.
     Creadentials are stored in cp.
@@ -217,6 +218,7 @@ def freshen():
             args = list( movie_metadata.values()) + [movie_id]
             csfr(dbwriter, cmd, args)
 
+#pylint: disable=too-many-arguments
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
     db.create_course(course_key = course_key,

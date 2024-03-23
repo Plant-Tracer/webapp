@@ -4,7 +4,6 @@ API
 
 import time
 import json
-import bottle
 import logging
 import sys
 import subprocess
@@ -16,14 +15,14 @@ import io
 import csv
 from collections import defaultdict
 
-
 from validate_email_address import validate_email
+import bottle
 from bottle import request
 
 import db
 import auth
 
-from constants import C,E,__version__,GET,POST,GET_POST
+from constants import C,E,__version__,POST,GET_POST
 import mailer
 import tracker
 
@@ -118,7 +117,8 @@ def get_user_dict():
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.info("api_key %s ipaddr %s is invalid  request.url=%s",api_key,request.environ.get('REMOTE_ADDR'),request.url)
+        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
+                     api_key,request.environ.get('REMOTE_ADDR'),request.url)
         auth.clear_cookie()
         # This will produce a "Session expired" message
         if request.url.endswith("/error"):
@@ -556,6 +556,23 @@ def api_new_frame():
     assert isinstance( frame_id, int)
     return {'error': False, 'frame_id': frame_id}
 
+def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
+    # is frame_id provided?
+    if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
+        row =  db.get_frame(frame_id=frame_id)
+        return row.get('frame_data',None)
+    # Is there a movie we can access?
+    if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+        try:
+            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
+                                         frame_number = frame_number,
+                                         fmt = 'jpeg')
+        except ValueError as e:
+            return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
+    logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
+    return E.INVALID_FRAME_ACCESS
+
+
 @api.route('/api/get-frame', method=GET_POST)
 def api_get_frame():
     """
@@ -595,31 +612,20 @@ def api_get_frame():
         return E.INVALID_MOVIE_ACCESS
 
     if fmt=='jpeg':
-        # is frame_id provided?
-        if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-            row =  db.get_frame(frame_id=frame_id)
-            return row.get('frame_data',None)
-        # Is there a movie we can access?
-        if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-            try:
-                return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
-                                             frame_number = frame_number,
-                                             fmt = 'jpeg')
-            except ValueError as e:
-                return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
-        logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
-        return E.INVALID_FRAME_ACCESS
+        # Return just the JPEG for the frame, with no metadata
+        return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id)
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_number=frame_number)
-    logging.debug("ret=%s",ret)
     if ret:
         # Get any frame annotations and trackpoints
         ret['annotations'] = db.get_frame_annotations(frame_id=ret['frame_id'])
         ret['trackpoints'] = db.get_frame_trackpoints(frame_id=ret['frame_id'])
 
     else:
-        # plant_dev is not in the database, so we need to make it
+        # the frame is not in the database, so we need to make it
+        if frame_id is not None:
+            return E.INVALID_FRAME_ID_DB
         frame_id = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
         ret = {'movie_id':movie_id,
                'frame_id':frame_id,
@@ -643,9 +649,11 @@ def api_get_frame():
     ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
     ret['error'] = False
     #
-    # Need to convert all datetimes to strings. We then return the dictionary, which bottle runs json.dumps() on
+    # Need to convert all datetimes to strings.
+    # We then return the dictionary, which bottle runs json.dumps() on
     # and returns MIME type of "application/json"
-    # JQuery will then automatically decode this JSON into a JavaScript object, without having to call JSON.parse()
+    # JQuery will then automatically decode this JSON into a JavaScript object,
+    # without having to call JSON.parse()
     return fix_types(ret)
 
 @api.route('/api/put-frame-analysis', method=POST)

@@ -56,12 +56,13 @@ from bottle import request
 
 from lib.ctools import clogging
 
+import wsgiserver               # pylint: disable=syntax-error
 import db
 import auth
 from auth import get_dbreader
 
 from paths import view, STATIC_DIR
-from constants import C,__version__,GET,POST,GET_POST
+from constants import C,__version__,GET,GET_POST
 
 import bottle_api
 from bottle_api import git_head_time,git_last_commit,get_user_dict
@@ -325,7 +326,6 @@ if __name__ == "__main__":
         pass
 
     if args.multi:
-        import wsgiserver
         httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
         try:
             httpd.serve_forever()

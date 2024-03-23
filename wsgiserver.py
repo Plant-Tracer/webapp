@@ -1,4 +1,3 @@
-#
 """
 https://www.electricmonk.nl/log/2016/02/15/multithreaded-dev-web-server-for-the-python-bottle-web-framework/
 Simple multithreaded WSGI HTTP server.

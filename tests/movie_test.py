@@ -59,7 +59,7 @@ def new_movie(new_user):
                         "title": movie_title,
                         "description": "test movie description",
                         "movie_base64_data": base64.b64encode(movie_data)}):
-        bottle_app.expand_memfile_max()
+        bottle_api.expand_memfile_max()
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_api.api_new_movie()
 
@@ -69,7 +69,7 @@ def new_movie(new_user):
                         "title": movie_title,
                         "description": "test movie description",
                         "movie_base64_data": base64.b64encode(movie_data_big)}):
-        bottle_app.expand_memfile_max()
+        bottle_api.expand_memfile_max()
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_api.api_new_movie()
 

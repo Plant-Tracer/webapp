@@ -154,7 +154,9 @@ def cleanup_mp4(*,infile,outfile):
     subprocess.call([ FFMPEG_PATH ] + args)
 
 
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, moviefile_output, frame_start=0, callback=None):
+# pylint: disable=too-many-arguments
+def track_movie(*, engine_name, engine_version=None, moviefile_input,
+                input_trackpoints, moviefile_output, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame

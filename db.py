@@ -25,6 +25,7 @@ from paths import TEMPLATE_DIR
 
 
 import auth
+from constants import C
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
@@ -504,7 +505,7 @@ def get_movie_data(*, movie_id):
         return object_data
 
     if object_url:
-        r = requests.get(object_url)
+        r = requests.get(object_url, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content
 
     return None
