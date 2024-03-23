@@ -107,11 +107,11 @@ coverage:
 
 debug:
 	@echo run bottle locally in debug mode
-	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-multi:
 	@echo run bottle locally in debug mode
-	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
+	$(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-local:
 	@echo run bottle locally in debug mode

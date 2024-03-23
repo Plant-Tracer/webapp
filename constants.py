@@ -20,6 +20,10 @@ class C:
     DEFAULT_GET_TIMEOUT = 10
     YES = 'YES'
     NO = 'NO'
+    PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    MOVIE_EXTENSION = ".mov"
+    PUT = 'put'
+    GET = 'get'
 
 
 class Engines:

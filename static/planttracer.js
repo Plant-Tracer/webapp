@@ -10,6 +10,7 @@
 
 const PLAY_LABEL = 'play original';
 const PLAY_TRACKED_LABEL = 'play tracked';
+const UPLOAD_TIMEOUT_SECONDS = 20;
 
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
@@ -103,17 +104,11 @@ async function computeSHA256(file) {
 
 // Uploads an entire movie at once using an HTTP POST to the SQL server
 // https://stackoverflow.com/questions/5587973/javascript-upload-file
-const UPLOAD_TIMEOUT_SECONDS = 20;
-
 async function upload_movie_sql(movie_title, description, movieFile, showMovie)
 {
-
-    var sha256 = await computeSHA256(movieFile);
-    console.log("sha256=",sha256);
-
     let formData = new FormData();
-    formData.append("movie",       movieFile); // the movie itself
-    formData.append("api_key",     api_key); // on the upload form
+    formData.append("movie_data",  movieFile); // the movie itself
+    formData.append("api_key",     api_key);   // on the upload form
     formData.append("title",       movie_title);
     formData.append("description", description);
 
@@ -126,22 +121,63 @@ async function upload_movie_sql(movie_title, description, movieFile, showMovie)
         console.log("HTTP response code=",r);
         if (r.status!=200) {
             $('#message').html(`<i>Error uploading movie: ${r.status}</i>`);
-        } else{
-            const body = await r.json();
-            console.log('body=',body);
-            if (body.error==false ){
-                showMovie(movie_title,body.movie_id);
-            } else {
-                $('#message').html(`Error uploading movie. ${body.message}`);
-            }
+            return;
         }
+        const obj = await r.json();
+        console.log('obj=',obj);
+        if (obj.error ){
+            $('#message').html(`Error uploading movie. ${obj.message}`);
+            return;
+        }
+        showMovie(movie_title,obj.movie_id);
     } catch(e) {
         console.log('Error uploading movie:',e);
         $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
     }
 }
 
-async function upload_movie(inp)
+// Uploads a movie to Amazon S3. Does this by requesting an upload URL from the server, and then
+// sending it to Amazon S3. See:
+// https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
+// https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
+async function upload_movie_s3(movie_title, description, movieFile, show_movie)
+{
+    var movie_data_sha256 = await computeSHA256(movieFile);
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append("title",       movie_title);
+    formData.append("description", description);
+    formData.append("movie_data_sha256",  movie_data_sha256);
+    formData.append("movie_data_length",  movieFile.fileSize);
+    let r = await fetch('/api/new-movie', { method:"POST", body:formData});
+    console.log("App response code=",r);
+    let obj = await r.json();
+    console.log('obj=',obj);
+    if (obj.error){
+        $('#message').html(`Error getting upload URL: ${obj.message}`);
+        return;
+    }
+
+    try {
+        const ctrl = new AbortController();    // timeout
+        setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
+        let r = await fetch(obj.upload_url, { method:'PUT',
+                                              headers: { 'Content-Type': 'video/mpeg'},
+                                              body: movieFile,
+                                              signal: ctrl.signal } )
+        console.log("S3 response code=",r);
+        if (obj.error ){
+            $('#message').html(`Error uploading movie. ${obj.message}`);
+            return;
+        }
+        showMovie(movie_title,obj.movie_id);
+    } catch(e) {
+        console.log('Error uploading movie to S3:',e);
+        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+    }
+}
+
+function upload_movie(inp)
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
@@ -176,7 +212,8 @@ async function upload_movie(inp)
         $('#movie-file').val('');
         check_upload_metadata(); // disable the button
     };
-    upload_movie_sql(movie_title, description, movieFile, show_movie);
+    //upload_movie_sql(movie_title, description, movieFile, show_movie);
+    upload_movie_s3(movie_title, description, movieFile, show_movie);
 }
 
 

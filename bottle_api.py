@@ -20,6 +20,7 @@ import bottle
 from bottle import request
 
 import db
+import db_object
 import auth
 
 from constants import C,E,__version__,POST,GET_POST
@@ -259,17 +260,26 @@ def api_new_movie():
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param movie: If present, the movie file
+    :param movie_data: If present, the movie file itself
+    :param movie_base64_data - if present, the movie file, base64 encoded
+    :param movie_sha256: If present, the SHA256
+    :param movie_data_length - if present, the length
+    :return: dict['movie_id'] - uploaded movie
+             dict['movie_s3'] - s3:// if it is being uploaded to s3
+             dict['upload_url'] - URL for uploading
     """
 
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     movie_data = None
+    movie_metadata = None
+    movie_data_sha256 = None
+    movie_data_urn = None
     # First see if a file named movie was uploaded
-    if 'movie' in request.files:
+    if 'movie_data' in request.files:
         with io.BytesIO() as f:
-            request.files['movie'].save(f)
+            request.files['movie_data'].save(f)
             movie_data = f.getvalue()
             if len(movie_data) > C.MAX_FILE_UPLOAD:
                 return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
@@ -290,18 +300,29 @@ def api_new_movie():
         logging.debug("api_new_movie: movie_base64_data is None")
 
 
-    if (movie_data is not None) and (len(movie_data) > C.MAX_FILE_UPLOAD):
-        logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
-        return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
+    if movie_data is not None:
+        if len(movie_data) > C.MAX_FILE_UPLOAD:
+            logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
+            return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
 
-    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-    logging.debug("movie_metadata=%s",movie_metadata)
-    movie_id = db.create_new_movie(user_id=user_id,
+        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+
+    ret = {'error':False}
+
+    if movie_data_sha256:
+        movie_data_urn    = db_object.make_urn(movie_data_sha256=movie_data_sha256)
+        ret['upload_url'] = db_object.make_url(movie_data_sha256=movie_data_sha256,
+                                               operation=C.PUT)
+
+    ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                    title=request.forms.get('title'),
                                    description=request.forms.get('description'),
                                    movie_data=movie_data,
-                                   movie_metadata = movie_metadata)
-    return {'error': False, 'movie_id': movie_id}
+                                   movie_metadata = movie_metadata,
+                                   movie_data_sha256 = movie_data_sha256,
+                                   movie_data_urn = movie_data_urn )
+
+    return ret
 
 
 @api.route('/get-movie-data', method=GET_POST)

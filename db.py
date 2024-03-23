@@ -5,7 +5,6 @@
 # pylint: disable=too-many-lines
 # pylint: disable=too-many-arguments
 
-
 import os
 import base64
 import uuid
@@ -22,8 +21,6 @@ from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
 from paths import TEMPLATE_DIR
-
-
 import auth
 from constants import C
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
@@ -604,7 +601,7 @@ def delete_movie(*,movie_id, delete=1):
 @log
 def create_new_movie(*, user_id, title=None, description=None,
                      movie_data=None, movie_metadata=None, orig_movie=None,
-                     movie_data_sha256=None, movie_data_url=None):
+                     movie_data_sha256=None, movie_data_urn=None):
     """
     :param: user_id  - person creating movie. Stored in movies table.
     :param: title - title of movie. Stored in movies table
@@ -613,16 +610,16 @@ def create_new_movie(*, user_id, title=None, description=None,
     :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
     :param: orig_movie - if presented, the movie_id of the movie on which this is based
     :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. Should not be present if movie_data is present.
-    :param: movie_data_url - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided.
+    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided.
     """
-    if (movie_data is not None) and (movie_data_url is not None):
-        raise RuntimeError("both movie_data and movie_data_url provided")
+    if (movie_data is not None) and (movie_data_urn is not None):
+        raise RuntimeError("both movie_data and movie_data_urn provided")
     if (movie_data is not None) and (movie_data_sha256 is not None):
         raise RuntimeError("both movie_data and movie_data_sha256 provided")
-    if (movie_data_sha256 is not None) and (movie_data_url is None):
-        raise RuntimeError("If movie_data_sha256 is provided, then movie_data_url must be provided")
-    if (movie_data_url is not None) and (movie_data_sha256 is None):
-        raise RuntimeError("If movie_data_url is provided, then movie_data_sha256 must be provided")
+    if (movie_data_sha256 is not None) and (movie_data_urn is None):
+        raise RuntimeError("If movie_data_sha256 is provided, then movie_data_urn must be provided")
+    if (movie_data_urn is not None) and (movie_data_sha256 is None):
+        raise RuntimeError("If movie_data_urn is provided, then movie_data_sha256 must be provided")
 
 
     # First get the user's primary_course_id
@@ -645,7 +642,7 @@ def create_new_movie(*, user_id, title=None, description=None,
                             (movie_id, movie_data_sha256))
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO objects (sha256, data, url) values (%s, %s, %s)",
-                            (movie_data_sha256- movie_data, movie_data_url))
+                            (movie_data_sha256- movie_data, movie_data_urn))
     else:
         if movie_data:
             dbfile.DBMySQL.csfr(get_dbwriter(),

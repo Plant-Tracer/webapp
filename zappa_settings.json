@@ -12,11 +12,13 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
+        "s3_bucket": "planttracer-zappa",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_S3_BUCKET":"planttracer-movies"
         }
     },
     "dev": {
@@ -36,11 +38,13 @@
         "num_retained_versions":5,
         "log_level" : "INFO",
         "memory_size" : 1024,
+        "s3_bucket": "planttracer-zappa",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_S3_BUCKET":"planttracer-movies"
         }
     },
     "demo": {
@@ -56,12 +60,14 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
+        "s3_bucket": "planttracer-zappa",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "PLANTTRACER_DEMO":"YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_S3_BUCKET":"planttracer-movies"
         }
     }
 
