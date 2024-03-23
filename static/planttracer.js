@@ -101,33 +101,13 @@ async function computeSHA256(file) {
     return hashHex;
 }
 
-// Uploads an entire movie at once using an HTTP POST
+// Uploads an entire movie at once using an HTTP POST to the SQL server
 // https://stackoverflow.com/questions/5587973/javascript-upload-file
 const UPLOAD_TIMEOUT_SECONDS = 20;
-async function upload_movie(inp)
+
+async function upload_movie_sql(movie_title, description, movieFile, showMovie)
 {
-    const movie_title = $('#movie-title').val();
-    const description = $('#movie-description').val();
 
-    console.log('movie_title.length=',movie_title.length);
-    if (movie_title.length < 3) {
-        $('#message').html('<b>Movie title must be at least 3 characters long');
-        return;
-    }
-
-    if (description.length < 3) {
-        $('#message').html('<b>Movie description must be at least 3 characters long');
-        return;
-    }
-
-    $('#message').html(`Uploading image...`);
-    console.log("upload_movie inp=",inp);
-    const movieFile = inp.files[0];
-    if (movieFile.fileSize > MAX_FILE_UPLOAD) {
-        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
-        return;
-    }
-    console.log('movieFile:',movieFile);
     var sha256 = await computeSHA256(movieFile);
     console.log("sha256=",sha256);
 
@@ -150,15 +130,7 @@ async function upload_movie(inp)
             const body = await r.json();
             console.log('body=',body);
             if (body.error==false ){
-                $('#message').html(`<p>Movie ${body.movie_id} successfully uploaded.</p>`+
-                                   `<p>First frame:</p>` +
-                                   `<img src="/api/get-frame?api_key=${api_key}&movie_id=${body.movie_id}&frame_number=0&format=jpeg">`+
-                                   `<p><a href='/analyze?movie_id=${body.movie_id}'>Track movie '${movie_title}' (${body.movie_id})</a> `+
-                                   `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-                $('#movie-title').val('');
-                $('#movie-description').val('');
-                $('#movie-file').val('');
-                check_upload_metadata(); // disable the button
+                showMovie(movie_title,body.movie_id);
             } else {
                 $('#message').html(`Error uploading movie. ${body.message}`);
             }
@@ -167,6 +139,44 @@ async function upload_movie(inp)
         console.log('Error uploading movie:',e);
         $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
     }
+}
+
+async function upload_movie(inp)
+{
+    const movie_title = $('#movie-title').val();
+    const description = $('#movie-description').val();
+
+    console.log('movie_title.length=',movie_title.length);
+    if (movie_title.length < 3) {
+        $('#message').html('<b>Movie title must be at least 3 characters long');
+        return;
+    }
+
+    if (description.length < 3) {
+        $('#message').html('<b>Movie description must be at least 3 characters long');
+        return;
+    }
+
+    const movieFile = inp.files[0];
+    if (movieFile.fileSize > MAX_FILE_UPLOAD) {
+        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
+        return;
+    }
+    $('#message').html(`Uploading image...`);
+
+    let show_movie = function(movie_title,movie_id) {
+        let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+        $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
+                           `<p>First frame:</p> <img src="${first_frame}">`+
+                           `<p><a href='/analyze?movie_id=${movie_id}'>Track movie '${movie_title}' (${movie_id})</a> `+
+                           `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
+        // Clear the movie uploaded
+        $('#movie-title').val('');
+        $('#movie-description').val('');
+        $('#movie-file').val('');
+        check_upload_metadata(); // disable the button
+    };
+    upload_movie_sql(movie_title, description, movieFile, show_movie);
 }
 
 

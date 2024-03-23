@@ -63,13 +63,13 @@ def get(key, default=None):
 def get_json(key):
     try:
         return json.loads(request.forms.get(key))
-    except (TypeError,json.decoder.JSONDecodeError):
+    except (TypeError,ValueError,json.decoder.JSONDecodeError):
         return None
 
 def get_int(key, default=None):
     try:
         return int(get(key))
-    except TypeError:
+    except (TypeError,ValueError):
         return default
 
 def get_float(key, default=None):
