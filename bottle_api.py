@@ -262,8 +262,7 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data: If present, the movie file itself
     :param movie_base64_data - if present, the movie file, base64 encoded
-    :param movie_sha256: If present, the SHA256
-    :param movie_data_length - if present, the length
+    :param movie_data_sha256: If present, the SHA256
     :return: dict['movie_id'] - uploaded movie
              dict['movie_s3'] - s3:// if it is being uploaded to s3
              dict['upload_url'] - URL for uploading
@@ -272,9 +271,9 @@ def api_new_movie():
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
+    movie_data_sha256 = get('movie_data_sha256')
     movie_data = None
     movie_metadata = None
-    movie_data_sha256 = None
     movie_data_urn = None
     # First see if a file named movie was uploaded
     if 'movie_data' in request.files:

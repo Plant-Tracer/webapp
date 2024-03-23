@@ -149,6 +149,7 @@ async function upload_movie_s3(movie_title, description, movieFile, show_movie)
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.fileSize);
+    console.log("sending:",formData);
     let r = await fetch('/api/new-movie', { method:"POST", body:formData});
     console.log("App response code=",r);
     let obj = await r.json();
@@ -182,7 +183,6 @@ function upload_movie(inp)
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
 
-    console.log('movie_title.length=',movie_title.length);
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
         return;
