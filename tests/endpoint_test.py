@@ -24,6 +24,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 import db
 from user_test import new_course, new_user, api_key
+from constants import C,E,__version__,GET,POST,GET_POST
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
@@ -31,7 +32,6 @@ SKIP_ENDPOINT_TEST = (os.environ.get('SKIP_ENDPOINT_TEST', 'NO') == 'YES')
 SKIP_ENDPOINT_TEST = False
 
 HTTP_PORT = 8008
-
 
 def next_port():
     global HTTP_PORT
@@ -84,8 +84,19 @@ def test_ver(http_endpoint):
 
 
 @pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
+def test_ver(http_endpoint):
+    r = requests.get(http_endpoint+'/api/ver')
+    assert r.status_code == 200
+    val = r.json()
+    assert val['__version__'] == __version__
+    assert val['sys_version'] == sys.version
+
+
+@pytest.mark.skipif(SKIP_ENDPOINT_TEST, reason='SKIP_ENDPOINT_TEST set')
 def test_add(http_endpoint):
     r = requests.post(http_endpoint+'/api/add', {'a': 10, 'b': 20})
+    print("r=",r)
+    print("r.text=",r.text)
     assert r.status_code == 200
     assert r.json() == {'result': 30, 'error': False}
 

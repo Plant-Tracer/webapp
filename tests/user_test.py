@@ -21,6 +21,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 from auth import get_dbreader,get_dbwriter
 import db
 import dbmaint
+import bottle_api
 import bottle_app
 import ctools.dbfile as dbfile
 from paths import TEST_DIR
@@ -129,14 +130,14 @@ def new_movie(new_user):
                         "movie_base64_data": movie_base64_data}):
         bottle_app.expand_memfile_max()
         with pytest.raises(bottle.HTTPResponse):
-            res = bottle_app.api_new_movie()
+            res = bottle_api.api_new_movie()
 
     # Try to uplaod the movie all at once
     with boddle(params={"api_key": api_key,
                         "title": movie_title,
                         "description": "test movie description",
                         "movie_base64_data": movie_base64_data}):
-        res = bottle_app.api_new_movie()
+        res = bottle_api.api_new_movie()
     assert res['error'] == False
     movie_id = res['movie_id']
     assert movie_id > 0
@@ -149,7 +150,7 @@ def new_movie(new_user):
     # Delete the movie we uploaded
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
-        res = bottle_app.api_delete_movie()
+        res = bottle_api.api_delete_movie()
     assert res['error'] == False
 
     # And purge the movie that we have deleted
@@ -215,7 +216,7 @@ def test_movie_upload(new_movie):
     with boddle(params={'api_key': 'invalid',
                         'movie_id': movie_id}):
         with pytest.raises(bottle.HTTPResponse):
-            res = bottle_app.api_delete_movie()
+            res = bottle_api.api_delete_movie()
 
 
 def test_movie_update_metadata(new_movie):
@@ -233,7 +234,7 @@ def test_movie_update_metadata(new_movie):
                         'set_movie_id': movie_id,
                         'property': 'title',
                         'value': new_title}):
-        res = bottle_app.api_set_metadata()
+        res = bottle_api.api_set_metadata()
     assert res['error'] == False
 
     # Get the list of movies
@@ -244,7 +245,7 @@ def test_movie_update_metadata(new_movie):
                         'set_movie_id': movie_id,
                         'property': 'description',
                         'value': new_description}):
-        res = bottle_app.api_set_metadata()
+        res = bottle_api.api_set_metadata()
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['description'] == new_description
 
@@ -253,7 +254,7 @@ def test_movie_update_metadata(new_movie):
                         'set_movie_id': movie_id,
                         'property': 'deleted',
                         'value': 1}):
-        res = bottle_app.api_set_metadata()
+        res = bottle_api.api_set_metadata()
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['deleted'] == 1
 
@@ -262,7 +263,7 @@ def test_movie_update_metadata(new_movie):
                         'set_movie_id': movie_id,
                         'property': 'deleted',
                         'value': 0}):
-        res = bottle_app.api_set_metadata()
+        res = bottle_api.api_set_metadata()
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['deleted'] == 0
 
@@ -272,7 +273,7 @@ def test_movie_update_metadata(new_movie):
                         'set_movie_id': movie_id,
                         'property': 'published',
                         'value': 1}):
-        res = bottle_app.api_set_metadata()
+        res = bottle_api.api_set_metadata()
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['published'] == 0
 
@@ -286,7 +287,7 @@ def test_movie_update_metadata(new_movie):
 def movie_list(api_key):
     """Return a list of the movies"""
     with boddle(params={"api_key": api_key}):
-        res = bottle_app.api_list_movies()
+        res = bottle_api.api_list_movies()
     assert res['error'] == False
     return res['movies']
 
@@ -342,7 +343,7 @@ def test_get_logs(new_user):
     api_key = new_user[API_KEY]
     user_id   = new_user['user_id']
     with boddle(params={'api_key': api_key, 'user_id':user_id}):
-        res = bottle_app.api_get_logs()
+        res = bottle_api.api_get_logs()
 
     # Turns out that there are no logs with this user, since the scaffolding calls register_email
     # for the new_user with a NULL user_id....
@@ -369,7 +370,7 @@ def test_course_list(new_user):
 
     # Make sure that the endpoint works
     with boddle(params={'api_key': api_key}):
-        res = bottle_app.api_list_users()
+        res = bottle_api.api_list_users()
     assert res['error'] is False
     users2 = res['users']
     # There is the user and the admin; there may also be a demo user

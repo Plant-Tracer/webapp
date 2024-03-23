@@ -76,12 +76,29 @@ function resend_func() {
 ////////////////////////////////////////////////////////////////
 /// page: /upload
 /// Enable the movie-file upload when we have at least 3 characters of title and description
+/// We also allow uploading other places
 function check_upload_metadata()
 {
     const title = $('#movie-title').val();
     const description = $('#movie-description').val();
 
     $('#movie-file').prop('disabled', (title.length < 3 || description.length < 3));
+}
+
+// THis is an async function, which uses async functions.
+// You get the results with
+//        var sha256 = await computeSHA256(file);
+async function computeSHA256(file) {
+    // Read the file as an ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+
+    // Compute the SHA-256 hash
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+
+    // Convert the hash to a hexadecimal string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
 }
 
 // Uploads an entire movie at once using an HTTP POST
@@ -111,6 +128,9 @@ async function upload_movie(inp)
         return;
     }
     console.log('movieFile:',movieFile);
+    var sha256 = await computeSHA256(movieFile);
+    console.log("sha256=",sha256);
+
     let formData = new FormData();
     formData.append("movie",       movieFile); // the movie itself
     formData.append("api_key",     api_key); // on the upload form

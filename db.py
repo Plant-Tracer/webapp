@@ -483,13 +483,30 @@ def remaining_course_registrations(*,course_key):
 
 @log
 def get_movie_data(*, movie_id):
-    """Returns the movie contents. Does no checking"""
+    """Returns the movie contents for a movie_id. If the data is stored in the movie_data, return that.
+    If a sha256 is stored, redirect through the objects table.
+    """
     logging.debug("movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))
-    if len(rows)==1:
-        assert len(rows[0])==1
-        return rows[0][0]
-    raise InvalidMovie_Id(str(movie_id))
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
+    if len(rows)!=1:
+        raise InvalidMovie_Id(f"movie_id={movie_id}")
+    (movie_data,movie_sha256) = rows[0]
+    if movie_data:
+        return movie_data
+
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT data,url from objects where sha256=%s LIMIT 1",(movie_sha256))
+    if len(rows)!=1:
+        raise InvalidMovie_Id(f"movie_id={movie_id} sha256={movie_sha256}")
+    (object_data,object_url) = rows
+    if object_data:
+        return object_data
+
+    if object_url:
+        r = requests.get(object_url)
+        return r.content
+
+    return None
+
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
@@ -581,7 +598,29 @@ def delete_movie(*,movie_id, delete=1):
 
 @log
 def create_new_movie(*, user_id, title=None, description=None,
-                     movie_data=None, movie_metadata=None, orig_movie=None):
+                     movie_data=None, movie_metadata=None, orig_movie=None,
+                     movie_data_sha256=None, movie_data_url=None):
+    """
+    :param: user_id  - person creating movie. Stored in movies table.
+    :param: title - title of movie. Stored in movies table
+    :param: description - description of movie
+    :param: movie_data - if presented, data for the movie. Stored in movie_data SQL table.
+    :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
+    :param: orig_movie - if presented, the movie_id of the movie on which this is based
+    :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. Should not be present if movie_data is present.
+    :param: movie_data_url - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided.
+    """
+    if (movie_data is not None) and (movie_data_url is not None):
+        raise RuntimeError("both movie_data and movie_data_url provided")
+    if (movie_data is not None) and (movie_data_sha256 is not None):
+        raise RuntimeError("both movie_data and movie_data_sha256 provided")
+    if (movie_data_sha256 is not None) and (movie_data_url is None):
+        raise RuntimeError("If movie_data_sha256 is provided, then movie_data_url must be provided")
+    if (movie_data_url is not None) and (movie_data_sha256 is None):
+        raise RuntimeError("If movie_data_url is provided, then movie_data_sha256 must be provided")
+
+
+    # First get the user's primary_course_id
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -589,14 +628,24 @@ def create_new_movie(*, user_id, title=None, description=None,
         logging.error("res=%s", res)
         raise RuntimeError(f"user_id={user_id} len(res)={len(res)} res={res}")
     primary_course_id = res[0][0]
+
+    # Now create the movie record
     movie_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                    """INSERT INTO movies (title,description,user_id,course_id,orig_movie) VALUES (%s,%s,%s,%s,%s)
                                     """,
                                    (title, description, user_id, primary_course_id,orig_movie))
-    if movie_data:
+    if movie_data_sha256:
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
-                            (movie_id, movie_data))
+                            "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
+                            (movie_id, movie_sha256))
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "INSERT INTO objects (sha256, data, url) values (%s, %s, %s)",
+                            (movie_data_sha256- movie_data, movie_data_url))
+    else:
+        if movie_data:
+            dbfile.DBMySQL.csfr(get_dbwriter(),
+                                "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
+                                (movie_id, movie_data))
     if movie_metadata:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +

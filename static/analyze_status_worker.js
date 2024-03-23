@@ -5,7 +5,7 @@
 // JQuery not available in webworker because there is no document
 // https://stackoverflow.com/questions/48408491/using-webworkers-jquery-returns-undefined
 
-const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (in msec)
+const NOTIFY_UPDATE_INTERVAL = 1000;    // how quickly to pool for retracking (in msec)
 
 // Set a timer to get the movie status from the server and put it in the status field
 // during long operations.

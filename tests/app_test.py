@@ -24,6 +24,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import STATIC_DIR,TEST_DATA_DIR
 import db
+import bottle_api
 import bottle_app
 import auth
 
@@ -190,15 +191,15 @@ def test_check_api_key(new_user):
     api_key = new_user[API_KEY]
     # no parameter should generate error
     with boddle(params={}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == True
 
     # invalid API key should generate error
     with boddle(params={'api_key': 'invalid'}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == True
 
     # valid key should generate no error
     with boddle(params={'api_key': api_key}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == False, f'API_KEY {API_KEY} should be valid'

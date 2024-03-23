@@ -6,6 +6,10 @@ Constants are created in classes so we can import the class and don't have to im
 
 __version__ = '0.9.2'
 
+GET='GET'
+POST='POST'
+GET_POST = [GET,POST]
+
 class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
