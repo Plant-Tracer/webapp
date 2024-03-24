@@ -488,23 +488,32 @@ def get_movie_data(*, movie_id):
     """Returns the movie contents for a movie_id. If the data is stored in the movie_data, return that.
     If a sha256 is stored, redirect through the objects table.
     """
-    logging.debug("movie_id=%s",movie_id)
+    logging.debug("1. movie_id=%s",movie_id)
     rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
     if len(rows)!=1:
         raise InvalidMovie_Id(f"movie_id={movie_id}")
     (movie_data,movie_sha256) = rows[0]
-    if movie_data:
+    logging.debug("**2**  movie_data=%s",movie_data)
+    if movie_data is not None:
         return movie_data
 
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT data,url from objects where sha256=%s LIMIT 1",(movie_sha256))
+    logging.debug("**3**")
+    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                               "SELECT data,urn from objects where sha256=%s LIMIT 1",
+                               (movie_sha256,))
+    logging.debug("**4**")
+    logging.debug("rows=%s",rows)
     if len(rows)!=1:
+        logging.debug("raise")
         raise InvalidMovie_Id(f"movie_id={movie_id} sha256={movie_sha256}")
-    (object_data,object_url) = rows
+    (object_data,object_url) = rows[0]
     if object_data:
         return object_data
 
+    logging.debug("object_url=%s",object_url)
     if object_url:
         r = requests.get(object_url, timeout=C.DEFAULT_GET_TIMEOUT)
+        # TODO - if object_url begins with s3://, get the S3 file
         return r.content
 
     return None
@@ -641,8 +650,8 @@ def create_new_movie(*, user_id, title=None, description=None,
                             "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
                             (movie_id, movie_data_sha256))
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO objects (sha256, data, url) values (%s, %s, %s)",
-                            (movie_data_sha256- movie_data, movie_data_urn))
+                            "INSERT INTO objects (sha256, data, urn) values (%s, %s, %s)",
+                            (movie_data_sha256, movie_data, movie_data_urn))
     else:
         if movie_data:
             dbfile.DBMySQL.csfr(get_dbwriter(),

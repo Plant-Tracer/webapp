@@ -309,9 +309,9 @@ def api_new_movie():
     ret = {'error':False}
 
     if movie_data_sha256:
-        movie_data_urn    = db_object.make_urn(movie_data_sha256=movie_data_sha256)
-        ret['upload_url'] = db_object.make_url(movie_data_sha256=movie_data_sha256,
-                                               operation=C.PUT)
+        object_name = movie_data_sha256 + C.MOVIE_EXTENSION
+        movie_data_urn                 = db_object.make_urn(object_name=object_name)
+        ret['presigned_post_response'] = db_object.make_presigned_post(urn=movie_data_urn)
 
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                    title=request.forms.get('title'),

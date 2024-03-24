@@ -140,7 +140,7 @@ async function upload_movie_sql(movie_title, description, movieFile, showMovie)
 // sending it to Amazon S3. See:
 // https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
 // https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
-async function upload_movie_s3(movie_title, description, movieFile, show_movie)
+async function upload_movie_s3(movie_title, description, movieFile, showMovie)
 {
     var movie_data_sha256 = await computeSHA256(movieFile);
     let formData = new FormData();
@@ -159,16 +159,27 @@ async function upload_movie_s3(movie_title, description, movieFile, show_movie)
         return;
     }
 
+    // https://stackoverflow.com/questions/13782198/how-to-do-a-put-request-with-curl
     try {
+        const response = obj.presigned_post_response;
+        console.log("response:",response);
+        const formData = new FormData();
+        formData.append("file", movieFile);
+        for (const field in response) {
+            formData.append(field, response[field]);
+        }
+
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
-        let r = await fetch(obj.upload_url, { method:'PUT',
-                                              headers: { 'Content-Type': 'video/mpeg'},
-                                              body: movieFile,
-                                              signal: ctrl.signal } )
-        console.log("S3 response code=",r);
-        if (obj.error ){
-            $('#message').html(`Error uploading movie. ${obj.message}`);
+        const r = await fetch(response.url, {
+            method: "POST",
+            body: formData,
+            headers: { "Content-Type":"multipart/form-data",
+                     },
+        });
+        if (!r.ok) {
+            $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
+            console.log("r.text()=",await r.text());
             return;
         }
         showMovie(movie_title,obj.movie_id);
