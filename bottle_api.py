@@ -328,14 +328,27 @@ def api_new_movie():
 def api_get_movie_data():
     """
     :param api_key:   authentication
-    :param movie_id:   movie
-    :return: returns the raw movie data as a quicktime
+    :param movie_id:  movie
+    :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
+              IF MOVIE IS IN DB - The raw movie data as a movie.
     """
-    movie_id = get_int('movie_id')
-    if db.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
-        bottle.response.set_header('Content-Type', 'video/quicktime')
-        return db.get_movie_data(movie_id=movie_id)
-    return E.INVALID_MOVIE_ACCESS
+    try:
+        movie_id = get_int('movie_id')
+        movie = db.Movie(movie_id, user_id=get_user_id())
+    except db.UnauthorizedUser as e:
+        raise bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404) from e
+
+    # If we have a movie, return it
+    if movie.data is not None:
+        bottle.response.set_header('Content-Type', movie.mime_type)
+        return movie.data
+
+    # If we have a
+    url = movie.url()
+    logging.info("Redirecting movie_id=%s to %s",movie.movie_id, url)
+    raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': url })
+
+
 
 @api.route('/get-movie-metadata', method=GET_POST)
 def api_get_movie_metadata():

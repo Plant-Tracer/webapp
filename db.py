@@ -15,15 +15,13 @@ import copy
 import smtplib
 from typing import Optional
 
-import requests
-
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
 import db_object
 from paths import TEMPLATE_DIR
 import auth
-from constants import C
+from constants import MIME
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
@@ -35,18 +33,6 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class DB_Errors(RuntimeError):
-    """Base class for DB Errors"""
-
-class InvalidAPI_Key(DB_Errors):
-    """ API Key is invalid """
-
-class InvalidCourse_Key(DB_Errors):
-    """ API Key is invalid """
-
-class InvalidMovie_Id(DB_Errors):
-    """ API Key is invalid """
-
 LOG_DB = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
 LOG_WARNING = 'LOG_WARNING'
@@ -56,6 +42,29 @@ logging_policy.add(LOG_DB)
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
+
+################################################################
+## Errors
+################################################################
+
+class DB_Errors(RuntimeError):
+    """Base class for DB Errors"""
+
+class InvalidAPI_Key(DB_Errors):
+    """ API Key is invalid """
+
+class InvalidCourse_Key(DB_Errors):
+    """ Course Key is invalid """
+
+class InvalidMovie_Id(DB_Errors):
+    """ MovieID is invalid """
+
+class UnauthorizedUser(DB_Errors):
+    """ User is not authorized for movie"""
+
+class NoMovieData(DB_Errors):
+    """There is no data for the movie"""
+
 
 ################################################################
 # Logging
@@ -489,7 +498,6 @@ def get_movie_data(*, movie_id):
     """Returns the movie contents for a movie_id. If the data is stored in the movie_data, return that.
     If a sha256 is stored, redirect through the objects table.
     """
-    logging.debug("1. movie_id=%s",movie_id)
     rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
     if len(rows)!=1:
         raise InvalidMovie_Id(f"movie_id={movie_id}")
@@ -1121,3 +1129,42 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                                           (value, user_id))
                 return ret
     return None
+
+
+################################################################
+## Movie Class (in transition)
+## A higher-level interface to movies.
+################################################################
+
+class Movie():
+    """Simple representation of movies that may be stored in SQL database or on S3. More intelligence will move into this class over time."""
+    __slots__ = ['movie_id', 'data', 'urn', 'sha256', 'mime_type']
+    def __init__(self, movie_id, *, user_id=None):
+        # If user_id is provided, make sure user gets access
+        self.mime_type = MIME.MP4
+        if (user_id is not None) and not can_access_movie(user_id=user_id, movie_id=movie_id):
+            raise UnauthorizedUser(f"user_id={user_id} movie_id={movie_id}")
+        self.movie_id = movie_id
+        rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1",
+                                   (self.movie_id,))
+        if len(rows)!=1:
+            raise InvalidMovie_Id(f"movie_id={self.movie_id}")
+        (self.data,self.sha256) = rows[0]
+        if self.data is None:
+            rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (self.sha256,))
+            try:
+                self.urn = rows[0]
+            except IndexError as e:
+                raise NoMovieData(f"movie_id={self.movie_id} sha256={self.sha256}") from e
+
+
+    def get_data(self):
+        """Return the object data"""
+        if self.data is not None:
+            return self.data
+        return db_object.read_object(self.urn)
+
+    def url(self):
+        """Return a URL for accessing the data. This is a self-signed URL"""
+        return db_object.make_signed_url(urn=self.urn)
