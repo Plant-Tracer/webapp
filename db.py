@@ -20,6 +20,7 @@ import requests
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
+import db_object
 from paths import TEMPLATE_DIR
 import auth
 from constants import C
@@ -493,15 +494,12 @@ def get_movie_data(*, movie_id):
     if len(rows)!=1:
         raise InvalidMovie_Id(f"movie_id={movie_id}")
     (movie_data,movie_sha256) = rows[0]
-    logging.debug("**2**  movie_data=%s",movie_data)
     if movie_data is not None:
         return movie_data
 
-    logging.debug("**3**")
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
                                "SELECT data,urn from objects where sha256=%s LIMIT 1",
                                (movie_sha256,))
-    logging.debug("**4**")
     logging.debug("rows=%s",rows)
     if len(rows)!=1:
         logging.debug("raise")
@@ -512,7 +510,7 @@ def get_movie_data(*, movie_id):
 
     logging.debug("object_urn=%s",object_urn)
     if object_urn:
-        return read_object(object_url)
+        return db_object.read_object(object_urn)
     return None
 
 

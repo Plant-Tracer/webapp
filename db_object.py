@@ -95,14 +95,13 @@ def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expire
 
 
 def read_object(urn):
-    o = urllib.parse.urlparse(object_url)
+    o = urllib.parse.urlparse(urn)
+    logging.debug("urn=%s o=%s",urn,o)
     if o.scheme=='s3':
         # We are getting the object, so we do not need a presigned url
-        obj = s3_client().Object(o.netloc, o.path[1:])
-        data = obj.get()['Body'].read()
-        return data
+        return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
     # default to requests
-    r = requests.get(object_url, timeout=C.DEFAULT_GET_TIMEOUT)
+    r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
     return r.content
 
 
