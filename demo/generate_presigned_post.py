@@ -7,6 +7,9 @@ MWE to generate a signed post and then upload a file
 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/generate_presigned_post.html
 # But it finally took GPT-4 to tell me I also needed to specify Conditions
 
+# Always go to the boto3 documentation:
+# https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html
+
 import boto3
 import requests
 import json

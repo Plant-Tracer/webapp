@@ -310,8 +310,8 @@ def api_new_movie():
 
     if movie_data_sha256:
         object_name = movie_data_sha256 + C.MOVIE_EXTENSION
-        movie_data_urn                 = db_object.make_urn(object_name=object_name)
-        ret['presigned_post_response'] = db_object.make_presigned_post(urn=movie_data_urn)
+        movie_data_urn        = db_object.make_urn(object_name=object_name)
+        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn, mime_type='video/mp4')
 
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                    title=request.forms.get('title'),

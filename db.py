@@ -506,16 +506,13 @@ def get_movie_data(*, movie_id):
     if len(rows)!=1:
         logging.debug("raise")
         raise InvalidMovie_Id(f"movie_id={movie_id} sha256={movie_sha256}")
-    (object_data,object_url) = rows[0]
+    (object_data,object_urn) = rows[0]
     if object_data:
         return object_data
 
-    logging.debug("object_url=%s",object_url)
-    if object_url:
-        r = requests.get(object_url, timeout=C.DEFAULT_GET_TIMEOUT)
-        # TODO - if object_url begins with s3://, get the S3 file
-        return r.content
-
+    logging.debug("object_urn=%s",object_urn)
+    if object_urn:
+        return read_object(object_url)
     return None
 
 

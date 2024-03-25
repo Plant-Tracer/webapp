@@ -160,22 +160,21 @@ async function upload_movie_s3(movie_title, description, movieFile, showMovie)
     }
 
     // https://stackoverflow.com/questions/13782198/how-to-do-a-put-request-with-curl
+    // https://stackoverflow.com/questions/15234496/upload-directly-to-amazon-s3-using-ajax-returning-error-bucket-post-must-contai/15235866#15235866
     try {
-        const response = obj.presigned_post_response;
-        console.log("response:",response);
+        const pp = obj.presigned_post;
+        console.log("pp:",pp)
         const formData = new FormData();
-        formData.append("file", movieFile);
-        for (const field in response) {
-            formData.append(field, response[field]);
+        for (const field in pp.fields) {
+            formData.append(field, pp.fields[field]);
         }
+        formData.append("file", movieFile); // order matters!
 
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
-        const r = await fetch(response.url, {
+        const r = await fetch(pp.url, {
             method: "POST",
             body: formData,
-            headers: { "Content-Type":"multipart/form-data",
-                     },
         });
         if (!r.ok) {
             $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);

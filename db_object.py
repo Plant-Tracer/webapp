@@ -31,6 +31,18 @@ cors_configuration = {
 }
 
 
+def s3_client():
+    return boto3.session.Session().client('s3')
+
+def make_urn(*, object_name, schema='s3'):
+    """Currently we only support the s3 schema. Makes a URL for movies"""
+    assert schema.lower() == 's3'
+    if not S3_BUCKET:
+        raise RuntimeError(C.PLANTTRACER_S3_BUCKET+" not set")
+    ret = f"s3://{S3_BUCKET}/{object_name}"
+    logging.debug("make_urn=%s",ret)
+    return ret
+
 def create_presigned_url(bucket_name, object_name, operation, expiration=3600):
     """
     Generate a presigned URL to upload a file to S3.
@@ -59,16 +71,6 @@ def create_presigned_url(bucket_name, object_name, operation, expiration=3600):
                                                     'Key': object_name},
                                             ExpiresIn=expiration)
 
-
-def make_urn(*, object_name, schema='s3'):
-    """Currently we only support the s3 schema. Makes a URL for movies"""
-    assert schema.lower() == 's3'
-    if not S3_BUCKET:
-        raise RuntimeError(C.PLANTTRACER_S3_BUCKET+" not set")
-    ret = f"s3://{S3_BUCKET}/{object_name}"
-    logging.debug("make_urn=%s",ret)
-    return ret
-
 def make_signed_url(*,urn,operation=C.GET):
     o = urllib.parse.urlparse(urn)
     if o.scheme=='s3':
@@ -76,15 +78,32 @@ def make_signed_url(*,urn,operation=C.GET):
         return create_presigned_url(o.netloc, o.path[1:], op) # remove the / from the path
     raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
-def make_presigned_post(*, urn):
+def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600):
+    """Returns a dictionary with 'url' and 'fields'"""
     o = urllib.parse.urlparse(urn)
     if o.scheme!='s3':
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
-    s3_client = boto3.client('s3')
-    return s3_client.generate_presigned_post(Bucket=o.netloc,
-                                             Key=o.path[1:], # remove the / from the front
-                                             ExpiresIn=3600)
+        raise RuntimeError(f"Unknown scheme: {o.scheme} (urn={urn})")
+    return s3_client().generate_presigned_post( Bucket=o.netloc,
+                                                Key=o.path[1:],
+                                                Conditions=[
+                                                    {"Content-Type": mime_type}, # Explicitly allow Content-Type header
+                                                    ["content-length-range", 1, maxsize], # Example condition: limit size between 1 and 10 MB
+                                                ],
+                                                Fields= { 'Content-Type':mime_type },
+                                                ExpiresIn=expires)
 
+
+
+def read_object(urn):
+    o = urllib.parse.urlparse(object_url)
+    if o.scheme=='s3':
+        # We are getting the object, so we do not need a presigned url
+        obj = s3_client().Object(o.netloc, o.path[1:])
+        data = obj.get()['Body'].read()
+        return data
+    # default to requests
+    r = requests.get(object_url, timeout=C.DEFAULT_GET_TIMEOUT)
+    return r.content
 
 
 if __name__=="__main__":
