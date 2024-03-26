@@ -125,11 +125,15 @@ def logit(*, func_name, func_args, func_return):
 def log(func):
     """Logging decorator --- log both the arguments and what was returned."""
     def wrapper(*args, **kwargs):
-        try:
-            r = func(*args, **kwargs)
-        except Exception as e:
-            logging.debug("EXCEPTION IN CALL. args=%s kwargs=%s",args,kwargs)
-            raise
+        r = func(*args, **kwargs)
+        #try:
+        #    r = func(*args, **kwargs)
+        #except Exception as e:
+        #    logging.error("EXCEPTION %s args=%s kwargs=%s",e.__class__.__module__, str(args)[0:100],str(kwargs)[0:100])
+        #    logit(func_name=func.__name__,
+        #          func_args={**kwargs, **{'args': args}},
+        #          func_return="EXCEPTION")
+        #    raise
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
@@ -625,13 +629,19 @@ def create_new_movie(*, user_id, title=None, description=None,
     :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. If also present with movie_data, they must agree.
     :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
     """
-    if (movie_data is not None) and (movie_data_urn is not None):
-        raise RuntimeError("both movie_data and movie_data_urn provided")
+    if (movie_data is not None) and (movie_data_urn is None):
+        raise ValueError("If movie_data is provided, we must have a URN where it should be written")
     if (movie_data_sha256 is not None) and (movie_data_urn is None):
-        raise RuntimeError("If movie_data_sha256 is provided, then movie_data_urn must be provided")
+        raise ValueError("If movie_data_sha256 is provided without movie_data, then movie_data_urn must be provided")
     if (movie_data_urn is not None) and (movie_data_sha256 is None):
-        raise RuntimeError("If movie_data_urn is provided, then movie_data_sha256 must be provided")
+        raise ValueError("If movie_data_urn is provided, then movie_data_sha256 must be provided")
 
+    computed_movie_data_sha256 = db_object.sha256(movie_data) if (movie_data is not None) else None
+    if (computed_movie_data_sha256 is not None) and (movie_data_sha256 is None):
+        movie_data_sha256 = computed_movie_data_sha256
+
+    if (movie_data is not None) and (movie_data_sha256 != computed_movie_data_sha256):
+        raise ValueError(f"movie_data_sha256={movie_data_sha256} but computed_movie_data_sha256={computed_movie_data_sha256}")
 
     # First get the user's primary_course_id
     res = dbfile.DBMySQL.csfr(
@@ -648,21 +658,16 @@ def create_new_movie(*, user_id, title=None, description=None,
                                     """,
                                    (title, description, user_id, primary_course_id,orig_movie))
     if movie_data_sha256:
+        # If we know the sha256 we can put it in the metadata
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
                             (movie_id, movie_data_sha256))
-
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE sha256=%s",
                             (movie_data_sha256, movie_data_urn, movie_data_sha256))
-    else:
-        if movie_data:
-            # TODO - Generate the SHA256 and check to make sure that it matches movie_data_sha256 if present
-            # Write to object_storeage
-            # dbfile.DBMySQL.csfr(get_dbwriter(),
-            # "INSERT INTO object_storage (sha256, object) values (%s,%s)",
-            # (movie_data_sha256, movie_data))
-            raise RuntimeError("Not Implemented Yet")
+    if movie_data:
+        db_object.write_object(movie_data_urn, movie_data)
+
     if movie_metadata:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
@@ -1157,9 +1162,11 @@ class Movie():
         if self.data is None:
             rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (self.sha256,))
             try:
-                self.urn = rows[0]
+                self.urn = rows[0][0]
             except IndexError as e:
                 raise NoMovieData(f"movie_id={self.movie_id} sha256={self.sha256}") from e
+    def __repr__(self):
+        return f"<Movie {self.movie_id} urn={self.urn} sha256={self.sha256}>"
 
 
     def get_data(self):

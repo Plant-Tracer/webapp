@@ -636,6 +636,7 @@ function append_new_ptc(movie_id, frame_number) {
         let window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
 
         /* launch the webworker if we can */
+        /* Disabled because Amazon's back end isn't multi-threaded
         if (window.Worker) {
             const myWorker = new Worker(STATUS_WORKER);
             console.log("AAA this.tracked_movie_status=",window_ptc.tracked_movie_status);
@@ -646,7 +647,7 @@ function append_new_ptc(movie_id, frame_number) {
         } else {
             alert("Your browser does not support web workers. You cannot track movies.");
         }
-
+        */
 
         // get the request frame of the movie. When it comes back, use it to populate
         // a new PlantTracerController.

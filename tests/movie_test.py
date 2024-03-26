@@ -15,6 +15,7 @@ import copy
 import hashlib
 import json
 import logging
+import requests
 from os.path import abspath, dirname
 
 from boddle import boddle
@@ -123,15 +124,21 @@ def test_new_movie(new_movie):
     with boddle(params={'api_key': 'invalid',
                         'movie_id': movie_id}):
         with pytest.raises(bottle.HTTPResponse):
-            res = bottle_api.api_delete_movie()
+            movie_data = bottle_api.api_delete_movie()
 
     # Make sure that we can get data for the movie
     with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id}):
-        res = bottle_api.api_get_movie_data()
-    # res must be a movie. We should validate it.
-    assert len(res)>0
+                        'movie_id': movie_id,
+                        'redirect_inline':True}):
+        movie_data = bottle_api.api_get_movie_data()
+        if type(movie_data)==str and movie_data.startswith("#REDIRECT "):
+            url = movie_data.replace("#REDIRECT ","")
+            r = requests.get(url)
+            movie_data = r.content
 
+    # res must be a movie. We should validate it.
+    assert len(movie_data)>0
+    assert filetype.guess(movie_data).mime==MIME.MP4
     # Make sure that we can get the metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):

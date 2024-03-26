@@ -284,8 +284,6 @@ def api_new_movie():
                 return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
         logging.debug("api_new_movie: movie uploaded as a file")
 
-    # Now check to see if it is in the post
-
     #
     # It turns out that you can upload arbitrary data in an HTTP POST
     # provided that it is a file upload, but not in POST fields. That
@@ -304,6 +302,7 @@ def api_new_movie():
             logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
             return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
 
+        movie_data_sha256 = db_object.sha256(movie_data)
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
 
     ret = {'error':False}
@@ -313,6 +312,9 @@ def api_new_movie():
         movie_data_urn        = db_object.make_urn(object_name=object_name)
         ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn, mime_type='video/mp4')
 
+    if movie_data is not None:
+        assert movie_data_sha256 is not None
+        assert movie_data_urn is not None
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                    title=request.forms.get('title'),
                                    description=request.forms.get('description'),
@@ -329,6 +331,7 @@ def api_get_movie_data():
     """
     :param api_key:   authentication
     :param movie_id:  movie
+    :param redirect_inline: - if True and we are redirecting, return "#REDIRECT url"
     :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
@@ -343,10 +346,12 @@ def api_get_movie_data():
         bottle.response.set_header('Content-Type', movie.mime_type)
         return movie.data
 
-    # If we have a
+    # Looks like we need a url
     url = movie.url()
+    if get_bool('redirect_inline'):
+        return "#REDIRECT " + url
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, url)
-    raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': url })
+    return bottle.redirect(url)
 
 
 
@@ -507,16 +512,23 @@ def api_track_movie():
             # Save the movie with updated metadata
             db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='status', value='')
             new_movie_data = outfile.read()
+            # Compute the new movie's sha256
+            new_movie_data_sha256 = db_object.sha256(new_movie_data)
             new_title      = mtc.movie_metadata['title']
             if "TRACKED" in new_title:
                 new_title += "+"
             else:
                 new_title += " TRACKED"
+            logging.debug("creating tracked movie for orig_movie %s",movie_id)
+            object_name = new_movie_data_sha256 + C.MOVIE_EXTENSION
+            movie_data_urn        = db_object.make_urn(object_name=object_name)
             tracked_movie_id = db.create_new_movie(user_id = user_id,
                                                    title = new_title,
                                                    description = mtc.movie_metadata['description'],
                                                    orig_movie = movie_id,
-                                                   movie_data = new_movie_data)
+                                                   movie_data = new_movie_data,
+                                                   movie_data_sha256 = new_movie_data_sha256,
+                                                   movie_data_urn = movie_data_urn )
             # purge the other movies that have been tracked for this one
             to_purge = db.list_movies(user_id = user_id, orig_movie = movie_id)
             for movie in to_purge:

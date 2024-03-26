@@ -5,6 +5,7 @@ Support for the object-store
 import os
 import logging
 import urllib.parse
+import hashlib
 import requests
 import boto3
 from constants import C
@@ -31,6 +32,14 @@ cors_configuration = {
     }]
 }
 
+def sha256(data):
+    """Note: We use sha256 and have it hard coded everywhere. But the hashes should really be pluggable, in the form 'hashalg:hash'
+    e.g. "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    """
+
+    h = hashlib.sha256()
+    h.update(data)
+    return h.hexdigest()
 
 def s3_client():
     return boto3.session.Session().client('s3')
@@ -45,6 +54,7 @@ def make_urn(*, object_name, schema='s3'):
     return ret
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
+    logging.debug("urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme=='s3':
         op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
@@ -69,8 +79,6 @@ def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expire
                                                 Fields= { 'Content-Type':mime_type },
                                                 ExpiresIn=expires)
 
-
-
 def read_object(urn):
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
@@ -80,6 +88,14 @@ def read_object(urn):
     # default to requests
     r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
     return r.content
+
+def write_object(urn, object_data):
+    o = urllib.parse.urlparse(urn)
+    logging.debug("urn=%s o=%s",urn,o)
+    if o.scheme=='s3':
+        return s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
+    else:
+        raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
 
 
 if __name__=="__main__":
