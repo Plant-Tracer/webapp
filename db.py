@@ -125,7 +125,11 @@ def logit(*, func_name, func_args, func_return):
 def log(func):
     """Logging decorator --- log both the arguments and what was returned."""
     def wrapper(*args, **kwargs):
-        r = func(*args, **kwargs)
+        try:
+            r = func(*args, **kwargs)
+        except Exception as e:
+            logging.debug("EXCEPTION IN CALL. args=%s kwargs=%s",args,kwargs)
+            raise
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
@@ -498,24 +502,21 @@ def get_movie_data(*, movie_id):
     """Returns the movie contents for a movie_id. If the data is stored in the movie_data, return that.
     If a sha256 is stored, redirect through the objects table.
     """
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data, movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
     if len(rows)!=1:
         raise InvalidMovie_Id(f"movie_id={movie_id}")
     (movie_data,movie_sha256) = rows[0]
     if movie_data is not None:
         return movie_data
 
-    rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               "SELECT data,urn from objects where sha256=%s LIMIT 1",
-                               (movie_sha256,))
+    # TODO: Make this a join with object_store so that we get the object if it is locally in the database
+
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (movie_sha256,))
     logging.debug("rows=%s",rows)
     if len(rows)!=1:
         logging.debug("raise")
         raise InvalidMovie_Id(f"movie_id={movie_id} sha256={movie_sha256}")
-    (object_data,object_urn) = rows[0]
-    if object_data:
-        return object_data
-
+    object_urn = rows[0][0]
     logging.debug("object_urn=%s",object_urn)
     if object_urn:
         return db_object.read_object(object_urn)
@@ -618,16 +619,14 @@ def create_new_movie(*, user_id, title=None, description=None,
     :param: user_id  - person creating movie. Stored in movies table.
     :param: title - title of movie. Stored in movies table
     :param: description - description of movie
-    :param: movie_data - if presented, data for the movie. Stored in movie_data SQL table.
+    :param: movie_data - if presented, data for the movie. Stored in object_data SQL table. (TODO)
     :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
     :param: orig_movie - if presented, the movie_id of the movie on which this is based
-    :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. Should not be present if movie_data is present.
-    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided.
+    :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. If also present with movie_data, they must agree.
+    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
     """
     if (movie_data is not None) and (movie_data_urn is not None):
         raise RuntimeError("both movie_data and movie_data_urn provided")
-    if (movie_data is not None) and (movie_data_sha256 is not None):
-        raise RuntimeError("both movie_data and movie_data_sha256 provided")
     if (movie_data_sha256 is not None) and (movie_data_urn is None):
         raise RuntimeError("If movie_data_sha256 is provided, then movie_data_urn must be provided")
     if (movie_data_urn is not None) and (movie_data_sha256 is None):
@@ -652,14 +651,18 @@ def create_new_movie(*, user_id, title=None, description=None,
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
                             (movie_id, movie_data_sha256))
+
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO objects (sha256, data, urn) values (%s, %s, %s)",
-                            (movie_data_sha256, movie_data, movie_data_urn))
+                            "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE sha256=%s",
+                            (movie_data_sha256, movie_data_urn, movie_data_sha256))
     else:
         if movie_data:
-            dbfile.DBMySQL.csfr(get_dbwriter(),
-                                "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
-                                (movie_id, movie_data))
+            # TODO - Generate the SHA256 and check to make sure that it matches movie_data_sha256 if present
+            # Write to object_storeage
+            # dbfile.DBMySQL.csfr(get_dbwriter(),
+            # "INSERT INTO object_storage (sha256, object) values (%s,%s)",
+            # (movie_data_sha256, movie_data))
+            raise RuntimeError("Not Implemented Yet")
     if movie_metadata:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
