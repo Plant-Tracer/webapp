@@ -27,16 +27,17 @@ Installation
 
 5. Now you need to create the database. This should be pretty automatic:
 
-   $ python dbmaint.py --readconfig etc/credentials.ini --load_schema
+   $ export MYSQL_ROOT_PASSWORD=testrootpass <br>
+   $ make create_localdb
 
-6. Run the self-tests
+7. Run the self-tests
 
    $ make pytest-quiet
 
-7. Create your first course! If you want, give it a demo account too:
+8. Create your first course! If you want, give it a demo account too:
 
    $ python dbmaint.py --create_course "Demo Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--create_demo]
    course_key: leact-skio-proih
    $
 
-8. You have a course key! If the demo account is made, you have that too.
+9. You have a course key! If the demo account is made, you have that too.
