@@ -12,7 +12,7 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
-        "s3_bucket": "planttracer-zappa",
+        "s3_bucket" : "planttracer-zappa-lambda",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
@@ -38,7 +38,7 @@
         "num_retained_versions":5,
         "log_level" : "INFO",
         "memory_size" : 1024,
-        "s3_bucket": "planttracer-zappa",
+        "s3_bucket" : "planttracer-zappa-lambda",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
@@ -60,7 +60,7 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
-        "s3_bucket": "planttracer-zappa",
+        "s3_bucket" : "planttracer-zappa-lambda",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "PLANTTRACER_DEMO":"YES",

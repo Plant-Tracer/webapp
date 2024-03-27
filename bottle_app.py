@@ -66,6 +66,7 @@ from constants import C,__version__,GET,GET_POST
 
 import bottle_api
 from bottle_api import git_head_time,git_last_commit,get_user_dict
+import dbmaint
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -76,6 +77,9 @@ LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript consol
 
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
+
+# Upgrade the server if it needs upgrading. This gets run when this file gets loaded
+dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
 ################################################################
 # Bottle endpoints
@@ -301,6 +305,7 @@ def func_ver():
 # Bottle App
 ##
 
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
@@ -325,6 +330,7 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
+    # Run the multi-threaded server?
     if args.multi:
         httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
         try:
@@ -333,4 +339,5 @@ if __name__ == "__main__":
             print("")
             sys.exit(0)
 
+    # Run the single-threaded server (more debugging and the reloader)
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

@@ -267,35 +267,36 @@ def current_source_schema():
         ver = max( int(m.group(1)), ver)
     return ver
 
-def schema_upgrade( dbcon, dbname ):
+def schema_upgrade( ath, dbname ):
     """Upgrade the schema to the current version.
     NOTE: uses dbcon and not a dbreader/dbwriter
     """
-    dbcon.execute(f"USE {dbname}")
+    with dbfile.DBMySQL( ath) as dbcon:
+        dbcon.execute(f"USE {dbname}")
 
-    max_version = current_source_schema()
-    logging.info("max_version=%s", max_version)
-    # First get the current schema version, upgrading from version 0 to 1 in the process
-    # if there is no metadata table
-    with open(SCHEMA1_FILE,'r') as f:
-        dbcon.create_schema(f.read())
-        logging.info("upgraded to %s",SCHEMA1_FILE)
-
-    def current_version():
-        cursor = dbcon.cursor()
-        cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
-        return int(cursor.fetchone()[0])
-
-    cv = current_version()
-    logging.info("current database version: %s  max version: %s", cv , max_version)
-
-    for upgrade in range(cv+1, max_version+1):
-        logging.info("Upgrading from version %s to %s",cv, upgrade)
-        with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+        max_version = current_source_schema()
+        logging.info("max_version=%s", max_version)
+        # First get the current schema version, upgrading from version 0 to 1 in the process
+        # if there is no metadata table
+        with open(SCHEMA1_FILE,'r') as f:
             dbcon.create_schema(f.read())
-        cv += 1
-        logging.info("Current version now %s",current_version())
-        assert cv == current_version()
+            logging.info("upgraded to %s",SCHEMA1_FILE)
+
+        def current_version():
+            cursor = dbcon.cursor()
+            cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
+            return int(cursor.fetchone()[0])
+
+        cv = current_version()
+        logging.info("current database version: %s  max version: %s", cv , max_version)
+
+        for upgrade in range(cv+1, max_version+1):
+            logging.info("Upgrading from version %s to %s",cv, upgrade)
+            with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+                dbcon.create_schema(f.read())
+            cv += 1
+            logging.info("Current version now %s",current_version())
+            assert cv == current_version()
 
 if __name__ == "__main__":
     import argparse
@@ -361,13 +362,14 @@ if __name__ == "__main__":
             print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
             sys.exit(1)
 
-        with dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') ) as droot:
+        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
+        with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.upgradedb:
-                schema_upgrade(dbcon=droot, dbname=args.upgradedb)
+                schema_upgrade(ath, dbname=args.upgradedb)
                 sys.exit(0)
 
             if args.dropdb:

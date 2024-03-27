@@ -171,3 +171,7 @@ install-windows:
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+
+update:
+	$(PYTHON) pip freeze
+	$(PYTHON) zappa update dev
