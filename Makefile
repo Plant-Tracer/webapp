@@ -170,6 +170,7 @@ install-macos:
 	brew install ffmpeg
 	brew install node
 	brew install npm
+	npm ci
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
