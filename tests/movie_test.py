@@ -51,7 +51,7 @@ def test_edge_case():
     with pytest.raises(ValueError):
         db.create_new_movie(user_id=0,movie_data=b'a', movie_data_sha256=db_object.sha256(b'b'))
     with pytest.raises(ValueError):
-        db_object.make_run(scheme='xxx')
+        db_object.make_urn(object_name="xxx",scheme='xxx')
 
 
 @pytest.fixture
