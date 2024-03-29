@@ -27,6 +27,7 @@ from paths import TEST_DATA_DIR
 from constants import C
 import lib.ctools.dbfile as dbfile
 import db
+import db_object
 import bottle_api
 import bottle_app
 
@@ -43,7 +44,6 @@ def new_movie(new_user):
     When we are finished with the movie, purge it and all of its child data.
     """
     cfg = copy.copy(new_user)
-
     api_key = cfg[API_KEY]
     api_key_invalid = api_key+"invalid"
     movie_title = f'test-movie title {str(uuid.uuid4())}'
@@ -74,9 +74,8 @@ def new_movie(new_user):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_api.api_new_movie()
 
-
-
-    # This does not raise an error
+    # This does not raise an error -- it creates a new movie that is then yielded
+    # It uses the movie_base64_data interface
     logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
     with boddle(params={'api_key': api_key,
                         "title": movie_title,
@@ -147,6 +146,38 @@ def test_new_movie(new_movie):
     assert res['metadata']['title'] == movie_title
 
 
+
+def test_movie_upload_presigned_post(new_user):
+    """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
+    hold_env = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
+    if C.PLANTTRACER_S3_BUCKET in os.environ:
+        del os.environ[C.PLANTTRACER_S3_BUCKET]
+
+    cfg = copy.copy(new_user)
+    api_key = cfg[API_KEY]
+    movie_title = f'test-movie title {str(uuid.uuid4())}'
+    with open(TEST_MOVIE_FILENAME, "rb") as f:
+        movie_data = f.read()
+    movie_data_sha256 = db_object.sha256(movie_data)
+    with boddle(params={'api_key': api_key,
+                        "title": movie_title,
+                        "description": "test movie description",
+                        "movie_data_sha256":movie_data_sha256
+                        }):
+        bottle_api.expand_memfile_max()
+        res = bottle_api.api_new_movie()
+    assert res['error'] == False
+
+    # Now try the upload post
+    # Unfortunately, boddle doesn't seem to have a way to upload post requests.
+    assert 'presigned_post' in res;
+
+    db.purge_movie(movie_id = res['movie_id'])
+    logging.info("PURGE MOVIE %d",res['movie_id'])
+
+    # And put back the environment variable
+    if hold_env is not None:
+        os.environ[C.PLANTTRACER_S3_BUCKET] = hold_env
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""

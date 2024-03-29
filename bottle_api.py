@@ -266,7 +266,7 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data: If present, the movie file itself
     :param movie_base64_data - if present, the movie file, base64 encoded
-    :param movie_data_sha256: If present, the SHA256
+    :param movie_data_sha256: If present, the SHA256. Signifies we want to upload by presigned URL
     :return: dict['movie_id'] - uploaded movie
              dict['movie_s3'] - s3:// if it is being uploaded to s3
              dict['upload_url'] - URL for uploading
@@ -596,7 +596,7 @@ def api_new_movie_analysis():
     """Creates a new movie analysis
     :param api_key: the user's api_key
     :param movie_id: The movie to associate this movie analysis with
-    :param engine_id: The nngine used to create the analyis
+    :param engine_id: The engine used to create the analyis
     :param annotations: The movie analysis's annotations, that is, a JSON document containing analysis data
     """
 
