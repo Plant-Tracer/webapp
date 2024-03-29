@@ -128,7 +128,7 @@ def read_object(urn):
         return r.content
     elif o.scheme == C.SCHEME_DB:
         sha256 = os.path.splitext(o.path[1:])[0]
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT data from object_store where sha256=%s",sha256)
+        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT data from object_store where sha256=%s",(sha256,))
         return res[0][0]
     else:
         raise ValueError("Unknown schema: "+urn)
