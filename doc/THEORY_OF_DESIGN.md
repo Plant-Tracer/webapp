@@ -40,3 +40,15 @@ Users are authenticated with an `api_key`:
   * Shows all students assigned to each of their section, and all unassigned students.
   * Allows students to be moved between sections and unassigned.
   * Shows all uploaded movies for each section and allows them to be publisehd or unpublished.
+
+# API
+## Upload a file
+1 - User goes to app.digitalcorpora.org/upload
+2 - User fills out form with movie title, description, and chooses movie.
+3 - Form 'onchange' fires.
+  3a - JavaScript hashes movie.
+  3b - /api/movie-upload-start gets api_key, title, description, sha256, movie length
+  3c - bottle_app.movie_upload_start() calls db.create_movie which creats the movie entry with this sha256.
+  3d - if the sha256 already exists, return to the client with 'movie_id' and 'upload_url' equal to '' and 'movie_url' being the final movie URL.
+  3e - If the sha256 does not exist, return to the client with 'movie_id' and a 'upload_url' being a presigned s3 upload URL and 'movie_url' being the final movie URL.
+  Now, if the client has an upload_url, it starts the upload with a POST.

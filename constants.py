@@ -6,12 +6,26 @@ Constants are created in classes so we can import the class and don't have to im
 
 __version__ = '0.9.2'
 
+GET='GET'
+POST='POST'
+GET_POST = [GET,POST]
+
 class C:
     """Constants"""
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
     MAX_FILE_UPLOAD = 1024*1024*16
     NOTIFY_UPDATE_INTERVAL = 5.0
     TRACK_DELAY = 'TRACK_DELAY'
+    CHECK_MX = False                # True didn't work
+    DEFAULT_GET_TIMEOUT = 10
+    YES = 'YES'
+    NO = 'NO'
+    PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    MOVIE_EXTENSION = ".mov"
+    PUT = 'put'
+    GET = 'get'
+    SCHEME_S3 = 's3'
+    SCHEME_DB = 'db'
 
 
 class Engines:
@@ -49,5 +63,6 @@ class E:
     INVALID_MAILER_CONFIGURATION = {'error':True, 'message':'Invalid mailer configuration. Please review error.log on server for more information'}
     MUST_TRACK_ORIG_MOVIE = {'error':True, 'message':'Must track original movies'}
     NO_MAILER_CONFIGURATION = {'error':True, 'message':'Email cannot be sent as no mailer has been configured.'}
+    INVALID_FRAME_ID_DB = {'error':True, 'message':'frame_id is not in the database'}
 
 #pylint: enable=too-few-public-methods

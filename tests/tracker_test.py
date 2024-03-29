@@ -22,6 +22,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
+import bottle_api
 import bottle_app
 import copy
 import db
@@ -79,7 +80,7 @@ def test_track_point_annotations(new_movie):
                         'engine_name': engine_name,
                         'engine_version':engine_version,
                         'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_app.api_put_frame_analysis()
+        bottle_api.api_put_frame_analysis()
     # See if I can get it back
     tps = db.get_frame_trackpoints(frame_id=frame_id)
     assert len(tps)==3
@@ -121,7 +122,7 @@ def test_movie_tracking(new_movie):
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_number': '0'}):
-        ret = bottle_app.api_new_frame()
+        ret = bottle_api.api_new_frame()
     logging.debug("new frame ret=%s",ret)
     assert ret['error']==False
     frame_id = int(ret['frame_id'])
@@ -131,7 +132,7 @@ def test_movie_tracking(new_movie):
                         'frame_id': str(frame_id),
                         'trackpoints' : json.dumps(tpts),
                         'frame_number': '0'}):
-        ret = bottle_app.api_put_frame_analysis()
+        ret = bottle_api.api_put_frame_analysis()
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
@@ -141,7 +142,7 @@ def test_movie_tracking(new_movie):
                         'frame_start': '0',
                         'engine_name':Engines.CV2,
                         'engine_version':0 }):
-        ret = bottle_app.api_track_movie()
+        ret = bottle_api.api_track_movie()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
     assert isinstance(ret['tracked_movie_id'],int)
@@ -155,7 +156,7 @@ def test_movie_tracking(new_movie):
     # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
-        ret = bottle_app.api_get_movie_trackpoints()
+        ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
     # Check that the header is set
     assert "track1 x" in lines[0]

@@ -19,10 +19,12 @@ from pronounceable import generate_word
 
 import paths
 
+from constants import C
 
 # pylint: disable=no-member
 
 import db
+import db_object
 import tracker
 import auth
 from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
@@ -81,6 +83,7 @@ def wipe_test_movies():
     c.execute( "delete from courses where course_name like '%course name%'")
     c.execute( "delete from engines where name like 'engine %'")
 
+# pylint: disable=too-many-statements
 def createdb(*,droot, createdb_name, write_config_fname, schema):
     """Create a database named `createdb_name` where droot is a root connection to the database server.
     Creadentials are stored in cp.
@@ -206,7 +209,7 @@ def freshen():
             print(json.dumps(movie,default=str,indent=4))
             try:
                 movie_data = db.get_movie_data(movie_id=movie_id)
-            except db.InvalidMovie_Id as e:
+            except db.InvalidMovie_Id:
                 print(f"Cannot get movie data. Purging movie {movie_id}")
                 db.purge_movie(movie_id=movie_id)
                 continue
@@ -217,6 +220,7 @@ def freshen():
             args = list( movie_metadata.values()) + [movie_id]
             csfr(dbwriter, cmd, args)
 
+#pylint: disable=too-many-arguments
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
     db.create_course(course_key = course_key,
@@ -235,10 +239,16 @@ def create_course(*, course_key, course_name, admin_email,
             ext = os.path.splitext(fn)[1]
             if ext in ['.mp4','.mov']:
                 with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+                    movie_data = f.read()
+                    movie_data_sha256 = db_object.sha256(movie_data)
+                    object_name    = movie_data_sha256 + C.MOVIE_EXTENSION
+                    movie_data_urn = db_object.make_urn(object_name=object_name)
                     db.create_new_movie(user_id=user_id,
                                         title=DEMO_MOVIE_TITLE.format(ct=ct),
                                         description=DEMO_MOVIE_DESCRIPTION,
-                                        movie_data = f.read())
+                                        movie_data = movie_data,
+                                        movie_data_sha256 = movie_data_sha256,
+                                        movie_data_urn = movie_data_urn)
                 ct += 1
     return admin_id
 
@@ -257,35 +267,36 @@ def current_source_schema():
         ver = max( int(m.group(1)), ver)
     return ver
 
-def schema_upgrade( dbcon, dbname ):
+def schema_upgrade( ath, dbname ):
     """Upgrade the schema to the current version.
     NOTE: uses dbcon and not a dbreader/dbwriter
     """
-    dbcon.execute(f"USE {dbname}")
+    with dbfile.DBMySQL( ath) as dbcon:
+        dbcon.execute(f"USE {dbname}")
 
-    max_version = current_source_schema()
-    logging.info("max_version=%s", max_version)
-    # First get the current schema version, upgrading from version 0 to 1 in the process
-    # if there is no metadata table
-    with open(SCHEMA1_FILE,'r') as f:
-        dbcon.create_schema(f.read())
-        logging.info("upgraded to %s",SCHEMA1_FILE)
-
-    def current_version():
-        cursor = dbcon.cursor()
-        cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
-        return int(cursor.fetchone()[0])
-
-    cv = current_version()
-    logging.info("current database version: %s  max version: %s", cv , max_version)
-
-    for upgrade in range(cv+1, max_version+1):
-        logging.info("Upgrading from version %s to %s",cv, upgrade)
-        with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+        max_version = current_source_schema()
+        logging.info("max_version=%s", max_version)
+        # First get the current schema version, upgrading from version 0 to 1 in the process
+        # if there is no metadata table
+        with open(SCHEMA1_FILE,'r') as f:
             dbcon.create_schema(f.read())
-        cv += 1
-        logging.info("Current version now %s",current_version())
-        assert cv == current_version()
+            logging.info("upgraded to %s",SCHEMA1_FILE)
+
+        def current_version():
+            cursor = dbcon.cursor()
+            cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
+            return int(cursor.fetchone()[0])
+
+        cv = current_version()
+        logging.info("current database version: %s  max version: %s", cv , max_version)
+
+        for upgrade in range(cv+1, max_version+1):
+            logging.info("Upgrading from version %s to %s",cv, upgrade)
+            with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+                dbcon.create_schema(f.read())
+            cv += 1
+            logging.info("Current version now %s",current_version())
+            assert cv == current_version()
 
 if __name__ == "__main__":
     import argparse
@@ -351,13 +362,14 @@ if __name__ == "__main__":
             print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
             sys.exit(1)
 
-        with dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') ) as droot:
+        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
+        with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.upgradedb:
-                schema_upgrade(dbcon=droot, dbname=args.upgradedb)
+                schema_upgrade(ath, dbname=args.upgradedb)
                 sys.exit(0)
 
             if args.dropdb:

@@ -107,11 +107,11 @@ coverage:
 
 debug:
 	@echo run bottle locally in debug mode
-	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-multi:
 	@echo run bottle locally in debug mode
-	TRACK_DELAY=0.25 $(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
+	$(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
 
 debug-local:
 	@echo run bottle locally in debug mode
@@ -171,3 +171,8 @@ install-windows:
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+
+update:
+	$(PYTHON) pip freeze > requirements.txt
+	$(PYTHON) zappa certify dev # not strictly needed
+	$(PYTHON) zappa update dev
