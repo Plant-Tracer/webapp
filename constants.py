@@ -24,6 +24,8 @@ class C:
     MOVIE_EXTENSION = ".mov"
     PUT = 'put'
     GET = 'get'
+    SCHEME_S3 = 's3'
+    SCHEME_DB = 'db'
 
 
 class Engines:

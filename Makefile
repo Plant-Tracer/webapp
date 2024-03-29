@@ -173,5 +173,6 @@ install-windows:
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 update:
-	$(PYTHON) pip freeze
+	$(PYTHON) pip freeze > requirements.txt
+	$(PYTHON) zappa certify dev # not strictly needed
 	$(PYTHON) zappa update dev

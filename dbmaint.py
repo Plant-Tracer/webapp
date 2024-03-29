@@ -241,8 +241,8 @@ def create_course(*, course_key, course_name, admin_email,
                 with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
                     movie_data = f.read()
                     movie_data_sha256 = db_object.sha256(movie_data)
-                    object_name = movie_data_sha256 + C.MOVIE_EXTENSION
-                    movie_data_urn        = db_object.make_urn(object_name=object_name)
+                    object_name    = movie_data_sha256 + C.MOVIE_EXTENSION
+                    movie_data_urn = db_object.make_urn(object_name=object_name)
                     db.create_new_movie(user_id=user_id,
                                         title=DEMO_MOVIE_TITLE.format(ct=ct),
                                         description=DEMO_MOVIE_DESCRIPTION,

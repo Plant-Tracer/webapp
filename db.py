@@ -663,8 +663,8 @@ def create_new_movie(*, user_id, title=None, description=None,
                             "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
                             (movie_id, movie_data_sha256))
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE sha256=%s",
-                            (movie_data_sha256, movie_data_urn, movie_data_sha256))
+                            "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE id=id",
+                            (movie_data_sha256, movie_data_urn))
     if movie_data:
         db_object.write_object(movie_data_urn, movie_data)
 

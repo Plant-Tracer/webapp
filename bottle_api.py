@@ -23,7 +23,7 @@ import db
 import db_object
 import auth
 
-from constants import C,E,__version__,POST,GET_POST
+from constants import C,E,__version__,POST,GET_POST,MIME
 import mailer
 import tracker
 
@@ -257,6 +257,10 @@ def api_bulk_register():
 @api.route('/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
+    Moving can appear here as a file or as a base64 encoded data.
+    If no movie is provided, we return a presigned URL that can be used to post the movie to S3 or to the
+    /upload-movie API (below).
+
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
@@ -296,7 +300,6 @@ def api_new_movie():
     else:
         logging.debug("api_new_movie: movie_base64_data is None")
 
-
     if movie_data is not None:
         if len(movie_data) > C.MAX_FILE_UPLOAD:
             logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
@@ -310,7 +313,9 @@ def api_new_movie():
     if movie_data_sha256:
         object_name = movie_data_sha256 + C.MOVIE_EXTENSION
         movie_data_urn        = db_object.make_urn(object_name=object_name)
-        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn, mime_type='video/mp4')
+        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+                                                              mime_type='video/mp4',
+                                                              sha256=movie_data_sha256)
 
     if movie_data is not None:
         assert movie_data_sha256 is not None
@@ -322,8 +327,36 @@ def api_new_movie():
                                    movie_metadata = movie_metadata,
                                    movie_data_sha256 = movie_data_sha256,
                                    movie_data_urn = movie_data_urn )
-
     return ret
+
+
+@api.route('/upload-movie', method=POST)
+def api_upload_movie():
+    """
+    Upload a movie that has already been created. This is our receiver for 'presigned posts.'
+    We verify that the SHA256 provided matches the SHA256 in the database, then we verify that the uploaded
+    file actually has that SHA256.
+    :param: mime_type - mime type
+    :param: scheme - should be db
+    :param: sha256 - should be a hex encoding of the sha256
+    :param: key    - where the file gets uploaded
+    :param: request.files[0] - the file!
+    """
+    scheme = get('scheme')
+    key = get('key')
+    #movie_mime_type = get('mime_type')
+    movie_data_sha256 = get('sha256')
+    with io.BytesIO() as f:
+        request.files[0].save(f)
+        movie_data = f.getvalue()
+        if len(movie_data) > C.MAX_FILE_UPLOAD:
+            return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
+    if db_object.sha256(movie_data) != movie_data_sha256:
+        return {'error': True, 'message':
+                f'movie_data_sha256={movie_data_sha256} but post.sha256={db_object.sha256(movie_data)}'}
+    urn = db_object.make_urn(object_name=key, scheme=scheme)
+    db_object.write_object(urn, movie_data)
+    return {'error':False,'message':'Upload ok.'}
 
 
 @api.route('/get-movie-data', method=GET_POST)
@@ -662,6 +695,7 @@ def api_get_frame():
 
     if fmt=='jpeg':
         # Return just the JPEG for the frame, with no metadata
+        bottle.response.set_header('Content-Type', MIME.JPEG)
         return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id)
 
     # See if get_frame can find the movie frame
