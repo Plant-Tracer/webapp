@@ -21,7 +21,7 @@ from validate_email_address import validate_email
 import db_object
 from paths import TEMPLATE_DIR
 import auth
-from constants import MIME
+from constants import MIME,C
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
