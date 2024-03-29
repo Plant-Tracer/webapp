@@ -1165,6 +1165,11 @@ class Movie():
                 self.urn = rows[0][0]
             except IndexError as e:
                 raise NoMovieData(f"movie_id={self.movie_id} sha256={self.sha256}") from e
+
+            # If the movie's URN's scheme is C.SCHEME_DB, get the data as well
+            if self.urn.startswith(C.SCHEME_DB):
+                self.data = db_object.read_object(self.urn)
+
     def __repr__(self):
         return f"<Movie {self.movie_id} urn={self.urn} sha256={self.sha256}>"
 
