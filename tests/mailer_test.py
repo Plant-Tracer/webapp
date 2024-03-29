@@ -15,10 +15,15 @@ import logging
 import pytest
 import configparser
 import threading
+import copy
 
+from boddle import boddle
 from os.path import abspath, dirname, join
 
 from fixtures.localmail_config import mailer_config
+from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
+
+import bottle_api
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -34,8 +39,9 @@ subject: This is a test subject {{ guid }}
 This is a test message.
 """
 
-FAKE_USER_EMAIL = 'fake-user@planttracer.com'
-FAKE_SENDER     = 'do-not-reply@planttracer.com'
+FAKE_USER_EMAIL = f'fake-user@{str(uuid.uuid4())}.planttracer.com'
+FAKE_NAME       = f'fake-name-{str(uuid.uuid4())}'
+FAKE_SENDER     = f'do-not-reply@{str(uuid.uuid4())}.planttracer.com'
 
 def test_send_message(mailer_config):
     nonce = str(uuid.uuid4())
@@ -72,13 +78,27 @@ def test_send_message(mailer_config):
         raise RuntimeError("Could not delete test message")
 
 
-def test_register_email():
+def test_register_email(mailer_config,new_course):
+    cfg = copy.copy(new_course)
+    course_key = cfg[COURSE_KEY]
+
     """Some tests of the email registration software in db"""
     with pytest.raises(InvalidEmail):
         db.register_email(email='invalid-email', name='valid-name')
 
     with pytest.raises(ValueError):
-        db.register_email(email='user@company.com', name='valid-name', course_key=None, course_id=None)
+        db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key=None, course_id=None)
 
     with pytest.raises(InvalidCourse_Key):
-        db.register_email(email='user@company.com', name='valid-name', course_key='invalid-course-key', course_id=None)
+        db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key='invalid-course-key', course_id=None)
+
+
+    # try register api
+    with boddle(params={'email':FAKE_USER_EMAIL,
+                        'course_key':course_key,
+                        'name':FAKE_NAME}):
+        res = bottle_api.api_register()
+
+    # TODO: verify if registratione mail appeared
+    # Now delete the user
+    db.delete_user(email=FAKE_USER_EMAIL, purge_movies=True)
