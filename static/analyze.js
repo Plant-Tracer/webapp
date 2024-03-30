@@ -18,6 +18,7 @@
 /*global api_key */
 /*global movie_id */
 
+const PLAY_MSEC = 100;          // how fast to play
 const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_FRAMES = 20;      // default number of frames to show
 //const DEFAULT_WIDTH = 340;
@@ -32,6 +33,7 @@ var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
 const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
+const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 
 // available colors
 // https://sashamaps.net/docs/resources/20-colors/
@@ -258,11 +260,6 @@ class PlantTracerController extends CanvasController {
         // Hide the download link until we track or retrack
         this.download_link.hide();
 
-        if (this.last_tracked_frame > 0 ){
-            $(`#${this.this_id} input.track_button`).val( 'retrack movie' );
-            this.download_link.show();
-        }
-
         // Hide the video until we track or retrack retrack
         this.tracked_movie.hide();
         this.tracked_movie_status.hide();
@@ -282,6 +279,16 @@ class PlantTracerController extends CanvasController {
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
+        this.start_button = $(`#${this.this_id} input.start_button`);
+        this.start_button.prop('disabled',false);
+        this.start_button.on('click', (_event) => {this.start_button_pressed();});
+        this.play_button = $(`#${this.this_id} input.play_button`);
+        this.play_button.prop('disabled',false);
+        this.play_button.on('click', (_event) => {this.play_button_pressed();});
+
+        this.stop_button = $(`#${this.this_id} input.stop_button`);
+        this.stop_button.prop('disabled',true);
+        this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
 
         // Wire up the movement buttons
         $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
@@ -304,6 +311,11 @@ class PlantTracerController extends CanvasController {
             console.log("input ",new_frame);
             this.goto_frame( new_frame );
         });
+
+        if (this.last_tracked_frame > 0 ){
+            this.track_button.val( 'retrack movie' );
+            this.download_link.show();
+        }
     }
 
 
@@ -444,7 +456,7 @@ class PlantTracerController extends CanvasController {
             this.status_worker.onmessage = (e) => {
                 // Got back a message
                 this.tracked_movie_status.text( e.data.status );
-                if (e.data.status=='TRACKING COMPLETED') {
+                if (e.data.status==TRACKING_COMPLETED_FLAG) {
                     this.movie_tracked();
                 }
             };
@@ -492,7 +504,7 @@ class PlantTracerController extends CanvasController {
                 this.tracked_movie.show();
                 this.download_link.show();
                 // change from 'track movie' to 'retrack movie' and re-enable it
-                $(`#${this.this_id} input.track_button`).val( `retrack movie.` );
+                this.track_button.val( `retrack movie.` );
                 this.track_button.prop('disabled',false);
 
                 // redraw the current frame
@@ -520,10 +532,13 @@ class PlantTracerController extends CanvasController {
         if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) {
             frame=this.movie_metadata.total_frames-1;
         }
-        if (frame>this.last_tracked_frame) {
+        if (frame < 0) frame=0;
+        if (frame < this.last_tracked_frame-1){
+            this.play_button.prop('disabled',false);
+        } else{
             frame=this.last_tracked_frame-1;
+            this.play_button.prop('disabled',true);
         }
-        if (frame<0) frame=0;
         this.frame_number_field.val( frame );
         this.frame_number = frame;
         const get_frame_params = {
@@ -533,7 +548,37 @@ class PlantTracerController extends CanvasController {
             format:'json',
         };
         $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
-        // And load the frame number
+    }
+
+    start_button_pressed() {
+        this.stop_button_pressed();  // clear any timmers in progress
+        this.goto_frame(0);
+        /* should have a sleep here for PLAY_MSEC */
+        this.play_button_pressed();
+    }
+
+    /***
+     * play_button_pressed() is called when the play button is pressed. It goes to the next frame and
+     * sets another timer if we haven't reach the end. The STOP button stops the timmer.
+     */
+    play_button_pressed() {
+        if (this.frame_number < this.last_tracked_frame-1) {
+            this.goto_frame( this.frame_number + 1);
+            this.playTimer = setTimeout( () => this.play_button_pressed(), PLAY_MSEC);
+            this.play_button.prop('disabled',true);
+            this.stop_button.prop('disabled',false);
+            this.retrack_button.prop('disabled',true);
+        } else {
+            this.stop_button_pressed(); // simulate stop button pressed at end of movie
+        }
+    }
+
+    stop_button_pressed() {
+        clearTimeout(this.playTimer);
+        this.playTimer = undefined;
+        this.play_button.prop('disabled',false);
+        this.stop_button.prop('disabled',true);
+        this.retrack_button.prop('disabled',false);
     }
 
     /***
@@ -557,12 +602,12 @@ class PlantTracerController extends CanvasController {
         this.frame_number_field.val( data.frame_number );
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
-        this.objects = [];      // clear the array
         this.theImage = new myImage( 0, 0, data.data_url, this);
+        this.objects = [];      // clear the array
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
         if (data.frame_number>0){
-            $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
+            this.track_button.val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
         let count = 0;
