@@ -110,6 +110,7 @@ def test_cleanup_mp4():
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
+    Note: We no longer create an output movie: we just test the trackpoints
     """
     cfg      = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -145,14 +146,8 @@ def test_movie_tracking(new_movie):
         ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
-    assert isinstance(ret['tracked_movie_id'],int)
-    tracked_movie_id = ret['tracked_movie_id']
 
-    # Make sure that the tracked movie has its orig_movie set to movie_id
-    new_movie_row = db.list_movies(user_id=0, movie_id=tracked_movie_id)
-    assert new_movie_row[0]['orig_movie'] == movie_id
-
-    # Download the trackpoints as as CSV and make sure it is formatted okay.
+    # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
@@ -176,6 +171,3 @@ def test_movie_tracking(new_movie):
 
     # Make sure we got a lot back
     assert len(lines) > 50
-
-    # Purge the new movie
-    db.purge_movie( movie_id=tracked_movie_id )

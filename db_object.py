@@ -118,6 +118,7 @@ def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expire
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
 def read_object(urn):
+    logging.info("read_object(%s)",urn)
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
@@ -134,6 +135,7 @@ def read_object(urn):
         raise ValueError("Unknown schema: "+urn)
 
 def write_object(urn, object_data):
+    logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:

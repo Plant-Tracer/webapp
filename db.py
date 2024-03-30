@@ -245,14 +245,16 @@ def delete_user(*,email,purge_movies=False):
     Also deletes the user from any courses where they may be an admin.
     """
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               "SELECT id from movies where user_id in (select id from users where email=%s)",
-                               (email,))
+                               "SELECT id as movie_id,title from movies where user_id in (select id from users where email=%s)",
+                               (email,),asDicts=True)
     if rows:
         if not purge_movies:
-            raise RuntimeError(f"user {email} has outstanding movies")
+            for row in rows:
+                logging.error("row=%s",row)
+            raise RuntimeError(f"user {email} has {len(rows)} outstanding movies.")
         # This is not the most efficient, but there probably aren't that many movies to purge
-        for (movie_id,) in rows:
-            purge_movie(movie_id=movie_id)
+        for row in rows:
+            purge_movie(movie_id=row['movie_id'])
 
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))

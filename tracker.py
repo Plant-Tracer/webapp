@@ -9,12 +9,11 @@ import argparse
 import tempfile
 import subprocess
 import logging
-import time
 import os
 
 import cv2
 import numpy as np
-from constants import Engines,C
+from constants import Engines
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -154,19 +153,52 @@ def cleanup_mp4(*,infile,outfile):
     subprocess.call([ FFMPEG_PATH ] + args)
 
 
+def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints):
+    # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    cap = cv2.VideoCapture(moviefile_input)
+    ret, current_frame_data = cap.read()
+    # Get video properties
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps    = cap.get(cv2.CAP_PROP_FPS)
+
+
+    logging.info("start movie rendering")
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
+
+        for frame_number in range(1_000_000):
+            ret, current_frame_data = cap.read()
+            if not ret:
+                break
+
+            # Label the output and write it
+            cv2_label_frame(frame=current_frame_data, trackpoints=movie_trackpoints[frame_number], frame_label=frame_number)
+            out.write(current_frame_data)
+
+        cap.release()
+        out.release()
+
+        # Finally, use ffmpeg to transcode the output to a proper mp4 file (This shouldn't be necessary)
+        cleanup_mp4(infile=tf.name, outfile=moviefile_output)
+    logging.info("rendered movie")
+
+
 # pylint: disable=too-many-arguments
 def track_movie(*, engine_name, engine_version=None, moviefile_input,
-                input_trackpoints, moviefile_output, frame_start=0, callback=None):
+                input_trackpoints, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
     :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
-    :param: moviefile_output - file name of the tracked output, with annotations.
     :param: trackpoints - a list of dictionaries {'x', 'y', 'label', 'frame_number'} to track.  Those before frame_start will be copied to the output.
     :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
     :param: callback - a function to callback with (callback_arg, output_trackpoints)
     :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
+
+    Note - no longer renders the tracked movie. That's now in render_tracked_movie()
 
     """
     if engine_name!=Engines.CV2:
@@ -177,54 +209,31 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input,
 
     # should be movie name + tracked
 
-    # Get video properties
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps    = cap.get(cv2.CAP_PROP_FPS)
-
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
-    track_delay = float(os.environ.get(C.TRACK_DELAY,0))
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
+    logging.info("start movie tracking")
+    output_trackpoints = []
+    for frame_number in range(1_000_000):
+        prev_frame_data = current_frame_data
+        ret, current_frame_data = cap.read()
+        if not ret:
+            break
 
-        output_trackpoints = []
-        for frame_number in range(1_000_000):
-            prev_frame_data = current_frame_data
-            ret, current_frame_data = cap.read()
-            if not ret:
-                break
+        # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
+        if frame_number <= frame_start:
+            current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
 
-            # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
-            if frame_number <= frame_start:
-                current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+        # If this is after the starting frame, then track it
+        if frame_number > frame_start:
+            current_trackpoints = cv2_track_frame(frame0=prev_frame_data, frame1=current_frame_data, trackpoints=current_trackpoints)
 
-            # If this is after the starting frame, then track it
-            if frame_number > frame_start:
-                current_trackpoints = cv2_track_frame(frame0=prev_frame_data, frame1=current_frame_data, trackpoints=current_trackpoints)
+        # Add the trackpionts to the output list, giving each a frame number
+        output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
 
-            # Label the output and write it
-            cv2_label_frame(frame=current_frame_data, trackpoints=current_trackpoints, frame_label=frame_number)
-            out.write(current_frame_data)
+        # Call the callback if we have one
+        if callback is not None:
+            callback(output_trackpoints)
 
-            # Add the trackpionts to the output list, giving each a frame number
-            output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
-
-            # Call the callback if we have one
-            if callback is not None:
-                callback(output_trackpoints)
-
-            ### DEBUG CODE
-            if track_delay:
-                logging.debug("TRACK DELAY %s",track_delay)
-                time.sleep(track_delay)
-
-        cap.release()
-        out.release()
-
-        # Finally, use ffmpeg to transcode the output to a proper mp4 file (This shouldn't be necessary)
-        cleanup_mp4(infile=tf.name, outfile=moviefile_output)
-
+    cap.release()
     return {'output_trackpoints':output_trackpoints}
 
 if __name__ == "__main__":
@@ -248,6 +257,6 @@ if __name__ == "__main__":
 
     res = track_movie(engine_name=args.engine,
                       moviefile_input=args.moviefile,
-                      input_trackpoints=trackpoints, moviefile_output=args.outfile)
+                      input_trackpoints=trackpoints)
     print("results:")
     print(json.dumps(res,default=str,indent=4))
