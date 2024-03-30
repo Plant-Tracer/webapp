@@ -7,7 +7,7 @@
 
 <p>A method to explore the genetics of plant movement</p>
 
-{% if api_key %}
+{% if logged_in %}
 <i>You are logged in. You can:</i>
 <ul>
     <li><a href='/list'> List the movies that you can work with</a></li>
@@ -16,7 +16,7 @@
 
 {% else %}
 
-  {% if demo_api_key %}
+  {% if enable_demo_mode %}
     {% include 'demo.html' %}
      <hr/>
       You may also log into this server if you have an account.

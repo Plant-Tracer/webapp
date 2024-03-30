@@ -290,6 +290,8 @@ class PlantTracerController extends CanvasController {
         this.stop_button.prop('disabled',true);
         this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
 
+        this.retrack_button = $(`#${this.this_id} input.retrack_button`);
+
         // Wire up the movement buttons
         $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
         $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( this.frame_number-1);});
@@ -455,6 +457,7 @@ class PlantTracerController extends CanvasController {
             this.status_worker = new Worker(STATUS_WORKER);
             this.status_worker.onmessage = (e) => {
                 // Got back a message
+                console.log("got e.data=",e.data,"status=",e.data.status);
                 this.tracked_movie_status.text( e.data.status );
                 if (e.data.status==TRACKING_COMPLETED_FLAG) {
                     this.movie_tracked();

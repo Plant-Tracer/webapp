@@ -174,5 +174,4 @@ install-windows:
 
 update:
 	$(PYTHON) pip freeze > requirements.txt
-	$(PYTHON) zappa certify dev # not strictly needed
 	$(PYTHON) zappa update dev

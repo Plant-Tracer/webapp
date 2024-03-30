@@ -13,14 +13,13 @@ import base64
 import functools
 import io
 import csv
+import os
 from collections import defaultdict
-
 
 from validate_email_address import validate_email
 import bottle
 from bottle import request
 from zappa.asynchronous import task
-
 
 import db
 import db_object
@@ -31,6 +30,9 @@ import mailer
 import tracker
 
 api = bottle.Bottle()
+
+DEMO_MODE = os.environ.get('PLANTTRACER_DEMO',' ')[0:1] in 'yYtT1'
+print("DEMO_MODE = ",DEMO_MODE)
 
 ################################################################
 ## Utility
@@ -404,8 +406,6 @@ def api_get_movie_metadata():
         metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
         metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
         return {'error':False, 'metadata':fix_types(metadata)}
-
-
     return E.INVALID_MOVIE_ACCESS
 
 @api.route('/get-movie-trackpoints',method=GET_POST)

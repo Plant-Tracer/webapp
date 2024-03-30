@@ -65,7 +65,7 @@ from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST
 
 import bottle_api
-from bottle_api import git_head_time,git_last_commit,get_user_dict
+from bottle_api import git_head_time,git_last_commit,get_user_dict,fix_types,DEMO_MODE
 import dbmaint
 
 DEFAULT_OFFSET = 0
@@ -116,16 +116,19 @@ def favicon():
 # HTML Pages served with template system
 ################################################################
 
-def page_dict(title='', *, require_auth=False, logout=False, lookup=True):
+def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=False):
     """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page
     :param: require_auth  - if true, the user must already be authenticated, or throws an error
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
+    :param: lookup - if true, We weren't being called in an error condition, so we can lookup the api_key in the URL
     """
     logging.debug("page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     o = urlparse(request.url)
+    logging.debug("o=%s",o)
     if lookup:
         api_key = auth.get_user_api_key()
+        logging.info("auth.get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
             raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
@@ -133,18 +136,21 @@ def page_dict(title='', *, require_auth=False, logout=False, lookup=True):
         api_key = None
 
     if (api_key is not None) and (logout is False):
-        auth.set_cookie(api_key)
         user_dict = get_user_dict()
         user_name = user_dict['name']
         user_email = user_dict['email']
         user_demo  = user_dict['demo']
         user_id = user_dict['id']
         user_primary_course_id = user_dict['primary_course_id']
+        logged_in = 1
         primary_course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
         admin = db.check_course_admin(user_id=user_id, course_id=user_primary_course_id)
         # If this is a demo account, the user cannot be an admin
         if user_demo:
             assert not admin
+        # if this is not a demo account and the user_id is set, make sure we set the cookie
+        if (user_id is not None) and (not user_demo):
+            auth.set_cookie(api_key)
 
     else:
         user_name  = None
@@ -154,46 +160,55 @@ def page_dict(title='', *, require_auth=False, logout=False, lookup=True):
         user_primary_course_id = None
         primary_course_name = None
         admin = None
+        logged_in = 0
+
 
     try:
         movie_id = int(request.query.get('movie_id'))
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
-    if logout:
-        auth.clear_cookie()
-
-    logging.debug("returning dict")
-    return {'api_key': api_key,
-            'user_id': user_id,
-            'user_name': user_name,
-            'user_email': user_email,
-            'user_demo':  user_demo,
-            'admin':admin,
-            'user_primary_course_id': user_primary_course_id,
-            'primary_course_name': primary_course_name,
-            'title':'Plant Tracer '+title,
-            'hostname':o.hostname,
-            'movie_id':movie_id,
-            'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-            'dbreader_host':get_dbreader().host,
-            'version':__version__,
-            'git_head_time':git_head_time(),
-            'git_last_commit':git_last_commit()}
+    logging.debug("DEMO_MODE: %s",DEMO_MODE)
+    ret= fix_types({'api_key': api_key,
+                    'user_id': user_id,
+                    'user_name': user_name,
+                    'user_email': user_email,
+                    'user_demo':  user_demo,
+                    'logged_in': logged_in,
+                    'admin':admin,
+                    'user_primary_course_id': user_primary_course_id,
+                    'primary_course_name': primary_course_name,
+                    'title':'Plant Tracer '+title,
+                    'hostname':o.hostname,
+                    'movie_id':movie_id,
+                    'enable_demo_mode':DEMO_MODE,
+                    'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
+                    'dbreader_host':get_dbreader().host,
+                    'version':__version__,
+                    'git_head_time':git_head_time(),
+                    'git_last_commit':git_last_commit()})
+    for (k,v) in ret.items():
+        if v is None:
+            ret[k] = "null";
+    if debug:
+        logging.debug("fixed page_dict=%s",ret)
+    return ret
 
 
 @bottle.route('/', method=GET_POST)
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
+    ret = page_dict()
     logging.info("func_root")
-    demo_users = db.list_demo_users()
-    demo_api_key = False
-    if len(demo_users)>0:
-        demo_api_key   = demo_users[0].get('api_key',False)
-        logging.debug("demo_api_key=%s",demo_api_key)
-    return {**page_dict(),
-            **{'demo_api_key':demo_api_key}}
+    if DEMO_MODE:
+        demo_users = db.list_demo_users()
+        demo_api_key = False
+        if len(demo_users)>0:
+            demo_api_key   = demo_users[0].get('api_key',False)
+            logging.debug("demo_api_key=%s",demo_api_key)
+            ret['demo_api_key'] = demo_api_key
+    return ret
 
 @bottle.route('/about', method=GET_POST)
 @view('about.html')
@@ -231,20 +246,21 @@ def func_analyze():
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    demo_users = db.list_demo_users()
-    logging.debug("demo_users=%s",demo_users)
-    demo_api_key = False
-    if len(demo_users)>0:
-        demo_api_key   = demo_users[0].get('api_key',False)
+    ret = page_dict('Login')
+    if DEMO_MODE:
+        demo_users = db.list_demo_users()
+        demo_api_key = False
+        if len(demo_users)>0:
+            ret['demo_api_key']   = demo_users[0].get('api_key',False)
 
-    return {**page_dict('Login'),
-            **{'demo_api_key':demo_api_key}}
+    return ret
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
 def func_logout():
     """/list - list movies and edit them and user info"""
-    return page_dict('Logout',logout=True)
+    auth.clear_cookie()
+    return page_dict('Logout',logout=True,debug=True)
 
 @bottle.route('/privacy', method=GET_POST)
 @view('privacy.html')
