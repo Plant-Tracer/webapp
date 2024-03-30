@@ -142,7 +142,7 @@ def test_movie_tracking(new_movie):
                         'frame_start': '0',
                         'engine_name':Engines.CV2,
                         'engine_version':0 }):
-        ret = bottle_api.api_track_movie()
+        ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
     assert isinstance(ret['tracked_movie_id'],int)

@@ -5,7 +5,7 @@
         "profile_name": "default",
         "project_name": "planttracer-",
         "runtime": "python3.11",
-        "timeout_seconds": 300,
+        "timeout_seconds": 10,
         "slim_handler":true,
         "domain":"app.planttracer.com",
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
@@ -13,6 +13,7 @@
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
         "s3_bucket" : "planttracer-zappa-lambda",
+        "cors" : true,
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
