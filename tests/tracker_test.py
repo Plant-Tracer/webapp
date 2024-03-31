@@ -137,7 +137,7 @@ def test_movie_tracking(new_movie):
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2
+    # Now track with CV2 - This actually does the tracking when run outsie of lambda
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_start': '0',

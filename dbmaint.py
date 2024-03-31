@@ -90,6 +90,16 @@ def wipe_test_data():
     c.execute( "delete from courses where course_name like 'test-test-%'")
     c.execute( "delete from engines where name like 'engine %'")
 
+def wipe_all_movies():
+    """Remove all test data from the database"""
+    sizes = {}
+    d = dbfile.DBMySQL(auth.get_dbwriter())
+    c = d.cursor()
+    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+        print("wiping",table)
+        c.execute( f"delete from {table}")
+
+
 # pylint: disable=too-many-statements
 def createdb(*,droot, createdb_name, write_config_fname, schema):
     """Create a database named `createdb_name` where droot is a root connection to the database server.
@@ -327,6 +337,7 @@ if __name__ == "__main__":
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
     parser.add_argument('--wipe_test_data', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--wipe_all_movies', help='Remove all of the movies from the database', action='store_true')
     parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
@@ -435,6 +446,9 @@ if __name__ == "__main__":
 
     if args.wipe_test_data:
         wipe_test_data()
+
+    if args.wipe_all_movies:
+        wipe_all_movies()
 
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)

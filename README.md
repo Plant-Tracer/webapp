@@ -70,3 +70,7 @@ Keep your Lambda functions optimized for performance and cost.
  Remember to choose the solution that best fits your specific application requirements and constraints of the Lambda environment.
 
 
+
+
+# Lambda and S3
+Lamda limits returns to 6MB and uploads to around 256K. So large uploads are done with presigned POST to S3 and large downloads by putting the data into S3 and having it pulled with a presigned URL.
