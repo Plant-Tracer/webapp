@@ -54,15 +54,15 @@ line-height:0px;
         <canvas id="canvas-id" width='320' height='240'> </canvas><br/>
         <div class='tracked_movie_status'>Tracking movie status message...</div><br/>
         <form action="javascript:void(0)" >
-          <input type='button' value='START' class='start_button' />
-          <input id='frame_prev10' type='button' value='⬅️  10' class='frame_prev10 frame_movement' disabled/>
-          <input type='button' value='⬅️ ' class='frame_prev frame_movement' disabled/>
+          <input type='button' value='⬅️ ⬅️ ' class='frame0_button frame_movement frame_movement_backwards' />
+          <input id='frame_prev10' type='button' value='⬅️  10' class='frame_prev10 frame_movement frame_movement_backwards' disabled/>
+          <input type='button' value='⬅️ ' class='frame_prev frame_movement frame_movement_backwards' disabled/>
           frame:
           <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='0' disabled/>
           <input type='button' value='STOP' class='stop_button' />
           <input type='button' value='PLAY' class='play_button' />
-          <input type='button' value='➡️ ' class='frame_next frame_movement' disabled/>
-          <input type='button' value='➡️  10' class='frame_next10 frame_movement' disabled/>
+          <input type='button' value='➡️ ' class='frame_next frame_movement frame_movement_forwards' disabled/>
+          <input type='button' value='➡️  10' class='frame_next10 frame_movement frame_movement_forwards' disabled/>
           <br/>
           <label for="zoom">zoom:</label>
           <select id="zoom-id" name="zoom" class='zoom'>

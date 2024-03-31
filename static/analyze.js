@@ -246,6 +246,7 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
+        this.playing = 0;
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -279,9 +280,9 @@ class PlantTracerController extends CanvasController {
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
-        this.start_button = $(`#${this.this_id} input.start_button`);
-        this.start_button.prop('disabled',false);
-        this.start_button.on('click', (_event) => {this.start_button_pressed();});
+        this.frame0_button = $(`#${this.this_id} input.frame0_button`);
+        this.frame0_button.prop('disabled',false);
+        this.frame0_button.on('click', (_event) => {this.frame0_button_pressed();});
         this.play_button = $(`#${this.this_id} input.play_button`);
         this.play_button.prop('disabled',false);
         this.play_button.on('click', (_event) => {this.play_button_pressed();});
@@ -553,11 +554,24 @@ class PlantTracerController extends CanvasController {
         $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
     }
 
-    start_button_pressed() {
+    frame0_button_pressed() {
         this.stop_button_pressed();  // clear any timmers in progress
         this.goto_frame(0);
-        /* should have a sleep here for PLAY_MSEC */
-        this.play_button_pressed();
+    }
+
+    set_play_buttons() {
+        if (this.playing) {
+            this.play_button.prop('disabled',true);
+            this.stop_button.prop('disabled',false);
+            this.retrack_button.prop('disabled',true);
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',true);
+            return;
+        }
+        this.play_button.prop('disabled',false);
+        this.stop_button.prop('disabled',true);
+        this.retrack_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
+        $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<1);
+        $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame);
     }
 
     /***
@@ -568,20 +582,21 @@ class PlantTracerController extends CanvasController {
         if (this.frame_number < this.last_tracked_frame-1) {
             this.goto_frame( this.frame_number + 1);
             this.playTimer = setTimeout( () => this.play_button_pressed(), PLAY_MSEC);
-            this.play_button.prop('disabled',true);
-            this.stop_button.prop('disabled',false);
-            this.retrack_button.prop('disabled',true);
+            this.playing = 1;
         } else {
             this.stop_button_pressed(); // simulate stop button pressed at end of movie
+            this.playing = 0;
         }
+        this.set_play_buttons();
     }
 
     stop_button_pressed() {
-        clearTimeout(this.playTimer);
-        this.playTimer = undefined;
-        this.play_button.prop('disabled',false);
-        this.stop_button.prop('disabled',true);
-        this.retrack_button.prop('disabled',false);
+        if (this.playTimer) {
+            clearTimeout(this.playTimer);
+            this.playTimer = undefined;
+        }
+        this.playing = 0;
+        this.set_play_buttons();
     }
 
     /***
@@ -609,10 +624,11 @@ class PlantTracerController extends CanvasController {
         this.objects = [];      // clear the array
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
-        if (data.frame_number>0){
+        if (data.frame_number>=0){
             this.track_button.val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
+        // Draw trakcpoints if we have them, otherwise create initial trackpoints
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
@@ -630,7 +646,7 @@ class PlantTracerController extends CanvasController {
                 this.add_marker_status.show();
             }
         }
-        this.redraw('append_new_ptc');              // initial drawing
+        this.set_play_buttons();
     }
 }
 
