@@ -189,7 +189,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
                     'git_last_commit':git_last_commit()})
     for (k,v) in ret.items():
         if v is None:
-            ret[k] = "null";
+            ret[k] = "null"
     if debug:
         logging.debug("fixed page_dict=%s",ret)
     return ret
@@ -249,7 +249,6 @@ def func_login():
     ret = page_dict('Login')
     if DEMO_MODE:
         demo_users = db.list_demo_users()
-        demo_api_key = False
         if len(demo_users)>0:
             ret['demo_api_key']   = demo_users[0].get('api_key',False)
 

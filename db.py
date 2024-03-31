@@ -767,7 +767,8 @@ def last_tracked_frame(*, movie_id):
                                """,
                                (movie_id,))[0][0]
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
+def get_frame(*,
+              frame_id=None, movie_id=None, frame_number=None,
               get_annotations=False, get_trackpoints=False):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted

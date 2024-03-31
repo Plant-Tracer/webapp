@@ -2,7 +2,6 @@
 API
 """
 
-import time
 import json
 import logging
 import sys
@@ -474,17 +473,16 @@ class MovieTrackCallback:
         self.user_id = user_id
         self.movie_id = movie_id
         self.movie_metadata = None
-        self.last     = 0
 
-    def notify(self, arg):
-        max_frame = max( (obj['frame_number'] for obj in arg) )
+    def notify(self, *, frame_number, frame, output_trackpoints): # pylint: disable=unused-argument
+        """Update the status and write the frame to the database"""
         total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {max_frame} of {total_frames}"
+        message = f"Tracked frames {frame_number} of {total_frames}"
 
-        if time.time() > self.last + C.NOTIFY_UPDATE_INTERVAL:
-            logging.debug("MovieTrackCallback %s",message)
-            db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-            self.last = time.time()
+        logging.debug("MovieTrackCallback %s",message)
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
+        db.create_new_frame(movie_id=self.movie_id, frame_number = frame_number,
+                            frame_data = tracker.convert_frame_to_jpeg(frame))
 
     def done(self):
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
@@ -492,7 +490,7 @@ class MovieTrackCallback:
 @task
 def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
-    Stores new trackpoints in the datqbase. No longer renders new movie: that's now in render_tracked_movie
+    Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
     """
     # Find trackpoints we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
