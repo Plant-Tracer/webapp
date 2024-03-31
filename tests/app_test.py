@@ -88,7 +88,7 @@ def test_error():
 
 
 # make sure we get no api_key with a bad request
-def test_null_api_key():
+def test_null_api_key(mocker):
     mocker.patch("request.query.get", return_value=None)
     assert auth.get_user_dpi_key() == None
 
