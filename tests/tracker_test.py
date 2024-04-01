@@ -106,7 +106,6 @@ def test_cleanup_mp4():
 
 
 
-
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
@@ -171,3 +170,17 @@ def test_movie_tracking(new_movie):
 
     # Make sure we got a lot back
     assert len(lines) > 50
+
+def test_render_trackpoints():
+    input_trackpoints = [{"x":138,"y":86,"label":"mypoint",'frame_number':0}];
+
+    # Get the new trackpoints
+    infile = os.path.join(TEST_DATA_DIR,"2019-07-12 circumnutation.mp4")
+    res = tracker.track_movie(engine_name="CV2",
+                      moviefile_input=infile,
+                      input_trackpoints=input_trackpoints)
+    # Now render the movie
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        tracker.render_tracked_movie( moviefile_input= infile, moviefile_output=tf.name,
+                              movie_trackpoints=res['output_trackpoints'])
+        assert os.path.getsize(tf.name)>100

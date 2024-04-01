@@ -10,6 +10,7 @@ import tempfile
 import subprocess
 import logging
 import os
+from collections import defaultdict
 
 import cv2
 import numpy as np
@@ -68,7 +69,7 @@ def cv2_track_frame(*,frame_prev, frame_this, trackpoints):
 def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     """
     :param: frame - cv2 frame
-    :param: trackpoints - array of dicts
+    :param: trackpoints - array of dicts where each dict has at least an ['x'] and a ['y']
     :param frame_label - if present, label for frame number (can be int or string)
     """
 
@@ -159,6 +160,9 @@ def cleanup_mp4(*,infile,outfile):
 
 def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints):
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
+    # movie_trackpoints is an array of records where each has the form:
+    # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
+
     cap = cv2.VideoCapture(moviefile_input)
     ret, current_frame_data = cap.read()
     # Get video properties
@@ -167,6 +171,10 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
     logging.info("start movie rendering")
+    trackpoints_by_frame = defaultdict(list)
+    for tp in movie_trackpoints:
+        trackpoints_by_frame[tp['frame_number']].append(tp)
+
     with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
@@ -177,7 +185,7 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
                 break
 
             # Label the output and write it
-            cv2_label_frame(frame=current_frame_data, trackpoints=movie_trackpoints[frame_number], frame_label=frame_number)
+            cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
             out.write(current_frame_data)
 
         cap.release()
@@ -188,9 +196,7 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     logging.info("rendered movie")
 
 
-# pylint: disable=too-many-arguments
-def track_movie(*, engine_name, engine_version=None, moviefile_input,
-                input_trackpoints, frame_start=0, callback=None):
+def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -259,10 +265,14 @@ if __name__ == "__main__":
     # Get the trackpoints
     trackpoints = json.loads(args.points_to_track)
     # Make sure every trackpoint is for frame 0
-    trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
+    input_trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
 
+    # Get the new trackpoints
     res = track_movie(engine_name=args.engine,
                       moviefile_input=args.moviefile,
-                      input_trackpoints=trackpoints)
+                      input_trackpoints=input_trackpoints)
+    # Now render the movie
     print("results:")
-    print(json.dumps(res,default=str,indent=4))
+    render_tracked_movie( moviefile_input= args.moviefile, moviefile_output='tracked.mp4',
+                          movie_trackpoints=res['output_trackpoints'])
+    subprocess.call(['open','tracked.mp4'])
