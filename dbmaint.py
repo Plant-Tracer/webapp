@@ -55,7 +55,8 @@ def hostnames():
     hostname = socket.gethostname()
     return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def wipe_test_movies():
+def wipe_test_data():
+    """Remove all test data from the database"""
     sizes = {}
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
@@ -66,22 +67,38 @@ def wipe_test_movies():
         count = c2.fetchone()[0]
         print(f"table {table:20} count: {count:,}")
         sizes[table] = count
-    del_movies = "(select id from movies where user_id in (select id from users where name like 'Test%'))"
-    for table in ['movie_frame_analysis','movie_frame_trackpoints']:
-        cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
-        print(cmd)
-        c.execute(cmd)
-    for table in ['movie_analysis','movie_data','movie_frames']:
-        cmd = f"delete from {table} where movie_id in {del_movies}"
-        print(cmd)
-        c.execute(cmd)
-    c.execute(f"delete from movie_frames where movie_id in {del_movies}")
-    c.execute( "delete from movies where user_id in (select id from users where name like 'Test%')")
-    c.execute( "delete from admins where course_id in (select id from courses where course_name like '%course name%')")
-    c.execute( "delete from api_keys where user_id in (select id from users where name like 'Test%')")
-    c.execute( "delete from users where name like 'Test%'")
-    c.execute( "delete from courses where course_name like '%course name%'")
+
+    c.execute( "delete from admins where course_id in (select id from courses where course_name like 'test-test-%')")
+    for where in ['where name like "fake-name-%"',
+                  'where name like "Test%"',
+                  'where email like "%admin+test%"',
+                  'where email like "%demo+admin%"']:
+        del_movies = f"(select id from movies where user_id in (select id from users {where}))"
+        for table in ['movie_frame_analysis','movie_frame_trackpoints']:
+            cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+            print(cmd)
+            c.execute(cmd)
+        for table in ['movie_analysis','movie_data','movie_frames']:
+            cmd = f"delete from {table} where movie_id in {del_movies}"
+            print(cmd)
+            c.execute(cmd)
+        c.execute(f"delete from movie_frames where movie_id in {del_movies}")
+        c.execute(f"delete from movies where user_id in (select id from users {where})")
+        c.execute( f"delete from api_keys where user_id in (select id from users {where})")
+        c.execute( f"delete from users {where}")
+        c.execute( f"delete from users {where}")
+    c.execute( "delete from courses where course_name like 'test-test-%'")
     c.execute( "delete from engines where name like 'engine %'")
+
+def wipe_all_movies():
+    """Remove all test data from the database"""
+    sizes = {}
+    d = dbfile.DBMySQL(auth.get_dbwriter())
+    c = d.cursor()
+    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+        print("wiping",table)
+        c.execute( f"delete from {table}")
+
 
 # pylint: disable=too-many-statements
 def createdb(*,droot, createdb_name, write_config_fname, schema):
@@ -269,18 +286,17 @@ def current_source_schema():
 
 def schema_upgrade( ath, dbname ):
     """Upgrade the schema to the current version.
-    NOTE: uses dbcon and not a dbreader/dbwriter
+    NOTE: uses ath to create a new database connection. ath must have ability to modify database schema.
+
     """
-    with dbfile.DBMySQL( ath) as dbcon:
+    with dbfile.DBMySQL( ath ) as dbcon:
         dbcon.execute(f"USE {dbname}")
 
         max_version = current_source_schema()
-        logging.info("max_version=%s", max_version)
         # First get the current schema version, upgrading from version 0 to 1 in the process
         # if there is no metadata table
         with open(SCHEMA1_FILE,'r') as f:
             dbcon.create_schema(f.read())
-            logging.info("upgraded to %s",SCHEMA1_FILE)
 
         def current_version():
             cursor = dbcon.cursor()
@@ -320,7 +336,8 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
-    parser.add_argument('--wipe_test_movies', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--wipe_test_data', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--wipe_all_movies', help='Remove all of the movies from the database', action='store_true')
     parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
@@ -427,8 +444,11 @@ if __name__ == "__main__":
     ################################################################
     ## Cleanup
 
-    if args.wipe_test_movies:
-        wipe_test_movies()
+    if args.wipe_test_data:
+        wipe_test_data()
+
+    if args.wipe_all_movies:
+        wipe_all_movies()
 
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)

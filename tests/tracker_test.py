@@ -106,10 +106,10 @@ def test_cleanup_mp4():
 
 
 
-
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
+    Note: We no longer create an output movie: we just test the trackpoints
     """
     cfg      = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -136,23 +136,17 @@ def test_movie_tracking(new_movie):
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2
+    # Now track with CV2 - This actually does the tracking when run outsie of lambda
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_start': '0',
                         'engine_name':Engines.CV2,
                         'engine_version':0 }):
-        ret = bottle_api.api_track_movie()
+        ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
-    assert isinstance(ret['tracked_movie_id'],int)
-    tracked_movie_id = ret['tracked_movie_id']
 
-    # Make sure that the tracked movie has its orig_movie set to movie_id
-    new_movie_row = db.list_movies(user_id=0, movie_id=tracked_movie_id)
-    assert new_movie_row[0]['orig_movie'] == movie_id
-
-    # Download the trackpoints as as CSV and make sure it is formatted okay.
+    # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
@@ -177,5 +171,16 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
-    # Purge the new movie
-    db.purge_movie( movie_id=tracked_movie_id )
+def test_render_trackpoints():
+    input_trackpoints = [{"x":138,"y":86,"label":"mypoint",'frame_number':0}];
+
+    # Get the new trackpoints
+    infile = os.path.join(TEST_DATA_DIR,"2019-07-12 circumnutation.mp4")
+    res = tracker.track_movie(engine_name="CV2",
+                      moviefile_input=infile,
+                      input_trackpoints=input_trackpoints)
+    # Now render the movie
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        tracker.render_tracked_movie( moviefile_input= infile, moviefile_output=tf.name,
+                              movie_trackpoints=res['output_trackpoints'])
+        assert os.path.getsize(tf.name)>100

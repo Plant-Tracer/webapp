@@ -2,7 +2,6 @@
 API
 """
 
-import time
 import json
 import logging
 import sys
@@ -13,11 +12,13 @@ import base64
 import functools
 import io
 import csv
+import os
 from collections import defaultdict
 
 from validate_email_address import validate_email
 import bottle
 from bottle import request
+from zappa.asynchronous import task
 
 import db
 import db_object
@@ -28,6 +29,9 @@ import mailer
 import tracker
 
 api = bottle.Bottle()
+
+DEMO_MODE = os.environ.get('PLANTTRACER_DEMO',' ')[0:1] in 'yYtT1'
+print("DEMO_MODE = ",DEMO_MODE)
 
 ################################################################
 ## Utility
@@ -307,7 +311,6 @@ def api_new_movie():
 
         movie_data_sha256 = db_object.sha256(movie_data)
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-
     ret = {'error':False}
 
     if movie_data_sha256:
@@ -402,8 +405,6 @@ def api_get_movie_metadata():
         metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
         metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
         return {'error':False, 'metadata':fix_types(metadata)}
-
-
     return E.INVALID_MOVIE_ACCESS
 
 @api.route('/get-movie-trackpoints',method=GET_POST)
@@ -446,7 +447,7 @@ def api_get_movie_trackpoints():
     return E.INVALID_MOVIE_ACCESS
 
 
-@api.route('/delete-movie', method='POST')
+@api.route('/delete-movie', method=POST)
 def api_delete_movie():
     """ delete a movie
     :param movie_id: the id of the movie to delete
@@ -472,20 +473,72 @@ class MovieTrackCallback:
         self.user_id = user_id
         self.movie_id = movie_id
         self.movie_metadata = None
-        self.last     = 0
 
-    def notify(self, arg):
-        max_frame = max( (obj['frame_number'] for obj in arg) )
+    def notify(self, *, frame_number, frame, output_trackpoints): # pylint: disable=unused-argument
+        """Update the status and write the frame to the database"""
         total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {max_frame} of {total_frames}"
+        message = f"Tracked frames {frame_number} of {total_frames}"
 
-        if time.time() > self.last + C.NOTIFY_UPDATE_INTERVAL:
-            logging.debug("MovieTrackCallback %s",message)
-            db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-            self.last = time.time()
+        logging.debug("MovieTrackCallback %s",message)
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
+        db.create_new_frame(movie_id=self.movie_id, frame_number = frame_number,
+                            frame_data = tracker.convert_frame_to_jpeg(frame))
 
-@api.route('/track-movie', method='POST')
-def api_track_movie():
+    def done(self):
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
+
+@task
+def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_start):
+    """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
+    Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
+    """
+    # Find trackpoints we are tracking or retracking
+    input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
+    logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
+
+    # If there are no trackpoints, we just go through the motions...
+
+    # Write the movie to a tempfile, because OpenCV has to read movies from files.
+    mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
+    with tempfile.NamedTemporaryFile(suffix='.mp4',mode='wb') as infile:
+        movie_data     = db.get_movie_data(movie_id=movie_id)
+        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+        infile.write( movie_data  )
+        infile.flush()
+
+        # While I'm here, update the movie metadata
+        for prop in ['fps','width','height','total_frames','total_bytes']:
+            if prop in movie_metadata:
+                db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=movie_metadata[prop])
+
+
+        # Track (or retrack) the movie and create the tracked movie
+        # This creates an output file that has the trackpoints animated
+        # and an array of all the trackpoints
+        mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
+        tracked = tracker.track_movie(engine_name=engine_name,
+                                      engine_version=engine_version,
+                                      input_trackpoints = input_trackpoints,
+                                      frame_start      = frame_start,
+                                      moviefile_input  = infile.name,
+                                      callback = mtc.notify)
+
+    # Get new trackpoints for each frame and save them into the database
+    output_trackpoints   = tracked['output_trackpoints']
+    output_trackpoints_by_frame = defaultdict(list)
+    for tp in output_trackpoints:
+        output_trackpoints_by_frame[tp['frame_number']].append(tp)
+
+    # Write all of the trackpoints by frame that were re-tracked
+    for (frame_number,trackpoints) in output_trackpoints_by_frame.items():
+        if frame_number >= frame_start:
+            frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
+            db.put_frame_trackpoints(frame_id = frame_id,
+                                     trackpoints = trackpoints)
+    mtc.done()                  # sets the status to tracking complete
+
+@api.route('/track-movie-queue', method=GET_POST)
+def api_track_movie_queue():
     """Tracks a movie that has been uploaded.
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
@@ -494,7 +547,6 @@ def api_track_movie():
     :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
              dict['message'] = message to display
-             dict['tracked_movie_id'] = movie_id of tracked movie
              dict['frame_start'] = where the tracking started
     """
 
@@ -510,83 +562,14 @@ def api_track_movie():
     if movie_row[0]['orig_movie'] is not None:
         return E.MUST_TRACK_ORIG_MOVIE
 
-    engine_name    = get('engine_name')
-    engine_version = get('engine_version')
-    frame_start    = get_int('frame_start')
-
-    # Find trackpoints we are tracking or retracking
-    input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
-    logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
-
-    if len(input_trackpoints)==0:
-        return E.NO_TRACKPOINTS
-
-    # Write the movie to a tempfile, because OpenCV has to read movies from files.
-    with tempfile.NamedTemporaryFile(suffix='.mp4',mode='wb') as infile:
-        infile.write( db.get_movie_data(movie_id=movie_id) )
-        infile.flush()
-
-        # Create an output file, becuase OpenCV has to write movies to files
-        with tempfile.NamedTemporaryFile(suffix='.mp4', mode='rb') as outfile:
-
-            # Track (or retrack) the movie and create the tracked movie
-            # This creates an output file that has the trackpoints animated
-            # and an array of all the trackpoints
-            mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
-            mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
-            tracked = tracker.track_movie(engine_name=engine_name,
-                                          engine_version=engine_version,
-                                          input_trackpoints = input_trackpoints,
-                                          frame_start      = frame_start,
-                                          moviefile_input  = infile.name,
-                                          moviefile_output = outfile.name,
-                                          callback = mtc.notify)
-
-            # Save the movie with updated metadata
-            db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='status', value='')
-            new_movie_data = outfile.read()
-            # Compute the new movie's sha256
-            new_movie_data_sha256 = db_object.sha256(new_movie_data)
-            new_title      = mtc.movie_metadata['title']
-            if "TRACKED" in new_title:
-                new_title += "+"
-            else:
-                new_title += " TRACKED"
-            logging.debug("creating tracked movie for orig_movie %s",movie_id)
-            object_name = new_movie_data_sha256 + C.MOVIE_EXTENSION
-            movie_data_urn        = db_object.make_urn(object_name=object_name)
-            tracked_movie_id = db.create_new_movie(user_id = user_id,
-                                                   title = new_title,
-                                                   description = mtc.movie_metadata['description'],
-                                                   orig_movie = movie_id,
-                                                   movie_data = new_movie_data,
-                                                   movie_data_sha256 = new_movie_data_sha256,
-                                                   movie_data_urn = movie_data_urn )
-            # purge the other movies that have been tracked for this one
-            to_purge = db.list_movies(user_id = user_id, orig_movie = movie_id)
-            for movie in to_purge:
-                if movie['movie_id'] != tracked_movie_id:
-                    db.purge_movie(movie_id=movie['movie_id'])
-
-
-    # Get new trackpoints for each frame
-    output_trackpoints   = tracked['output_trackpoints']
-    output_trackpoints_by_frame = defaultdict(list)
-    for tp in output_trackpoints:
-        output_trackpoints_by_frame[tp['frame_number']].append(tp)
-
-    # Write all of the trackpoints by frame that were re-tracked
-    for (frame_number,trackpoints) in output_trackpoints_by_frame.items():
-        if frame_number >= frame_start:
-            frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
-            db.put_frame_trackpoints(frame_id = frame_id,
-                                     trackpoints = trackpoints)
+    api_track_movie(user_id=user_id, movie_id=movie_id,
+                    engine_name=get('engine_name'),
+                    engine_version=get('engine_version'),
+                    frame_start=get_int('frame_start'))
 
     # We return all the trackpoints to the client, although the client currently doesn't use them
-    ret = {'error': False,
-           'frame_start':frame_start,
-           'tracked_movie_id':tracked_movie_id}
-    return fix_types(ret)
+    return {'error': False, 'message':'Tracking is queued'}
+
 
 ##
 # Movie analysis API
@@ -785,10 +768,6 @@ def api_get_log():
     TODO - add search capabilities.
     """
     return {'error':False, 'logs': db.get_logs(user_id=get_user_id()) }
-
-##
-# Metadata
-##
 
 
 ################################################################

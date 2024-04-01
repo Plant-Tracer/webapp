@@ -87,6 +87,13 @@ def test_error():
             in str(bottle.response))
 
 
+# make sure we get no api_key with a bad request
+def test_null_api_key(mocker):
+    mocker.patch("bottle.request.query.get", return_value=None)
+    assert auth.get_user_api_key() == None
+
+
+
 # Note: mocker magically works if pytest-mock is installed
 def test_api_key_null(mocker):
     mocker.patch('auth.get_user_api_key', return_value=None)

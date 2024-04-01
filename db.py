@@ -245,14 +245,16 @@ def delete_user(*,email,purge_movies=False):
     Also deletes the user from any courses where they may be an admin.
     """
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               "SELECT id from movies where user_id in (select id from users where email=%s)",
-                               (email,))
+                               "SELECT id as movie_id,title from movies where user_id in (select id from users where email=%s)",
+                               (email,),asDicts=True)
     if rows:
         if not purge_movies:
-            raise RuntimeError(f"user {email} has outstanding movies")
+            for row in rows:
+                logging.error("row=%s",row)
+            raise RuntimeError(f"user {email} has {len(rows)} outstanding movies.")
         # This is not the most efficient, but there probably aren't that many movies to purge
-        for (movie_id,) in rows:
-            purge_movie(movie_id=movie_id)
+        for row in rows:
+            purge_movie(movie_id=row['movie_id'])
 
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
@@ -513,7 +515,8 @@ def get_movie_data(*, movie_id):
     if movie_data is not None:
         return movie_data
 
-    # TODO: Make this a join with object_store so that we get the object if it is locally in the database
+    # Performance Improvement:
+    # Make this a join with object_store so that we get the object if it is locally in the database
 
     rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (movie_sha256,))
     logging.debug("rows=%s",rows)
@@ -533,15 +536,20 @@ def get_movie_metadata(*,user_id, movie_id):
     This is used for the movie list.
     """
 
-    cmd = """SELECT *,id as movie_id from movies WHERE
-                ((user_id=%s) OR
+    cmd = """SELECT A.id as movie_id, A.title, A.description, A.created_at, A.user_id,
+                    A.course_id, A.published, A.deleted, A.date_uploaded, A.orig_movie, A.mtime,
+                    A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
+                    B.id as tracked_movie_id from movies A
+             LEFT JOIN movies B on A.id=B.orig_movie
+             WHERE
+                ((A.user_id=%s) OR
                 (%s=0) OR
-                (course_id=(select primary_course_id from users where id=%s)) OR
-                (course_id in (select course_id from admins where user_id=%s)))
+                (A.course_id=(select primary_course_id from users where id=%s)) OR
+                (A.course_id in (select course_id from admins where A.user_id=%s)))
     """
     params = [user_id, user_id, user_id, user_id]
     if movie_id:
-        cmd += " AND movies.id=%s"
+        cmd += " AND A.id=%s"
         params.append(movie_id)
 
     return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
@@ -759,7 +767,8 @@ def last_tracked_frame(*, movie_id):
                                """,
                                (movie_id,))[0][0]
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
+def get_frame(*,
+              frame_id=None, movie_id=None, frame_number=None,
               get_annotations=False, get_trackpoints=False):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted
@@ -920,7 +929,6 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     cmd = """SELECT users.name as name,users.email as email,users.primary_course_id as primary_course_id,
           movies.id as movie_id,title,description,movies.created_at as created_at,
           user_id,course_id,published,deleted,date_uploaded,orig_movie,
-          center_x,center_y,calib_x,calib_y,calib_user_id,calib_time_t,
           fps,width,height,total_frames,total_bytes
           FROM movies LEFT JOIN users ON movies.user_id = users.id
           WHERE
@@ -1077,16 +1085,23 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
 SET_MOVIE_METADATA = {
-    # title, status and description can be changed by the owner or the admin
+    # these can be changed by the owner or an admin
     'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
     'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
     'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    'fps': 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    'width': 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
+    'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
+    'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
+    'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     'published': 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
+
+
 }
 
 
@@ -1116,7 +1131,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                                   """
                                   SELECT %s IN (select user_id from admins
                                                 WHERE course_id=(select course_id
-                                               FROM movies WHERE id=%s))
+                                                FROM movies WHERE id=%s))
                                   """,
                                   (user_id, set_movie_id))
         # Or if the user is the admin

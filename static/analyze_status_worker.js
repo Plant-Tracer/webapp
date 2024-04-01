@@ -22,7 +22,7 @@ function start_update_timer(obj) {
         })
             .then((response) => response.json())
             .then((data) => {
-                console.log(Date.now(),"got = ",data);
+                console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",data,"metadata:",data.metadata,"status:",data.metadata.status);
                 if (data.error==false){
                     // Send the status back to the UX
                     postMessage(data.metadata);

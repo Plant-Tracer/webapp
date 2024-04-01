@@ -18,13 +18,13 @@
 /*global api_key */
 /*global movie_id */
 
+const PLAY_MSEC = 100;          // how fast to play
 const DEFAULT_R = 10;           // default radius of the marker
 //const DEFAULT_FRAMES = 20;      // default number of frames to show
 //const DEFAULT_WIDTH = 340;
 //const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
-const TRACK_MOVIE_WORKER = document.currentScript.src.replace("analyze.js","analyze_track_movie_worker.js");
 
 /* MyCanvasController Object - creates a canvas that can manage MyObjects */
 
@@ -33,6 +33,7 @@ var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
 const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
+const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 
 // available colors
 // https://sashamaps.net/docs/resources/20-colors/
@@ -245,6 +246,7 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
+        this.playing = 0;
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -258,11 +260,6 @@ class PlantTracerController extends CanvasController {
 
         // Hide the download link until we track or retrack
         this.download_link.hide();
-
-        if (this.last_tracked_frame > 0 ){
-            $(`#${this.this_id} input.track_button`).val( 'retrack movie' );
-            this.download_link.show();
-        }
 
         // Hide the video until we track or retrack retrack
         this.tracked_movie.hide();
@@ -283,6 +280,18 @@ class PlantTracerController extends CanvasController {
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
+        this.frame0_button = $(`#${this.this_id} input.frame0_button`);
+        this.frame0_button.prop('disabled',false);
+        this.frame0_button.on('click', (_event) => {this.frame0_button_pressed();});
+        this.play_button = $(`#${this.this_id} input.play_button`);
+        this.play_button.prop('disabled',false);
+        this.play_button.on('click', (_event) => {this.play_button_pressed();});
+
+        this.stop_button = $(`#${this.this_id} input.stop_button`);
+        this.stop_button.prop('disabled',true);
+        this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
+
+        this.retrack_button = $(`#${this.this_id} input.retrack_button`);
 
         // Wire up the movement buttons
         $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
@@ -305,6 +314,11 @@ class PlantTracerController extends CanvasController {
             console.log("input ",new_frame);
             this.goto_frame( new_frame );
         });
+
+        if (this.last_tracked_frame > 0 ){
+            this.track_button.val( 'retrack movie' );
+            this.download_link.show();
+        }
     }
 
 
@@ -427,7 +441,7 @@ class PlantTracerController extends CanvasController {
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
-     * It tracks on the server, then displays the new movie and offers to download a CSV file.
+     * It calls the /api/track-movie-quque on the server, queuing movie tracking (which takes a while).
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
@@ -438,43 +452,74 @@ class PlantTracerController extends CanvasController {
      */
     track_to_end(_event) {
         // get the next frame and apply tracking logic
+        // First launch the status worker
+        /* Disabled because Amazon's back end isn't multi-threaded */
+        if (window.Worker) {
+            this.status_worker = new Worker(STATUS_WORKER);
+            this.status_worker.onmessage = (e) => {
+                // Got back a message
+                console.log("got e.data=",e.data,"status=",e.data.status);
+                this.tracked_movie_status.text( e.data.status );
+                if (e.data.status==TRACKING_COMPLETED_FLAG) {
+                    this.movie_tracked();
+                }
+            };
+            this.status_worker.postMessage( {movie_id:movie_id, api_key:api_key} );
+        } else {
+            alert("Your browser does not support web workers. You cannot track movies.");
+        }
         console.log("track_to_end start");
         this.tracked_movie.hide();
         this.tracked_movie_status.text("Tracking movie...");
         this.tracked_movie_status.show();
-        let movie_tracker_worker = new Worker(TRACK_MOVIE_WORKER);
-        let movie_tracker_args = {
-            api_key:api_key,
-            movie_id:this.movie_id,
-            frame_start:this.frame_number,
-            engine_name: ENGINE,
-            engine_version: ENGINE_VERSION
-        };
-        movie_tracker_worker.onmessage = (e) => {
-            // Got the tracked movie back!
-            if (e.data.error) {
-                this.tracked_movie_status.text("Tracking error: "+data.message);
-                return;
-            }
-            const tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${e.data.tracked_movie_id}`;
-            this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`); // download link for it
-            this.tracked_movie_status.hide();
-            this.tracked_movie.show();
-            this.download_link.show();
-            $(`#${this.this_id} input.track_button`).val( `retrack movie.` ); // change from 'track movie' to 'retrack movie'
+        this.track_button.prop('disabled',true); // disable it until tracking is finished
+        const formData = new FormData();
+        formData.append('api_key',api_key);
+        formData.append('movie_id',this.movie_id);
+        formData.append('frame_start',this.frame_number);
+        formData.append('engine_name',ENGINE);
+        formData.append('engine_version',ENGINE_VERSION);
+        fetch('/api/track-movie-queue', {
+            method:'POST',
+            body: formData
+        })
+        .then((response) => response.json())
+            .then((data) => {
+                if(data.error){
+                    alert(data.message);
+                } else {
+                    this.tracked_movie_status.text(data.message);
+                }
+            });
+    }
 
-            // redraw the current frame
-            const get_frame_params = {
-                api_key :api_key,
-                movie_id:this.movie_id,
-                frame_number:this.frame_number,
-                format:'json',
-            };
-            $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
-            movie_tracker_worker.terminate();
-        };
-        // Track the movie - parameters for the call
-        movie_tracker_worker.postMessage( movie_tracker_args );
+    /** movie is tracked - display the results */
+    movie_tracked() {
+        const movie_id = this.movie_id;
+        console.log(`terminating status worker; getting metadata for movie_id=${movie_id}`);
+        this.status_worker.terminate();
+        fetch(`/api/get-movie-metadata?api_key=${api_key}&movie_id=${movie_id}`, { method:'GET'})
+            .then((response) => response.json())
+            .then((data) => {
+                console.log("movie metadata: ",data);
+                const tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.metadata.tracked_movie_id}`;
+                this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`); // download link for it
+                this.tracked_movie_status.text('Movie tracking complete.');
+                this.tracked_movie.show();
+                this.download_link.show();
+                // change from 'track movie' to 'retrack movie' and re-enable it
+                this.track_button.val( `retrack movie.` );
+                this.track_button.prop('disabled',false);
+
+                // redraw the current frame
+                const get_frame_params = {
+                    api_key :api_key,
+                    movie_id:this.movie_id,
+                    frame_number:this.frame_number,
+                    format:'json',
+                };
+                $.post('/api/get-frame', get_frame_params).done( (data) => {this.get_frame_handler(data);});
+            });
     }
 
     // Change the frame
@@ -491,10 +536,13 @@ class PlantTracerController extends CanvasController {
         if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) {
             frame=this.movie_metadata.total_frames-1;
         }
-        if (frame>this.last_tracked_frame) {
+        if (frame < 0) frame=0;
+        if (frame < this.last_tracked_frame-1){
+            this.play_button.prop('disabled',false);
+        } else{
             frame=this.last_tracked_frame-1;
+            this.play_button.prop('disabled',true);
         }
-        if (frame<0) frame=0;
         this.frame_number_field.val( frame );
         this.frame_number = frame;
         const get_frame_params = {
@@ -504,7 +552,51 @@ class PlantTracerController extends CanvasController {
             format:'json',
         };
         $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
-        // And load the frame number
+    }
+
+    frame0_button_pressed() {
+        this.stop_button_pressed();  // clear any timmers in progress
+        this.goto_frame(0);
+    }
+
+    set_play_buttons() {
+        if (this.playing) {
+            this.play_button.prop('disabled',true);
+            this.stop_button.prop('disabled',false);
+            this.retrack_button.prop('disabled',true);
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',true);
+            return;
+        }
+        this.play_button.prop('disabled',false);
+        this.stop_button.prop('disabled',true);
+        this.retrack_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
+        $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<1);
+        $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame);
+    }
+
+    /***
+     * play_button_pressed() is called when the play button is pressed. It goes to the next frame and
+     * sets another timer if we haven't reach the end. The STOP button stops the timmer.
+     */
+    play_button_pressed() {
+        if (this.frame_number < this.last_tracked_frame-1) {
+            this.goto_frame( this.frame_number + 1);
+            this.playTimer = setTimeout( () => this.play_button_pressed(), PLAY_MSEC);
+            this.playing = 1;
+        } else {
+            this.stop_button_pressed(); // simulate stop button pressed at end of movie
+            this.playing = 0;
+        }
+        this.set_play_buttons();
+    }
+
+    stop_button_pressed() {
+        if (this.playTimer) {
+            clearTimeout(this.playTimer);
+            this.playTimer = undefined;
+        }
+        this.playing = 0;
+        this.set_play_buttons();
     }
 
     /***
@@ -528,14 +620,15 @@ class PlantTracerController extends CanvasController {
         this.frame_number_field.val( data.frame_number );
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
-        this.objects = [];      // clear the array
         this.theImage = new myImage( 0, 0, data.data_url, this);
+        this.objects = [];      // clear the array
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
-        if (data.frame_number>0){
-            $(`#${this.this_id} input.track_button`).val( `retrack from frame ${data.frame_number} to end of movie` );
+        if (data.frame_number>=0){
+            this.track_button.val( `retrack from frame ${data.frame_number} to end of movie` );
         }
 
+        // Draw trakcpoints if we have them, otherwise create initial trackpoints
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
@@ -553,7 +646,7 @@ class PlantTracerController extends CanvasController {
                 this.add_marker_status.show();
             }
         }
-        this.redraw('append_new_ptc');              // initial drawing
+        this.set_play_buttons();
     }
 }
 
@@ -634,20 +727,6 @@ function append_new_ptc(movie_id, frame_number) {
             return;
         }
         let window_ptc = new PlantTracerController( this_id, movie_id, frame_number, data.metadata );
-
-        /* launch the webworker if we can */
-        /* Disabled because Amazon's back end isn't multi-threaded
-        if (window.Worker) {
-            const myWorker = new Worker(STATUS_WORKER);
-            console.log("AAA this.tracked_movie_status=",window_ptc.tracked_movie_status);
-            myWorker.onmessage = (e) => {
-                window_ptc.tracked_movie_status.text( e.data.status );
-            };
-            myWorker.postMessage( {movie_id:movie_id, api_key:api_key} );
-        } else {
-            alert("Your browser does not support web workers. You cannot track movies.");
-        }
-        */
 
         // get the request frame of the movie. When it comes back, use it to populate
         // a new PlantTracerController.
