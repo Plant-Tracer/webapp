@@ -61,7 +61,6 @@ import filetype
 import bottle
 from bottle import request
 from validate_email_address import validate_email
-from tracker import *
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
