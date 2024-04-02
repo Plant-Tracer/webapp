@@ -61,6 +61,7 @@ import filetype
 import bottle
 from bottle import request
 from validate_email_address import validate_email
+from tracker import *
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -75,6 +76,7 @@ from paths import view, STATIC_DIR
 from constants import C,E,__version__
 import mailer
 import tracker
+import re
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -629,57 +631,46 @@ def api_get_movie_trackpoints():
         labels         = sorted( ( tp['label'] for tp in trackpoint_dicts) )
         frame_dicts    = defaultdict(dict)
 
-        ruler0_x, ruler20_x = -1, -1
-        ruler0_y, ruler20_y = -1, -1
+        # init ruler parameters
+        ruler0_x, ruler_xx_x = -1, -1
+        ruler0_y, ruler_xx_y = -1, -1
+        # Record each 'ruler0_frame_number' in the for loop.
         ruler0_frame_number = -1
-        sensor_width_mm = 36  # Sensor width 36 millimeters (this is a common value,
-        # but should be adjusted according to actual circumstances)
-        actual_distance_mm = 20
-        mm_per_inch = 25.4  # common value
 
         for tp in trackpoint_dicts:
             frame_dicts[tp['frame_number']][tp['label'] + ' x'] = tp['x']
             frame_dicts[tp['frame_number']][tp['label'] + ' y'] = tp['y']
-            if tp['label'] == 'ruller 0 mm':
+
+            # Record ruler0_x, ruler0_y and ruler0_frame_number
+            if tp['label'] == 'ruler 0 mm':
                 ruler0_x = tp['x']
                 ruler0_y = tp['y']
                 ruler0_frame_number = tp['frame_number']
-            if tp['label'] == 'ruller 20 mm':
-                ruler20_x = tp['x']
-                ruler20_y = tp['y']
 
-                # calculate the dpi of the ruler, and convert to mm
-                def pixels_to_mm(pixel_value):
-                    pixel_distance_px = math.sqrt((ruler20_x - ruler0_x) ** 2 + (ruler20_y - ruler0_y) ** 2)
-                    pixel_to_mm_ratio = actual_distance_mm / pixel_distance_px
-                    # dpi = sensor_width_mm * pixel_to_mm_ratio / mm_per_inch
-                    # mm_per_pixel = mm_per_inch / dpi
-                    mm_per_pixel = mm_per_inch ** 2 / sensor_width_mm * pixel_to_mm_ratio
-                    return pixel_value * mm_per_pixel
+            # If the label is match any ruler xx mm, get xx distance in mm
+            pattern = r'ruler ([1-9]\d*) mm'
+            if re.match(pattern, tp['label']):
+                actual_distance_mm = int(re.search(pattern, tp['label']).group(1))
 
-                ruler0_x_mm = pixels_to_mm(ruler0_x)
-                ruler0_y_mm = pixels_to_mm(ruler0_y)
-                ruler20_x_mm = pixels_to_mm(ruler20_x)
-                ruler20_y_mm = pixels_to_mm(ruler20_y)
+                ruler0_x_mm, ruler0_y_mm, ruler_xx_x_mm, ruler_xx_y_mm = pixels_to_mm(
+                    actual_distance_mm, ruler0_x, ruler0_y, tp['x'], tp['y'])
 
                 # update ruler0_frame_number mm value
                 frame_dicts[ruler0_frame_number][tp['label'] + ' x' + ' mm'] = ruler0_x_mm
                 frame_dicts[ruler0_frame_number][tp['label'] + ' y' + ' mm'] = ruler0_y_mm
-                # update ruler20_frame_number mm value
-                frame_dicts[tp['frame_number']][tp['label'] + ' x' + ' mm'] = ruler20_x_mm
-                frame_dicts[tp['frame_number']][tp['label'] + ' y' + ' mm'] = ruler20_y_mm
 
-                # init parameters
-                ruler0_x, ruler20_x = -1, -1
-                ruler0_y, ruler20_y = -1, -1
-                ruler0_frame_number = -1
+                # update ruler_xx_frame_number mm value
+                frame_dicts[tp['frame_number']][tp['label'] + ' x' + ' mm'] = ruler_xx_x_mm
+                frame_dicts[tp['frame_number']][tp['label'] + ' y' + ' mm'] = ruler_xx_y_mm
 
         fieldnames = ['frame_number']
         for label in labels:
             fieldnames.append(label + ' x')
             fieldnames.append(label + ' y')
-            # update labels
-            if label == 'ruller 0 mm' or label == 'ruller 20 mm':
+
+            # If the label is match any ruler xx mm, add mm labels
+            pattern = r'ruler (\d+) mm'
+            if re.match(pattern, label):
                 fieldnames.append(label + ' x' + ' mm')
                 fieldnames.append(label + ' y' + ' mm')
 

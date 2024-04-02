@@ -13,6 +13,7 @@ from os.path import abspath, dirname
 
 import numpy as np
 import cv2
+import re
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
@@ -104,6 +105,24 @@ def test_cleanup_mp4():
         tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
 
 
+def test_get_actual_distance_mm():
+    pattern = r'ruler ([1-9]\d*) mm'
+    label = 'ruler 20 mm'
+    actual_distance_mm = int(re.search(pattern, label).group(1))
+    assert actual_distance_mm == 20
+
+
+def test_pixels_to_mm():
+    x1, y1 = 100, 150
+    x2, y2 = 200, 250
+    straight_line_distance_mm = 50.0
+
+    x1_mm, y1_mm, x2_mm, y2_mm = tracker.pixels_to_mm(
+        x1, y1, x2, y2, straight_line_distance_mm)
+    assert x1_mm == 35.36
+    assert y1_mm == 53.03
+    assert x2_mm == 70.71
+    assert y2_mm == 88.39
 
 
 def test_movie_tracking(new_movie):
