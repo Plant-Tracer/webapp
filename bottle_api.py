@@ -418,9 +418,12 @@ def api_get_movie_trackpoints():
         # get_movie_trackpoints() returns a dictionary for each trackpoint.
         # we want a dictionary for each frame_number
         trackpoint_dicts = db.get_movie_trackpoints(movie_id=get_int('movie_id'))
-        frame_numbers  = sorted( ( tp['frame_number'] for tp in trackpoint_dicts) )
-        labels         = sorted( ( tp['label'] for tp in trackpoint_dicts) )
+        frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
+        labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
         frame_dicts    = defaultdict(dict)
+
+        logging.debug("frame_numbers=%s",frame_numbers)
+        logging.debug("labels=%s",labels)
 
         if get('format')=='json':
             return fix_types({'error':'False',
@@ -434,6 +437,7 @@ def api_get_movie_trackpoints():
         for label in labels:
             fieldnames.append(label+' x')
             fieldnames.append(label+' y')
+        logging.debug("fieldnames=%s",fieldnames)
 
         # Now write it out with the dictwriter
         with io.StringIO() as f:
