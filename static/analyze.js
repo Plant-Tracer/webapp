@@ -20,9 +20,6 @@
 
 const PLAY_MSEC = 100;          // how fast to play
 const DEFAULT_R = 10;           // default radius of the marker
-//const DEFAULT_FRAMES = 20;      // default number of frames to show
-//const DEFAULT_WIDTH = 340;
-//const DEFAULT_HEIGHT= 340;
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
 
@@ -43,6 +40,14 @@ const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
                      '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
                        '#000075', '#808080', '#e6194b', ];
 
+/*
+ * CanvasController maintains a set of objects that can be on the canvas and allows them to be moved and drawn.
+ * Objects implemented below:
+ * myObject - base class
+ * myCircle - draws a circle
+ * myImage  - draws an image (from a URL). Used to draw movie animations.
+ * myPath   - draws a line or, with many lines, a path
+ */
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $( canvas_selector );
@@ -140,7 +145,17 @@ class CanvasController {
         // clear canvas
         // this is useful for tracking who called redraw, and how many times it is called, and when
         // console.log(`redraw=${msg} id=${this.c.id}`);
-        this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+        // We don't need to do it if the 0th object draws to the bounds
+        if ((this.objects.length > 0)
+            && (this.objects[0].fills_bounds)
+            && (this.objects[0].x == 0)
+            && (this.objects[0].y == 0)
+            && (this.objects[0].width == this.naturalWidth )
+            && (this.objects[0].height == this.naturalHeight)){
+            console.log("no need to clear");
+        } else {
+            this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+        }
 
         // draw the objects. Always draw the selected objects after
         // the unselected (so they are on top)
@@ -169,6 +184,7 @@ class MyObject {
         this.x = x;
         this.y = y;
         this.name = name;
+        this.fills_bounds = false; // does not fill bounds
     }
     // default - it never contains the point
     contains_point(_pt) {
@@ -228,6 +244,49 @@ class myCircle extends MyObject {
 
 }
 
+/* myImage Object - Draws an image (x,y) specified by the url */
+class myImage extends MyObject {
+    constructor(x, y, url, ptc) {
+        super(x, y, url);
+        this.ptc = ptc;
+
+        let theImage=this;
+        this.draggable = false;
+        this.ctx    = null;
+        this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
+        this.img = new Image();
+
+        // When the image is loaded, draw the entire stack again.
+        this.img.onload = (_event) => {
+            theImage.state = 1;
+            if (theImage.ctx) {
+                ptc.redraw('myImage constructor');
+            }
+        };
+
+        this.draw = (ctx) => {
+            // See if this is the first time we have drawn in the context.
+            theImage.ctx = ctx;
+            if (theImage.state > 0){
+                if (theImage.state==1){
+                    this.width  = ptc.naturalWidth  = this.img.naturalWidth;
+                    this.height = ptc.naturalHeight = this.img.naturalHeight;
+                    this.fills_bounds = true;
+                    theImage.state = 2;
+                    ptc.set_zoom( 1.0 ); // default zoom
+                }
+                ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
+            }
+        };
+
+        // set the URL. It loads immediately if it is a here document.
+        // That will make onload run, but theImge.ctx won't be set.
+        // If the document is not a here document, then draw might be called before
+        // the image is loaded. Hence we need to pay attenrtion to theImage.state.
+        this.img.src = url;
+    }
+}
+
 // The PlantTracerController is the box where we control the plant tracer functionality.
 // Create the canvas and wire up the buttons for add_marker button
 class PlantTracerController extends CanvasController {
@@ -246,6 +305,7 @@ class PlantTracerController extends CanvasController {
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
+        this.download_button      = $(`#${this.this_id} .download_button`);
         this.playing = 0;
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
@@ -279,6 +339,8 @@ class PlantTracerController extends CanvasController {
         this.track_button.on('click', (event) => {this.track_to_end(event);});
         this.track_button.prop('disabled',true); // disable it until we have a marker added.
 
+        this.download_button = $(`#${this_id} input.download_button`);
+
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
         this.frame0_button = $(`#${this.this_id} input.frame0_button`);
         this.frame0_button.prop('disabled',false);
@@ -291,7 +353,7 @@ class PlantTracerController extends CanvasController {
         this.stop_button.prop('disabled',true);
         this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
 
-        this.retrack_button = $(`#${this.this_id} input.retrack_button`);
+        this.track_button = $(`#${this.this_id} input.track_button`);
 
         // Wire up the movement buttons
         $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
@@ -522,7 +584,14 @@ class PlantTracerController extends CanvasController {
             });
     }
 
-    // Change the frame
+    /**
+     * Change the frame. This is called repeatedly when the movie is playing, with the frame number changing
+     * First we verify the next frame number, then we call the /api/get-frame call to get the frame,
+     * with get_frame_handler getting the data.
+     *
+     * Todo: cache the frames in an array.
+     * Use double-buffering by drawing into an offscreen canvas and then bitblt in the image, to avoid flashing.
+     */
     goto_frame( frame ) {
         //console.log(`frame=${frame} last_tracked_frame=${this.last_tracked_frame} movie_metadata.total_frames=${this.movie_metadata.total_frames}`);
         if (this.last_tracked_frame === null){
@@ -563,20 +632,23 @@ class PlantTracerController extends CanvasController {
         if (this.playing) {
             this.play_button.prop('disabled',true);
             this.stop_button.prop('disabled',false);
-            this.retrack_button.prop('disabled',true);
+            this.track_button.prop('disabled',true);
+            this.download_button.prop('disabled',true);
             $(`#${this.this_id} input.frame_movement`).prop('disabled',true);
             return;
         }
         this.play_button.prop('disabled',false);
         this.stop_button.prop('disabled',true);
-        this.retrack_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
+        this.track_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
+        this.download_button.prop('disabled',false);
         $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<1);
         $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame);
     }
 
     /***
-     * play_button_pressed() is called when the play button is pressed. It goes to the next frame and
-     * sets another timer if we haven't reach the end. The STOP button stops the timmer.
+     * play_button_pressed() is called when the play button is pressed, and each time the play timer clicks.
+     * It goes to the next frame and sets another timer if we haven't reach the end.
+     * The STOP button stops the timmer.
      */
     play_button_pressed() {
         if (this.frame_number < this.last_tracked_frame-1) {
@@ -618,6 +690,7 @@ class PlantTracerController extends CanvasController {
             this.frame_number_field.attr('max', data.last_tracked_frame);
         }
         this.frame_number_field.val( data.frame_number );
+
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
         this.theImage = new myImage( 0, 0, data.data_url, this);
@@ -650,48 +723,6 @@ class PlantTracerController extends CanvasController {
     }
 }
 
-
-/* myImage Object - Draws an image (x,y) specified by the url */
-class myImage extends MyObject {
-    constructor(x, y, url, ptc) {
-        super(x, y, url);
-        this.ptc = ptc;
-
-        let theImage=this;
-        this.draggable = false;
-        this.ctx    = null;
-        this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
-        this.img = new Image();
-
-        // When the image is loaded, draw the entire stack again.
-        this.img.onload = (_event) => {
-            theImage.state = 1;
-            if (theImage.ctx) {
-                ptc.redraw('myImage constructor');
-            }
-        };
-
-        this.draw = function (ctx) {
-            // See if this is the first time we have drawn in the context.
-            theImage.ctx = ctx;
-            if (theImage.state > 0){
-                if (theImage.state==1){
-                    ptc.naturalWidth  = this.img.naturalWidth;
-                    ptc.naturalHeight = this.img.naturalHeight;
-                    theImage.state = 2;
-                    ptc.set_zoom( 1.0 );
-                }
-                ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
-            }
-        };
-
-        // set the URL. It loads immediately if it is a here document.
-        // That will make onload run, but theImge.ctx won't be set.
-        // If the document is not a here document, then draw might be called before
-        // the image is loaded. Hence we need to pay attenrtion to theImage.state.
-        this.img.src = url;
-    }
-}
 
 /* update_div:
  * Callback when data arrives from /api/get-frame.
