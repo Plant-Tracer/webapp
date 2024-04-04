@@ -5,7 +5,6 @@
 # pylint: disable=too-many-lines
 # pylint: disable=too-many-arguments
 
-
 import os
 import base64
 import uuid
@@ -19,10 +18,10 @@ from typing import Optional
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
 
+import db_object
 from paths import TEMPLATE_DIR
-
-
 import auth
+from constants import MIME,C
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
@@ -34,18 +33,6 @@ if sys.version < '3.11':
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
-class DB_Errors(RuntimeError):
-    """Base class for DB Errors"""
-
-class InvalidAPI_Key(DB_Errors):
-    """ API Key is invalid """
-
-class InvalidCourse_Key(DB_Errors):
-    """ API Key is invalid """
-
-class InvalidMovie_Id(DB_Errors):
-    """ API Key is invalid """
-
 LOG_DB = 'LOG_DB'
 LOG_INFO = 'LOG_INFO'
 LOG_WARNING = 'LOG_WARNING'
@@ -55,6 +42,29 @@ logging_policy.add(LOG_DB)
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
+
+################################################################
+## Errors
+################################################################
+
+class DB_Errors(RuntimeError):
+    """Base class for DB Errors"""
+
+class InvalidAPI_Key(DB_Errors):
+    """ API Key is invalid """
+
+class InvalidCourse_Key(DB_Errors):
+    """ Course Key is invalid """
+
+class InvalidMovie_Id(DB_Errors):
+    """ MovieID is invalid """
+
+class UnauthorizedUser(DB_Errors):
+    """ User is not authorized for movie"""
+
+class NoMovieData(DB_Errors):
+    """There is no data for the movie"""
+
 
 ################################################################
 # Logging
@@ -116,6 +126,14 @@ def log(func):
     """Logging decorator --- log both the arguments and what was returned."""
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
+        #try:
+        #    r = func(*args, **kwargs)
+        #except Exception as e:
+        #    logging.error("EXCEPTION %s args=%s kwargs=%s",e.__class__.__module__, str(args)[0:100],str(kwargs)[0:100])
+        #    logit(func_name=func.__name__,
+        #          func_args={**kwargs, **{'args': args}},
+        #          func_return="EXCEPTION")
+        #    raise
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
@@ -227,14 +245,16 @@ def delete_user(*,email,purge_movies=False):
     Also deletes the user from any courses where they may be an admin.
     """
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               "SELECT id from movies where user_id in (select id from users where email=%s)",
-                               (email,))
+                               "SELECT id as movie_id,title from movies where user_id in (select id from users where email=%s)",
+                               (email,),asDicts=True)
     if rows:
         if not purge_movies:
-            raise RuntimeError(f"user {email} has outstanding movies")
+            for row in rows:
+                logging.error("row=%s",row)
+            raise RuntimeError(f"user {email} has {len(rows)} outstanding movies.")
         # This is not the most efficient, but there probably aren't that many movies to purge
-        for (movie_id,) in rows:
-            purge_movie(movie_id=movie_id)
+        for row in rows:
+            purge_movie(movie_id=row['movie_id'])
 
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM admins WHERE user_id in (select id from users where email=%s)", (email,))
     dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE FROM api_keys WHERE user_id in (select id from users where email=%s)", (email,))
@@ -390,7 +410,8 @@ def list_demo_users():
 
 def lookup_course(*, course_id):
     try:
-        return dbfile.DBMySQL.csfr(get_dbreader(), "select * from courses where id=%s", (course_id,), asDicts=True)[0]
+        return dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT * FROM courses WHERE id=%s", (course_id,), asDicts=True)[0]
     except IndexError:
         return {}
 
@@ -400,7 +421,8 @@ def create_course(*, course_key, course_name, max_enrollment, course_section=Non
     """Create a new course
     :return: course_id of the new course
     """
-    ret = dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
+    ret = dbfile.DBMySQL.csfr(get_dbwriter(),
+                              "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
                               (course_key, course_name, max_enrollment, course_section))
     return {'course_id':ret}
 
@@ -483,13 +505,30 @@ def remaining_course_registrations(*,course_key):
 
 @log
 def get_movie_data(*, movie_id):
-    """Returns the movie contents. Does no checking"""
-    logging.debug("movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data from movie_data where movie_id=%s LIMIT 1", (movie_id,))
-    if len(rows)==1:
-        assert len(rows[0])==1
-        return rows[0][0]
-    raise InvalidMovie_Id(str(movie_id))
+    """Returns the movie contents for a movie_id. If the data is stored in the movie_data, return that.
+    If a sha256 is stored, redirect through the objects table.
+    """
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT movie_data, movie_sha256 from movie_data where movie_id=%s LIMIT 1", (movie_id,))
+    if len(rows)!=1:
+        raise InvalidMovie_Id(f"movie_id={movie_id}")
+    (movie_data,movie_sha256) = rows[0]
+    if movie_data is not None:
+        return movie_data
+
+    # Performance Improvement:
+    # Make this a join with object_store so that we get the object if it is locally in the database
+
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (movie_sha256,))
+    logging.debug("rows=%s",rows)
+    if len(rows)!=1:
+        logging.debug("raise")
+        raise InvalidMovie_Id(f"movie_id={movie_id} sha256={movie_sha256}")
+    object_urn = rows[0][0]
+    logging.debug("object_urn=%s",object_urn)
+    if object_urn:
+        return db_object.read_object(object_urn)
+    return None
+
 
 @log
 def get_movie_metadata(*,user_id, movie_id):
@@ -497,15 +536,20 @@ def get_movie_metadata(*,user_id, movie_id):
     This is used for the movie list.
     """
 
-    cmd = """SELECT *,id as movie_id from movies WHERE
-                ((user_id=%s) OR
+    cmd = """SELECT A.id as movie_id, A.title, A.description, A.created_at, A.user_id,
+                    A.course_id, A.published, A.deleted, A.date_uploaded, A.orig_movie, A.mtime,
+                    A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
+                    B.id as tracked_movie_id from movies A
+             LEFT JOIN movies B on A.id=B.orig_movie
+             WHERE
+                ((A.user_id=%s) OR
                 (%s=0) OR
-                (course_id=(select primary_course_id from users where id=%s)) OR
-                (course_id in (select course_id from admins where user_id=%s)))
+                (A.course_id=(select primary_course_id from users where id=%s)) OR
+                (A.course_id in (select course_id from admins where A.user_id=%s)))
     """
     params = [user_id, user_id, user_id, user_id]
     if movie_id:
-        cmd += " AND movies.id=%s"
+        cmd += " AND A.id=%s"
         params.append(movie_id)
 
     return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
@@ -581,7 +625,33 @@ def delete_movie(*,movie_id, delete=1):
 
 @log
 def create_new_movie(*, user_id, title=None, description=None,
-                     movie_data=None, movie_metadata=None, orig_movie=None):
+                     movie_data=None, movie_metadata=None, orig_movie=None,
+                     movie_data_sha256=None, movie_data_urn=None):
+    """
+    :param: user_id  - person creating movie. Stored in movies table.
+    :param: title - title of movie. Stored in movies table
+    :param: description - description of movie
+    :param: movie_data - if presented, data for the movie. Stored in object_data SQL table. (TODO)
+    :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
+    :param: orig_movie - if presented, the movie_id of the movie on which this is based
+    :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. If also present with movie_data, they must agree.
+    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
+    """
+    if (movie_data is not None) and (movie_data_urn is None):
+        raise ValueError("If movie_data is provided, we must have a URN where it should be written")
+    if (movie_data_sha256 is not None) and (movie_data_urn is None):
+        raise ValueError("If movie_data_sha256 is provided without movie_data, then movie_data_urn must be provided")
+    if (movie_data_urn is not None) and (movie_data_sha256 is None):
+        raise ValueError("If movie_data_urn is provided, then movie_data_sha256 must be provided")
+
+    computed_movie_data_sha256 = db_object.sha256(movie_data) if (movie_data is not None) else None
+    if (computed_movie_data_sha256 is not None) and (movie_data_sha256 is None):
+        movie_data_sha256 = computed_movie_data_sha256
+
+    if (movie_data is not None) and (movie_data_sha256 != computed_movie_data_sha256):
+        raise ValueError(f"movie_data_sha256={movie_data_sha256} but computed_movie_data_sha256={computed_movie_data_sha256}")
+
+    # First get the user's primary_course_id
     res = dbfile.DBMySQL.csfr(
         get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
     if not res or len(res) != 1:
@@ -589,14 +659,23 @@ def create_new_movie(*, user_id, title=None, description=None,
         logging.error("res=%s", res)
         raise RuntimeError(f"user_id={user_id} len(res)={len(res)} res={res}")
     primary_course_id = res[0][0]
+
+    # Now create the movie record
     movie_id = dbfile.DBMySQL.csfr(get_dbwriter(),
                                    """INSERT INTO movies (title,description,user_id,course_id,orig_movie) VALUES (%s,%s,%s,%s,%s)
                                     """,
                                    (title, description, user_id, primary_course_id,orig_movie))
-    if movie_data:
+    if movie_data_sha256:
+        # If we know the sha256 we can put it in the metadata
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO movie_data (movie_id, movie_data) values (%s,%s)",
-                            (movie_id, movie_data))
+                            "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
+                            (movie_id, movie_data_sha256))
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE id=id",
+                            (movie_data_sha256, movie_data_urn))
+    if movie_data:
+        db_object.write_object(movie_data_urn, movie_data)
+
     if movie_metadata:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
@@ -688,7 +767,8 @@ def last_tracked_frame(*, movie_id):
                                """,
                                (movie_id,))[0][0]
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None,
+def get_frame(*,
+              frame_id=None, movie_id=None, frame_number=None,
               get_annotations=False, get_trackpoints=False):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     :param: movie_id - the movie_id wanted
@@ -849,7 +929,6 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     cmd = """SELECT users.name as name,users.email as email,users.primary_course_id as primary_course_id,
           movies.id as movie_id,title,description,movies.created_at as created_at,
           user_id,course_id,published,deleted,date_uploaded,orig_movie,
-          center_x,center_y,calib_x,calib_y,calib_user_id,calib_time_t,
           fps,width,height,total_frames,total_bytes
           FROM movies LEFT JOIN users ON movies.user_id = users.id
           WHERE
@@ -910,11 +989,10 @@ def delete_engine(*,engine_id):
 ## Logs
 ################################################################
 
-# Do we need to log get_logs?
 def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
               course_key=None, movie_id=None, log_user_id=None,
               ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
-    """get log entries (to which the user is entitled)
+    """get log entries (to which the user is entitled) - Implements /api/get-log
     :param: user_id    - the user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
     :param: end_time   - the last log entry to provide (time_t)
@@ -1007,16 +1085,23 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
 SET_MOVIE_METADATA = {
-    # title, status and description can be changed by the owner or the admin
+    # these can be changed by the owner or an admin
     'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
     'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
     'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    'fps': 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    'width': 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
+    'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
+    'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
+    'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     'published': 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
+
+
 }
 
 
@@ -1046,7 +1131,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                                   """
                                   SELECT %s IN (select user_id from admins
                                                 WHERE course_id=(select course_id
-                                               FROM movies WHERE id=%s))
+                                                FROM movies WHERE id=%s))
                                   """,
                                   (user_id, set_movie_id))
         # Or if the user is the admin
@@ -1067,3 +1152,49 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                                           (value, user_id))
                 return ret
     return None
+
+
+################################################################
+## Movie Class (in transition)
+## A higher-level interface to movies.
+################################################################
+
+class Movie():
+    """Simple representation of movies that may be stored in SQL database or on S3. More intelligence will move into this class over time."""
+    __slots__ = ['movie_id', 'data', 'urn', 'sha256', 'mime_type']
+    def __init__(self, movie_id, *, user_id=None):
+        # If user_id is provided, make sure user gets access
+        self.mime_type = MIME.MP4
+        if (user_id is not None) and not can_access_movie(user_id=user_id, movie_id=movie_id):
+            raise UnauthorizedUser(f"user_id={user_id} movie_id={movie_id}")
+        self.movie_id = movie_id
+        rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1",
+                                   (self.movie_id,))
+        if len(rows)!=1:
+            raise InvalidMovie_Id(f"movie_id={self.movie_id}")
+        (self.data,self.sha256) = rows[0]
+        if self.data is None:
+            rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (self.sha256,))
+            try:
+                self.urn = rows[0][0]
+            except IndexError as e:
+                raise NoMovieData(f"movie_id={self.movie_id} sha256={self.sha256}") from e
+
+            # If the movie's URN's scheme is C.SCHEME_DB, get the data as well
+            if self.urn.startswith(C.SCHEME_DB):
+                self.data = db_object.read_object(self.urn)
+
+    def __repr__(self):
+        return f"<Movie {self.movie_id} urn={self.urn} sha256={self.sha256}>"
+
+
+    def get_data(self):
+        """Return the object data"""
+        if self.data is not None:
+            return self.data
+        return db_object.read_object(self.urn)
+
+    def url(self):
+        """Return a URL for accessing the data. This is a self-signed URL"""
+        return db_object.make_signed_url(urn=self.urn)

@@ -10,6 +10,7 @@
 
 const PLAY_LABEL = 'play original';
 const PLAY_TRACKED_LABEL = 'play tracked';
+const UPLOAD_TIMEOUT_SECONDS = 20;
 
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
@@ -76,6 +77,7 @@ function resend_func() {
 ////////////////////////////////////////////////////////////////
 /// page: /upload
 /// Enable the movie-file upload when we have at least 3 characters of title and description
+/// We also allow uploading other places
 function check_upload_metadata()
 {
     const title = $('#movie-title').val();
@@ -84,15 +86,79 @@ function check_upload_metadata()
     $('#movie-file').prop('disabled', (title.length < 3 || description.length < 3));
 }
 
-// Uploads an entire movie at once using an HTTP POST
-// https://stackoverflow.com/questions/5587973/javascript-upload-file
-const UPLOAD_TIMEOUT_SECONDS = 20;
-async function upload_movie(inp)
+// This is an async function, which uses async functions.
+// You get the results with
+//        var sha256 = await computeSHA256(file);
+async function computeSHA256(file) {
+    // Read the file as an ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+
+    // Compute the SHA-256 hash
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+
+    // Convert the hash to a hexadecimal string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
+
+// Uploads a movie using a presigned post. See:
+// https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
+// https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
+async function upload_movie_post(movie_title, description, movieFile, showMovie)
+{
+    var movie_data_sha256 = await computeSHA256(movieFile);
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append("title",       movie_title);
+    formData.append("description", description);
+    formData.append("movie_data_sha256",  movie_data_sha256);
+    formData.append("movie_data_length",  movieFile.fileSize);
+    console.log("sending:",formData);
+    let r = await fetch('/api/new-movie', { method:"POST", body:formData});
+    console.log("App response code=",r);
+    let obj = await r.json();
+    console.log('obj=',obj);
+    if (obj.error){
+        $('#message').html(`Error getting upload URL: ${obj.message}`);
+        return;
+    }
+
+    // https://stackoverflow.com/questions/13782198/how-to-do-a-put-request-with-curl
+    // https://stackoverflow.com/questions/15234496/upload-directly-to-amazon-s3-using-ajax-returning-error-bucket-post-must-contai/15235866#15235866
+    try {
+        const pp = obj.presigned_post;
+        console.log("pp:",pp)
+        const formData = new FormData();
+        for (const field in pp.fields) {
+            formData.append(field, pp.fields[field]);
+        }
+        formData.append("file", movieFile); // order matters!
+
+        const ctrl = new AbortController();    // timeout
+        setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
+        const r = await fetch(pp.url, {
+            method: "POST",
+            body: formData,
+        });
+        if (!r.ok) {
+            $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
+            console.log("r.text()=",await r.text());
+            return;
+        }
+        showMovie(movie_title,obj.movie_id);
+    } catch(e) {
+        console.log('Error uploading movie to S3:',e);
+        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+    }
+}
+
+/* Finally the function that is called when a movie is picked */
+function upload_movie(inp)
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
 
-    console.log('movie_title.length=',movie_title.length);
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
         return;
@@ -103,50 +169,26 @@ async function upload_movie(inp)
         return;
     }
 
-    $('#message').html(`Uploading image...`);
-    console.log("upload_movie inp=",inp);
     const movieFile = inp.files[0];
     if (movieFile.fileSize > MAX_FILE_UPLOAD) {
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
-    console.log('movieFile:',movieFile);
-    let formData = new FormData();
-    formData.append("movie",       movieFile); // the movie itself
-    formData.append("api_key",     api_key); // on the upload form
-    formData.append("title",       movie_title);
-    formData.append("description", description);
+    $('#message').html(`Uploading image...`);
 
-    const ctrl = new AbortController();    // timeout
-    setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
-
-    try {
-        let r = await fetch('/api/new-movie',
-                            { method:"POST", body:formData, signal: ctrl.signal });
-        console.log("HTTP response code=",r);
-        if (r.status!=200) {
-            $('#message').html(`<i>Error uploading movie: ${r.status}</i>`);
-        } else{
-            const body = await r.json();
-            console.log('body=',body);
-            if (body.error==false ){
-                $('#message').html(`<p>Movie ${body.movie_id} successfully uploaded.</p>`+
-                                   `<p>First frame:</p>` +
-                                   `<img src="/api/get-frame?api_key=${api_key}&movie_id=${body.movie_id}&frame_number=0&format=jpeg">`+
-                                   `<p><a href='/analyze?movie_id=${body.movie_id}'>Track movie '${movie_title}' (${body.movie_id})</a> `+
-                                   `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-                $('#movie-title').val('');
-                $('#movie-description').val('');
-                $('#movie-file').val('');
-                check_upload_metadata(); // disable the button
-            } else {
-                $('#message').html(`Error uploading movie. ${body.message}`);
-            }
-        }
-    } catch(e) {
-        console.log('Error uploading movie:',e);
-        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
-    }
+    let show_movie = function(movie_title,movie_id) {
+        let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+        $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
+                           `<p>First frame:</p> <img src="${first_frame}">`+
+                           `<p><a href='/analyze?movie_id=${movie_id}'>Track movie '${movie_title}' (${movie_id})</a> `+
+                           `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
+        // Clear the movie uploaded
+        $('#movie-title').val('');
+        $('#movie-description').val('');
+        $('#movie-file').val('');
+        check_upload_metadata(); // disable the button
+    };
+    upload_movie_post(movie_title, description, movieFile, show_movie);
 }
 
 

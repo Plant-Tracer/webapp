@@ -19,10 +19,12 @@ from pronounceable import generate_word
 
 import paths
 
+from constants import C
 
 # pylint: disable=no-member
 
 import db
+import db_object
 import tracker
 import auth
 from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
@@ -53,7 +55,8 @@ def hostnames():
     hostname = socket.gethostname()
     return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def wipe_test_movies():
+def purge_test_data():
+    """Remove all test data from the database"""
     sizes = {}
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
@@ -64,23 +67,40 @@ def wipe_test_movies():
         count = c2.fetchone()[0]
         print(f"table {table:20} count: {count:,}")
         sizes[table] = count
-    del_movies = "(select id from movies where user_id in (select id from users where name like 'Test%'))"
-    for table in ['movie_frame_analysis','movie_frame_trackpoints']:
-        cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
-        print(cmd)
-        c.execute(cmd)
-    for table in ['movie_analysis','movie_data','movie_frames']:
-        cmd = f"delete from {table} where movie_id in {del_movies}"
-        print(cmd)
-        c.execute(cmd)
-    c.execute(f"delete from movie_frames where movie_id in {del_movies}")
-    c.execute( "delete from movies where user_id in (select id from users where name like 'Test%')")
-    c.execute( "delete from admins where course_id in (select id from courses where course_name like '%course name%')")
-    c.execute( "delete from api_keys where user_id in (select id from users where name like 'Test%')")
-    c.execute( "delete from users where name like 'Test%'")
-    c.execute( "delete from courses where course_name like '%course name%'")
+
+    c.execute( "delete from admins where course_id in (select id from courses where course_name like 'test-test-%')")
+    for where in ['where name like "fake-name-%"',
+                  'where name like "Test%"',
+                  'where email like "%admin+test%"',
+                  'where email like "%demo+admin%"']:
+        del_movies = f"(select id from movies where user_id in (select id from users {where}))"
+        for table in ['movie_frame_analysis','movie_frame_trackpoints']:
+            cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+            print(cmd)
+            c.execute(cmd)
+        for table in ['movie_analysis','movie_data','movie_frames']:
+            cmd = f"delete from {table} where movie_id in {del_movies}"
+            print(cmd)
+            c.execute(cmd)
+        c.execute(f"delete from movie_frames where movie_id in {del_movies}")
+        c.execute(f"delete from movies where user_id in (select id from users {where})")
+        c.execute( f"delete from api_keys where user_id in (select id from users {where})")
+        c.execute( f"delete from users {where}")
+        c.execute( f"delete from users {where}")
+    c.execute( "delete from courses where course_name like 'test-test-%'")
     c.execute( "delete from engines where name like 'engine %'")
 
+def purge_all_movies():
+    """Remove all test data from the database"""
+    sizes = {}
+    d = dbfile.DBMySQL(auth.get_dbwriter())
+    c = d.cursor()
+    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+        print("wiping",table)
+        c.execute( f"delete from {table}")
+
+
+# pylint: disable=too-many-statements
 def createdb(*,droot, createdb_name, write_config_fname, schema):
     """Create a database named `createdb_name` where droot is a root connection to the database server.
     Creadentials are stored in cp.
@@ -206,7 +226,7 @@ def freshen():
             print(json.dumps(movie,default=str,indent=4))
             try:
                 movie_data = db.get_movie_data(movie_id=movie_id)
-            except db.InvalidMovie_Id as e:
+            except db.InvalidMovie_Id:
                 print(f"Cannot get movie data. Purging movie {movie_id}")
                 db.purge_movie(movie_id=movie_id)
                 continue
@@ -217,6 +237,7 @@ def freshen():
             args = list( movie_metadata.values()) + [movie_id]
             csfr(dbwriter, cmd, args)
 
+#pylint: disable=too-many-arguments
 def create_course(*, course_key, course_name, admin_email,
                   admin_name,max_enrollment=DEFAULT_MAX_ENROLLMENT,demo_email = None):
     db.create_course(course_key = course_key,
@@ -235,10 +256,16 @@ def create_course(*, course_key, course_name, admin_email,
             ext = os.path.splitext(fn)[1]
             if ext in ['.mp4','.mov']:
                 with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+                    movie_data = f.read()
+                    movie_data_sha256 = db_object.sha256(movie_data)
+                    object_name    = movie_data_sha256 + C.MOVIE_EXTENSION
+                    movie_data_urn = db_object.make_urn(object_name=object_name)
                     db.create_new_movie(user_id=user_id,
                                         title=DEMO_MOVIE_TITLE.format(ct=ct),
                                         description=DEMO_MOVIE_DESCRIPTION,
-                                        movie_data = f.read())
+                                        movie_data = movie_data,
+                                        movie_data_sha256 = movie_data_sha256,
+                                        movie_data_urn = movie_data_urn)
                 ct += 1
     return admin_id
 
@@ -257,35 +284,35 @@ def current_source_schema():
         ver = max( int(m.group(1)), ver)
     return ver
 
-def schema_upgrade( dbcon, dbname ):
+def schema_upgrade( ath, dbname ):
     """Upgrade the schema to the current version.
-    NOTE: uses dbcon and not a dbreader/dbwriter
+    NOTE: uses ath to create a new database connection. ath must have ability to modify database schema.
+
     """
-    dbcon.execute(f"USE {dbname}")
+    with dbfile.DBMySQL( ath ) as dbcon:
+        dbcon.execute(f"USE {dbname}")
 
-    max_version = current_source_schema()
-    logging.info("max_version=%s", max_version)
-    # First get the current schema version, upgrading from version 0 to 1 in the process
-    # if there is no metadata table
-    with open(SCHEMA1_FILE,'r') as f:
-        dbcon.create_schema(f.read())
-        logging.info("upgraded to %s",SCHEMA1_FILE)
-
-    def current_version():
-        cursor = dbcon.cursor()
-        cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
-        return int(cursor.fetchone()[0])
-
-    cv = current_version()
-    logging.info("current database version: %s  max version: %s", cv , max_version)
-
-    for upgrade in range(cv+1, max_version+1):
-        logging.info("Upgrading from version %s to %s",cv, upgrade)
-        with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+        max_version = current_source_schema()
+        # First get the current schema version, upgrading from version 0 to 1 in the process
+        # if there is no metadata table
+        with open(SCHEMA1_FILE,'r') as f:
             dbcon.create_schema(f.read())
-        cv += 1
-        logging.info("Current version now %s",current_version())
-        assert cv == current_version()
+
+        def current_version():
+            cursor = dbcon.cursor()
+            cursor.execute("SELECT v from metadata where k=%s",(SCHEMA_VERSION,))
+            return int(cursor.fetchone()[0])
+
+        cv = current_version()
+        logging.info("current database version: %s  max version: %s", cv , max_version)
+
+        for upgrade in range(cv+1, max_version+1):
+            logging.info("Upgrading from version %s to %s",cv, upgrade)
+            with open(SCHEMA_TEMPLATE.format(schema=upgrade),'r') as f:
+                dbcon.create_schema(f.read())
+            cv += 1
+            logging.info("Current version now %s",current_version())
+            assert cv == current_version()
 
 if __name__ == "__main__":
     import argparse
@@ -309,7 +336,9 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
-    parser.add_argument('--wipe_test_movies', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database', action='store_true')
+    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
     parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
@@ -318,9 +347,6 @@ if __name__ == "__main__":
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
-    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
-    parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
     parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
     parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
 
@@ -351,13 +377,14 @@ if __name__ == "__main__":
             print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
             sys.exit(1)
 
-        with dbfile.DBMySQL( dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client') ) as droot:
+        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
+        with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.upgradedb:
-                schema_upgrade(dbcon=droot, dbname=args.upgradedb)
+                schema_upgrade(ath, dbname=args.upgradedb)
                 sys.exit(0)
 
             if args.dropdb:
@@ -415,8 +442,11 @@ if __name__ == "__main__":
     ################################################################
     ## Cleanup
 
-    if args.wipe_test_movies:
-        wipe_test_movies()
+    if args.purge_test_data:
+        purge_test_data()
+
+    if args.purge_all_movies:
+        purge_all_movies()
 
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)

@@ -24,6 +24,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import STATIC_DIR,TEST_DATA_DIR
 import db
+import bottle_api
 import bottle_app
 import auth
 
@@ -37,22 +38,22 @@ def test_version():
         assert bottle_app.__version__ in res
 
 def test_is_true():
-    assert bottle_app.is_true("Y") is True
-    assert bottle_app.is_true("f") is False
+    assert bottle_api.is_true("Y") is True
+    assert bottle_api.is_true("f") is False
 
 def test_get_float(mocker):
-    mocker.patch("bottle_app.get", return_value="3")
-    assert bottle_app.get_float("key")==3
-    mocker.patch("bottle_app.get", return_value="xxx")
-    assert bottle_app.get_float("key",default=4)==4
+    mocker.patch("bottle_api.get", return_value="3")
+    assert bottle_api.get_float("key")==3
+    mocker.patch("bottle_api.get", return_value="xxx")
+    assert bottle_api.get_float("key",default=4)==4
 
 def test_get_bool(mocker):
-    mocker.patch("bottle_app.get", return_value="YES")
-    assert bottle_app.get_bool("key")==True
-    mocker.patch("bottle_app.get", return_value="xxx")
-    assert bottle_app.get_bool("key",default=False)==False
-    mocker.patch("bottle_app.get", return_value=3.4)
-    assert bottle_app.get_bool("key",default=True)==True
+    mocker.patch("bottle_api.get", return_value="YES")
+    assert bottle_api.get_bool("key")==True
+    mocker.patch("bottle_api.get", return_value="xxx")
+    assert bottle_api.get_bool("key",default=False)==False
+    mocker.patch("bottle_api.get", return_value=3.4)
+    assert bottle_api.get_bool("key",default=True)==True
 
 
 def test_static_path():
@@ -84,6 +85,13 @@ def test_error():
     assert "Session expired - You have been logged out" in res
     assert (f'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
             in str(bottle.response))
+
+
+# make sure we get no api_key with a bad request
+def test_null_api_key(mocker):
+    mocker.patch("bottle.request.query.get", return_value=None)
+    assert auth.get_user_api_key() == None
+
 
 
 # Note: mocker magically works if pytest-mock is installed
@@ -190,15 +198,15 @@ def test_check_api_key(new_user):
     api_key = new_user[API_KEY]
     # no parameter should generate error
     with boddle(params={}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == True
 
     # invalid API key should generate error
     with boddle(params={'api_key': 'invalid'}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == True
 
     # valid key should generate no error
     with boddle(params={'api_key': api_key}):
-        r = bottle_app.api_check_api_key()
+        r = bottle_api.api_check_api_key()
         assert r['error'] == False, f'API_KEY {API_KEY} should be valid'

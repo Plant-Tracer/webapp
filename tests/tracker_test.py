@@ -23,6 +23,7 @@ sys.path.append(dirname(dirname(abspath(__file__))))
 
 from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
+import bottle_api
 import bottle_app
 import copy
 import db
@@ -80,7 +81,7 @@ def test_track_point_annotations(new_movie):
                         'engine_name': engine_name,
                         'engine_version':engine_version,
                         'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_app.api_put_frame_analysis()
+        bottle_api.api_put_frame_analysis()
     # See if I can get it back
     tps = db.get_frame_trackpoints(frame_id=frame_id)
     assert len(tps)==3
@@ -134,10 +135,10 @@ def test_pixels_to_mm():
     assert x2_mm - 70.7107 <= 0.0001
     assert y2_mm - 88.3883 <= 0.0001
 
-
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
+    Note: We no longer create an output movie: we just test the trackpoints
     """
     cfg      = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -150,7 +151,7 @@ def test_movie_tracking(new_movie):
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_number': '0'}):
-        ret = bottle_app.api_new_frame()
+        ret = bottle_api.api_new_frame()
     logging.debug("new frame ret=%s",ret)
     assert ret['error']==False
     frame_id = int(ret['frame_id'])
@@ -160,31 +161,25 @@ def test_movie_tracking(new_movie):
                         'frame_id': str(frame_id),
                         'trackpoints' : json.dumps(tpts),
                         'frame_number': '0'}):
-        ret = bottle_app.api_put_frame_analysis()
+        ret = bottle_api.api_put_frame_analysis()
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2
+    # Now track with CV2 - This actually does the tracking when run outsie of lambda
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_start': '0',
                         'engine_name':Engines.CV2,
                         'engine_version':0 }):
-        ret = bottle_app.api_track_movie()
+        ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
-    assert isinstance(ret['tracked_movie_id'],int)
-    tracked_movie_id = ret['tracked_movie_id']
 
-    # Make sure that the tracked movie has its orig_movie set to movie_id
-    new_movie_row = db.list_movies(user_id=0, movie_id=tracked_movie_id)
-    assert new_movie_row[0]['orig_movie'] == movie_id
-
-    # Download the trackpoints as as CSV and make sure it is formatted okay.
+    # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
-        ret = bottle_app.api_get_movie_trackpoints()
+        ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
     # Check that the header is set
     assert "track1 x" in lines[0]
@@ -205,5 +200,16 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
-    # Purge the new movie
-    db.purge_movie( movie_id=tracked_movie_id )
+def test_render_trackpoints():
+    input_trackpoints = [{"x":138,"y":86,"label":"mypoint",'frame_number':0}];
+
+    # Get the new trackpoints
+    infile = os.path.join(TEST_DATA_DIR,"2019-07-12 circumnutation.mp4")
+    res = tracker.track_movie(engine_name="CV2",
+                      moviefile_input=infile,
+                      input_trackpoints=input_trackpoints)
+    # Now render the movie
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        tracker.render_tracked_movie( moviefile_input= infile, moviefile_output=tf.name,
+                              movie_trackpoints=res['output_trackpoints'])
+        assert os.path.getsize(tf.name)>100

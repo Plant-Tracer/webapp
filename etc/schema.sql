@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.2.0, for macos13 (arm64)
 --
--- Host: localhost    Database: pt_local
+-- Host: localhost    Database: actions_test
 -- ------------------------------------------------------
 -- Server version	8.2.0
 
@@ -104,6 +104,19 @@ CREATE TABLE `logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `metadata`
+--
+
+DROP TABLE IF EXISTS `metadata`;
+CREATE TABLE `metadata` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `k` varchar(250) NOT NULL DEFAULT '',
+  `v` varchar(250) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uc1` (`k`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
 -- Table structure for table `movie_analysis`
 --
 
@@ -129,7 +142,7 @@ CREATE TABLE `movie_data` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
   `movie_sha256` varchar(64) DEFAULT NULL,
-  `movie_data` mediumblob NOT NULL,
+  `movie_data` mediumblob,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `movie_id` (`movie_id`),
@@ -206,30 +219,36 @@ CREATE TABLE `movies` (
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `orig_movie` int DEFAULT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `center_x` int DEFAULT NULL,
-  `center_y` int DEFAULT NULL,
-  `calib_x` float DEFAULT NULL,
-  `calib_y` float DEFAULT NULL,
-  `calib_user_id` int DEFAULT NULL,
-  `calib_time_t` int DEFAULT NULL,
   `fps` decimal(5,2) DEFAULT NULL,
   `width` int DEFAULT NULL,
   `height` int DEFAULT NULL,
   `total_frames` int DEFAULT NULL,
   `total_bytes` int DEFAULT NULL,
+  `status` varchar(250) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
   KEY `title` (`title`),
   KEY `course_id` (`course_id`),
-  KEY `movies_usr` (`calib_user_id`),
   FULLTEXT KEY `description` (`description`),
   FULLTEXT KEY `title_ft` (`title`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
-  CONSTRAINT `movies_usr` FOREIGN KEY (`calib_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
   CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `object_store`
+--
+
+DROP TABLE IF EXISTS `object_store`;
+CREATE TABLE `object_store` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `sha256` varchar(64) NOT NULL,
+  `data` longblob NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sha256` (`sha256`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -241,9 +260,11 @@ CREATE TABLE `objects` (
   `id` int NOT NULL AUTO_INCREMENT,
   `sha256` varchar(64) DEFAULT NULL,
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `data` mediumblob,
-  `url` varchar(1024) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  `urn` varchar(1024) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sha256` (`sha256`),
+  KEY `mtime` (`mtime`),
+  KEY `urn` (`urn`(768))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

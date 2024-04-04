@@ -5,7 +5,7 @@
 // JQuery not available in webworker because there is no document
 // https://stackoverflow.com/questions/48408491/using-webworkers-jquery-returns-undefined
 
-const NOTIFY_UPDATE_INTERVAL = 5000;    // how quickly to pool for retracking (in msec)
+const NOTIFY_UPDATE_INTERVAL = 1000;    // how quickly to pool for retracking (in msec)
 
 // Set a timer to get the movie status from the server and put it in the status field
 // during long operations.
@@ -22,7 +22,7 @@ function start_update_timer(obj) {
         })
             .then((response) => response.json())
             .then((data) => {
-                console.log(Date.now(),"got = ",data);
+                console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",data,"metadata:",data.metadata,"status:",data.metadata.status);
                 if (data.error==false){
                     // Send the status back to the UX
                     postMessage(data.metadata);
