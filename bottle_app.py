@@ -151,7 +151,7 @@ def get_bool(key, default=None):
         return v[0:1] in 'yYtT1'
     except (TypeError,ValueError):
         return default
-=======
+
 # Upgrade the server if it needs upgrading. This gets run when this file gets loaded
 dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
