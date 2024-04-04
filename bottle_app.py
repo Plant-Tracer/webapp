@@ -87,6 +87,12 @@ CHECK_MX = False                # True didn't work
 
 app = bottle.default_app()      # for Lambda
 
+
+pattern_without_zero = r'ruler ([1-9]\d*) mm'  # ruler xx mm pattern
+
+pattern = r'ruler (\d+) mm'  # ruler xx mm pattern
+
+
 ################################################################
 ## Utility
 def expand_memfile_max():
@@ -647,11 +653,10 @@ def api_get_movie_trackpoints():
                 ruler0_frame_number = tp['frame_number']
 
             # If the label is match any ruler xx mm, get xx distance in mm
-            pattern = r'ruler ([1-9]\d*) mm'
-            if re.match(pattern, tp['label']):
-                actual_distance_mm = int(re.search(pattern, tp['label']).group(1))
+            if re.match(pattern_without_zero, tp['label']):
+                actual_distance_mm = int(re.search(pattern_without_zero, tp['label']).group(1))
 
-                ruler0_x_mm, ruler0_y_mm, ruler_xx_x_mm, ruler_xx_y_mm = pixels_to_mm(
+                ruler0_x_mm, ruler0_y_mm, ruler_xx_x_mm, ruler_xx_y_mm = tracker.pixels_to_mm(
                     actual_distance_mm, ruler0_x, ruler0_y, tp['x'], tp['y'])
 
                 # update ruler0_frame_number mm value
@@ -668,7 +673,6 @@ def api_get_movie_trackpoints():
             fieldnames.append(label + ' y')
 
             # If the label is match any ruler xx mm, add mm labels
-            pattern = r'ruler (\d+) mm'
             if re.match(pattern, label):
                 fieldnames.append(label + ' x' + ' mm')
                 fieldnames.append(label + ' y' + ' mm')

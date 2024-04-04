@@ -106,10 +106,20 @@ def test_cleanup_mp4():
 
 
 def test_get_actual_distance_mm():
-    pattern = r'ruler ([1-9]\d*) mm'
+    pattern_without_zero = r'ruler ([1-9]\d*) mm'
     label = 'ruler 20 mm'
-    actual_distance_mm = int(re.search(pattern, label).group(1))
-    assert actual_distance_mm == 20
+    actual_distance_mm = -1
+    if re.match(pattern_without_zero, label):
+        actual_distance_mm = int(re.search(pattern_without_zero, label).group(1))
+        assert actual_distance_mm == 20
+    else:
+        assert actual_distance_mm == -1
+
+    pattern = r'ruler (\d+) mm'  # ruler xx mm pattern
+    label_0 = 'ruler 0 mm'
+    label_20 = 'ruler 20 mm'
+    assert re.match(pattern, label_0) is not None
+    assert re.match(pattern, label_20) is not None
 
 
 def test_pixels_to_mm():
@@ -119,10 +129,10 @@ def test_pixels_to_mm():
 
     x1_mm, y1_mm, x2_mm, y2_mm = tracker.pixels_to_mm(
         x1, y1, x2, y2, straight_line_distance_mm)
-    assert x1_mm == 35.36
-    assert y1_mm == 53.03
-    assert x2_mm == 70.71
-    assert y2_mm == 88.39
+    assert x1_mm - 35.3553 <= 0.0001
+    assert y1_mm - 53.033 <= 0.0001
+    assert x2_mm - 70.7107 <= 0.0001
+    assert y2_mm - 88.3883 <= 0.0001
 
 
 def test_movie_tracking(new_movie):

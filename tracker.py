@@ -13,6 +13,7 @@ import time
 import os
 import errno
 
+import math
 import cv2
 import numpy as np
 from constants import Engines,C
@@ -228,7 +229,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
 
 def pixels_to_mm(x1, y1, x2, y2, straight_line_distance_mm):
-    import math
     pixel_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
     mm_per_pixel = straight_line_distance_mm / pixel_distance
@@ -238,7 +238,7 @@ def pixels_to_mm(x1, y1, x2, y2, straight_line_distance_mm):
     X2_mm = x2 * mm_per_pixel
     Y2_mm = y2 * mm_per_pixel
 
-    return round(X1_mm, 2), round(Y1_mm, 2), round(X2_mm, 2), round(Y2_mm, 2)
+    return round(X1_mm, 4), round(Y1_mm, 4), round(X2_mm, 4), round(Y2_mm, 4)
 
 
 if __name__ == "__main__":
