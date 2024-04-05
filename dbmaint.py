@@ -55,7 +55,7 @@ def hostnames():
     hostname = socket.gethostname()
     return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
 
-def wipe_test_data():
+def purge_test_data():
     """Remove all test data from the database"""
     sizes = {}
     d = dbfile.DBMySQL(auth.get_dbwriter())
@@ -90,7 +90,7 @@ def wipe_test_data():
     c.execute( "delete from courses where course_name like 'test-test-%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-def wipe_all_movies():
+def purge_all_movies():
     """Remove all test data from the database"""
     sizes = {}
     d = dbfile.DBMySQL(auth.get_dbwriter())
@@ -336,8 +336,9 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
-    parser.add_argument('--wipe_test_data', help='Remove the test data from the database', action='store_true')
-    parser.add_argument('--wipe_all_movies', help='Remove all of the movies from the database', action='store_true')
+    parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
+    parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database', action='store_true')
+    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
     parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
@@ -346,9 +347,6 @@ if __name__ == "__main__":
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
-    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--purge_all_movies",help="remove the movie and all of its associated data from the database",action='store_true')
-    parser.add_argument("--purge_all_courses",help="remove all courses from the database",action='store_true')
     parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
     parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
 
@@ -444,11 +442,11 @@ if __name__ == "__main__":
     ################################################################
     ## Cleanup
 
-    if args.wipe_test_data:
-        wipe_test_data()
+    if args.purge_test_data:
+        purge_test_data()
 
-    if args.wipe_all_movies:
-        wipe_all_movies()
+    if args.purge_all_movies:
+        purge_all_movies()
 
     if args.purge_movie:
         db.purge_movie(movie_id=args.purge_movie)
