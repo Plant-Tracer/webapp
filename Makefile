@@ -133,6 +133,9 @@ tracker-debug:
 eslint:
 	(cd static;make eslint)
 
+jscoverage:
+	npm run coverage
+
 
 ################################################################
 # Installations are used by the CI pipeline:
@@ -152,6 +155,9 @@ install-chromium-browser-macos: $(REQ)
 install-ubuntu: $(REQ)
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	which ffmpeg || sudo apt install ffmpeg
+	which node || sudo apt-get install nodejs
+	which npm || sudo apt-get install npm
+	npm ci
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];        then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
@@ -162,6 +168,9 @@ install-macos:
 	brew upgrade
 	brew install python3
 	brew install ffmpeg
+	brew install node
+	brew install npm
+	npm ci
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
