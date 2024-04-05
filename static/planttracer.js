@@ -180,7 +180,7 @@ function upload_movie(inp)
         let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
         $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
                            `<p>First frame:</p> <img src="${first_frame}">`+
-                           `<p><a href='/analyze?movie_id=${movie_id}'>Track movie '${movie_title}' (${movie_id})</a> `+
+                           `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
                            `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
         // Clear the movie uploaded
         $('#movie-title').val('');
