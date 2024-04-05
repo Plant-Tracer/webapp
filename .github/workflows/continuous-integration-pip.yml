@@ -120,3 +120,7 @@ jobs:
         run: |
           make coverage
           ls -l
+
+      - name: Run JavaScript tests and coverage
+        run: |
+          make jscoverage

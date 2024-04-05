@@ -178,3 +178,4 @@ activate
 *.zip
 *.gz
 node_modules
+coverage
