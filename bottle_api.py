@@ -479,9 +479,13 @@ class MovieTrackCallback:
         self.movie_metadata = None
 
     def notify(self, *, frame_number, frame, output_trackpoints): # pylint: disable=unused-argument
-        """Update the status and write the frame to the database"""
+        """Update the status and write the frame to the database.
+        We only track frames 1..(total_frames-1).
+        If there are 296 frames, they are numbered 0 to 295.
+        We actually track frames 1 through 295. We add 1 to make the status look correct.
+        """
         total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {frame_number} of {total_frames}"
+        message = f"Tracked frames {frame_number+1} of {total_frames}"
 
         logging.debug("MovieTrackCallback %s",message)
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
