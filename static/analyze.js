@@ -329,12 +329,12 @@ class MyImage extends AbstractObject {
 class PlantTracerController extends CanvasController {
     constructor( this_id, movie_id, frame_number, movie_metadata ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
-
         this.this_id         = this_id;
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed
         this.frame_number    = frame_number;   // current frame number
         this.movie_metadata  = movie_metadata;
+        this.total_frames    = movie_metadata.total_frames;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
         this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
@@ -342,6 +342,7 @@ class PlantTracerController extends CanvasController {
         this.download_link        = $(`#${this.this_id} .download_link`);
         this.download_button      = $(`#${this.this_id} .download_button`);
         this.playing = 0;
+        console.log("PlantTracer movie_id=",movie_id,"metadata=",movie_metadata);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
 
@@ -376,7 +377,7 @@ class PlantTracerController extends CanvasController {
 
         this.download_button = $(`#${this_id} input.download_button`);
 
-        $(`#${this.this_id} span.total-frames-span`).text(this.movie_metadata.total_frames);
+        $(`#${this.this_id} span.total-frames-span`).text(this.total_frames);
 
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
         this.frame0_button = $(`#${this.this_id} input.frame0_button`);
@@ -500,6 +501,9 @@ class PlantTracerController extends CanvasController {
     // Update the matrix location of the object the moved
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
+        if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
+            this.track_button.prop('disabled',false); // enable the button if track point is moved
+        }
     }
 
     // Movement finished; upload new annotations
@@ -560,6 +564,8 @@ class PlantTracerController extends CanvasController {
                 this.tracked_movie_status.text( e.data.status );
                 if (e.data.status==TRACKING_COMPLETED_FLAG) {
                     this.movie_tracked();
+                    this.total_frames = e.data.total_frames;
+                    $(`#${this.this_id} span.total-frames-span`).text(this.total_frames);
                 }
             };
             this.status_worker.postMessage( {movie_id:movie_id, api_key:api_key} );
@@ -629,7 +635,7 @@ class PlantTracerController extends CanvasController {
      * Use double-buffering by drawing into an offscreen canvas and then bitblt in the image, to avoid flashing.
      */
     goto_frame( frame ) {
-        console.log(`goto_frame(${frame}) total_frames=${this.movie_metadata.total_frames} last_tracked_frame=${this.last_tracked_frame}`);
+        console.log(`goto_frame(${frame}) total_frames=${this.total_frames} last_tracked_frame=${this.last_tracked_frame}`);
         if (this.last_tracked_frame === null){
             return;
         }
@@ -637,8 +643,8 @@ class PlantTracerController extends CanvasController {
             frame = 0;
         }
 
-        if (this.movie_metadata.total_frames != null && frame>=this.movie_metadata.total_frames) {
-            frame=this.movie_metadata.total_frames-1;
+        if (this.total_frames != null && frame>=this.total_frames) {
+            frame=this.total_frames-1;
         }
 
         this.frame_number = frame;
@@ -746,7 +752,8 @@ class PlantTracerController extends CanvasController {
                 this.add_marker( 20, 20, 'apex');
                 this.add_marker( 20, 50, 'ruler 0 mm');
                 this.add_marker( 20, 80, 'ruler 20 mm');
-                this.add_marker_status.text("Place the three markers. You can also create additional markers.");
+                this.add_marker_status.text("Drag each marker to the appropriate place on the image. You can also create additional markers.");
+                this.track_button.val( "Initial movie tracking." );
                 this.add_marker_status.show();
             }
         }
