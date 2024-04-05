@@ -3,6 +3,8 @@
     "jslint": "^0.12.1"
   },
   "devDependencies": {
+    "@html-eslint/eslint-plugin": "^0.24.0",
+    "@html-eslint/parser": "^0.24.0",
     "@babel/core": "^7.24.3",
     "@babel/preset-env": "^7.24.3",
     "babel-jest": "^29.7.0",

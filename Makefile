@@ -132,6 +132,7 @@ tracker-debug:
 
 eslint:
 	(cd static;make eslint)
+	(cd templates;make eslint)
 
 jscoverage:
 	npm run coverage
