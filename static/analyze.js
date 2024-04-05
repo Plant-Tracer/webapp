@@ -27,13 +27,32 @@
  - object_move_finished( _obj) {} - for sublcass
 
  AbstractObject - base object class
- myCircle:AbstractObject - draws a circle. Used for track points.
+ MyCircle:AbstractObject - draws a circle. Used for track points.
  - draw
  - contains_point() - used for hit detection
  - loc() - returns location as an "x,y" string
 
- myImage - draws an image specified by a URL
+ MyImage - draws an image specified by a URL
+ - draw
 
+ PlantTracerCanvas - Implements the functionality for the user interface, including the movie player and the track buttons.
+ This is a component so we could have multiple planttracers on the screen. Probably not needed at this point.
+ - marker_name_input_handler - called when something is typed in the 'new marker name' box
+ - add_marker_onclick_handler - called when "add_new_marker" button is clicked
+ - add_marker - adds a marker to the canvas stack
+ - create_marker_table - creates the HTML for the marker table and adds to the DOM
+ - del_row - deletes a row in the marker table
+ - object_did_move - picks up movements in the marker and updates the table
+ - object_move_finished - runs put_trackpoints, which uploads the new trackpoints to the server
+ - get_trackpoints - returns an array of the trackpoints. Each trackpoint is a {x,y,label}
+ - json_trackpoints - returns the trackpoints as an actual JSON list
+ - put_trackpoints - sends the trackpoints to the server for the current frame using /api/put-frame-analysis
+ - track_to_end - called when the 'retrack' or 'track' button is pressed. Starts the window worker and sends a track message to server.
+ - movie_tracked - called when the movie tracking is finished. Terminates the status worker, gets the new trackpoints.
+ - goto_frame( frame) - jumps to the requested frame number
+ - set_movie_control_buttons() - enable or disable the movie control buttons
+
+ Frames are numbered from 0 to (total_frames)-1
 ***/
 
 /*global api_key */
@@ -65,8 +84,8 @@ const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
  * CanvasController maintains a set of objects that can be on the canvas and allows them to be moved and drawn.
  * Objects implemented below:
  * AbstractObject - base class
- * myCircle - draws a circle
- * myImage  - draws an image (from a URL). Used to draw movie animations.
+ * MyCircle - draws a circle
+ * MyImage  - draws an image (from a URL). Used to draw movie animations.
  * myPath   - draws a line or, with many lines, a path
  */
 class CanvasController {
@@ -173,7 +192,6 @@ class CanvasController {
             && (this.objects[0].y == 0)
             && (this.objects[0].width == this.naturalWidth )
             && (this.objects[0].height == this.naturalHeight)){
-            console.log("no need to clear");
         } else {
             this.ctx.clearRect(0, 0, this.c.width, this.c.height);
         }
@@ -213,10 +231,10 @@ class AbstractObject {
     }
 }
 
-/* myCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
+/* MyCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
  */
 
-class myCircle extends AbstractObject {
+class MyCircle extends AbstractObject {
     constructor(x, y, r, fill, stroke, name) {
         super(x, y, name);
         this.startingAngle = 0;
@@ -264,8 +282,8 @@ class myCircle extends AbstractObject {
     }
 }
 
-/* myImage Object - Draws an image (x,y) specified by the url */
-class myImage extends AbstractObject {
+/* MyImage Object - Draws an image (x,y) specified by the url */
+class MyImage extends AbstractObject {
     constructor(x, y, url, ptc) {
         super(x, y, url);
         this.ptc = ptc;
@@ -279,7 +297,7 @@ class myImage extends AbstractObject {
         this.img.onload = (_) => {
             this.state = 1;
             if (this.ctx) {
-                ptc.redraw('myImage constructor');
+                ptc.redraw('MyImage constructor');
             }
         };
 
@@ -312,12 +330,10 @@ class PlantTracerController extends CanvasController {
     constructor( this_id, movie_id, frame_number, movie_metadata ) {
         super( `#canvas-${this_id}`, `#zoom-${this_id}` );
 
-        //console.log("movie_metadata:",movie_metadata);
-
         this.this_id         = this_id;
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed
-        this.frame_number    = frame_number; //
+        this.frame_number    = frame_number;   // current frame number
         this.movie_metadata  = movie_metadata;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
@@ -360,10 +376,12 @@ class PlantTracerController extends CanvasController {
 
         this.download_button = $(`#${this_id} input.download_button`);
 
+        $(`#${this.this_id} span.total-frames-span`).text(this.movie_metadata.total_frames);
+
         this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
         this.frame0_button = $(`#${this.this_id} input.frame0_button`);
         this.frame0_button.prop('disabled',false);
-        this.frame0_button.on('click', (_event) => {this.frame0_button_pressed();});
+        this.frame0_button.on('click', (_event) => {this.goto_frame(0);});
         this.play_button = $(`#${this.this_id} input.play_button`);
         this.play_button.prop('disabled',false);
         this.play_button.on('click', (_event) => {this.play_button_pressed();});
@@ -375,13 +393,14 @@ class PlantTracerController extends CanvasController {
         this.track_button = $(`#${this.this_id} input.track_button`);
 
         // Wire up the movement buttons
-        $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( this.frame_number-10);});
-        $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( this.frame_number-1);});
-        $(`#${this.this_id} input.frame_next`)  .on('click', (_event) => {this.goto_frame( this.frame_number+1);});
-        $(`#${this.this_id} input.frame_next10`).on('click', (_event) => {this.goto_frame( this.frame_number+10);});
+        $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)-10);});
+        $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)-1);});
+        $(`#${this.this_id} input.frame_next`)  .on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)+1);});
+        $(`#${this.this_id} input.frame_next10`).on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)+10);});
 
         $(`#${this.this_id} input.frame_number_field`).on('input', (_event) => {
             let new_frame = this.frame_number_field[0].value;
+            console.log("frame_number_field number changed to ",new_frame);
             // turn '' into a "0"
             if (new_frame=='') {
                 new_frame='0';
@@ -392,7 +411,6 @@ class PlantTracerController extends CanvasController {
                 new_frame = new_frame[1];
                 this.frame_number_field[0].value=new_frame;
             }
-            console.log("input ",new_frame);
             this.goto_frame( new_frame );
         });
 
@@ -430,21 +448,21 @@ class PlantTracerController extends CanvasController {
     // new marker added
     add_marker_onclick_handler(_e) {
         if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
-            this.insert_circle( 50, 50, this.marker_name_input.val());
+            this.add_marker( 50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
         }
     }
 
     // add a tracking circle with the next color
-    insert_circle(x, y, name) {
+    add_marker(x, y, name) {
         // Find out how many circles there are
         let count = 0;
         for (let i=0;i<this.objects.length;i++){
-            if (this.objects[i].constructor.name == myCircle.name) count+=1;
+            if (this.objects[i].constructor.name == MyCircle.name) count+=1;
         }
 
         let color = CIRCLE_COLORS[count];
-        this.objects.push( new myCircle(x, y, DEFAULT_R, color, color, name));
+        this.objects.push( new MyCircle(x, y, DEFAULT_R, color, color, name));
         this.create_marker_table();
         // Finally enable the track-to-end button
         this.track_button.prop('disabled',false);
@@ -455,7 +473,7 @@ class PlantTracerController extends CanvasController {
         let rows = '';
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
-            if (obj.constructor.name == myCircle.name){
+            if (obj.constructor.name == MyCircle.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
@@ -464,7 +482,7 @@ class PlantTracerController extends CanvasController {
             }
         }
         $(`#${this.this_id} tbody.marker_table_body`).html( rows );
-        this.redraw('insert_circle');
+        this.redraw('add_marker');
 
         // wire up the delete object method
         $(`#${this.this_id} .del-row`).on('click', (event) => {this.del_row(event.target.getAttribute('object_index'));});
@@ -489,12 +507,12 @@ class PlantTracerController extends CanvasController {
         this.put_trackpoints();
     }
 
-    // Return an array of JSON trackpoints
+    // Return an array of trackpoints
     get_trackpoints() {
         let trackpoints = [];
         for (let i=0;i<this.objects.length;i++){
             let obj = this.objects[i];
-            if (obj.constructor.name == myCircle.name){
+            if (obj.constructor.name == MyCircle.name){
                 trackpoints.push( {x:obj.x, y:obj.y, label:obj.name} );
             }
         }
@@ -513,7 +531,6 @@ class PlantTracerController extends CanvasController {
             frame_number : this.frame_number,
             trackpoints  : this.json_trackpoints()
         };
-        //console.log("put-frame-analysis: ",put_frame_analysis_params);
         $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
             if (data.error) {
                 alert("Error saving annotations: "+data.message);
@@ -551,7 +568,7 @@ class PlantTracerController extends CanvasController {
         }
         console.log("track_to_end start");
         this.tracked_movie.hide();
-        this.tracked_movie_status.text("Tracking movie...");
+        this.tracked_movie_status.text("Asking server to track movie...");
         this.tracked_movie_status.show();
         this.track_button.prop('disabled',true); // disable it until tracking is finished
         const formData = new FormData();
@@ -612,27 +629,24 @@ class PlantTracerController extends CanvasController {
      * Use double-buffering by drawing into an offscreen canvas and then bitblt in the image, to avoid flashing.
      */
     goto_frame( frame ) {
-        //console.log(`frame=${frame} last_tracked_frame=${this.last_tracked_frame} movie_metadata.total_frames=${this.movie_metadata.total_frames}`);
+        console.log(`goto_frame(${frame}) total_frames=${this.movie_metadata.total_frames} last_tracked_frame=${this.last_tracked_frame}`);
         if (this.last_tracked_frame === null){
             return;
         }
-        // Make sure it is in range
-        if ( isNaN(frame)) {
+        if ( isNaN(frame) || frame<0) {
             frame = 0;
         }
 
-        if (this.movie_metadata.total_frames != null && frame>this.movie_metadata.total_frames) {
+        if (this.movie_metadata.total_frames != null && frame>=this.movie_metadata.total_frames) {
             frame=this.movie_metadata.total_frames-1;
         }
-        if (frame < 0) frame=0;
-        if (frame < this.last_tracked_frame-1){
-            this.play_button.prop('disabled',false);
-        } else{
-            frame=this.last_tracked_frame-1;
-            this.play_button.prop('disabled',true);
-        }
-        this.frame_number_field.val( frame );
+
         this.frame_number = frame;
+        if (this.frame_number_field[0].value != frame ){
+            this.frame_number_field[0].value = frame;
+        }
+        this.set_movie_control_buttons();     // enable or disable all buttons as appropriate
+        // And get the frame
         const get_frame_params = {
             api_key :api_key,
             movie_id:this.movie_id,
@@ -642,26 +656,24 @@ class PlantTracerController extends CanvasController {
         $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
     }
 
-    frame0_button_pressed() {
-        this.stop_button_pressed();  // clear any timmers in progress
-        this.goto_frame(0);
-    }
-
-    set_play_buttons() {
+    set_movie_control_buttons() {
         if (this.playing) {
             this.play_button.prop('disabled',true);
             this.stop_button.prop('disabled',false);
             this.track_button.prop('disabled',true);
             this.download_button.prop('disabled',true);
-            $(`#${this.this_id} input.frame_movement`).prop('disabled',true);
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',true); // all arrow buttons disabled
             return;
         }
-        this.play_button.prop('disabled',false);
+        // movie not playing
         this.stop_button.prop('disabled',true);
         this.track_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
         this.download_button.prop('disabled',false);
-        $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<1);
-        $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame);
+        $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<=0);
+        $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame-1);
+
+        // We can play if we are not on the last frame
+        this.play_button.prop('disabled', this.frame_number >= this.last_tracked_frame);
     }
 
     /***
@@ -678,7 +690,7 @@ class PlantTracerController extends CanvasController {
             this.stop_button_pressed(); // simulate stop button pressed at end of movie
             this.playing = 0;
         }
-        this.set_play_buttons();
+        this.set_movie_control_buttons();
     }
 
     stop_button_pressed() {
@@ -687,7 +699,7 @@ class PlantTracerController extends CanvasController {
             this.playTimer = undefined;
         }
         this.playing = 0;
-        this.set_play_buttons();
+        this.set_movie_control_buttons();
     }
 
     /***
@@ -712,7 +724,7 @@ class PlantTracerController extends CanvasController {
 
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
-        this.theImage = new myImage( 0, 0, data.data_url, this);
+        this.theImage = new MyImage( 0, 0, data.data_url, this);
         this.objects = [];      // clear the array
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
@@ -724,21 +736,21 @@ class PlantTracerController extends CanvasController {
         let count = 0;
         if (data.trackpoints) {
             for (let tp of data.trackpoints) {
-                this.insert_circle( tp.x, tp.y, tp.label );
+                this.add_marker( tp.x, tp.y, tp.label );
                 count += 1;
             }
         }
         if (count==0) {
             if (data.frame_number==0) {
                 // Add the initial trackpoints
-                this.insert_circle( 20, 20, 'apex');
-                this.insert_circle( 20, 50, 'ruler 0 mm');
-                this.insert_circle( 20, 80, 'ruler 20 mm');
+                this.add_marker( 20, 20, 'apex');
+                this.add_marker( 20, 50, 'ruler 0 mm');
+                this.add_marker( 20, 80, 'ruler 20 mm');
                 this.add_marker_status.text("Place the three markers. You can also create additional markers.");
                 this.add_marker_status.show();
             }
         }
-        this.set_play_buttons();
+        this.set_movie_control_buttons();
     }
 }
 
