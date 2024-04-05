@@ -13,6 +13,27 @@
  - On startup, the <div> is stored in a variable and a first one is instantiated.
  - Pressing 'track to end of movie' asks the server to track from here to the end of the movie.
 
+ Classes and methods:
+
+ CanvasController - implements an object-based display onto a convas that supports selection.
+ - clear_selection()
+ - getMousePosition(e) - in canvas coordinates. Returns {x,y}
+ - mousedown_handler(e) - for selection
+ - mousemove_handler(e) - for dragging.
+ - mouseup_handler(_) - for dragging
+ - set_zoom(factor) - because we can zoom!
+ - redraw( _msg) - draws all of the objects into the canvas. Currently flashes. Should use double-buffering.. calls draw of all objects
+ - object_did_move( _obj) {} - for subclasses. Every move.
+ - object_move_finished( _obj) {} - for sublcass
+
+ AbstractObject - base object class
+ myCircle:AbstractObject - draws a circle. Used for track points.
+ - draw
+ - contains_point() - used for hit detection
+ - loc() - returns location as an "x,y" string
+
+ myImage - draws an image specified by a URL
+
 ***/
 
 /*global api_key */
@@ -23,7 +44,7 @@ const DEFAULT_R = 10;           // default radius of the marker
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
 
-/* MyCanvasController Object - creates a canvas that can manage MyObjects */
+/* MyCanvasController Object - creates a canvas that can manage AbstractObjects */
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
@@ -43,7 +64,7 @@ const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
 /*
  * CanvasController maintains a set of objects that can be on the canvas and allows them to be moved and drawn.
  * Objects implemented below:
- * myObject - base class
+ * AbstractObject - base class
  * myCircle - draws a circle
  * myImage  - draws an image (from a URL). Used to draw movie animations.
  * myPath   - draws a line or, with many lines, a path
@@ -178,8 +199,8 @@ class CanvasController {
 }
 
 
-/* MyObject --- base object for CanvasController system */
-class MyObject {
+/* AbstractObject --- base object for CanvasController system */
+class AbstractObject {
     constructor(x, y, name) {
         this.x = x;
         this.y = y;
@@ -195,7 +216,7 @@ class MyObject {
 /* myCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
  */
 
-class myCircle extends MyObject {
+class myCircle extends AbstractObject {
     constructor(x, y, r, fill, stroke, name) {
         super(x, y, name);
         this.startingAngle = 0;
@@ -241,41 +262,24 @@ class myCircle extends MyObject {
     loc() {
         return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")";
     }
-
 }
 
 /* myImage Object - Draws an image (x,y) specified by the url */
-class myImage extends MyObject {
+class myImage extends AbstractObject {
     constructor(x, y, url, ptc) {
         super(x, y, url);
         this.ptc = ptc;
 
-        let theImage=this;
         this.draggable = false;
         this.ctx    = null;
         this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
         this.img = new Image();
 
-        // When the image is loaded, draw the entire stack again.
-        this.img.onload = (_event) => {
-            theImage.state = 1;
-            if (theImage.ctx) {
+        // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
+        this.img.onload = (_) => {
+            this.state = 1;
+            if (this.ctx) {
                 ptc.redraw('myImage constructor');
-            }
-        };
-
-        this.draw = (ctx) => {
-            // See if this is the first time we have drawn in the context.
-            theImage.ctx = ctx;
-            if (theImage.state > 0){
-                if (theImage.state==1){
-                    this.width  = ptc.naturalWidth  = this.img.naturalWidth;
-                    this.height = ptc.naturalHeight = this.img.naturalHeight;
-                    this.fills_bounds = true;
-                    theImage.state = 2;
-                    ptc.set_zoom( 1.0 ); // default zoom
-                }
-                ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
             }
         };
 
@@ -284,6 +288,21 @@ class myImage extends MyObject {
         // If the document is not a here document, then draw might be called before
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
+    }
+
+    draw(ctx, selected) {
+        // See if this is the first time we have drawn in the context.
+        this.ctx = ctx;
+        if (this.state > 0){
+            if (this.state==1){
+                this.width  = this.ptc.naturalWidth  = this.img.naturalWidth;
+                this.height = this.ptc.naturalHeight = this.img.naturalHeight;
+                this.fills_bounds = true;
+                this.state = 2;
+                this.ptc.set_zoom( 1.0 ); // default zoom
+            }
+            ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
+        }
     }
 }
 
