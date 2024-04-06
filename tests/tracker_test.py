@@ -9,6 +9,7 @@ import tempfile
 import glob
 import base64
 import csv
+import math
 from os.path import abspath, dirname
 
 import numpy as np
@@ -135,6 +136,7 @@ def test_pixels_to_mm():
     assert x2_mm - 70.7107 <= 0.0001
     assert y2_mm - 88.3883 <= 0.0001
 
+
 def test_movie_tracking(new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
@@ -182,11 +184,9 @@ def test_movie_tracking(new_movie):
         ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
     # Check that the header is set
-    assert "track1 x" in lines[0]
-    assert "track1 y" in lines[0]
-    assert "track2 x" in lines[0]
-    assert "track2 y" in lines[0]
-    assert "track1 x" not in lines[2]
+    fields = lines[0].split(",")
+    logging.info("fields: %s",fields)
+    assert fields==['frame_number','track1 x','track1 y','track2 x','track2 y']
 
     sr = csv.DictReader(lines,delimiter=',')
     dictlines = [row for row in sr]
@@ -194,8 +194,14 @@ def test_movie_tracking(new_movie):
     assert (dictlines[0]['track1 x']=='275') and (dictlines[0]['track1 y']=='215')
     assert (dictlines[0]['track2 x']=='410') and (dictlines[0]['track2 y']=='175')
 
-    # Make sure that the second frame has moved
-    assert not ((dictlines[1]['track1 x']=='275') and (dictlines[1]['track1 y']!='215'))
+    # This is where the 10th point ends up, more or less
+    def close(a,b):
+        return math.fabs(float(a)-float(b)) < 1.0
+
+    assert close(dictlines[10]['track1 x'], 272.28845)
+    assert close(dictlines[10]['track1 y'], 188.73012)
+    assert close(dictlines[10]['track2 x'], 408.65558)
+    assert close(dictlines[10]['track2 y'], 171.97594)
 
     # Make sure we got a lot back
     assert len(lines) > 50

@@ -418,9 +418,12 @@ def api_get_movie_trackpoints():
         # get_movie_trackpoints() returns a dictionary for each trackpoint.
         # we want a dictionary for each frame_number
         trackpoint_dicts = db.get_movie_trackpoints(movie_id=get_int('movie_id'))
-        frame_numbers  = sorted( ( tp['frame_number'] for tp in trackpoint_dicts) )
-        labels         = sorted( ( tp['label'] for tp in trackpoint_dicts) )
+        frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
+        labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
         frame_dicts    = defaultdict(dict)
+
+        logging.debug("frame_numbers=%s",frame_numbers)
+        logging.debug("labels=%s",labels)
 
         if get('format')=='json':
             return fix_types({'error':'False',
@@ -434,6 +437,7 @@ def api_get_movie_trackpoints():
         for label in labels:
             fieldnames.append(label+' x')
             fieldnames.append(label+' y')
+        logging.debug("fieldnames=%s",fieldnames)
 
         # Now write it out with the dictwriter
         with io.StringIO() as f:
@@ -475,9 +479,13 @@ class MovieTrackCallback:
         self.movie_metadata = None
 
     def notify(self, *, frame_number, frame, output_trackpoints): # pylint: disable=unused-argument
-        """Update the status and write the frame to the database"""
+        """Update the status and write the frame to the database.
+        We only track frames 1..(total_frames-1).
+        If there are 296 frames, they are numbered 0 to 295.
+        We actually track frames 1 through 295. We add 1 to make the status look correct.
+        """
         total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {frame_number} of {total_frames}"
+        message = f"Tracked frames {frame_number+1} of {total_frames}"
 
         logging.debug("MovieTrackCallback %s",message)
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)

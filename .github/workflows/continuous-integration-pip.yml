@@ -84,6 +84,10 @@ jobs:
       - name: Lint with pylint
         run: |
           make pylint
+ 
+      - name: JavaScript and HTML eslint
+        run: |
+          make eslint
 
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
@@ -116,3 +120,7 @@ jobs:
         run: |
           make coverage
           ls -l
+
+      - name: Run JavaScript tests and coverage
+        run: |
+          make jscoverage
