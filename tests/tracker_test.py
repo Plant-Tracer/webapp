@@ -39,7 +39,6 @@ from movie_test import new_movie
 from constants import MIME,Engines
 import tracker
 
-
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
@@ -107,8 +106,33 @@ def test_cleanup_mp4():
         tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
 
 
+# Regular expression to match ruler position.
+# User might label points "rule 00mm" or "ruler 00 mm" or "ruler 10 mm"
+# so the regular expression accepts a variety of options
+def test_identify_calibration_labels_label():
+    assert tracker.identify_ruler_label("") is None
+    assert tracker.identify_ruler_label("nope") is None
+    assert tracker.identify_ruler_label("ruler 1 mm") is 1
+    assert tracker.identify_ruler_label("rule 10 mm") is 10
+    assert tracker.identify_ruler_label("ruler 20mm") is 20
+
+def test_compute_distance():
+    ### TODO - Evan write this
+
+### Evan - create a test set of trackpoints here that has a list with three trackpoints and two
+### calibration points for two frames
+
+TEST_TRACKPOINTS = [ ... ]
+
+def test_calibrate_point():
+    ### TODO - Evan - write this test that uses your test data above for a single point
+
+def test_calibrate_trackpoint_frames():
+    ### TODO - Evan - write this test that uses your test data above for all of the trackpoints
+
+
+""" OLD CODE
 def test_get_actual_distance_mm():
-    pattern_without_zero = r'ruler ([1-9]\d*) mm'
     label = 'ruler 20 mm'
     actual_distance_mm = -1
     if re.match(pattern_without_zero, label):
@@ -131,11 +155,14 @@ def test_pixels_to_mm():
 
     x1_mm, y1_mm, x2_mm, y2_mm = tracker.pixels_to_mm(
         x1, y1, x2, y2, straight_line_distance_mm)
-    assert x1_mm - 35.3553 <= 0.0001
-    assert y1_mm - 53.033 <= 0.0001
-    assert x2_mm - 70.7107 <= 0.0001
-    assert y2_mm - 88.3883 <= 0.0001
+    EPSILON=0.0001
+    assert math.fabs(x1_mm - 35.3553) <= EPSILON
+    assert math.fabs(y1_mm - 53.033)  <= EPSILON
+    assert math.fabs(x2_mm - 70.7107) <= EPSILON
+    assert math.fabs(y2_mm - 88.3883) <= EPSILON
+"""
 
+################################################################
 
 def test_movie_tracking(new_movie):
     """

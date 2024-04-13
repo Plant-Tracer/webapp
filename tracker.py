@@ -249,18 +249,53 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     cap.release()
     return {'output_trackpoints':output_trackpoints}
 
+################################################################
+### Code to figure convert from screen coordinatrs to actual mm
+### Given that two points are labeled "ruler xx mm" where xx is the ruler position in milimeters
 
-def pixels_to_mm(x1, y1, x2, y2, straight_line_distance_mm):
-    pixel_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+RULER_POINT_RE = re.compile(r'ruler? +([0-9]+) *mm')
+def identify_calibration_labels(label):
+    """returns the position on the ruler in mm or returns None"""
+    m = RULER_POINT_RE.searh(label)
+    return m.group(1) if m else None
 
-    mm_per_pixel = straight_line_distance_mm / pixel_distance
+def compute_distance(pt1, pt2):
+    """Returns the distance between point1 and point2. Points are {'x':x,'y':y} dicts."""
+    return math.sqrt( (pt1['x']-pt1['x']) ** 2 + (pt1['y']-pt2['y'])**2)
 
-    X1_mm = x1 * mm_per_pixel
-    Y1_mm = y1 * mm_per_pixel
-    X2_mm = x2 * mm_per_pixel
-    Y2_mm = y2 * mm_per_pixel
+def calibrate_point(pt, calibration_label1, calibration_label2):
+    """Given a point and two calibration labels, compute the distance,
+    and return the point calibrated. (So in addition to having a 'x'
+    and 'y' property in dictionary, it also has a 'x_mm' and a 'y_mm'
+    in the dictionary.)
+    """
 
-    return round(X1_mm, 4), round(Y1_mm, 4), round(X2_mm, 4), round(Y2_mm, 4)
+    ### TODO - Evan - write the code here
+
+
+def calibrate_trackpoint_frames(trackpoints):
+    """
+    Given an array of many trackpoints for many frames, epeat for every frame:
+    Find the trackpoints for the frame, identify the the calibration points,
+    pass each trackpoint to calibrate_point with the two calibration points,
+    and create a new trackpoints list that has the non-calibration points calibrated for each frame.
+    """
+
+    ### TODO - Evan - write code here
+
+
+### OLD CODE
+#def pixels_to_mm(*, pt, calibration_points):
+#
+#    pixel_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+#    mm_per_pixel = straight_line_distance_mm / pixel_distance
+#
+#    X1_mm = x1 * mm_per_pixel
+#    Y1_mm = y1 * mm_per_pixel
+#    X2_mm = x2 * mm_per_pixel
+#    Y2_mm = y2 * mm_per_pixel
+#
+#    return round(X1_mm, 4), round(Y1_mm, 4), round(X2_mm, 4), round(Y2_mm, 4)
 
 
 if __name__ == "__main__":
