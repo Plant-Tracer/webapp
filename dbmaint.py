@@ -184,6 +184,7 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
 
 def report():
     dbreader = auth.get_dbreader()
+    print(dbreader)
     headers = []
     rows = csfr(dbreader,
                 """SELECT id,course_name,course_section,course_key,max_enrollment,A.ct as enrolled,B.movie_count from courses
