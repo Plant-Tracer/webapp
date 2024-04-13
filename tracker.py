@@ -12,6 +12,7 @@ import logging
 import os
 from collections import defaultdict
 
+import math
 import cv2
 import numpy as np
 from constants import Engines
@@ -247,6 +248,20 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
     cap.release()
     return {'output_trackpoints':output_trackpoints}
+
+
+def pixels_to_mm(x1, y1, x2, y2, straight_line_distance_mm):
+    pixel_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    mm_per_pixel = straight_line_distance_mm / pixel_distance
+
+    X1_mm = x1 * mm_per_pixel
+    Y1_mm = y1 * mm_per_pixel
+    X2_mm = x2 * mm_per_pixel
+    Y2_mm = y2 * mm_per_pixel
+
+    return round(X1_mm, 4), round(Y1_mm, 4), round(X2_mm, 4), round(Y2_mm, 4)
+
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
