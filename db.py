@@ -692,30 +692,6 @@ def create_new_movie(*, user_id, title=None, description=None,
 ################################################################
 
 
-# Don't log this; it will blow up the database when movies are updated unless
-# Old implementation that writes to the SQL database:
-def create_new_frame_sql(*, movie_id, frame_number, frame_data=None):
-    """Get the frame id specified by movie_id and frame_number.
-    if frame_data is provided, update. Otherwise just return the frame_id.
-    """
-
-    args = (movie_id, frame_number, movie_id, frame_number)
-    a1 = a2 = a3 = ""
-    if frame_data is not None:
-        a1 = ", frame_data"
-        a2 = ",%s"
-        a3 = ",frame_data=%s"
-        args = (movie_id, frame_number, frame_data, movie_id, frame_number, frame_data)
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
-                        VALUES (%s,%s{a2})
-                        ON DUPLICATE KEY UPDATE movie_id=%s,frame_number=%s{a3}""",
-                        args)
-    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
-                                   (movie_id, frame_number))[0][0]
-    return frame_id
-
-
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
 def create_new_frame(*, movie_id, frame_number, frame_data=None):
