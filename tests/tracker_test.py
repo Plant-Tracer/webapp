@@ -177,13 +177,19 @@ def test_movie_tracking(new_movie):
 def test_render_trackpoints():
     input_trackpoints = [{"x":138,"y":86,"label":"mypoint",'frame_number':0}];
 
+    # pylint: disable=unused-argument
+    trackpoints = []
+    def callback(*,frame_number,frame_data,frame_trackpoints):
+        trackpoints.extend(frame_trackpoints)
+
     # Get the new trackpoints
     infile = os.path.join(TEST_DATA_DIR,"2019-07-12 circumnutation.mp4")
-    res = tracker.track_movie(engine_name="CV2",
-                      moviefile_input=infile,
-                      input_trackpoints=input_trackpoints)
+    tracker.track_movie(engine_name="CV2",
+                        moviefile_input=infile,
+                        input_trackpoints=input_trackpoints,
+                        callback = callback )
     # Now render the movie
     with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
         tracker.render_tracked_movie( moviefile_input= infile, moviefile_output=tf.name,
-                              movie_trackpoints=res['output_trackpoints'])
+                                      movie_trackpoints=trackpoints)
         assert os.path.getsize(tf.name)>100

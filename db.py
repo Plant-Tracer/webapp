@@ -123,7 +123,9 @@ def logit(*, func_name, func_args, func_return):
 
 
 def log(func):
-    """Logging decorator --- log both the arguments and what was returned."""
+    """Logging decorator --- log both the arguments and what was returned.
+    TODO: add an option parameter of arguments not to log.
+    """
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
         #try:
@@ -690,8 +692,9 @@ def create_new_movie(*, user_id, title=None, description=None,
 ################################################################
 
 
-# Don't log this; it will blow up the database when movies are updated
-def create_new_frame(*, movie_id, frame_number, frame_data=None):
+# Don't log this; it will blow up the database when movies are updated unless
+# Old implementation that writes to the SQL database:
+def create_new_frame_sql(*, movie_id, frame_number, frame_data=None):
     """Get the frame id specified by movie_id and frame_number.
     if frame_data is provided, update. Otherwise just return the frame_id.
     """
@@ -712,6 +715,38 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                                    (movie_id, frame_number))[0][0]
     return frame_id
 
+
+# New implementation that writes to s3
+# Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
+def create_new_frame(*, movie_id, frame_number, frame_data=None):
+    """Get the frame id specified by movie_id and frame_number.
+    if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
+    if trackpoints are provided, replace current trackpoints with those
+    """
+    if frame_data is not None:
+        # upload the frame to the store
+        object_name = db_object.sha256(frame_data) + C.JPEG_EXTENSION
+        frame_urn = db_object.make_urn( object_name = object_name)
+        db_object.write_object(frame_urn, frame_data)
+    else:
+        frame_urn = None
+
+    # If we have frame_data, store as an object and get the ARN
+    args = (movie_id, frame_number )
+    a1 = a2 = a3 = ""
+    if frame_urn is not None:
+        a1 = ", frame_urn"
+        a2 = ",%s"
+        a3 = ",frame_urn=%s"
+        args = (movie_id, frame_number, frame_urn, frame_urn)
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
+                        VALUES (%s,%s{a2})
+                        ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
+                        args)
+    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
+                                   (movie_id, frame_number))[0][0]
+    return frame_id
 
 def get_frame_annotations(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
@@ -782,11 +817,13 @@ def get_frame(*,
     else:
         where = "WHERE movie_id=%s AND frame_number=%s"
         args = [movie_id, frame_number]
-    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data FROM movie_frames {where} LIMIT 1"""
+    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data, frame_urn FROM movie_frames {where} LIMIT 1"""
     rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     if len(rows)!=1:
         return None
     row = rows[0]
+    if (row['frame_data'] is None) and (row['frame_urn'] is not None):
+        row['frame_data'] = db_object.read_object(row['frame_urn'])
     if get_annotations:
         row['annotations'] = get_frame_annotations(frame_id=row['frame_id'])
     if get_trackpoints:

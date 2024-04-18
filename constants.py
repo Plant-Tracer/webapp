@@ -23,6 +23,7 @@ class C:
     NO = 'NO'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     MOVIE_EXTENSION = ".mov"
+    JPEG_EXTENSION = ".jpg"
     PUT = 'put'
     GET = 'get'
     SCHEME_S3 = 's3'

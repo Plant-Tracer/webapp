@@ -92,7 +92,6 @@ def purge_test_data():
 
 def purge_all_movies():
     """Remove all test data from the database"""
-    sizes = {}
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
     for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
