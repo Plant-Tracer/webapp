@@ -13,6 +13,7 @@ import json
 import sys
 import copy
 import smtplib
+import functools
 from typing import Optional
 
 from jinja2.nativetypes import NativeEnvironment
@@ -538,8 +539,10 @@ def get_movie_metadata(*,user_id, movie_id):
     This is used for the movie list.
     """
 
-    cmd = """SELECT A.id as movie_id, A.title, A.description, A.created_at, A.user_id,
-                    A.course_id, A.published, A.deleted, A.date_uploaded, A.orig_movie, A.mtime,
+    cmd = """SELECT A.id as movie_id, A.title as title, A.description as description,
+                    A.created_at as created_at, A.user_id as user_id,
+                    A.course_id as course_id, A.published as published, A.deleted as deleted,
+                    A.date_uploaded as date_uploaded, A.mtime,
                     A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
                     B.id as tracked_movie_id from movies A
              LEFT JOIN movies B on A.id=B.orig_movie
@@ -691,6 +694,9 @@ def create_new_movie(*, user_id, title=None, description=None,
 ## frames
 ################################################################
 
+@functools.lrucache(maxsize=128)
+def course_id_for_movie_id(movie_id):
+    return get_movie_metadata(user_id=0, movie_id=movie_id)['course_id']
 
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
@@ -701,7 +707,8 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     """
     if frame_data is not None:
         # upload the frame to the store
-        object_name = db_object.sha256(frame_data) + C.JPEG_EXTENSION
+        object_name = db_object.object_name(data=frame_data, couse_id=course_id_for_movie_id(movie_id),
+                                            ext=C.JPEG_EXTENSION)
         frame_urn = db_object.make_urn( object_name = object_name)
         db_object.write_object(frame_urn, frame_data)
     else:

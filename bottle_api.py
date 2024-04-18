@@ -314,8 +314,11 @@ def api_new_movie():
     ret = {'error':False}
 
     if movie_data_sha256:
-        object_name = movie_data_sha256 + C.MOVIE_EXTENSION
-        movie_data_urn        = db_object.make_urn(object_name=object_name)
+        movie_data_urn        = db_object.make_urn(
+            object_name=db_object.object_name(
+                data_sha256=movie_data_sha256,
+                course_id=course_id,
+                ext=C.MOVIE_EXTENSION))
         ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
                                                               mime_type='video/mp4',
                                                               sha256=movie_data_sha256)
@@ -342,7 +345,7 @@ def api_upload_movie():
     :param: mime_type - mime type
     :param: scheme - should be db
     :param: sha256 - should be a hex encoding of the sha256
-    :param: key    - where the file gets uploaded
+    :param: key    - where the file gets uploaded -from api_new_movie()
     :param: request.files[0] - the file!
     """
     scheme = get('scheme')

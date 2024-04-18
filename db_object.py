@@ -32,6 +32,7 @@ Note tht the bucket must have this CORSRule:
 We support the following schemas:
 
 s3:// - Store in the AWS S3 bucket specified by the environment variable PLANTTRACER_S3_BUCKET. The running script must be authorized to read and write that bucket.
+      - stores as s3://{bucket}/{course}/{SHA256}.{extension}
 
 db:// - Store in the local MySQL DB specified in etc/client.ini under the [dbreader] and [dbwriter] sections.
 """
@@ -58,6 +59,12 @@ def sha256(data):
     h = hashlib.sha256()
     h.update(data)
     return h.hexdigest()
+
+def object_name(*,data=None,data_sha256=None,course_id,ext):
+    if data_sha256:
+        return f"{course_id}/{data_sha256}{ext}"
+    else:
+        return f"{course_id}/{sha256(data)}{ext}"
 
 def s3_client():
     return boto3.session.Session().client( S3 )
