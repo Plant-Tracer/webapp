@@ -14,7 +14,7 @@ class C:
     """Constants"""
     TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
-    MAX_FILE_UPLOAD = 1024*1024*16
+    MAX_FILE_UPLOAD = 1024*1024*64
     NOTIFY_UPDATE_INTERVAL = 5.0
     TRACK_DELAY = 'TRACK_DELAY'
     CHECK_MX = False                # True didn't work

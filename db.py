@@ -630,17 +630,16 @@ def delete_movie(*,movie_id, delete=1):
 
 @log
 def create_new_movie(*, user_id, title=None, description=None,
-                     movie_data=None, movie_metadata=None, orig_movie=None,
+                     movie_data=None, orig_movie=None,
                      movie_data_sha256=None, movie_data_urn=None):
     """
+    Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
+
     :param: user_id  - person creating movie. Stored in movies table.
     :param: title - title of movie. Stored in movies table
     :param: description - description of movie
-    :param: movie_data - if presented, data for the movie. Stored in object_data SQL table. (TODO)
     :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
     :param: orig_movie - if presented, the movie_id of the movie on which this is based
-    :param: movie_data_sha256 - if presented, the SHA256 (in hex) of the movie. If also present with movie_data, they must agree.
-    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
     """
     if (movie_data is not None) and (movie_data_urn is None):
         raise ValueError("If movie_data is provided, we must have a URN where it should be written")
@@ -656,45 +655,57 @@ def create_new_movie(*, user_id, title=None, description=None,
     if (movie_data is not None) and (movie_data_sha256 != computed_movie_data_sha256):
         raise ValueError(f"movie_data_sha256={movie_data_sha256} but computed_movie_data_sha256={computed_movie_data_sha256}")
 
-    # First get the user's primary_course_id
-    res = dbfile.DBMySQL.csfr(
-        get_dbreader(), "select primary_course_id from users where id=%s", (user_id,))
-    if not res or len(res) != 1:
-        logging.error("len(res)=%s", len(res))
-        logging.error("res=%s", res)
-        raise RuntimeError(f"user_id={user_id} len(res)={len(res)} res={res}")
-    primary_course_id = res[0][0]
-
-    # Now create the movie record
+    # Create a new movie record
     movie_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movies (title,description,user_id,course_id,orig_movie) VALUES (%s,%s,%s,%s,%s)
+                                   """INSERT INTO movies (title,description,user_id,course_id,orig_movie)
+                                   VALUES (%s,%s,%s,(select primary_course_id from users where id=%s),%s)
                                     """,
-                                   (title, description, user_id, primary_course_id,orig_movie))
-    if movie_data_sha256:
-        # If we know the sha256 we can put it in the metadata
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO movie_data (movie_id, movie_sha256) values (%s,%s)",
-                            (movie_id, movie_data_sha256))
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "INSERT INTO objects (sha256, urn) values (%s, %s) ON DUPLICATE KEY UPDATE id=id",
-                            (movie_data_sha256, movie_data_urn))
-    if movie_data:
-        db_object.write_object(movie_data_urn, movie_data)
-
-    if movie_metadata:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
-                            "WHERE id = %s",
-                            list(movie_metadata.values()) + [movie_id])
-
+                                   (title, description, user_id, user_id,orig_movie))
     return movie_id
+
+
+def set_movie_data(*, movie_id, movie_data=None, movie_data_urn=None):
+    """
+    Sets the movie data for a movie. Either movie_data or movie_data_urn must be provided, but not both.
+    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
+    :param: movie_data - if presented, data for the movie. Stored in object_data SQL table. (TODO)
+    """
+    if (movie_data is not None) and (movie_data_urn is not None):
+        raise ValueError("Both movie_data and movie_data_run may not be provided.")
+    if (movie_data is None) and (movie_data_urn is None):
+        raise ValueError("Either movie_data or movie_data_run must be be provided.")
+
+    # If movie_data is provided, save it as an object get the movie_data_urn
+    if movie_data is not None:
+        if len(movie_data) > C.MAX_FILE_UPLOAD:
+            logging.info("movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
+            raise ValueError(f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.')
+        movie_data_sha256 = db_object.sha256(movie_data)
+        set_movie_metadata( movie_id=movie_id, movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
+
+    else:
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "UPDATE movies set movie_data_urn=%s where movie_id=%s",
+                            (movie_data_urn, movie_id))
+    # save the movie_data_urn
+
+
+def set_movie_metadata(*, movie_id, movie_metadata):
+    """Set the movie_metadata from a dictionary."""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
+                        "WHERE id = %s",
+                        list(movie_metadata.values()) + [movie_id])
+
+
+
 
 
 ################################################################
 ## frames
 ################################################################
 
-@functools.lrucache(maxsize=128)
+@functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)['course_id']
 
@@ -707,7 +718,8 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     """
     if frame_data is not None:
         # upload the frame to the store
-        object_name = db_object.object_name(data=frame_data, couse_id=course_id_for_movie_id(movie_id),
+        object_name = db_object.object_name(data=frame_data,
+                                            course_id=course_id_for_movie_id(movie_id),
                                             ext=C.JPEG_EXTENSION)
         frame_urn = db_object.make_urn( object_name = object_name)
         db_object.write_object(frame_urn, frame_data)
@@ -1120,8 +1132,6 @@ SET_MOVIE_METADATA = {
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     'published': 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
-
-
 }
 
 
