@@ -311,29 +311,24 @@ def api_new_movie():
                                           description=request.forms.get('description') )
 
     # If we have movie_data or the movie_data_sha256, compute the urn
-    if (movie_data is not None) or (movie_data_sha256 is not None):
-        if movie_data_sha256 is None:
-            movie_data_sha256 = db_object.sha256(movie_data)
+    if movie_data is not None:
+        if len(movie_data) > C.MAX_FILE_UPLOAD:
+            logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
+            return {'error':True,
+                    'message':f'movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}'}
+        db.set_movie_data(movie_id=ret['movie_id'], movie_data=movie_data)
+        db.set_movie_metadata( movie_id=ret['movie_id'],
+                               movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
+    elif movie_data_sha256 is not None:
+        # We do not have the movie_data, so we mut have had the sha256.
+        # Get the object name and create the upload URL
         object_name= db_object.object_name( data_sha256=movie_data_sha256,
                                             course_id = db.course_id_for_movie_id( ret['movie_id']),
-                                            ext=C.MOVIE_EXTENSION))
+                                            ext=C.MOVIE_EXTENSION)
         movie_data_urn        = db_object.make_urn( object_name = object_name)
-        logging.info("object_name=%s movie_data_urn=%s",object_name,movie_data_urn)
-        db.set_movie_data_urn(movie_id = ret['movie_id'], movie_data_urn=movie_data_urn)
-
-        if movie_data is not None:
-            # if we have the movie data, write it:
-            if len(movie_data) > C.MAX_FILE_UPLOAD:
-                logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
-                return {'error':True,f"movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}")
-            db_object.write_object(movie_data_urn, movie_data)
-            set_movie_metadata( movie_id=movie_id, movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
-        else:
-            # We do not have the movie_data, so we mut have had the sha256.
-            # Create an upload URL
-            ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
-                                                                  mime_type='video/mp4',
-                                                                  sha256=movie_data_sha256)
+        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+                                                              mime_type='video/mp4',
+                                                              sha256=movie_data_sha256)
     return ret
 
 

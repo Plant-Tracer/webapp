@@ -19,12 +19,12 @@ from pronounceable import generate_word
 
 import paths
 
-from constants import C
+#from constants import C
 
 # pylint: disable=no-member
 
 import db
-import db_object
+#import db_object
 import tracker
 import auth
 from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
@@ -257,15 +257,10 @@ def create_course(*, course_key, course_name, admin_email,
             if ext in ['.mp4','.mov']:
                 with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
                     movie_data = f.read()
-                    movie_data_sha256 = db_object.sha256(movie_data)
-                    object_name    = movie_data_sha256 + C.MOVIE_EXTENSION
-                    movie_data_urn = db_object.make_urn(object_name=object_name)
-                    db.create_new_movie(user_id=user_id,
+                    movie_id = db.create_new_movie(user_id=user_id,
                                         title=DEMO_MOVIE_TITLE.format(ct=ct),
-                                        description=DEMO_MOVIE_DESCRIPTION,
-                                        movie_data = movie_data,
-                                        movie_data_sha256 = movie_data_sha256,
-                                        movie_data_urn = movie_data_urn)
+                                        description=DEMO_MOVIE_DESCRIPTION)
+                    db.set_movie_data(movie_id=movie_id, movie_data = movie_data)
                 ct += 1
     return admin_id
 

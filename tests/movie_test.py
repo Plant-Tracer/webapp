@@ -42,14 +42,6 @@ import tracker
 def test_edge_case():
     with pytest.raises(db.InvalidMovie_Id):
         db.get_movie_data(movie_id = -1)
-    with pytest.raises(RuntimeError):
-        db.create_new_movie(user_id=0,movie_data=None, movie_data_urn=None)
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data_sha256=db_object.sha256(b""), movie_data_urn=None)
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data_sha256=None, movie_data_urn="s3://bucket/key")
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data=b'a', movie_data_sha256=db_object.sha256(b'b'))
     with pytest.raises(ValueError):
         db_object.make_urn(object_name="xxx",scheme='xxx')
 

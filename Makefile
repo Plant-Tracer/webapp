@@ -37,12 +37,41 @@ check:
 touch:
 	touch tmp/restart.txt
 
+################################################################
+## Program testing
+##
+## Static Analysis
+
 pylint: $(REQ)
 	$(PYTHON) -m pylint --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose $(PYLINT_FILES)
+
+mypy:
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
+
+black:
+	black --line-length 127 .
+
+black-check:
+	black --line-length 127 . --check
+	@echo "If this fails, simply run: make black"
+
+isort:
+	isort . --profile=black
+
+isort-check:
+	isort --check . --profile=black
+
+flake:
+	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
+
 
 #
 # In the tests below, we always test the database connectivity first
 # It makes no sense to run the tests otherwise
+
+##
+## Dynamic Analysis
 
 pytest-db: $(REQ)
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
@@ -87,6 +116,10 @@ pytest-quiet:
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
+
+################################################################
+
+
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
