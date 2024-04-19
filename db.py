@@ -524,7 +524,7 @@ def get_movie_data(*, movie_id:int):
                                          movie_data.movie_data as movie_data,
                                          movie_data.movie_sha256 as movie_sha256,
                                          objects.urn as object_urn
-                               FROM MOVIES
+                               FROM movies
                                LEFT JOIN movie_data on movies.id=movie_data.movie_id
                                LEFT JOIN objects on movie_data.movie_sha256=objects.sha256
                                WHERE movies.id=%s
