@@ -544,7 +544,7 @@ def get_movie_data(*, movie_id:int):
         print("name=",name,"urn=",urn)
         if urn:
             return db_object.read_object(urn)
-    print("gmdrow returning None)
+    print("gmdrow returning None")
     return None
 
 
