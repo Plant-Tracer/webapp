@@ -281,7 +281,6 @@ def api_new_movie():
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     movie_data_sha256 = get('movie_data_sha256')
     movie_data = None
-    movie_data_urn = None
 
     # First see if a file named movie was uploaded
     if 'movie_data' in request.files:
@@ -311,20 +310,30 @@ def api_new_movie():
                                           title=request.forms.get('title'),
                                           description=request.forms.get('description') )
 
-    if movie_data is not None:
-        # We have movie_data, so save it.
-        db.set_movie_data(movie_id=movie_id, movie_data=movie_data)
-    elif movie_data_sha256 is not None:
-        # If we have a movie_data_sha256 but no movie_data, create an upload URL
-        movie_data_urn        = db_object.make_urn( object_name=
-                                                    db_object.object_name( data_sha256=movie_data_sha256,
-                                                                           course_id = db.course_id_for_movie_id( ret['movie_id']),
-                                                                           ext=C.MOVIE_EXTENSION))
-        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
-                                                              mime_type='video/mp4',
-                                                              sha256=movie_data_sha256)
-        db.set_movie_data(movie_id=movie_id, movie_data_urn = movie_data_urn)
+    # If we have movie_data or the movie_data_sha256, compute the urn
+    if (movie_data is not None) or (movie_data_sha256 is not None):
+        if movie_data_sha256 is None:
+            movie_data_sha256 = db_object.sha256(movie_data)
+        object_name= db_object.object_name( data_sha256=movie_data_sha256,
+                                            course_id = db.course_id_for_movie_id( ret['movie_id']),
+                                            ext=C.MOVIE_EXTENSION))
+        movie_data_urn        = db_object.make_urn( object_name = object_name)
+        logging.info("object_name=%s movie_data_urn=%s",object_name,movie_data_urn)
+        db.set_movie_data_urn(movie_id = ret['movie_id'], movie_data_urn=movie_data_urn)
 
+        if movie_data is not None:
+            # if we have the movie data, write it:
+            if len(movie_data) > C.MAX_FILE_UPLOAD:
+                logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
+                return {'error':True,f"movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}")
+            db_object.write_object(movie_data_urn, movie_data)
+            set_movie_metadata( movie_id=movie_id, movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
+        else:
+            # We do not have the movie_data, so we mut have had the sha256.
+            # Create an upload URL
+            ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+                                                                  mime_type='video/mp4',
+                                                                  sha256=movie_data_sha256)
     return ret
 
 

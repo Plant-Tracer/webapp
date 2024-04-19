@@ -664,30 +664,14 @@ def create_new_movie(*, user_id, title=None, description=None,
     return movie_id
 
 
-def set_movie_data(*, movie_id, movie_data=None, movie_data_urn=None):
+def set_movie_data_urn(*, movie_id, movie_data_urn):
     """
     Sets the movie data for a movie. Either movie_data or movie_data_urn must be provided, but not both.
-    :param: movie_data_urn - if presented, the URL at which the data can be found. If provided, then movie_data_sha256 must be provided (because that's how they link).
-    :param: movie_data - if presented, data for the movie. Stored in object_data SQL table. (TODO)
+    :param: movie_data_urn - if presented, the URL at which the data can or will be found.
     """
-    if (movie_data is not None) and (movie_data_urn is not None):
-        raise ValueError("Both movie_data and movie_data_run may not be provided.")
-    if (movie_data is None) and (movie_data_urn is None):
-        raise ValueError("Either movie_data or movie_data_run must be be provided.")
-
-    # If movie_data is provided, save it as an object get the movie_data_urn
-    if movie_data is not None:
-        if len(movie_data) > C.MAX_FILE_UPLOAD:
-            logging.info("movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
-            raise ValueError(f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.')
-        movie_data_sha256 = db_object.sha256(movie_data)
-        set_movie_metadata( movie_id=movie_id, movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
-
-    else:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "UPDATE movies set movie_data_urn=%s where movie_id=%s",
-                            (movie_data_urn, movie_id))
-    # save the movie_data_urn
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "UPDATE movies set movie_data_urn=%s where movie_id=%s",
+                        (movie_data_urn, movie_id))
 
 
 def set_movie_metadata(*, movie_id, movie_metadata):
