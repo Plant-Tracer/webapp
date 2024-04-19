@@ -140,7 +140,10 @@ def read_object(urn):
             get_dbreader(),
             "SELECT object_store.data from objects left join object_store on objects.sha256 = object_store.sha256 where urn=%s LIMIT 1",
             (urn,), debug=True)
-        return res[0][0]
+        if len(res)==1:
+            return res[0][0]
+        # Perhaps look for the SHA256 in the path and see if we can just find the data in the object_store?
+        return None
     else:
         raise ValueError("Unknown schema: "+urn)
 
@@ -163,6 +166,22 @@ def write_object(urn, object_data):
             (object_sha256, object_data))
     else:
         raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
+
+def delete_object(urn):
+    logging.info("delete_object(%s)",urn)
+    o = urllib.parse.urlparse(urn)
+    logging.debug("urn=%s o=%s",urn,o)
+    if o.scheme== C.SCHEME_S3:
+        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
+    elif o.scheme== C.SCHEME_DB:
+        assert o.netloc == DB_TABLE
+        sha256_val = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT sha256 from objects where urn=%s", (urn,))[0][0]
+        count  = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT count(*) from objects where sha256=%s", (sha256_val,))[0][0]
+        dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM objects where urn=%s", (urn,))
+        if count==1:
+            dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM object_store where sha256=%s", (sha256_val,))
+    else:
+        raise ValueError(f"Cannot delete object urn={urn}")
 
 
 if __name__=="__main__":

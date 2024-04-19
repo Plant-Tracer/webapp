@@ -54,7 +54,7 @@ def test_make_urn():
         b = f'db://{db_object.DB_TABLE}/1/{DATA_SHA256}.txt'
         assert a==b
 
-def test_write_object():
+def test_write_read_delete_object():
     logging.debug("dbwriter: %s",get_dbwriter())
     with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
         name = db_object.object_name(course_id=1, ext='.txt', data=DATA, data_sha256=DATA_SHA256)
@@ -71,5 +71,8 @@ def test_write_object():
     assert res[0]['sha256']==DATA_SHA256
     assert res[0]['urn']==urn
 
+    obj_data = db_object.read_object(urn=urn)
+    assert obj_data == DATA
 
-    #obj_data = db_object.read_object(urn=urn)
+    db_object.delete_object(urn=urn)
+    assert db_object.read_object(urn=urn) == None
