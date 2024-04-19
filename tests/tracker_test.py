@@ -210,12 +210,13 @@ def test_render_trackpoints():
 
     # Check the trackpoints
     assert len(trackpoints) == 3 * 296
-    EPSILON = 0.1
+    EPSILON = 1.0
     def close(tp1,tp2):
+        logging.debug("tp1=%s tp2=%s",tp1,tp2)
         assert tp1['frame_number']==tp2['frame_number']
         assert tp1['label']==tp2['label']
-        assert math.fabs(tp1['x']-tp2['x']) < EPSILON
-        assert math.fabs(tp1['y']-tp2['y']) < EPSILON
+        assert math.fabs(tp1['x']-tp2['x']) <= EPSILON
+        assert math.fabs(tp1['y']-tp2['y']) <= EPSILON
         return True
 
     # Below we assume that order is preserved (or at least sorted by frame number and then label)

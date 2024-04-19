@@ -407,7 +407,7 @@ def list_demo_users():
     """Returns a list of all demo accounts and their API keys. This can be downloaded without authentication!"""
     return dbfile.DBMySQL.csfr(get_dbreader(),
                                "select *,users.id as user_id from users left join api_keys on api_keys.user_id=users.id where demo=1 and api_keys.enabled=1",
-                               asDicts=True,debug=True)
+                               asDicts=True)
 
 
 #########################
@@ -530,7 +530,7 @@ def get_movie_data(*, movie_id:int):
                                WHERE movies.id=%s
                                LIMIT 1""",
                                   (movie_id,),
-                                  asDicts=True, debug=True)[0]
+                                  asDicts=True)[0]
     except IndexError as e:
         raise InvalidMovie_Id(movie_id) from e
 
@@ -1180,40 +1180,25 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 ################################################################
 
 class Movie():
-    """Simple representation of movies that may be stored in SQL database or on S3. More intelligence will move into this class over time."""
-    __slots__ = ['movie_id', 'data', 'urn', 'sha256', 'mime_type']
+    """Simple representation of movies that may be stored in SQL database or on S3.
+    More intelligence will move into this class over time."""
+    __slots__ = ['movie_id', 'urn', 'sha256', 'mime_type']
     def __init__(self, movie_id, *, user_id=None):
         # If user_id is provided, make sure user gets access
+        self.movie_id = movie_id
+        self.urn = None
         self.mime_type = MIME.MP4
+        self.sha256 = None
         if (user_id is not None) and not can_access_movie(user_id=user_id, movie_id=movie_id):
             raise UnauthorizedUser(f"user_id={user_id} movie_id={movie_id}")
-        self.movie_id = movie_id
-        rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                                   "SELECT movie_data,movie_sha256 from movie_data where movie_id=%s LIMIT 1",
-                                   (self.movie_id,))
-        if len(rows)!=1:
-            raise InvalidMovie_Id(self.movie_id)
-        (self.data,self.sha256) = rows[0]
-        if self.data is None:
-            rows = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT urn from objects where sha256=%s LIMIT 1", (self.sha256,))
-            try:
-                self.urn = rows[0][0]
-            except IndexError as e:
-                raise NoMovieData(f"movie_id={self.movie_id} sha256={self.sha256}") from e
-
-            # If the movie's URN's scheme is C.SCHEME_DB, get the data as well
-            if self.urn.startswith(C.SCHEME_DB):
-                self.data = db_object.read_object(self.urn)
 
     def __repr__(self):
         return f"<Movie {self.movie_id} urn={self.urn} sha256={self.sha256}>"
 
-
-    def get_data(self):
+    @property
+    def data(self):
         """Return the object data"""
-        if self.data is not None:
-            return self.data
-        return db_object.read_object(self.urn)
+        return get_movie_data(movie_id=self.movie_id)
 
     def url(self):
         """Return a URL for accessing the data. This is a self-signed URL"""
