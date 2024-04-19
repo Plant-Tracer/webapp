@@ -305,6 +305,7 @@ def api_new_movie():
 
     ret = {'error':False}
 
+    print("movie_data is set")
     # This is where the movie_id is assigned
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                           title=request.forms.get('title'),
@@ -316,6 +317,7 @@ def api_new_movie():
             logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
             return {'error':True,
                     'message':f'movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}'}
+        print("calling db.set_movie_data")
         db.set_movie_data(movie_id=ret['movie_id'], movie_data=movie_data)
         db.set_movie_metadata( movie_id=ret['movie_id'],
                                movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))

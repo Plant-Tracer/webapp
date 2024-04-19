@@ -682,11 +682,13 @@ def set_movie_metadata(*, movie_id, movie_metadata):
 
 
 def set_movie_data(*,movie_id, movie_data):
+    print("set_movie_data movie_id=",movie_id)
     movie_data_sha256 = db_object.sha256(movie_data)
     object_name= db_object.object_name( data_sha256=movie_data_sha256,
                                         course_id = course_id_for_movie_id( movie_id ),
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
+    print("movie_data_urn=",movie_data_urn)
     set_movie_data_urn(movie_id = movie_id, movie_data_urn=movie_data_urn)
     db_object.write_object(movie_data_urn, movie_data)
 
