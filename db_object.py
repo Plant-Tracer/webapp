@@ -135,8 +135,11 @@ def read_object(urn):
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content
     elif o.scheme == C.SCHEME_DB:
-        sha256 = os.path.splitext(o.path[1:])[0]
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT data from object_store where sha256=%s",(sha256,))
+        #key = os.path.splitext(o.path[1:])[0]
+        res = dbfile.DBMySQL.csfr(
+            get_dbreader(),
+            "SELECT object_store.data from objects left join object_store on objects.sha256 = object_store.sha256 where urn=%s LIMIT 1",
+            (urn,), debug=True)
         return res[0][0]
     else:
         raise ValueError("Unknown schema: "+urn)
@@ -148,10 +151,16 @@ def write_object(urn, object_data):
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
     elif o.scheme== C.SCHEME_DB:
+        object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
         dbfile.DBMySQL.csfr(
-            get_dbwriter(), "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (sha256(object_data), object_data))
+            get_dbwriter(),
+            "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
+            (urn, object_sha256))
+        dbfile.DBMySQL.csfr(
+            get_dbwriter(),
+            "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
+            (object_sha256, object_data))
     else:
         raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
 
