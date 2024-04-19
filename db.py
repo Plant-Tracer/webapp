@@ -541,9 +541,10 @@ def get_movie_data(*, movie_id:int):
     print("gmdrow=",row)
     for name in ['movie_data_urn','object_urn']:
         urn = row[name]
-        logging.debug("name=%s urn=%s",name,urn)
+        print("name=",name,"urn=",urn)
         if urn:
             return db_object.read_object(urn)
+    print("gmdrow returning None)
     return None
 
 
