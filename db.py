@@ -523,10 +523,12 @@ def get_movie_data(*, movie_id:int):
                                """SELECT movies.movie_data_urn as movie_data_urn,
                                          movie_data.movie_data as movie_data,
                                          movie_data.movie_sha256 as movie_sha256,
-                                         objects.urn as object_urn
+                                         objects.urn as object_urn,
+                                         object_store.data as object_data
                                FROM movies
                                LEFT JOIN movie_data on movies.id=movie_data.movie_id
                                LEFT JOIN objects on movie_data.movie_sha256=objects.sha256
+                               LEFT JOIN object_store on object_store.sha256=objects.sha256
                                WHERE movies.id=%s
                                LIMIT 1""",
                                   (movie_id,),
@@ -536,6 +538,9 @@ def get_movie_data(*, movie_id:int):
 
     if row['movie_data'] is not None and len(row['movie_data'])>0:
         return row['movie_data']
+
+    if row['object_data'] is not None and len(row['object_data'])>0:
+        return row['object_data']
 
     logging.debug("gmdrow=%s",row)
     print("gmdrow=",row)

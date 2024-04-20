@@ -264,9 +264,9 @@ CREATE TABLE `objects` (
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `urn` varchar(1024) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `sha256` (`sha256`),
+  UNIQUE KEY `urn` (`urn`(768)),
   KEY `mtime` (`mtime`),
-  KEY `urn` (`urn`(768))
+  KEY `sha256` (`sha256`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

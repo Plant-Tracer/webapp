@@ -104,7 +104,7 @@ pytest-debug1:
 	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
 
 pytest-app-framework:
 	@echo validate app framework

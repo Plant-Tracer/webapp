@@ -139,7 +139,7 @@ def read_object(urn):
         res = dbfile.DBMySQL.csfr(
             get_dbreader(),
             "SELECT object_store.data from objects left join object_store on objects.sha256 = object_store.sha256 where urn=%s LIMIT 1",
-            (urn,), debug=True)
+            (urn,))
         if len(res)==1:
             return res[0][0]
         # Perhaps look for the SHA256 in the path and see if we can just find the data in the object_store?
@@ -165,7 +165,7 @@ def write_object(urn, object_data):
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (object_sha256, object_data),debug=True)
+            (object_sha256, object_data))
     else:
         raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
 
