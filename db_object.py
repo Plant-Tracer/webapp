@@ -148,7 +148,6 @@ def read_object(urn):
         raise ValueError("Unknown schema: "+urn)
 
 def write_object(urn, object_data):
-    print("write_object urn=",urn)
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
@@ -157,7 +156,6 @@ def write_object(urn, object_data):
     elif o.scheme== C.SCHEME_DB:
         object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
-        print("object_sha256=",object_sha256)
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",

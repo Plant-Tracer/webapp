@@ -31,7 +31,6 @@ import tracker
 api = bottle.Bottle()
 
 DEMO_MODE = os.environ.get('PLANTTRACER_DEMO',' ')[0:1] in 'yYtT1'
-print("DEMO_MODE = ",DEMO_MODE)
 
 ################################################################
 ## Utility
@@ -305,7 +304,6 @@ def api_new_movie():
 
     ret = {'error':False}
 
-    print("movie_data is set")
     # This is where the movie_id is assigned
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
                                           title=request.forms.get('title'),
@@ -317,7 +315,6 @@ def api_new_movie():
             logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
             return {'error':True,
                     'message':f'movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}'}
-        print("calling db.set_movie_data")
         db.set_movie_data(movie_id=ret['movie_id'], movie_data=movie_data)
         db.set_movie_metadata( movie_id=ret['movie_id'],
                                movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
@@ -829,7 +826,6 @@ def api_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     logging.debug("api_ver")
-    print("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
 
 
