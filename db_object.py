@@ -116,11 +116,11 @@ def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expire
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
-        return {'url':'/upload-movie',
-                'mime_type':mime_type,
-                'key': o.path[1:],
-                'scheme':C.SCHEME_DB,
-                'sha256':sha256 }
+        return {'url':'/api/upload-movie',
+                'fields':{ 'mime_type':mime_type,
+                           'key': o.path[1:],
+                           'scheme':C.SCHEME_DB,
+                           'sha256':sha256 }}
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
@@ -172,10 +172,13 @@ def delete_object(urn):
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:
-        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
+        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
     elif o.scheme== C.SCHEME_DB:
         assert o.netloc == DB_TABLE
-        sha256_val = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT sha256 from objects where urn=%s", (urn,))[0][0]
+        res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT sha256 from objects where urn=%s", (urn,))
+        if not res:
+            return
+        sha256_val = res[0][0]
         count  = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT count(*) from objects where sha256=%s", (sha256_val,))[0][0]
         dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM objects where urn=%s", (urn,))
         if count==1:

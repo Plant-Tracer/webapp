@@ -28,14 +28,10 @@ venv:
 all:
 	@echo verify syntax and then restart
 	make pylint
-	make touch
 
 check:
 	make pylint
 	make pytest
-
-touch:
-	touch tmp/restart.txt
 
 ################################################################
 ## Program testing
@@ -78,30 +74,27 @@ pytest-db: $(REQ)
 	@echo dbreader_test is successful
 
 pytest:  $(REQ)
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
-pytest-movie-test:
-	make touch
+TEST1MODULE=tests/movie_test.py
+TEST1FUNCTION="-k test_new_movie"
+pytest1:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py -k test_movie_extract --maxfail=1
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest-selenium:
-	make touch
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug:
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-debug1:
 	@echo run in debug mode but stop on first error
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
@@ -112,7 +105,6 @@ pytest-app-framework:
 
 pytest-quiet:
 	@echo quietly make pytest and stop at the firt error
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR

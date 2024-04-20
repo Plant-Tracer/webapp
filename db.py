@@ -62,6 +62,9 @@ class InvalidMovie_Id(DB_Errors):
     def __init__(self, v):
         super().__init__(str(v))
 
+class InvalidFrameAccess(DB_Errors):
+    """ FrameID is invalid """
+
 
 class UnauthorizedUser(DB_Errors):
     """ User is not authorized for movie"""
@@ -626,23 +629,24 @@ def purge_movie_frames(*,movie_id):
 def purge_movie_data(*,movie_id):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s", (movie_id,))
+    if res:
+        urn = res[0][0]
+        db_object.delete_object(urn)
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
 
 @log
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
     purge_movie_frames(movie_id=movie_id)
     purge_movie_data(movie_id=movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
 
 @log
 def delete_movie(*,movie_id, delete=1):
     """Set a movie's deleted bit to be true"""
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
 
 
 @log
@@ -709,6 +713,9 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
     if trackpoints are provided, replace current trackpoints with those
     """
+    args = (movie_id, frame_number )
+    a1 = a2 = a3 = ""
+    frame_urn = None
     if frame_data is not None:
         # upload the frame to the store
         object_name = db_object.object_name(data=frame_data,
@@ -716,22 +723,19 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                                             ext=C.JPEG_EXTENSION)
         frame_urn = db_object.make_urn( object_name = object_name)
         db_object.write_object(frame_urn, frame_data)
-    else:
-        frame_urn = None
 
-    # If we have frame_data, store as an object and get the ARN
-    args = (movie_id, frame_number )
-    a1 = a2 = a3 = ""
-    if frame_urn is not None:
         a1 = ", frame_urn"
         a2 = ",%s"
         a3 = ",frame_urn=%s"
         args = (movie_id, frame_number, frame_urn, frame_urn)
+
+    # Update the database
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
                         VALUES (%s,%s{a2})
                         ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
                         args)
+    # Get the frame_id
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
                                    (movie_id, frame_number))[0][0]
     return frame_id

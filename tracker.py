@@ -118,12 +118,14 @@ def convert_frame_to_jpeg(img):
     return jpg_img.tobytes()
 
 def extract_frame(*, movie_data, frame_number, fmt):
-    """Extract a frame from movie data using CV2. This is not an efficient approach to read the entire movie.
+    """Extract a single frame from movie data using CV2. This is not an efficient approach to read the entire movie.
+    Perhaps  make frame_number an array of frames to allow multiple frames to be extracted, with a callback?
     :param: movie_data - binary object of data
     :param: frame_number - frame to extract
     :param: fmt - format wanted. CV2-return a CV2 image; 'jpeg' - return a jpeg image as a byte array.
     """
     assert fmt in ['CV2','jpeg']
+    assert movie_data is not None
     # CV2's VideoCapture method does not support reading from a memory buffer.
     # So perhaps we will change this to use a named pipe
     with tempfile.NamedTemporaryFile(mode='ab') as tf:

@@ -1,3 +1,4 @@
+"use strict";
 /* jshint esversion: 8 */
 /*global api_key */
 /*global admin */
@@ -118,7 +119,7 @@ async function upload_movie_post(movie_title, description, movieFile, showMovie)
     let r = await fetch('/api/new-movie', { method:"POST", body:formData});
     console.log("App response code=",r);
     let obj = await r.json();
-    console.log('obj=',obj);
+    console.log('new-movie obj=',obj);
     if (obj.error){
         $('#message').html(`Error getting upload URL: ${obj.message}`);
         return;
@@ -141,6 +142,7 @@ async function upload_movie_post(movie_title, description, movieFile, showMovie)
             method: "POST",
             body: formData,
         });
+        console.log("uploaded movie. r=",r);
         if (!r.ok) {
             $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             console.log("r.text()=",await r.text());
@@ -176,7 +178,7 @@ function upload_movie(inp)
     }
     $('#message').html(`Uploading image...`);
 
-    let show_movie = function(movie_title,movie_id) {
+    let show_movie = function(movie_title, movie_id) {
         let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
         $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
                            `<p>First frame:</p> <img src="${first_frame}">`+

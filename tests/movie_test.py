@@ -49,8 +49,10 @@ def test_edge_case():
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it.
+    This uses the movie API where the movie is uploaded with the
     When we are finished with the movie, purge it and all of its child data.
     """
+    bottle_api.expand_memfile_max()
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     api_key_invalid = api_key+"invalid"
@@ -58,47 +60,61 @@ def new_movie(new_user):
 
     logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
     with open(TEST_MOVIE_FILENAME, "rb") as f:
-        movie_data = f.read()
+        movie_data   = f.read()
+        movie_data_sha256 = db_object.sha256(movie_data)
     assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
     assert len(movie_data) > 0
 
     # This generates an error, which is why it needs to be caught with pytest.raises():
-    logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
     with boddle(params={'api_key': api_key_invalid,
                         "title": movie_title,
                         "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data)}):
-        bottle_api.expand_memfile_max()
+                        "movie_data_sha256": movie_data_sha256}):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_api.api_new_movie()
 
-    # This generates an error --- movie too big
-    movie_data_big = b"*" * (C.MAX_FILE_UPLOAD + 1)
-    with boddle(params={'api_key': api_key_invalid,
-                        "title": movie_title,
-                        "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data_big)}):
-        bottle_api.expand_memfile_max()
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_api.api_new_movie()
-
-    # This does not raise an error -- it creates a new movie that is then yielded
-    # It uses the movie_base64_data interface
-    logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
+    # This return an error --- SHA256 invalid
     with boddle(params={'api_key': api_key,
                         "title": movie_title,
                         "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data)}):
+                        "movie_data_sha256": movie_data_sha256+"a"}):
         res = bottle_api.api_new_movie()
+        assert res['error']==True
+
+    # Get the upload information
+    with boddle(params={'api_key': api_key,
+                        "title": movie_title,
+                        "description": "test movie description",
+                        "movie_data_sha256": movie_data_sha256}):
+        res = bottle_api.api_new_movie()
+        logging.debug("res=%s",res)
     assert res['error'] == False
     movie_id = res['movie_id']
     assert movie_id > 0
 
+    logging.debug("new_movie fixture: movie_id=%s",movie_id)
     cfg[MOVIE_ID] = movie_id
     cfg[MOVIE_TITLE] = movie_title
 
-    logging.debug("new_movie fixture: movie_id=%s",movie_id)
+    url    = res['presigned_post']['url']
+    fields = res['presigned_post']['fields']
+    # Now send the data
+    with open(TEST_MOVIE_FILENAME, "rb") as f:
+        if url.startswith('https://'):
+            # Do a real post! (probably going to S3)
+            logging.debug("calling requests.post(%s,data=%s)",url,fields)
+            r = requests.post(url, files={'file':f}, data=fields)
+            logging.info("uploaded to %s r=%s",url, r)
+            assert r.ok
+        else:
+            with boddle(params=fields):
+                from bottle import request
+                request.files['file'] = bottle.FileUpload(f, 'file', 'file')
+                res = bottle_api.api_upload_movie()
+                logging.debug("res=%s",res)
+                assert res['error']==False
 
+    # Make sure data got there
     retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data

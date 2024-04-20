@@ -262,45 +262,23 @@ def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
     Moving can appear here as a file or as a base64 encoded data.
     If no movie is provided, we return a presigned URL that can be used to post the movie to S3 or to the
-    /upload-movie API (below).
+    /api/upload-movie API (below).
 
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param movie_data: If present, the movie file itself
-    :param movie_base64_data - if present, the movie file, base64 encoded
-    :param movie_data_sha256: If present, the SHA256. Signifies we want to upload by presigned URL
-    :return: dict['movie_id'] - uploaded movie
-             dict['movie_s3'] - s3:// if it is being uploaded to s3
-             dict['upload_url'] - URL for uploading
+    :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
+    :return: dict['movie_id'] - The movie_id that is allocated
+             dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
     """
 
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     movie_data_sha256 = get('movie_data_sha256')
-    movie_data = None
 
-    # First see if a file named movie was uploaded
-    if 'movie_data' in request.files:
-        with io.BytesIO() as f:
-            request.files['movie_data'].save(f)
-            movie_data = f.getvalue()
-            if len(movie_data) > C.MAX_FILE_UPLOAD:
-                return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
-        logging.debug("api_new_movie: movie uploaded as a file")
-
-    #
-    # It turns out that you can upload arbitrary data in an HTTP POST
-    # provided that it is a file upload, but not in POST fields. That
-    # is why I it has to be base64-encoded.
-    if movie_data is None:
-        movie_base64_data = request.forms.get('movie_base64_data',None)
-        if movie_base64_data is not None:
-            movie_data = base64.b64decode(movie_base64_data)
-        logging.debug("api_new_movie: movie_base64_data from request.forms.get")
-    else:
-        logging.debug("api_new_movie: movie_base64_data is None")
+    if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
+        return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
 
     ret = {'error':False}
 
@@ -309,25 +287,15 @@ def api_new_movie():
                                           title=request.forms.get('title'),
                                           description=request.forms.get('description') )
 
-    # If we have movie_data or the movie_data_sha256, compute the urn
-    if movie_data is not None:
-        if len(movie_data) > C.MAX_FILE_UPLOAD:
-            logging.info("movie length %s is bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
-            return {'error':True,
-                    'message':f'movie length {len(movie_data)} is bigger than {C.MAX_FILE_UPLOAD}'}
-        db.set_movie_data(movie_id=ret['movie_id'], movie_data=movie_data)
-        db.set_movie_metadata( movie_id=ret['movie_id'],
-                               movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data))
-    elif movie_data_sha256 is not None:
-        # We do not have the movie_data, so we mut have had the sha256.
-        # Get the object name and create the upload URL
-        object_name= db_object.object_name( data_sha256=movie_data_sha256,
-                                            course_id = db.course_id_for_movie_id( ret['movie_id']),
-                                            ext=C.MOVIE_EXTENSION)
-        movie_data_urn        = db_object.make_urn( object_name = object_name)
-        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
-                                                              mime_type='video/mp4',
-                                                              sha256=movie_data_sha256)
+    # Get the object name and create the upload URL
+    object_name= db_object.object_name( data_sha256=movie_data_sha256,
+                                        course_id = db.course_id_for_movie_id( ret['movie_id']),
+                                        ext=C.MOVIE_EXTENSION)
+    movie_data_urn        = db_object.make_urn( object_name = object_name)
+    db.set_movie_data_urn(movie_id=ret['movie_id'], movie_data_urn=movie_data_urn)
+    ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+                                                          mime_type='video/mp4',
+                                                          sha256=movie_data_sha256)
     return ret
 
 
@@ -341,18 +309,24 @@ def api_upload_movie():
     :param: scheme - should be db
     :param: sha256 - should be a hex encoding of the sha256
     :param: key    - where the file gets uploaded -from api_new_movie()
-    :param: request.files[0] - the file!
+    :param: request.files['file'] - the file!
     """
     scheme = get('scheme')
     key = get('key')
     movie_data_sha256 = get('sha256') # claimed SHA256
+    logging.debug("api_upload_movie: request=%s request.files=%s request.files.keys=%s",request,request.files,list(request.files.keys()))
+    if 'file' not in request.files:
+        logging.debug("request.files=%s",request.files)
+        return {'error':True, 'message':'upload request a file parameter named "file".'}
     with io.BytesIO() as f:
-        request.files[0].save(f)
+        request.files['file'].save(f)
         movie_data = f.getvalue()
+        logging.debug("len(movie_data)=%s",len(movie_data))
         if len(movie_data) > C.MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
     # make sure claimed SHA256 matches computed SHA256
     if db_object.sha256(movie_data) != movie_data_sha256:
+        logging.error("sha256(movie_data)=%s but movie_data_sha256=%s",db_object.sha256(movie_data),movie_data_sha256)
         return {'error': True, 'message':
                 f'movie_data_sha256={movie_data_sha256} but post.sha256={db_object.sha256(movie_data)}'}
     urn = db_object.make_urn(object_name=key, scheme=scheme)
@@ -616,20 +590,22 @@ def api_new_frame():
     return {'error': False, 'frame_id': frame_id}
 
 def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
+    """Returns the JPEG for a given frame, or raises InvalidFrameAccess()"""
     # is frame_id provided?
     if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
         row =  db.get_frame(frame_id=frame_id)
         return row.get('frame_data',None)
     # Is there a movie we can access?
     if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+        movie_data = db.get_movie_data(movie_id = movie_id)
+        if movie_data is None:
+            raise db.InvalidFrameAccess()
         try:
-            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
-                                         frame_number = frame_number,
-                                         fmt = 'jpeg')
+            return tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
         except ValueError as e:
             return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
     logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
-    return E.INVALID_FRAME_ACCESS
+    raise db.InvalidFrameAccess()
 
 
 @api.route('/get-frame', method=GET_POST)
@@ -694,8 +670,9 @@ def api_get_frame():
     # If we do not have frame_data, extract it from the movie (but don't store in database)
     if ret.get('frame_data',None) is None:
         logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
+        movie_data = db.get_movie_data(movie_id=movie_id)
         try:
-            ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+            ret['frame_data'] = tracker.extract_frame(movie_data=movie_data,
                                                       frame_number=frame_number,
                                                       fmt='jpeg')
         except ValueError:
