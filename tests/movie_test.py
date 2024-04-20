@@ -34,7 +34,7 @@ import bottle_app
 from auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME,ENGINE_ID
 from constants import MIME,Engines
 import tracker
 
@@ -169,26 +169,6 @@ def test_new_movie(new_movie):
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
 
-def test_new_movie_analysis(new_engine):
-    cfg = copy.copy(new_engine)
-    movie_id = cfg[MOVIE_ID]
-    engine_id = cfg[ENGINE_ID]
-
-    annotations='{"key": "aKey", "value": "aValue" }'
-
-    #create movie_analysis
-    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
-                                 engine_id=engine_id,
-                                 annotations=annotations
-                                 )['movie_analysis_id']
-    #verify movie_analysis exists
-    #TODO
-
-    # delete the created movie_analysis
-    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
-
-
-
 def test_movie_upload_presigned_post(new_user):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
     hold_env = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
@@ -290,6 +270,26 @@ def new_engine(new_movie):
     cfg[ENGINE_ID] = engine_id
     yield cfg
     db.purge_engine(engine_id=engine_id)
+
+def test_new_movie_analysis(new_engine):
+    cfg = copy.copy(new_engine)
+    movie_id = cfg[MOVIE_ID]
+    engine_id = cfg[ENGINE_ID]
+
+    annotations='{"key": "aKey", "value": "aValue" }'
+
+    #create movie_analysis
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
+                                 engine_id=engine_id,
+                                 annotations=annotations
+                                 )['movie_analysis_id']
+    #verify movie_analysis exists
+    #TODO
+
+    # delete the created movie_analysis
+    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
+
+
 
 def test_movie_extract(new_movie):
     """Try extracting individual movie frames"""
