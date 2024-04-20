@@ -148,7 +148,7 @@ def read_object(urn):
         raise ValueError("Unknown schema: "+urn)
 
 def write_object(urn, object_data):
-    print("write_object urn=",urn,"object_data=",object_data)
+    print("write_object urn=",urn)
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
