@@ -169,6 +169,24 @@ def test_new_movie(new_movie):
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
 
+def test_new_movie_analysis(new_engine):
+    cfg = copy.copy(new_engine)
+    movie_id = cfg[MOVIE_ID]
+    engine_id = cfg[ENGINE_ID]
+
+    annotations='{"key": "aKey", "value": "aValue" }'
+
+    #create movie_analysis
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
+                                 engine_id=engine_id,
+                                 annotations=annotations
+                                 )['movie_analysis_id']
+    #verify movie_analysis exists
+    #TODO
+
+    # delete the created movie_analysis
+    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
+
 
 
 def test_movie_upload_presigned_post(new_user):
@@ -261,6 +279,17 @@ def test_movie_update_metadata(new_movie):
     assert res['error'] == False
     assert get_movie(api_key, movie_id)['published'] == 0
 
+
+@pytest.fixture
+def new_engine(new_movie):
+    cfg = copy.copy(new_movie)
+
+    engine_name = 'pytest-engine'
+    engine_version = 'VTest'
+    engine_id = db.get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
+    cfg[ENGINE_ID] = engine_id
+    yield cfg
+    db.purge_engine(engine_id=engine_id)
 
 def test_movie_extract(new_movie):
     """Try extracting individual movie frames"""
