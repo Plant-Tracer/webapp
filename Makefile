@@ -5,6 +5,9 @@
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
+TS_FILES := $(wildcard *.ts */*.ts)
+JS_FILES := $(TS_FILES:.ts=.js)
+
 
 ################################################################
 # Manage the virtual environment
@@ -197,6 +200,7 @@ install-macos:
 	brew install node
 	brew install npm
 	npm ci
+	npm install -g typescript webpack webpack-cli
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
@@ -210,3 +214,6 @@ install-windows:
 update:
 	$(PYTHON) pip freeze > requirements.txt
 	$(PYTHON) zappa update dev
+
+%.js: %.ts
+    tsc $<

@@ -83,8 +83,10 @@ function check_upload_metadata()
 {
     const title = $('#movie-title').val();
     const description = $('#movie-description').val();
+    const movie_file = $('#movie-file').val();
 
-    $('#movie-file').prop('disabled', (title.length < 3 || description.length < 3));
+
+    $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
 }
 
 // This is an async function, which uses async functions.
@@ -155,11 +157,28 @@ async function upload_movie_post(movie_title, description, movieFile, showMovie)
     }
 }
 
+function show_movie(movie_title, movie_id)
+{
+    let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+    $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
+                       `<p>First frame:</p> <img src="${first_frame}">`+
+                       `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
+                       `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
+    // Clear the movie uploaded
+    $('#movie-title').val('');
+    $('#movie-description').val('');
+    $('#movie-file').val('');
+    check_upload_metadata(); // disable the button
+};
+
+
 /* Finally the function that is called when a movie is picked */
-function upload_movie(inp)
+function upload_movie()
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
+    const movieFile = $('#movie-file').prop('files')[0];
+    console.log("movieFile=",movieFile);
 
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -171,25 +190,12 @@ function upload_movie(inp)
         return;
     }
 
-    const movieFile = inp.files[0];
     if (movieFile.fileSize > MAX_FILE_UPLOAD) {
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
     $('#message').html(`Uploading image...`);
 
-    let show_movie = function(movie_title, movie_id) {
-        let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-        $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
-                           `<p>First frame:</p> <img src="${first_frame}">`+
-                           `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
-                           `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-        // Clear the movie uploaded
-        $('#movie-title').val('');
-        $('#movie-description').val('');
-        $('#movie-file').val('');
-        check_upload_metadata(); // disable the button
-    };
     upload_movie_post(movie_title, description, movieFile, show_movie);
 }
 
