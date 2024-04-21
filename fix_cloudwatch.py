@@ -8,6 +8,8 @@ import boto3
 
 logger = logging.getLogger(__name__)
 
+# https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups
+
 def set_cloudwatch_log_retention(log_group_name, retention_days):
     """
     Set the retention policy for a CloudWatch Logs log group.

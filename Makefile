@@ -216,4 +216,4 @@ update:
 	$(PYTHON) zappa update dev
 
 %.js: %.ts
-    tsc $<
+	tsc $<
