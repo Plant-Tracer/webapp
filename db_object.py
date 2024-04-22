@@ -60,11 +60,11 @@ def sha256(data):
     h.update(data)
     return h.hexdigest()
 
-def object_name(*,data=None,data_sha256=None,course_id,ext):
-    if data_sha256:
-        return f"{course_id}/{data_sha256}{ext}"
-    else:
-        return f"{course_id}/{sha256(data)}{ext}"
+def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
+    if data_sha256 is None:
+        data_sha256 = sha256(data)
+    fm = f"/{frame_number:06d}" if frame_number is not None else ""
+    return f"{course_id}/{movie_id}{fm}{ext}"
 
 def s3_client():
     return boto3.session.Session().client( S3 )
