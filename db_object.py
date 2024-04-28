@@ -61,8 +61,6 @@ def sha256(data):
     return h.hexdigest()
 
 def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
-    if data_sha256 is None:
-        data_sha256 = sha256(data)
     fm = f"/{frame_number:06d}" if frame_number is not None else ""
     return f"{course_id}/{movie_id}{fm}{ext}"
 
