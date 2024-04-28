@@ -1,3 +1,4 @@
+"use strict";
 /* jshint esversion: 8 */
 /* global api_key */
 

@@ -1,3 +1,4 @@
+"use strict";
 /* jshint esversion: 8 */
 // code for /analyze web worker
 

@@ -31,7 +31,6 @@ import tracker
 api = bottle.Bottle()
 
 DEMO_MODE = os.environ.get('PLANTTRACER_DEMO',' ')[0:1] in 'yYtT1'
-print("DEMO_MODE = ",DEMO_MODE)
 
 ################################################################
 ## Utility
@@ -263,73 +262,40 @@ def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
     Moving can appear here as a file or as a base64 encoded data.
     If no movie is provided, we return a presigned URL that can be used to post the movie to S3 or to the
-    /upload-movie API (below).
+    /api/upload-movie API (below).
 
     :param api_key: the user's api_key
     :param title: The movie's title
     :param description: The movie's description
-    :param movie_data: If present, the movie file itself
-    :param movie_base64_data - if present, the movie file, base64 encoded
-    :param movie_data_sha256: If present, the SHA256. Signifies we want to upload by presigned URL
-    :return: dict['movie_id'] - uploaded movie
-             dict['movie_s3'] - s3:// if it is being uploaded to s3
-             dict['upload_url'] - URL for uploading
+    :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
+    :return: dict['movie_id'] - The movie_id that is allocated
+             dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
     """
 
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     movie_data_sha256 = get('movie_data_sha256')
-    movie_data = None
-    movie_metadata = None
-    movie_data_urn = None
-    # First see if a file named movie was uploaded
-    if 'movie_data' in request.files:
-        with io.BytesIO() as f:
-            request.files['movie_data'].save(f)
-            movie_data = f.getvalue()
-            if len(movie_data) > C.MAX_FILE_UPLOAD:
-                return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
-        logging.debug("api_new_movie: movie uploaded as a file")
 
-    #
-    # It turns out that you can upload arbitrary data in an HTTP POST
-    # provided that it is a file upload, but not in POST fields. That
-    # is why I it has to be base64-encoded.
-    if movie_data is None:
-        movie_base64_data = request.forms.get('movie_base64_data',None)
-        if movie_base64_data is not None:
-            movie_data = base64.b64decode(movie_base64_data)
-        logging.debug("api_new_movie: movie_base64_data from request.forms.get")
-    else:
-        logging.debug("api_new_movie: movie_base64_data is None")
+    if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
+        return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
 
-    if movie_data is not None:
-        if len(movie_data) > C.MAX_FILE_UPLOAD:
-            logging.debug("api_new_movie: movie length %s bigger than %s",len(movie_data), C.MAX_FILE_UPLOAD)
-            return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
-
-        movie_data_sha256 = db_object.sha256(movie_data)
-        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
     ret = {'error':False}
 
-    if movie_data_sha256:
-        object_name = movie_data_sha256 + C.MOVIE_EXTENSION
-        movie_data_urn        = db_object.make_urn(object_name=object_name)
-        ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
-                                                              mime_type='video/mp4',
-                                                              sha256=movie_data_sha256)
-
-    if movie_data is not None:
-        assert movie_data_sha256 is not None
-        assert movie_data_urn is not None
+    # This is where the movie_id is assigned
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
-                                   title=request.forms.get('title'),
-                                   description=request.forms.get('description'),
-                                   movie_data=movie_data,
-                                   movie_metadata = movie_metadata,
-                                   movie_data_sha256 = movie_data_sha256,
-                                   movie_data_urn = movie_data_urn )
+                                          title=request.forms.get('title'),
+                                          description=request.forms.get('description') )
+
+    # Get the object name and create the upload URL
+    object_name= db_object.object_name( data_sha256=movie_data_sha256,
+                                        course_id = db.course_id_for_movie_id( ret['movie_id']),
+                                        ext=C.MOVIE_EXTENSION)
+    movie_data_urn        = db_object.make_urn( object_name = object_name)
+    db.set_movie_data_urn(movie_id=ret['movie_id'], movie_data_urn=movie_data_urn)
+    ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+                                                          mime_type='video/mp4',
+                                                          sha256=movie_data_sha256)
     return ret
 
 
@@ -342,19 +308,25 @@ def api_upload_movie():
     :param: mime_type - mime type
     :param: scheme - should be db
     :param: sha256 - should be a hex encoding of the sha256
-    :param: key    - where the file gets uploaded
-    :param: request.files[0] - the file!
+    :param: key    - where the file gets uploaded -from api_new_movie()
+    :param: request.files['file'] - the file!
     """
     scheme = get('scheme')
     key = get('key')
-    #movie_mime_type = get('mime_type')
-    movie_data_sha256 = get('sha256')
+    movie_data_sha256 = get('sha256') # claimed SHA256
+    logging.debug("api_upload_movie: request=%s request.files=%s request.files.keys=%s",request,request.files,list(request.files.keys()))
+    if 'file' not in request.files:
+        logging.debug("request.files=%s",request.files)
+        return {'error':True, 'message':'upload request a file parameter named "file".'}
     with io.BytesIO() as f:
-        request.files[0].save(f)
+        request.files['file'].save(f)
         movie_data = f.getvalue()
+        logging.debug("len(movie_data)=%s",len(movie_data))
         if len(movie_data) > C.MAX_FILE_UPLOAD:
             return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
+    # make sure claimed SHA256 matches computed SHA256
     if db_object.sha256(movie_data) != movie_data_sha256:
+        logging.error("sha256(movie_data)=%s but movie_data_sha256=%s",db_object.sha256(movie_data),movie_data_sha256)
         return {'error': True, 'message':
                 f'movie_data_sha256={movie_data_sha256} but post.sha256={db_object.sha256(movie_data)}'}
     urn = db_object.make_urn(object_name=key, scheme=scheme)
@@ -478,7 +450,7 @@ class MovieTrackCallback:
         self.movie_id = movie_id
         self.movie_metadata = None
 
-    def notify(self, *, frame_number, frame, output_trackpoints): # pylint: disable=unused-argument
+    def notify(self, *, frame_number, frame_data, frame_trackpoints): # pylint: disable=unused-argument
         """Update the status and write the frame to the database.
         We only track frames 1..(total_frames-1).
         If there are 296 frames, they are numbered 0 to 295.
@@ -489,8 +461,10 @@ class MovieTrackCallback:
 
         logging.debug("MovieTrackCallback %s",message)
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-        db.create_new_frame(movie_id=self.movie_id, frame_number = frame_number,
-                            frame_data = tracker.convert_frame_to_jpeg(frame))
+        frame_id = db.create_new_frame(movie_id=self.movie_id,
+                                       frame_number = frame_number,
+                                       frame_data = tracker.convert_frame_to_jpeg(frame_data))
+        db.put_frame_trackpoints(frame_id=frame_id, trackpoints=frame_trackpoints)
 
     def done(self):
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
@@ -500,11 +474,9 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
     Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
     """
-    # Find trackpoints we are tracking or retracking
+    # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
     logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
-
-    # If there are no trackpoints, we just go through the motions...
 
     # Write the movie to a tempfile, because OpenCV has to read movies from files.
     mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
@@ -514,35 +486,23 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
         infile.write( movie_data  )
         infile.flush()
 
-        # While I'm here, update the movie metadata
+        # While we are here, update the movie metadata
         for prop in ['fps','width','height','total_frames','total_bytes']:
             if prop in movie_metadata:
                 db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=movie_metadata[prop])
 
 
         # Track (or retrack) the movie and create the tracked movie
-        # This creates an output file that has the trackpoints animated
-        # and an array of all the trackpoints
+        # Each time the callback is called it will update the trackpoints for that frame
+        # and write the frame to the frame store.
+        #
         mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
-        tracked = tracker.track_movie(engine_name=engine_name,
-                                      engine_version=engine_version,
-                                      input_trackpoints = input_trackpoints,
-                                      frame_start      = frame_start,
-                                      moviefile_input  = infile.name,
-                                      callback = mtc.notify)
-
-    # Get new trackpoints for each frame and save them into the database
-    output_trackpoints   = tracked['output_trackpoints']
-    output_trackpoints_by_frame = defaultdict(list)
-    for tp in output_trackpoints:
-        output_trackpoints_by_frame[tp['frame_number']].append(tp)
-
-    # Write all of the trackpoints by frame that were re-tracked
-    for (frame_number,trackpoints) in output_trackpoints_by_frame.items():
-        if frame_number >= frame_start:
-            frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
-            db.put_frame_trackpoints(frame_id = frame_id,
-                                     trackpoints = trackpoints)
+        tracker.track_movie(engine_name=engine_name,
+                            engine_version=engine_version,
+                            input_trackpoints = input_trackpoints,
+                            frame_start      = frame_start,
+                            moviefile_input  = infile.name,
+                            callback = mtc.notify)
     mtc.done()                  # sets the status to tracking complete
 
 @api.route('/track-movie-queue', method=GET_POST)
@@ -630,20 +590,22 @@ def api_new_frame():
     return {'error': False, 'frame_id': frame_id}
 
 def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
+    """Returns the JPEG for a given frame, or raises InvalidFrameAccess()"""
     # is frame_id provided?
     if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
         row =  db.get_frame(frame_id=frame_id)
         return row.get('frame_data',None)
     # Is there a movie we can access?
     if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+        movie_data = db.get_movie_data(movie_id = movie_id)
+        if movie_data is None:
+            raise db.InvalidFrameAccess()
         try:
-            return tracker.extract_frame(movie_data = db.get_movie_data(movie_id = movie_id),
-                                         frame_number = frame_number,
-                                         fmt = 'jpeg')
+            return tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
         except ValueError as e:
             return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
     logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
-    return E.INVALID_FRAME_ACCESS
+    raise db.InvalidFrameAccess()
 
 
 @api.route('/get-frame', method=GET_POST)
@@ -708,8 +670,9 @@ def api_get_frame():
     # If we do not have frame_data, extract it from the movie (but don't store in database)
     if ret.get('frame_data',None) is None:
         logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
+        movie_data = db.get_movie_data(movie_id=movie_id)
         try:
-            ret['frame_data'] = tracker.extract_frame(movie_data=db.get_movie_data(movie_id=movie_id),
+            ret['frame_data'] = tracker.extract_frame(movie_data=movie_data,
                                                       frame_number=frame_number,
                                                       fmt='jpeg')
         except ValueError:
@@ -840,7 +803,6 @@ def api_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     logging.debug("api_ver")
-    print("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
 
 

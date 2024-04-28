@@ -118,12 +118,14 @@ def convert_frame_to_jpeg(img):
     return jpg_img.tobytes()
 
 def extract_frame(*, movie_data, frame_number, fmt):
-    """Extract a frame from movie data using CV2. This is not an efficient approach to read the entire movie.
+    """Extract a single frame from movie data using CV2. This is not an efficient approach to read the entire movie.
+    Perhaps  make frame_number an array of frames to allow multiple frames to be extracted, with a callback?
     :param: movie_data - binary object of data
     :param: frame_number - frame to extract
     :param: fmt - format wanted. CV2-return a CV2 image; 'jpeg' - return a jpeg image as a byte array.
     """
     assert fmt in ['CV2','jpeg']
+    assert movie_data is not None
     # CV2's VideoCapture method does not support reading from a memory buffer.
     # So perhaps we will change this to use a named pipe
     with tempfile.NamedTemporaryFile(mode='ab') as tf:
@@ -196,19 +198,22 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     logging.info("rendered movie")
 
 
+#pylint: disable=too-many-arguments
 def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
     :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
-    :param: trackpoints - a list of dictionaries {'x', 'y', 'label', 'frame_number'} to track.  Those before frame_start will be copied to the output.
+    :param: trackpoints - a list all current trackpoints.
+                        - Each trackpoint is dictinary {'x', 'y', 'label', 'frame_number'} to track.
     :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
     :param: callback - a function to callback with (*, frame_number, jpeg, trackpoints)
-    :return: dict 'output_trackpoints' = [frame][pt#][0], [frame][pt#][1]
 
-    Note - no longer renders the tracked movie. That's now in render_tracked_movie()
+    Note - no longer renders the tracked movie. That's now in render_tracked_movie().
+         - no longer returns trackpoints; that's the job of the callback
 
+         - Frame0 is never tracked. It's trackpoints are the provided trackpoints.
     """
     if engine_name!=Engines.CV2:
         raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
@@ -220,7 +225,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     logging.info("start movie tracking")
-    output_trackpoints = []
     for frame_number in range(1_000_000):
         frame_prev = frame_this
         result, frame_this = cap.read()
@@ -237,16 +241,14 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
         if frame_number > frame_start:
             assert frame_prev is not None
             current_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
-
-        # Add the trackpionts to the output list, giving each a frame number
-        output_trackpoints.extend( [ {**tp, **{'frame_number':frame_number}} for tp in current_trackpoints] )
+            for tp in current_trackpoints:
+                tp['frame_number'] = frame_number # set the frame number
 
         # Call the callback if we have one
         if callback is not None:
-            callback(frame_number=frame_number, frame=frame_this, output_trackpoints=output_trackpoints)
+            callback(frame_number=frame_number, frame_data=frame_this, frame_trackpoints=current_trackpoints)
 
     cap.release()
-    return {'output_trackpoints':output_trackpoints}
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
@@ -268,11 +270,17 @@ if __name__ == "__main__":
     input_trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
 
     # Get the new trackpoints
-    res = track_movie(engine_name=args.engine,
-                      moviefile_input=args.moviefile,
-                      input_trackpoints=input_trackpoints)
+    trackpoints = []
+    # pylint: disable=unused-argument
+    def callback(*,frame_number,frame_data,frame_trackpoints):
+        trackpoints.extend(frame_trackpoints)
+
+
+    track_movie(engine_name=args.engine,
+                moviefile_input=args.moviefile,
+                input_trackpoints=input_trackpoints,
+                callback=callback )
     # Now render the movie
-    print("results:")
     render_tracked_movie( moviefile_input= args.moviefile, moviefile_output='tracked.mp4',
-                          movie_trackpoints=res['output_trackpoints'])
+                          movie_trackpoints=trackpoints)
     subprocess.call(['open','tracked.mp4'])

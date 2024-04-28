@@ -32,6 +32,7 @@ Note tht the bucket must have this CORSRule:
 We support the following schemas:
 
 s3:// - Store in the AWS S3 bucket specified by the environment variable PLANTTRACER_S3_BUCKET. The running script must be authorized to read and write that bucket.
+      - stores as s3://{bucket}/{course}/{SHA256}.{extension}
 
 db:// - Store in the local MySQL DB specified in etc/client.ini under the [dbreader] and [dbwriter] sections.
 """
@@ -58,6 +59,12 @@ def sha256(data):
     h = hashlib.sha256()
     h.update(data)
     return h.hexdigest()
+
+def object_name(*,data=None,data_sha256=None,course_id,ext):
+    if data_sha256:
+        return f"{course_id}/{data_sha256}{ext}"
+    else:
+        return f"{course_id}/{sha256(data)}{ext}"
 
 def s3_client():
     return boto3.session.Session().client( S3 )
@@ -109,11 +116,11 @@ def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expire
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
-        return {'url':'/upload-movie',
-                'mime_type':mime_type,
-                'key': o.path[1:],
-                'scheme':C.SCHEME_DB,
-                'sha256':sha256 }
+        return {'url':'/api/upload-movie',
+                'fields':{ 'mime_type':mime_type,
+                           'key': o.path[1:],
+                           'scheme':C.SCHEME_DB,
+                           'sha256':sha256 }}
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
@@ -128,9 +135,15 @@ def read_object(urn):
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content
     elif o.scheme == C.SCHEME_DB:
-        sha256 = os.path.splitext(o.path[1:])[0]
-        res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT data from object_store where sha256=%s",(sha256,))
-        return res[0][0]
+        #key = os.path.splitext(o.path[1:])[0]
+        res = dbfile.DBMySQL.csfr(
+            get_dbreader(),
+            "SELECT object_store.data from objects left join object_store on objects.sha256 = object_store.sha256 where urn=%s LIMIT 1",
+            (urn,))
+        if len(res)==1:
+            return res[0][0]
+        # Perhaps look for the SHA256 in the path and see if we can just find the data in the object_store?
+        return None
     else:
         raise ValueError("Unknown schema: "+urn)
 
@@ -141,12 +154,37 @@ def write_object(urn, object_data):
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
     elif o.scheme== C.SCHEME_DB:
+        object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
         dbfile.DBMySQL.csfr(
-            get_dbwriter(), "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (sha256(object_data), object_data))
+            get_dbwriter(),
+            "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
+            (urn, object_sha256),debug=True)
+        dbfile.DBMySQL.csfr(
+            get_dbwriter(),
+            "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
+            (object_sha256, object_data))
     else:
         raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
+
+def delete_object(urn):
+    logging.info("delete_object(%s)",urn)
+    o = urllib.parse.urlparse(urn)
+    logging.debug("urn=%s o=%s",urn,o)
+    if o.scheme== C.SCHEME_S3:
+        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
+    elif o.scheme== C.SCHEME_DB:
+        assert o.netloc == DB_TABLE
+        res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT sha256 from objects where urn=%s", (urn,))
+        if not res:
+            return
+        sha256_val = res[0][0]
+        count  = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT count(*) from objects where sha256=%s", (sha256_val,))[0][0]
+        dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM objects where urn=%s", (urn,))
+        if count==1:
+            dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM object_store where sha256=%s", (sha256_val,))
+    else:
+        raise ValueError(f"Cannot delete object urn={urn}")
 
 
 if __name__=="__main__":

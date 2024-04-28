@@ -1,3 +1,4 @@
+"use strict";
 /* jshint esversion: 8 */
 // code for /analyze
 
@@ -113,9 +114,11 @@ class CanvasController {
         this.c.addEventListener('mouseup',   (e) => {this.mouseup_handler(e);}, false);
 
         // Catch the zoom change event
+        console.log("startup. zoom_selector=",zoom_selector,"this=",this);
         if (zoom_selector) {
-            $(zoom_selector).on('change', (_) => {
-                this.set_zoom( $(zoom_selector).val() / 100 );
+            this.zoom_selector = zoom_selector;
+            $(this.zoom_selector).on('change', (_) => {
+                this.set_zoom_from_selector();
             });
         }
     }
@@ -178,6 +181,10 @@ class CanvasController {
         this.c.width = this.naturalWidth * factor;
         this.c.height = this.naturalHeight * factor;
         this.redraw('set_zoom');
+    }
+
+    set_zoom_from_selector() {
+        this.set_zoom( $(this.zoom_selector).val() / 100 );
     }
 
     // Main drawing function:
@@ -287,7 +294,6 @@ class MyImage extends AbstractObject {
     constructor(x, y, url, ptc) {
         super(x, y, url);
         this.ptc = ptc;
-
         this.draggable = false;
         this.ctx    = null;
         this.state  = 0;        // 0 = not loaded; 1 = loaded, first draw; 2 = loaded, subsequent draws
@@ -308,16 +314,16 @@ class MyImage extends AbstractObject {
         this.img.src = url;
     }
 
+    // MyImage draw
     draw(ctx, selected) {
         // See if this is the first time we have drawn in the context.
-        this.ctx = ctx;
+        this.ctx = ctx;         // context in which we draw
         if (this.state > 0){
             if (this.state==1){
                 this.width  = this.ptc.naturalWidth  = this.img.naturalWidth;
                 this.height = this.ptc.naturalHeight = this.img.naturalHeight;
                 this.fills_bounds = true;
                 this.state = 2;
-                this.ptc.set_zoom( 1.0 ); // default zoom
             }
             ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
         }
@@ -753,7 +759,7 @@ class PlantTracerController extends CanvasController {
                 this.add_marker( 20, 50, 'ruler 0 mm');
                 this.add_marker( 20, 80, 'ruler 20 mm');
                 this.add_marker_status.text("Drag each marker to the appropriate place on the image. You can also create additional markers.");
-                this.track_button.val( "Initial movie tracking." );
+                this.track_button.val( "Track movie." );
                 this.add_marker_status.show();
             }
         }

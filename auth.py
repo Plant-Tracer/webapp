@@ -83,14 +83,12 @@ def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
     :return: None if user is not logged in
     """
-    logging.debug("get_user_api_key")
     # check the query string
     try:
         api_key = request.query.get('api_key', None) # must be 'api_key', because may be in URL
         if api_key is not None:
             return api_key
     except KeyError:
-        logging.debug("key error 1")
         return None             # not running in WSGI
 
 
@@ -98,7 +96,6 @@ def get_user_api_key():
     try:
         api_key = request.forms.get('api_key', None) # must be 'api_key', because may be in a form
     except KeyError:
-        logging.debug("key error 2")
         return None             # not running in WSGI
 
     if api_key:

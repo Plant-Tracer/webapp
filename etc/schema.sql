@@ -196,7 +196,7 @@ CREATE TABLE `movie_frames` (
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `frame_sha256` varchar(256) DEFAULT NULL,
+  `frame_urn` varchar(256) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
@@ -225,11 +225,13 @@ CREATE TABLE `movies` (
   `total_frames` int DEFAULT NULL,
   `total_bytes` int DEFAULT NULL,
   `status` varchar(250) DEFAULT NULL,
+  `movie_data_urn` varchar(1024) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
   KEY `title` (`title`),
   KEY `course_id` (`course_id`),
+  KEY `movie_data_urn` (`movie_data_urn`(768)),
   FULLTEXT KEY `description` (`description`),
   FULLTEXT KEY `title_ft` (`title`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
@@ -262,9 +264,9 @@ CREATE TABLE `objects` (
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `urn` varchar(1024) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `sha256` (`sha256`),
+  UNIQUE KEY `urn` (`urn`(768)),
   KEY `mtime` (`mtime`),
-  KEY `urn` (`urn`(768))
+  KEY `sha256` (`sha256`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

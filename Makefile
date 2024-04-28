@@ -5,6 +5,9 @@
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
+TS_FILES := $(wildcard *.ts */*.ts)
+JS_FILES := $(TS_FILES:.ts=.js)
+
 
 ################################################################
 # Manage the virtual environment
@@ -28,54 +31,76 @@ venv:
 all:
 	@echo verify syntax and then restart
 	make pylint
-	make touch
 
 check:
 	make pylint
 	make pytest
 
-touch:
-	touch tmp/restart.txt
+################################################################
+## Program testing
+##
+## Static Analysis
 
 pylint: $(REQ)
 	$(PYTHON) -m pylint --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose $(PYLINT_FILES)
 
+mypy:
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
+
+black:
+	black --line-length 127 .
+
+black-check:
+	black --line-length 127 . --check
+	@echo "If this fails, simply run: make black"
+
+isort:
+	isort . --profile=black
+
+isort-check:
+	isort --check . --profile=black
+
+flake:
+	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
+
+
 #
 # In the tests below, we always test the database connectivity first
 # It makes no sense to run the tests otherwise
+
+##
+## Dynamic Analysis
 
 pytest-db: $(REQ)
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 
 pytest:  $(REQ)
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
-pytest-movie-test:
-	make touch
+TEST1MODULE=tests/movie_test.py
+TEST1FUNCTION="-k test_new_movie"
+pytest1:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests/movie_test.py -k test_movie_extract --maxfail=1
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest-selenium:
-	make touch
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug:
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-debug1:
 	@echo run in debug mode but stop on first error
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
 
 pytest-app-framework:
 	@echo validate app framework
@@ -83,10 +108,13 @@ pytest-app-framework:
 
 pytest-quiet:
 	@echo quietly make pytest and stop at the firt error
-	make touch
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
+
+################################################################
+
+
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
@@ -172,6 +200,7 @@ install-macos:
 	brew install node
 	brew install npm
 	npm ci
+	npm install -g typescript webpack webpack-cli
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
@@ -185,3 +214,6 @@ install-windows:
 update:
 	$(PYTHON) pip freeze > requirements.txt
 	$(PYTHON) zappa update dev
+
+%.js: %.ts
+	tsc $<
