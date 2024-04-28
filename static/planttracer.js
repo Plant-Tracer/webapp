@@ -105,10 +105,33 @@ async function computeSHA256(file) {
     return hashHex;
 }
 
-// Uploads a movie using a presigned post. See:
-// https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
-// https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
-async function upload_movie_post(movie_title, description, movieFile, showMovie)
+/**
+ * function that is called after the movie is uploaded.
+  */
+function show_movie(movie_title, movie_id)
+{
+    let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+    $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
+                       `<p>First frame:</p> <img src="${first_frame}" style="max-width:300px;max-height:300px">`+
+                       `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
+                       `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
+    // Clear the movie uploaded
+    $('#movie-title').val('');
+    $('#movie-description').val('');
+    $('#movie-file').val('');
+    check_upload_metadata(); // disable the button
+};
+
+
+/*
+ *
+ * Uploads a movie using a presigned post. See:
+ * https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
+ * https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
+ *
+ * Presigned post is provided by the /api/new-movie call (see below)
+ */
+async function upload_movie_post(movie_title, description, movieFile)
 {
     var movie_data_sha256 = await computeSHA256(movieFile);
     let formData = new FormData();
@@ -150,27 +173,12 @@ async function upload_movie_post(movie_title, description, movieFile, showMovie)
             console.log("r.text()=",await r.text());
             return;
         }
-        showMovie(movie_title,obj.movie_id);
+        show_movie(movie_title,obj.movie_id);
     } catch(e) {
         console.log('Error uploading movie to S3:',e);
         $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
     }
 }
-
-function show_movie(movie_title, movie_id)
-{
-    let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-    $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
-                       `<p>First frame:</p> <img src="${first_frame}">`+
-                       `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
-                       `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-    // Clear the movie uploaded
-    $('#movie-title').val('');
-    $('#movie-description').val('');
-    $('#movie-file').val('');
-    check_upload_metadata(); // disable the button
-};
-
 
 /* Finally the function that is called when a movie is picked */
 function upload_movie()
@@ -196,7 +204,7 @@ function upload_movie()
     }
     $('#message').html(`Uploading image...`);
 
-    upload_movie_post(movie_title, description, movieFile, show_movie);
+    upload_movie_post(movie_title, description, movieFile);
 }
 
 
