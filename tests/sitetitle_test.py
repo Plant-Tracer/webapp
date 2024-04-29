@@ -19,17 +19,7 @@ from selenium.webdriver.chrome.options import Options
 
 PLANTTRACER_TITLE = 'Plant Tracer'
 
-@functools.cache
-def on_dreamhost():
-    """If we are running on dreamhost, the word 'dreamhost' is in /etc/hosts a lot.
-    I can't find any other way to know if we are running on dreamhost.
-    """
-    with open("/etc/hosts","r") as f:
-        hosts = f.read().lower()
-        return hosts.count("dreamhost")>1
-
 # test function illustrating the use of selenium package directly
-@pytest.mark.skipif(on_dreamhost(), reason='Selenium test does not work on dreamhost')
 def test_sitetitle_just_selenium(http_endpoint):
 
     logging.info("http_endpoint %s", http_endpoint)
