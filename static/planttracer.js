@@ -8,10 +8,20 @@
 /*global MAX_FILE_UPLOAD */
 /*global user_demo */
 
-
+// special buttons
+const PUBLISH_BUTTON='PUBLISH';
+const UNPUBLISH_BUTTON='UNPUBLISH';
+const DELETE_BUTTON='DELETE';
+const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play original';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
+
+// sounds for buttons
+var SOUNDS = [];
+SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
+SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+
 
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
@@ -133,6 +143,7 @@ function show_movie(movie_title, movie_id)
  */
 async function upload_movie_post(movie_title, description, movieFile)
 {
+    // Get a new movie_id
     var movie_data_sha256 = await computeSHA256(movieFile);
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
@@ -150,17 +161,17 @@ async function upload_movie_post(movie_title, description, movieFile)
         return;
     }
 
-    // https://stackoverflow.com/questions/13782198/how-to-do-a-put-request-with-curl
-    // https://stackoverflow.com/questions/15234496/upload-directly-to-amazon-s3-using-ajax-returning-error-bucket-post-must-contai/15235866#15235866
+    // The new movie_id came with the presigned post to upload the form data.
     try {
         const pp = obj.presigned_post;
-        console.log("pp:",pp)
+        console.log("presigned post:",pp);
         const formData = new FormData();
         for (const field in pp.fields) {
             formData.append(field, pp.fields[field]);
         }
         formData.append("file", movieFile); // order matters!
 
+        console.log("uploading movie...");
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
         const r = await fetch(pp.url, {
@@ -169,23 +180,39 @@ async function upload_movie_post(movie_title, description, movieFile)
         });
         console.log("uploaded movie. r=",r);
         if (!r.ok) {
-            $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
+            $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             console.log("r.text()=",await r.text());
             return;
         }
-        show_movie(movie_title,obj.movie_id);
     } catch(e) {
         console.log('Error uploading movie to S3:',e);
-        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+        $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+        return;
     }
+    // Movie was uploaded! Clear the form and show the first frame
+
+    $('#movie-title').val('');
+    $('#movie-description').val('');
+    $('#movie-file').val('');
+
+    const first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+    $('#uploaded_movie_title').val(movie_title);        // display the movie title
+    $('#movie_id').val(movie_id);                       // display the movie_id
+    $('#first_frame').attr('src',first_frame);          // display the first frame
+    $('#track_uploaded_move_link').attr('href',`/analyze?movie_id=${movie_id}`);
+
+    // Clear the movie uploaded
+    $('#upload-preview').attr('disabled',false);    // display the upload-preview
+    $('#upload-form').attr('disabled',true);        // hide the upload form
+    check_upload_metadata(); // disable the button
 }
 
-/* Finally the function that is called when a movie is picked */
+/* Finally the function that is called when the upload_movie button is clicked */
 function upload_movie()
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
-    const movieFile = $('#movie-file').prop('files')[0];
+    const movieFile   = $('#movie-file').prop('files')[0];
     console.log("movieFile=",movieFile);
 
     if (movie_title.length < 3) {
@@ -211,17 +238,6 @@ function upload_movie()
 ////////////////////////////////////////////////////////////////
 /// page: /list
 
-
-// special buttons
-const PUBLISH_BUTTON='PUBLISH';
-const UNPUBLISH_BUTTON='UNPUBLISH';
-const DELETE_BUTTON='DELETE';
-const UNDELETE_BUTTON='UNDELETE';
-
-// sounds for buttons
-var SOUNDS = [];
-SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
-SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
 
 ////////////////
 // PLAYBACK
@@ -622,7 +638,6 @@ function list_users()
             list_users_data( data.users, course_array);
         });
 }
-
 
 // Wire up whatever happens to be present
 // audit and list are wired with their own ready functions
