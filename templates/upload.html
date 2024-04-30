@@ -48,14 +48,14 @@
 
 <!-- uploaded image shows here -->
 <div style='display:none' id='upload-preview'>
-  <p>Movie <i><span id='uploaded_movie_title'></span> (<span id='movie_id'>)</span> successfully uploaded.</p>
+  <p>Movie <i><span id='uploaded_movie_title'></span> (<span id='movie_id'>)</span> successfully uploaded.</i></p>
   <p>Here's the first frame of your movie:</p>
   <img id='image-preview' src=''/>
 
   <h2>Next steps...</h2>
   Now you can:
   <ul>
-    <li><a id='delete_movie_link' onclick='purge_movie()'>Delete the movie (if you uploaded the wrong movie)</a>
+    <li><a id='delete_movie_link' onclick='purge_movie()'>Delete the movie (if you uploaded the wrong movie)</a></li>
     <li><a id='rotate_movie_link' onclick='rotate_movie()'>Rotate the movie 90º</a></li>
     <li><a id='track_uploaded_movie_link' href=''>Track uploaded movie</a></li>
     <li><a href='/list?api_key={{api_key}}'>List all uploaded movies</a>.</li>
