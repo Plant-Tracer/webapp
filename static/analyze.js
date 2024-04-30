@@ -560,6 +560,7 @@ class PlantTracerController extends CanvasController {
         // First launch the status worker
         /* Disabled because Amazon's back end isn't multi-threaded */
         this.tracking = true;   // we are tracking
+        this.set_movie_control_buttons();
         if (window.Worker) {
             this.status_worker = new Worker(STATUS_WORKER);
             this.status_worker.onmessage = (e) => {
@@ -568,6 +569,7 @@ class PlantTracerController extends CanvasController {
                 this.tracking_status.text( e.data.status );
                 if (e.data.status==TRACKING_COMPLETED_FLAG) {
                     this.tracking = false; // done tracking
+                    this.set_movie_control_buttons();
                     this.movie_tracked();
                     this.total_frames = e.data.total_frames;
                     $(`#${this.this_id} span.total-frames-span`).text(this.total_frames);
@@ -662,6 +664,17 @@ class PlantTracerController extends CanvasController {
     }
 
     set_movie_control_buttons() {
+        // if tracking, everything is disabled
+        if (this.tracking) {
+            this.play_button.prop('disabled',true);
+            this.stop_button.prop('disabled',true);
+            this.track_button.prop('disabled',true);
+            this.download_button.prop('disabled',true);
+            $(`#${this.this_id} input.frame_movement`).prop('disabled',true); // all arrow buttons disabled
+            return;
+        }
+
+        // if playing, everything but 'stop' is disabled
         if (this.playing) {
             this.play_button.prop('disabled',true);
             this.stop_button.prop('disabled',false);
