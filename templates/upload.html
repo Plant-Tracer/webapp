@@ -13,6 +13,8 @@
   <p>Email: <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
     <span class='editor'  x-target-id='user-email'    onclick='row_pencil_clicked(this)'> ✏️  </span></p>
 
+  <p><i>Note: you can change your name or email by clicking on the pencil icon (✏️ ) above. </i></p>
+
   <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
 
 
@@ -21,16 +23,16 @@
       <div class='pure-control-group'>
         <label for='title'>Title:</label>
         <input type='text' id='movie-title'       name='title' onkeydown='check_upload_metadata()'/>
-        <span class="pure-form-message-inline">required</span>
+        <span class="pure-form-message-inline">required (at least 3 characters)</span>
       </div>
 
       <div class='pure-control-group'>
         <label for='description'>Description:</label>
         <input type='text' id='movie-description' name='description' onkeydown='check_upload_metadata()'/>
-        <span class="pure-form-message-inline">required</span>
+        <span class="pure-form-message-inline">required (at least 3 characters)</span>
       </div>
       <div class='pure-control-group'>
-        <label for='movie-file'>Click to upload file:</label>
+        <label for='movie-file'>Select movie to upload:</label>
         <input id='movie-file' type="file" onchange='check_upload_metadata()'/>
         <span class="pure-form-message-inline">required</span>
       </div>
@@ -53,13 +55,18 @@
   <h2>Next steps...</h2>
   Now you can:
   <ul>
-    <li><a id='delete_movie_link'>Delete the movie (if you uploaded the wrong movie)</a>
-    <li><a id='rotate_movie_link'>Rotate the movie 90º</a></li>
+    <li><a id='delete_movie_link' onclick='purge_movie()'>Delete the movie (if you uploaded the wrong movie)</a>
+    <li><a id='rotate_movie_link' onclick='rotate_movie()'>Rotate the movie 90º</a></li>
     <li><a id='track_uploaded_movie_link' href=''>Track uploaded movie</a></li>
-    <li><a href='list?api_key={{api_key}}'>List all uploaded movies</a>.</li>
-    <li><a href='/upload.html'>Upload another movie.</a></li>
+    <li><a href='/list?api_key={{api_key}}'>List all uploaded movies</a>.</li>
+    <li><a href='/upload'>Upload another movie.</a></li>
   </ul>
 </div>
 
 
+<script>
+$( document ).ready( function() {
+   upload_ready_function();
+});
+</script>
 {% endblock %}

@@ -573,7 +573,7 @@ def get_movie_metadata(*,user_id, movie_id):
                 (A.course_id in (select course_id from admins where A.user_id=%s)))
     """
     assert isinstance(user_id,int)
-    assert isinstance(movie_id,(int,None))
+    assert isinstance(movie_id,(int,type(None)))
     params = [user_id, user_id, user_id, user_id]
     if movie_id is not None:
         cmd += " AND A.id=%s"

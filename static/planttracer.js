@@ -94,8 +94,6 @@ function check_upload_metadata()
     const title = $('#movie-title').val();
     const description = $('#movie-description').val();
     const movie_file = $('#movie-file').val();
-
-
     $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
 }
 
@@ -234,6 +232,17 @@ function upload_movie()
     upload_movie_post(movie_title, description, movieFile);
 }
 
+function rotate_movie() {
+    console.log("rotate_movie()");
+}
+
+function purge_movie() {
+    console.log("purge_movie()");
+}
+
+function upload_ready_function() {
+
+}
 
 ////////////////////////////////////////////////////////////////
 /// page: /list
@@ -562,7 +571,7 @@ function list_movies_data( movies ) {
 // It's called from the document ready function and after a movie change request is sent to the server.
 // The functions after this implement the interactivity
 //
-function list_movies() {
+function list_ready_function() {
     console.log("list_movies");
     $('#message').html('Listing movies...');
 
@@ -640,7 +649,7 @@ function list_users()
 }
 
 // Wire up whatever happens to be present
-// audit and list are wired with their own ready functions
+// audit, list and upload are wired with their own ready functions
 $( document ).ready( function() {
     $('#load_message').html('');       // remove the load message
     $('#adder_button').click( add_func );

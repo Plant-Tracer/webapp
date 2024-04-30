@@ -313,8 +313,8 @@ def api_upload_movie():
     scheme = get('scheme')
     key = get('key')
     movie_data_sha256 = get('sha256') # claimed SHA256
-    logging.debug("api_upload_movie: request=%s request.files=%s request.files.keys=%s",request,request.files,list(request.files.keys()))
-    if 'file' not in request.files:
+    logging.debug("api_upload_movie: request=%s request.files=%s ", request,request.files)
+    if 'file' not in request.files: # pylint: disable=unsupported-membership-test
         logging.debug("request.files=%s",request.files)
         return {'error':True, 'message':'upload request a file parameter named "file".'}
     with io.BytesIO() as f:
