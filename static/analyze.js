@@ -301,6 +301,7 @@ class MyImage extends AbstractObject {
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
+            console.log("image loaded img=",this.img.naturalWidth, this.img.naturalHeight);
             this.state = 1;
             if (this.ctx) {
                 ptc.redraw('MyImage constructor');
@@ -316,12 +317,13 @@ class MyImage extends AbstractObject {
 
     // MyImage draw
     draw(ctx, selected) {
-        // See if this is the first time we have drawn in the context.
         this.ctx = ctx;         // context in which we draw
         if (this.state > 0){
+            // See if this is the first time we have drawn in the context. If so, resize
             if (this.state==1){
-                this.width  = this.ptc.naturalWidth  = this.img.naturalWidth;
-                this.height = this.ptc.naturalHeight = this.img.naturalHeight;
+                console.log(`resizing from ${this.width}x${this.height} to ${this.img.naturalWidth}x${this.img.naturalHeight}`);
+                this.width  = this.ptc.c.width = this.ptc.naturalWidth  = this.img.naturalWidth;
+                this.height = this.ptc.c.height = this.ptc.naturalHeight = this.img.naturalHeight;
                 this.fills_bounds = true;
                 this.state = 2;
             }
