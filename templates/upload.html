@@ -38,7 +38,7 @@
       </div>
       <div class='pure-control-group'>
         <label for='submit-button'>Click to upload:</label>
-        <input id='upload-button' type='button' value='upload' onclick='upload_movie()' />
+        <input id='upload-button' type='button' value='upload' onclick='upload_movie()' disabled/>
       </div>
     </fieldset>
   </form>
@@ -48,18 +48,20 @@
 
 <!-- uploaded image shows here -->
 <div style='display:none' id='upload-preview'>
-  <p>Movie <i><span id='uploaded_movie_title'></span> (<span id='movie_id'>)</span> successfully uploaded.</i></p>
+  <p>Movie <i><span id='uploaded_movie_title'></span></i> (<span id='movie_id'></span>) successfully uploaded.</p>
   <p>Here's the first frame of your movie:</p>
   <img id='image-preview' src=''/>
 
   <h2>Next steps...</h2>
   Now you can:
   <ul>
-    <li><a id='delete_movie_link' onclick='purge_movie()'>Delete the movie (if you uploaded the wrong movie)</a></li>
-    <li><a id='rotate_movie_link' onclick='rotate_movie()'>Rotate the movie 90º</a></li>
-    <li><a id='track_uploaded_movie_link' href=''>Track uploaded movie</a></li>
-    <li><a href='/list?api_key={{api_key}}'>List all uploaded movies</a>.</li>
-    <li><a href='/upload'>Upload another movie.</a></li>
+    <li><a href='javascript:;' id='delete_movie_link' onclick='purge_movie()'>
+        Delete the movie (if you uploaded the wrong movie)</a></li>
+    <li><a href='javascript:;' id='rotate_movie_link' onclick='rotate_movie()'>
+        Rotate the movie 90º</a></li>
+    <li><a href='' id='track_movie_link' >Track the uploaded movie</a></li>
+    <li><a href='/list'>List all uploaded movies</a></li>
+    <li><a href='/upload'>Upload another movie</a></li>
   </ul>
 </div>
 

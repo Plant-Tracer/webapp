@@ -113,24 +113,6 @@ async function computeSHA256(file) {
     return hashHex;
 }
 
-/**
- * function that is called after the movie is uploaded.
-  */
-function show_movie(movie_title, movie_id)
-{
-    let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-    $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
-                       `<p>First frame:</p> <img src="${first_frame}" style="max-width:300px;max-height:300px">`+
-                       `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
-                       `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-    // Clear the movie uploaded
-    $('#movie-title').val('');
-    $('#movie-description').val('');
-    $('#movie-file').val('');
-    check_upload_metadata(); // disable the button
-};
-
-
 /*
  *
  * Uploads a movie using a presigned post. See:
@@ -142,7 +124,7 @@ function show_movie(movie_title, movie_id)
 async function upload_movie_post(movie_title, description, movieFile)
 {
     // Get a new movie_id
-    var movie_data_sha256 = await computeSHA256(movieFile);
+    const movie_data_sha256 = await computeSHA256(movieFile);
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("title",       movie_title);
@@ -150,14 +132,15 @@ async function upload_movie_post(movie_title, description, movieFile)
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.fileSize);
     console.log("sending:",formData);
-    let r = await fetch('/api/new-movie', { method:"POST", body:formData});
+    const r = await fetch('/api/new-movie', { method:"POST", body:formData});
     console.log("App response code=",r);
-    let obj = await r.json();
+    const obj = await r.json();
     console.log('new-movie obj=',obj);
     if (obj.error){
         $('#message').html(`Error getting upload URL: ${obj.message}`);
         return;
     }
+    const movie_id = obj.movie_id;
 
     // The new movie_id came with the presigned post to upload the form data.
     try {
@@ -189,19 +172,22 @@ async function upload_movie_post(movie_title, description, movieFile)
     }
     // Movie was uploaded! Clear the form and show the first frame
 
-    $('#movie-title').val('');
+    $('#upload_message').text('Movie uploaded.'); // .text() for <div>s.
+    $('#movie-title').val('');                    // .val() for fields
     $('#movie-description').val('');
     $('#movie-file').val('');
 
     const first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-    $('#uploaded_movie_title').val(movie_title);        // display the movie title
-    $('#movie_id').val(movie_id);                       // display the movie_id
-    $('#first_frame').attr('src',first_frame);          // display the first frame
-    $('#track_uploaded_move_link').attr('href',`/analyze?movie_id=${movie_id}`);
+    const track_movie = `/analyze?movie_id=${movie_id}`;
+    console.log('first_frame: ',first_frame);
+    $('#uploaded_movie_title').text(movie_title);        // display the movie title
+    $('#movie_id').text(movie_id);                       // display the movie_id
+    $('#image-preview').attr('src',first_frame);          // display the first frame
+    $('#track_movie_link').attr('href',track_movie);
 
     // Clear the movie uploaded
-    $('#upload-preview').attr('disabled',false);    // display the upload-preview
-    $('#upload-form').attr('disabled',true);        // hide the upload form
+    $('#upload-preview').show();
+    $('#upload-form').hide();
     check_upload_metadata(); // disable the button
 }
 
@@ -227,7 +213,7 @@ function upload_movie()
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
-    $('#message').html(`Uploading image...`);
+    $('#upload_message').html(`Uploading movie ...`);
 
     upload_movie_post(movie_title, description, movieFile);
 }
@@ -434,7 +420,7 @@ function list_movies_data( movies ) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
                 tid += 1;
-                var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
+                let r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
                 if ((admin || user_id == m.user_id) && user_demo==0) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> `;
@@ -584,7 +570,7 @@ function list_ready_function() {
                 $('#message').html('error: '+data.message);
             } else {
                 // Make a map of each movie_id to its position in the array
-                var movie_map = new Array()
+                let movie_map = new Array()
                 for (let movie of data.movies) {
                     movie_map[movie.movie_id] = movie;
                 }
@@ -613,9 +599,9 @@ function list_users_data( users, course_array ) {
     let h = '<table>';
     h += '<tbody>';
     function user_html(user) {
-        var d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
-        var d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
-        var ret = '';
+        let d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
+        let d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
+        let ret = '';
         if (current_course != user.primary_course_id) {
             ret += `<tr><td colspan='4'>&nbsp;</td></tr>\n`;
             ret += `<tr><th colspan='4'>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</th></tr>\n`;
@@ -642,7 +628,7 @@ function list_users()
                 $('#message').html('error: '+data.message);
                 return;
             }
-            var course_array = [];
+            let course_array = [];
             data.courses.forEach( course => (course_array[course.course_id] = course ));
             list_users_data( data.users, course_array);
         });
