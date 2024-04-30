@@ -7,7 +7,7 @@ This provides for all authentication in the planttracer system:
 """
 import functools
 import configparser
-import logging
+#import logging
 
 import bottle
 from bottle import request

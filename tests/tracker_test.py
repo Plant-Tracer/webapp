@@ -21,7 +21,6 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
 import bottle_api
 import bottle_app
@@ -33,7 +32,7 @@ from PIL import Image
 # get the first MOV
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
 from constants import MIME,Engines
 import tracker
@@ -44,7 +43,6 @@ TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
 
 # Actual labels for the circumnutation movie
-TEST_MOVIE_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},
                                 {'frame_number':0,'x':240,'y':96,'label':'ruler 0 mm'},
                                 {'frame_number':0,'x':242,'y':135,'label':'ruler 20 mm'}]
@@ -194,7 +192,7 @@ def test_render_trackpoints():
         trackpoints.extend(frame_trackpoints)
 
     # Get the new trackpoints
-    infile = TEST_MOVIE_PATH
+    infile = TEST_CIRCUMNUTATION_PATH
     tracker.track_movie(engine_name="CV2",
                         moviefile_input=infile,
                         input_trackpoints=input_trackpoints,
@@ -227,3 +225,9 @@ def test_render_trackpoints():
     assert close(trackpoints[-1], TEST_MOVIE_END_TRACKPOINTS[-1])
     assert close(trackpoints[-2], TEST_MOVIE_END_TRACKPOINTS[-2])
     assert close(trackpoints[-3], TEST_MOVIE_END_TRACKPOINTS[-3])
+
+def test_movie_rotate():
+    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
+        tracker.rotate_movie(TEST_PLANTMOVIE_PATH,tf.name)
+        # Not sure how to test that the movie got rotated.
+        # Check width and height?

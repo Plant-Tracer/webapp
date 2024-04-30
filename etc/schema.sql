@@ -226,6 +226,7 @@ CREATE TABLE `movies` (
   `total_bytes` int DEFAULT NULL,
   `status` varchar(250) DEFAULT NULL,
   `movie_data_urn` varchar(1024) DEFAULT NULL,
+  `version` int NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),

@@ -34,7 +34,7 @@ import bottle_app
 from auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME,ENGINE_ID
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,ENGINE_ID
 from constants import MIME,Engines
 import tracker
 
@@ -58,11 +58,11 @@ def new_movie(new_user):
     api_key_invalid = api_key+"invalid"
     movie_title = f'test-movie title {str(uuid.uuid4())}'
 
-    logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
+    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
         movie_data_sha256 = db_object.sha256(movie_data)
-    assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
+    assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
     assert len(movie_data) > 0
 
     # This generates an error, which is why it needs to be caught with pytest.raises():
@@ -99,7 +99,7 @@ def new_movie(new_user):
     url    = res['presigned_post']['url']
     fields = res['presigned_post']['fields']
     # Now send the data
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         if url.startswith('https://'):
             # Do a real post! (probably going to S3)
             logging.debug("calling requests.post(%s,data=%s)",url,fields)
@@ -178,7 +178,7 @@ def test_movie_upload_presigned_post(new_user):
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     movie_title = f'test-movie title {str(uuid.uuid4())}'
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data = f.read()
     movie_data_sha256 = db_object.sha256(movie_data)
     with boddle(params={'api_key': api_key,

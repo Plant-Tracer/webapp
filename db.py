@@ -562,7 +562,7 @@ def get_movie_metadata(*,user_id, movie_id):
     cmd = """SELECT A.id as movie_id, A.title as title, A.description as description,
                     A.created_at as created_at, A.user_id as user_id,
                     A.course_id as course_id, A.published as published, A.deleted as deleted,
-                    A.date_uploaded as date_uploaded, A.mtime,
+                    A.date_uploaded as date_uploaded, A.mtime, A.version as version,
                     A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
                     B.id as tracked_movie_id from movies A
              LEFT JOIN movies B on A.id=B.orig_movie
@@ -572,8 +572,10 @@ def get_movie_metadata(*,user_id, movie_id):
                 (A.course_id=(select primary_course_id from users where id=%s)) OR
                 (A.course_id in (select course_id from admins where A.user_id=%s)))
     """
+    assert isinstance(user_id,int)
+    assert isinstance(movie_id,(int,type(None)))
     params = [user_id, user_id, user_id, user_id]
-    if movie_id:
+    if movie_id is not None:
         cmd += " AND A.id=%s"
         params.append(movie_id)
 
@@ -1126,6 +1128,7 @@ SET_MOVIE_METADATA = {
     'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
     'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
     'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
+    'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1137,7 +1140,14 @@ SET_MOVIE_METADATA = {
 
 @log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
-    """We tried doing this in a single statement and it failed"""
+    """We tried doing this in a single statement and it failed
+    :param user_id: - user doing the setting. 0 for root
+    :param set_movie_id: - if not None, the movie for which we are setting metadata
+    :param set_user_id: - if not None, the user for which we are setting metadata
+    :param prop - the name of the metadata property being set
+    :param value - the value of the metadata property being set
+
+    """
     # First compute @is_owner
 
     logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s",
@@ -1151,23 +1161,32 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     MAPPER = {0: 'FALSE', 1: 'TRUE'}
 
     if set_movie_id:
-        # We are changing metadata for a movie; make sure that this user is allowed to do so
-        res = dbfile.DBMySQL.csfr(
-            get_dbreader(),
-            """SELECT %s in (select user_id from movies where id=%s)""", (user_id, set_movie_id))
-        # Find out if the user is the owner of the movie
-        is_owner = MAPPER[res[0][0]]
-        res = dbfile.DBMySQL.csfr(get_dbreader(),
-                                  """
-                                  SELECT %s IN (select user_id from admins
-                                                WHERE course_id=(select course_id
-                                                FROM movies WHERE id=%s))
-                                  """,
-                                  (user_id, set_movie_id))
-        # Or if the user is the admin
-        is_admin = MAPPER[res[0][0]]
+        # We are changing metadata for a movie; make sure that this user is allowed to do so.
+        # root is always allowed to do so
+        if user_id==0:
+            is_owner = "TRUE"
+            is_admin = "TRUE"
+        else:
+            res = dbfile.DBMySQL.csfr(
+                get_dbreader(),
+                """SELECT %s in (select user_id from movies where id=%s)""", (user_id, set_movie_id))
+            # Find out if the user is the owner of the movie
+            is_owner = MAPPER[res[0][0]]
+
+            # Find out if the user is an admin of the movie's course
+            res = dbfile.DBMySQL.csfr(get_dbreader(),
+                                      """
+                                      SELECT %s IN (select user_id from admins
+                                                    WHERE course_id=(select course_id
+                                                    FROM movies WHERE id=%s))
+                                      """,
+                                      (user_id, set_movie_id))
+            is_admin = MAPPER[res[0][0]]
         # Create the command that updates the movie metadata if the user is the owner of the movie or admin
-        cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
+        try:
+            cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
+        except KeyError as e:
+            raise ValueError('Cannot set property '+prop) from e
         args  = [value, set_movie_id]
         ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
         return ret
@@ -1191,10 +1210,17 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
 class Movie():
     """Simple representation of movies that may be stored in SQL database or on S3.
-    More intelligence will move into this class over time."""
+    Not used for creating movies, but can be used for updating them
+    More intelligence will move into this class over time.
+    """
     __slots__ = ['movie_id', 'urn', 'sha256', 'mime_type']
     def __init__(self, movie_id, *, user_id=None):
-        # If user_id is provided, make sure user gets access
+        """
+        :param movie_id: - the id of the movie
+        :param user_id: - the user_id requesting access. If provided, the user must have access.
+        """
+        assert isinstance(movie_id,int)
+        assert isinstance(user_id,(int,type(None)))
         self.movie_id = movie_id
         self.urn = None
         self.mime_type = MIME.MP4
@@ -1210,6 +1236,26 @@ class Movie():
         """Return the object data"""
         return get_movie_data(movie_id=self.movie_id)
 
+    @data.setter
+    def data(self, movie_data):
+        set_movie_data(movie_id=self.movie_id, movie_data=movie_data)
+
+    @property
     def url(self):
         """Return a URL for accessing the data. This is a self-signed URL"""
         return db_object.make_signed_url(urn=self.urn)
+
+    @property
+    def metadata(self):
+        """Returns a dictionary of the movie metadata"""
+        res = get_movie_metadata(user_id=0, movie_id = self.movie_id)
+        logging.debug("metadata=%s",res[0])
+        return res[0]
+
+    @property
+    def version(self):
+        return self.metadata['version']
+
+    @version.setter
+    def version(self, value):
+        set_metadata(user_id = 0, set_movie_id=self.movie_id, prop='version', value=value)

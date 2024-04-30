@@ -25,6 +25,7 @@ TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_SCALE = 0.75
 TEXT_THICKNESS = 2
 TEXT_MARGIN = 5
+MIN_MOVIE_BYTES = 10
 
 ## JPEG support
 
@@ -249,6 +250,13 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
             callback(frame_number=frame_number, frame_data=frame_this, frame_trackpoints=current_trackpoints)
 
     cap.release()
+
+def rotate_movie(movie_input, movie_output, transpose=1):
+    assert os.path.getsize(movie_input) > MIN_MOVIE_BYTES
+    assert os.path.getsize(movie_output) == 0
+    subprocess.call([FFMPEG_PATH,'-hide_banner','-loglevel','error',
+                     '-i',movie_input,'-vf',f'transpose={int(transpose)}','-c:a','copy','-y',movie_output])
+    assert os.path.getsize(movie_output) > MIN_MOVIE_BYTES
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie

@@ -256,7 +256,6 @@ def api_bulk_register():
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
 
-
 @api.route('/new-movie', method='POST')
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
@@ -315,8 +314,8 @@ def api_upload_movie():
     scheme = get('scheme')
     key = get('key')
     movie_data_sha256 = get('sha256') # claimed SHA256
-    logging.debug("api_upload_movie: request=%s request.files=%s request.files.keys=%s",request,request.files,list(request.files.keys()))
-    if 'file' not in request.files:
+    logging.debug("api_upload_movie: request=%s request.files=%s ", request,request.files)
+    if 'file' not in request.files: # pylint: disable=unsupported-membership-test
         logging.debug("request.files=%s",request.files)
         return {'error':True, 'message':'upload request a file parameter named "file".'}
     with io.BytesIO() as f:
@@ -338,6 +337,7 @@ def api_upload_movie():
 @api.route('/get-movie-data', method=GET_POST)
 def api_get_movie_data():
     """
+    NOTE - This gets the ENTIRE movie. This may cause memory issues at some point.
     :param api_key:   authentication
     :param movie_id:  movie
     :param redirect_inline: - if True and we are redirecting, return "#REDIRECT url"
@@ -424,18 +424,48 @@ def api_get_movie_trackpoints():
     return E.INVALID_MOVIE_ACCESS
 
 
+@api.route('/edit-movie', method=POST)
+def api_edit_movie():
+    """ edit a movie
+    :param api_key: user authentication
+    :param movie_id: the id of the movie to delete
+    :param action: what to do. Must be one of 'rotate90cw'
+
+    """
+    movie_id = get_int('movie_id')
+    if not db.can_access_movie(user_id=get_user_id(allow_demo=False),
+                               movie_id=movie_id):
+        return E.INVALID_MOVIE_ACCESS
+
+    action = get("action")
+    if action=='rotate90cw':
+        with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_input:
+            with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_output:
+                movie = db.Movie(movie_id, user_id=get_user_id())
+                movie_input.write( movie.data )
+                tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
+                movie_output.seek(0)
+                movie.data = movie_output.read()
+                movie.version += 1
+                return {'error': False}
+    else:
+        return E.INVALID_EDIT_ACTION
+
+
+
 @api.route('/delete-movie', method=POST)
 def api_delete_movie():
     """ delete a movie
+    :param api_key: - the User's API key.
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if db.can_access_movie(user_id=get_user_id(allow_demo=False),
+    if not db.can_access_movie(user_id=get_user_id(allow_demo=False),
                            movie_id=get_int('movie_id')):
-        db.delete_movie(movie_id=get_int('movie_id'),
-                        delete=get_bool('delete',True))
-        return {'error': False}
-    return E.INVALID_MOVIE_ACCESS
+        return E.INVALID_MOVIE_ACCESS
+    db.delete_movie(movie_id=get_int('movie_id'),
+                    delete=get_bool('delete',True))
+    return {'error': False}
 
 
 @api.route('/list-movies', method=POST)
@@ -730,7 +760,6 @@ def api_put_frame_analysis():
 
 
 ################################################################
-
 ##
 # Log API
 #

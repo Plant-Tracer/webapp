@@ -24,7 +24,7 @@ import dbmaint
 import bottle_api
 import bottle_app
 import ctools.dbfile as dbfile
-from paths import TEST_DIR
+from paths import TEST_DIR, TEST_DATA_DIR
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
@@ -46,7 +46,9 @@ MOVIE_TITLE = 'movie_title'
 ENGINE_ID = 'engine_id'
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
-TEST_MOVIE_FILENAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
+TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
+TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
+TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 
 ################################################################
 

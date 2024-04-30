@@ -301,6 +301,7 @@ class MyImage extends AbstractObject {
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
+            console.log("image loaded img=",this.img.naturalWidth, this.img.naturalHeight);
             this.state = 1;
             if (this.ctx) {
                 ptc.redraw('MyImage constructor');
@@ -316,12 +317,12 @@ class MyImage extends AbstractObject {
 
     // MyImage draw
     draw(ctx, selected) {
-        // See if this is the first time we have drawn in the context.
         this.ctx = ctx;         // context in which we draw
         if (this.state > 0){
+            // See if this is the first time we have drawn in the context. If so, resize
             if (this.state==1){
-                this.width  = this.ptc.naturalWidth  = this.img.naturalWidth;
-                this.height = this.ptc.naturalHeight = this.img.naturalHeight;
+                this.width  = this.ptc.c.width = this.ptc.naturalWidth  = this.img.naturalWidth;
+                this.height = this.ptc.c.height = this.ptc.naturalHeight = this.img.naturalHeight;
                 this.fills_bounds = true;
                 this.state = 2;
             }
@@ -342,12 +343,12 @@ class PlantTracerController extends CanvasController {
         this.movie_metadata  = movie_metadata;
         this.total_frames    = movie_metadata.total_frames;
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
-        this.tracked_movie        = $(`#${this.this_id} .tracked_movie`);
-        this.tracked_movie_status = $(`#${this.this_id} .tracked_movie_status`);
+        this.tracking_status = $(`#${this.this_id} .tracking_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
         this.download_button      = $(`#${this.this_id} .download_button`);
-        this.playing = 0;
+        this.playing = false;   // are we playing a movie?
+        this.tracking = false;  // are we tracking a movie?
         console.log("PlantTracer movie_id=",movie_id,"metadata=",movie_metadata);
 
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
@@ -362,10 +363,6 @@ class PlantTracerController extends CanvasController {
 
         // Hide the download link until we track or retrack
         this.download_link.hide();
-
-        // Hide the video until we track or retrack retrack
-        this.tracked_movie.hide();
-        this.tracked_movie_status.hide();
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(`#${this_id} input.marker_name_input`);
@@ -562,13 +559,15 @@ class PlantTracerController extends CanvasController {
         // get the next frame and apply tracking logic
         // First launch the status worker
         /* Disabled because Amazon's back end isn't multi-threaded */
+        this.tracking = true;   // we are tracking
         if (window.Worker) {
             this.status_worker = new Worker(STATUS_WORKER);
             this.status_worker.onmessage = (e) => {
                 // Got back a message
                 console.log("got e.data=",e.data,"status=",e.data.status);
-                this.tracked_movie_status.text( e.data.status );
+                this.tracking_status.text( e.data.status );
                 if (e.data.status==TRACKING_COMPLETED_FLAG) {
+                    this.tracking = false; // done tracking
                     this.movie_tracked();
                     this.total_frames = e.data.total_frames;
                     $(`#${this.this_id} span.total-frames-span`).text(this.total_frames);
@@ -579,9 +578,7 @@ class PlantTracerController extends CanvasController {
             alert("Your browser does not support web workers. You cannot track movies.");
         }
         console.log("track_to_end start");
-        this.tracked_movie.hide();
-        this.tracked_movie_status.text("Asking server to track movie...");
-        this.tracked_movie_status.show();
+        this.tracking_status.text("Asking server to track movie...");
         this.track_button.prop('disabled',true); // disable it until tracking is finished
         const formData = new FormData();
         formData.append('api_key',api_key);
@@ -598,24 +595,20 @@ class PlantTracerController extends CanvasController {
                 if(data.error){
                     alert(data.message);
                 } else {
-                    this.tracked_movie_status.text(data.message);
+                    this.tracking_status.text(data.message);
                 }
             });
     }
 
     /** movie is tracked - display the results */
     movie_tracked() {
-        const movie_id = this.movie_id;
-        console.log(`terminating status worker; getting metadata for movie_id=${movie_id}`);
+        console.log(`terminating status worker; getting metadata for movie_id=${this.movie_id}`);
         this.status_worker.terminate();
-        fetch(`/api/get-movie-metadata?api_key=${api_key}&movie_id=${movie_id}`, { method:'GET'})
+        fetch(`/api/get-movie-metadata?api_key=${api_key}&movie_id=${this.movie_id}`, { method:'GET'})
             .then((response) => response.json())
             .then((data) => {
                 console.log("movie metadata: ",data);
-                const tracked_movie_url = `/api/get-movie-data?api_key=${api_key}&movie_id=${data.metadata.tracked_movie_id}`;
-                this.tracked_movie.html(`<source src='${tracked_movie_url}' type='video/mp4'>`); // download link for it
-                this.tracked_movie_status.text('Movie tracking complete.');
-                this.tracked_movie.show();
+                this.tracking_status.text('Movie tracking complete.');
                 this.download_link.show();
                 // change from 'track movie' to 'retrack movie' and re-enable it
                 this.track_button.val( `retrack movie.` );
