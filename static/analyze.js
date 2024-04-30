@@ -393,6 +393,9 @@ class PlantTracerController extends CanvasController {
         this.stop_button = $(`#${this.this_id} input.stop_button`);
         this.stop_button.prop('disabled',true);
         this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
+        this.rotate_button = $(`#${this.this_id} input.rotate_button`);
+        this.rotate_button.prop('diabled',false);
+        this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         this.track_button = $(`#${this.this_id} input.track_button`);
 
@@ -670,6 +673,8 @@ class PlantTracerController extends CanvasController {
             this.stop_button.prop('disabled',true);
             this.track_button.prop('disabled',true);
             this.download_button.prop('disabled',true);
+            this.rotate_button.prop('disabled',true);
+
             $(`#${this.this_id} input.frame_movement`).prop('disabled',true); // all arrow buttons disabled
             return;
         }
@@ -680,6 +685,7 @@ class PlantTracerController extends CanvasController {
             this.stop_button.prop('disabled',false);
             this.track_button.prop('disabled',true);
             this.download_button.prop('disabled',true);
+            this.rotate_button.prop('disabled',true);
             $(`#${this.this_id} input.frame_movement`).prop('disabled',true); // all arrow buttons disabled
             return;
         }
@@ -689,6 +695,7 @@ class PlantTracerController extends CanvasController {
         this.download_button.prop('disabled',false);
         $(`#${this.this_id} input.frame_movement_backwards`).prop('disabled', this.frame_number<=0);
         $(`#${this.this_id} input.frame_movement_forwards`).prop('disabled', this.frame_number>=this.last_tracked_frame-1);
+        this.rotate_button.prop('disabled',this.frame_number>0); // can only rotate on first frame
 
         // We can play if we are not on the last frame
         this.play_button.prop('disabled', this.frame_number >= this.last_tracked_frame);
@@ -720,6 +727,21 @@ class PlantTracerController extends CanvasController {
         this.set_movie_control_buttons();
     }
 
+    async rotate_button_pressed() {
+        // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
+        let formData = new FormData();
+        formData.append("api_key",  api_key);   // on the upload form
+        formData.append('movie_id', this.movie_id);
+        formData.append('action', 'rotate90cw');
+        const r = await fetch('/api/edit-movie', { method:"POST", body:formData});
+        console.log("r=",r);
+        if (!r.ok) {
+            console.log('could not rotate. r=',r);
+            return;
+        }
+        location.reload(true);
+    }
+
     /***
      * get_frame_handler() is called as a callback from the /api/get-frame call.
      * It sets the frame visible in the top of the component and sets up the rest of the GUI to match.
@@ -747,7 +769,14 @@ class PlantTracerController extends CanvasController {
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );
         if (data.frame_number>=0){
-            this.track_button.val( `retrack from frame ${data.frame_number} to end of movie` );
+            if (data.frame_number == data.total_frames-1) {
+                this.track_button.val( `at end of movie..` );
+                this.track_button.prop('disabled',true);
+            }
+            else {
+                this.track_button.val( `retrack from frame ${data.frame_number} to end of movie` );
+                this.track_button.prop('disabled',false);
+            }
         }
 
         // Draw trakcpoints if we have them, otherwise create initial trackpoints
