@@ -290,6 +290,7 @@ def api_new_movie():
     # Get the object name and create the upload URL
     object_name= db_object.object_name( data_sha256=movie_data_sha256,
                                         course_id = db.course_id_for_movie_id( ret['movie_id']),
+                                        movie_id = ret['movie_id'],
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
     db.set_movie_data_urn(movie_id=ret['movie_id'], movie_data_urn=movie_data_urn)
