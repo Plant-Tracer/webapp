@@ -227,7 +227,7 @@ function purge_movie() {
 }
 
 function upload_ready_function() {
-
+    check_upload_metadata();    // disable the upload button
 }
 
 ////////////////////////////////////////////////////////////////
