@@ -9,9 +9,13 @@ API calls on that the JavaScript movie player can use
 
   If it has to single frame through the movie, it saves the frame.
 
+  Status: Implemented
+
 - edit-movie
   If movie is rotated, all of the frames and trackpoints have to be
   deleted. This should be done automatically on the server.
+
+  Status: Implemented
 
 - get-movie-metadata
   Gets information about individual frames. Parameters:
