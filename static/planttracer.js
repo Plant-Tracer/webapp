@@ -114,6 +114,14 @@ async function computeSHA256(file) {
 }
 
 /*
+ * get the first frame with cache busting logic.
+ */
+function first_frame_url(movie_id)
+{
+    return `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
+}
+
+/*
  *
  * Uploads a movie using a presigned post. See:
  * https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
@@ -140,7 +148,7 @@ async function upload_movie_post(movie_title, description, movieFile)
         $('#message').html(`Error getting upload URL: ${obj.message}`);
         return;
     }
-    const movie_id = obj.movie_id;
+    const movie_id = window.movie_id = obj.movie_id;
 
     // The new movie_id came with the presigned post to upload the form data.
     try {
@@ -177,12 +185,10 @@ async function upload_movie_post(movie_title, description, movieFile)
     $('#movie-description').val('');
     $('#movie-file').val('');
 
-    const first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
     const track_movie = `/analyze?movie_id=${movie_id}`;
-    console.log('first_frame: ',first_frame);
     $('#uploaded_movie_title').text(movie_title);        // display the movie title
     $('#movie_id').text(movie_id);                       // display the movie_id
-    $('#image-preview').attr('src',first_frame);          // display the first frame
+    $('#image-preview').attr('src',first_frame_url(movie_id));          // display the first frame
     $('#track_movie_link').attr('href',track_movie);
 
     // Clear the movie uploaded
@@ -218,8 +224,39 @@ function upload_movie()
     upload_movie_post(movie_title, description, movieFile);
 }
 
-function rotate_movie() {
-    console.log("rotate_movie()");
+async function get_movie_metadata(movie_id){
+    // Ask the server to rotate the movie
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append("movie_id",    movie_id);
+    const r = await fetch('/api/get-movie-metadata', { method:"POST", body:formData});
+    console.log("get_movie_metadata. r=",r);
+    if (r.ok) {
+        return await r.json()['metadata'];
+    }
+}
+
+
+async function rotate_movie() {
+    //
+    // Ask the server to rotate the movie
+    const movie_id = window.movie_id;
+    console.log("rotate_movie. movie_id=",movie_id);
+    const m0 = await get_movie_metadata(movie_id);
+    console.log("Initial metadata:",m0);
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append('movie_id', movie_id);
+    formData.append('action', 'rotate90cw');
+    const r = await fetch('/api/edit-movie', { method:"POST", body:formData});
+    console.log("r=",r);
+    if (!r.ok) {
+        console.log('could not rotate. r=',r);
+        return;
+    }
+    const m1 = get_movie_metadata(movie_id);
+    console.log("New metadata:",m1);
+    $('#image-preview').attr('src',first_frame_url(movie_id));          // reload the first frame
 }
 
 function purge_movie() {
