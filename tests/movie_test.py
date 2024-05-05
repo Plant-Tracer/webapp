@@ -290,6 +290,54 @@ def test_new_movie_analysis(new_engine):
     db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
 
 
+def test_movie_extract(new_movie):
+    """Check single frame extarct and error handling"""
+    cfg = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    user_id = cfg[USER_ID]
+
+    with boddle(params={'api_key': api_key}):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': 0,
+                        'format':'no-format'
+                        }):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': -1,
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': 0,
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        logging.debug("frame0a=%s",r)
+        assert r['error']==False
+        frame0a = r
+    logging.info("frame0 id=%s",frame0a['frame_id'])
+
+    with boddle(params={'api_key': api_key,
+                        'frame_id': frame0a['frame_id'],
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        logging.debug("frame0b=%s",r)
+        assert r['error']==False
+        frame0b = r
+    assert frame0a == frame0b
 
 def test_movie_extract(new_movie):
     """Try extracting individual movie frames"""
@@ -330,6 +378,8 @@ def test_movie_extract(new_movie):
     jpeg1 = get_jpeg_frame(1)
     jpeg2 = get_jpeg_frame(2)
     assert jpeg0 != jpeg1 != jpeg2
+
+    # Handle missing params
 
     # Make sure it properly handles frames out-of-range
     with boddle(params={'api_key': api_key,

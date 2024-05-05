@@ -9,14 +9,18 @@ API calls on that the JavaScript movie player can use
 
   If it has to single frame through the movie, it saves the frame.
 
+  Status: Implemented
+
 - edit-movie
   If movie is rotated, all of the frames and trackpoints have to be
   deleted. This should be done automatically on the server.
 
-- get-movie-metadata-and-frames
+  Status: Implemented
+
+- get-movie-metadata
   Gets information about individual frames. Parameters:
-  frame-start - starting frame to get;
-  frame-count - count of frames to get; 0 for no frames
+  frame_start - starting frame to get;
+  frame_count - count of frames to get; 0 for no frames
   what - comma-delimited string - 'trackpoints', 'annotations', 'urls'
 
   Returns JSON dictionary:
@@ -29,7 +33,6 @@ API calls on that the JavaScript movie player can use
 
 Client Side
 ===========
-
 
 Tunable Constants
 -----------------
