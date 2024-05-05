@@ -29,7 +29,7 @@ API calls on that the JavaScript movie player can use
   ['frames']['10']      (where '10' is a frame number) - per-frame dictionary.
   ['frames']['10']['trackpoints'] - array of the trackpoints for that frame
   ['frames']['10']['annotations'] - array of the annotations for that frame
-  ['frames']['10']['url'] - signed URL for the frame, from S3
+  ['frames']['10']['frame_url'] - signed URL for the frame
 
 Client Side
 ===========

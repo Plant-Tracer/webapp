@@ -1,11 +1,16 @@
-"""
-Support for the object-store. Currently we have support for:
+"""Support for the object-store. Currently we have support for:
 
 S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be authenticated to the bucket
 DB - db://object_store/name - Local stored in the mysql database
 
-If the environment varialbe PLANTTRACER_S3_BUCKET is set, use that bucket for writes, otherwise use DB.
+movie_name = {course_id}/{movie_id}.mov
+frame_name = {course_id}/{movie_id}/frame_id:06d}.jpg
+
+If the environment variable PLANTTRACER_S3_BUCKET is set, use that bucket for writes, otherwise use DB.
 Reads are based on whatever is in the URN.
+
+Note that we previously stored everything by SHA256. We aren't doing
+that anymore, and the SHA256 stuff should probably come out.
 
 """
 
@@ -15,26 +20,29 @@ import urllib.parse
 import hashlib
 import requests
 import boto3
+import bottle
 
 from lib.ctools import dbfile
 from constants import C
 from auth import get_dbreader,get_dbwriter
 
 """
-Note tht the bucket must have this CORSRule:
+Note tht to allow for local access the bucket must have this CORSRule:
 <CORSRule>
     <AllowedOrigin>http://localhost:8080</AllowedOrigin>
     <AllowedMethod>PUT</AllowedMethod>
     <AllowedMethod>GET</AllowedMethod>
     <AllowedHeader>*</AllowedHeader>
 </CORSRule>
-
-We support the following schemas:
-
-s3:// - Store in the AWS S3 bucket specified by the environment variable PLANTTRACER_S3_BUCKET. The running script must be authorized to read and write that bucket.
-      - stores as s3://{bucket}/{course}/{SHA256}.{extension}
-
-db:// - Store in the local MySQL DB specified in etc/client.ini under the [dbreader] and [dbwriter] sections.
+We use this:
+<CORSRule>
+    <AllowedOrigin>*</AllowedOrigin>
+    <AllowedMethod>DELETE</AllowedMethod>
+    <AllowedMethod>GET</AllowedMethod>
+    <AllowedMethod>POST</AllowedMethod>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedHeader>*</AllowedHeader>
+</CORSRule>
 """
 
 ALLOWED_SCHEMES = [ C.SCHEME_S3, C.SCHEME_DB ]
@@ -68,8 +76,10 @@ def s3_client():
     return boto3.session.Session().client( S3 )
 
 def make_urn(*, object_name, scheme = None ):
-    # If environment variable is not set, default to the database schema
-    # We grab this every time through so that the bucket can be changed during unit tests
+    """
+    If environment variable is not set, default to the database schema
+    We grab this every time through so that the bucket can be changed during unit tests
+    """
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
     if scheme is None:
         scheme = C.SCHEME_S3 if (s3_bucket is not None) else C.SCHEME_DB
@@ -85,6 +95,7 @@ def make_urn(*, object_name, scheme = None ):
     logging.debug("make_urn=%s",ret)
     return ret
 
+API_SECRET=os.environ.get("API_SECRET","test-secret")
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     logging.debug("urn=%s",urn)
     o = urllib.parse.urlparse(urn)
@@ -96,9 +107,19 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
                     'Key': o.path[1:]},
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
-        raise RuntimeError("Signed URLs not implemented for DB")
+        sig = sha256( (o.netloc + "/" + o.path[1:] + API_SECRET ).encode('utf-8'))
+        return f"/get-object/{o.netloc}/{o.path[1:]}/{sig}"
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
+
+def read_signed_url(*,bucket,key,sig):
+    computed_sig = sha256( (bucket + "/" + key + API_SECRET).encode('utf-8'))
+    if sig==computed_sig:
+        urn = f"{C.SCHEME_DB}://{bucket}/{key}"
+        logging.info("URL signature matches. urn=%s",urn)
+        return read_object(urn)
+    logging.error("URL signature does not match. bucket=%s key=%s sig=%s computed_sig=%s",bucket,key,sig,computed_sig)
+    raise bottle.HTTPResponse(body="signature does not verify", status=204)
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""

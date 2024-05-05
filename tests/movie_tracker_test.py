@@ -185,7 +185,7 @@ def test_movie_tracking(new_movie):
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_start': 0,
-                        'frame_count': 'all'}): # not implemented
+                        'frame_count': 0}): # not implemented
         r = bottle_api.api_get_movie_metadata()
         assert r == E.FRAME_COUNT_GT_0
 
@@ -193,13 +193,15 @@ def test_movie_tracking(new_movie):
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_start': 0,
-                        'frame_end': 1000}):
+                        'frame_count': 1000}):
         r = bottle_api.api_get_movie_metadata()
-        logging.debug("r=%s",r)
+        logging.debug("r10=%s",r)
+        print(json.dumps(r,indent=4),file=sys.stderr)
         assert r['error'] == False
         movie_id = r['metadata']['movie_id']
-        frame0 = r['frames'][0]
-        assert frames0['url'].startswith('https')
+        frame0 = r['frames']['0']
+        assert f"/{movie_id}/" in frame0['frame_url']
+        assert "/000000.jpg/" in frame0['frame_url']
     # See if we can find our starting data
     track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
     assert track1['x']==275
@@ -207,6 +209,6 @@ def test_movie_tracking(new_movie):
     assert track1['label']=='track1'
 
     track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
-    assert track1['x']==410
-    assert track1['y']==175
-    assert track1['label']=='track2'
+    assert track2['x']==410
+    assert track2['y']==175
+    assert track2['label']=='track2'

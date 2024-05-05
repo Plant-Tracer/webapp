@@ -546,17 +546,19 @@ def get_movie_data(*, movie_id:int):
 
 
 @log
-def get_movie_metadata(*,user_id, movie_id):
+def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
     This is used for the movie list.
     """
 
-    cmd = """SELECT A.id as movie_id, A.title as title, A.description as description,
-                    A.created_at as created_at, A.user_id as user_id,
-                    A.course_id as course_id, A.published as published, A.deleted as deleted,
-                    A.date_uploaded as date_uploaded, A.mtime, A.version as version,
-                    A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
-                    B.id as tracked_movie_id from movies A
+    cmd = """SELECT A.id AS movie_id, A.title AS title, A.description AS description,
+                    A.created_at AS created_at, A.user_id AS user_id,
+                    A.course_id AS course_id, A.published AS published, A.deleted AS deleted,
+                    A.date_uploaded AS date_uploaded, A.mtime AS mtime, A.version AS version,
+                    A.fps as fps, A.width as width, A.height as height,
+                    A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
+                    B.id AS tracked_movie_id
+             FROM movies A
              LEFT JOIN movies B on A.id=B.orig_movie
              WHERE
                 ((A.user_id=%s) OR
@@ -571,7 +573,11 @@ def get_movie_metadata(*,user_id, movie_id):
         cmd += " AND A.id=%s"
         params.append(movie_id)
 
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
+    if get_last_frame_tracked:
+        ret = [ {**r,**{'last_frame_tracked':last_tracked_frame(movie_id=r['movie_id'])}} for r in ret]
+    return ret
+
 
 @log
 def can_access_movie(*, user_id, movie_id):
@@ -804,6 +810,27 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
                                SELECT frame_number,x,y,label
                                FROM movie_frame_trackpoints
                                LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s {extra}
+                               """,
+                               args, asDicts=True)
+
+def get_movie_frame_metadata(*, movie_id, frame_start=None, frame_count=None):
+    """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_id, frame_number, frame_urn
+    :param: frame_start, frame_count -
+    """
+    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
+
+    if frame_start is None:
+        args = [movie_id]
+        extra = ''
+    else:
+        args = [movie_id, frame_start, frame_start+frame_count]
+        extra = ' and frame_number >= %s and frame_number < %s '
+
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               f"""
+                               SELECT id as frame_id, movie_id, frame_number, created_at, mtime, frame_urn
+                               FROM movie_frames
                                WHERE movie_id=%s {extra}
                                """,
                                args, asDicts=True)
