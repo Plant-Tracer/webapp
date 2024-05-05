@@ -200,8 +200,15 @@ def test_movie_tracking(new_movie):
         assert r['error'] == False
         movie_id = r['metadata']['movie_id']
         frame0 = r['frames']['0']
-        assert f"/{movie_id}/" in frame0['frame_url']
-        assert "/000000.jpg/" in frame0['frame_url']
+
+        # Verify that the signed URL works
+        (first,command,bucket,key,sig) = frame0['frame_url'].split('/')
+        assert first=''
+        assert command=='get-object'
+        frame = db_object.read_signed_url(bucket, key, sig)
+        assert len(frame)>100
+        assert b'JFIF' in frame
+
     # See if we can find our starting data
     track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
     assert track1['x']==275
