@@ -552,9 +552,11 @@ def api_get_movie_metadata():
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
             return E.FRAME_COUNT_GT_0
-
-
-
+        # Get the trackpoints and then divide them up by frame_number for the response
+        ret['trackpoints'] = defaultdict(list)
+        tpts = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
+        for tpt in tpts:
+            ret['trackpoints'][tpt['frame_number']].append(tpt)
 
     return fix_types(ret)
 

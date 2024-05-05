@@ -39,7 +39,7 @@ from PIL import Image
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME,Engines
+from constants import MIME,Engines,E
 import tracker
 
 # Bogus labels for generic test
@@ -175,6 +175,20 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
+    # Check error conditions for getting incomplete metadata
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id,
+                        'frame_start': 0}):
+        r = bottle_api.api_get_movie_metadata()
+        assert r == E.FRAME_START_NO_FRAME_COUNT
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id,
+                        'frame_start': 0,
+                        'frame_count': 'all'}): # not implemented
+        r = bottle_api.api_get_movie_metadata()
+        assert r == E.FRAME_COUNT_GT_0
+
     # Now test the API to make sure we can get the URL for the frames.
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
@@ -191,3 +205,8 @@ def test_movie_tracking(new_movie):
     assert track1['x']==275
     assert track1['y']==215
     assert track1['label']=='track1'
+
+    track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
+    assert track1['x']==410
+    assert track1['y']==175
+    assert track1['label']=='track2'

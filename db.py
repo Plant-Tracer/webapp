@@ -747,13 +747,11 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                                    (movie_id, frame_number))[0][0]
     return frame_id
 
-def get_frame(*,
-              frame_id=None, movie_id=None, frame_number=None,
-              get_annotations=False, get_trackpoints=False):
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
+    Can also get trackpoints and annotations.
     :param: movie_id - the movie_id wanted
-    :param: get_annotations - return anotations in the 'annotations' slot
-    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
+    :param: (frame_id, frame_number) - provide one of these. Specifies which frame to get
     :return: returns a dictionary with the frame info
     """
     if frame_id is not None:
@@ -769,19 +767,15 @@ def get_frame(*,
     row = rows[0]
     if (row['frame_data'] is None) and (row['frame_urn'] is not None):
         row['frame_data'] = db_object.read_object(row['frame_urn'])
-    if get_annotations:
-        row['annotations'] = get_frame_annotations(frame_id=row['frame_id'])
-    if get_trackpoints:
-        row['trackpoints'] = get_frame_trackpoints(frame_id=row['frame_id'])
     return row
 
 
 ################################################################
 ## Trackpoints
 
-
 def get_frame_trackpoints(*, frame_id):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    No join required
     """
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                """
@@ -791,19 +785,28 @@ def get_frame_trackpoints(*, frame_id):
                                (frame_id,),
                                asDicts=True)
 
-def get_movie_trackpoints(*, movie_id):
+def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    Requires a join becuase we know the movie_id but not the frame_id.
+    :param: frame_start, frame_count - optional
     """
+    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
+
+    if frame_start is None:
+        args = [movie_id]
+        extra = ''
+    else:
+        args = [movie_id, frame_start, frame_start+frame_count]
+        extra = ' and frame_number >= %s and frame_number < %s '
+
     return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               """
+                               f"""
                                SELECT frame_number,x,y,label
                                FROM movie_frame_trackpoints
                                LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
-                               WHERE movie_id=%s
-                               ORDER BY frame_number
+                               WHERE movie_id=%s {extra}
                                """,
-                               (movie_id,),
-                               asDicts=True)
+                               args, asDicts=True)
 
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
