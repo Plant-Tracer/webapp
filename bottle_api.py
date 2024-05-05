@@ -538,11 +538,26 @@ def api_get_movie_metadata():
     user_id = get_user_id()
     movie_id = get_int('movie_id')
     logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
-        metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
-        return {'error':False, 'metadata':fix_types(metadata)}
-    return E.INVALID_MOVIE_ACCESS
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        return E.INVALID_MOVIE_ACCESS
+
+    metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+    metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
+    ret = {'error':False, 'metadata':metadata}
+
+    frame_start = get_int('frame_start')
+    if frame_start is not None:
+        frame_count = get_int('frame_count')
+        if frame_count is None:
+            return E.FRAME_START_NO_FRAME_COUNT
+        if frame_count<1:
+            return E.FRAME_COUNT_GT_0
+
+
+
+
+    return fix_types(ret)
+
 
 @api.route('/get-movie-trackpoints',method=GET_POST)
 def api_get_movie_trackpoints():

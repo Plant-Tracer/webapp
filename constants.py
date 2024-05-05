@@ -67,5 +67,8 @@ class E:
     MUST_TRACK_ORIG_MOVIE = {'error':True, 'message':'Must track original movies'}
     NO_MAILER_CONFIGURATION = {'error':True, 'message':'Email cannot be sent as no mailer has been configured.'}
     INVALID_FRAME_ID_DB = {'error':True, 'message':'frame_id is not in the database'}
+    FRAME_START_NO_FRAME_COUNT = {'error':True, 'message':'frame_start provided but frame_count is not provided'}
+    FRAME_COUNT_GT_0 = {'error':True, 'message':'frame_count must be greater than 0'}
+
 
 #pylint: enable=too-few-public-methods
