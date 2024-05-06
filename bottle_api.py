@@ -24,7 +24,7 @@ import db
 import db_object
 import auth
 
-from constants import C,E,__version__,POST,GET_POST,MIME
+from constants import C,E,__version__,GET,POST,GET_POST,MIME
 import mailer
 import tracker
 
@@ -253,10 +253,19 @@ def api_bulk_register():
 
 ################################################################
 ##
+## Object API
+@api.route('/get-object', method=GET)
+def api_get_object(bucket,key,sig):
+    """Implement signed URLs"""
+    return db_object.read_signed_url(urn=get('urn'), sig=get('sig'))
+
+
+################################################################
+##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
 
-@api.route('/new-movie', method='POST')
+@api.route('/new-movie', method=POST)
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
     Moving can appear here as a file or as a base64 encoded data.
@@ -391,6 +400,7 @@ def api_get_frame():
     """
     Get a frame and its annotation from a movie. Return from the frame database. If not there, grab it from the movie
 
+
     :param api_key:   authentication
     :param movie_id:   movie
     :param frame_id:   just get by frame_id
@@ -398,6 +408,7 @@ def api_get_frame():
     :param format:     jpeg - just get the image;
                        json (default) - get the image (default), json annotation and trackpoints
                        // todo - frame_id - just get the frame_id
+                       // deprecated - soon will be just jpeg
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
       error        = true or false
@@ -534,15 +545,47 @@ def api_get_movie_metadata():
     :param movie_id:  movie
     :param frame_start: if provided, first frame to provide metadata about
     :param frame_count: if provided, number of frames to get info on. 0 is no frames
+
+    Returns JSON dictionary:
+    ['metadata'] - movie metadata (same as get-metadata)
+    ['frames'] - annotations, trackpoints, or URLS.
+    ['frames']['10']      (where '10' is a frame number) - per-frame dictionary.
+    ['frames']['10']['trackpoints'] - array of the trackpoints for that frame
+    ['frames']['10']['annotations'] - array of the annotations for that frame
+    ['frames']['10']['url'] - signed URL for the frame, from S3
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')
     logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
-    if db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
-        metadata['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
-        return {'error':False, 'metadata':fix_types(metadata)}
-    return E.INVALID_MOVIE_ACCESS
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+        return E.INVALID_MOVIE_ACCESS
+
+    metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
+    ret = {'error':False, 'metadata':metadata}
+
+    frame_start = get_int('frame_start')
+    if frame_start is not None:
+        frame_count = get_int('frame_count')
+        if frame_count is None:
+            return E.FRAME_START_NO_FRAME_COUNT
+        if frame_count<1:
+            return E.FRAME_COUNT_GT_0
+        # Get the trackpoints and then divide them up by frame_number for the response
+        ret['frames'] = defaultdict(dict)
+        tpts = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
+        for tpt in tpts:
+            frame = ret['frames'][tpt['frame_number']]
+            if 'trackpoints' not in frame:
+                frame['trackpoints'] = []
+            frame['trackpoints'].append(tpt)
+
+        # Now get the URLs
+        for frame in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
+            ret['frames'][frame['frame_number']]['frame_url'] = db_object.make_signed_url(urn=frame['frame_urn'])
+
+    logging.debug("ret=%s",ret)
+    return fix_types(ret)
+
 
 @api.route('/get-movie-trackpoints',method=GET_POST)
 def api_get_movie_trackpoints():

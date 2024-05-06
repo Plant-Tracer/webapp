@@ -162,12 +162,15 @@ def test_new_movie(new_movie):
     # res must be a movie. We should validate it.
     assert len(movie_data)>0
     assert filetype.guess(movie_data).mime==MIME.MP4
+
     # Make sure that we can get the metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_api.api_get_movie_metadata()
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
+
+
 
 def test_movie_upload_presigned_post(new_user):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""

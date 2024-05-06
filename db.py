@@ -135,14 +135,6 @@ def log(func):
     """
     def wrapper(*args, **kwargs):
         r = func(*args, **kwargs)
-        #try:
-        #    r = func(*args, **kwargs)
-        #except Exception as e:
-        #    logging.error("EXCEPTION %s args=%s kwargs=%s",e.__class__.__module__, str(args)[0:100],str(kwargs)[0:100])
-        #    logit(func_name=func.__name__,
-        #          func_args={**kwargs, **{'args': args}},
-        #          func_return="EXCEPTION")
-        #    raise
         logit(func_name=func.__name__,
               func_args={**kwargs, **{'args': args}},
               func_return=r)
@@ -554,17 +546,19 @@ def get_movie_data(*, movie_id:int):
 
 
 @log
-def get_movie_metadata(*,user_id, movie_id):
+def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
     This is used for the movie list.
     """
 
-    cmd = """SELECT A.id as movie_id, A.title as title, A.description as description,
-                    A.created_at as created_at, A.user_id as user_id,
-                    A.course_id as course_id, A.published as published, A.deleted as deleted,
-                    A.date_uploaded as date_uploaded, A.mtime, A.version as version,
-                    A.fps, A.width, A.height, A.total_frames, A.total_bytes, A.status,
-                    B.id as tracked_movie_id from movies A
+    cmd = """SELECT A.id AS movie_id, A.title AS title, A.description AS description,
+                    A.created_at AS created_at, A.user_id AS user_id,
+                    A.course_id AS course_id, A.published AS published, A.deleted AS deleted,
+                    A.date_uploaded AS date_uploaded, A.mtime AS mtime, A.version AS version,
+                    A.fps as fps, A.width as width, A.height as height,
+                    A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
+                    B.id AS tracked_movie_id
+             FROM movies A
              LEFT JOIN movies B on A.id=B.orig_movie
              WHERE
                 ((A.user_id=%s) OR
@@ -579,7 +573,11 @@ def get_movie_metadata(*,user_id, movie_id):
         cmd += " AND A.id=%s"
         params.append(movie_id)
 
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
+    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
+    if get_last_frame_tracked:
+        ret = [ {**r,**{'last_frame_tracked':last_tracked_frame(movie_id=r['movie_id'])}} for r in ret]
+    return ret
+
 
 @log
 def can_access_movie(*, user_id, movie_id):
@@ -592,6 +590,9 @@ def can_access_movie(*, user_id, movie_id):
         course_id in (select course_id from admins where user_id=%s))""",
         (movie_id, user_id, user_id, user_id))
     return res[0][0] > 0
+
+################################################################
+## Movie frames
 
 @log
 def can_access_frame(*, user_id, frame_id=None):
@@ -607,49 +608,6 @@ def can_access_frame(*, user_id, frame_id=None):
             """,
             (frame_id, user_id, user_id, user_id, user_id))
     return res[0][0] > 0
-
-@log
-def movie_frames_info(*,movie_id):
-    """Gets information about movie frames"""
-    ret = {}
-    ret['count'] = dbfile.DBMySQL.csfr(
-        get_dbreader(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
-    return ret
-
-@log
-def purge_movie_frames(*,movie_id):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frame_analysis where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frame_trackpoints where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
-
-@log
-def purge_movie_data(*,movie_id):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s", (movie_id,))
-    if res:
-        urn = res[0][0]
-        db_object.delete_object(urn)
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
-
-@log
-def purge_movie(*,movie_id):
-    """Actually delete a movie and all its frames"""
-    purge_movie_frames(movie_id=movie_id)
-    purge_movie_data(movie_id=movie_id)
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
-
-
-@log
-def delete_movie(*,movie_id, delete=1):
-    """Set a movie's deleted bit to be true"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
-
 
 @log
 def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
@@ -700,6 +658,47 @@ def set_movie_data(*,movie_id, movie_data):
     db_object.write_object(movie_data_urn, movie_data)
 
 
+################################################################
+## Deleting
+
+@log
+def purge_movie_frames(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_analysis where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frame_trackpoints where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
+    dbfile.DBMySQL.csfr(
+        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie_data(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s", (movie_id,))
+    if res:
+        urn = res[0][0]
+        db_object.delete_object(urn)
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+
+@log
+def purge_movie(*,movie_id):
+    """Actually delete a movie and all its frames"""
+    purge_movie_frames(movie_id=movie_id)
+    purge_movie_data(movie_id=movie_id)
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
+
+
+@log
+def delete_movie(*,movie_id, delete=1):
+    """Set a movie's deleted bit to be true"""
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
+
+
+################################################################
+
+
 
 ################################################################
 ## frames
@@ -708,6 +707,15 @@ def set_movie_data(*,movie_id, movie_data):
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['course_id']
+
+@log
+def movie_frames_info(*,movie_id):
+    """Gets information about movie frames"""
+    ret = {}
+    ret['count'] = dbfile.DBMySQL.csfr(
+        get_dbreader(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
+    return ret
+
 
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
@@ -745,6 +753,119 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                                    (movie_id, frame_number))[0][0]
     return frame_id
 
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
+    """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
+    Can also get trackpoints and annotations.
+    :param: movie_id - the movie_id wanted
+    :param: (frame_id, frame_number) - provide one of these. Specifies which frame to get
+    :return: returns a dictionary with the frame info
+    """
+    if frame_id is not None:
+        where = 'WHERE id = %s '
+        args  = [frame_id]
+    else:
+        where = "WHERE movie_id=%s AND frame_number=%s"
+        args = [movie_id, frame_number]
+    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data, frame_urn FROM movie_frames {where} LIMIT 1"""
+    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    if len(rows)!=1:
+        return None
+    row = rows[0]
+    if (row['frame_data'] is None) and (row['frame_urn'] is not None):
+        row['frame_data'] = db_object.read_object(row['frame_urn'])
+    return row
+
+
+################################################################
+## Trackpoints
+
+def get_frame_trackpoints(*, frame_id):
+    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    No join required
+    """
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               """
+                               SELECT id as movie_frame_trackpoints_id,
+                                      frame_id,x,y,label FROM movie_frame_trackpoints
+                               WHERE frame_id=%s""",
+                               (frame_id,),
+                               asDicts=True)
+
+def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
+    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
+    Requires a join becuase we know the movie_id but not the frame_id.
+    :param: frame_start, frame_count - optional
+    """
+    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
+
+    if frame_start is None:
+        args = [movie_id]
+        extra = ''
+    else:
+        args = [movie_id, frame_start, frame_start+frame_count]
+        extra = ' and frame_number >= %s and frame_number < %s '
+
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               f"""
+                               SELECT frame_number,x,y,label
+                               FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s {extra}
+                               """,
+                               args, asDicts=True)
+
+def get_movie_frame_metadata(*, movie_id, frame_start=None, frame_count=None):
+    """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_id, frame_number, frame_urn
+    :param: frame_start, frame_count -
+    """
+    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
+
+    if frame_start is None:
+        args = [movie_id]
+        extra = ''
+    else:
+        args = [movie_id, frame_start, frame_start+frame_count]
+        extra = ' and frame_number >= %s and frame_number < %s '
+
+    return  dbfile.DBMySQL.csfr(get_dbreader(),
+                               f"""
+                               SELECT id as frame_id, movie_id, frame_number, created_at, mtime, frame_urn
+                               FROM movie_frames
+                               WHERE movie_id=%s {extra}
+                               """,
+                               args, asDicts=True)
+
+def last_tracked_frame(*, movie_id):
+    """Return the last tracked frame_number of the movie"""
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT max(movie_frames.frame_number)
+                               FROM movie_frame_trackpoints
+                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
+                               WHERE movie_id=%s
+                               """,
+                               (movie_id,))[0][0]
+
+def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+    """
+    :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
+    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    """
+    vals = []
+    for tp in trackpoints:
+        if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
+            raise KeyError(f'trackpoints element {tp} missing x, y or label')
+        vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
+    dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
+    if vals:
+        args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
+        cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
+        logging.debug("cmd=%s vals=%s",cmd,vals)
+        dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
+
+
+################################################################
+## Annotations (not currently used)
+
 def get_frame_annotations(*, frame_id):
     """Returns a list of dictionaries where each dictonary represents a record.
     Within that record, 'annotations' is stored in the database as a JSON string,
@@ -763,87 +884,6 @@ def get_frame_annotations(*, frame_id):
     for r in ret:
         r['annotations'] = json.loads(r['annotations'])
     return ret
-
-def get_frame_trackpoints(*, frame_id):
-    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    """
-    return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               """
-                               SELECT id as movie_frame_trackpoints_id,
-                                      frame_id,x,y,label FROM movie_frame_trackpoints
-                               WHERE frame_id=%s""",
-                               (frame_id,),
-                               asDicts=True)
-
-def get_movie_trackpoints(*, movie_id):
-    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    """
-    return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               """
-                               SELECT frame_number,x,y,label
-                               FROM movie_frame_trackpoints
-                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
-                               WHERE movie_id=%s
-                               ORDER BY frame_number
-                               """,
-                               (movie_id,),
-                               asDicts=True)
-
-def last_tracked_frame(*, movie_id):
-    """Return the last tracked frame_number of the movie"""
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT max(movie_frames.frame_number)
-                               FROM movie_frame_trackpoints
-                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
-                               WHERE movie_id=%s
-                               """,
-                               (movie_id,))[0][0]
-
-def get_frame(*,
-              frame_id=None, movie_id=None, frame_number=None,
-              get_annotations=False, get_trackpoints=False):
-    """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
-    :param: movie_id - the movie_id wanted
-    :param: get_annotations - return anotations in the 'annotations' slot
-    :param: get_trackpoints - returns the trackpoints in the 'trackpoints' slot.
-    :return: returns a dictionary with the frame info
-    """
-    if frame_id is not None:
-        where = 'WHERE id = %s '
-        args  = [frame_id]
-    else:
-        where = "WHERE movie_id=%s AND frame_number=%s"
-        args = [movie_id, frame_number]
-    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data, frame_urn FROM movie_frames {where} LIMIT 1"""
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
-    if len(rows)!=1:
-        return None
-    row = rows[0]
-    if (row['frame_data'] is None) and (row['frame_urn'] is not None):
-        row['frame_data'] = db_object.read_object(row['frame_urn'])
-    if get_annotations:
-        row['annotations'] = get_frame_annotations(frame_id=row['frame_id'])
-    if get_trackpoints:
-        row['trackpoints'] = get_frame_trackpoints(frame_id=row['frame_id'])
-    return row
-
-
-def get_analysis_engine_id(*, engine_name, engine_version):
-    """Create an analysis engine if it does not exist, and return the engine_id"""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """INSERT INTO engines
-                        (`name`,version) VALUES (%s,%s)
-                        ON DUPLICATE KEY UPDATE name=%s""",
-                        (engine_name,engine_version,engine_name))
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT id from engines
-                               WHERE `name`=%s and version=%s""",
-                               (engine_name,engine_version))[0][0]
-
-def delete_analysis_engine_id(*, engine_id):
-    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        "DELETE from engines where id=%s",(engine_id,))
 
 def encode_json(d):
     """Given json data, encode it as base64 and return as an SQL
@@ -894,22 +934,25 @@ def put_frame_annotations(*,
                         ON DUPLICATE KEY UPDATE
                         annotations={ea} """)
 
-def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
-    """
-    :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
-    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
-    """
-    vals = []
-    for tp in trackpoints:
-        if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
-            raise KeyError(f'trackpoints element {tp} missing x, y or label')
-        vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
-    dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
-    if vals:
-        args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
-        cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
-        logging.debug("cmd=%s vals=%s",cmd,vals)
-        dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
+################################################################
+## Analysis (not durrently used)
+
+def get_analysis_engine_id(*, engine_name, engine_version):
+    """Create an analysis engine if it does not exist, and return the engine_id"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """INSERT INTO engines
+                        (`name`,version) VALUES (%s,%s)
+                        ON DUPLICATE KEY UPDATE name=%s""",
+                        (engine_name,engine_version,engine_name))
+    return dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT id from engines
+                               WHERE `name`=%s and version=%s""",
+                               (engine_name,engine_version))[0][0]
+
+def delete_analysis_engine_id(*, engine_id):
+    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        "DELETE from engines where id=%s",(engine_id,))
 
 def delete_frame_analysis(*, frame_id=None, engine_id=None):
     """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
@@ -951,6 +994,35 @@ def delete_analysis_engine(*, engine_name, version=None, recursive=None):
     dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from engines where {where}",args)
 
 
+
+@log
+def create_new_movie_analysis(*, movie_id, engine_id, annotations):
+    if movie_id:
+        movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
+                                                """INSERT INTO movie_analysis (movie_id, engine_id, annotations) VALUES (%s,%s,%s)""",
+                                                (movie_id, engine_id, annotations))
+        return {'movie_analysis_id': movie_analysis_id}
+    else:
+        return {'movie_analysis_id': None}
+
+@log
+def delete_movie_analysis(*,movie_analysis_id):
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
+
+@log
+def purge_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE engine_id=%s", ([engine_id]))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_analysis WHERE engine_id=%s", ([engine_id]))
+    delete_engine(engine_id=engine_id)
+
+@log
+def delete_engine(*,engine_id):
+    assert engine_id is not None
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from engines WHERE id=%s", ([engine_id]))
+
+################################################################
+
 # Don't log this; we run list_movies every time the page is refreshed
 def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
     """Return a list of movies that the user is allowed to access.
@@ -988,36 +1060,6 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
 
     res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
     return res
-
-###
-# Movie analysis
-###
-
-@log
-def create_new_movie_analysis(*, movie_id, engine_id, annotations):
-    if movie_id:
-        movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                                """INSERT INTO movie_analysis (movie_id, engine_id, annotations) VALUES (%s,%s,%s)""",
-                                                (movie_id, engine_id, annotations))
-        return {'movie_analysis_id': movie_analysis_id}
-    else:
-        return {'movie_analysis_id': None}
-
-@log
-def delete_movie_analysis(*,movie_analysis_id):
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
-
-@log
-def purge_engine(*,engine_id):
-    assert engine_id is not None
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE engine_id=%s", ([engine_id]))
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_analysis WHERE engine_id=%s", ([engine_id]))
-    delete_engine(engine_id=engine_id)
-
-@log
-def delete_engine(*,engine_id):
-    assert engine_id is not None
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from engines WHERE id=%s", ([engine_id]))
 
 ################################################################
 ## Logs
