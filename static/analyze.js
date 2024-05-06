@@ -224,8 +224,8 @@ class CanvasController {
 }
 
 
-/* AbstractObject --- base object for CanvasController system */
-class AbstractObject {
+/* CanvasItem --- base object for CanvasController system */
+class CanvasItem {
     constructor(x, y, name) {
         this.x = x;
         this.y = y;
@@ -241,7 +241,7 @@ class AbstractObject {
 /* MyCircle Object - Draws a circle radius (r) at (x,y) with fill and stroke colors
  */
 
-class MyCircle extends AbstractObject {
+class MyCircle extends CanvasItem {
     constructor(x, y, r, fill, stroke, name) {
         super(x, y, name);
         this.startingAngle = 0;
@@ -289,8 +289,10 @@ class MyCircle extends AbstractObject {
     }
 }
 
-/* MyImage Object - Draws an image (x,y) specified by the url */
-class MyImage extends AbstractObject {
+/* WebImage Object - Draws an image (x,y) specified by the url.
+ * This is the legacy system.
+ */
+class WebImage extends CanvasItem {
     constructor(x, y, url, ptc) {
         super(x, y, url);
         this.ptc = ptc;
@@ -304,7 +306,7 @@ class MyImage extends AbstractObject {
             console.log("image loaded img=",this.img.naturalWidth, this.img.naturalHeight);
             this.state = 1;
             if (this.ctx) {
-                ptc.redraw('MyImage constructor');
+                ptc.redraw('WebImage constructor');
             }
         };
 
@@ -315,7 +317,7 @@ class MyImage extends AbstractObject {
         this.img.src = url;
     }
 
-    // MyImage draw
+    // WebImage draw
     draw(ctx, selected) {
         this.ctx = ctx;         // context in which we draw
         if (this.state > 0){
@@ -330,6 +332,11 @@ class MyImage extends AbstractObject {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////
+///
+///
+
 
 // The PlantTracerController is the box where we control the plant tracer functionality.
 // Create the canvas and wire up the buttons for add_marker button
@@ -764,7 +771,7 @@ class PlantTracerController extends CanvasController {
 
         //console.log("this.frame_number_field=",this.frame_number_field,"val=",this.frame_number_field.val());
         // Add the markers to the image and draw them in the table
-        this.theImage = new MyImage( 0, 0, data.data_url, this);
+        this.theImage = new WebImage( 0, 0, data.data_url, this);
         this.objects = [];      // clear the array
         this.objects.push(this.theImage );
         $(`#${this.this_id} td.message`).text( ' ' );

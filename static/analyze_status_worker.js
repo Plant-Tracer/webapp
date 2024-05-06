@@ -1,9 +1,10 @@
 "use strict";
 /* jshint esversion: 8 */
 // code for /analyze web worker
-
-
-// JQuery not available in webworker because there is no document
+// This worker starts with an api_key and movie_id polls the movie's metadata.
+// Honestly, this no longer needs a webworker. They turned out to be less powerful than I thought
+// becuase JQuery is not available in webworker because there is no document.
+// But it is conceptually easier to start and kill the webworker at the moment.
 // https://stackoverflow.com/questions/48408491/using-webworkers-jquery-returns-undefined
 
 const NOTIFY_UPDATE_INTERVAL = 1000;    // how quickly to pool for retracking (in msec)
@@ -23,7 +24,8 @@ function start_update_timer(obj) {
         })
             .then((response) => response.json())
             .then((data) => {
-                console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",data,"metadata:",data.metadata,"status:",data.metadata.status);
+                console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",
+                            data,"metadata:",data.metadata,"status:",data.metadata.status);
                 if (data.error==false){
                     // Send the status back to the UX
                     postMessage(data.metadata);
