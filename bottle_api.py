@@ -254,10 +254,10 @@ def api_bulk_register():
 ################################################################
 ##
 ## Object API
-@api.route('/get-object/<bucket>/<key>/<sig>', method=GET)
+@api.route('/get-object', method=GET)
 def api_get_object(bucket,key,sig):
     """Implement signed URLs"""
-    return db_object.read_signed_url(bucket,key,sig)
+    return db_object.read_signed_url(urn=get('urn'), sig=get('sig'))
 
 
 ################################################################

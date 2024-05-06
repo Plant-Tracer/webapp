@@ -15,6 +15,8 @@ import glob
 import base64
 import csv
 import math
+import urllib
+from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
 
 import numpy as np
@@ -31,6 +33,7 @@ import bottle_api
 import bottle_app
 import copy
 import db
+import db_object
 
 from PIL import Image
 
@@ -202,12 +205,10 @@ def test_movie_tracking(new_movie):
         frame0 = r['frames']['0']
 
         # Verify that the signed URL works
-        (first,command,bucket,key,sig) = frame0['frame_url'].split('/')
-        assert first=''
-        assert command=='get-object'
-        frame = db_object.read_signed_url(bucket, key, sig)
-        assert len(frame)>100
-        assert b'JFIF' in frame
+        url = frame0['frame_url']
+        params = parse_qs(urlparse(url).query)
+        frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
+        assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
     track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]

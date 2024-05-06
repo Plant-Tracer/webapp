@@ -96,6 +96,9 @@ def make_urn(*, object_name, scheme = None ):
     return ret
 
 API_SECRET=os.environ.get("API_SECRET","test-secret")
+def sig_for_urn(urn):
+    return sha256( (urn + API_SECRET).encode('utf-8'))
+
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     logging.debug("urn=%s",urn)
     o = urllib.parse.urlparse(urn)
@@ -107,18 +110,17 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
                     'Key': o.path[1:]},
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
-        sig = sha256( (o.netloc + "/" + o.path[1:] + API_SECRET ).encode('utf-8'))
-        return f"/get-object/{o.netloc}/{o.path[1:]}/{sig}"
+        params = urllib.parse.urlencode({'urn': urn, 'sig': sig_for_urn(urn) })
+        return f"/get-object?{params}"
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
-def read_signed_url(*,bucket,key,sig):
-    computed_sig = sha256( (bucket + "/" + key + API_SECRET).encode('utf-8'))
+def read_signed_url(*,urn,sig):
+    computed_sig = sig_for_urn(urn)
     if sig==computed_sig:
-        urn = f"{C.SCHEME_DB}://{bucket}/{key}"
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
-    logging.error("URL signature does not match. bucket=%s key=%s sig=%s computed_sig=%s",bucket,key,sig,computed_sig)
+    logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
     raise bottle.HTTPResponse(body="signature does not verify", status=204)
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
