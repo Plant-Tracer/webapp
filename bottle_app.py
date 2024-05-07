@@ -103,7 +103,14 @@ def static_path(path):
         kind = filetype.guess(os.path.join(STATIC_DIR,path))
     except FileNotFoundError as e:
         raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404) from e
-    mimetype = kind.mime if kind else 'text/plain'
+    if kind is not None:
+        mimetype = kind.mime
+    elif path.endswith(".html"):
+        mimetype = 'text/html'
+    elif path.endswith(".js"):
+        mimetype = 'text/javascript'
+    else:
+        mimetype = 'text/plain'
     response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
     return response
