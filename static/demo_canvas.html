@@ -3,7 +3,7 @@
   <head>
     <title>Demo</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script type="text/javascript" charset="utf8" src="dev/jquery.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script type="module" src="./canvas_controller.js"></script>
   </head>
   <style>
@@ -31,8 +31,8 @@
     // This demo draws three dragable objects and adds some text.
     import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
     const cc = new CanvasController('#canvas-id','#zoom-id');
-    cc.objects.push( new Marker(100, 100, 30, "red", "blue", "Test Marker 1"));
-    cc.objects.push( new Marker(300, 300, 20, "blue", "red", "Test Marker 2"));
+    cc.add_object( new Marker(100, 100, 30, "red", "blue", "Test Marker 1"));
+    cc.add_object( new Marker(300, 300, 20, "blue", "red", "Test Marker 2"));
     cc.redraw();
   </script>
 </html>

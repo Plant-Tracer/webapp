@@ -3,29 +3,37 @@
 // code for /analyze
 
 /***
+ * Canvas Controller:
+ * Implements an object system for HTML5 <canvas>. Supports:
+ *  - Selection
+ *  - Dragging
+ *  - Arbitrary images
+ *  - Z layering
+ *  - double-buffering.
+ *  - zoom
  *
  Core idea from the following websites, but made object-oriented.
  * https://stackoverflow.com/questions/3768565/drawing-an-svg-file-on-a-html5-canvas
  * https://www.html5canvastutorials.com/tutorials/html5-canvas-circles/
 
  Core idea:
- - templates/analyze.html defines <div id='template'> that contains a frame of a movie and some controls.
- - With this frame, annotations can be created. They are stored on the server.
- - On startup, the <div> is stored in a variable and a first one is instantiated.
- - Pressing 'track to end of movie' asks the server to track from here to the end of the movie.
 
  Classes and methods:
 
  CanvasController - implements an object-based display onto a convas that supports selection.
  - clear_selection()
- - getMousePosition(e) - in canvas coordinates. Returns {x,y}
+ - getMousePosition(e) - in canvas coordinates. Returns obj.x, obj.y in canvas coordinates
  - mousedown_handler(e) - for selection
  - mousemove_handler(e) - for dragging.
  - mouseup_handler(_) - for dragging
  - set_zoom(factor) - because we can zoom!
- - redraw( _msg) - draws all of the objects into the canvas. Currently flashes. Should use double-buffering.. calls draw of all objects
- - object_did_move( _obj) {} - for subclasses. Every move.
- - object_move_finished( _obj) {} - for sublcass
+ - copyOffscreen()  - copies from the offscreen canvas to the onscreen canvas
+ - redraw()    - draws in the offscreen canvas and then schedules a copyOffscreen
+ - resize(w,h) - resizes the canvas and its offscreen canvas.
+ -
+ - delegate    - if set, gets notices
+ - delegate.object_did_move( _obj) {} - tells delegate that an object moved.
+ - delegate.object_move_finished( _obj) {} - tells delegate that object move finished.
 
  AbstractObject - base object class
  MyCircle:AbstractObject - draws a circle. Used for track points.
@@ -36,31 +44,15 @@
  MyImage - draws an image specified by a URL
  - draw
 
- PlantTracerCanvas - Implements the functionality for the user interface, including the movie player and the track buttons.
- This is a component so we could have multiple planttracers on the screen. Probably not needed at this point.
- - marker_name_input_handler - called when something is typed in the 'new marker name' box
- - add_marker_onclick_handler - called when "add_new_marker" button is clicked
- - add_marker - adds a marker to the canvas stack
- - create_marker_table - creates the HTML for the marker table and adds to the DOM
- - del_row - deletes a row in the marker table
- - object_did_move - picks up movements in the marker and updates the table
- - object_move_finished - runs put_trackpoints, which uploads the new trackpoints to the server
- - get_trackpoints - returns an array of the trackpoints. Each trackpoint is a {x,y,label}
- - json_trackpoints - returns the trackpoints as an actual JSON list
- - put_trackpoints - sends the trackpoints to the server for the current frame using /api/put-frame-analysis
- - track_to_end - called when the 'retrack' or 'track' button is pressed. Starts the window worker and sends a track message to server.
- - movie_tracked - called when the movie tracking is finished. Terminates the status worker, gets the new trackpoints.
- - goto_frame( frame) - jumps to the requested frame number
- - set_movie_control_buttons() - enable or disable the movie control buttons
-
- Frames are numbered from 0 to (total_frames)-1
 ***/
 
 /*global api_key */
 /*global movie_id */
 
 
-/* MyCanvasController Object - creates a canvas that can manage AbstractObjects */
+/* MyCanvasController Object - creates a canvas that can manage AbstractObjects.
+ * Implements double-buffering to avoid flashing in redraws.
+ */
 
 /*
  * CanvasController maintains a set of objects that can be on the canvas and allows them to be moved and drawn.
@@ -78,17 +70,23 @@ class CanvasController {
             return;
         }
 
-        this.c   = canvas[0];     // get the element
-        this.ctx = this.c.getContext('2d');                  // the drawing context
+        this.c   = canvas[0];                // get the element
+        this.ctx = this.c.getContext('2d');  // the drawing context
 
-        this.selected = null,             // the selected object
-        this.objects = new Array();                // the objects
+        this.oc = document.createElement('canvas'); // offscreen canvas
+        this.oc.width  = this.c.width;
+        this.oc.height = this.c.height;
+        this.octx = this.oc.getContext('2d');
+
+        this.delegate = null;            // the delegate
+        this.selected = null;             // the selected object
+        this.objects = new Array();       // the objects
         this.zoom    = 1;                 // default zoom
 
         // Register my events.
         // We use '=>' rather than lambda becuase '=>' wraps the current environment (including this),
         // whereas 'lambda' does not.
-        // Prior, I assigned this to `me`. Without =>, 'this' points to the HTML element that generated the event.
+        // Without =>, 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
         this.c.addEventListener('mousemove', (e) => {this.mousemove_handler(e);} , false);
         this.c.addEventListener('mousedown', (e) => {this.mousedown_handler(e);} , false);
@@ -98,11 +96,13 @@ class CanvasController {
         console.log("startup. zoom_selector=",zoom_selector,"this=",this);
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
-            $(this.zoom_selector).on('change', (_) => {
-                this.set_zoom_from_selector();
-            });
+            $(this.zoom_selector).on('change', (_) => { this.set_zoom( $(this.zoom_selector).val() / 100 ); });
         }
     }
+
+    // add and clear objects
+    add_object(obj) { this.objects.push(obj);  }
+    clear_objects() { this.objects.length = 0; }
 
     // Selection Management
     clear_selection() {
@@ -111,6 +111,7 @@ class CanvasController {
         }
     }
 
+    // Mouse handling
     getMousePosition(e) {
         let rect = this.c.getBoundingClientRect();
         return { x: (Math.round(e.x) - rect.left) / this.zoom,
@@ -157,46 +158,49 @@ class CanvasController {
         this.object_move_finished(obj);
     }
 
-    set_zoom(factor) {
-        this.zoom = factor;
-        this.c.width = this.naturalWidth * factor;
-        this.c.height = this.naturalHeight * factor;
-        this.redraw('set_zoom');
-    }
+    // Zoom happens by scaling the drawing with a transformation and resizing the canvas element.
+    // We also have to resize the offscreen canvas
 
-    set_zoom_from_selector() {
-        this.set_zoom( $(this.zoom_selector).val() / 100 );
+    set_zoom(factor) {
+        this.zoom      = factor;
+        this.oc.width  = this.c.width  = this.naturalWidth * factor;
+        this.oc.height = this.c.height = this.naturalHeight * factor;
+        this.redraw();
     }
 
     // Main drawing function:
-    redraw( _msg ) {
+    redraw(  ) {
         // clear canvas
         // this is useful for tracking who called redraw, and how many times it is called, and when
         // console.log(`redraw=${msg} id=${this.c.id}`);
-        // We don't need to do it if the 0th object draws to the bounds
+        // We don't need to do it if the first object is draws to the bounds (like it's an image).
         if ((this.objects.length > 0)
             && (this.objects[0].fills_bounds)
             && (this.objects[0].x == 0)
             && (this.objects[0].y == 0)
-            && (this.objects[0].width == this.naturalWidth )
+            && (this.objects[0].width  == this.naturalWidth )
             && (this.objects[0].height == this.naturalHeight)){
         } else {
-            this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+            this.octx.clearRect(0, 0, this.oc.width, this.oc.height);
         }
 
         // draw the objects. Always draw the selected objects after
         // the unselected (so they are on top)
-        this.ctx.save();
-        this.ctx.scale(this.zoom, this.zoom);
+        this.octx.save();
+        this.octx.scale(this.zoom, this.zoom);
         for (let s = 0; s<2; s++){
             for (let i = 0; i< this.objects.length; i++){
                 let obj = this.objects[i];
                 if ((s==0 && this.selected!=obj) || (s==1 && this.selected==obj)){
-                    obj.draw( this.ctx , this.selected==obj);
+                    obj.draw( this.octx , this.selected==obj);
                 }
             }
         }
-        this.ctx.restore();
+        this.octx.restore();
+        requestAnimationFrame( (_) => {
+            this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+            this.ctx.drawImage( this.oc, 0, 0);
+        });
     }
 
     // These can be subclassed
