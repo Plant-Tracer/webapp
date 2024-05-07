@@ -74,8 +74,8 @@ class CanvasController {
         this.ctx = this.c.getContext('2d');  // the drawing context
 
         this.oc = document.createElement('canvas'); // offscreen canvas
-        this.oc.width  = this.c.width;
-        this.oc.height = this.c.height;
+        this.oc.width  = this.naturalWidth  = this.c.width;
+        this.oc.height = this.naturalHeight = this.c.height;
         this.octx = this.oc.getContext('2d');
 
         this.delegate = null;            // the delegate
@@ -96,7 +96,11 @@ class CanvasController {
         console.log("startup. zoom_selector=",zoom_selector,"this=",this);
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
-            $(this.zoom_selector).on('change', (_) => { this.set_zoom( $(this.zoom_selector).val() / 100 ); });
+            $(this.zoom_selector).on('change', (e) => {
+                const new_zoom = $(this.zoom_selector).val() / 100.0;
+                console.log("new_zoom=",new_zoom);
+                this.set_zoom( new_zoom );
+            });
         }
     }
 
