@@ -30,18 +30,20 @@
  - copyOffscreen()  - copies from the offscreen canvas to the onscreen canvas
  - redraw()    - draws in the offscreen canvas and then schedules a copyOffscreen
  - resize(w,h) - resizes the canvas and its offscreen canvas.
+ - add_object() - adds an object to the display list
+ - set_background_image - fetches a background image and resizes the canvas to be the size of the image.
  -
  - delegate    - if set, gets notices
  - delegate.object_did_move( _obj) {} - tells delegate that an object moved.
  - delegate.object_move_finished( _obj) {} - tells delegate that object move finished.
 
- AbstractObject - base object class
- MyCircle:AbstractObject - draws a circle. Used for track points.
+ CanvasItem - base object class
+ MyCircle:CanvasItem - draws a circle. Used for track points.
  - draw
  - contains_point() - used for hit detection
  - loc() - returns location as an "x,y" string
 
- MyImage - draws an image specified by a URL
+ WebImage - draws an image specified by a URL
  - draw
 
 ***/
@@ -49,17 +51,16 @@
 /*global api_key */
 /*global movie_id */
 
-
-/* MyCanvasController Object - creates a canvas that can manage AbstractObjects.
+/* MyCanvasController Object - creates a canvas that can manage CanvasItems.
  * Implements double-buffering to avoid flashing in redraws.
  */
 
 /*
  * CanvasController maintains a set of objects that can be on the canvas and allows them to be moved and drawn.
  * Objects implemented below:
- * AbstractObject - base class
+ * CanvasItem - base class
  * MyCircle - draws a circle
- * MyImage  - draws an image (from a URL). Used to draw movie animations.
+ * WebImage  - draws an image (from a URL). Used to draw movie animations.
  * myPath   - draws a line or, with many lines, a path
  */
 class CanvasController {
@@ -70,30 +71,30 @@ class CanvasController {
             return;
         }
 
-        this.c   = canvas[0];                // get the element
-        this.ctx = this.c.getContext('2d');  // the drawing context
+        this.c         = canvas[0];                // get the element
+        this.ctx       = this.c.getContext('2d');  // the drawing context
 
-        this.oc = document.createElement('canvas'); // offscreen canvas
+        this.oc        = document.createElement('canvas'); // offscreen canvas
         this.oc.width  = this.naturalWidth  = this.c.width;
         this.oc.height = this.naturalHeight = this.c.height;
-        this.octx = this.oc.getContext('2d');
+        this.octx      = this.oc.getContext('2d');
 
-        this.delegate = null;            // the delegate
-        this.selected = null;             // the selected object
-        this.objects = new Array();       // the objects
-        this.zoom    = 1;                 // default zoom
+        this.delegate  = null;              // the delegate
+        this.selected  = null;              // the selected object
+        this.objects   = new Array();       // the objects
+        this.zoom      = 1;                 // default zoom
 
         // Register my events.
         // We use '=>' rather than lambda becuase '=>' wraps the current environment (including this),
         // whereas 'lambda' does not.
         // Without =>, 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
+
         this.c.addEventListener('mousemove', (e) => {this.mousemove_handler(e);} , false);
         this.c.addEventListener('mousedown', (e) => {this.mousedown_handler(e);} , false);
         this.c.addEventListener('mouseup',   (e) => {this.mouseup_handler(e);}, false);
 
         // Catch the zoom change event
-        console.log("startup. zoom_selector=",zoom_selector,"this=",this);
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
             $(this.zoom_selector).on('change', (e) => {
@@ -105,7 +106,10 @@ class CanvasController {
     }
 
     // add and clear objects
-    add_object(obj) { this.objects.push(obj);  }
+    add_object(obj) {
+        obj.cc = this;          // We are now this object's canvas controller
+        this.objects.push(obj);
+    }
     clear_objects() { this.objects.length = 0; }
 
     // Selection Management
@@ -207,18 +211,24 @@ class CanvasController {
         });
     }
 
-    // These can be subclassed
-    object_did_move( _obj) { }
-    object_move_finished( _obj) { }
+    set_background_image( url ){
+        this.add_object( new WebImage(0, 0, url) );
+    }
+
+    // These can be subclassed, or you can use the delegate
+    object_did_move( _obj)      { if (this.delegate) this.delegate.object_did_move( _obj ); }
+    object_move_finished( _obj) { if (this.delegate) this.delegate.object_move_finished( _obj ); }
 }
+
 
 /* CanvasItem --- base object for CanvasController system */
 class CanvasItem {
     constructor(x, y, name) {
-        this.x = x;
-        this.y = y;
+        this.x = x;             // every item has an x, but I'm not sure why
+        this.y = y;             // every item has a y
         this.name = name;
-        this.fills_bounds = false; // does not fill bounds
+        this.fills_bounds = false; // does not fill bounds, does this make sense? We don't have bounds
+        this.cc = null;            // currently no controller
     }
 
     // default - it never contains the point. Subclass this
@@ -240,11 +250,11 @@ class Marker extends CanvasItem {
         super(x, y, name);
         this.startingAngle = 0;
         this.endAngle = 2 * Math.PI;
-        this.r = r;
-        this.draggable = true;
-        this.fill = fill;
-        this.stroke = stroke;
-        this.name = name;
+        this.r      = r;        // in pixels
+        this.draggable = true;  // boolean
+        this.fill   = fill;     // string for color
+        this.stroke = stroke;   // string for color
+        this.name   = name;     //
     }
 
     draw(ctx, selected) {
@@ -282,28 +292,25 @@ class Marker extends CanvasItem {
 /* WebImage Object - Draws an image (x,y) specified by the url.
  * This is the legacy system.
  *
- * State machine:
- * state 0 = not loaded;
- * state 1 = loaded, first draw. Likely requires resizing, since we don't know the size when loaded.
- * state 2 = loaded, subsequent draws
  */
 class WebImage extends CanvasItem {
     //
-    constructor(x, y, url, ptc) {
+    constructor(x, y, url) {
         super(x, y, url);       // url is the name
-        this.ptc = ptc;
         this.draggable = false;
-        this.ctx    = null;
-        this.state  = 0;
         this.img = new Image();
+        this.img_loaded = false;
+        this.fills_bounds = true;
+        this.width = 0;
+        this.height = 0;
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
             console.log("image loaded img=",this.img.naturalWidth, this.img.naturalHeight);
-            this.state = 1;
-            if (this.ctx) {
-                ptc.redraw('WebImage constructor');
-            }
+            this.width  = this.img.naturalWidth;
+            this.height = this.img.naturalHeight;
+            this.img_loaded = true;
+            this.cc.redraw();
         };
 
         // set the URL. It loads immediately if it is a here document.
@@ -315,16 +322,8 @@ class WebImage extends CanvasItem {
 
     // WebImage draw
     draw(ctx, selected) {
-        this.ctx = ctx;         // context in which we draw
-        if (this.state > 0){
-            // See if this is the first time we have drawn in the context. If so, resize
-            if (this.state==1){
-                this.width  = this.ptc.c.width = this.ptc.naturalWidth  = this.img.naturalWidth;
-                this.height = this.ptc.c.height = this.ptc.naturalHeight = this.img.naturalHeight;
-                this.fills_bounds = true;
-                this.state = 2;
-            }
-            ctx.drawImage(this.img, 0, 0, this.img.naturalWidth, this.img.naturalHeight);
+        if (this.img_loaded) {
+            ctx.drawImage(this.img, this.x, this.y, this.img.naturalWidth, this.img.naturalHeight);
         }
     }
 }

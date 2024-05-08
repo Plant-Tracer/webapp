@@ -12,6 +12,7 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
+        "log_level" : "ERROR",
         "s3_bucket" : "planttracer-zappa-lambda",
         "delete_local_zip":false,
         "delete_s3_zip":false,
@@ -65,6 +66,7 @@
         "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
+        "log_level" : "ERROR",
         "ephemeral_storage" : {"Size":1024},
         "s3_bucket" : "planttracer-zappa-lambda",
         "environment_variables": {
