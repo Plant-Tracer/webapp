@@ -5,7 +5,7 @@
 /*global api_key */
 /*global movie_id */
 
-const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
+const PLAY_MSEC = 1000;          // pause between frames; could be 1000/29.92
 
 import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
 
@@ -20,20 +20,20 @@ class MovieController extends CanvasController {
         // Movie state variables
         this.frame_number_field = $(div_selector + " .frame_number_field");
         this.frame_number = null;  // no frame number to start
-        this.playing = false;   // are we playing a movie?
-        this.playing_direction = 1; // -1 for reverse
+        this.playing = 0;   // are we playing a movie? +1 means forward, -1 is reverse
         this.frames = [];         // needs to be set with load_movie
         this.timer = null;          // when playing or reverse playing, this is the timer that repeatedly calls next or prev
+        this.tick = 0;
 
         // set up movie controls  (manipulations are all done with CSS classes)
-        $(div_selector + " .first_button").on('click', (_) => {this.goto_frame(0);});
-        $(div_selector + " .reverse_button").on('click', (_) => {this.play(-1);});
-        $(div_selector + " .play_button").on('click', (_) => {this.play(+1);});
-        $(div_selector + " .stop_button").on('click', (_) => {this.stop_button_pressed();});
-        $(div_selector + " .last_button").on('click', (_) => {this.goto_frame(1e10);});
-        $(div_selector + " .next_frame").on('click',  (_) => {this.goto_frame(this.frame_number+1);});
-        $(div_selector + " .prev_frame").on('click',  (_) => {this.goto_frame(this.frame_number-1);});
-        $(div_selector + " .frame_number_field").on('input', (_) => {
+        $(div_selector + " input.first_button").on('click', (_) => {this.goto_frame(0);});
+        $(div_selector + " input.play_reverse").on('click', (_) => {this.play(-1);});
+        $(div_selector + " input.play_forward").on('click',   (_) => {this.play(+1);});
+        $(div_selector + " input.pause_button").on('click', (_) => {this.stop_button_pressed();});
+        $(div_selector + " input.last_button").on('click', (_) => {this.goto_frame(1e10);});
+        $(div_selector + " input.next_frame").on('click',  (_) => {this.goto_frame(this.frame_number+1);});
+        $(div_selector + " input.prev_frame").on('click',  (_) => {this.goto_frame(this.frame_number-1);});
+        $(div_selector + " input.frame_number_field").on('input', (_) => {
             let new_frame = this.frame_number_field[0].value;
             if (new_frame=='') {            // turn '' into a "0"
                 this.frame_number_field[0].value='0';
@@ -70,13 +70,12 @@ class MovieController extends CanvasController {
         console.log(`goto_frame(${frame})`);
         console.log("div_selector4=",this.div_selector);
 
-
         frame = parseInt(frame);         // make sure it is integer
         if ( isNaN(frame) || frame<0 ) {
             frame = 0;
         }
 
-        if (frame>this.frames.length) {
+        if (frame>=this.frames.length) {
             frame = this.frames.length-1;
         }
 
@@ -95,6 +94,7 @@ class MovieController extends CanvasController {
                 this.add_object( Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
             }
         }
+        $(this.div_selector+" input.frame_number_field").val(this.frame_number);
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
     }
 
@@ -102,21 +102,25 @@ class MovieController extends CanvasController {
      * It's called by the timer or when the button is pressed
      */
     play(delta) {
-        var next_frame=0;
+        this.tick += 1;
+        console.log("play",this.tick,"delta=",delta,"frame:",this.frame_number);
+
+        var next_frame=this.frame_number;
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
         }
+        this.playing = delta;
         if (delta>0) {
-            if (this.frame_number >= this.frames.length) {
+            if (this.frame_number >= this.frames.length-1) {
                 if (this.loop) {
                     next_frame = 0;
                 }
                 else {
-                    this.playing = false;
+                    this.playing=0;
                 }
             } else {
-                next_frame = this.frame_number + delta;
+                next_frame += delta;
             }
         }
         if (delta<0) {
@@ -125,24 +129,26 @@ class MovieController extends CanvasController {
                     next_frame = this.frames.length-1;
                 }
                 else {
-                    this.playing = false;
-                    return;
+                    this.playing = 0;
                 }
             } else {
-                next_frame = this.frame_number + delta;
+                next_frame += delta;
             }
         }
-        this.playing=true;
-        this.goto_frame(next_frame);
-        this.timer = setTimeout( () => {this.timer=null;play(delta);}, PLAY_MSEC );
+        if (this.playing) {
+            this.goto_frame(next_frame);
+            this.timer = setTimeout( () => {this.timer=null;this.play(delta);}, PLAY_MSEC );
+        }
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
     }
 
     stop_button_pressed() {
+        console.log("stop button pressed. this.timer=",this.timer);
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
         }
+        this.playing = false;
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
     }
 
@@ -154,18 +160,25 @@ class MovieController extends CanvasController {
         if (this.frames.length==0){
             $(this.div_selector + ' input.frame_movement').prop('disabled',true);
             $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
+            $(this.div_selector + ' input.play_forward').prop('disabled',true);
+            $(this.div_selector + ' input.play_reverse').prop('disabled',true);
             return;
         }
         // if playing, everything but 'stop' is disabled
         if (this.playing) {
             $(this.div_selector + ' input.frame_movement').prop('disabled',true);
             $(this.div_selector + ' input.frame_stoppage').prop('disabled',false);
+            $(this.div_selector + ' input.play_forward').prop('disabled', this.playing>0);
+            $(this.div_selector + ' input.play_reverse').prop('disabled',this.playing<0);
             return;
         }
         // movie not playing
         console.log("movie not playing. forwards=",this.frame_number==this.length-1);
+        $(this.div_selector + ' input.frame_number_field').prop('disabled',false);
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
         $(this.div_selector + ' input.frame_movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
+        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number==this.length-1);
+        $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
         var sel = this.div_selector + ' input.frame_movement_forwards';
         var val = this.frame_number==this.length-1;
         console.log("sel=",sel,"val=",val);
