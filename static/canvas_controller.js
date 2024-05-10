@@ -297,6 +297,7 @@ class WebImage extends CanvasItem {
     //
     constructor(x, y, url) {
         super(x, y, url);       // url is the name
+        console.log("WebImage x=",x,"y=",y,"url=",url);
         this.draggable = false;
         this.img = new Image();
         this.img_loaded = false;

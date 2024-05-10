@@ -1,51 +1,37 @@
 "use strict";
-/* jshint esversion: 8 */
 // code for /analyze
-
+/* jshint esversion: 8 */
 /*global api_key */
 /*global movie_id */
 
-const PLAY_MSEC = 100;          // how fast to play
 const DEFAULT_R = 10;           // default radius of the marker
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-//const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
 var cell_id_counter = 0;
 var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
+
+const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
+                       '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
+                       '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+                       '#000075', '#808080', '#e6194b', ];
+
 const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
-// available colors
-// https://sashamaps.net/docs/resources/20-colors/
-// removing green (for obvious reasons)
-const CIRCLE_COLORS = ['#ffe119', '#f58271', '#f363d8', '#918eb4',
-                     '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
-                     '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
-                       '#000075', '#808080', '#e6194b', ];
 
-
-
-import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
-
-
-// The PlantTracerController is the box where we control the plant tracer functionality.
-// Create the canvas and wire up the buttons for add_marker button
-class PlantTracerController extends CanvasController {
-    constructor( this_id, movie_id, frame_number, movie_metadata ) {
-        super( `#canvas-${this_id}`, `#zoom-${this_id}` );
+class MovieTrackerController extends MovieController {
+    constructor( div_selector, zoom_selector
         this.this_id         = this_id;
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed
-        this.frame_number    = frame_number;   // current frame number
-        this.movie_metadata  = movie_metadata;
-        this.total_frames    = movie_metadata.total_frames;
+}
+
         this.last_tracked_frame = movie_metadata.last_tracked_frame;
         this.tracking_status = $(`#${this.this_id} .tracking_status`);
         this.add_marker_status    = $(`#${this_id}      .add_marker_status`);
         this.download_link        = $(`#${this.this_id} .download_link`);
         this.download_button      = $(`#${this.this_id} .download_button`);
-        this.playing = false;   // are we playing a movie?
         this.tracking = false;  // are we tracking a movie?
         console.log("PlantTracer movie_id=",movie_id,"metadata=",movie_metadata);
 
@@ -80,44 +66,11 @@ class PlantTracerController extends CanvasController {
 
         $(`#${this.this_id} span.total-frames-span`).text(this.total_frames);
 
-        this.frame_number_field = $(`#${this.this_id} input.frame_number_field`);
-        this.frame0_button = $(`#${this.this_id} input.frame0_button`);
-        this.frame0_button.prop('disabled',false);
-        this.frame0_button.on('click', (_event) => {this.goto_frame(0);});
-        this.play_button = $(`#${this.this_id} input.play_button`);
-        this.play_button.prop('disabled',false);
-        this.play_button.on('click', (_event) => {this.play_button_pressed();});
-
-        this.stop_button = $(`#${this.this_id} input.stop_button`);
-        this.stop_button.prop('disabled',true);
-        this.stop_button.on('click', (_event) => {this.stop_button_pressed();});
         this.rotate_button = $(`#${this.this_id} input.rotate_button`);
         this.rotate_button.prop('diabled',false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         this.track_button = $(`#${this.this_id} input.track_button`);
-
-        // Wire up the movement buttons
-        $(`#${this.this_id} input.frame_prev10`).on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)-10);});
-        $(`#${this.this_id} input.frame_prev`)  .on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)-1);});
-        $(`#${this.this_id} input.frame_next`)  .on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)+1);});
-        $(`#${this.this_id} input.frame_next10`).on('click', (_event) => {this.goto_frame( parseInt(this.frame_number)+10);});
-
-        $(`#${this.this_id} input.frame_number_field`).on('input', (_event) => {
-            let new_frame = this.frame_number_field[0].value;
-            console.log("frame_number_field number changed to ",new_frame);
-            // turn '' into a "0"
-            if (new_frame=='') {
-                new_frame='0';
-                this.frame_number_field[0].value=new_frame;
-            }
-            // remove leading 0
-            if (new_frame.length == 2 && new_frame[0]=='0') {
-                new_frame = new_frame[1];
-                this.frame_number_field[0].value=new_frame;
-            }
-            this.goto_frame( new_frame );
-        });
 
         if (this.last_tracked_frame > 0 ){
             this.track_button.val( 'retrack movie' );
@@ -334,43 +287,13 @@ class PlantTracerController extends CanvasController {
             });
     }
 
-    /**
-     * Change the frame. This is called repeatedly when the movie is playing, with the frame number changing
-     * First we verify the next frame number, then we call the /api/get-frame call to get the frame,
-     * with get_frame_handler getting the data.
-     *
-     * Todo: cache the frames in an array.
-     * Use double-buffering by drawing into an offscreen canvas and then bitblt in the image, to avoid flashing.
-     */
-    goto_frame( frame ) {
-        console.log(`goto_frame(${frame}) total_frames=${this.total_frames} last_tracked_frame=${this.last_tracked_frame}`);
+goto_frame
+total_frames=${this.total_frames} last_tracked_frame=${this.last_tracked_frame}
         if (this.last_tracked_frame === null){
             return;
         }
-        if ( isNaN(frame) || frame<0) {
-            frame = 0;
-        }
 
-        if (this.total_frames != null && frame>=this.total_frames) {
-            frame=this.total_frames-1;
-        }
 
-        this.frame_number = frame;
-        if (this.frame_number_field[0].value != frame ){
-            this.frame_number_field[0].value = frame;
-        }
-        this.set_movie_control_buttons();     // enable or disable all buttons as appropriate
-        // And get the frame
-        const get_frame_params = {
-            api_key :api_key,
-            movie_id:this.movie_id,
-            frame_number:this.frame_number,
-            format:'json',
-        };
-        $.post('/api/get-frame', get_frame_params).done( (data) => { this.get_frame_handler(data);});
-    }
-
-    set_movie_control_buttons() {
         // if tracking, everything is disabled
         if (this.tracking) {
             this.play_button.prop('disabled',true);
@@ -383,17 +306,9 @@ class PlantTracerController extends CanvasController {
             return;
         }
 
-        // if playing, everything but 'stop' is disabled
-        if (this.playing) {
-            this.play_button.prop('disabled',true);
-            this.stop_button.prop('disabled',false);
             this.track_button.prop('disabled',true);
             this.download_button.prop('disabled',true);
             this.rotate_button.prop('disabled',true);
-            $(`#${this.this_id} input.frame_movement`).prop('disabled',true); // all arrow buttons disabled
-            return;
-        }
-        // movie not playing
         this.stop_button.prop('disabled',true);
         this.track_button.prop('disabled', this.frame_number>=this.last_tracked_frame);
         this.download_button.prop('disabled',false);
@@ -403,7 +318,7 @@ class PlantTracerController extends CanvasController {
 
         // We can play if we are not on the last frame
         this.play_button.prop('disabled', this.frame_number >= this.last_tracked_frame);
-    }
+
 
     /***
      * play_button_pressed() is called when the play button is pressed, and each time the play timer clicks.
@@ -506,6 +421,12 @@ class PlantTracerController extends CanvasController {
     }
 }
 
+
+
+//const STATUS_WORKER = document.currentScript.src.replace("analyze.js","analyze_status_worker.js");
+// available colors
+// https://sashamaps.net/docs/resources/20-colors/
+// removing green (for obvious reasons)
 
 /* update_div:
  * Callback when data arrives from /api/get-frame.
