@@ -21,7 +21,7 @@ const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
 
 class MovieTrackerController extends MovieController {
-    constructor( div_selector, zoom_selector
+    constructor( div_selector, zoom_selector)
         this.this_id         = this_id;
         this.canvasId        = 0;
         this.movie_id        = movie_id;       // the movie being analyzed

@@ -48,9 +48,6 @@
 
 ***/
 
-/*global api_key */
-/*global movie_id */
-
 /* MyCanvasController Object - creates a canvas that can manage CanvasItems.
  * Implements double-buffering to avoid flashing in redraws.
  */
@@ -97,7 +94,7 @@ class CanvasController {
         // Catch the zoom change event
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
-            $(this.zoom_selector).on('change', (e) => {
+            $(this.zoom_selector).on('change', (_) => {
                 const new_zoom = $(this.zoom_selector).val() / 100.0;
                 console.log("new_zoom=",new_zoom);
                 this.set_zoom( new_zoom );
@@ -105,12 +102,20 @@ class CanvasController {
         }
     }
 
-    // add and clear objects
+    // add an object
     add_object(obj) {
         obj.cc = this;          // We are now this object's canvas controller
         this.objects.push(obj);
     }
-    clear_objects() { this.objects.length = 0; }
+
+    // Erase each object's cc and then delete the references.
+    // For the canvas_movie_controller, we end up retaining a reference for all of the images
+    clear_objects() {
+        for (let i=0;i<this.objects.length;i++){
+            this.objects[i].cc = null;
+        }
+        this.objects.length = 0;
+    }
 
     // Selection Management
     clear_selection() {
@@ -182,13 +187,12 @@ class CanvasController {
         // this is useful for tracking who called redraw, and how many times it is called, and when
         // console.log(`redraw=${msg} id=${this.c.id}`);
         // We don't need to do it if the first object is draws to the bounds (like it's an image).
-        if ((this.objects.length > 0)
-            && (this.objects[0].fills_bounds)
-            && (this.objects[0].x == 0)
-            && (this.objects[0].y == 0)
-            && (this.objects[0].width  == this.naturalWidth )
-            && (this.objects[0].height == this.naturalHeight)){
-        } else {
+        if (this.objects.length == 0
+            ||  !this.objects[0].fills_bounds
+            ||  this.objects[0].x != 0
+            ||  this.objects[0].y != 0
+            ||  this.objects[0].width  != this.naturalWidth
+            ||  this.objects[0].height == this.naturalHeight){
             this.octx.clearRect(0, 0, this.oc.width, this.oc.height);
         }
 
@@ -274,7 +278,7 @@ class Marker extends CanvasItem {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
         ctx.font = '18px sanserif';
-        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2);
+        ctx.fillText( this.name, this.x+this.r+5, this.x+this.r/2);
         ctx.restore();
     }
 
@@ -293,25 +297,55 @@ class Marker extends CanvasItem {
  * This is the legacy system.
  *
  */
+const maxRetries    = 10;
+const retryInterval = 2000;
+
 class WebImage extends CanvasItem {
-    //
     constructor(x, y, url) {
         super(x, y, url);       // url is the name
         console.log("WebImage x=",x,"y=",y,"url=",url);
         this.draggable = false;
+        this.url = url;
         this.img = new Image();
-        this.img_loaded = false;
+        this.loaded = false;
         this.fills_bounds = true;
-        this.width = 0;
+        this.width  = 0;
         this.height = 0;
+        this.retry  = 0;
+        this.timer  = null;
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
-            console.log("image loaded img=",this.img.naturalWidth, this.img.naturalHeight);
+            console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
+            if (this.timer) {
+                console.log("clearTimeout ",this.timer);
+                clearTimeout(this.timer);
+                this.timer = null;
+            }
             this.width  = this.img.naturalWidth;
             this.height = this.img.naturalHeight;
-            this.img_loaded = true;
-            this.cc.redraw();
+            this.loaded = true;
+            // If we are in a canvas controller, have it redraw
+            if (this.cc) this.cc.redraw();
+        };
+
+        this.img.onerror = (_) => {
+            console.log("image onerror ",this.url," loaded=",this.loaded,"this=",this);
+            if (this.timer) {
+                clearTimeout(this.timer);
+                this.timer = null;
+            }
+            if (this.loaded) {
+                return;
+            }
+
+            if (this.retries < maxRetries) {
+                this.retries++;
+                console.log(`image failed ${this.url} retrying ${this.retries}`)
+                this.img.src = ''; // clear the source to ensure that browser attempts a reload
+                this.img.src = this.url; // queue reload
+                this.timeout = setTimeout( ()=>{console.log("timeout "+this.url);this.img.onerror();}, retryInterval); // que another retry
+            }
         };
 
         // set the URL. It loads immediately if it is a here document.
@@ -319,12 +353,17 @@ class WebImage extends CanvasItem {
         // If the document is not a here document, then draw might be called before
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
+        this.timeout = setTimeout( ()=>{console.log("timeout0 "+this.url);this.img.onerror();}, retryInterval); // quey a retry
+        console.log("url=",url,"this.timeout=",this.timeout);
     }
 
     // WebImage draw
     draw(ctx, selected) {
-        if (this.img_loaded) {
+        if (this.loaded) {
+            console.log("*** draw ",this.url);
             ctx.drawImage(this.img, this.x, this.y, this.img.naturalWidth, this.img.naturalHeight);
+        } else {
+            ctx.fillText( this.img.src, this.x, this.y, this.img.naturalWidth+selected);
         }
     }
 }

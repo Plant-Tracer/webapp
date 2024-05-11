@@ -55,9 +55,7 @@
         {'frame_url':'demo/frame2.jpg'},
         {'frame_url':'demo/frame3.jpg'},
         {'frame_url':'demo/frame4.jpg'}];
-    console.log("frames=",frames);
     cc.load_movie(frames);
-    cc.goto_frame(0);
-    cc.redraw();
+    cc.set_loop(true);
   </script>
 </html>

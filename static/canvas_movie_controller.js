@@ -1,9 +1,11 @@
 "use strict";
-/* jshint esversion: 8 */
-// code for /analyze
+/*jshint esversion: 8 */
 
-/*global api_key */
-/*global movie_id */
+/**
+ * Canvas Movie Controller:
+ * Holds all of the frames for a movie and changes the image and annotation in response to button press or timer
+ */
+
 
 const PLAY_MSEC = 1000;          // pause between frames; could be 1000/29.92
 
@@ -24,6 +26,8 @@ class MovieController extends CanvasController {
         this.frames = [];         // needs to be set with load_movie
         this.timer = null;          // when playing or reverse playing, this is the timer that repeatedly calls next or prev
         this.tick = 0;
+        this.bounce = false;    // when playing, bounce off the ends
+        this.loop = false;    // when playing, Loop from end to beginning
 
         // set up movie controls  (manipulations are all done with CSS classes)
         $(div_selector + " input.first_button").on('click', (_) => {this.goto_frame(0);});
@@ -56,8 +60,19 @@ class MovieController extends CanvasController {
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects
+        console.log("load_movie(frames)=",frames);
         this.frames = frames;
+
+        /* Now preload all of the images */
+        for(let i = 0;i<this.frames.length;i++){
+            this.frames[i].web_image = new WebImage(0, 0, frames[i].frame_url);
+        }
+        this.goto_frame(0);
+        this.redraw();
     }
+
+    set_bounce( bounce) { this.bounce = bounce; }
+    set_loop( loop) { this.loop = loop; }
 
     /**
      * Change the frame. This is called repeatedly when the movie is
@@ -88,7 +103,8 @@ class MovieController extends CanvasController {
         /* set the frame number, clear the screen and repaint the objects */
         this.frame_number = frame;
         this.clear_objects();
-        this.set_background_image( this.frames[frame].frame_url );
+        console.log("add_object(frame=",frame,")=",this.frames[frame].web_image);
+        this.add_object( this.frames[frame].web_image );
         if (this.frames[frame].trackpoints) {
             for (let tp of this.frames[frame].trackpoints) {
                 this.add_object( Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
@@ -96,6 +112,7 @@ class MovieController extends CanvasController {
         }
         $(this.div_selector+" input.frame_number_field").val(this.frame_number);
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
+        this.redraw();
     }
 
     /** play is using for playing (delta=+1) and reversing (delta=-1).
@@ -105,7 +122,8 @@ class MovieController extends CanvasController {
         this.tick += 1;
         console.log("play",this.tick,"delta=",delta,"frame:",this.frame_number);
 
-        var next_frame=this.frame_number;
+        var next_frame = this.frame_number;
+        var next_delta = delta;
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
@@ -115,8 +133,10 @@ class MovieController extends CanvasController {
             if (this.frame_number >= this.frames.length-1) {
                 if (this.loop) {
                     next_frame = 0;
-                }
-                else {
+                } else if (this.bounce) {
+                    next_frame = this.frames.length - 2;
+                    next_delta = -1;
+                } else {
                     this.playing=0;
                 }
             } else {
@@ -127,8 +147,10 @@ class MovieController extends CanvasController {
             if (this.frame_number == 0) {
                 if (this.loop) {
                     next_frame = this.frames.length-1;
-                }
-                else {
+                } else if (this.bounce) {
+                    next_frame = 1;
+                    next_delta = 1;
+                } else {
                     this.playing = 0;
                 }
             } else {
@@ -137,7 +159,7 @@ class MovieController extends CanvasController {
         }
         if (this.playing) {
             this.goto_frame(next_frame);
-            this.timer = setTimeout( () => {this.timer=null;this.play(delta);}, PLAY_MSEC );
+            this.timer = setTimeout( () => {this.timer=null;this.play(next_delta);}, PLAY_MSEC );
         }
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
     }
