@@ -328,7 +328,7 @@ total_frames=${this.total_frames} last_tracked_frame=${this.last_tracked_frame}
     play_button_pressed() {
         if (this.frame_number < this.last_tracked_frame-1) {
             this.goto_frame( this.frame_number + 1);
-            this.playTimer = setTimeout( () => this.play_button_pressed(), PLAY_MSEC);
+            this.playTimeout = setTimeout( () => this.play_button_pressed(), PLAY_MSEC);
             this.playing = 1;
         } else {
             this.stop_button_pressed(); // simulate stop button pressed at end of movie
@@ -338,9 +338,9 @@ total_frames=${this.total_frames} last_tracked_frame=${this.last_tracked_frame}
     }
 
     stop_button_pressed() {
-        if (this.playTimer) {
-            clearTimeout(this.playTimer);
-            this.playTimer = undefined;
+        if (this.playTimeout) {
+            clearTimeout(this.playTimeout);
+            this.playTimeout = null;
         }
         this.playing = 0;
         this.set_movie_control_buttons();

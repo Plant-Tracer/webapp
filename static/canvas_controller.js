@@ -312,15 +312,15 @@ class WebImage extends CanvasItem {
         this.width  = 0;
         this.height = 0;
         this.retry  = 0;
-        this.timer  = null;
+        this.timeout  = null;
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
             console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
-            if (this.timer) {
-                console.log("clearTimeout ",this.timer);
-                clearTimeout(this.timer);
-                this.timer = null;
+            if (this.timeout) {
+                console.log("clearTimeout ",this.timeout);
+                clearTimeout(this.timeout);
+                this.timeout = null;
             }
             this.width  = this.img.naturalWidth;
             this.height = this.img.naturalHeight;
@@ -331,9 +331,9 @@ class WebImage extends CanvasItem {
 
         this.img.onerror = (_) => {
             console.log("image onerror ",this.url," loaded=",this.loaded,"this=",this);
-            if (this.timer) {
-                clearTimeout(this.timer);
-                this.timer = null;
+            if (this.timeout) {
+                clearTimeout(this.timeout);
+                this.timeout = null;
             }
             if (this.loaded) {
                 return;
