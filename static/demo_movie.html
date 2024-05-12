@@ -13,7 +13,7 @@
     }
     </style>
   <body>
-    <p>This demo shows the drag-and-drop of the CanvasController.</p>
+    <p>This demo shows a flipbook movie.</p>
     <div id='movie_controller'>
         <canvas id="canvas-id" width='640' height='480'> </canvas>
         <form action="javascript:void(0)" >
@@ -21,15 +21,15 @@
           <!-- https://en.wikipedia.org/wiki/Media_control_symbols -->
           <!-- https://stackoverflow.com/questions/22885702/html-for-the-pause-symbol-in-audio-and-video-control -->
 
-          <input type='button' value='⏮ ' class='first_button frame_movement frame_movement_backwards' disabled/>
-          <input type='button' value='⏴'  class='play_reverse' disabled/>
-          <input type='button' value='-1' class='prev_frame frame_movement frame_movement_backwards' disabled/>
+          <input type='button' value='⏮ ' class='first_button frame_movement movement_backwards' disabled/>
+          <input type='button' value='⏴'  class='play_reverse frame_movement movement_backwards' disabled/>
+          <input type='button' value='-1' class='prev_frame   frame_movement movement_backwards' disabled/>
 
           <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='0' disabled/>
           <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled/>
-          <input type='button' value='+1' class='next_frame frame_movement frame_movement_forwards' disabled/>
-          <input type='button' value='⏵'  class='play_forward' disabled/>
-          <input type='button' value='⏭ ' class='last_button frame_movement frame_movement_forwards' disabled/>
+          <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled/>
+          <input type='button' value='⏵'  class='play_forward frame_movement movement_forwards' disabled/>
+          <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled/>
 
           <label for="zoom">zoom:</label>
           <select id="zoom-id" name="zoom" class='zoom'>

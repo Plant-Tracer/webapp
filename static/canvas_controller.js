@@ -209,6 +209,8 @@ class CanvasController {
             }
         }
         this.octx.restore();
+        // Now use double-buffering to copy the off-screen context to the screen.
+        // We use requestAnimationFrame() to prevent flickering.
         requestAnimationFrame( (_) => {
             this.ctx.clearRect(0, 0, this.c.width, this.c.height);
             this.ctx.drawImage( this.oc, 0, 0);
@@ -278,7 +280,7 @@ class Marker extends CanvasItem {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
         ctx.font = '18px sanserif';
-        ctx.fillText( this.name, this.x+this.r+5, this.x+this.r/2);
+        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2);
         ctx.restore();
     }
 

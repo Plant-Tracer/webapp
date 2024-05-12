@@ -1,5 +1,6 @@
 "use strict";
 /*jshint esversion: 8 */
+/*global $*/
 
 /**
  * Canvas Movie Controller:
@@ -13,19 +14,15 @@ import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_control
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
-        console.log("div_selector1=",div_selector);
         super( div_selector + " canvas", div_selector + " .zoom" );
-        console.log("div_selector2=",div_selector);
-        this.div_selector = div_selector;
-        console.log("this.div_selector=",this.div_selector);
 
         // Movie state variables
         this.frame_number_field = $(div_selector + " .frame_number_field");
         this.frame_number = null;  // no frame number to start
         this.playing = 0;   // are we playing a movie? +1 means forward, -1 is reverse
         this.frames = [];         // needs to be set with load_movie
+        this.cached_web_images = [];
         this.timer = null;          // when playing or reverse playing, this is the timer that repeatedly calls next or prev
-        this.tick = 0;
         this.bounce = false;    // when playing, bounce off the ends
         this.loop = false;    // when playing, Loop from end to beginning
 
@@ -52,27 +49,46 @@ class MovieController extends CanvasController {
         });
     }
 
+    set_bounce( bounce) { this.bounce = bounce; }
+    set_loop( loop) { this.loop = loop; }
+
     /*
      * loads the description of the movie and annotations
+     * `frames` comes from the get-movie-metadata which is called:
+     * - when a movie is first loaded (and it is filled if the movie is tracked.)
+     * - is called to poll for tracking completion,
+     *
+     * If a movie is not tracked we do not know how many frames it is.
+     * In this case, we:
+     * - Use the JPEG URL for the first frame
+     * - Set up the default trackpoints and write them to the server.
+     * - Wait for the user to move the trackpoints and then click 'track',
+     *   which will track and then gets the frames array.
      */
     load_movie( frames ){
-        // frames is a dictionary with [nn] frame number indexes.
+        // frames is an array with [nn] frame number indexes.
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects
         console.log("load_movie(frames)=",frames);
         this.frames = frames;
 
-        /* Now preload all of the images */
+        /* Now preload all of the images, downloading new ones as necessary.
+         * Typically load_movie is called repeatedly for each new tracking,
+         * but the images are only downloaded the first time.
+         */
         for(let i = 0;i<this.frames.length;i++){
-            this.frames[i].web_image = new WebImage(0, 0, frames[i].frame_url);
+            if (!this.cached_web_images[i]) {
+                this.cached_web_images[i] = new WebImage(0, 0, frames[i].frame_url);
+            }
+            this.frames[i].web_image = this.cached_web_images[i];
         }
-        this.goto_frame(0);
+        $(this.div_selector + " span.total-frames").text(this.total_frames);
+        if (!this.frame_number) { // if frame number is not set, be sure we move to frame 0
+            this.goto_frame(0);
+        }
         this.redraw();
     }
-
-    set_bounce( bounce) { this.bounce = bounce; }
-    set_loop( loop) { this.loop = loop; }
 
     /**
      * Change the frame. This is called repeatedly when the movie is
@@ -83,7 +99,6 @@ class MovieController extends CanvasController {
      */
     goto_frame( frame ) {
         console.log(`goto_frame(${frame})`);
-        console.log("div_selector4=",this.div_selector);
 
         frame = parseInt(frame);         // make sure it is integer
         if ( isNaN(frame) || frame<0 ) {
@@ -99,28 +114,25 @@ class MovieController extends CanvasController {
             return;             // did not change
         }
 
-        console.log("frame=",frame,"this.frames[frame]=",this.frames[frame]);
-        /* set the frame number, clear the screen and repaint the objects */
+        // set the frame number, clear the screen and re-add the objects
         this.frame_number = frame;
         this.clear_objects();
-        console.log("add_object(frame=",frame,")=",this.frames[frame].web_image);
-        this.add_object( this.frames[frame].web_image );
-        if (this.frames[frame].trackpoints) {
-            for (let tp of this.frames[frame].trackpoints) {
-                this.add_object( Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
-            }
-        }
+        this.add_object( this.frames[frame].web_image ); // always add this first
+        this.add_frame_objects( frame );                 // typically will be subclassed
         $(this.div_selector+" input.frame_number_field").val(this.frame_number);
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
         this.redraw();
+    }
+
+    // override this in your subclass to add things that annotate the movie.
+    add_frame_objects( frame ){
     }
 
     /** play is using for playing (delta=+1) and reversing (delta=-1).
      * It's called by the timer or when the button is pressed
      */
     play(delta) {
-        this.tick += 1;
-        console.log("play",this.tick,"delta=",delta,"frame:",this.frame_number);
+        console.log("play delta=",delta,"frame:",this.frame_number);
 
         var next_frame = this.frame_number;
         var next_delta = delta;
@@ -175,6 +187,9 @@ class MovieController extends CanvasController {
     }
 
 
+    /**
+     * enable or disable controls as appropriate.
+     */
     set_movie_control_buttons() {
         console.log("div_selector3=",this.div_selector);
 
@@ -186,7 +201,7 @@ class MovieController extends CanvasController {
             $(this.div_selector + ' input.play_reverse').prop('disabled',true);
             return;
         }
-        // if playing, everything but 'stop' is disabled
+        // if playing, everything but 'stop' and reversing direciton is disabled
         if (this.playing) {
             $(this.div_selector + ' input.frame_movement').prop('disabled',true);
             $(this.div_selector + ' input.frame_stoppage').prop('disabled',false);
@@ -195,16 +210,11 @@ class MovieController extends CanvasController {
             return;
         }
         // movie not playing
-        console.log("movie not playing. forwards=",this.frame_number==this.length-1);
         $(this.div_selector + ' input.frame_number_field').prop('disabled',false);
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
-        $(this.div_selector + ' input.frame_movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
-        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number==this.length-1);
+        $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
+        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number==this.length-1);
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
-        var sel = this.div_selector + ' input.frame_movement_forwards';
-        var val = this.frame_number==this.length-1;
-        console.log("sel=",sel,"val=",val);
-        $(sel).prop('disabled', val); // can't move forwards
     }
 }
 

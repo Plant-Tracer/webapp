@@ -20,8 +20,7 @@ function start_update_timer(obj) {
         formData.append('movie_id',obj.movie_id);
         fetch('/api/get-movie-metadata', {
             method:'POST',
-            body: formData
-        })
+            body: formData })
             .then((response) => response.json())
             .then((data) => {
                 console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",

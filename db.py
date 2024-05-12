@@ -954,10 +954,14 @@ def delete_analysis_engine_id(*, engine_id):
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         "DELETE from engines where id=%s",(engine_id,))
 
-def delete_frame_analysis(*, frame_id=None, engine_id=None):
+def delete_frame_analysis(*, frame_id=None, movie_id=None, engine_id=None):
     """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
-    if (frame_id is None) and (engine_id is None):
-        raise RuntimeError("frame_id and/or engine_id must not be None")
+    if (frame_id is None) and (movie_id is None) and (engine_id is None):
+        raise RuntimeError("frame_id, movie_id or engine_id must not be None")
+
+    if (movie_id is None):
+        if (frame_id is None) or (engine_id is None):
+            raise RuntimeError("if movie_id is set, frame_id and engine_id must be None")
 
     cmd = "DELETE FROM movie_frame_analysis WHERE "
     args = []
@@ -969,11 +973,18 @@ def delete_frame_analysis(*, frame_id=None, engine_id=None):
     if engine_id:
         cmd += " engine_id=%s"
         args.append(engine_id)
+    if movie_id:
+        cmd += " frame_id in (select id from movie_frames where movie_id=%s) "
+        args.append(movie_id)
     dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
 
     if frame_id is not None:
-        cmd = "DELETE FROM movie_trackpoints WHERE frame_id=%s"
+        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id=%s"
         dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [frame_id,])
+
+    if movie_id is not None:
+        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id in (select id from movie_frames where movie_id=%s)"
+        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [movie_id,])
 
 
 def delete_analysis_engine(*, engine_name, version=None, recursive=None):

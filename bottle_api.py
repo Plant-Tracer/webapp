@@ -371,25 +371,38 @@ def api_get_movie_data():
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, url)
     return bottle.redirect(url)
 
+def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
+    """Update the movie metadata."""
+    for prop in ['fps','width','height','total_frames','total_bytes']:
+        if prop in movie_metadata:
+            db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=movie_metadata[prop])
+
+
 ################
-## get-frame api.
-## Gets a single frame. Use cookie or API_KEY authenticaiton.
-## Note that you can also get single frames with a signed URL from get-movie-metadata
-def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
+# get-frame api.
+# Gets a single frame. Use cookie or API_KEY authenticaiton.
+# Note that you can also get single frames with a signed URL from get-movie-metadata
+#
+def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
     """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
+    If we have to extract the frame, write it to the database
     Used by get-frame below.
     """
     # is frame_id provided?
-    if (frame_id is not None) and db.can_access_frame(user_id = get_user_id(), frame_id=frame_id):
-        row =  db.get_frame(frame_id=frame_id)
+    if (frame_id is not None) and db.can_access_frame(user_id = user_id, frame_id=frame_id):
+        row =  db.get_frame(frame_id=frame_id) # reads from db or object store
         return row.get('frame_data',None)
+
     # Is there a movie we can access?
-    if frame_number is not None and db.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+    if frame_number is not None and db.can_access_movie(user_id = user_id, movie_id=movie_id):
         movie_data = db.get_movie_data(movie_id = movie_id)
         if movie_data is None:
             raise db.InvalidFrameAccess()
         try:
-            return tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
+            ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
+            movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+            set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+
         except ValueError as e:
             return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
     logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
@@ -398,8 +411,12 @@ def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None):
 @api.route('/get-frame', method=GET_POST)
 def api_get_frame():
     """
-    Get a frame and its annotation from a movie. Return from the frame database. If not there, grab it from the movie
-
+    Get a frame and its annotation from a movie.
+    If frame is in frame storage:
+         - return from the frame storage.
+    If not is not in frame storage:
+         - Grab it from the movie
+         - Also get the width and height, and be sure they are in the database too.
 
     :param api_key:   authentication
     :param movie_id:   movie
@@ -438,7 +455,7 @@ def api_get_frame():
     if fmt=='jpeg':
         # Return just the JPEG for the frame, with no metadata
         bottle.response.set_header('Content-Type', MIME.JPEG)
-        return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id)
+        return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id, user_id=user_id)
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_number=frame_number)
@@ -505,6 +522,7 @@ def api_edit_movie():
                 movie = db.Movie(movie_id, user_id=get_user_id())
                 movie_input.write( movie.data )
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
+                db.purge_movie_frames( movie.movie_id )
                 movie_output.seek(0)
                 movie.data = movie_output.read()
                 movie.version += 1
@@ -545,10 +563,11 @@ def api_get_movie_metadata():
     :param movie_id:  movie
     :param frame_start: if provided, first frame to provide metadata about
     :param frame_count: if provided, number of frames to get info on. 0 is no frames
+    :param get_all_if_tracking_completed: if status is TRACKING_COMPLETED_FLAG, return all of the trackpoints
 
     Returns JSON dictionary:
     ['metadata'] - movie metadata (same as get-metadata)
-    ['frames'] - annotations, trackpoints, or URLS.
+    ['frames'] - annotations, trackpoints, or URLs - same format that canvas_movie_controller.load_movie() takes
     ['frames']['10']      (where '10' is a frame number) - per-frame dictionary.
     ['frames']['10']['trackpoints'] - array of the trackpoints for that frame
     ['frames']['10']['annotations'] - array of the annotations for that frame
@@ -556,6 +575,8 @@ def api_get_movie_metadata():
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')
+    get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
+
     logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
@@ -563,9 +584,10 @@ def api_get_movie_metadata():
     metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
     ret = {'error':False, 'metadata':metadata}
 
-    frame_start = get_int('frame_start')
+    tracking_completed = (metadata['status'] == E.TRACKING_COMPLETED)
+    frame_start = get_int('frame_start') if not tracking_completed else 0
     if frame_start is not None:
-        frame_count = get_int('frame_count')
+        frame_count = get_int('frame_count') if not tracking_completed else C.MAX_FRAMES
         if frame_count is None:
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
@@ -679,11 +701,7 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
         infile.write( movie_data  )
         infile.flush()
 
-        # While we are here, update the movie metadata
-        for prop in ['fps','width','height','total_frames','total_bytes']:
-            if prop in movie_metadata:
-                db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=movie_metadata[prop])
-
+        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
         # Track (or retrack) the movie and create the tracked movie
         # Each time the callback is called it will update the trackpoints for that frame
