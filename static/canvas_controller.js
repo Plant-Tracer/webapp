@@ -96,7 +96,6 @@ class CanvasController {
             this.zoom_selector = zoom_selector;
             $(this.zoom_selector).on('change', (_) => {
                 const new_zoom = $(this.zoom_selector).val() / 100.0;
-                console.log("new_zoom=",new_zoom);
                 this.set_zoom( new_zoom );
             });
         }
@@ -183,10 +182,8 @@ class CanvasController {
 
     // Main drawing function:
     redraw(  ) {
-        // clear canvas
-        // this is useful for tracking who called redraw, and how many times it is called, and when
-        // console.log(`redraw=${msg} id=${this.c.id}`);
-        // We don't need to do it if the first object is draws to the bounds (like it's an image).
+        // redraw the object stack.
+        // We don't need to clear the canvas if the first object is draws to the bounds (like it's an image).
         if (this.objects.length == 0
             ||  !this.objects[0].fills_bounds
             ||  this.objects[0].x != 0
@@ -304,7 +301,6 @@ class Line extends CanvasItem {
     }
 
     draw(ctx, selected) {
-        console.log("draw ",this.x,this.y,"to",this.x2,this.y2);
         ctx.save();
         ctx.beginPath();
         ctx.lineWidth = this.width;
@@ -326,7 +322,6 @@ const retryInterval = 2000;
 class WebImage extends CanvasItem {
     constructor(x, y, url) {
         super(x, y, url);       // url is the name
-        console.log("WebImage x=",x,"y=",y,"url=",url);
         this.draggable = false;
         this.url = url;
         this.img = new Image();
@@ -352,14 +347,14 @@ class WebImage extends CanvasItem {
         };
 
         this.img.onerror = (_) => {
-            console.log("image onerror ",this.url," loaded=",this.loaded,"this=",this);
+            console.log("image onerror ",this.url);
+            // Clear the timeout if it is still set
             if (this.timeout) {
-                console.log("clearTimeout for ",this.url);
                 clearTimeout(this.timeout);
                 this.timeout = null;
             }
             if (this.loaded) {
-                console.log("this.loaded won't retry.");
+                console.log(this.url,"loaded; won't retry.");
                 return;
             }
 
@@ -369,7 +364,8 @@ class WebImage extends CanvasItem {
                 console.log(`image failed ${this.url} retrying ${this.retries}`)
                 this.img.src = ''; // clear the source to ensure that browser attempts a reload
                 this.img.src = this.url; // queue reload
-                this.timeout = setTimeout( ()=>{console.log("timeout "+this.url);this.img.onerror();}, retryInterval); // que another retry
+                this.timeout = setTimeout(
+                    ()=>{this.img.onerror();}, retryInterval); // que another retry
             }
         };
 
@@ -379,8 +375,7 @@ class WebImage extends CanvasItem {
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
         this.timeout = setTimeout(
-            ()=>{console.log("timeout0 "+this.url);this.img.onerror();}, retryInterval); // quey a retry
-        console.log("url=",url,"this.timeout=",this.timeout);
+            ()=>{this.img.onerror();}, retryInterval); // quey a retry
     }
 
     // WebImage draw

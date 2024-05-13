@@ -230,32 +230,22 @@ class TracerController extends MovieController {
     }
 
     add_frame_objects( frame ){
-        console.log("add_frame_objects frame=",frame,frame-1);
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has trackpoints
-        console.log("this.frames[frame]=",this.frames[frame]);
-        console.log("this.frames[frame].trackpoints=",this.frames[frame].trackpoints);
-        if(frame>0){
-            console.log("this.frames[frame-1]=",this.frames[frame-1]);
-            console.log("this.frames[frame-1].trackpoints=",this.frames[frame-1].trackpoints);
-        }
         if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
             for (let f0=0;f0<frame;f0++){
                 var starts = [];
                 var ends   = {};
                 for (let tp of this.frames[f0].trackpoints){
-                    console.log("starts=",starts,"tp=",tp);
                     starts.push(tp);
                 }
                 for (let tp of this.frames[f0+1].trackpoints){
-                    console.log("ends=",ends,"tp=",tp);
                     ends[tp.label] = tp
                 }
                 // now add the lines between the trackpoints in the previous frames
                 // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
                 for (let st of starts){
                     if (ends[st.label]){
-                        console.log("st=",st,"ends[st.label]=",ends[st.label]);
                         this.add_object( new Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
                     }
                 }
@@ -310,7 +300,6 @@ class TracerController extends MovieController {
 
     /** movie is tracked - display the results */
     movie_tracked(data) {
-        console.log("movie_tracked data: ",data);
         this.tracking = false;
         this.tracking_status.text('Movie tracking complete.');
         this.download_link.show();
