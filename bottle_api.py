@@ -98,11 +98,12 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if 'id' not in userdict:
         logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(body='user_id is not valid', status=501, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(status=501, headers={ 'Location': '/'})
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
-        raise bottle.HTTPResponse(body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
-                                  status=503, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(
+            body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
+            status=503, headers={ 'Location': '/'})
     return userdict['id']
 
 
@@ -116,7 +117,11 @@ def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     api_key = auth.get_user_api_key()
     if api_key is None:
-        logging.info("api_key is none")
+        logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
+        if bottle.request.fullpath.startswith('/api/'):
+            raise bottle.HTTPResponse(body=E.INVALID_API_KEY)
+        # Check if we were running under an API
+
         # This will redirect to the / and produce a "Session expired" message
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)

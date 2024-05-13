@@ -23,7 +23,7 @@
 
     </style>
   <body>
-      <p>This demo shows the TraceController *before* the image is traced.
+      <p>This demo shows the TraceController <i>before</i> the image is traced.
           The user has the ability to drag and edit the initial track points.
       </p>
     <div id='tracker'>
@@ -67,13 +67,13 @@
             <form class='pure-form pure-form-aligned marker_form' action="javascript:void(0)" >
                 <fieldset>
                     <div class='pure-control-group'>
-                        <span class='add_marker_status'></span> <!-- for errror messages -->
-                    </div>
-
-                    <div class='pure-control-group'>
                         <label for='marker-name'>New marker name:</label>
                         <input class='marker_name_input' type='text' placeholder='Marker name' size='20' />
                         <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
+                    </div>
+
+                    <div class='pure-control-group'>
+                        <span class='add_marker_status'></span> <!-- for errror messages -->
                     </div>
 
                     <div class='pure-control-group'>
@@ -96,10 +96,11 @@
     // This demo draws three dragable objects and adds some text.
    import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
    import { MovieController } from "./canvas_movie_controller.js";
-   import { TracerController } from "./canvas_tracer_controller.js";
+   import { TracerController, trace_movie_one_frame } from "./canvas_tracer_controller.js";
    const movie_id = 10;
    const movie_metadata = {'movie_id':movie_id, 'width':512, 'height':512};
    const api_key='demo_key';
-   const cc = new TracerController('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
+   trace_movie_one_frame('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
+   // const cc = new TracerController('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
   </script>
 </html>

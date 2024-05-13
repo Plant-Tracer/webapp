@@ -14,7 +14,9 @@ import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_control
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
-        super( div_selector + " canvas", div_selector + " .zoom" );
+        super( div_selector + " canvas ", div_selector + " .zoom" );
+        div_selector += ' ';    // make sure there is a trailing space
+        this.div_selector = div_selector;
 
         // Movie state variables
         this.frame_number_field = $(div_selector + " .frame_number_field");

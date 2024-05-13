@@ -91,7 +91,6 @@ def get_user_api_key():
     except KeyError:
         return None             # not running in WSGI
 
-
     # check for a form submission
     try:
         api_key = request.forms.get('api_key', None) # must be 'api_key', because may be in a form
@@ -103,7 +102,6 @@ def get_user_api_key():
 
     # Return the api_key if it is in a cookie, otherwise None
     return request.get_cookie(cookie_name(), None)
-
 
 def get_user_ipaddr():
     """This is the only place where db.py knows about bottle."""

@@ -292,7 +292,6 @@ class Marker extends CanvasItem {
         let contained = areaX * areaX + areaY * areaY <= this.r * this.r;
         return contained;
     }
-
 }
 
 /* WebImage Object - Draws an image (x,y) specified by the url.
@@ -355,14 +354,14 @@ class WebImage extends CanvasItem {
         // If the document is not a here document, then draw might be called before
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
-        this.timeout = setTimeout( ()=>{console.log("timeout0 "+this.url);this.img.onerror();}, retryInterval); // quey a retry
+        this.timeout = setTimeout(
+            ()=>{console.log("timeout0 "+this.url);this.img.onerror();}, retryInterval); // quey a retry
         console.log("url=",url,"this.timeout=",this.timeout);
     }
 
     // WebImage draw
     draw(ctx, selected) {
         if (this.loaded) {
-            console.log("*** draw ",this.url);
             ctx.drawImage(this.img, this.x, this.y, this.img.naturalWidth, this.img.naturalHeight);
         } else {
             ctx.fillText( this.img.src, this.x, this.y, this.img.naturalWidth+selected);
