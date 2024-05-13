@@ -23,7 +23,7 @@ var cell_id_counter = 0;
 var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
 
-import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
+import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
 
 
@@ -240,21 +240,24 @@ class TracerController extends MovieController {
             console.log("this.frames[frame-1].trackpoints=",this.frames[frame-1].trackpoints);
         }
         if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
-            var starts = [];
-            var ends   = {};
-            for (let tp of this.frames[frame-1].trackpoints){
-                console.log("starts=",starts,"tp=",tp);
-                starts.push(tp);
-            }
-            for (let tp of this.frames[frame-1].trackpoints){
-                console.log("ends=",ends,"tp=",tp);
-                ends[tp.label] = tp
-            }
-            // now add the lines between the trackpoints in the previous frames
-            // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
-            for (let st of starts){
-                if (ends[st.label]){
-                    this.add_object( Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
+            for (let f0=0;f0<frame;f0++){
+                var starts = [];
+                var ends   = {};
+                for (let tp of this.frames[f0].trackpoints){
+                    console.log("starts=",starts,"tp=",tp);
+                    starts.push(tp);
+                }
+                for (let tp of this.frames[f0+1].trackpoints){
+                    console.log("ends=",ends,"tp=",tp);
+                    ends[tp.label] = tp
+                }
+                // now add the lines between the trackpoints in the previous frames
+                // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
+                for (let st of starts){
+                    if (ends[st.label]){
+                        console.log("st=",st,"ends[st.label]=",ends[st.label]);
+                        this.add_object( new Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
+                    }
                 }
             }
         }

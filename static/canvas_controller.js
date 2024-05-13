@@ -294,6 +294,28 @@ class Marker extends CanvasItem {
     }
 }
 
+class Line extends CanvasItem {
+    constructor(x, y, x2, y2, width, color) {
+        super(x, y, 'line');
+        this.x2 = x2;
+        this.y2 = y2;
+        this.width = width;
+        this.color = color;
+    }
+
+    draw(ctx, selected) {
+        console.log("draw ",this.x,this.y,"to",this.x2,this.y2);
+        ctx.save();
+        ctx.beginPath();
+        ctx.lineWidth = this.width;
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x2, this.y2);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+
 /* WebImage Object - Draws an image (x,y) specified by the url.
  * This is the legacy system.
  *
@@ -368,4 +390,4 @@ class WebImage extends CanvasItem {
     }
 }
 
-export { CanvasController, CanvasItem, Marker, WebImage };
+export { CanvasController, CanvasItem, Marker, WebImage, Line };
