@@ -112,7 +112,6 @@ class MovieController extends CanvasController {
         }
 
         if (frame==this.frame_number && !(frame===null)) {
-            console.log("frame=",frame,"this.frame_number=",this.frame_number);
             return;             // did not change
         }
 
@@ -179,7 +178,6 @@ class MovieController extends CanvasController {
     }
 
     stop_button_pressed() {
-        console.log("stop button pressed. this.timer=",this.timer);
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
@@ -193,8 +191,6 @@ class MovieController extends CanvasController {
      * enable or disable controls as appropriate.
      */
     set_movie_control_buttons() {
-        console.log("set_movie_control_buttons: div_selector3=",this.div_selector,"this.frames=",this.frames,"this.frame_number=",this.frame_number);
-
         // no frames, nothing is enabled
         if (this.frames.length==0){
             $(this.div_selector + ' input.frame_movement').prop('disabled',true);

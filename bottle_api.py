@@ -380,7 +380,7 @@ def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
     """Update the movie metadata."""
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
-            db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=movie_metadata[prop])
+            db.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
 
 
 ################
@@ -398,8 +398,9 @@ def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
         row =  db.get_frame(frame_id=frame_id) # reads from db or object store
         return row.get('frame_data',None)
 
-    # Is there a movie we can access?
-    if frame_number is not None and db.can_access_movie(user_id = user_id, movie_id=movie_id):
+    # Is there a movie we can access? If so, get the first frame and, while we have the movie in memory,
+    # put its metadata into the computer
+    if (frame_number is not None) and db.can_access_movie(user_id = user_id, movie_id=movie_id):
         movie_data = db.get_movie_data(movie_id = movie_id)
         if movie_data is None:
             raise db.InvalidFrameAccess()
@@ -407,10 +408,11 @@ def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
             ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
             movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
             set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
-
+            return ret
         except ValueError as e:
             return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
-    logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",frame_id,frame_number,movie_id)
+    logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",
+                 frame_id,frame_number,movie_id)
     raise db.InvalidFrameAccess()
 
 @api.route('/get-frame', method=GET_POST)
@@ -459,8 +461,11 @@ def api_get_frame():
 
     if fmt=='jpeg':
         # Return just the JPEG for the frame, with no metadata
-        bottle.response.set_header('Content-Type', MIME.JPEG)
-        return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+        try:
+            bottle.response.set_header('Content-Type', MIME.JPEG)
+            return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+        except db.InvalidFrameAccess:
+            return bottle.HTTPResponse(body=f'<html><body>invalid frame access frame_id={frame_id} frame_number={frame_number} movie_id={movie_id} user_id={user_id}</body></html>', status=404)
 
     # See if get_frame can find the movie frame
     ret = db.get_frame(movie_id=movie_id, frame_id = frame_id, frame_number=frame_number)
