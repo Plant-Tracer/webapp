@@ -33,11 +33,11 @@ class TracerController extends MovieController {
         this.tracking = false;  // are we tracking a movie?
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
-        const movie_id = movie_metadata.movie_id;
+        this.movie_id = movie_metadata.movie_id;
 
         // set up the download button
         this.download_link = $(div_selector + " input.download_button");
-        this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${movie_id}`);
+        this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
         this.download_link.hide();
 
         // Size the canvas and video player
@@ -273,17 +273,16 @@ class TracerController extends MovieController {
      * Poll the server to see if tracking has ended.
      */
     poll_for_track_end() {
-        console.log(Date.now(),"update_tracked_movie_status_from_server obj=",obj);
         const formData = new FormData();
-        formData.append('api_key',obj.api_key);
-        formData.append('movie_id',obj.movie_id);
+        formData.append('api_key',this.api_key);
+        formData.append('movie_id',this.movie_id);
         formData.append('get_all_if_tracking_completed',true);
         fetch('/api/get-movie-metadata', {
             method:'POST',
             body: formData })
             .then((response) => response.json())
             .then((data) => {
-                console.log(Date.now(),"get-movie-metadata (movie_id=",obj.movie_id,") got = ",
+                console.log(Date.now(),"get-movie-metadata (movie_id=",this.movie_id,") got = ",
                             data,"metadata:",data.metadata,"status:",data.metadata.status);
                 if (data.error==false){
                     // Send the status back to the UX
@@ -349,7 +348,7 @@ function trace_movie_frames(div_controller, movie_metadata, api_key) {
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
-function trace_movie(div_controller, movie_metadata, first_frame, api_key) {
+function trace_movie(div_controller, movie_id, api_key) {
     const params = {
         api_key: api_key,
         movie_id: movie_id,
@@ -361,11 +360,16 @@ function trace_movie(div_controller, movie_metadata, first_frame, api_key) {
             return;
         } else {
             $('#firsth2').html(`Movie #${movie_id}: ready to trace`);
+            console.log("data:",data);
+            const width = data.metadata.width;
+            const height = data.metadata.height;
+            console.log('resizing to',width,'x','height');
+            $(div_controller + ' canvas').prop('width',width).prop('height',height);
             if (data.metadata.frames) {
                 trace_movie_frames(div_controller, data.metadata, api_key);
             } else {
-                trace_movie_one_frame(div_controller, data.metadata,
-                                      `/api/get-frame?api_key=${api_key}&movie_id=${data.metadata.movie_id}&frame_number=0&format=jpeg`);
+                const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+                trace_movie_one_frame(div_controller, data.metadata, frame0);
             }
         }});
 }

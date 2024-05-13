@@ -170,6 +170,12 @@ class CanvasController {
         this.object_move_finished(obj);
     }
 
+    resize( width, height ){
+        this.c.width = this.naturalWidth = width;
+        this.c.height = this.naturalHeight = height;
+        this.redraw();
+    }
+
     // Zoom happens by scaling the drawing with a transformation and resizing the canvas element.
     // We also have to resize the offscreen canvas
 

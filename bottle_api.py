@@ -831,7 +831,10 @@ def api_put_frame_analysis():
     user_id   = get_user_id(allow_demo=True)
     logging.debug("put_frame_analysis. frame_id=%s user_id=%s",frame_id,user_id)
     if frame_id is None:
-        frame_id = db.create_new_frame(movie_id=get_int('movie_id'), frame_number=get_int('frame_number'))
+        movie_id = get_int('movie_id')
+        frame_number = get_int('frame_number')
+        logging.debug("put_frame_analysis. movie_id=%s frame_number=%s",movie_id,frame_number)
+        frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
         logging.debug("frame_id is now %s",frame_id)
     if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
         logging.debug("user %s cannot access frame_id %s",user_id, frame_id)

@@ -1203,8 +1203,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """
     # First compute @is_owner
 
-    logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s",
-                 set_user_id, set_movie_id, prop, value)
+    #logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
     assert isinstance(user_id, int)
     assert isinstance(set_movie_id, int) or (set_movie_id is None)
     assert isinstance(set_user_id, int) or (set_user_id is None)

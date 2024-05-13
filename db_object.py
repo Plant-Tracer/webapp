@@ -21,6 +21,7 @@ import hashlib
 import requests
 import boto3
 import bottle
+import uuid
 
 from lib.ctools import dbfile
 from constants import C
@@ -69,8 +70,14 @@ def sha256(data):
     return h.hexdigest()
 
 def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
+    """object_name is a URN that is generated according to a scheme
+    that uses course_id, movie_id, and frame_number, but there is also
+    a 16-bit nonce This means that you can't generate it on the fly;
+    it has to be stored in a database.
+    """
     fm = f"/{frame_number:06d}" if frame_number is not None else ""
-    return f"{course_id}/{movie_id}{fm}{ext}"
+    nonce = str(uuid.uuid4())[0:4]
+    return f"{course_id}/{movie_id}{fm}-{nonce}{ext}"
 
 def s3_client():
     return boto3.session.Session().client( S3 )

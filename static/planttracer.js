@@ -13,7 +13,7 @@ const PUBLISH_BUTTON='PUBLISH';
 const UNPUBLISH_BUTTON='UNPUBLISH';
 const DELETE_BUTTON='DELETE';
 const UNDELETE_BUTTON='UNDELETE';
-const PLAY_LABEL = 'play original';
+const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
 
@@ -216,7 +216,6 @@ function upload_movie()
 }
 
 async function get_movie_metadata(movie_id){
-    // Ask the server to rotate the movie
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("movie_id",    movie_id);
@@ -227,9 +226,9 @@ async function get_movie_metadata(movie_id){
 }
 
 
+//
+// Ask the server to rotate the movie
 async function rotate_movie() {
-    //
-    // Ask the server to rotate the movie
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
     const m0 = await get_movie_metadata(movie_id);
