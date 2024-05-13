@@ -334,7 +334,7 @@ class WebImage extends CanvasItem {
         this.fills_bounds = true;
         this.width  = 0;
         this.height = 0;
-        this.retry  = 0;
+        this.retries  = 0;
         this.timeout  = null;
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
@@ -354,13 +354,16 @@ class WebImage extends CanvasItem {
         this.img.onerror = (_) => {
             console.log("image onerror ",this.url," loaded=",this.loaded,"this=",this);
             if (this.timeout) {
+                console.log("clearTimeout for ",this.url);
                 clearTimeout(this.timeout);
                 this.timeout = null;
             }
             if (this.loaded) {
+                console.log("this.loaded won't retry.");
                 return;
             }
 
+            console.log("this.retries=",this.retries,"maxRetries=",maxRetries);
             if (this.retries < maxRetries) {
                 this.retries++;
                 console.log(`image failed ${this.url} retrying ${this.retries}`)

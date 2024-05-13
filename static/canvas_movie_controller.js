@@ -217,10 +217,8 @@ class MovieController extends CanvasController {
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
         $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
         $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number==this.length-1);
+        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number==this.length-1);
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
-
-        console.log("movie is not playing.","div_selecxtor=",this.div_selector,$(this.div_selector +' input.movement_forwards'));
-        $(this.div_selector + ' input.movement_forwards').prop('disabled',false);
     }
 }
 
