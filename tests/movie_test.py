@@ -293,7 +293,7 @@ def test_new_movie_analysis(new_engine):
     db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
 
 
-def test_movie_extract(new_movie):
+def test_movie_extract1(new_movie):
     """Check single frame extarct and error handling"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -342,7 +342,7 @@ def test_movie_extract(new_movie):
         frame0b = r
     assert frame0a == frame0b
 
-def test_movie_extract(new_movie):
+def test_movie_extract2(new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]

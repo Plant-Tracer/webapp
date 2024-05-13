@@ -522,7 +522,7 @@ def api_edit_movie():
                 movie = db.Movie(movie_id, user_id=get_user_id())
                 movie_input.write( movie.data )
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
-                db.purge_movie_frames( movie.movie_id )
+                db.purge_movie_frames( movie_id=movie.movie_id )
                 movie_output.seek(0)
                 movie.data = movie_output.read()
                 movie.version += 1
@@ -584,7 +584,7 @@ def api_get_movie_metadata():
     metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
     ret = {'error':False, 'metadata':metadata}
 
-    tracking_completed = (metadata['status'] == E.TRACKING_COMPLETED)
+    tracking_completed = (metadata['status'] == C.TRACKING_COMPLETED)
     frame_start = get_int('frame_start') if not tracking_completed else 0
     if frame_start is not None:
         frame_count = get_int('frame_count') if not tracking_completed else C.MAX_FRAMES

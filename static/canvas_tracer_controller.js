@@ -28,11 +28,12 @@ import { MovieController } from "./canvas_movie_controller.js"
 
 
 class TracerController extends MovieController {
-    constructor( div_selector, movie_metadata) {
+    constructor( div_selector, movie_metadata, api_key) {
         super( div_selector );
         this.div_selector = div_selector;
         this.tracking = false;  // are we tracking a movie?
         this.movie_metadata = movie_metadata;
+        const movie_id = movie_metadata.movie_id;
 
         // set up the download button
         this.download_link = $(div_selector + " input.download_button");
@@ -259,7 +260,7 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller ' input').prop('disabled',true); // disable all the inputs
+            $(this.div_controller + ' input').prop('disabled',true); // disable all the inputs
             return;
         }
         super.set_movie_control_buttons(); // otherwise run the super class
@@ -321,7 +322,6 @@ class TracerController extends MovieController {
         }
         location.reload(true);
     }
-
 }
 
 // Called when the page is loaded
@@ -345,8 +345,9 @@ function trace_movie(api_key, movie_id) {
         });
 }
 
+export { TracerController };
 
 // Call analyze_move on load
-$( document ).ready( function() {
-    trace_movie( api_key, movie_id);
-});
+//$( document ).ready( function() {
+//    trace_movie( api_key, movie_id);
+//});
