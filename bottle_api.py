@@ -573,10 +573,10 @@ def api_get_movie_metadata():
     Returns JSON dictionary:
     ['metadata'] - movie metadata (same as get-metadata)
     ['frames'] - annotations, trackpoints, or URLs - same format that canvas_movie_controller.load_movie() takes
-    ['frames']['10']      (where '10' is a frame number) - per-frame dictionary.
-    ['frames']['10']['trackpoints'] - array of the trackpoints for that frame
-    ['frames']['10']['annotations'] - array of the annotations for that frame
-    ['frames']['10']['url'] - signed URL for the frame, from S3
+    ['frames'][10]      (where 10 is a frame number) - per-frame array, starting with frame 0.
+    ['frames'][10]['trackpoints'] - array of the trackpoints for that frame
+    ['frames'][10]['annotations'] - array of the annotations for that frame
+    ['frames'][10]['frame_url'] - signed URL for the frame, from S3
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')

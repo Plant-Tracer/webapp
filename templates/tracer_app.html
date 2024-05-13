@@ -1,47 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <title>Demo</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script type="text/javascript" charset="utf8" src="dev/jquery.js"></script>
-    <script type="module" src="./canvas_controller.js"></script>
-    <script type="module" src="./canvas_movie_controller.js"></script>
-  </head>
-  <style>
-    canvas {
-      border: 1px solid black;
-    }
-   .float-movie {
-       float: left;
-       padding: 2px;
-   }
-
-   .float-controls {
-       float: left;
-       padding: 2px;
-   }
-
-    </style>
-  <body>
-      <p>This demo shows the TraceController <i>before</i> the image is traced.
-          The user has the ability to drag and edit the initial track points.
-      </p>
-    <div id='tracker'>
+    <div id='tracer'>
         <div class='float-movie'>
             <canvas id="canvas-id" width='640' height='480'> </canvas>
             <form action="javascript:void(0)" >
                 <!-- https://en.wikipedia.org/wiki/Media_control_symbols -->
                 <!-- https://stackoverflow.com/questions/22885702/html-for-the-pause-symbol-in-audio-and-video-control -->
 
-                <input type='button' value='⏮ ' class='first_button frame_movement frame_movement_backwards' disabled/>
+                <input type='button' value='⏮ ' class='first_button frame_movement movement_backwards' disabled/>
                 <input type='button' value='⏴'  class='play_reverse' disabled/>
-                <input type='button' value='-1' class='prev_frame frame_movement frame_movement_backwards' disabled/>
+                <input type='button' value='-1' class='prev_frame frame_movement movement_backwards' disabled/>
 
-                <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='0' disabled/>
+                <input type='number' value='0'  class='frame_number_field frame_movement'
+                       placeholder='frame' size='4' min='0' max='0' disabled/>
                 <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled/>
-                <input type='button' value='+1' class='next_frame frame_movement frame_movement_forwards' disabled/>
+                <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled/>
                 <input type='button' value='⏵'  class='play_forward' disabled/>
-                <input type='button' value='⏭ ' class='last_button frame_movement frame_movement_forwards' disabled/>
+                <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled/>
 
                 <label for="zoom">zoom:</label>
                 <select id="zoom-id" name="zoom" class='zoom'>
@@ -66,8 +39,9 @@
             <hr>
             <form class='pure-form pure-form-aligned marker_form' action="javascript:void(0)" >
                 <fieldset>
+                    <p>Add another marker by entering the new marker name:</p>
                     <div class='pure-control-group'>
-                        <label for='marker-name'>New marker name:</label>
+                        <label for='marker-name'>marker name:</label>
                         <input class='marker_name_input' type='text' placeholder='Marker name' size='20' />
                         <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
                     </div>
@@ -91,16 +65,3 @@
             </form>
         </div> <!-- right controls -->
     </div> <!-- tracer controller -->
-  </body>
-  <script type='module'>
-    // This demo draws three dragable objects and adds some text.
-   import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
-   import { MovieController } from "./canvas_movie_controller.js";
-   import { TracerController, trace_movie_one_frame } from "./canvas_tracer_controller.js";
-   const movie_id = 10;
-   const movie_metadata = {'movie_id':movie_id, 'width':512, 'height':512};
-   const api_key='demo_key';
-   trace_movie_one_frame('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
-   // const cc = new TracerController('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
-  </script>
-</html>

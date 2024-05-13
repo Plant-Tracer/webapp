@@ -319,7 +319,6 @@ class WebImage extends CanvasItem {
         this.img.onload = (_) => {
             console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
             if (this.timeout) {
-                console.log("clearTimeout ",this.timeout);
                 clearTimeout(this.timeout);
                 this.timeout = null;
             }

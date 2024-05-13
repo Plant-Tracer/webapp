@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Demo</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <script type="text/javascript" charset="utf8" src="./static/dev/jquery.js"></script>
+    <script type="module" src="./static/canvas_controller.js"></script>
+    <script type="module" src="./static/canvas_movie_controller.js"></script>
+  </head>
+
+  <style>
+      {% include 'tracer_app.css' %}
+  </style>
+  <body>
+      <p>This demo shows the TraceController <i>before</i> the image is traced.
+          The user has the ability to drag and edit the initial track points.
+      </p>
+      {% include 'tracer_app.html' %}
+  </body>
+  <script type='module'>
+    // This demo draws three dragable objects and adds some text.
+   import { CanvasController, CanvasItem, Marker, WebImage } from "./static/canvas_controller.js";
+   import { MovieController } from "./static/canvas_movie_controller.js";
+   import { TracerController, trace_movie_one_frame } from "./static/canvas_tracer_controller.js";
+   const movie_id = 10;
+   const movie_metadata = {'movie_id':movie_id, 'width':512, 'height':512};
+   const api_key='demo_key';
+   trace_movie_one_frame('div#tracer', movie_metadata, './static/demo/frame0.jpg', api_key);
+  </script>
+</html>

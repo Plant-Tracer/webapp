@@ -193,7 +193,7 @@ class MovieController extends CanvasController {
      * enable or disable controls as appropriate.
      */
     set_movie_control_buttons() {
-        console.log("div_selector3=",this.div_selector);
+        console.log("set_movie_control_buttons: div_selector3=",this.div_selector,"this.frames=",this.frames,"this.frame_number=",this.frame_number);
 
         // no frames, nothing is enabled
         if (this.frames.length==0){
@@ -212,11 +212,15 @@ class MovieController extends CanvasController {
             return;
         }
         // movie not playing
+
         $(this.div_selector + ' input.frame_number_field').prop('disabled',false);
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
         $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
         $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number==this.length-1);
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
+
+        console.log("movie is not playing.","div_selecxtor=",this.div_selector,$(this.div_selector +' input.movement_forwards'));
+        $(this.div_selector + ' input.movement_forwards').prop('disabled',false);
     }
 }
 

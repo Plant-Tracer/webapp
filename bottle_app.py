@@ -322,6 +322,16 @@ def func_ver():
     """
     return {'__version__': __version__, 'sys_version': sys.version}
 
+@bottle.route('/demo_tracer1', method=GET)
+@view('demo_tracer1.html')
+def demo_tracer1():
+    return {}
+
+@bottle.route('/demo_tracer2', method=GET)
+@view('demo_tracer2.html')
+def demo_tracer1():
+    return {}
+
 
 ################################################################
 # Bottle App

@@ -30,7 +30,6 @@ import { MovieController } from "./canvas_movie_controller.js"
 class TracerController extends MovieController {
     constructor( div_selector, movie_metadata, api_key) {
         super( div_selector );
-        console.log('TracerController',this);
         this.tracking = false;  // are we tracking a movie?
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
@@ -57,7 +56,6 @@ class TracerController extends MovieController {
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(div_selector + " input.add_marker_button");
-        console.log('add_marker_button=',this.add_marker_button);
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the
@@ -82,7 +80,6 @@ class TracerController extends MovieController {
 
     // on each change of input, validate the marker name
     marker_name_changed ( ) {
-        console.log('marker_name_changed');
         const val = this.marker_name_input.val();
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
@@ -127,11 +124,8 @@ class TracerController extends MovieController {
         // Generate the HTML for the table body
         let rows = '';
         for (let i=0;i<this.objects.length;i++){
-            let obj = this.objects[i];
+            const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
-                console.log("obj=",obj);
-                console.log("obj.x=",obj.x);
-                console.log("obj.loc()=",obj.loc());
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
@@ -173,7 +167,7 @@ class TracerController extends MovieController {
     get_trackpoints() {
         let trackpoints = [];
         for (let i=0;i<this.objects.length;i++){
-            let obj = this.objects[i];
+            const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
                 trackpoints.push( {x:obj.x, y:obj.y, label:obj.name} );
             }
@@ -187,7 +181,7 @@ class TracerController extends MovieController {
 
     put_trackpoints() {
         // If we are putting the frame, we already have the frame_id
-        let put_frame_analysis_params = {
+        const put_frame_analysis_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
@@ -215,39 +209,46 @@ class TracerController extends MovieController {
         // If successfull, set up a status worker to poll
         this.tracking_status.text("Asking server to track movie...");
         this.track_button.prop('disabled',true); // disable it until tracking is finished
-        const formData = new FormData();
-        formData.append('api_key',this.api_key);
-        formData.append('movie_id',this.movie_id);
-        formData.append('frame_start',this.frame_number);
-        formData.append('engine_name',ENGINE);
-        formData.append('engine_version',ENGINE_VERSION);
-        fetch('/api/track-movie-queue', {
-            method:'POST',
-            body: formData })
-            .then((response) => response.json())
-            .then((data) => {
-                if(data.error){
-                    alert(data.message);
-                } else {
-                    this.tracking = true;   // we are tracking
-                    this.set_movie_control_buttons();
-                    this.tracking_status.text(data.message);
-                    this.poll_for_track_end();
-                }
-            });
+
+        const params = {
+            api_key: this.api_key,
+            movie_id: this.movie_id,
+            frame_start: this.frame_number,
+            engine_name: ENGINE,
+            engine_version: ENGINE_VERSION };
+        $.post('/api/track-movie-queue', params ).done( (data) => {
+            if(data.error){
+                alert(data.message);
+                this.track_button.prop('disabled',false); // disable it until tracking is finished
+            } else {
+                this.tracking = true;   // we are tracking
+                this.set_movie_control_buttons();
+                this.tracking_status.text(data.message);
+                this.poll_for_track_end();
+            }
+        });
     }
 
     add_frame_objects( frame ){
+        console.log("add_frame_objects frame=",frame,frame-1);
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has trackpoints
-        if (frame>0 && this.frames[frame-1].trackpoints && this.frame[frame] && trackpoints){
+        console.log("this.frames[frame]=",this.frames[frame]);
+        console.log("this.frames[frame].trackpoints=",this.frames[frame].trackpoints);
+        if(frame>0){
+            console.log("this.frames[frame-1]=",this.frames[frame-1]);
+            console.log("this.frames[frame-1].trackpoints=",this.frames[frame-1].trackpoints);
+        }
+        if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
             var starts = [];
-            var ends   = [];
+            var ends   = {};
             for (let tp of this.frames[frame-1].trackpoints){
-                starts[tp.label] = tp
+                console.log("starts=",starts,"tp=",tp);
+                starts.push(tp);
             }
             for (let tp of this.frames[frame-1].trackpoints){
-                ends[tp.label].end = tp
+                console.log("ends=",ends,"tp=",tp);
+                ends[tp.label] = tp
             }
             // now add the lines between the trackpoints in the previous frames
             // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
@@ -314,21 +315,21 @@ class TracerController extends MovieController {
         $(this.div_selector + ' input.track_button').val( 'retrack movie.' );
         this.track_button.prop('disabled',false);
         // We do not need to redraw, because the frame hasn't changed
-        self.set_movie_control_buttons();
     }
 
-    async rotate_button_pressed() {
+    rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
-        let formData = new FormData();
-        formData.append("api_key",  this.api_key);   // on the upload form
-        formData.append('movie_id', this.movie_id);
-        formData.append('action', 'rotate90cw');
-        const r = await fetch('/api/edit-movie', { method:"POST", body:formData});
-        console.log("r=",r);
-        if (!r.ok) {
-            console.log('could not rotate. r=',r);
-            return;
-        }
+        const params = {
+            api_key: this.api_key,
+            movie_id: this.movie_id,
+            action: 'rotate90cw'};
+        $.post('/api/edit-movie', params ).done( (data) => {
+            if(data.error){
+                alert(data.message);
+            } else {
+                location.reload(true);
+            }
+        });
         location.reload(true);
     }
 }
@@ -346,36 +347,35 @@ function trace_movie_one_frame(div_controller, movie_metadata, first_frame, api_
                   }];
     cc.load_movie(frames);
     cc.create_marker_table();
-
 }
 
-// Called when we trade a movie for which we have the frame-by-frame analysis.
-function trace_movie_frames() {
+// Called when we trace a movie for which we have the frame-by-frame analysis.
+function trace_movie_frames(div_controller, movie_metadata, api_key) {
+    cc = new TracerController(div_controller, movie_metadata);
+    cc.load_movie(movie_metadata.frames);
+    cc.set_movie_control_buttons();
 }
 
+// Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_metadata, first_frame, api_key) {
-    const formData = new FormData();
-    formData.append('api_key',api_key);
-    formData.append('movie_id',movie_id);
-    formData.append('first_frame',0);
-    formData.append('frame_count',1e6);
-    fetch('/api/get-movie-metadata', {
-        method:'POST',
-        body: formData})
-        .then((response) => response.json())
-        .then((data) => {
-            if (data.error==true) {
-                $('#firsth2').html(`Movie #${movie_id}: Cannot load metadata: ${data.message}`);
-                return;
-            }
+    const params = {
+        api_key: api_key,
+        movie_id: movie_id,
+        first_frame: 0,
+        frame_count: 1e6};
+    $.post('/api/get-movie-metadata', params ).done( (data) => {
+        if (data.error==true) {
+            alert(data.message);
+            return;
+        } else {
             $('#firsth2').html(`Movie #${movie_id}: ready to trace`);
-            const cc = new TracerController( div_id, movie_id, data );
-        });
+            if (data.metadata.frames) {
+                trace_movie_frames(div_controller, data.metadata, api_key);
+            } else {
+                trace_movie_one_frame(div_controller, data.metadata,
+                                      `/api/get-frame?api_key=${api_key}&movie_id=${data.metadata.movie_id}&frame_number=0&format=jpeg`);
+            }
+        }});
 }
 
-export { TracerController, trace_movie, trace_movie_one_frame };
-
-// Call analyze_move on load
-//$( document ).ready( function() {
-//    trace_movie( api_key, movie_id);
-//});
+export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
