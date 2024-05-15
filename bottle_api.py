@@ -591,18 +591,26 @@ def api_get_movie_metadata():
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
 
-    metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
-    ret = {'error':False, 'metadata':metadata}
+    movie_metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
+    # If we do not have the movie width and height, get them...
+    if (not movie_metadata['width']) or (not movie_metadata['height']):
+        movie_data = db.get_movie_data(movie_id = movie_id)
+        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
-    tracking_completed = (metadata['status'] == C.TRACKING_COMPLETED)
-    frame_start = get_int('frame_start') if not tracking_completed else 0
+    ret = {'error':False, 'metadata':movie_metadata}
+
+    # If status TRACKING_COMPLETED_FLAG, get all the trackpoints.
+    tracking_completed = (movie_metadata.get('status','') == C.TRACKING_COMPLETED)
+    get_all_trackpoints = get_all_if_tracking_completed or tracking_completed
+    frame_start = 0 if get_all_trackpoints else get_int('frame_start')
     if frame_start is not None:
-        frame_count = get_int('frame_count') if not tracking_completed else C.MAX_FRAMES
+        frame_count = C.MAX_FRAMES if get_all_trackpoints else get_int('frame_count')
         if frame_count is None:
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
             return E.FRAME_COUNT_GT_0
-        # Get the trackpoints and then divide them up by frame_number for the response
+        # Get the trackpoints and then group by frame_number for the response
         ret['frames'] = defaultdict(dict)
         tpts = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
         for tpt in tpts:

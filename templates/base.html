@@ -10,6 +10,7 @@
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
           integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
 
     <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script type="text/javascript" charset="utf8" src="static/dev/jquery.js"></script>
@@ -109,15 +110,20 @@
     </div>
     {% endif %}
 
+    <div id='message' class='alert'><b>{{message}}</b></div>
 
+    <div class='content'>
     {% block body %}
     {% endblock %}
+    </div>
 
-    <div id='message'></div>
-    <footer>
-      <p id="copyright"><a href='/tos'>Copyright &#169; 2023, 2024</a></p>
-      <hr/>
-      <p><small>ver {{version}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
-    </footer>
+    <div class='footer'>
+      <div class='pure-u-1 u-sm-1-2'>
+        <p id="copyright" class="legal-license"><a href='/tos'>Copyright &#169; 2023, 2024</a></p>
+        <hr/>
+        <p><small>ver {{version}} {{git_last_commit}}
+        {{git_head_time}} ({{dbreader_host}})</small></p>
+      </div>
+    </div>
   </body>
 </html>

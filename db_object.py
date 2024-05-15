@@ -49,6 +49,7 @@ We use this:
 ALLOWED_SCHEMES = [ C.SCHEME_S3, C.SCHEME_DB ]
 S3 = 's3'
 DB_TABLE = 'object_store'
+STORE_LOCAL=False               # even if S3 is set, store local
 
 cors_configuration = {
     'CORSRules': [{
@@ -82,12 +83,15 @@ def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=Non
 def s3_client():
     return boto3.session.Session().client( S3 )
 
+
 def make_urn(*, object_name, scheme = None ):
     """
     If environment variable is not set, default to the database schema
     We grab this every time through so that the bucket can be changed during unit tests
     """
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
+    if STORE_LOCAL:
+        scheme = C.SCHEME_DB
     if scheme is None:
         scheme = C.SCHEME_S3 if (s3_bucket is not None) else C.SCHEME_DB
     if scheme == C.SCHEME_S3 and s3_bucket is None:

@@ -346,12 +346,16 @@ if __name__ == "__main__":
     parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
+    parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
     if args.dbcredentials:
         os.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+
+    if args.storelocal:
+        db_object.STORE_LOCAL=True
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
@@ -362,7 +366,7 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
-    # Run the multi-threaded server?
+    # Run the multi-threaded server? Needed for testing local-tracking
     if args.multi:
         httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
         try:

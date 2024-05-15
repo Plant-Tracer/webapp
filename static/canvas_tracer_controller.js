@@ -26,6 +26,8 @@ var div_template = '';          // will be set with the div template
 import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
 
+const DISABLED='disabled';
+
 
 class TracerController extends MovieController {
     constructor( div_selector, movie_metadata, api_key) {
@@ -36,45 +38,46 @@ class TracerController extends MovieController {
         this.movie_id = movie_metadata.movie_id;
 
         // set up the download button
-        this.download_link = $(div_selector + " input.download_button");
+        this.download_link = $(this.div_selector + " input.download_button");
         this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
         this.download_link.hide();
 
         // Size the canvas and video player
-        $(div_selector + " canvas").attr('width',this.movie_metadata.width);
-        $(div_selector + " canvas").attr('height',this.movie_metadata.height);
-        $(div_selector + " video").attr('width',this.movie_metadata.width);
-        $(div_selector + " video").attr('height',this.movie_metadata.height);
+        $(this.div_selector + " canvas").attr('width',this.movie_metadata.width);
+        $(this.div_selector + " canvas").attr('height',this.movie_metadata.height);
+        $(this.div_selector + " video").attr('width',this.movie_metadata.width);
+        $(this.div_selector + " video").attr('height',this.movie_metadata.height);
 
         // Hide the download link until we track or retrack
 
         // marker_name_input is the text field for the marker name
-        this.marker_name_input = $(div_selector + " .marker_name_input");
+        this.marker_name_input = $(this.div_selector + " .marker_name_input");
         this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
         this.marker_name_input.on('keydown', (e) => { if (e.keyCode==13) this.add_marker_onclick_handler(event);});
-        this.add_marker_status = $(div_selector + ' .add_marker_status');
+        this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
-        this.add_marker_button = $(div_selector + " input.add_marker_button");
+        this.add_marker_button = $(this.div_selector + " input.add_marker_button");
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // We need to be able to enable or display the
-        this.track_button = $(div_selector + " input.track_button");
+        this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.on('click', () => {this.track_to_end();});
-        this.track_button.prop('disabled',true); // disable it until we have a marker added.
+        this.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 
-        $(div_selector + " span.total-frames-span").text(this.total_frames);
+        $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
-        this.rotate_button = $(div_selector + " input.rotate_button");
-        this.rotate_button.prop('diabled',false);
+        this.rotate_button = $(this.div_selector + " input.rotate_movie");
+        console.log("this.rotate_button=",this.rotate_button);
+        this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
-        this.track_button = $(div_selector + " input.track_button");
+        this.track_button = $(this.div_selector + " input.track_button");
         if (this.last_tracked_frame > 0 ){
             this.track_button.val( 'retrack movie' );
             this.download_link.show();
         }
-        this.tracking_status = $(div_selector + ' span.add_marker_status');
+        this.tracking_status = $(this.div_selector + ' span.add_marker_status');
     }
 
 
@@ -84,22 +87,22 @@ class TracerController extends MovieController {
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
             this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
-            this.add_marker_button.prop('disabled',true);
+            this.add_marker_button.prop(DISABLED,true);
             return;
         } else {
             this.add_marker_status.text("");
-            this.add_marker_button.prop('enabled',true);
+            this.add_marker_button.prop(DISABLED,false);
         }
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
             if(this.objects[i].name == val){
                 this.add_marker_status.text("That name is in use, choose another.");
-                this.add_marker_button.prop('disabled',true);
+                this.add_marker_button.prop(DISABLED,true);
                 return;
             }
         }
         this.add_marker_status.text('');
-        this.add_marker_button.prop('disabled',false);
+        this.add_marker_button.prop(DISABLED,false);
     }
 
     // new marker added
@@ -117,7 +120,7 @@ class TracerController extends MovieController {
         this.create_marker_table(); // redraw table
 
         // Finally enable the track-to-end button
-        this.track_button.prop('disabled',false);
+        this.track_button.prop(DISABLED,false);
     }
 
     create_marker_table() {
@@ -134,12 +137,12 @@ class TracerController extends MovieController {
                     `<td>n/a</td><td class="del-row" object_index="${i}" >🚫</td></tr>`;
             }
         }
+        // put the HTML in the window and wire up the delete object method
         $(this.div_selector + " tbody.marker_table_body").html( rows );
-        this.redraw();          // redraw with the markers
-
-        // wire up the delete object method
-        $(this.div_selector + " .del-row").on('click', (event) => {this.del_row(event.target.getAttribute('object_index'));});
+        $(this.div_selector + " .del-row").on('click',
+                                              (event) => {this.del_row(event.target.getAttribute('object_index'));});
         $(this.div_selector + " .del-row").css('cursor','default');
+        this.redraw();          // redraw with the markers
     }
 
     // Delete a row and update the server
@@ -154,7 +157,7 @@ class TracerController extends MovieController {
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
         if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
-            this.track_button.prop('disabled',false); // enable the button if track point is moved
+            this.track_button.prop(DISABLED,false); // enable the button if track point is moved
         }
     }
 
@@ -208,7 +211,7 @@ class TracerController extends MovieController {
         // Ask the server to track from this frame to the end of the movie.
         // If successfull, set up a status worker to poll
         this.tracking_status.text("Asking server to track movie...");
-        this.track_button.prop('disabled',true); // disable it until tracking is finished
+        this.track_button.prop(DISABLED,true); // disable it until tracking is finished
 
         const params = {
             api_key: this.api_key,
@@ -216,15 +219,21 @@ class TracerController extends MovieController {
             frame_start: this.frame_number,
             engine_name: ENGINE,
             engine_version: ENGINE_VERSION };
+
+        // post is non-blocking, but running locally on bottle the tracking happens
+        // before the post returns.
+        this.tracking = true;   // we are tracking
+        this.poll_for_track_end();
+        this.set_movie_control_buttons();
         $.post('/api/track-movie-queue', params ).done( (data) => {
+            console.log("track-movie-queue data=",data)
             if(data.error){
                 alert(data.message);
-                this.track_button.prop('disabled',false); // disable it until tracking is finished
-            } else {
-                this.tracking = true;   // we are tracking
+                this.track_button.prop(DISABLED,false); // disable it until tracking is finished
+                this.tracking=false;
                 this.set_movie_control_buttons();
-                this.tracking_status.text(data.message);
-                this.poll_for_track_end();
+            } else {
+                console.log("no error");
             }
         });
     }
@@ -263,9 +272,11 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller + ' input').prop('disabled',true); // disable all the inputs
+            $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
+            this.rotate_button.prop(DISABLED,true);
             return;
         }
+        this.rotate_button.prop(DISABLED,false);
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
@@ -273,6 +284,7 @@ class TracerController extends MovieController {
      * Poll the server to see if tracking has ended.
      */
     poll_for_track_end() {
+        console.log(Date.now(), "poll_for_track_end");
         const formData = new FormData();
         formData.append('api_key',this.api_key);
         formData.append('movie_id',this.movie_id);
@@ -304,7 +316,7 @@ class TracerController extends MovieController {
         this.download_link.show();
         // change from 'track movie' to 'retrack movie' and re-enable it
         $(this.div_selector + ' input.track_button').val( 'retrack movie.' );
-        this.track_button.prop('disabled',false);
+        this.track_button.prop(DISABLED,false);
         // We do not need to redraw, because the frame hasn't changed
     }
 

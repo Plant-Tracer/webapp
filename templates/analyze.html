@@ -2,20 +2,17 @@
 {% extends 'base.html' %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
 {% endblock %}
 
 
 {% block body %}
-
-<div id='message' class='alert'><b>{{message}}</b></div>
 
 <h1>Plant Movie Analyzer</h1>
 
 <style>
   {% include 'tracer_app.css' %}
 
-  .dot {
+.dot {
   text-align:center;
   font-size:32px;
   position:relative;
@@ -26,6 +23,7 @@
 <h2 id='firsth2'>Movie Loading...</h2>
 
 {% include 'tracer_app.html' %}
+
 
 <script type='module'>
   // This demo draws three dragable objects and adds some text.

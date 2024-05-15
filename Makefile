@@ -135,16 +135,20 @@ coverage:
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
-	@echo run bottle locally in debug mode
-	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials.ini
+	make debug-local
 
+DEBUG:=$(PYTHON) bottle_app.py --loglevel DEBUG
 debug-multi:
-	@echo run bottle locally in debug mode
-	$(PYTHON) bottle_app.py --multi --loglevel DEBUG --dbcredentials etc/credentials.ini
+	@echo run bottle locally in debug mode multi-threaded
+	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
+
+debug-single:
+	@echo run bottle locally in debug mode single-threaded
+	$(DEBUG)  --dbcredentials etc/credentials.ini
 
 debug-local:
 	@echo run bottle locally in debug mode
-	$(PYTHON) bottle_app.py --loglevel DEBUG --dbcredentials etc/credentials-local.ini
+	$(DEBUG) --storelocal --dbcredentials etc/credentials-local.ini
 
 freeze:
 	$(PYTHON) -m pip freeze > requirements.txt
