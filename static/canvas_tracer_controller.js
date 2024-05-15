@@ -1,8 +1,8 @@
 "use strict";
 // code for /analyze
 /* jshint esversion: 8 */
-/*global api_key */
-/*global movie_id */
+/*global api_key,movie_id */
+/*global console,alert */
 /*global $ */
 
 /*
@@ -28,6 +28,14 @@ import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_c
 import { MovieController } from "./canvas_movie_controller.js"
 
 const DISABLED='disabled';
+
+function dict_to_array( dict ) {
+    let array = [];
+    for (const key in dict) {
+        array[parseInt(key)] = dict[key];
+    }
+    return array;
+}
 
 
 class TracerController extends MovieController {
@@ -239,7 +247,6 @@ class TracerController extends MovieController {
     add_frame_objects( frame ){
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has trackpoints
-        console.log("add_frame_objects(",frame,")");
         if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
             for (let f0=0;f0<frame;f0++){
                 var starts = [];
@@ -294,7 +301,9 @@ class TracerController extends MovieController {
             if (data.error==false){
                 // Send the status back to the UX
                 if (data.metadata.status==TRACKING_COMPLETED_FLAG) {
-                    this.movie_tracked(data);
+                    if (this.tracking) {
+                        this.movie_tracked(data);
+                    }
                 } else {
                     /* Update the status and track again in 250 msec */
                     this.tracking_status.text(data.metadata.status);
@@ -306,13 +315,24 @@ class TracerController extends MovieController {
 
     /** movie is tracked - display the results */
     movie_tracked(data) {
+        console.log("Tracking complete. data=",data);
+
+        // This should work. but it is not. So just force a reload until I can figure out what's wrong.
+        location.reload(true);
+
+        /***
+
         this.tracking = false;
         this.tracking_status.text('Movie tracking complete.');
+        console.log("before load_movie. this.frames=",this.frames);
+        this.load_movie( dict_to_array(data.frames)); // reload the movie
+        console.log("after load_movie. this.frames=",this.frames);
         this.download_link.show();
         // change from 'track movie' to 'retrack movie' and re-enable it
         $(this.div_selector + ' input.track_button').val( 'retrack movie.' );
         this.track_button.prop(DISABLED,false);
         // We do not need to redraw, because the frame hasn't changed
+        */
     }
 
     rotate_button_pressed() {
@@ -331,6 +351,7 @@ class TracerController extends MovieController {
         location.reload(true);
     }
 }
+
 
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
@@ -378,10 +399,7 @@ function trace_movie(div_controller, movie_id, api_key) {
             if (data.frames) {
                 // Note: data.frames comes in as a dict, but we need it as an array.
                 // We also need to change frame_url to web_image.
-                frames = []
-                for (const key in data.frames) {
-                    frames[parseInt(key)] = data.frames[key];
-                }
+                let frames = dict_to_array(data.frames);
                 if (frames.length>0){
                     trace_movie_frames(div_controller, data.metadata, frames, api_key);
                     return;

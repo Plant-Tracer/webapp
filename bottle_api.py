@@ -722,13 +722,22 @@ class MovieTrackCallback:
         If there are 296 frames, they are numbered 0 to 295.
         We actually track frames 1 through 295. We add 1 to make the status look correct.
         """
+        # Update the movie status
         total_frames = self.movie_metadata['total_frames']
         message = f"Tracked frames {frame_number+1} of {total_frames}"
-
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-        (frame_id,frame_urn) = db.create_new_frame(movie_id=self.movie_id,
-                                       frame_number = frame_number,
-                                       frame_data = tracker.convert_frame_to_jpeg(frame_data))
+
+        # Write the frame data to the database if we do not have it
+        # Moving to an object-oriented API would make this a whole lot more efficient...
+
+        row = db.get_frame(movie_id=self.movie_id, frame_number=frame_number, get_frame_data=False)
+        if row and (row['frame_data'] is not None) or (row['frame_urn'] is not None):
+            frame_id = row['frame_id']
+        else:
+            (frame_id,frame_urn) = db.create_new_frame(movie_id=self.movie_id,
+                                                       frame_number = frame_number,
+                                                       frame_data = tracker.convert_frame_to_jpeg(frame_data))
+        # And update the trackpoints
         db.put_frame_trackpoints(frame_id=frame_id, trackpoints=frame_trackpoints)
 
     def done(self):

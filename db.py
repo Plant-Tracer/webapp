@@ -755,7 +755,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                                    (movie_id, frame_number))[0][0]
     return (frame_id,frame_urn)
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None, get_frame_data=True):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     Can also get trackpoints and annotations.
     :param: movie_id - the movie_id wanted
@@ -773,7 +773,7 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
     if len(rows)!=1:
         return None
     row = rows[0]
-    if (row['frame_data'] is None) and (row['frame_urn'] is not None):
+    if (row['frame_data'] is None) and (row['frame_urn'] is not None) and get_frame_data:
         row['frame_data'] = db_object.read_object(row['frame_urn'])
     return row
 

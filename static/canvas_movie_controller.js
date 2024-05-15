@@ -23,7 +23,7 @@ class MovieController extends CanvasController {
         this.frame_number = null;  // no frame number to start
         this.playing = 0;   // are we playing a movie? +1 means forward, -1 is reverse
         this.frames = [];         // needs to be set with load_movie
-        this.cached_web_images = [];
+        this.cached_web_images = {};
         this.timer = null;          // when playing or reverse playing, this is the timer that repeatedly calls next or prev
         this.bounce = false;    // when playing, bounce off the ends
         this.loop = false;    // when playing, Loop from end to beginning
@@ -80,10 +80,11 @@ class MovieController extends CanvasController {
          * but the images are only downloaded the first time.
          */
         for(let i = 0;i<this.frames.length;i++){
-            if (!this.cached_web_images[i]) {
-                this.cached_web_images[i] = new WebImage(0, 0, frames[i].frame_url);
+            const url = frames[i].frame_url;
+            if (!this.cached_web_images[ url ]) {
+                this.cached_web_images[ url ] = new WebImage(0, 0, frames[i].frame_url);
             }
-            this.frames[i].web_image = this.cached_web_images[i];
+            this.frames[i].web_image = this.cached_web_images[ url ];
         }
         $(this.div_selector + " span.total-frames").text(this.total_frames);
         if (!this.frame_number) { // if frame number is not set, be sure we move to frame 0
@@ -98,6 +99,8 @@ class MovieController extends CanvasController {
      * next frame number, then we call the /api/get-frame call to get
      * the frame, with get_frame_handler getting the data.
      *
+     * Always redraws.
+     *
      */
     goto_frame( frame ) {
         console.log(`goto_frame(${frame})`);
@@ -109,10 +112,6 @@ class MovieController extends CanvasController {
 
         if (frame>=this.frames.length) {
             frame = this.frames.length-1;
-        }
-
-        if (frame==this.frame_number && !(frame===null)) {
-            return;             // did not change
         }
 
         // set the frame number, clear the screen and re-add the objects
@@ -137,8 +136,6 @@ class MovieController extends CanvasController {
      * It's called by the timer or when the button is pressed
      */
     play(delta) {
-        console.log("play delta=",delta,"frame:",this.frame_number);
-
         var next_frame = this.frame_number;
         var next_delta = delta;
         if (this.timer) {
