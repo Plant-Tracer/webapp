@@ -18,6 +18,7 @@ const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
+const TRACKING_POLL_MSEC=1000;
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
@@ -63,12 +64,10 @@ class TracerController extends MovieController {
         // We need to be able to enable or display the
         this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.on('click', () => {this.track_to_end();});
-        this.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
         this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        console.log("this.rotate_button=",this.rotate_button);
         this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
@@ -240,6 +239,7 @@ class TracerController extends MovieController {
     add_frame_objects( frame ){
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has trackpoints
+        console.log("add_frame_objects(",frame,")");
         if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
             for (let f0=0;f0<frame;f0++){
                 var starts = [];
@@ -266,6 +266,7 @@ class TracerController extends MovieController {
                 this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
             }
         }
+        this.create_marker_table();
     }
 
     set_movie_control_buttons()  {
@@ -283,29 +284,24 @@ class TracerController extends MovieController {
      * Poll the server to see if tracking has ended.
      */
     poll_for_track_end() {
-        console.log(Date.now(), "poll_for_track_end");
-        const formData = new FormData();
-        formData.append('api_key',this.api_key);
-        formData.append('movie_id',this.movie_id);
-        formData.append('get_all_if_tracking_completed',true);
-        fetch('/api/get-movie-metadata', {
-            method:'POST',
-            body: formData })
-            .then((response) => response.json())
-            .then((data) => {
-                console.log(Date.now(),"get-movie-metadata (movie_id=",this.movie_id,") got = ",
-                            data,"metadata:",data.metadata,"status:",data.metadata.status);
-                if (data.error==false){
-                    // Send the status back to the UX
-                    if (data.status==TRACKING_COMPLETED_FLAG) {
-                        movie_tracked(data);
-                    } else {
-                        /* Update the status and track again in 250 msec */
-                        this.tracking_status.text(data.metadata.status);
-                        this.timeout = setTimeout( ()=>{this.wait_for_track_end();} );
-                    }
+        const params = {
+            api_key:this.api_key,
+            movie_id:this.movie_id,
+            get_all_if_tracking_completed: true
+        };
+        $.post('/api/get-movie-metadata', params).done( (data) => {
+            console.log("poll_for_track_end",Date.now(),"data:",data);
+            if (data.error==false){
+                // Send the status back to the UX
+                if (data.metadata.status==TRACKING_COMPLETED_FLAG) {
+                    this.movie_tracked(data);
+                } else {
+                    /* Update the status and track again in 250 msec */
+                    this.tracking_status.text(data.metadata.status);
+                    this.timeout = setTimeout( ()=>{this.poll_for_track_end();}, TRACKING_POLL_MSEC );
                 }
-            });
+            }
+        });
     }
 
     /** movie is tracked - display the results */
@@ -340,7 +336,7 @@ class TracerController extends MovieController {
 // set up the default
 var cc;
 function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_key) {
-    console.log("trace_movie_one_frame");
+    console.log("trace_movie_one_frame.");
     cc = new TracerController(div_controller, movie_metadata);
     var frames = [{'frame_url': frame0_url,
                    'trackpoints':[{'x':50,'y':50,'label':'Apex'},
@@ -350,19 +346,16 @@ function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_k
                   }];
     cc.load_movie(frames);
     cc.create_marker_table();
+    cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 function trace_movie_frames(div_controller, movie_metadata, movie_frames, api_key) {
-    console.log("div_controller=",div_controller,"movie_metadata=",movie_metadata,"movie_frames=",movie_frames,"api_key=",api_key);
+    console.log("trace_movie_frames. movie_frames=",movie_frames);
     cc = new TracerController(div_controller, movie_metadata);
-    console.log("movie_frames=",movie_frames);
-    for(let i=0;i<movie_frames.length;i++){
-        movie_frames[i].web_image = movie_frames[i].frame_url;
-        console.log("i=",i,"movie_frames[i]=",movie_frames[i]);
-    }
     cc.load_movie(movie_frames);
     cc.set_movie_control_buttons();
+    cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
@@ -378,23 +371,25 @@ function trace_movie(div_controller, movie_id, api_key) {
             return;
         } else {
             $('#firsth2').html(`Movie #${movie_id}: ready to trace`);
-            console.log("data:",data);
             const width = data.metadata.width;
             const height = data.metadata.height;
-            console.log('resizing to',width,'x','height');
             $(div_controller + ' canvas').prop('width',width).prop('height',height);
+            console.log("data=",data);
             if (data.frames) {
                 // Note: data.frames comes in as a dict, but we need it as an array.
                 // We also need to change frame_url to web_image.
                 frames = []
                 for (const key in data.frames) {
-                    frames[key] = data.frames[key];
+                    frames[parseInt(key)] = data.frames[key];
                 }
-                trace_movie_frames(div_controller, data.metadata, frames, api_key);
-            } else {
-                const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-                trace_movie_one_frame(div_controller, data.metadata, frame0);
+                if (frames.length>0){
+                    trace_movie_frames(div_controller, data.metadata, frames, api_key);
+                    return;
+                }
             }
+            // no frames, so create the URL for frame 0 and fake it
+            const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            trace_movie_one_frame(div_controller, data.metadata, frame0);
         }});
 }
 

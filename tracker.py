@@ -207,7 +207,8 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
     :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
     :param: trackpoints - a list all current trackpoints.
-                        - Each trackpoint is dictinary {'x', 'y', 'label', 'frame_number'} to track.
+                        - Each trackpoint is dictionary {'x', 'y', 'label', 'frame_number'} to track.
+                        - code would be cleaner if this were a dictionary keyed by label!
     :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
     :param: callback - a function to callback with (*, frame_number, jpeg, trackpoints)
 
@@ -238,10 +239,20 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
 
         # If this is after the starting frame, then track it
-        # This is run the second time
+        # This is run every time through the loop except the first time.
         if frame_number > frame_start:
             assert frame_prev is not None
-            current_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
+            trackpoints_by_label = { tp['label']:tp for tp in current_trackpoints }
+            new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
+
+            # Copy in updated trackpoints
+            for tp in new_trackpoints:
+                trackpoints_by_label[tp['label']] = tp
+
+            # create new list of trackpoints
+            current_trackpoints = trackpoints_by_label.values()
+
+            # And set their new frame numbers
             for tp in current_trackpoints:
                 tp['frame_number'] = frame_number # set the frame number
 

@@ -8,7 +8,7 @@
  */
 
 
-const PLAY_MSEC = 1000;          // pause between frames; could be 1000/29.92
+const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
 
 import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.js";
 

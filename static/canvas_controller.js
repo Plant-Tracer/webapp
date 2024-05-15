@@ -312,6 +312,7 @@ class Line extends CanvasItem {
         ctx.lineWidth = this.width;
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x2, this.y2);
+        ctx.strokeStyle = this.color;
         ctx.stroke();
         ctx.restore();
     }

@@ -111,6 +111,7 @@ def sig_for_urn(urn):
     return sha256( (urn + API_SECRET).encode('utf-8'))
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
+    assert isinstance(urn,str)
     logging.debug("urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
@@ -191,7 +192,7 @@ def write_object(urn, object_data):
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (urn, object_sha256),debug=True)
+            (urn, object_sha256))
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",

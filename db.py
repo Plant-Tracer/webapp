@@ -725,7 +725,6 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     if trackpoints are provided, replace current trackpoints with those. This is used sometimes
     just to update the frame_data
     """
-    logging.debug("movie_id=%s frame_number=%s frame_data=%s",movie_id,frame_number,frame_data)
     args = (movie_id, frame_number )
     a1 = a2 = a3 = ""
     frame_urn = None
@@ -750,7 +749,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                         f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
                         VALUES (%s,%s{a2})
                         ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
-                        args, debug=True)
+                        args)
     # Get the frame_id
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
                                    (movie_id, frame_number))[0][0]
@@ -1205,8 +1204,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
     """
     # First compute @is_owner
-
-    #logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
+    logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
     assert isinstance(user_id, int)
     assert isinstance(set_movie_id, int) or (set_movie_id is None)
     assert isinstance(set_user_id, int) or (set_user_id is None)
@@ -1241,6 +1239,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         try:
             cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
         except KeyError as e:
+            logging.error(f"Cannot set property {prop} from {e}")
             raise ValueError('Cannot set property '+prop) from e
         args  = [value, set_movie_id]
         ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)

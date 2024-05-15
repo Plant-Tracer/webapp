@@ -113,9 +113,9 @@ def fix_types(obj):
     seem to get bottle to do that."""
     return json.loads(json.dumps(obj,default=str))
 
-
 def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
+    logging.debug("get_user_dict(). request.url=%s",request.url)
     api_key = auth.get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
@@ -132,7 +132,9 @@ def get_user_dict():
         auth.clear_cookie()
         # This will produce a "Session expired" message
         if request.url.endswith("/error"):
+            logging.debug("/error so error 301 with /logout")
             raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/logout'})
+        logging.debug("no /error so error 301 with /logout")
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
     return userdict
 
@@ -420,8 +422,6 @@ def api_get_frame_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_i
             return ret
         except ValueError as e:
             return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
-    logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",
-                 frame_id,frame_number,movie_id)
     raise db.InvalidFrameAccess()
 
 def api_get_frame_urn(*,frame_number,movie_id,user_id):
@@ -472,7 +472,6 @@ def api_get_frame():
     movie_id     = get_int('movie_id')
     fmt          = get('format', 'jpeg').lower()
 
-    logging.debug("api_get_frame fmt=%s movie_id=%s frame_number=%s",fmt,movie_id,frame_number)
     if fmt not in ['jpeg', 'json']:
         logging.info("fmt is not in jpeg or json")
         return E.INVALID_FRAME_FORMAT
@@ -616,9 +615,7 @@ def api_get_movie_metadata():
     frame_count = get_int('frame_count')
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
     get_trackpoints = get_bool('get_trackpoints')
-    logging.debug("**** get_all_if_tracking_completed=%s",get_all_if_tracking_completed)
 
-    logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
 
@@ -641,7 +638,6 @@ def api_get_movie_metadata():
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
-    logging.debug("**** frame_start=%s frame_count=%s",frame_start,frame_count)
     if frame_start is not None:
         if frame_count is None:
             return E.FRAME_START_NO_FRAME_COUNT
@@ -659,11 +655,11 @@ def api_get_movie_metadata():
         # Now get the URLs for every frame for which there are trackpoints
         for row in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
             urn = row['frame_urn']
-            if urn is not None:
+            if urn is None:
                 urn = api_get_frame_urn(frame_number=row['frame_number'], movie_id=movie_id, user_id=user_id)
+                assert urn is not None
             ret['frames'][row['frame_number']]['frame_url'] = db_object.make_signed_url(urn=urn)
 
-    logging.debug("ret=%s",ret)
     return fix_types(ret)
 
 
@@ -681,9 +677,6 @@ def api_get_movie_trackpoints():
         frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
         labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
         frame_dicts    = defaultdict(dict)
-
-        logging.debug("frame_numbers=%s",frame_numbers)
-        logging.debug("labels=%s",labels)
 
         if get('format')=='json':
             return fix_types({'error':'False',
@@ -732,7 +725,6 @@ class MovieTrackCallback:
         total_frames = self.movie_metadata['total_frames']
         message = f"Tracked frames {frame_number+1} of {total_frames}"
 
-        logging.debug("MovieTrackCallback %s",message)
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
         (frame_id,frame_urn) = db.create_new_frame(movie_id=self.movie_id,
                                        frame_number = frame_number,
@@ -742,6 +734,7 @@ class MovieTrackCallback:
     def done(self):
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
 
+# @task causes this to be run in background on zappa, but in foreground when run locally
 @task
 def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
@@ -749,7 +742,6 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
     """
     # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = db.get_movie_trackpoints(movie_id=movie_id)
-    logging.debug("len(input_trackpoints)=%s",len(input_trackpoints))
 
     # Write the movie to a tempfile, because OpenCV has to read movies from files.
     mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
@@ -772,7 +764,7 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
                             frame_start      = frame_start,
                             moviefile_input  = infile.name,
                             callback = mtc.notify)
-    mtc.done()                  # sets the status to tracking complete
+    mtc.done() # sets the status to tracking complete
 
 @api.route('/track-movie-queue', method=GET_POST)
 def api_track_movie_queue():
@@ -799,11 +791,13 @@ def api_track_movie_queue():
     if movie_row[0]['orig_movie'] is not None:
         return E.MUST_TRACK_ORIG_MOVIE
 
+    logging.debug("calling api_track_movie")
     api_track_movie(user_id=user_id, movie_id=movie_id,
                     engine_name=get('engine_name'),
                     engine_version=get('engine_version'),
                     frame_start=get_int('frame_start'))
 
+    logging.debug("return from api_track_movie")
     # We return all the trackpoints to the client, although the client currently doesn't use them
     return {'error': False, 'message':'Tracking is queued'}
 
@@ -881,7 +875,6 @@ def api_put_frame_analysis():
     if frame_id is None:
         movie_id = get_int('movie_id')
         frame_number = get_int('frame_number')
-        logging.debug("put_frame_analysis. movie_id=%s frame_number=%s",movie_id,frame_number)
         (frame_id,frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
         logging.debug("frame_id is now %s",frame_id)
     if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
@@ -889,7 +882,6 @@ def api_put_frame_analysis():
         return {'error':True, 'message':f'User {user_id} cannot access frame_id={frame_id}'}
     annotations=get_json('annotations')
     trackpoints=get_json('trackpoints')
-    logging.debug("put_frame_analysis. frame_id=%s annotations=%s trackpoints=%s",frame_id,annotations,trackpoints)
     if annotations is not None:
         db.put_frame_annotations(frame_id=frame_id,
                                  annotations=annotations,

@@ -266,7 +266,7 @@ def func_login():
 def func_logout():
     """/list - list movies and edit them and user info"""
     auth.clear_cookie()
-    return page_dict('Logout',logout=True,debug=True)
+    return page_dict('Logout',logout=True)
 
 @bottle.route('/privacy', method=GET_POST)
 @view('privacy.html')
