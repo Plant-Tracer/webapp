@@ -722,13 +722,15 @@ def movie_frames_info(*,movie_id):
 def create_new_frame(*, movie_id, frame_number, frame_data=None):
     """Get the frame id specified by movie_id and frame_number.
     if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
-    if trackpoints are provided, replace current trackpoints with those
+    if trackpoints are provided, replace current trackpoints with those. This is used sometimes
+    just to update the frame_data
     """
+    logging.debug("movie_id=%s frame_number=%s frame_data=%s",movie_id,frame_number,frame_data)
     args = (movie_id, frame_number )
     a1 = a2 = a3 = ""
     frame_urn = None
     if frame_data is not None:
-        # upload the frame to the store
+        # upload the frame to the store and make a frame_urn
         object_name = db_object.object_name(data=frame_data,
                                             course_id=course_id_for_movie_id(movie_id),
                                             movie_id=movie_id,
@@ -743,15 +745,16 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
         args = (movie_id, frame_number, frame_urn, frame_urn)
 
     # Update the database
+    logging.debug("a1=%s a2=%s a3=%s args=%s",a1,a2,a3,args)
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
                         VALUES (%s,%s{a2})
                         ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
-                        args)
+                        args, debug=True)
     # Get the frame_id
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
                                    (movie_id, frame_number))[0][0]
-    return frame_id
+    return (frame_id,frame_urn)
 
 def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.

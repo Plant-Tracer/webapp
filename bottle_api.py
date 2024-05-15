@@ -11,6 +11,7 @@ import tempfile
 import base64
 import functools
 import io
+import urllib
 import csv
 import os
 from collections import defaultdict
@@ -259,9 +260,17 @@ def api_bulk_register():
 ################################################################
 ##
 ## Object API
+MIME_MAP = {'.jpg':'image/jpeg',
+            '.jpeg':'image/jpeg'}
+
+
 @api.route('/get-object', method=GET)
-def api_get_object(bucket,key,sig):
+def api_get_object():
     """Implement signed URLs"""
+    # my object store doesn't implement mime types, so fake them.
+    urn = get('urn')
+    ext = os.path.splitext( urn )[1]
+    bottle.response.set_header('Content-Type', MIME_MAP[ext])
     return db_object.read_signed_url(urn=get('urn'), sig=get('sig'))
 
 
@@ -388,7 +397,7 @@ def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
-def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
+def api_get_frame_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
     """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
     If we have to extract the frame, write it to the database
     Used by get-frame below.
@@ -414,6 +423,19 @@ def api_get_jpeg(*,frame_id=None, frame_number=None, movie_id=None, user_id):
     logging.info("fmt=jpeg but INVALID_FRAME_ACCESS with frame_id=%s and frame_number=%s and movie_id=%s",
                  frame_id,frame_number,movie_id)
     raise db.InvalidFrameAccess()
+
+def api_get_frame_urn(*,frame_number,movie_id,user_id):
+    """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
+    data = db.get_frame(frame_number=frame_number, movie_id=movie_id)
+    if data['frame_urn'] is not None:
+        return data['frame_urn']
+    # Get the frame data so we can get it a URN
+    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+    (frame_id, frame_urn) = db.create_new_frame(movie_id=movie_id,
+                                                frame_number=frame_number,
+                                                frame_data=frame_data)
+    assert frame_urn is not None
+    return frame_urn
 
 @api.route('/get-frame', method=GET_POST)
 def api_get_frame():
@@ -463,7 +485,7 @@ def api_get_frame():
         # Return just the JPEG for the frame, with no metadata
         try:
             bottle.response.set_header('Content-Type', MIME.JPEG)
-            return api_get_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+            return api_get_frame_jpeg(frame_id=frame_id, frame_number=frame_number, movie_id=movie_id, user_id=user_id)
         except db.InvalidFrameAccess:
             return bottle.HTTPResponse(body=f'<html><body>invalid frame access frame_id={frame_id} frame_number={frame_number} movie_id={movie_id} user_id={user_id}</body></html>', status=404)
 
@@ -478,7 +500,7 @@ def api_get_frame():
         # the frame is not in the database, so we need to make it
         if frame_id is not None:
             return E.INVALID_FRAME_ID_DB
-        frame_id = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
+        (frame_id,frame_urn) = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
         ret = {'movie_id':movie_id,
                'frame_id':frame_id,
                'frame_number':frame_number}
@@ -508,6 +530,8 @@ def api_get_frame():
     # JQuery will then automatically decode this JSON into a JavaScript object,
     # without having to call JSON.parse()
     return fix_types(ret)
+
+
 
 ################################################################
 ## Movie editing
@@ -576,7 +600,7 @@ def api_get_movie_metadata():
     :param movie_id:  movie
     :param frame_start: if provided, first frame to provide metadata about
     :param frame_count: if provided, number of frames to get info on. 0 is no frames
-    :param get_all_if_tracking_completed: if status is TRACKING_COMPLETED_FLAG, return all of the trackpoints
+    :param get_all_if_tracking_completed: if status is TRACKING_COMPLETED_FLAG, return all of the metadata
 
     Returns JSON dictionary:
     ['metadata'] - movie metadata (same as get-metadata)
@@ -584,11 +608,15 @@ def api_get_movie_metadata():
     ['frames'][10]      (where 10 is a frame number) - per-frame array, starting with frame 0.
     ['frames'][10]['trackpoints'] - array of the trackpoints for that frame
     ['frames'][10]['annotations'] - array of the annotations for that frame
-    ['frames'][10]['frame_url'] - signed URL for the frame, from S3
+    ['frames'][10]['frame_url'] - signed URL for the frame, if it exists
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')
+    frame_start = get_int('frame_start')
+    frame_count = get_int('frame_count')
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
+    get_trackpoints = get_bool('get_trackpoints')
+    logging.debug("**** get_all_if_tracking_completed=%s",get_all_if_tracking_completed)
 
     logging.info("get_movie_metadata() movie_id=%s user_id=%s",movie_id,user_id)
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
@@ -597,18 +625,24 @@ def api_get_movie_metadata():
     movie_metadata =  db.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
     # If we do not have the movie width and height, get them...
     if (not movie_metadata['width']) or (not movie_metadata['height']):
-        movie_data = db.get_movie_data(movie_id = movie_id)
+        movie_data     = db.get_movie_data(movie_id = movie_id)
+
+        if movie_data is None:
+            return E.NO_MOVIE_DATA
+
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
     ret = {'error':False, 'metadata':movie_metadata}
 
-    # If status TRACKING_COMPLETED_FLAG, get all the trackpoints.
+    # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
+    # then get all the trackpoints.
     tracking_completed = (movie_metadata.get('status','') == C.TRACKING_COMPLETED)
-    get_all_trackpoints = get_all_if_tracking_completed or tracking_completed
-    frame_start = 0 if get_all_trackpoints else get_int('frame_start')
+    if tracking_completed and get_all_if_tracking_completed:
+        frame_start = 0
+        frame_count = C.MAX_FRAMES
+    logging.debug("**** frame_start=%s frame_count=%s",frame_start,frame_count)
     if frame_start is not None:
-        frame_count = C.MAX_FRAMES if get_all_trackpoints else get_int('frame_count')
         if frame_count is None:
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
@@ -622,9 +656,12 @@ def api_get_movie_metadata():
                 frame['trackpoints'] = []
             frame['trackpoints'].append(tpt)
 
-        # Now get the URLs
-        for frame in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
-            ret['frames'][frame['frame_number']]['frame_url'] = db_object.make_signed_url(urn=frame['frame_urn'])
+        # Now get the URLs for every frame for which there are trackpoints
+        for row in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
+            urn = row['frame_urn']
+            if urn is not None:
+                urn = api_get_frame_urn(frame_number=row['frame_number'], movie_id=movie_id, user_id=user_id)
+            ret['frames'][row['frame_number']]['frame_url'] = db_object.make_signed_url(urn=urn)
 
     logging.debug("ret=%s",ret)
     return fix_types(ret)
@@ -697,7 +734,7 @@ class MovieTrackCallback:
 
         logging.debug("MovieTrackCallback %s",message)
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-        frame_id = db.create_new_frame(movie_id=self.movie_id,
+        (frame_id,frame_urn) = db.create_new_frame(movie_id=self.movie_id,
                                        frame_number = frame_number,
                                        frame_data = tracker.convert_frame_to_jpeg(frame_data))
         db.put_frame_trackpoints(frame_id=frame_id, trackpoints=frame_trackpoints)
@@ -795,7 +832,7 @@ def api_new_frame():
         frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
     except TypeError:
         frame_data = None
-    frame_id = db.create_new_frame( movie_id = get_int('movie_id'),
+    (frame_id,frame_urn) = db.create_new_frame( movie_id = get_int('movie_id'),
                                frame_number = get_int('frame_number'),
                                frame_data = frame_data)
     assert isinstance( frame_id, int)
@@ -845,7 +882,7 @@ def api_put_frame_analysis():
         movie_id = get_int('movie_id')
         frame_number = get_int('frame_number')
         logging.debug("put_frame_analysis. movie_id=%s frame_number=%s",movie_id,frame_number)
-        frame_id = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
+        (frame_id,frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
         logging.debug("frame_id is now %s",frame_id)
     if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
         logging.debug("user %s cannot access frame_id %s",user_id, frame_id)

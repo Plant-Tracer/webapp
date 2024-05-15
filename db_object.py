@@ -122,9 +122,9 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
         params = urllib.parse.urlencode({'urn': urn, 'sig': sig_for_urn(urn) })
-        return f"/get-object?{params}"
+        return f"/api/get-object?{params}"
     else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+        raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
 def read_signed_url(*,urn,sig):
     computed_sig = sig_for_urn(urn)

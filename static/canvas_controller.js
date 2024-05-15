@@ -318,6 +318,21 @@ class Line extends CanvasItem {
 }
 
 
+class Text extends CanvasItem {
+    constructor(x, y, text, color='black') {
+        super(x, y, text);
+        this.font = '18px sanserif';
+        this.color = color;
+    }
+
+    draw(ctx, selected) {
+        ctx.save();
+        ctx.font = this.font;
+        ctx.fillText( this.name, this.x, this.y);
+    }
+}
+
+
 /* WebImage Object - Draws an image (x,y) specified by the url.
  * This is the legacy system.
  *
@@ -394,4 +409,4 @@ class WebImage extends CanvasItem {
     }
 }
 
-export { CanvasController, CanvasItem, Marker, WebImage, Line };
+export { CanvasController, CanvasItem, Marker, WebImage, Line, Text };

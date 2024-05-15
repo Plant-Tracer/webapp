@@ -118,7 +118,6 @@ class TracerController extends MovieController {
         let color = PLANT_MARKER_COLOR;
         this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
         this.create_marker_table(); // redraw table
-
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
     }
@@ -340,9 +339,10 @@ class TracerController extends MovieController {
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
 var cc;
-function trace_movie_one_frame(div_controller, movie_metadata, first_frame, api_key) {
+function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_key) {
+    console.log("trace_movie_one_frame");
     cc = new TracerController(div_controller, movie_metadata);
-    var frames = [{'frame_url':first_frame,
+    var frames = [{'frame_url': frame0_url,
                    'trackpoints':[{'x':50,'y':50,'label':'Apex'},
                                   {'x':50,'y':100,'label':'Ruler 0mm'},
                                   {'x':50,'y':150,'label':'Ruler 20mm'}
@@ -353,9 +353,15 @@ function trace_movie_one_frame(div_controller, movie_metadata, first_frame, api_
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-function trace_movie_frames(div_controller, movie_metadata, api_key) {
+function trace_movie_frames(div_controller, movie_metadata, movie_frames, api_key) {
+    console.log("div_controller=",div_controller,"movie_metadata=",movie_metadata,"movie_frames=",movie_frames,"api_key=",api_key);
     cc = new TracerController(div_controller, movie_metadata);
-    cc.load_movie(movie_metadata.frames);
+    console.log("movie_frames=",movie_frames);
+    for(let i=0;i<movie_frames.length;i++){
+        movie_frames[i].web_image = movie_frames[i].frame_url;
+        console.log("i=",i,"movie_frames[i]=",movie_frames[i]);
+    }
+    cc.load_movie(movie_frames);
     cc.set_movie_control_buttons();
 }
 
@@ -364,7 +370,7 @@ function trace_movie(div_controller, movie_id, api_key) {
     const params = {
         api_key: api_key,
         movie_id: movie_id,
-        first_frame: 0,
+        frame_start: 0,
         frame_count: 1e6};
     $.post('/api/get-movie-metadata', params ).done( (data) => {
         if (data.error==true) {
@@ -377,8 +383,14 @@ function trace_movie(div_controller, movie_id, api_key) {
             const height = data.metadata.height;
             console.log('resizing to',width,'x','height');
             $(div_controller + ' canvas').prop('width',width).prop('height',height);
-            if (data.metadata.frames) {
-                trace_movie_frames(div_controller, data.metadata, api_key);
+            if (data.frames) {
+                // Note: data.frames comes in as a dict, but we need it as an array.
+                // We also need to change frame_url to web_image.
+                frames = []
+                for (const key in data.frames) {
+                    frames[key] = data.frames[key];
+                }
+                trace_movie_frames(div_controller, data.metadata, frames, api_key);
             } else {
                 const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
                 trace_movie_one_frame(div_controller, data.metadata, frame0);

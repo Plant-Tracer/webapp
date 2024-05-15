@@ -10,7 +10,7 @@
 
 const PLAY_MSEC = 1000;          // pause between frames; could be 1000/29.92
 
-import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
+import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.js";
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
@@ -118,7 +118,11 @@ class MovieController extends CanvasController {
         // set the frame number, clear the screen and re-add the objects
         this.frame_number = frame;
         this.clear_objects();
-        this.add_object( this.frames[frame].web_image ); // always add this first
+        if (this.frames[frame].web_image){
+            this.add_object( this.frames[frame].web_image ); // always add this first
+        } else {
+            this.add_object( new Text(24,24,"No web_image for frame "+frame) );
+        }
         this.add_frame_objects( frame );                 // typically will be subclassed
         $(this.div_selector+" input.frame_number_field").val(this.frame_number);
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
