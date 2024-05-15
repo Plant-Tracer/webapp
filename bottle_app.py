@@ -58,8 +58,8 @@ from lib.ctools import clogging
 
 import wsgiserver               # pylint: disable=syntax-error
 import db
+import db_object
 import auth
-from auth import get_dbreader
 
 from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST
@@ -190,7 +190,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
                     'movie_id':movie_id,
                     'enable_demo_mode':DEMO_MODE,
                     'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-                    'dbreader_host':get_dbreader().host,
+                    'dbreader_host':auth.get_dbreader().host,
                     'version':__version__,
                     'git_head_time':git_head_time(),
                     'git_last_commit':git_last_commit()})

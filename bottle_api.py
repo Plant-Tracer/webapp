@@ -521,8 +521,8 @@ def api_edit_movie():
 
     """
     movie_id = get_int('movie_id')
-    if not db.can_access_movie(user_id=get_user_id(allow_demo=False),
-                               movie_id=movie_id):
+    user_id  = get_user_id(allow_demo=False)
+    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
 
     action = get("action")
@@ -534,8 +534,11 @@ def api_edit_movie():
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
                 db.purge_movie_frames( movie_id=movie.movie_id )
                 movie_output.seek(0)
-                movie.data = movie_output.read()
+                movie.data = movie_data = movie_output.read()
                 movie.version += 1
+                movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+                set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+
                 return {'error': False}
     else:
         return E.INVALID_EDIT_ACTION
