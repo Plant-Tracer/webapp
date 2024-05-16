@@ -167,6 +167,7 @@ def test_new_movie(new_movie):
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_api.api_get_movie_metadata()
+        logging.debug("test_new_movie: res=%s",res)
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
 
