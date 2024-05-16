@@ -90,6 +90,8 @@ def make_urn(*, object_name, scheme = None ):
     We grab this every time through so that the bucket can be changed during unit tests
     """
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
+    if s3_bucket=="":
+        s3_bucket = None
     if STORE_LOCAL:
         scheme = C.SCHEME_DB
     if scheme is None:

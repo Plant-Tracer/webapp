@@ -731,7 +731,7 @@ class MovieTrackCallback:
         # Moving to an object-oriented API would make this a whole lot more efficient...
 
         row = db.get_frame(movie_id=self.movie_id, frame_number=frame_number, get_frame_data=False)
-        if row and (row['frame_data'] is not None) or (row['frame_urn'] is not None):
+        if (row is not None) and ((row['frame_data'] is not None) or (row['frame_urn'] is not None)):
             frame_id = row['frame_id']
         else:
             (frame_id,frame_urn) = db.create_new_frame(movie_id=self.movie_id,
