@@ -61,7 +61,7 @@ def test_track_point_annotations(new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_id = db.create_new_frame(movie_id=movie_id, frame_number=0)
+    (frame_id, frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=0)
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back

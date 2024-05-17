@@ -82,8 +82,8 @@ pytest:  $(REQ)
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/movie_tracker_test.py
-TEST1FUNCTION="-k test_movie_tracking"
+TEST1MODULE=tests/movie_test.py
+TEST1FUNCTION="-k test_movie_extract1"
 pytest1:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful

@@ -476,9 +476,14 @@ def api_get_frame():
         logging.info("fmt is not in jpeg or json")
         return E.INVALID_FRAME_FORMAT
 
-    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return E.INVALID_MOVIE_ACCESS
+    if movie_id is not None:
+        if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
+            logging.info("User %s cannot access movie_id %s",user_id, movie_id)
+            return E.INVALID_MOVIE_ACCESS
+    else:
+        if not db.can_access_frame(user_id=user_id, frame_id=frame_id):
+            logging.info("User %s cannot access frame_id %s",user_id, frame_id)
+            return E.INVALID_FRAME_ACCESS
 
     if fmt=='jpeg':
         # Return just the JPEG for the frame, with no metadata
@@ -505,7 +510,7 @@ def api_get_frame():
                'frame_number':frame_number}
 
     # If we do not have frame_data, extract it from the movie (but don't store in database)
-    if ret.get('frame_data',None) is None:
+    if (ret.get('frame_data',None) is None) and (movie_id is not None):
         logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
         movie_data = db.get_movie_data(movie_id=movie_id)
         try:
@@ -517,7 +522,9 @@ def api_get_frame():
                     'message':f'frame number {frame_number} is out of range'}
 
     # Convert the frame_data to a data URL
-    ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(ret["frame_data"]).decode()}'
+    frame_data = ret["frame_data"]
+    if frame_data is not None:
+        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
     del ret['frame_data']
 
     ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
@@ -627,7 +634,8 @@ def api_get_movie_metadata():
         if movie_data is None:
             return E.NO_MOVIE_DATA
 
-        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+        # Add in the movie_metadata we just got
+        movie_metadata = {**movie_metadata, **tracker.extract_movie_metadata(movie_data=movie_data)}
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
     ret = {'error':False, 'metadata':movie_metadata}

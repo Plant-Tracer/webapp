@@ -334,7 +334,6 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     return new_api_key
 
 ################ API KEY ################
-
 def make_new_api_key(*,email):
     """Create a new api_key for an email that is registered
     :param: email - the email
@@ -537,7 +536,6 @@ def get_movie_data(*, movie_id:int):
     if row['object_data'] is not None and len(row['object_data'])>0:
         return row['object_data']
 
-    logging.debug("gmdrow=%s",row)
     for name in ['movie_data_urn','object_urn']:
         urn = row[name]
         if urn:

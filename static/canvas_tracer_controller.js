@@ -189,7 +189,6 @@ class TracerController extends MovieController {
     }
 
     put_trackpoints() {
-        // If we are putting the frame, we already have the frame_id
         const put_frame_analysis_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
