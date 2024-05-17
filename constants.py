@@ -15,6 +15,7 @@ class C:
     TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
     MAX_FILE_UPLOAD = 1024*1024*64
+    MAX_FRAMES = 1e6            # max possible frames in a movie
     NOTIFY_UPDATE_INTERVAL = 5.0
     TRACK_DELAY = 'TRACK_DELAY'
     CHECK_MX = False                # True didn't work
@@ -56,6 +57,7 @@ class E:
     INVALID_MOVIE_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie.'}
     INVALID_MOVIE_FRAME = { 'error': True, 'message': 'Could not retrieve the movie frame.'}
     INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
+    NO_MOVIE_DATA = {'error': True, 'message': 'No data is available for that movie_id'}
     INVALID_EDIT_ACTION = {'error' : True, 'message':'invalid movie edit action'}
     INVALID_REQUEST_JPEG = {'error': True, 'message':'Invalid request when requesting JPEG'}
     NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}

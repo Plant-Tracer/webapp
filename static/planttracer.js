@@ -13,7 +13,7 @@ const PUBLISH_BUTTON='PUBLISH';
 const UNPUBLISH_BUTTON='UNPUBLISH';
 const DELETE_BUTTON='DELETE';
 const UNDELETE_BUTTON='UNDELETE';
-const PLAY_LABEL = 'play original';
+const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
 
@@ -55,7 +55,6 @@ function register_func() {
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
     $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
         .done( function(data) {
-            console.log("register data=",data);
             if (data.error){
                 $('#message').html(`<b>Error: ${data.message}`);
             } else {
@@ -139,9 +138,7 @@ async function upload_movie_post(movie_title, description, movieFile)
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.fileSize);
-    console.log("sending:",formData);
     const r = await fetch('/api/new-movie', { method:"POST", body:formData});
-    console.log("App response code=",r);
     const obj = await r.json();
     console.log('new-movie obj=',obj);
     if (obj.error){
@@ -153,28 +150,23 @@ async function upload_movie_post(movie_title, description, movieFile)
     // The new movie_id came with the presigned post to upload the form data.
     try {
         const pp = obj.presigned_post;
-        console.log("presigned post:",pp);
         const formData = new FormData();
         for (const field in pp.fields) {
             formData.append(field, pp.fields[field]);
         }
         formData.append("file", movieFile); // order matters!
 
-        console.log("uploading movie...");
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
         const r = await fetch(pp.url, {
             method: "POST",
             body: formData,
         });
-        console.log("uploaded movie. r=",r);
         if (!r.ok) {
             $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
-            console.log("r.text()=",await r.text());
             return;
         }
     } catch(e) {
-        console.log('Error uploading movie to S3:',e);
         $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
         return;
     }
@@ -203,7 +195,6 @@ function upload_movie()
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
     const movieFile   = $('#movie-file').prop('files')[0];
-    console.log("movieFile=",movieFile);
 
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -225,21 +216,19 @@ function upload_movie()
 }
 
 async function get_movie_metadata(movie_id){
-    // Ask the server to rotate the movie
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("movie_id",    movie_id);
     const r = await fetch('/api/get-movie-metadata', { method:"POST", body:formData});
-    console.log("get_movie_metadata. r=",r);
     if (r.ok) {
         return await r.json()['metadata'];
     }
 }
 
 
+//
+// Ask the server to rotate the movie
 async function rotate_movie() {
-    //
-    // Ask the server to rotate the movie
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
     const m0 = await get_movie_metadata(movie_id);

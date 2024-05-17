@@ -21,6 +21,7 @@ import hashlib
 import requests
 import boto3
 import bottle
+import uuid
 
 from lib.ctools import dbfile
 from constants import C
@@ -48,6 +49,7 @@ We use this:
 ALLOWED_SCHEMES = [ C.SCHEME_S3, C.SCHEME_DB ]
 S3 = 's3'
 DB_TABLE = 'object_store'
+STORE_LOCAL=False               # even if S3 is set, store local
 
 cors_configuration = {
     'CORSRules': [{
@@ -69,11 +71,18 @@ def sha256(data):
     return h.hexdigest()
 
 def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
+    """object_name is a URN that is generated according to a scheme
+    that uses course_id, movie_id, and frame_number, but there is also
+    a 16-bit nonce This means that you can't generate it on the fly;
+    it has to be stored in a database.
+    """
     fm = f"/{frame_number:06d}" if frame_number is not None else ""
-    return f"{course_id}/{movie_id}{fm}{ext}"
+    nonce = str(uuid.uuid4())[0:4]
+    return f"{course_id}/{movie_id}{fm}-{nonce}{ext}"
 
 def s3_client():
     return boto3.session.Session().client( S3 )
+
 
 def make_urn(*, object_name, scheme = None ):
     """
@@ -81,6 +90,10 @@ def make_urn(*, object_name, scheme = None ):
     We grab this every time through so that the bucket can be changed during unit tests
     """
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
+    if s3_bucket=="":
+        s3_bucket = None
+    if STORE_LOCAL:
+        scheme = C.SCHEME_DB
     if scheme is None:
         scheme = C.SCHEME_S3 if (s3_bucket is not None) else C.SCHEME_DB
     if scheme == C.SCHEME_S3 and s3_bucket is None:
@@ -100,6 +113,7 @@ def sig_for_urn(urn):
     return sha256( (urn + API_SECRET).encode('utf-8'))
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
+    assert isinstance(urn,str)
     logging.debug("urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
@@ -111,9 +125,9 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     elif o.scheme==C.SCHEME_DB:
         params = urllib.parse.urlencode({'urn': urn, 'sig': sig_for_urn(urn) })
-        return f"/get-object?{params}"
+        return f"/api/get-object?{params}"
     else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+        raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
 def read_signed_url(*,urn,sig):
     computed_sig = sig_for_urn(urn)
@@ -180,7 +194,7 @@ def write_object(urn, object_data):
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (urn, object_sha256),debug=True)
+            (urn, object_sha256))
         dbfile.DBMySQL.csfr(
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",

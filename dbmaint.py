@@ -24,7 +24,6 @@ import paths
 # pylint: disable=no-member
 
 import db
-#import db_object
 import tracker
 import auth
 from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE

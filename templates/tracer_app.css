@@ -1,0 +1,12 @@
+    canvas {
+      border: 1px solid black;
+    }
+   .float-movie {
+       float: left;
+       padding: 2px;
+   }
+
+   .float-controls {
+       float: left;
+       padding: 2px;
+   }

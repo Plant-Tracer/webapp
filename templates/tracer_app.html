@@ -1,0 +1,70 @@
+    <div id='tracer'>
+        <div class='float-movie'>
+            <form action='javascript:void(0)'>
+                <input type='button' value='rotate movie 90º' class='rotate_movie' disabled/>
+            </form>
+            <canvas id="canvas-id" width='640' height='480'> </canvas>
+            <form action="javascript:void(0)" >
+                <!-- https://en.wikipedia.org/wiki/Media_control_symbols -->
+                <!-- https://stackoverflow.com/questions/22885702/html-for-the-pause-symbol-in-audio-and-video-control -->
+
+                <input type='button' value='⏮ ' class='first_button frame_movement movement_backwards' disabled/>
+                <input type='button' value='⏴'  class='play_reverse' disabled/>
+                <input type='button' value='-1' class='prev_frame frame_movement movement_backwards' disabled/>
+
+                <input type='number' value='0'  class='frame_number_field frame_movement'
+                       placeholder='frame' size='4' min='0' max='0' disabled/>
+                <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled/>
+                <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled/>
+                <input type='button' value='⏵'  class='play_forward' disabled/>
+                <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled/>
+
+                <label for="zoom">zoom:</label>
+                <select id="zoom-id" name="zoom" class='zoom'>
+                    <option value="25">25%</option>
+                    <option value="50">50%</option>
+                    <option value="75">75%</option>
+                    <option value="100" selected>100%</option>
+                    <option value="150">150%</option>
+                    <option value="200">200%</option>
+                    <option value="300">300%</option>
+                </select>
+            </form>
+        </div>
+        <div class='float-controls'>
+            <table class="pure-table pure-table-horizontal pure-table-striped">
+                <thead>
+                    <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th><th>Delete</th></tr>
+                </thead>
+                <tbody class='marker_table_body'>
+                </tbody>
+            </table>
+            <hr>
+            <form class='pure-form pure-form-aligned marker_form' action="javascript:void(0)" >
+                <fieldset>
+                    <p>Add another marker by entering the new marker name:</p>
+                    <div class='pure-control-group'>
+                        <label for='marker-name'>marker name:</label>
+                        <input class='marker_name_input' type='text' placeholder='Marker name' size='20' />
+                        <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
+                    </div>
+
+                    <div class='pure-control-group'>
+                        <span class='add_marker_status'></span> <!-- for errror messages -->
+                    </div>
+
+                    <div class='pure-control-group'>
+                        <label></label>
+                        <input class='track_button pure-button pure-button-primary' type='button' value='track movie'/>
+                    </div>
+
+                    <div class='pure-control-group'>
+                        <label></label>
+                        <a class='download_link' href=''>
+                            <input class='download_button pure-button pure-button-primary' type='button' value='Download Trackpoints'/>
+                        </a>
+                    </div>
+                </fieldset>
+            </form>
+        </div> <!-- right controls -->
+    </div> <!-- tracer controller -->

@@ -334,7 +334,6 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
     return new_api_key
 
 ################ API KEY ################
-
 def make_new_api_key(*,email):
     """Create a new api_key for an email that is registered
     :param: email - the email
@@ -537,7 +536,6 @@ def get_movie_data(*, movie_id:int):
     if row['object_data'] is not None and len(row['object_data'])>0:
         return row['object_data']
 
-    logging.debug("gmdrow=%s",row)
     for name in ['movie_data_urn','object_urn']:
         urn = row[name]
         if urn:
@@ -722,13 +720,14 @@ def movie_frames_info(*,movie_id):
 def create_new_frame(*, movie_id, frame_number, frame_data=None):
     """Get the frame id specified by movie_id and frame_number.
     if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
-    if trackpoints are provided, replace current trackpoints with those
+    if trackpoints are provided, replace current trackpoints with those. This is used sometimes
+    just to update the frame_data
     """
     args = (movie_id, frame_number )
     a1 = a2 = a3 = ""
     frame_urn = None
     if frame_data is not None:
-        # upload the frame to the store
+        # upload the frame to the store and make a frame_urn
         object_name = db_object.object_name(data=frame_data,
                                             course_id=course_id_for_movie_id(movie_id),
                                             movie_id=movie_id,
@@ -743,6 +742,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
         args = (movie_id, frame_number, frame_urn, frame_urn)
 
     # Update the database
+    logging.debug("a1=%s a2=%s a3=%s args=%s",a1,a2,a3,args)
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
                         VALUES (%s,%s{a2})
@@ -751,9 +751,9 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     # Get the frame_id
     frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
                                    (movie_id, frame_number))[0][0]
-    return frame_id
+    return (frame_id,frame_urn)
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
+def get_frame(*, frame_id=None, movie_id=None, frame_number=None, get_frame_data=True):
     """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
     Can also get trackpoints and annotations.
     :param: movie_id - the movie_id wanted
@@ -771,7 +771,7 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None):
     if len(rows)!=1:
         return None
     row = rows[0]
-    if (row['frame_data'] is None) and (row['frame_urn'] is not None):
+    if (row['frame_data'] is None) and (row['frame_urn'] is not None) and get_frame_data:
         row['frame_data'] = db_object.read_object(row['frame_urn'])
     return row
 
@@ -954,10 +954,14 @@ def delete_analysis_engine_id(*, engine_id):
     dbfile.DBMySQL.csfr(get_dbwriter(),
                         "DELETE from engines where id=%s",(engine_id,))
 
-def delete_frame_analysis(*, frame_id=None, engine_id=None):
+def delete_frame_analysis(*, frame_id=None, movie_id=None, engine_id=None):
     """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
-    if (frame_id is None) and (engine_id is None):
-        raise RuntimeError("frame_id and/or engine_id must not be None")
+    if (frame_id is None) and (movie_id is None) and (engine_id is None):
+        raise RuntimeError("frame_id, movie_id or engine_id must not be None")
+
+    if (movie_id is None):
+        if (frame_id is None) or (engine_id is None):
+            raise RuntimeError("if movie_id is set, frame_id and engine_id must be None")
 
     cmd = "DELETE FROM movie_frame_analysis WHERE "
     args = []
@@ -969,11 +973,18 @@ def delete_frame_analysis(*, frame_id=None, engine_id=None):
     if engine_id:
         cmd += " engine_id=%s"
         args.append(engine_id)
+    if movie_id:
+        cmd += " frame_id in (select id from movie_frames where movie_id=%s) "
+        args.append(movie_id)
     dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
 
     if frame_id is not None:
-        cmd = "DELETE FROM movie_trackpoints WHERE frame_id=%s"
+        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id=%s"
         dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [frame_id,])
+
+    if movie_id is not None:
+        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id in (select id from movie_frames where movie_id=%s)"
+        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [movie_id,])
 
 
 def delete_analysis_engine(*, engine_name, version=None, recursive=None):
@@ -1191,9 +1202,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
     """
     # First compute @is_owner
-
-    logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s",
-                 set_user_id, set_movie_id, prop, value)
+    logging.info("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
     assert isinstance(user_id, int)
     assert isinstance(set_movie_id, int) or (set_movie_id is None)
     assert isinstance(set_user_id, int) or (set_user_id is None)
@@ -1228,6 +1237,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         try:
             cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
         except KeyError as e:
+            logging.error(f"Cannot set property {prop} from {e}")
             raise ValueError('Cannot set property '+prop) from e
         args  = [value, set_movie_id]
         ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)

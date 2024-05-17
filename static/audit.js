@@ -17,14 +17,12 @@ function build_audit_table() {
                 $('#message').html('error: '+data.message);
                 return;
             }
-            console.log("data=",data);
             let logs = data.logs;
-            console.log("logs=",logs);
             // get the columns
             var columns = [];
             for (const key in logs[0]) {
                 //console.log(`${key}: ${logs{key}}`);
-                columns.push( {'data':key, 'title':key } );
+                columns.push( data:key, title:key } );
             }
             // make the data displayable
             $('#audit').DataTable( {

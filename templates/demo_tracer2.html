@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Demo</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <script type="text/javascript" charset="utf8" src="./static/dev/jquery.js"></script>
+    <script type="module" src="./static/canvas_controller.js"></script>
+    <script type="module" src="./static/canvas_movie_controller.js"></script>
+  </head>
+
+  <style>
+      {% include 'tracer_app.css' %}
+  </style>
+  <body>
+      <p>This demo shows the TraceController <i>after</i> the image is
+          traced.  The user still has the ability to drag and edit the
+          initial track points, but can also change frames.
+      </p>
+      {% include 'tracer_app.html' %}
+  </body>
+  <script type='module'>
+    // This demo draws three dragable objects and adds some text.
+   import { CanvasController, CanvasItem, Marker, WebImage } from "./static/canvas_controller.js";
+   import { MovieController } from "./static/canvas_movie_controller.js";
+   import { TracerController, trace_movie_one_frame, trace_movie_frames } from "./static/canvas_tracer_controller.js";
+   const movie_id = 10;
+   const api_key='demo_key';
+   const movie_metadata = {metadata: {movie_id:movie_id, width:512, height:512},
+                           frames: [{frame_url:'./static/demo/frame0.jpg',
+                                     trackpoints:[{x:100,y:100,label:'first trackpoint'},
+                                                  {x:100,y:150,label:'second trackpoint'},
+                                                  {x:100,y:200,label:'third trackpoint'}]},
+                                    {frame_url:'./static/demo/frame1.jpg',
+                                     trackpoints:[{x:110,y:105,label:'first trackpoint'},
+                                                  {x:120,y:155,label:'second trackpoint'},
+                                                  {x:130,y:205,label:'third trackpoint'}]},
+                                    {frame_url:'./static/demo/frame2.jpg',
+                                     trackpoints:[{x:120,y:100,label:'first trackpoint'},
+                                                  {x:140,y:150,label:'second trackpoint'},
+                                                  {x:160,y:200,label:'third trackpoint'}]},
+                                    {frame_url:'./static/demo/frame3.jpg',
+                                     trackpoints:[{x:130,y:105,label:'first trackpoint'},
+                                                  {x:160,y:155,label:'second trackpoint'},
+                                                  {x:190,y:205,label:'third trackpoint'}]},
+                                    {frame_url:'./static/demo/frame4.jpg',
+                                     trackpoints:[{x:140,y:100,label:'first trackpoint'},
+                                                  {x:180,y:150,label:'second trackpoint'},
+                                                  {x:220,y:200,label:'third trackpoint'}]},
+                                    {frame_url:'./static/demo/frame5.jpg',
+                                     trackpoints:[{x:150,y:105,label:'first trackpoint'},
+                                                  {x:200,y:155,label:'second trackpoint'},
+                                                  {x:250,y:205,label:'third trackpoint'}]}
+                               ]};
+   trace_movie_frames('div#tracer', movie_metadata, api_key);
+   // const cc = new TracerController('div#tracker', movie_metadata, 'demo/frame0.jpg', api_key);
+  </script>
+</html>

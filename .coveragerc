@@ -11,3 +11,7 @@ exclude_also =
     if TYPE_CHECKING:
     class .*\bProtocol\):
     @(abc\.)?abstractmethod
+
+omit =
+    config.py
+    config-3.py
