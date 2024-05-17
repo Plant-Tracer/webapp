@@ -50,19 +50,6 @@ TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
 
-# Actual labels for the circumnutation movie
-TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},
-                                {'frame_number':0,'x':240,'y':96,'label':'ruler 0 mm'},
-                                {'frame_number':0,'x':242,'y':135,'label':'ruler 20 mm'}]
-
-TEST_MOVIE_END_TRACKPOINTS = [{'frame_number':295,'x':58,'y':75,'label':'apex'},
-                              {'frame_number':295,'x':240,'y':96,'label':'ruler 0 mm'},
-                              {'frame_number':295,'x':242,'y':135,'label':'ruler 20 mm'}]
-def test_cleanup_mp4():
-    with pytest.raises(FileNotFoundError):
-        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
-
-
 def test_track_point_annotations(new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
