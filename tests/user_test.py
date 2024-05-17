@@ -24,7 +24,7 @@ import dbmaint
 import bottle_api
 import bottle_app
 import ctools.dbfile as dbfile
-from paths import TEST_DIR
+from paths import TEST_DIR, TEST_DATA_DIR
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
@@ -46,7 +46,9 @@ MOVIE_TITLE = 'movie_title'
 ENGINE_ID = 'engine_id'
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
-TEST_MOVIE_FILENAME = os.path.join(TEST_DIR, "data", "2019-07-31 plantmovie.mov")
+TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
+TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
+TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 
 ################################################################
 
@@ -111,62 +113,6 @@ def api_key(new_user):
     """Simple fixture that just returns a valid api_key"""
     yield new_user[API_KEY]
 
-@pytest.fixture
-def new_movie(new_user):
-    """Create a new movie_id and return it"""
-    cfg = copy.copy(new_user)
-
-    api_key = cfg[API_KEY]
-    api_key_invalid = api_key+"invalid"
-
-    movie_title = 'test movie title ' + str(uuid.uuid4())
-
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
-        movie_base64_data = base64.b64encode(f.read())
-
-   # Try to uplaod the movie with an invalid key
-    with boddle(params={"api_key": api_key_invalid,
-                        "title": movie_title,
-                        "description": "test movie description",
-                        "movie_base64_data": movie_base64_data}):
-        bottle_api.expand_memfile_max()
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_api.api_new_movie()
-
-    # Try to uplaod the movie all at once
-    with boddle(params={"api_key": api_key,
-                        "title": movie_title,
-                        "description": "test movie description",
-                        "movie_base64_data": movie_base64_data}):
-        res = bottle_api.api_new_movie()
-    assert res['error'] == False
-    movie_id = res['movie_id']
-    assert movie_id > 0
-
-    cfg[MOVIE_ID] = movie_id
-    cfg[MOVIE_TITLE] = movie_title
-
-    yield cfg
-
-    # Delete the movie we uploaded
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id}):
-        res = bottle_api.api_delete_movie()
-    assert res['error'] == False
-
-    # And purge the movie that we have deleted
-    db.purge_movie(movie_id=movie_id)
-
-@pytest.fixture
-def new_engine(new_movie):
-    cfg = copy.copy(new_movie)
-
-    engine_name = 'pytest-engine'
-    engine_version = 'VTest'
-    engine_id = db.get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
-    cfg[ENGINE_ID] = engine_id
-    yield cfg
-    db.purge_engine(engine_id=engine_id)
 
 ################################################################
 ## fixture tests
@@ -204,132 +150,6 @@ def test_new_user(new_user):
     assert 'admin' in ret2
     assert 'courses' in ret3
 
-def test_movie_upload(new_movie):
-    """Create a new user, upload the movie, delete the movie, and shut down"""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-
-    # Did the movie appear in the list?
-    movies = movie_list(api_key)
-    assert len([movie for movie in movies if movie['deleted'] ==
-               0 and movie['published'] == 0 and movie['title'] == movie_title]) == 1
-
-    # Make sure that we cannot delete the movie with a bad key
-    with boddle(params={'api_key': 'invalid',
-                        'movie_id': movie_id}):
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_api.api_delete_movie()
-
-
-def test_movie_update_metadata(new_movie):
-    """try updating the metadata, and making sure some updates fail."""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-
-    # Validate the old title
-    assert get_movie(api_key, movie_id)['title'] == movie_title
-
-    new_title = 'special new title ' + str(uuid.uuid4())
-    with boddle(params={'api_key': api_key,
-                        'set_movie_id': movie_id,
-                        'property': 'title',
-                        'value': new_title}):
-        res = bottle_api.api_set_metadata()
-    assert res['error'] == False
-
-    # Get the list of movies
-    assert get_movie(api_key, movie_id)['title'] == new_title
-
-    new_description = 'special new description ' + str(uuid.uuid4())
-    with boddle(params={'api_key': api_key,
-                        'set_movie_id': movie_id,
-                        'property': 'description',
-                        'value': new_description}):
-        res = bottle_api.api_set_metadata()
-    assert res['error'] == False
-    assert get_movie(api_key, movie_id)['description'] == new_description
-
-    # Try to delete the movie
-    with boddle(params={'api_key': api_key,
-                        'set_movie_id': movie_id,
-                        'property': 'deleted',
-                        'value': 1}):
-        res = bottle_api.api_set_metadata()
-    assert res['error'] == False
-    assert get_movie(api_key, movie_id)['deleted'] == 1
-
-    # Undelete the movie
-    with boddle(params={'api_key': api_key,
-                        'set_movie_id': movie_id,
-                        'property': 'deleted',
-                        'value': 0}):
-        res = bottle_api.api_set_metadata()
-    assert res['error'] == False
-    assert get_movie(api_key, movie_id)['deleted'] == 0
-
-    # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(api_key, movie_id)['published'] == 0
-    with boddle(params={'api_key': api_key,
-                        'set_movie_id': movie_id,
-                        'property': 'published',
-                        'value': 1}):
-        res = bottle_api.api_set_metadata()
-    assert res['error'] == False
-    assert get_movie(api_key, movie_id)['published'] == 0
-
-    # Try to publish the movie with the course admin's API key. This should work
-
-################################################################
-## support functions
-################################################################
-
-
-def movie_list(api_key):
-    """Return a list of the movies"""
-    with boddle(params={"api_key": api_key}):
-        res = bottle_api.api_list_movies()
-    assert res['error'] == False
-    return res['movies']
-
-def get_movie(api_key, movie_id):
-    """Used for testing. Just pull the specific movie"""
-    movies = movie_list(api_key)
-    for movie in movies:
-        return movie
-
-    user_id = db.validate_api_key(api_key)['user_id']
-    logging.error("api_key=%s movie_id=%s user_id=%s",
-                  api_key, movie_id, user_id)
-    logging.error("len(movies)=%s", len(movies))
-    for movie in movies:
-        logging.error("%s", str(movie))
-    dbreader = get_dbreader()
-    logging.error("Full database: (dbreader: %s)", dbreader)
-    for movie in dbfile.DBMySQL.csfr(dbreader, "select * from movies", (), asDicts=True):
-        logging.error("%s", str(movie))
-    raise RuntimeError(f"No movie has movie_id {movie_id}")
-
-def test_new_movie_analysis(new_engine):
-    cfg = copy.copy(new_engine)
-    movie_id = cfg[MOVIE_ID]
-    engine_id = cfg[ENGINE_ID]
-
-    annotations='{"key": "aKey", "value": "aValue" }'
-
-    #create movie_analysis
-    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
-                                 engine_id=engine_id,
-                                 annotations=annotations
-                                 )['movie_analysis_id']
-    #verify movie_analysis exists
-    #TODO
-
-    # delete the created movie_analysis
-    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
 
 def test_get_logs(new_user):
     """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""

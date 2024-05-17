@@ -28,7 +28,7 @@ import bottle_api
 import bottle_app
 import auth
 
-from user_test import new_course,new_user,API_KEY
+from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie
 
 def test_version():
@@ -210,3 +210,24 @@ def test_check_api_key(new_user):
     with boddle(params={'api_key': api_key}):
         r = bottle_api.api_check_api_key()
         assert r['error'] == False, f'API_KEY {API_KEY} should be valid'
+
+def test_api_edit_movie(new_movie):
+    # Verifies that editing the movie version has updated
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    movie = db.Movie(movie_id = movie_id)
+    movie_metadata = movie.metadata
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie.movie_id,
+                        'action' : 'bad-action'}):
+        r = bottle_api.api_edit_movie()
+        assert r['error']==True
+
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie.movie_id,
+                        'action' : 'rotate90cw'}):
+        r = bottle_api.api_edit_movie()
+        assert r['error']==False
+    movie_metadata2 = movie.metadata
+    # Make sure that the version number incremented
+    assert movie_metadata['version'] +1 == movie_metadata2['version']

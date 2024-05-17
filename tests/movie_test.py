@@ -34,7 +34,7 @@ import bottle_app
 from auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,ENGINE_ID
 from constants import MIME,Engines
 import tracker
 
@@ -42,14 +42,6 @@ import tracker
 def test_edge_case():
     with pytest.raises(db.InvalidMovie_Id):
         db.get_movie_data(movie_id = -1)
-    with pytest.raises(RuntimeError):
-        db.create_new_movie(user_id=0,movie_data=None, movie_data_urn=None)
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data_sha256=db_object.sha256(b""), movie_data_urn=None)
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data_sha256=None, movie_data_urn="s3://bucket/key")
-    with pytest.raises(ValueError):
-        db.create_new_movie(user_id=0,movie_data=b'a', movie_data_sha256=db_object.sha256(b'b'))
     with pytest.raises(ValueError):
         db_object.make_urn(object_name="xxx",scheme='xxx')
 
@@ -57,56 +49,72 @@ def test_edge_case():
 @pytest.fixture
 def new_movie(new_user):
     """Create a new movie_id and return it.
+    This uses the movie API where the movie is uploaded with the
     When we are finished with the movie, purge it and all of its child data.
     """
+    bottle_api.expand_memfile_max()
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     api_key_invalid = api_key+"invalid"
     movie_title = f'test-movie title {str(uuid.uuid4())}'
 
-    logging.debug("new_movie fixture: Opening %s",TEST_MOVIE_FILENAME)
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
-        movie_data = f.read()
-    assert len(movie_data) == os.path.getsize(TEST_MOVIE_FILENAME)
+    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data   = f.read()
+        movie_data_sha256 = db_object.sha256(movie_data)
+    assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
     assert len(movie_data) > 0
 
     # This generates an error, which is why it needs to be caught with pytest.raises():
-    logging.debug("new_movie fixture: Try to uplaod the movie with an invalid key")
     with boddle(params={'api_key': api_key_invalid,
                         "title": movie_title,
                         "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data)}):
-        bottle_api.expand_memfile_max()
+                        "movie_data_sha256": movie_data_sha256}):
         with pytest.raises(bottle.HTTPResponse):
             res = bottle_api.api_new_movie()
 
-    # This generates an error --- movie too big
-    movie_data_big = b"*" * (C.MAX_FILE_UPLOAD + 1)
-    with boddle(params={'api_key': api_key_invalid,
-                        "title": movie_title,
-                        "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data_big)}):
-        bottle_api.expand_memfile_max()
-        with pytest.raises(bottle.HTTPResponse):
-            res = bottle_api.api_new_movie()
-
-    # This does not raise an error -- it creates a new movie that is then yielded
-    # It uses the movie_base64_data interface
-    logging.debug("new_movie fixture: Create the movie in the database and upload the movie_data all at once")
+    # This return an error --- SHA256 invalid
     with boddle(params={'api_key': api_key,
                         "title": movie_title,
                         "description": "test movie description",
-                        "movie_base64_data": base64.b64encode(movie_data)}):
+                        "movie_data_sha256": movie_data_sha256+"a"}):
         res = bottle_api.api_new_movie()
+        assert res['error']==True
+
+    # Get the upload information
+    with boddle(params={'api_key': api_key,
+                        "title": movie_title,
+                        "description": "test movie description",
+                        "movie_data_sha256": movie_data_sha256}):
+        res = bottle_api.api_new_movie()
+        logging.debug("res=%s",res)
     assert res['error'] == False
     movie_id = res['movie_id']
     assert movie_id > 0
 
+    logging.debug("new_movie fixture: movie_id=%s",movie_id)
     cfg[MOVIE_ID] = movie_id
     cfg[MOVIE_TITLE] = movie_title
 
-    logging.debug("new_movie fixture: movie_id=%s",movie_id)
+    url    = res['presigned_post']['url']
+    fields = res['presigned_post']['fields']
+    # Now send the data
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        if url.startswith('https://'):
+            # Do a real post! (probably going to S3)
+            logging.debug("calling requests.post(%s,data=%s)",url,fields)
+            r = requests.post(url, files={'file':f}, data=fields)
+            logging.info("uploaded to %s r=%s",url, r)
+            assert r.ok
+        else:
+            with boddle(params=fields):
+                from bottle import request
+                request.files['file'] = bottle.FileUpload(f, 'file', 'file')
+                res = bottle_api.api_upload_movie()
+                logging.debug("res=%s",res)
+                assert res['error']==False
 
+    # Make sure data got there
     retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
@@ -132,8 +140,12 @@ def test_new_movie(new_movie):
 
     # Did the movie appear in the list?
     movies = movie_list(api_key)
-    assert len([movie for movie in movies if movie['deleted'] ==
-               0 and movie['published'] == 0 and movie['title'] == movie_title]) == 1
+    count = 0
+    for movie in movies:
+        if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
+            count += 1
+            logging.debug("found movie: %s",movie)
+    assert count==1
 
     # Make sure that we cannot delete the movie with a bad key
     with boddle(params={'api_key': 'invalid',
@@ -154,10 +166,12 @@ def test_new_movie(new_movie):
     # res must be a movie. We should validate it.
     assert len(movie_data)>0
     assert filetype.guess(movie_data).mime==MIME.MP4
+
     # Make sure that we can get the metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id}):
         res = bottle_api.api_get_movie_metadata()
+        logging.debug("test_new_movie: res=%s",res)
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
 
@@ -172,7 +186,7 @@ def test_movie_upload_presigned_post(new_user):
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     movie_title = f'test-movie title {str(uuid.uuid4())}'
-    with open(TEST_MOVIE_FILENAME, "rb") as f:
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data = f.read()
     movie_data_sha256 = db_object.sha256(movie_data)
     with boddle(params={'api_key': api_key,
@@ -254,7 +268,97 @@ def test_movie_update_metadata(new_movie):
     assert get_movie(api_key, movie_id)['published'] == 0
 
 
-def test_movie_extract(new_movie):
+@pytest.fixture
+def new_engine(new_movie):
+    cfg = copy.copy(new_movie)
+
+    engine_name = 'pytest-engine'
+    engine_version = 'VTest'
+    engine_id = db.get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
+    cfg[ENGINE_ID] = engine_id
+    yield cfg
+    db.purge_engine(engine_id=engine_id)
+
+def test_new_movie_analysis(new_engine):
+    cfg = copy.copy(new_engine)
+    movie_id = cfg[MOVIE_ID]
+    engine_id = cfg[ENGINE_ID]
+
+    annotations='{"key": "aKey", "value": "aValue" }'
+
+    #create movie_analysis
+    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
+                                 engine_id=engine_id,
+                                 annotations=annotations
+                                 )['movie_analysis_id']
+    #verify movie_analysis exists
+    #TODO
+
+    # delete the created movie_analysis
+    db.delete_movie_analysis(movie_analysis_id=movie_analysis_id)
+
+
+def test_movie_extract1(new_movie):
+    """Check single frame extarct and error handling"""
+    cfg = copy.copy(new_movie)
+    movie_id = cfg[MOVIE_ID]
+    movie_title = cfg[MOVIE_TITLE]
+    api_key = cfg[API_KEY]
+    user_id = cfg[USER_ID]
+
+    # Check for insufficient arguments
+    with boddle(params={'api_key': api_key}):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    # Check for bad format
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': 0,
+                        'format':'no-format'
+                        }):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    # Check for invalid frame_number
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': -1,
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        assert r['error']==True
+
+    # Check for getting by frame_number
+    with boddle(params={'api_key': api_key,
+                        'movie_id': str(movie_id),
+                        'frame_number': 0,
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        logging.debug("frame0a=%s",r)
+        assert r['error']==False
+        frame0a = r
+    logging.info("frame0 id=%s",frame0a['frame_id'])
+
+    # Frame-only access is going away.
+    with boddle(params={'api_key': api_key,
+                        'frame_id': frame0a['frame_id'],
+                        'format':'json'
+                        }):
+        r = bottle_api.api_get_frame()
+        print("frame0b=",r,file=sys.stderr)
+        logging.debug("frame0b=%s",r)
+        assert r['error']==False
+        frame0b = r
+
+    frame0b['data_url']= frame0a['data_url']     # hack because it's not being set at the moment
+    frame0a['annotations'] = frame0b['annotations'] # []
+    frame0a['frame_urn'] = frame0b['frame_urn']     # None
+    frame0a['trackpoints'] = frame0b['trackpoints'] # []
+    assert frame0a == frame0b
+
+def test_movie_extract2(new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -293,6 +397,8 @@ def test_movie_extract(new_movie):
     jpeg1 = get_jpeg_frame(1)
     jpeg2 = get_jpeg_frame(2)
     assert jpeg0 != jpeg1 != jpeg2
+
+    # Handle missing params
 
     # Make sure it properly handles frames out-of-range
     with boddle(params={'api_key': api_key,

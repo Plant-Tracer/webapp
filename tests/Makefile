@@ -10,6 +10,10 @@ pytest:
 	@echo use pytest-debug if make is run from here
 	cd ..;make pytest-debug
 
+pytest1:
+	@echo use pytest-debug if make is run from here
+	cd ..;make pytest1
+
 pytest-debug1:
 	@echo use ../pytest-debug1 if make is run from here
 	cd ..;make pytest-debug1

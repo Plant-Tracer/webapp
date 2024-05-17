@@ -58,8 +58,8 @@ from lib.ctools import clogging
 
 import wsgiserver               # pylint: disable=syntax-error
 import db
+import db_object
 import auth
-from auth import get_dbreader
 
 from paths import view, STATIC_DIR
 from constants import C,E,__version__
@@ -177,7 +177,14 @@ def static_path(path):
         kind = filetype.guess(os.path.join(STATIC_DIR,path))
     except FileNotFoundError as e:
         raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404) from e
-    mimetype = kind.mime if kind else 'text/plain'
+    if kind is not None:
+        mimetype = kind.mime
+    elif path.endswith(".html"):
+        mimetype = 'text/html'
+    elif path.endswith(".js"):
+        mimetype = 'text/javascript'
+    else:
+        mimetype = 'text/plain'
     response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
     response.set_header('Cache-Control', 'public, max-age=5')
     return response
@@ -257,7 +264,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
                     'movie_id':movie_id,
                     'enable_demo_mode':DEMO_MODE,
                     'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-                    'dbreader_host':get_dbreader().host,
+                    'dbreader_host':auth.get_dbreader().host,
                     'version':__version__,
                     'git_head_time':git_head_time(),
                     'git_last_commit':git_last_commit()})
@@ -333,7 +340,7 @@ def func_login():
 def func_logout():
     """/list - list movies and edit them and user info"""
     auth.clear_cookie()
-    return page_dict('Logout',logout=True,debug=True)
+    return page_dict('Logout',logout=True)
 
 @bottle.route('/privacy', method=GET_POST)
 @view('privacy.html')
@@ -388,6 +395,16 @@ def func_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     return {'__version__': __version__, 'sys_version': sys.version}
+
+@bottle.route('/demo_tracer1', method=GET)
+@view('demo_tracer1.html')
+def demo_tracer1():
+    return {}
+
+@bottle.route('/demo_tracer2', method=GET)
+@view('demo_tracer2.html')
+def demo_tracer1():
+    return {}
 
 
 ################################################################
@@ -1074,12 +1091,16 @@ if __name__ == "__main__":
     parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
+    parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
     if args.dbcredentials:
         os.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+
+    if args.storelocal:
+        db_object.STORE_LOCAL=True
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
@@ -1090,7 +1111,7 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
-    # Run the multi-threaded server?
+    # Run the multi-threaded server? Needed for testing local-tracking
     if args.multi:
         httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
         try:

@@ -1,3 +1,8 @@
+"""
+movie_tracker_test.py - test the api tracking
+"""
+
+
 import subprocess
 import pytest
 import sys
@@ -10,11 +15,12 @@ import glob
 import base64
 import csv
 import math
+import urllib
+from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
 
 import numpy as np
 import cv2
-import re
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
@@ -22,26 +28,40 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import TEST_DATA_DIR
 import lib.ctools.dbfile as dbfile
 import bottle_api
 import bottle_app
 import copy
 import db
+import db_object
 
 from PIL import Image
 
 # get the first MOV
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_MOVIE_FILENAME
+from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME,Engines
+from constants import MIME,Engines,E
 import tracker
 
+# Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
+
+# Actual labels for the circumnutation movie
+TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},
+                                {'frame_number':0,'x':240,'y':96,'label':'ruler 0 mm'},
+                                {'frame_number':0,'x':242,'y':135,'label':'ruler 20 mm'}]
+
+TEST_MOVIE_END_TRACKPOINTS = [{'frame_number':295,'x':58,'y':75,'label':'apex'},
+                              {'frame_number':295,'x':240,'y':96,'label':'ruler 0 mm'},
+                              {'frame_number':295,'x':242,'y':135,'label':'ruler 20 mm'}]
+def test_cleanup_mp4():
+    with pytest.raises(FileNotFoundError):
+        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
+
 
 def test_track_point_annotations(new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
@@ -54,7 +74,7 @@ def test_track_point_annotations(new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_id = db.create_new_frame(movie_id=movie_id, frame_number=0)
+    (frame_id, frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=0)
     db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
@@ -100,69 +120,6 @@ def test_track_point_annotations(new_movie):
     assert tps[2]['label'] == tp2['label']
     assert tps[2]['frame_id'] == frame_id
 
-
-def test_cleanup_mp4():
-    with pytest.raises(FileNotFoundError):
-        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
-
-
-# Regular expression to match ruler position.
-# User might label points "rule 00mm" or "ruler 00 mm" or "ruler 10 mm"
-# so the regular expression accepts a variety of options
-def test_identify_calibration_labels_label():
-    assert tracker.identify_ruler_label("") is None
-    assert tracker.identify_ruler_label("nope") is None
-    assert tracker.identify_ruler_label("ruler 1 mm") is 1
-    assert tracker.identify_ruler_label("rule 10 mm") is 10
-    assert tracker.identify_ruler_label("ruler 20mm") is 20
-
-def test_compute_distance():
-    ### TODO - Evan write this
-
-### Evan - create a test set of trackpoints here that has a list with three trackpoints and two
-### calibration points for two frames
-
-TEST_TRACKPOINTS = [ ... ]
-
-def test_calibrate_point():
-    ### TODO - Evan - write this test that uses your test data above for a single point
-
-def test_calibrate_trackpoint_frames():
-    ### TODO - Evan - write this test that uses your test data above for all of the trackpoints
-
-
-""" OLD CODE
-def test_get_actual_distance_mm():
-    label = 'ruler 20 mm'
-    actual_distance_mm = -1
-    if re.match(pattern_without_zero, label):
-        actual_distance_mm = int(re.search(pattern_without_zero, label).group(1))
-        assert actual_distance_mm == 20
-    else:
-        assert actual_distance_mm == -1
-
-    pattern = r'ruler (\d+) mm'  # ruler xx mm pattern
-    label_0 = 'ruler 0 mm'
-    label_20 = 'ruler 20 mm'
-    assert re.match(pattern, label_0) is not None
-    assert re.match(pattern, label_20) is not None
-
-
-def test_pixels_to_mm():
-    x1, y1 = 100, 150
-    x2, y2 = 200, 250
-    straight_line_distance_mm = 50.0
-
-    x1_mm, y1_mm, x2_mm, y2_mm = tracker.pixels_to_mm(
-        x1, y1, x2, y2, straight_line_distance_mm)
-    EPSILON=0.0001
-    assert math.fabs(x1_mm - 35.3553) <= EPSILON
-    assert math.fabs(y1_mm - 53.033)  <= EPSILON
-    assert math.fabs(x2_mm - 70.7107) <= EPSILON
-    assert math.fabs(y2_mm - 88.3883) <= EPSILON
-"""
-
-################################################################
 
 def test_movie_tracking(new_movie):
     """
@@ -210,6 +167,7 @@ def test_movie_tracking(new_movie):
                         'movie_id': movie_id}):
         ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
+
     # Check that the header is set
     fields = lines[0].split(",")
     logging.info("fields: %s",fields)
@@ -233,16 +191,45 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
-def test_render_trackpoints():
-    input_trackpoints = [{"x":138,"y":86,"label":"mypoint",'frame_number':0}];
+    # Check error conditions for getting incomplete metadata
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id,
+                        'frame_start': 0}):
+        r = bottle_api.api_get_movie_metadata()
+        assert r == E.FRAME_START_NO_FRAME_COUNT
 
-    # Get the new trackpoints
-    infile = os.path.join(TEST_DATA_DIR,"2019-07-12 circumnutation.mp4")
-    res = tracker.track_movie(engine_name="CV2",
-                      moviefile_input=infile,
-                      input_trackpoints=input_trackpoints)
-    # Now render the movie
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
-        tracker.render_tracked_movie( moviefile_input= infile, moviefile_output=tf.name,
-                              movie_trackpoints=res['output_trackpoints'])
-        assert os.path.getsize(tf.name)>100
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id,
+                        'frame_start': 0,
+                        'frame_count': 0}): # not implemented
+        r = bottle_api.api_get_movie_metadata()
+        assert r == E.FRAME_COUNT_GT_0
+
+    # Now test the API to make sure we can get the URL for the frames.
+    with boddle(params={'api_key': api_key,
+                        'movie_id': movie_id,
+                        'frame_start': 0,
+                        'frame_count': 1000}):
+        r = bottle_api.api_get_movie_metadata()
+        logging.debug("r10=%s",r)
+        print(json.dumps(r,indent=4),file=sys.stderr)
+        assert r['error'] == False
+        movie_id = r['metadata']['movie_id']
+        frame0 = r['frames']['0']
+
+        # Verify that the signed URL works
+        url = frame0['frame_url']
+        params = parse_qs(urlparse(url).query)
+        frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
+        assert len(frame)>100   # we should do a better job verifying JPEG
+
+    # See if we can find our starting data
+    track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
+    assert track1['x']==275
+    assert track1['y']==215
+    assert track1['label']=='track1'
+
+    track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
+    assert track2['x']==410
+    assert track2['y']==175
+    assert track2['label']=='track2'

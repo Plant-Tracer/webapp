@@ -1,3 +1,4 @@
+"use strict";
 /* jshint esversion: 8 */
 /*global api_key */
 /*global admin */
@@ -7,10 +8,20 @@
 /*global MAX_FILE_UPLOAD */
 /*global user_demo */
 
-
-const PLAY_LABEL = 'play original';
+// special buttons
+const PUBLISH_BUTTON='PUBLISH';
+const UNPUBLISH_BUTTON='UNPUBLISH';
+const DELETE_BUTTON='DELETE';
+const UNDELETE_BUTTON='UNDELETE';
+const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
+
+// sounds for buttons
+var SOUNDS = [];
+SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
+SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+
 
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
@@ -44,7 +55,6 @@ function register_func() {
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
     $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
         .done( function(data) {
-            console.log("register data=",data);
             if (data.error){
                 $('#message').html(`<b>Error: ${data.message}`);
             } else {
@@ -82,8 +92,8 @@ function check_upload_metadata()
 {
     const title = $('#movie-title').val();
     const description = $('#movie-description').val();
-
-    $('#movie-file').prop('disabled', (title.length < 3 || description.length < 3));
+    const movie_file = $('#movie-file').val();
+    $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
 }
 
 // This is an async function, which uses async functions.
@@ -102,33 +112,44 @@ async function computeSHA256(file) {
     return hashHex;
 }
 
-// Uploads a movie using a presigned post. See:
-// https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
-// https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
-async function upload_movie_post(movie_title, description, movieFile, showMovie)
+/*
+ * get the first frame with cache busting logic.
+ */
+function first_frame_url(movie_id)
 {
-    var movie_data_sha256 = await computeSHA256(movieFile);
+    return `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
+}
+
+/*
+ *
+ * Uploads a movie using a presigned post. See:
+ * https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
+ * https://boto3.amazonaws.com/v1/documentation/api/latest/guide/s3-presigned-urls.html
+ *
+ * Presigned post is provided by the /api/new-movie call (see below)
+ */
+async function upload_movie_post(movie_title, description, movieFile)
+{
+    // Get a new movie_id
+    const movie_data_sha256 = await computeSHA256(movieFile);
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("title",       movie_title);
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.fileSize);
-    console.log("sending:",formData);
-    let r = await fetch('/api/new-movie', { method:"POST", body:formData});
-    console.log("App response code=",r);
-    let obj = await r.json();
-    console.log('obj=',obj);
+    const r = await fetch('/api/new-movie', { method:"POST", body:formData});
+    const obj = await r.json();
+    console.log('new-movie obj=',obj);
     if (obj.error){
         $('#message').html(`Error getting upload URL: ${obj.message}`);
         return;
     }
+    const movie_id = window.movie_id = obj.movie_id;
 
-    // https://stackoverflow.com/questions/13782198/how-to-do-a-put-request-with-curl
-    // https://stackoverflow.com/questions/15234496/upload-directly-to-amazon-s3-using-ajax-returning-error-bucket-post-must-contai/15235866#15235866
+    // The new movie_id came with the presigned post to upload the form data.
     try {
         const pp = obj.presigned_post;
-        console.log("pp:",pp)
         const formData = new FormData();
         for (const field in pp.fields) {
             formData.append(field, pp.fields[field]);
@@ -142,22 +163,38 @@ async function upload_movie_post(movie_title, description, movieFile, showMovie)
             body: formData,
         });
         if (!r.ok) {
-            $('#message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
-            console.log("r.text()=",await r.text());
+            $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             return;
         }
-        showMovie(movie_title,obj.movie_id);
     } catch(e) {
-        console.log('Error uploading movie to S3:',e);
-        $('#message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+        $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
+        return;
     }
+    // Movie was uploaded! Clear the form and show the first frame
+
+    $('#upload_message').text('Movie uploaded.'); // .text() for <div>s.
+    $('#movie-title').val('');                    // .val() for fields
+    $('#movie-description').val('');
+    $('#movie-file').val('');
+
+    const track_movie = `/analyze?movie_id=${movie_id}`;
+    $('#uploaded_movie_title').text(movie_title);        // display the movie title
+    $('#movie_id').text(movie_id);                       // display the movie_id
+    $('#image-preview').attr('src',first_frame_url(movie_id));          // display the first frame
+    $('#track_movie_link').attr('href',track_movie);
+
+    // Clear the movie uploaded
+    $('#upload-preview').show();
+    $('#upload-form').hide();
+    check_upload_metadata(); // disable the button
 }
 
-/* Finally the function that is called when a movie is picked */
-function upload_movie(inp)
+/* Finally the function that is called when the upload_movie button is clicked */
+function upload_movie()
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
+    const movieFile   = $('#movie-file').prop('files')[0];
 
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -169,43 +206,59 @@ function upload_movie(inp)
         return;
     }
 
-    const movieFile = inp.files[0];
     if (movieFile.fileSize > MAX_FILE_UPLOAD) {
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
-    $('#message').html(`Uploading image...`);
+    $('#upload_message').html(`Uploading movie ...`);
 
-    let show_movie = function(movie_title,movie_id) {
-        let first_frame = `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-        $('#message').html(`<p>Movie ${movie_id} successfully uploaded.</p>`+
-                           `<p>First frame:</p> <img src="${first_frame}">`+
-                           `<p><a href='/analyze?movie_id=${movie_id}'>Track uploaded movie '${movie_title}' (${movie_id})</a><br/>`+
-                           `<a href='/list?api_key=${api_key}'>List all movies</a></p>`);
-        // Clear the movie uploaded
-        $('#movie-title').val('');
-        $('#movie-description').val('');
-        $('#movie-file').val('');
-        check_upload_metadata(); // disable the button
-    };
-    upload_movie_post(movie_title, description, movieFile, show_movie);
+    upload_movie_post(movie_title, description, movieFile);
 }
 
+async function get_movie_metadata(movie_id){
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append("movie_id",    movie_id);
+    const r = await fetch('/api/get-movie-metadata', { method:"POST", body:formData});
+    if (r.ok) {
+        return await r.json()['metadata'];
+    }
+}
+
+
+//
+// Ask the server to rotate the movie
+async function rotate_movie() {
+    const movie_id = window.movie_id;
+    console.log("rotate_movie. movie_id=",movie_id);
+    const m0 = await get_movie_metadata(movie_id);
+    console.log("Initial metadata:",m0);
+    let formData = new FormData();
+    formData.append("api_key",     api_key);   // on the upload form
+    formData.append('movie_id', movie_id);
+    formData.append('action', 'rotate90cw');
+    const r = await fetch('/api/edit-movie', { method:"POST", body:formData});
+    console.log("r=",r);
+    if (!r.ok) {
+        console.log('could not rotate. r=',r);
+        return;
+    }
+    const m1 = get_movie_metadata(movie_id);
+    console.log("New metadata:",m1);
+    $('#image-preview').attr('src',first_frame_url(movie_id));          // reload the first frame
+}
+
+function purge_movie() {
+    console.log("purge_movie()");
+}
+
+function upload_ready_function() {
+    check_upload_metadata();    // disable the upload button
+}
 
 ////////////////////////////////////////////////////////////////
 /// page: /list
 
-
-// special buttons
-const PUBLISH_BUTTON='PUBLISH';
-const UNPUBLISH_BUTTON='UNPUBLISH';
-const DELETE_BUTTON='DELETE';
-const UNDELETE_BUTTON='UNDELETE';
-
-// sounds for buttons
-var SOUNDS = [];
-SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
-SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
 
 ////////////////
 // PLAYBACK
@@ -393,7 +446,7 @@ function list_movies_data( movies ) {
                 // for debugging:
                 // return `<td> ${text} </td>`;
                 tid += 1;
-                var r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
+                let r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
                 if ((admin || user_id == m.user_id) && user_demo==0) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> `;
@@ -530,7 +583,7 @@ function list_movies_data( movies ) {
 // It's called from the document ready function and after a movie change request is sent to the server.
 // The functions after this implement the interactivity
 //
-function list_movies() {
+function list_ready_function() {
     console.log("list_movies");
     $('#message').html('Listing movies...');
 
@@ -543,7 +596,7 @@ function list_movies() {
                 $('#message').html('error: '+data.message);
             } else {
                 // Make a map of each movie_id to its position in the array
-                var movie_map = new Array()
+                let movie_map = new Array()
                 for (let movie of data.movies) {
                     movie_map[movie.movie_id] = movie;
                 }
@@ -572,9 +625,9 @@ function list_users_data( users, course_array ) {
     let h = '<table>';
     h += '<tbody>';
     function user_html(user) {
-        var d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
-        var d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
-        var ret = '';
+        let d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
+        let d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
+        let ret = '';
         if (current_course != user.primary_course_id) {
             ret += `<tr><td colspan='4'>&nbsp;</td></tr>\n`;
             ret += `<tr><th colspan='4'>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</th></tr>\n`;
@@ -601,15 +654,14 @@ function list_users()
                 $('#message').html('error: '+data.message);
                 return;
             }
-            var course_array = [];
+            let course_array = [];
             data.courses.forEach( course => (course_array[course.course_id] = course ));
             list_users_data( data.users, course_array);
         });
 }
 
-
 // Wire up whatever happens to be present
-// audit and list are wired with their own ready functions
+// audit, list and upload are wired with their own ready functions
 $( document ).ready( function() {
     $('#load_message').html('');       // remove the load message
     $('#adder_button').click( add_func );
