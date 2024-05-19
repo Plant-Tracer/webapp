@@ -61,51 +61,50 @@ def test_track_point_annotations(new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    (frame_id, frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=0)
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
+    frame_urn = db.create_new_frame(movie_id=movie_id, frame_number=0)
+    db.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    tps = db.get_frame_trackpoints(movie_id=movie_id, frame_number=0)
     assert len(tps)==2
     logging.debug("tps[0]=%s",tps[0])
     logging.debug("tp0=%s",tp0)
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
     assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
+    assert tps[0]['frame_number'] == 0
 
     assert tps[1]['x'] == tp1['x']
     assert tps[1]['y'] == tp1['y']
     assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
+    assert tps[1]['frame_number'] == 0
 
 
     # Try the other interface; this time send two trackpoints through
     engine_name = 'CV2';
     engine_version = '2';
     with boddle(params={'api_key': api_key,
-                        'frame_id': str(frame_id),
-                        'engine_name': engine_name,
-                        'engine_version':engine_version,
+                        'movie_id': movie_id,
+                        'frame_number':1,
                         'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_api.api_put_frame_analysis()
+        bottle_api.api_put_frame_trackpoints()
     # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    tps = db.get_frame_trackpoints(movie_id=movie_id, frame_number=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
     assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
+    assert tps[0]['frame_number'] == 1
 
     assert tps[1]['x'] == tp1['x']
     assert tps[1]['y'] == tp1['y']
     assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
+    assert tps[1]['frame_number'] == 1
 
     assert tps[2]['x'] == tp2['x']
     assert tps[2]['y'] == tp2['y']
     assert tps[2]['label'] == tp2['label']
-    assert tps[2]['frame_id'] == frame_id
+    assert tps[2]['frame_number'] == 1
 
 
 def test_movie_tracking(new_movie):
@@ -120,18 +119,9 @@ def test_movie_tracking(new_movie):
     user_id  = cfg[USER_ID]
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
-    # get frame_id with the api_new_frame
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': '0'}):
-        ret = bottle_api.api_new_frame()
-    logging.debug("new frame ret=%s",ret)
-    assert ret['error']==False
-    frame_id = int(ret['frame_id'])
-
     # save the trackpoints
     with boddle(params={'api_key': api_key,
-                        'frame_id': str(frame_id),
+                        'number': 0,
                         'trackpoints' : json.dumps(tpts),
                         'frame_number': '0'}):
         ret = bottle_api.api_put_frame_analysis()

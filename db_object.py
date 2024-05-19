@@ -4,7 +4,7 @@ S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be a
 DB - db://object_store/name - Local stored in the mysql database
 
 movie_name = {course_id}/{movie_id}.mov
-frame_name = {course_id}/{movie_id}/frame_id:06d}.jpg
+frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
 
 If the environment variable PLANTTRACER_S3_BUCKET is set, use that bucket for writes, otherwise use DB.
 Reads are based on whatever is in the URN.

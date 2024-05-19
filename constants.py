@@ -54,7 +54,6 @@ class E:
     INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
     INVALID_FRAME_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie frame.'}
     INVALID_FRAME_FORMAT = { 'error': True, 'message': 'Format must be "json" or "jpeg".'}
-    INVALID_FRAME_ID = {'error': True, 'message': 'frame_id is invalid or missing'}
     INVALID_MOVIE_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie.'}
     INVALID_MOVIE_FRAME = { 'error': True, 'message': 'Could not retrieve the movie frame.'}
     INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}

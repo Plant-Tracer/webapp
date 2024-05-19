@@ -195,7 +195,7 @@ class TracerController extends MovieController {
             frame_number : this.frame_number,
             trackpoints  : this.json_trackpoints()
         };
-        $.post('/api/put-frame-analysis', put_frame_analysis_params ).done( (data) => {
+        $.post('/api/put-frame-trackpoints', put_frame_trackpoints_params ).done( (data) => {
             if (data.error) {
                 alert("Error saving annotations: "+data.message);
             }

@@ -593,20 +593,6 @@ def can_access_movie(*, user_id, movie_id):
 ################################################################
 ## Movie frames
 
-@log
-def can_access_frame(*, user_id, frame_id=None):
-    """Return if the user is allowed to access a specific frame.
-    """
-    res = dbfile.DBMySQL.csfr(
-            get_dbreader(),
-            """select count(*) from movies WHERE id in (select movie_id from movie_frames where id=%s)
-            AND ( (user_id=%s) OR
-                  (course_id=(select primary_course_id from users where id=%s)) OR
-                  (course_id in (select course_id from admins where user_id=%s)) OR
-                  (%s = 0) )
-            """,
-            (frame_id, user_id, user_id, user_id, user_id))
-    return res[0][0] > 0
 
 @log
 def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
@@ -727,6 +713,8 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
     if trackpoints are provided, replace current trackpoints with those. This is used sometimes
     just to update the frame_data
+
+    returns frame_urn
     """
     args = (movie_id, frame_number )
     a1 = a2 = a3 = ""
@@ -753,26 +741,31 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                         VALUES (%s,%s{a2})
                         ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
                         args)
-    # Get the frame_id
-    frame_id = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s",
-                                   (movie_id, frame_number))[0][0]
-    return (frame_id,frame_urn)
+    return frame_urn
 
-def get_frame(*, frame_id=None, movie_id=None, frame_number=None, get_frame_data=True):
-    """Get a frame by frame_id, or by movie_id and either offset or frame number, Don't log this to prevent blowing up.
+def get_frame_id(*, movie_id, frame_number):
+    """This is only used by the trackpoint update system right now, and that will go away when movie_frames table is removed and the trackpoints table reference the movie_id and frame_number directly."""
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        f"""INSERT INTO movie_frames (movie_id, frame_number)
+                        VALUES (%s, %s)
+                        ON DUPLICATE KEY UPDATE movie_id=movie_id""",
+                        args)
+    return dbfile.DBMySQL.csfr(get_dbreader(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s LIMIT 1" ,(movie_id,frame_number))[0]
+
+
+def get_frame(*, movie_id, frame_number, get_frame_data=True):
+    """Get a frame by movie_id and either frame number.
+    Don't log this to prevent blowing up.
     Can also get trackpoints and annotations.
     :param: movie_id - the movie_id wanted
-    :param: (frame_id, frame_number) - provide one of these. Specifies which frame to get
+    :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns a dictionary with the frame info
     """
-    if frame_id is not None:
-        where = 'WHERE id = %s '
-        args  = [frame_id]
-    else:
-        where = "WHERE movie_id=%s AND frame_number=%s"
-        args = [movie_id, frame_number]
-    cmd = f"""SELECT id as frame_id, movie_id, frame_number, frame_data, frame_urn FROM movie_frames {where} LIMIT 1"""
-    rows = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    args = [movie_id, frame_number]
+    cmd =
+    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                               f"""SELECT movie_id, frame_number, frame_data, frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
+                               [movie_id, frame_number], asDicts=True)
     if len(rows)!=1:
         return None
     row = rows[0]
@@ -784,21 +777,8 @@ def get_frame(*, frame_id=None, movie_id=None, frame_number=None, get_frame_data
 ################################################################
 ## Trackpoints
 
-def get_frame_trackpoints(*, frame_id):
-    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    No join required
-    """
-    return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               """
-                               SELECT id as movie_frame_trackpoints_id,
-                                      frame_id,x,y,label FROM movie_frame_trackpoints
-                               WHERE frame_id=%s""",
-                               (frame_id,),
-                               asDicts=True)
-
 def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    Requires a join becuase we know the movie_id but not the frame_id.
     :param: frame_start, frame_count - optional
     """
     assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
@@ -819,26 +799,17 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
                                """,
                                args, asDicts=True)
 
-def get_movie_frame_metadata(*, movie_id, frame_start=None, frame_count=None):
-    """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_id, frame_number, frame_urn
+def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
+    """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_number, frame_urn
     :param: frame_start, frame_count -
     """
-    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
-
-    if frame_start is None:
-        args = [movie_id]
-        extra = ''
-    else:
-        args = [movie_id, frame_start, frame_start+frame_count]
-        extra = ' and frame_number >= %s and frame_number < %s '
-
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                f"""
-                               SELECT id as frame_id, movie_id, frame_number, created_at, mtime, frame_urn
+                               SELECT movie_id, frame_number, created_at, mtime, frame_urn
                                FROM movie_frames
-                               WHERE movie_id=%s {extra}
+                               WHERE movie_id=%s and frame_number >= %s and frame_number < %s
                                """,
-                               args, asDicts=True)
+                                [movie_id, frame_start, frame_start+frame_count], asDicts=True)
 
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
@@ -850,45 +821,25 @@ def last_tracked_frame(*, movie_id):
                                """,
                                (movie_id,))[0][0]
 
-def put_frame_trackpoints(*, frame_id:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[dict]):
     """
-    :frame_id: the frame to replace. If the frame has existing trackpoints, they are overwritten
+    :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
+    frame_id = get_frame_id(movie_id=movie_id, frame_number = frame_number)
+    dbfile.DBMySQL.csfr(get_dbwriter(),
+                        """DELETE FROM movie_frame_trackpoints WHERE frame_id=%s""",(frame_id,))
     vals = []
     for tp in trackpoints:
         if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
             raise KeyError(f'trackpoints element {tp} missing x, y or label')
         vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
-    dbfile.DBMySQL.csfr(get_dbwriter(),"DELETE FROM movie_frame_trackpoints where frame_id=%s",(frame_id,))
     if vals:
         args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
         cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
         logging.debug("cmd=%s vals=%s",cmd,vals)
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
-
-################################################################
-## Annotations (not currently used)
-
-def get_frame_annotations(*, frame_id):
-    """Returns a list of dictionaries where each dictonary represents a record.
-    Within that record, 'annotations' is stored in the database as a JSON string,
-    but we turn it into a dictionary on return, so that we don't have JSON encapsulating JSON when we send the data to the client.
-    """
-
-    ret = dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movie_frame_analysis.id AS movie_frame_analysis_id,
-                                         frame_id,engine_id,annotations,engines.name as engine_name,
-                                         engines.version AS engine_version FROM movie_frame_analysis
-                               LEFT JOIN engines ON engine_id=engines.id
-                               WHERE frame_id=%s ORDER BY engines.name,engines.version""",
-                               (frame_id,),
-                               asDicts=True)
-    # Now go through every annotations cell and decode the object
-    for r in ret:
-        r['annotations'] = json.loads(r['annotations'])
-    return ret
 
 def encode_json(d):
     """Given json data, encode it as base64 and return as an SQL
@@ -897,47 +848,6 @@ def encode_json(d):
     djson = json.dumps(d)
     dlen  = len(djson)
     return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
-
-def put_frame_annotations(*,
-                       frame_id:int,
-                       annotations:Optional[dict | list],
-                       engine_id:Optional[int] =None,
-                       engine_name:Optional[str]=None,
-                       engine_version:Optional[str]=None, ):
-    """
-    :param: frame_id - integer with frame id
-    :param: annotations - a dictionary that will be escaped
-    :param: engine_id - engine_id to use
-    :param: engine_name - string of engine to use; create the engine_id if it doesn't exist
-    :param: engine_version - string of version to use.
-    """
-
-    if (engine_id is None) and ((engine_name is None) or (engine_version is None)):
-        raise RuntimeError("if engine_id is None, then both engine_name and engine_version must be provided")
-    if (engine_name is None) and (engine_id is None):
-        raise RuntimeError("if engine_name is None, then engine_id must be provided.")
-    if (engine_id is not None) and (engine_name is not None):
-        raise RuntimeError("Both engine_name and engine_id may not be provided.")
-
-    # Get the engine_id if only engine_name is provided
-    if engine_id is None:
-        engine_id = get_analysis_engine_id(engine_name=engine_name, engine_version=engine_version)
-
-    if (not isinstance(annotations,dict)) and (not isinstance(annotations,list)):
-        raise ValueError(f"annotations is type {type(annotations)}, should be type dict or list")
-
-    ea = encode_json(annotations)
-
-    #
-    # We use base64 encoding to get by the quoting problems.
-    # This means we need a format string, rather than a prepared statement.
-    # The int() and the ea() provide sufficient protection.
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        f"""INSERT INTO movie_frame_analysis
-                        (frame_id, engine_id, annotations)
-                        VALUES ({int(frame_id)},{int(engine_id)},{ea})
-                        ON DUPLICATE KEY UPDATE
-                        annotations={ea} """)
 
 ################################################################
 ## Analysis (not durrently used)
@@ -953,89 +863,6 @@ def get_analysis_engine_id(*, engine_name, engine_version):
                                """SELECT id from engines
                                WHERE `name`=%s and version=%s""",
                                (engine_name,engine_version))[0][0]
-
-def delete_analysis_engine_id(*, engine_id):
-    """Deletes an analysis engine_id. This fails if the engine_id is in use"""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        "DELETE from engines where id=%s",(engine_id,))
-
-def delete_frame_analysis(*, frame_id=None, movie_id=None, engine_id=None):
-    """Deletes all annotations associated with frame_id or engine_id. If frame_id is provided, also delete all trackpoints"""
-    if (frame_id is None) and (movie_id is None) and (engine_id is None):
-        raise RuntimeError("frame_id, movie_id or engine_id must not be None")
-
-    if (movie_id is None):
-        if (frame_id is None) or (engine_id is None):
-            raise RuntimeError("if movie_id is set, frame_id and engine_id must be None")
-
-    cmd = "DELETE FROM movie_frame_analysis WHERE "
-    args = []
-    if frame_id:
-        cmd += "frame_id=%s "
-        args.append(frame_id)
-    if frame_id and engine_id:
-        cmd += " AND "
-    if engine_id:
-        cmd += " engine_id=%s"
-        args.append(engine_id)
-    if movie_id:
-        cmd += " frame_id in (select id from movie_frames where movie_id=%s) "
-        args.append(movie_id)
-    dbfile.DBMySQL.csfr(get_dbwriter(),cmd, args)
-
-    if frame_id is not None:
-        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id=%s"
-        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [frame_id,])
-
-    if movie_id is not None:
-        cmd = "DELETE FROM movie_frame_trackpoints WHERE frame_id in (select id from movie_frames where movie_id=%s)"
-        dbfile.DBMySQL.csfr(get_dbwriter(), cmd, [movie_id,])
-
-
-def delete_analysis_engine(*, engine_name, version=None, recursive=None):
-    """Delete the analysis engine.
-    :param: engine_name - the engine to delete
-    :param: version - the version number to delete. If None, delete all versions.
-    :param: recursive - if True, delete all of the data that is tagged with this engine
-    """
-    args = [engine_name]
-    where = "name=%s "
-    if version:
-        where += "AND version=%s "
-        args.append(version)
-    if recursive:
-        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_analysis where engine_id in (SELECT id from engines where {where})",args)
-        dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from movie_frame_analysis where engine_id in (SELECT id from engines where {where})",args)
-
-    dbfile.DBMySQL.csfr(get_dbwriter(), f"delete from engines where {where}",args)
-
-
-
-@log
-def create_new_movie_analysis(*, movie_id, engine_id, annotations):
-    if movie_id:
-        movie_analysis_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                                """INSERT INTO movie_analysis (movie_id, engine_id, annotations) VALUES (%s,%s,%s)""",
-                                                (movie_id, engine_id, annotations))
-        return {'movie_analysis_id': movie_analysis_id}
-    else:
-        return {'movie_analysis_id': None}
-
-@log
-def delete_movie_analysis(*,movie_analysis_id):
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE id=%s", ([movie_analysis_id]))
-
-@log
-def purge_engine(*,engine_id):
-    assert engine_id is not None
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_analysis WHERE engine_id=%s", ([engine_id]))
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_analysis WHERE engine_id=%s", ([engine_id]))
-    delete_engine(engine_id=engine_id)
-
-@log
-def delete_engine(*,engine_id):
-    assert engine_id is not None
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from engines WHERE id=%s", ([engine_id]))
 
 ################################################################
 
