@@ -313,16 +313,20 @@ def dump(config,dumpdir):
         raise FileExistsError(f"{dumpdir} exists")
     os.mkdir(dumpdir)
     dbreader = dbfile.DBMySQLAuth.FromConfig(config['dbreader'])
-    print("dbreader=",dbreader)
     movies = dbfile.DBMySQL.csfr(dbreader,
-                                 """select *,movies.id as movie_id from movies left join users on movies.user_id=users.id order by movies.id LIMIT 5""",asDicts=True)
+                                 """select *,movies.id as movie_id from movies
+                                 left join users on movies.user_id=users.id order by movies.id """,asDicts=True)
     for movie in movies:
         movie_id = movie['movie_id']
-        print(movie_id)
+        movie_data = db.get_movie_data(movie_id=movie_id)
+        if movie_data is None:
+            print("no data:",movie_id)
+            continue
+        print("saving ",movie_id)
         with open(os.path.join(dumpdir,f"movie_{movie_id}.json"),"w") as f:
             json.dump(movie, f, default=str)
         with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
-            f.write(db.get_movie_data(movie_id=movie_id))
+            f.write(movie_data)
 
 
 
