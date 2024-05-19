@@ -5,6 +5,7 @@ This provides for all authentication in the planttracer system:
 * Database authentication
 * Mailer authentication
 """
+import os
 import functools
 import configparser
 import logging
@@ -14,6 +15,8 @@ from bottle import request
 
 import paths
 from lib.ctools import dbfile
+
+from constants import C
 
 API_KEY_COOKIE_BASE = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
@@ -25,12 +28,13 @@ SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
 
 
 def credentials_file():
-    if paths.FORCE_CREDENTIALS_FILE is not None:
-        return paths.FORCE_CREDENTIALS_FILE
-    if paths.running_in_aws_lambda():
-        return paths.AWS_CREDENTIALS_FILE
-    else:
-        return paths.CREDENTIALS_FILE
+    try:
+        name = os.environ[ C.PLANTTRACER_CREDENTIALS ]
+    except KeyError as e:
+        raise f"Environment variable {C.PLANTTRACER_CREDENTIALS} must be defined" from e
+    if not os.path.exists(name):
+        raise FileNotFoundError(name)
+    return name
 
 def smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.

@@ -16,12 +16,6 @@ import ctools.dbfile as dbfile
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
 
-def test_credentials_file():
-    os.environ[ paths.AWS_LAMBDA_ENVIRON ] = 'YES'
-    assert credentials_file() == paths.AWS_CREDENTIALS_FILE
-    del os.environ[ paths.AWS_LAMBDA_ENVIRON ]
-    assert credentials_file() == paths.CREDENTIALS_FILE
-
 def test_dbreader():
     dbreader = get_dbreader()
     assert dbreader is not None

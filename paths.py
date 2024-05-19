@@ -10,6 +10,8 @@ import shutil
 import bottle
 from bottle import jinja2_view
 
+from constants import C
+
 HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
@@ -24,14 +26,8 @@ SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
 SCHEMA_TEMPLATE  = join(ROOT_DIR, 'etc', 'schema_{schema}.sql')
 SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
 SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
-FORCE_CREDENTIALS_FILE = None   # if set, this must be used
-CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials.ini')
-AWS_CREDENTIALS_FILE = join(ROOT_DIR, 'etc', 'credentials-aws.ini')
 
-LOCALMAIL_CONFIG_FNAME  = join( ROOT_DIR, 'tests', "localmail_config.ini")
-PRODUCTION_CONFIG_FNAME = join( ROOT_DIR, 'etc', 'credentials.ini')
 AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
-AWS_LAMBDA_ENVIRON = 'AWS_LAMBDA'
 
 # used by test program:
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
@@ -43,7 +39,7 @@ bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
 view = functools.partial(jinja2_view)
 
 def running_in_aws_lambda():
-    return AWS_LAMBDA_ENVIRON in os.environ
+    return C.AWS_LAMBDA_ENVIRON in os.environ
 
 def ffmpeg_path():
     if running_in_aws_lambda():

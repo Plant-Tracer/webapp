@@ -510,6 +510,7 @@ def get_movie_data(*, movie_id:int):
     If the data is stored in the movie_data, return that.
     If a sha256 is stored, redirect through the objects table.
     """
+    print("dbreader=",get_dbreader())
     if movie_id<0:
         raise InvalidMovie_Id(movie_id)
     try:
@@ -526,7 +527,7 @@ def get_movie_data(*, movie_id:int):
                                WHERE movies.id=%s
                                LIMIT 1""",
                                   (movie_id,),
-                                  asDicts=True)[0]
+                                  asDicts=True,debug=True)[0]
     except IndexError as e:
         raise InvalidMovie_Id(movie_id) from e
 
