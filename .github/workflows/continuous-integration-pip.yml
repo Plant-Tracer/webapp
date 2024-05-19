@@ -23,7 +23,6 @@ jobs:
           # See: https://hub.docker.com/_/mysql
           MYSQL_DATABASE: testdb
           MYSQL_ROOT_PASSWORD: testrootpass
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         ports:
           # Opens port 3306 on service container and host
           # https://docs.github.com/en/actions/using-containerized-services/about-service-containers
@@ -94,15 +93,20 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           MYSQL_ROOT_PASSWORD: testrootpass
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
 
       - name: Validate app framework
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make pytest-app-framework
 
       - name: Run coverage test
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
