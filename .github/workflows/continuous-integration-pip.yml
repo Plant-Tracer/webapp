@@ -121,10 +121,14 @@ jobs:
           files: ./coverage.xml
 
       - name: Show files in directory
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make coverage
           ls -l
 
       - name: Run JavaScript tests and coverage
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make jscoverage
