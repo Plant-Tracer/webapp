@@ -372,9 +372,9 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     config = configparser.ConfigParser()
-    config.read(args.rootconfig)
 
     if args.rootconfig:
+        config.read(args.rootconfig)
         os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
         ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
 
