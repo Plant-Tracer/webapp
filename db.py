@@ -175,7 +175,7 @@ def validate_api_key(api_key):
                               where api_key=%s and api_keys.enabled=1 and users.enabled=1 LIMIT 1""",
                               (api_key, ), asDicts=True)
 
-    logging.debug("validate_api_key(%s)=%s",api_key,ret)
+    logging.debug("validate_api_key(%s)=%s dbreader=%s",api_key,ret,get_dbreader())
     if ret:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """UPDATE api_keys
@@ -555,6 +555,7 @@ def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
                     A.date_uploaded AS date_uploaded, A.mtime AS mtime, A.version AS version,
                     A.fps as fps, A.width as width, A.height as height,
                     A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
+                    A.movie_data_urn as movie_data_urn,
                     B.id AS tracked_movie_id
              FROM movies A
              LEFT JOIN movies B on A.id=B.orig_movie
@@ -705,6 +706,10 @@ def delete_movie(*,movie_id, delete=1):
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['course_id']
+
+@functools.lru_cache(maxsize=128)
+def movie_data_urn_for_movie_id(movie_id):
+    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
 
 @log
 def movie_frames_info(*,movie_id):
@@ -1265,7 +1270,7 @@ class Movie():
     Not used for creating movies, but can be used for updating them
     More intelligence will move into this class over time.
     """
-    __slots__ = ['movie_id', 'urn', 'sha256', 'mime_type']
+    __slots__ = ['movie_id', 'sha256', 'mime_type']
     def __init__(self, movie_id, *, user_id=None):
         """
         :param movie_id: - the id of the movie
@@ -1273,20 +1278,23 @@ class Movie():
         """
         assert isinstance(movie_id,int)
         assert isinstance(user_id,(int,type(None)))
-        self.movie_id = movie_id
-        self.urn = None
+        self.movie_id  = movie_id
         self.mime_type = MIME.MP4
         self.sha256 = None
         if (user_id is not None) and not can_access_movie(user_id=user_id, movie_id=movie_id):
             raise UnauthorizedUser(f"user_id={user_id} movie_id={movie_id}")
 
     def __repr__(self):
-        return f"<Movie {self.movie_id} urn={self.urn} sha256={self.sha256}>"
+        return f"<Movie {self.movie_id} urn={self.movie_data_urn} sha256={self.sha256}>"
 
     @property
     def data(self):
         """Return the object data"""
         return get_movie_data(movie_id=self.movie_id)
+
+    @property
+    def movie_data_urn(self):
+        return movie_data_urn_for_movie_id(self.movie_id)
 
     @data.setter
     def data(self, movie_data):
@@ -1295,7 +1303,7 @@ class Movie():
     @property
     def url(self):
         """Return a URL for accessing the data. This is a self-signed URL"""
-        return db_object.make_signed_url(urn=self.urn)
+        return db_object.make_signed_url(urn=self.movie_data_urn)
 
     @property
     def metadata(self):
