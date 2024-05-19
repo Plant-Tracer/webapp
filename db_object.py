@@ -20,6 +20,7 @@ import urllib.parse
 import hashlib
 import requests
 import boto3
+from botocore.exceptions import ClientError
 import bottle
 import uuid
 
@@ -165,7 +166,11 @@ def read_object(urn):
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
         # We are getting the object, so we do not need a presigned url
-        return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
+        try:
+            return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
+        except ClientError as ex:
+            logging.error("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            return None
     elif o.scheme in ['http','https']:
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content

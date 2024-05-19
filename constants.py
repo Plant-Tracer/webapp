@@ -12,8 +12,9 @@ GET_POST = [GET,POST]
 
 class C:
     """Constants"""
+    AWS_LAMBDA_ENVIRON = 'AWS_LAMBDA'
     TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
-    DBCREDENTIALS_PATH = 'DBCREDENTIALS_PATH'
+    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS'
     MAX_FILE_UPLOAD = 1024*1024*64
     MAX_FRAMES = 1e6            # max possible frames in a movie
     NOTIFY_UPDATE_INTERVAL = 5.0

@@ -19,7 +19,7 @@ from pronounceable import generate_word
 
 import paths
 
-#from constants import C
+from constants import C
 
 # pylint: disable=no-member
 
@@ -298,7 +298,7 @@ def schema_upgrade( ath, dbname ):
             return int(cursor.fetchone()[0])
 
         cv = current_version()
-        logging.info("current database version: %s  max version: %s", cv , max_version)
+        logging.debug("current database version: %s  max version: %s", cv , max_version)
 
         for upgrade in range(cv+1, max_version+1):
             logging.info("Upgrading from version %s to %s",cv, upgrade)
@@ -308,12 +308,34 @@ def schema_upgrade( ath, dbname ):
             logging.info("Current version now %s",current_version())
             assert cv == current_version()
 
+def dump(config,dumpdir):
+    if os.path.exists(dumpdir):
+        raise FileExistsError(f"{dumpdir} exists")
+    os.mkdir(dumpdir)
+    dbreader = dbfile.DBMySQLAuth.FromConfig(config['dbreader'])
+    movies = dbfile.DBMySQL.csfr(dbreader,
+                                 """select *,movies.id as movie_id from movies
+                                 left join users on movies.user_id=users.id order by movies.id """,asDicts=True)
+    for movie in movies:
+        movie_id = movie['movie_id']
+        movie_data = db.get_movie_data(movie_id=movie_id)
+        if movie_data is None:
+            print("no data:",movie_id)
+            continue
+        print("saving ",movie_id)
+        with open(os.path.join(dumpdir,f"movie_{movie_id}.json"),"w") as f:
+            json.dump(movie, f, default=str)
+        with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
+            f.write(movie_data)
+
+
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Database Maintenance Program",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
-
     required.add_argument(
         "--rootconfig",
         help='specify config file with MySQL database root credentials in [client] section. '
@@ -343,10 +365,18 @@ if __name__ == "__main__":
     parser.add_argument("--report",help="print a report of the database",action='store_true')
     parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
     parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
+    parser.add_argument("--dump", help="backup all objects as JSON files and movie files to new directory called DUMP.  ")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
+
+    config = configparser.ConfigParser()
+
+    if args.rootconfig:
+        config.read(args.rootconfig)
+        os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
+        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
 
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
@@ -371,7 +401,6 @@ if __name__ == "__main__":
             print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
             sys.exit(1)
 
-        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
@@ -455,3 +484,7 @@ if __name__ == "__main__":
     if args.freshen:
         freshen()
         sys.exit(0)
+
+    if args.dump:
+        dump(config,args.dump)
+        sys.exit()

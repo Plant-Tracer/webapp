@@ -61,6 +61,7 @@ import db
 import db_object
 import auth
 
+import paths
 from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST
 
@@ -130,12 +131,12 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
     :param: lookup - if true, We weren't being called in an error condition, so we can lookup the api_key in the URL
     """
-    logging.debug("page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
+    logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     o = urlparse(request.url)
     logging.debug("o=%s",o)
     if lookup:
         api_key = auth.get_user_api_key()
-        logging.info("auth.get_user_api_key=%s",api_key)
+        logging.debug("auth.get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
             raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
@@ -206,8 +207,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
+    logging.debug("func_root")
     ret = page_dict()
-    logging.info("func_root")
     if DEMO_MODE:
         demo_users = db.list_demo_users()
         demo_api_key = False
@@ -239,6 +240,7 @@ def func_audit():
 @view('list.html')
 def func_list():
     """/list - list movies and edit them and user info"""
+    logging.debug("/list")
     return page_dict('List Movies', require_auth=True)
 
 @bottle.route('/analyze', method=GET)
@@ -343,16 +345,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument('--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
+    parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
+    if args.info:
+        for name in logging.root.manager.loggerDict:
+            print("Logger: ",name)
+        exit(0)
+
+    if args.loglevel=='DEBUG':
+        # even though we've set the main loglevel to be debug, set the other loggers to a different log level
+        for name in logging.root.manager.loggerDict:
+            if name.startswith('boto'):
+                logging.getLogger(name).setLevel(logging.INFO)
+
+
     if args.dbcredentials:
-        os.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+        paths.FORCE_CREDENTIALS_FILE = args.dbcredentials
+
 
     if args.storelocal:
         db_object.STORE_LOCAL=True

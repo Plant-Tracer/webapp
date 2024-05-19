@@ -104,7 +104,7 @@ def get_user_id(allow_demo=True):
         logging.info("demo account blocks requeted action")
         raise bottle.HTTPResponse(
             body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
-            status=503, headers={ 'Location': '/'})
+            status=404)
     return userdict['id']
 
 
@@ -117,6 +117,7 @@ def get_user_dict():
     """Returns the user_id of the currently logged in user, or throws a response"""
     logging.debug("get_user_dict(). request.url=%s",request.url)
     api_key = auth.get_user_api_key()
+    logging.debug("get_user_dict(). api_key=%s",api_key)
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
         if bottle.request.fullpath.startswith('/api/'):
@@ -127,15 +128,9 @@ def get_user_dict():
         raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
-                     api_key,request.environ.get('REMOTE_ADDR'),request.url)
+        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.environ.get('REMOTE_ADDR'),request.url)
         auth.clear_cookie()
-        # This will produce a "Session expired" message
-        if request.url.endswith("/error"):
-            logging.debug("/error so error 301 with /logout")
-            raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/logout'})
-        logging.debug("no /error so error 301 with /logout")
-        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/error'})
+        raise bottle.HTTPResponse(body=f'Error 404: api_key {api_key} is invalid. ', status=404)
     return userdict
 
 ################################################################
@@ -369,11 +364,13 @@ def api_get_movie_data():
     :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
+    logging.debug("api_get_movie_data")
     try:
         movie_id = get_int('movie_id')
         movie = db.Movie(movie_id, user_id=get_user_id())
-    except db.UnauthorizedUser as e:
-        raise bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404) from e
+    except (db.UnauthorizedUser,bottle.HTTPResponse) as e:
+        logging.debug("user authentication error=%s",e)
+        return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=403)
 
     # If we have a movie, return it
     if movie.data is not None:
@@ -381,11 +378,14 @@ def api_get_movie_data():
         return movie.data
 
     # Looks like we need a url
-    url = movie.url()
+    if movie.url is None:
+        logging.debug("no movie data for movie_id %s",movie_id)
+        return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404)
+
     if get_bool('redirect_inline'):
         return "#REDIRECT " + url
-    logging.info("Redirecting movie_id=%s to %s",movie.movie_id, url)
-    return bottle.redirect(url)
+    logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
+    return bottle.redirect(movie.url)
 
 def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
     """Update the movie metadata."""
@@ -974,6 +974,7 @@ def api_ver():
 ## Demo and debug
 ##
 @api.route('/add', method=GET_POST)
+#@api.route('/get-movie-data', method=GET_POST)
 def api_add():
     a = get_float('a')
     b = get_float('b')
