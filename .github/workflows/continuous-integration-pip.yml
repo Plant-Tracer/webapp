@@ -105,11 +105,10 @@ jobs:
           make pytest-app-framework
 
       - name: Run coverage test
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
 
