@@ -31,7 +31,7 @@ def credentials_file():
     try:
         name = os.environ[ C.PLANTTRACER_CREDENTIALS ]
     except KeyError as e:
-        raise f"Environment variable {C.PLANTTRACER_CREDENTIALS} must be defined" from e
+        raise RuntimeError(f"Environment variable {C.PLANTTRACER_CREDENTIALS} must be defined") from e
     if not os.path.exists(name):
         raise FileNotFoundError(name)
     return name
