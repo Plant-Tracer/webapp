@@ -7,14 +7,14 @@ This provides for all authentication in the planttracer system:
 """
 import functools
 import configparser
-#import logging
+import logging
 
 import bottle
 from bottle import request
 
 import paths
-
 from lib.ctools import dbfile
+
 API_KEY_COOKIE_BASE = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
 SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
@@ -25,6 +25,8 @@ SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
 
 
 def credentials_file():
+    if paths.FORCE_CREDENTIALS_FILE is not None:
+        return paths.FORCE_CREDENTIALS_FILE
     if paths.running_in_aws_lambda():
         return paths.AWS_CREDENTIALS_FILE
     else:
@@ -59,6 +61,7 @@ def get_dbwriter():
     1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
     2 - the [dbwriter] section of the file etc/credentials.ini
     """
+    logging.debug("get_dbwriter. credentials_file=%s",credentials_file())
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
 
 
@@ -110,11 +113,3 @@ def get_user_ipaddr():
 def get_param(k, default=None):
     """Get param v from the reqeust"""
     return request.query.get(k, request.forms.get(k, default))
-
-#def get_movie_id():
-#    movie_id = get_param('movie_id', None)
-#    if movie_id is not None:
-#        return movie_id
-#    raise bottle.HTTPResponse(body=json.dumps(INVALID_MOVIE_ID),
-#                              status=200,
-#                              headers={ 'Content-type': 'application/json'})

@@ -138,17 +138,21 @@ debug:
 	make debug-local
 
 DEBUG:=$(PYTHON) bottle_app.py --loglevel DEBUG
-debug-multi:
-	@echo run bottle locally in debug mode multi-threaded
-	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
-
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
 	$(DEBUG)  --dbcredentials etc/credentials.ini
 
+debug-multi:
+	@echo run bottle locally in debug mode multi-threaded
+	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
+
 debug-local:
-	@echo run bottle locally in debug mode
+	@echo run bottle locally in debug mode, storing new data in database
 	$(DEBUG) --storelocal --dbcredentials etc/credentials-local.ini
+
+debug-dev:
+	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
+	$(DEBUG) --dbcredentials etc/credentials-dev.ini
 
 freeze:
 	$(PYTHON) -m pip freeze > requirements.txt

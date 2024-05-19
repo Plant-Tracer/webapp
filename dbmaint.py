@@ -298,7 +298,7 @@ def schema_upgrade( ath, dbname ):
             return int(cursor.fetchone()[0])
 
         cv = current_version()
-        logging.info("current database version: %s  max version: %s", cv , max_version)
+        logging.debug("current database version: %s  max version: %s", cv , max_version)
 
         for upgrade in range(cv+1, max_version+1):
             logging.info("Upgrading from version %s to %s",cv, upgrade)
