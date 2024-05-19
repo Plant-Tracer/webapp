@@ -110,4 +110,4 @@ wsproto==1.2.0
 zappa==0.58.0
 zc.lockfile==3.0.post1
 zope.interface==6.1
-furo
+myst-parser
