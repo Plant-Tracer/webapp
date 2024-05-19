@@ -371,12 +371,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
-
     config = configparser.ConfigParser()
     config.read(args.rootconfig)
 
     if args.rootconfig:
+        os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
         ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
 
     if args.mailer_config:
