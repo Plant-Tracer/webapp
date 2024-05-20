@@ -229,7 +229,7 @@ def delete_object(urn):
         raise ValueError(f"Cannot delete object urn={urn}")
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
     if s3_bucket is None:
         raise RuntimeError(C.PLANTTRACER_S3_BUCKET + " is not set")
