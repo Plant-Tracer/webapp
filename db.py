@@ -695,15 +695,6 @@ def course_id_for_movie_id(movie_id):
 def movie_data_urn_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
 
-@log
-def movie_frames_info(*,movie_id):
-    """Gets information about movie frames"""
-    ret = {}
-    ret['count'] = dbfile.DBMySQL.csfr(
-        get_dbreader(), "SELECT count(*) from movie_frames where movie_id=%s", (movie_id,))[0][0]
-    return ret
-
-
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
 def create_new_frame(*, movie_id, frame_number, frame_data=None):
@@ -836,39 +827,15 @@ def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[di
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
 
-def encode_json(d):
-    """Given json data, encode it as base64 and return as an SQL
-    statement that processes it. We use this as a way of quoting a
-    JSON object that is then inserted into the database. (Other approaches for quoting failed.)"""
-    djson = json.dumps(d)
-    dlen  = len(djson)
-    return "cast(from_base64('" + base64.b64encode( json.dumps(d).encode() ).decode() + f"') as char({dlen+1000}))"
-
-################################################################
-## Analysis (not durrently used)
-
-def get_analysis_engine_id(*, engine_name, engine_version):
-    """Create an analysis engine if it does not exist, and return the engine_id"""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """INSERT INTO engines
-                        (`name`,version) VALUES (%s,%s)
-                        ON DUPLICATE KEY UPDATE name=%s""",
-                        (engine_name,engine_version,engine_name))
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT id from engines
-                               WHERE `name`=%s and version=%s""",
-                               (engine_name,engine_version))[0][0]
-
 ################################################################
 
 # Don't log this; we run list_movies every time the page is refreshed
-def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
+def list_movies(*,user_id, movie_id=None, orig_movie=None):
     """Return a list of movies that the user is allowed to access.
     This should be updated so that we can request only a specific movie
     :param: user_id - only list movies visible to user_id (0 for all movies)
     :param: movie_id - if provided, only use this movie
     :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
-    :param: no_frames - If true, only list movies that have no frames in movie_frames
     """
     cmd = """SELECT users.name as name,users.email as email,users.primary_course_id as primary_course_id,
           movies.id as movie_id,title,description,movies.created_at as created_at,
@@ -892,8 +859,6 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None, no_frames=False):
         cmd += " AND movies.orig_movie=%s "
         args.append(orig_movie)
 
-    if no_frames:
-        cmd += " AND (movies.id not in (select distinct movie_id from movie_frames)) "
     cmd += " ORDER BY movies.id "
 
     res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
