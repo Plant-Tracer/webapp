@@ -43,7 +43,6 @@ USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
-ENGINE_ID = 'engine_id'
 DBREADER = 'dbreader'
 DBWRITER = 'dbwriter'
 TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")

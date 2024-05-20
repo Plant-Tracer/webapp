@@ -13,7 +13,7 @@ import logging
 import bottle
 from bottle import request
 
-import paths
+#import paths
 from lib.ctools import dbfile
 
 from constants import C
@@ -49,6 +49,10 @@ def smtp_config():
     for key in SMTP_ATTRIBS:
         assert key in cp['smtp']
     return section
+
+def http404(msg=''):
+    return bottle.HTTPResponse(body='Authentication error 404 '+msg,
+                               status=404)
 
 @functools.cache
 def get_dbreader():

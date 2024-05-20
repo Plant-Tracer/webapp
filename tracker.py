@@ -14,7 +14,6 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
-from constants import Engines
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -200,11 +199,10 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
 
 
 #pylint: disable=too-many-arguments
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, frame_start=0, callback=None):
+def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
-    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
     :param: trackpoints - a list all current trackpoints.
                         - Each trackpoint is dictionary {'x', 'y', 'label', 'frame_number'} to track.
@@ -217,9 +215,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
          - Frame0 is never tracked. It's trackpoints are the provided trackpoints.
     """
-    if engine_name!=Engines.CV2:
-        raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
-
     cap = cv2.VideoCapture(moviefile_input)
     frame_this = None
 
@@ -274,7 +269,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--engine',default='CV2')
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
@@ -295,8 +289,7 @@ if __name__ == "__main__":
         trackpoints.extend(frame_trackpoints)
 
 
-    track_movie(engine_name=args.engine,
-                moviefile_input=args.moviefile,
+    track_movie(moviefile_input=args.moviefile,
                 input_trackpoints=input_trackpoints,
                 callback=callback )
     # Now render the movie

@@ -30,10 +30,8 @@ def test_sha256():
     assert db_object.sha256( DATA ) == DATA_SHA256
 
 def test_object_name():
-    assert db_object.object_name(course_id=1, movie_id=2, ext='.mov', data=DATA,
-                                 data_sha256=DATA_SHA256).endswith(".mov")
-    assert db_object.object_name(course_id=1, movie_id=2,
-                                 frame_number=3, ext='.jpeg').endswith(".jpeg")
+    assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
+    assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
 class SaveEnviron:
     def __init__(self,name):
@@ -48,14 +46,14 @@ class SaveEnviron:
 
 def test_make_urn():
     with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=2, ext='.txt', data=DATA, data_sha256=DATA_SHA256)
+        name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
         a = db_object.make_urn(object_name=name, scheme=None)
         assert a.endswith(".txt")
 
 def test_write_read_delete_object():
     logging.debug("dbwriter: %s",get_dbwriter())
     with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=3, ext='.txt', data=DATA, data_sha256=DATA_SHA256)
+        name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
         urn  = db_object.make_urn(object_name=name, scheme=None)
         db_object.write_object(urn=urn, object_data=DATA)
 
