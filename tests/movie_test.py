@@ -107,11 +107,16 @@ def new_movie(new_user):
             logging.info("uploaded to %s r=%s",url, r)
             assert r.ok
         else:
+            # Make sure that it requiest a file parameter is set
+            with boddle(params=fields):
+                from bottle import request
+                res = bottle_api.api_upload_movie()
+                assert res['error']==True
+
             with boddle(params=fields):
                 from bottle import request
                 request.files['file'] = bottle.FileUpload(f, 'file', 'file')
                 res = bottle_api.api_upload_movie()
-                logging.debug("res=%s",res)
                 assert res['error']==False
 
     # Make sure data got there

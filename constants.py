@@ -32,12 +32,6 @@ class C:
     SCHEME_DB = 'db'
 
 
-class Engines:
-    """Engines"""
-    NULL = "NULL"               # points are copied from input to output
-    MANUAL = "MANUAL"           # analysis entered by a person
-    CV2 = "CV2"                 # first CV2 algorithm
-
 class MIME:
     """MIME Types"""
     JPEG = 'image/jpeg'
@@ -48,6 +42,7 @@ class E:
     def __init__(self):
         raise RuntimeError("Do not instantiate this class. It exists solely for its static constants.")
     CALC_RESULTS_PARAM_INVALID = { 'error': True, 'message': 'All coordinates must be provided (not none) and time elapsed must be greater than zero.'}
+    NO_FILE_PARAMETER = {'error':True, 'message':'upload request a file parameter named "file".'}
     INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
     INVALID_COURSE_ACCESS = { 'error':True, 'message':'User is not authorized to manipulate course.'}
     INVALID_COURSE_KEY = {'error': True, 'message': 'There is no course for that course key.'}

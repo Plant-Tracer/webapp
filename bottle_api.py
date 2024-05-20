@@ -331,7 +331,7 @@ def api_upload_movie():
     logging.debug("api_upload_movie: request=%s request.files=%s ", request,request.files)
     if 'file' not in request.files: # pylint: disable=unsupported-membership-test
         logging.debug("request.files=%s",request.files)
-        return {'error':True, 'message':'upload request a file parameter named "file".'}
+        return E.NO_FILE_PARAMETER
     with io.BytesIO() as f:
         request.files['file'].save(f)
         movie_data = f.getvalue()
