@@ -97,9 +97,6 @@ def get_user_id(allow_demo=True):
     if allow_demo==False, then do not allow the user to be a demo user
     """
     userdict = get_user_dict()
-    if 'id' not in userdict:
-        logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(status=404, headers={ 'Location': '/'})
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
         raise auth.http404('demo accounts not allowed to execute requested action')
@@ -379,6 +376,7 @@ def api_get_movie_data():
         logging.debug("no movie data for movie_id %s",movie_id)
         return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404)
 
+    # This is used for testing redirect response in the test program
     if get_bool('redirect_inline'):
         return "#REDIRECT " + movie.url
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
