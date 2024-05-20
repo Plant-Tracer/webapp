@@ -66,8 +66,7 @@ def test_track_movie():
 
     # Get the new trackpoints
     infile = TEST_CIRCUMNUTATION_PATH
-    tracker.track_movie(engine_name="CV2",
-                        moviefile_input=infile,
+    tracker.track_movie(moviefile_input=infile,
                         input_trackpoints=input_trackpoints,
                         callback = callback )
     # Now render the movie

@@ -42,7 +42,7 @@ from PIL import Image
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME,Engines,E
+from constants import MIME,E
 import tracker
 
 # Bogus labels for generic test
@@ -81,8 +81,6 @@ def test_track_point_annotations(new_movie):
 
 
     # Try the other interface; this time send two trackpoints through
-    engine_name = 'CV2';
-    engine_version = '2';
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_number':1,
@@ -132,9 +130,7 @@ def test_movie_tracking(new_movie):
     # Now track with CV2 - This actually does the tracking when run outsie of lambda
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_start': '0',
-                        'engine_name':Engines.CV2,
-                        'engine_version':0 }):
+                        'frame_start': '0' }):
         ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False

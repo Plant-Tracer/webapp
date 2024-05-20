@@ -35,7 +35,7 @@ from auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
-from constants import MIME,Engines
+from constants import MIME
 import tracker
 
 # Test for edge cases

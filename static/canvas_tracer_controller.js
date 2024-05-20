@@ -221,9 +221,7 @@ class TracerController extends MovieController {
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
-            frame_start: this.frame_number,
-            engine_name: ENGINE,
-            engine_version: ENGINE_VERSION };
+            frame_start: this.frame_number };
 
         // post is non-blocking, but running locally on bottle the tracking happens
         // before the post returns.

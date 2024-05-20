@@ -726,7 +726,7 @@ class MovieTrackCallback:
 
 # @task causes this to be run in background on zappa, but in foreground when run locally
 @task
-def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_start):
+def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
     Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
     """
@@ -748,9 +748,7 @@ def api_track_movie(*,user_id, movie_id, engine_name, engine_version, frame_star
         # and write the frame to the frame store.
         #
         mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
-        tracker.track_movie(engine_name=engine_name,
-                            engine_version=engine_version,
-                            input_trackpoints = input_trackpoints,
+        tracker.track_movie(input_trackpoints = input_trackpoints,
                             frame_start      = frame_start,
                             moviefile_input  = infile.name,
                             callback = mtc.notify)
@@ -762,8 +760,6 @@ def api_track_movie_queue():
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
     :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
-    :param engine_name: string description tracking engine to use. May be omitted to get default engine.
-    :param engine_version - string to describe which version number of engine to use. May be omitted for default version.
     :return: dict['error'] = True/False
              dict['message'] = message to display
              dict['frame_start'] = where the tracking started
@@ -783,8 +779,6 @@ def api_track_movie_queue():
 
     logging.debug("calling api_track_movie")
     api_track_movie(user_id=user_id, movie_id=movie_id,
-                    engine_name=get('engine_name'),
-                    engine_version=get('engine_version'),
                     frame_start=get_int('frame_start'))
 
     logging.debug("return from api_track_movie")
