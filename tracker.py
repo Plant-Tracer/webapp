@@ -14,7 +14,6 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
-from constants import Engines
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -204,7 +203,6 @@ def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=N
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
-    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
     :param: trackpoints - a list all current trackpoints.
                         - Each trackpoint is dictionary {'x', 'y', 'label', 'frame_number'} to track.
@@ -271,7 +269,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--engine',default='CV2')
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
