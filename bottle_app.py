@@ -103,7 +103,7 @@ def static_path(path):
     try:
         kind = filetype.guess(os.path.join(STATIC_DIR,path))
     except FileNotFoundError as e:
-        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404) from e
+        raise auth.http404(f'File not found: {path}') from e
     if kind is not None:
         mimetype = kind.mime
     elif path.endswith(".html"):
@@ -139,7 +139,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         logging.debug("auth.get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
-            raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+            raise auth.http404("api_key is None and require_auth is True")
     else:
         api_key = None
 
@@ -324,17 +324,6 @@ def func_ver():
     """
     return {'__version__': __version__, 'sys_version': sys.version}
 
-@bottle.route('/demo_tracer1', method=GET)
-@view('demo_tracer1.html')
-def demo_tracer1():
-    return {}
-
-@bottle.route('/demo_tracer2', method=GET)
-@view('demo_tracer2.html')
-def demo_tracer1():
-    return {}
-
-
 ################################################################
 # Bottle App
 ##
@@ -357,7 +346,7 @@ if __name__ == "__main__":
     if args.info:
         for name in logging.root.manager.loggerDict:
             print("Logger: ",name)
-        exit(0)
+        sys.exit(0)
 
     if args.loglevel=='DEBUG':
         # even though we've set the main loglevel to be debug, set the other loggers to a different log level

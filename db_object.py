@@ -18,14 +18,16 @@ import os
 import logging
 import urllib.parse
 import hashlib
+import uuid
+
 import requests
 import boto3
 from botocore.exceptions import ClientError
-import bottle
-import uuid
+#import bottle
 
 from lib.ctools import dbfile
 from constants import C
+import auth
 from auth import get_dbreader,get_dbwriter
 
 """
@@ -71,7 +73,7 @@ def sha256(data):
     h.update(data)
     return h.hexdigest()
 
-def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
+def object_name(*,course_id,movie_id,frame_number=None,ext):
     """object_name is a URN that is generated according to a scheme
     that uses course_id, movie_id, and frame_number, but there is also
     a 16-bit nonce This means that you can't generate it on the fly;
@@ -136,7 +138,7 @@ def read_signed_url(*,urn,sig):
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise bottle.HTTPResponse(body="signature does not verify", status=204)
+    raise auth.http404("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""

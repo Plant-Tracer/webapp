@@ -11,7 +11,7 @@ import tempfile
 import base64
 import functools
 import io
-import urllib
+#import urllib
 import csv
 import os
 from collections import defaultdict
@@ -99,12 +99,10 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if 'id' not in userdict:
         logging.info("no ID in userdict = %s", userdict)
-        raise bottle.HTTPResponse(status=501, headers={ 'Location': '/'})
+        raise bottle.HTTPResponse(status=404, headers={ 'Location': '/'})
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
-        raise bottle.HTTPResponse(
-            body='{"Error":true,"message":"demo accounts not allowed to execute requested action."}',
-            status=404)
+        raise auth.http404('demo accounts not allowed to execute requested action')
     return userdict['id']
 
 
@@ -121,16 +119,16 @@ def get_user_dict():
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
         if bottle.request.fullpath.startswith('/api/'):
-            raise bottle.HTTPResponse(body=E.INVALID_API_KEY)
+            raise auth.http404('invalid API key')
         # Check if we were running under an API
 
         # This will redirect to the / and produce a "Session expired" message
-        raise bottle.HTTPResponse(body='', status=301, headers={ 'Location': '/'})
+        raise auth.http404('session expired')
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.environ.get('REMOTE_ADDR'),request.url)
         auth.clear_cookie()
-        raise bottle.HTTPResponse(body=f'Error 404: api_key {api_key} is invalid. ', status=404)
+        raise auth.http404(f'Error 404: api_key {api_key} is invalid. ')
     return userdict
 
 ################################################################
@@ -307,8 +305,7 @@ def api_new_movie():
                                           description=request.forms.get('description') )
 
     # Get the object name and create the upload URL
-    object_name= db_object.object_name( data_sha256=movie_data_sha256,
-                                        course_id = db.course_id_for_movie_id( ret['movie_id']),
+    object_name= db_object.object_name( course_id = db.course_id_for_movie_id( ret['movie_id']),
                                         movie_id = ret['movie_id'],
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
@@ -383,7 +380,7 @@ def api_get_movie_data():
         return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404)
 
     if get_bool('redirect_inline'):
-        return "#REDIRECT " + url
+        return "#REDIRECT " + movie.url
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
     return bottle.redirect(movie.url)
 
@@ -489,11 +486,11 @@ def api_get_frame():
                'frame_urn':frame_urn }
     else:
         # Get any trackpoints
-        ret['trackpoints'] = db.get_frame_trackpoints(movie_id=movie_id, frame_number=frame_number)
+        ret['trackpoints'] = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_number, frame_count=1)
 
 
     # If we do not have frame_data, extract it from the movie (but don't store in database)
-    if (ret.get('frame_data',None) is None):
+    if ret.get('frame_data',None) is None:
         logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
         movie_data = db.get_movie_data(movie_id=movie_id)
         try:
@@ -604,7 +601,6 @@ def api_get_movie_metadata():
     frame_start = get_int('frame_start')
     frame_count = get_int('frame_count')
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
-    get_trackpoints = get_bool('get_trackpoints')
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
@@ -625,7 +621,7 @@ def api_get_movie_metadata():
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
-    tracking_completed = (movie_metadata.get('status','') == C.TRACKING_COMPLETED)
+    tracking_completed = movie_metadata.get('status','') == C.TRACKING_COMPLETED
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
@@ -721,8 +717,7 @@ class MovieTrackCallback:
         # Write the frame data to the database if we do not have it
         # Moving to an object-oriented API would make this a whole lot more efficient...
 
-        row = db.get_frame(movie_id=self.movie_id, frame_number=frame_number, get_frame_data=False)
-        frame_urn = db.create_new_frame(movie_id=self.movie_id,
+        db.create_new_frame(movie_id=self.movie_id,
                                         frame_number = frame_number,
                                         frame_data = tracker.convert_frame_to_jpeg(frame_data))
         # And update the trackpoints
@@ -830,27 +825,6 @@ def api_new_frame():
 
 
 
-## frame analysis is not used
-@api.route('/new-movie-analysis', method=POST)
-def api_new_movie_analysis():
-    """Creates a new movie analysis
-    :param api_key: the user's api_key
-    :param movie_id: The movie to associate this movie analysis with
-    :param engine_id: The engine used to create the analyis
-    :param annotations: The movie analysis's annotations, that is, a JSON document containing analysis data
-    """
-
-    user_id  = get_user_id(allow_demo=False)
-    movie_id = request.forms.get('movie_id')
-    if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
-
-    movie_analysis_id = db.create_new_movie_analysis(movie_id=movie_id,
-                                                     engine_id=request.forms.get('engine_id'),
-                                                     annotations=request.forms.get('annotations'))['movie_analysis_id']
-    return {'error': False, 'movie_analysis_id': movie_analysis_id}
-
-
 
 @api.route('/put-frame-trackpionts', method=POST)
 def api_put_frame_trackpoints():
@@ -868,7 +842,6 @@ def api_put_frame_trackpoints():
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.debug("user %s cannot access movie_id %s",user_id, movie_id)
         return {'error':True, 'message':f'User {user_id} cannot access movie_id={movie_id}'}
-    frame_urn =  db.create_new_frame(movie_id=movie_id, frame_number=frame_number)
     trackpoints=get_json('trackpoints')
     db.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
     return {'error': False, 'message':'Trackpoints recorded.'}

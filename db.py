@@ -14,7 +14,7 @@ import sys
 import copy
 import smtplib
 import functools
-from typing import Optional
+#from typing import Optional
 
 from jinja2.nativetypes import NativeEnvironment
 from validate_email_address import validate_email
@@ -633,9 +633,7 @@ def set_movie_metadata(*, movie_id, movie_metadata):
 
 
 def set_movie_data(*,movie_id, movie_data):
-    movie_data_sha256 = db_object.sha256(movie_data)
-    object_name= db_object.object_name( data_sha256=movie_data_sha256,
-                                        course_id = course_id_for_movie_id( movie_id ),
+    object_name= db_object.object_name( course_id = course_id_for_movie_id( movie_id ),
                                         movie_id = movie_id,
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
@@ -721,8 +719,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
     frame_urn = None
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
-        object_name = db_object.object_name(data=frame_data,
-                                            course_id=course_id_for_movie_id(movie_id),
+        object_name = db_object.object_name(course_id=course_id_for_movie_id(movie_id),
                                             movie_id=movie_id,
                                             frame_number = frame_number,
                                             ext=C.JPEG_EXTENSION)
@@ -746,10 +743,10 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
 def get_frame_id(*, movie_id, frame_number):
     """This is only used by the trackpoint update system right now, and that will go away when movie_frames table is removed and the trackpoints table reference the movie_id and frame_number directly."""
     dbfile.DBMySQL.csfr(get_dbwriter(),
-                        f"""INSERT INTO movie_frames (movie_id, frame_number)
+                        """INSERT INTO movie_frames (movie_id, frame_number)
                         VALUES (%s, %s)
                         ON DUPLICATE KEY UPDATE movie_id=movie_id""",
-                        args)
+                        (movie_id, frame_number))
     return dbfile.DBMySQL.csfr(get_dbreader(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s LIMIT 1" ,(movie_id,frame_number))[0]
 
 
@@ -761,11 +758,9 @@ def get_frame(*, movie_id, frame_number, get_frame_data=True):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns a dictionary with the frame info
     """
-    args = [movie_id, frame_number]
-    cmd =
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               f"""SELECT movie_id, frame_number, frame_data, frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
-                               [movie_id, frame_number], asDicts=True)
+                               """SELECT movie_id, frame_number, frame_data, frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
+                               (movie_id, frame_number), asDicts=True)
     if len(rows)!=1:
         return None
     row = rows[0]
@@ -804,12 +799,12 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     :param: frame_start, frame_count -
     """
     return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               f"""
-                               SELECT movie_id, frame_number, created_at, mtime, frame_urn
-                               FROM movie_frames
-                               WHERE movie_id=%s and frame_number >= %s and frame_number < %s
-                               """,
-                                [movie_id, frame_start, frame_start+frame_count], asDicts=True)
+                                """
+                                SELECT movie_id, frame_number, created_at, mtime, frame_urn
+                                FROM movie_frames
+                                WHERE movie_id=%s and frame_number >= %s and frame_number < %s
+                                """,
+                                (movie_id, frame_start, frame_start+frame_count), asDicts=True)
 
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
@@ -1069,7 +1064,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         try:
             cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
         except KeyError as e:
-            logging.error(f"Cannot set property {prop} from {e}")
+            logging.error("Cannot set property %s from %s",prop,e)
             raise ValueError('Cannot set property '+prop) from e
         args  = [value, set_movie_id]
         ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
