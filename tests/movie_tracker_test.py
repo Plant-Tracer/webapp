@@ -65,7 +65,7 @@ def test_track_point_annotations(new_movie):
     db.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
-    tps = db.get_frame_trackpoints(movie_id=movie_id, frame_number=0)
+    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
     assert len(tps)==2
     logging.debug("tps[0]=%s",tps[0])
     logging.debug("tp0=%s",tp0)
@@ -89,7 +89,7 @@ def test_track_point_annotations(new_movie):
                         'trackpoints':json.dumps([tp0,tp1,tp2])}):
         bottle_api.api_put_frame_trackpoints()
     # See if I can get it back
-    tps = db.get_frame_trackpoints(movie_id=movie_id, frame_number=1)
+    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
@@ -121,10 +121,11 @@ def test_movie_tracking(new_movie):
 
     # save the trackpoints
     with boddle(params={'api_key': api_key,
-                        'number': 0,
-                        'trackpoints' : json.dumps(tpts),
-                        'frame_number': '0'}):
-        ret = bottle_api.api_put_frame_analysis()
+                        'movie_id': movie_id,
+                        'frame_number': '0',
+                        'trackpoints' : json.dumps(tpts)
+                        }):
+        ret = bottle_api.api_put_frame_trackpoints()
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
