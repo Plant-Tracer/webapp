@@ -328,9 +328,6 @@ def dump(config,dumpdir):
         with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
             f.write(movie_data)
 
-
-
-
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Database Maintenance Program",
@@ -389,7 +386,8 @@ if __name__ == "__main__":
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
         new_api_key = db.make_new_api_key(email=args.sendlink)
-        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint, new_api_key=new_api_key)
+        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
+                      new_api_key=new_api_key)
         sys.exit(0)
 
     ################################################################
@@ -403,7 +401,8 @@ if __name__ == "__main__":
 
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
-                createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
+                createdb(droot=droot, createdb_name = args.createdb,
+                         write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.upgradedb:
