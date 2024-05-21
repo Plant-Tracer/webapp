@@ -73,11 +73,11 @@ def purge_test_data():
                   'where email like "%admin+test%"',
                   'where email like "%demo+admin%"']:
         del_movies = f"(select id from movies where user_id in (select id from users {where}))"
-        for table in ['movie_frame_analysis','movie_frame_trackpoints']:
-            cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+        for table in ['movie_frame_trackpoints']:
+            cmd = f"delete from {table} where movie_id in {del_movies})"
             print(cmd)
             c.execute(cmd)
-        for table in ['movie_analysis','movie_data','movie_frames']:
+        for table in ['movie_frames']:
             cmd = f"delete from {table} where movie_id in {del_movies}"
             print(cmd)
             c.execute(cmd)
@@ -93,7 +93,7 @@ def purge_all_movies():
     """Remove all test data from the database"""
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
-    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+    for table in ['object_store','objects','movie_frame_trackpoints','movie_frames','movies']:
         print("wiping",table)
         c.execute( f"delete from {table}")
 
