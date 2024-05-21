@@ -6,7 +6,7 @@
 # pylint: disable=too-many-arguments
 
 import os
-import base64
+#import base64
 import uuid
 import logging
 import json
@@ -358,9 +358,7 @@ def delete_api_key(api_key):
     """
     if len(api_key) < 10:
         raise InvalidAPI_Key(api_key)
-    return dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """DELETE FROM api_keys WHERE api_key=%s""",
-                               (api_key,))
+    return dbfile.DBMySQL.csfr(get_dbwriter(), """DELETE FROM api_keys WHERE api_key=%s""", (api_key,))
 
 @log
 def list_users(*, user_id):
@@ -776,7 +774,7 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT max(movie_frames.frame_number) FROM movie_frame_trackpoints WHERE movie_id=%s
+                               """SELECT max(frame_number) FROM movie_frame_trackpoints WHERE movie_id=%s
                                """,
                                (movie_id,))[0][0]
 

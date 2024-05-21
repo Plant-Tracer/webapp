@@ -125,14 +125,12 @@ CREATE TABLE `movie_frame_trackpoints` (
   `id` int NOT NULL AUTO_INCREMENT,
   `movie_id` int NOT NULL,
   `frame_number` int NOT NULL,
-  `frame_id` int NOT NULL,
+  `label` varchar(255) NOT NULL,
   `x` int NOT NULL,
   `y` int NOT NULL,
-  `label` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk1` (`frame_id`,`label`),
-  UNIQUE KEY `uk_movie_frame_label` (`movie_id`,`frame_number`,`label`),
-  KEY `frame_id` (`frame_id`)
+  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`),
+  CONSTRAINT `m1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -252,4 +250,3 @@ CREATE TABLE `users` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-

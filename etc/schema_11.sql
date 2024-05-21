@@ -1,15 +1,18 @@
-DROP TABLE movie_frame_analysis;
-DROP TABLE movie_analysis;
-ALTER TABLE movie_frame_trackpoints add column movie_id int not null after id;
-ALTER TABLE movie_frame_trackpoints add column frame_number int not null after movie_id;
+DROP TABLE IF EXISTS movie_frame_analysis;
+DROP TABLE IF EXISTS movie_analysis;
+DROP TABLE IF EXISTS movie_data;
+DROP TABLE IF EXISTS `movie_frame_trackpoints`;
+CREATE TABLE `movie_frame_trackpoints` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `movie_id` int NOT NULL,
+  `frame_number` int NOT NULL,
+  `label` varchar(255) NOT NULL,
+  `x` int NOT NULL,
+  `y` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`)
+  CONSTRAINT `m1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-UPDATE movie_frame_trackpoints tp JOIN movie_frames mf ON tp.frame_id = mf.id
- SET tp.movie_id = mf.movie_id, tp.frame_number = mf.frame_number;
-
-ALTER TABLE `movie_frame_trackpoints` DROP FOREIGN KEY `movie_frame_trackpoints_ibfk_1`;
-
-ALTER TABLE `movie_frame_trackpoints` ADD UNIQUE KEY `uk_movie_frame_label` (`movie_id`, `frame_number`, `label`);
-
-alter table movies add column movie_sha256 varchar(64) after deleted;
-drop table movie_data;
+ALTER TABLE movies ADD COLUMN movie_sha256 varchar(64) AFTER deleted;
 UPDATE metadata set v=11 where k='schema_version';
