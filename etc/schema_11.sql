@@ -10,7 +10,7 @@ CREATE TABLE `movie_frame_trackpoints` (
   `x` int NOT NULL,
   `y` int NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`)
+  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`),
   CONSTRAINT `m1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
