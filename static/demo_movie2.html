@@ -13,7 +13,7 @@
     }
     </style>
   <body>
-    <p>This demo shows a flipbook movie, where each page is a pre-rendered JPEG that is loaded from the webserver.</p>
+    <p>This demo shows a movie that loaded from the server, with single frame controls.</p>
     <div id='movie_controller'>
         <canvas id="canvas-id" width='640' height='480'> </canvas>
         <form action="javascript:void(0)" >
@@ -49,7 +49,7 @@
     import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
     import { MovieController } from "./canvas_movie_controller.js";
     const cc = new MovieController('div#movie_controller');
-    const frames = [
+    const url = 'demo/frames = [
         {'frame_url':'demo/frame0.jpg'},
         {'frame_url':'demo/frame1.jpg'},
         {'frame_url':'demo/frame2.jpg'},
