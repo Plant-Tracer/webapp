@@ -3,9 +3,8 @@
   <head>
     <title>Demo</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script type="text/javascript" charset="utf8" src="dev/jquery.js"></script>
-    <script type="module" src="./canvas_controller.js"></script>
-    <script type="module" src="./canvas_movie_controller.js"></script>
+    <script type="text/javascript" charset="utf8" src="./jquery.js"></script>
+    <script type="module" src="../movie_stepper.js"></script>
   </head>
   <style>
     canvas {
@@ -13,7 +12,12 @@
     }
     </style>
   <body>
-    <p>This demo shows a movie that loaded from the server, with single frame controls.</p>
+    <p>This demo shows a movie that loaded from the server as an MPEG, with single frame controls implemented locally.</p>
+    <p>Regular movie:</p>
+    <video controls>
+        <source src='tracked.mp4' type='video/mp4' />
+    </video>
+    <p>With single-framer:</p>
     <div id='movie_controller'>
         <canvas id="canvas-id" width='640' height='480'> </canvas>
         <form action="javascript:void(0)" >
@@ -25,37 +29,31 @@
           <input type='button' value='⏴'  class='play_reverse frame_movement movement_backwards' disabled/>
           <input type='button' value='-1' class='prev_frame   frame_movement movement_backwards' disabled/>
 
-          <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='0' disabled/>
+          <input type='number' value='0'  class='frame_number_field frame_movement' placeholder='frame' size='4' min='0' max='1000' />
           <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled/>
           <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled/>
           <input type='button' value='⏵'  class='play_forward frame_movement movement_forwards' disabled/>
           <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled/>
-
-          <label for="zoom">zoom:</label>
-          <select id="zoom-id" name="zoom" class='zoom'>
-            <option value="25">25%</option>
-            <option value="50">50%</option>
-            <option value="75">75%</option>
-            <option value="100" selected>100%</option>
-            <option value="150">150%</option>
-            <option value="200">200%</option>
-            <option value="300">300%</option>
-          </select>
         </form>
     </div>
   </body>
   <script type='module'>
     // This demo draws three dragable objects and adds some text.
-    import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
-    import { MovieController } from "./canvas_movie_controller.js";
-    const cc = new MovieController('div#movie_controller');
-    const url = 'demo/frames = [
-        {'frame_url':'demo/frame0.jpg'},
-        {'frame_url':'demo/frame1.jpg'},
-        {'frame_url':'demo/frame2.jpg'},
-        {'frame_url':'demo/frame3.jpg'},
-        {'frame_url':'demo/frame4.jpg'}];
-    cc.load_movie(frames);
-    cc.set_loop(true);
+   import { MovieStepper } from "../movie_stepper.js";
+
+   var ms = new MovieStepper();
+   await ms.load('./tracked.mp4');
+   $(' input.frame_number_field').on('input', () => {
+       var f = parseInt($('input.frame_number_field').val());
+       console.log("go to frame ",f);
+       const ctx = document.getElementById('canvas-id').getContext('2d');
+       ms.getFrame(f).then((frame) => {
+           console.log("frame=",frame);
+           ctx.drawImage(frame, 0, 0);
+           ctx.font = '24px sanserif';
+           ctx.fillStyle = 'red';
+           ctx.fillText( `frame ${f}`, 25, 200);
+       });
+   });
   </script>
 </html>

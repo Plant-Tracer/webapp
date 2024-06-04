@@ -12,8 +12,8 @@
     }
     </style>
   <body>
-    <p>This demo shows the drag-and-drop of the CanvasController.</p>
-    <canvas id="canvas-id" width='640' height='480'> </canvas>
+    <p>This demo shows the drag-and-drop of the CanvasController which has markers on an image.</p>
+    <canvas id="canvas-id" width='512' height='512'> </canvas>
     <form action="javascript:void(0)" >
     <label for="zoom">zoom:</label>
     <select id="zoom-id" name="zoom" class='zoom'>
@@ -29,8 +29,9 @@
   </body>
   <script type='module'>
     // This demo draws three dragable objects and adds some text.
-    import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
+    import { CanvasController, CanvasItem, Marker, WebImage } from "../canvas_controller.js";
     const cc = new CanvasController('#canvas-id','#zoom-id');
+    cc.set_background_image( "frame0.jpg" );
     cc.add_object( new Marker(100, 100, 30, "red", "blue", "Test Marker 1"));
     cc.add_object( new Marker(300, 300, 20, "blue", "red", "Test Marker 2"));
     cc.redraw();

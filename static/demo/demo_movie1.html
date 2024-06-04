@@ -46,15 +46,15 @@
   </body>
   <script type='module'>
     // This demo draws three dragable objects and adds some text.
-    import { CanvasController, CanvasItem, Marker, WebImage } from "./canvas_controller.js";
-    import { MovieController } from "./canvas_movie_controller.js";
+    import { CanvasController, CanvasItem, Marker, WebImage } from "../canvas_controller.js";
+    import { MovieController } from "../canvas_movie_controller.js";
     const cc = new MovieController('div#movie_controller');
     const frames = [
-        {'frame_url':'demo/frame0.jpg'},
-        {'frame_url':'demo/frame1.jpg'},
-        {'frame_url':'demo/frame2.jpg'},
-        {'frame_url':'demo/frame3.jpg'},
-        {'frame_url':'demo/frame4.jpg'}];
+        {'frame_url':'frame0.jpg'},
+        {'frame_url':'frame1.jpg'},
+        {'frame_url':'frame2.jpg'},
+        {'frame_url':'frame3.jpg'},
+        {'frame_url':'frame4.jpg'}];
     cc.load_movie(frames);
     cc.set_loop(true);
   </script>

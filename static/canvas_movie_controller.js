@@ -29,14 +29,14 @@ class MovieController extends CanvasController {
         this.loop = false;    // when playing, Loop from end to beginning
 
         // set up movie controls  (manipulations are all done with CSS classes)
-        $(div_selector + " input.first_button").on('click', (_) => {this.goto_frame(0);});
-        $(div_selector + " input.play_reverse").on('click', (_) => {this.play(-1);});
-        $(div_selector + " input.play_forward").on('click',   (_) => {this.play(+1);});
-        $(div_selector + " input.pause_button").on('click', (_) => {this.stop_button_pressed();});
-        $(div_selector + " input.last_button").on('click', (_) => {this.goto_frame(1e10);});
-        $(div_selector + " input.next_frame").on('click',  (_) => {this.goto_frame(this.frame_number+1);});
-        $(div_selector + " input.prev_frame").on('click',  (_) => {this.goto_frame(this.frame_number-1);});
-        $(div_selector + " input.frame_number_field").on('input', (_) => {
+        $(div_selector + " input.first_button").on('click', () => {this.goto_frame(0);});
+        $(div_selector + " input.play_reverse").on('click', () => {this.play(-1);});
+        $(div_selector + " input.play_forward").on('click',   () => {this.play(+1);});
+        $(div_selector + " input.pause_button").on('click', () => {this.stop_button_pressed();});
+        $(div_selector + " input.last_button").on('click', () => {this.goto_frame(1e10);});
+        $(div_selector + " input.next_frame").on('click',  () => {this.goto_frame(this.frame_number+1);});
+        $(div_selector + " input.prev_frame").on('click',  () => {this.goto_frame(this.frame_number-1);});
+        $(div_selector + " input.frame_number_field").on('input', () => {
             let new_frame = this.frame_number_field[0].value;
             if (new_frame=='') {            // turn '' into a "0"
                 this.frame_number_field[0].value='0';
