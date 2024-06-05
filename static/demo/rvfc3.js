@@ -1,0 +1,119 @@
+"use strict";
+/* jshint esversion: 8 */
+/* global alert,document,MediaStreamTrackProcessor,console,createImageBitmap,window,HTMLVideoElement */
+// code for /analyze
+
+// https://stackoverflow.com/questions/996505/lru-cache-implementation-in-javascript
+class LRU {
+    constructor(max = 10) {
+        this.max = max;
+        this.cache = new Map();
+    }
+
+    get(key) {
+        let item = this.cache.get(key);
+        if (item !== undefined) {
+            // refresh key
+            this.cache.delete(key);
+            this.cache.set(key, item);
+        }
+        return item;
+    }
+
+    set(key, val) {
+        // refresh key
+        if (this.cache.has(key)) this.cache.delete(key);
+        // evict oldest
+        else if (this.cache.size === this.max) this.cache.delete(this.first());
+        this.cache.set(key, val);
+    }
+
+    first() {
+        return this.cache.keys().next().value;
+    }
+}
+
+class MovieStepper {
+    constructor() {
+        this.video = document.querySelector("video");
+        this.canvas = document.querySelector("canvas");
+        this.ctx = this.canvas.getContext("2d");
+        this.currentFrame = 0;
+        this.requestedFrame = 0;
+        this.video.muted = true;
+
+        // callback for the requestVideoFrameCallback when loading
+        // must be a const so that we can remove the event listener
+        this.loadeddata_callback = () => {
+            this.video.removeEventListener('loadeddata', this.loadeddata_callback); // don't call a second time
+            this.currentFrame = 0;
+            this.captureFrame();
+        };
+        this.video.addEventListener('loadeddata', this.loadeddata_callback);
+    }
+    captureFrame() {
+        console.log("captureFrame. this=",this);
+        console.log("captureFrame. this.video=",this.video);
+        this.video.pause();
+        createImageBitmap(this.video).then( (bitmap) => {
+            console.log("bitmap=",bitmap);
+            this.ctx.drawImage(bitmap, 0, 0, this.canvas.width, this.canvas.height);
+        });
+    }
+    // callback for the requestVideoFrameCallback when running...
+    run_callback(now, metadata) {
+        console.log("run_callback currentFrame=",this.currentFrame,"now=",now,"diff=",now-metadata.expectedDisplayTime,"metadata=",metadata);
+        this.currentFrame ++;
+        if (this.currentFrame == this.requestedFrame) {
+            console.log("current frame is requested frame. Capture");
+            this.captureFrame();
+        } else {
+            console.log("current frame is not requested frame. Carry on");
+            this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+        }
+        console.log("run_allback finished. currentFrame=",this.currentFrame);
+    }
+    // callback for load when reset button is pressed
+    load_callback(now, metadata) {
+        this.currentFrame = 0;
+        this.captureFrame();
+    }
+
+    // callback for the requestVideoFrameCallback when loading
+    load_run_callback(now, metadata) {
+        this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+        this.currentFrame = 0;
+        this.video.play();
+    }
+
+    load(url) {
+        this.video.src = "./tracked.mp4";
+        this.video.play();               // can we do this
+
+        document.querySelector('#step').addEventListener('click', (e) => {
+            this.requestedFrame = this.currentFrame + 1;
+            console.log("step click. currentFrame=",this.currentFrame,"requestedFrame=",this.requestedFrame);
+            this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+            this.video.play();
+        });
+        document.querySelector('#back').addEventListener('click', (e) => {
+            console.log("step click");
+            this.requestedFrame = this.currentFrame>0 ? this.currentFrame - 1 : 0;
+            // If the requested frame is in the cache
+            // jump to the beginning and run to the requested frame
+
+            this.video.requestVideoFrameCallback((a,b) => {this.load_run_callback(a,b);} );
+            console.log("Reloading and seeking to ",this.requestedFrame);
+            this.video.src = "./tracked.mp4";
+        });
+        document.querySelector('#reset').addEventListener('click', (e) => {
+            this.video.requestVideoFrameCallback((a,b) => {this.load_callback(a,b);} );
+            this.requestedFrame = 0;
+            this.video.src = "./tracked.mp4";
+        });
+    }
+}
+
+var ms = new MovieStepper();
+const startDrawing = () => { ms.load("./tracked.mp4"); };
+window.addEventListener('load', startDrawing);
