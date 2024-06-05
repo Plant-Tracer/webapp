@@ -24,9 +24,8 @@ const startDrawing = () => {
         metadataInfo.innerText = JSON.stringify(metadata, null, 2);
     };
 
-    video.src = "./tracked.mp4";
     video.muted = true;
-    //video.requestVideoFrameCallback(updateCanvas);
+    video.src = "./tracked.mp4";
 
     // This is fired when the first frame is loaded. We pause the play and capture the frame
 
@@ -35,6 +34,12 @@ const startDrawing = () => {
     video.play();               // can we do this
 
     document.querySelector('#step').addEventListener('click', (e) => {
+        console.log("step click");
+        video.requestVideoFrameCallback(updateCanvas);
+        currentFrame ++;
+        video.play();
+    });
+    document.querySelector('#back').addEventListener('click', (e) => {
         console.log("step click");
         video.requestVideoFrameCallback(updateCanvas);
         currentFrame ++;
