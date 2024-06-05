@@ -1,6 +1,6 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global alert,document,MediaStreamTrackProcessor,console */
+/* global alert,document,MediaStreamTrackProcessor,console,createImageBitmap,window,HTMLVideoElement */
 // code for /analyze
 
 // https://stackoverflow.com/questions/996505/lru-cache-implementation-in-javascript
@@ -37,12 +37,12 @@ class LRU {
 class MovieStepper {
     constructor() {
         this.cache = new LRU();
-        this.reader = null;
-        this.videoProcessor = null;
-        this.currentFrameIndex = null;
         this.video = document.createElement('video');
         this.video.muted = true; // Allow autoplay
         this.video.preload = 'none';
+        this.reader = null;
+        //this.videoProcessor = null;
+        this.currentFrameIndex = null;
 
         if (!('MediaStreamTrackProcessor' in window)) {
             alert('MediaStreamTrackProcessor is not supported in this browser.');
@@ -62,67 +62,35 @@ class MovieStepper {
 
     // See: https://developer.chrome.com/blog/play-request-was-interrupted
     async load(url) {
-        this.currentFrameIndex = 0;
+        this.currentFrameIndex = null;
         this.url = url;
         this.video.src = url;
         console.log("play ",url);
-        var playPromise = this.video.play();
-        if (playPromise !== undefined) {
-            playPromise.then(_ => {
-                // Automatic playback started!
-                // Show playing UI.
-                // We can now safely pause video...
-                video.pause();
-            }).catch(error => {
-                // Auto-play was prevented
-                // Show paused UI.
-                console.log("play error:",error);
-                alert("play error: ",error);
-            });
-        }
-
-
-
-        // advance to frame 0 and
-        //this.video.requestVideoFrameCallback( (now,metadata) => {
-        //    console.log("pausing movie now=",now,"metdata=",metadata);
-        //   this.video.pause();      // pause immediately to control frame advance
-        //});
-        const videoTrack = this.video.captureStream().getVideoTracks()[0];
-        console.log('videoTrack=',videoTrack);
-        this.videoProcessor = new MediaStreamTrackProcessor(videoTrack);
-        this.reader = this.videoProcessor.readable.getReader();
+        this.video.requestVideoFrameCallback( (now, metadata) => {
+            this.currentFrameIndex = 0;
+            this.video.pause();
+            console.log("pause 1");
+        });
     }
 
     async getFrame(n) {
-        if (!this.reader) {
-            throw new Error("Video not loaded or processor not initialized.");
-        }
-
+        // First check to see if it is in the cache
         let item = this.cache.get(n);
         if (item) return item;
 
-        // If requesting a previous frame, reset to start
+        // If requesting a previous frame, reset to start; we can only advance forward.
         if (n < this.currentFrameIndex) {
             await this.load(this.url); // Reload the video to reset the reader; fastSeek() is not available.
         }
 
-        // Read frames until reaching the desired frame
+        // Read frames one-by-one until reaching the desired frame
         while (this.currentFrameIndex <= n) {
-            // Is it this frame?
-            const { done, value } = await this.reader.read(); // read the frame
-            if (done) {
-                throw new Error("Reached end of video before reaching frame " + n);
-            }
             if (this.currentFrameIndex === n) {
-                const bitmap = await createImageBitmap(value);
-                value.close();             // Ensure the frame is closed after processing
+                const bitmap = await createImageBitmap(this.video);
                 this.cache.set(n, bitmap); // store the results
                 return bitmap;
             }
-            value.close(); // Close the frame we are skipping
 
-            // advance a single frame
             this.video.requestVideoFrameCallback( (now,metadata) => {
                 console.log("2. pausing movie now=",now,"metdata=",metadata);
                 this.currentFrameIndex++;
