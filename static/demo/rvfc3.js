@@ -35,54 +35,61 @@ class LRU {
 
 class MovieStepper {
     constructor() {
+        this.cache = new LRU(100);
         this.video = document.querySelector("video");
         this.canvas = document.querySelector("canvas");
         this.ctx = this.canvas.getContext("2d");
-        this.currentFrame = 0;
+        this.videoFrame = 0;
         this.requestedFrame = 0;
         this.video.muted = true;
+        this.currentFrame = null;
+        this.displayedFrame = null;
 
         // callback for the requestVideoFrameCallback when loading
         // must be a const so that we can remove the event listener
         this.loadeddata_callback = () => {
             this.video.removeEventListener('loadeddata', this.loadeddata_callback); // don't call a second time
-            this.currentFrame = 0;
-            this.captureFrame();
+            this.video.pause();
+            this.videoFrame = 0;
+            this.captureFrame(true);
         };
         this.video.addEventListener('loadeddata', this.loadeddata_callback);
     }
-    captureFrame() {
-        console.log("captureFrame. this=",this);
-        console.log("captureFrame. this.video=",this.video);
-        this.video.pause();
+    // Capture and cache the frame and optinally draw the bitmap
+    captureFrame(draw) {
         createImageBitmap(this.video).then( (bitmap) => {
-            console.log("bitmap=",bitmap);
-            this.ctx.drawImage(bitmap, 0, 0, this.canvas.width, this.canvas.height);
+            this.cache.set(this.videoFrame, bitmap);
+            if (draw) {
+                this.ctx.drawImage(bitmap, 0, 0, this.canvas.width, this.canvas.height);
+                this.displayedFrame = this.videoFrame;
+            }
         });
     }
     // callback for the requestVideoFrameCallback when running...
     run_callback(now, metadata) {
-        console.log("run_callback currentFrame=",this.currentFrame,"now=",now,"diff=",now-metadata.expectedDisplayTime,"metadata=",metadata);
-        this.currentFrame ++;
-        if (this.currentFrame == this.requestedFrame) {
+        console.log("run_callback videoFrame=",this.videoFrame,"now=",now,"diff=",now-metadata.expectedDisplayTime,"metadata=",metadata);
+        this.videoFrame ++;
+        if (this.videoFrame == this.requestedFrame) {
             console.log("current frame is requested frame. Capture");
-            this.captureFrame();
+            this.video.pause();
+            this.captureFrame(true);
         } else {
             console.log("current frame is not requested frame. Carry on");
             this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
         }
-        console.log("run_allback finished. currentFrame=",this.currentFrame);
+        console.log("run_allback finished. videoFrame=",this.videoFrame);
     }
     // callback for load when reset button is pressed
     load_callback(now, metadata) {
-        this.currentFrame = 0;
-        this.captureFrame();
+        this.videoFrame = 0;
+        this.video.pause();
+        this.captureFrame(true);
     }
 
     // callback for the requestVideoFrameCallback when loading
     load_run_callback(now, metadata) {
         this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
-        this.currentFrame = 0;
+        this.videoFrame = 0;
         this.video.play();
     }
 
@@ -91,14 +98,27 @@ class MovieStepper {
         this.video.play();               // can we do this
 
         document.querySelector('#step').addEventListener('click', (e) => {
-            this.requestedFrame = this.currentFrame + 1;
-            console.log("step click. currentFrame=",this.currentFrame,"requestedFrame=",this.requestedFrame);
+            this.requestedFrame = this.displayedFrame + 1;
+            let b = this.cache.get(this.requestedFrame);
+            if (b) {
+                this.ctx.drawImage(b, 0, 0, this.canvas.width, this.canvas.height);
+                this.displayedFrame = this.requestedFrame;
+                return;
+            }
+            console.log("step click. videoFrame=",this.videoFrame,"requestedFrame=",this.requestedFrame);
             this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
             this.video.play();
         });
         document.querySelector('#back').addEventListener('click', (e) => {
             console.log("step click");
-            this.requestedFrame = this.currentFrame>0 ? this.currentFrame - 1 : 0;
+            this.requestedFrame = this.displayedFrame>0 ? this.displayedFrame - 1 : 0;
+            let b = this.cache.get(this.requestedFrame);
+            if (b) {
+                this.ctx.drawImage(b, 0, 0, this.canvas.width, this.canvas.height);
+                this.displayedFrame = this.requestedFrame;
+                return;
+            }
+
             // If the requested frame is in the cache
             // jump to the beginning and run to the requested frame
 
