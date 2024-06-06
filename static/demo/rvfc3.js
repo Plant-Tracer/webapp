@@ -1,7 +1,10 @@
 "use strict";
 /* jshint esversion: 8 */
 /* global alert,document,MediaStreamTrackProcessor,console,createImageBitmap,window,HTMLVideoElement */
-// code for /analyze
+// Video player
+// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video#events
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback
+
 
 // https://stackoverflow.com/questions/996505/lru-cache-implementation-in-javascript
 class LRU {
@@ -53,7 +56,12 @@ class MovieStepper {
             this.videoFrame = 0;
             this.captureFrame(true);
         };
+        this.play_callback = () => {
+            //this.video.removeEventListener('play', this.play_callback); // don't call a second time
+            console.log("play_callback");
+        };
         this.video.addEventListener('loadeddata', this.loadeddata_callback);
+        this.video.addEventListener('play', this.play_callback);
     }
     // Capture and cache the frame and optinally draw the bitmap
     captureFrame(draw) {
