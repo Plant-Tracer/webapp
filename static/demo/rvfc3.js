@@ -38,6 +38,7 @@ class LRU {
 
 class MovieStepper {
     constructor() {
+        this.rcb = null;
         this.cache = new LRU(100);
         this.video = document.querySelector("video");
         this.canvas = document.querySelector("canvas");
@@ -47,6 +48,7 @@ class MovieStepper {
         this.video.muted = true;
         this.currentFrame = null;
         this.displayedFrame = null;
+        this.annotator = null;
 
         // callback for the requestVideoFrameCallback when loading
         // must be a const so that we can remove the event listener
@@ -56,12 +58,13 @@ class MovieStepper {
             this.videoFrame = 0;
             this.captureFrame(true);
         };
-        this.play_callback = () => {
-            //this.video.removeEventListener('play', this.play_callback); // don't call a second time
-            console.log("play_callback");
-        };
         this.video.addEventListener('loadeddata', this.loadeddata_callback);
-        this.video.addEventListener('play', this.play_callback);
+        // play callback takes too much time!
+        //this.play_callback = () => {
+        //    //this.video.removeEventListener('play', this.play_callback); // don't call a second time
+        //    console.log("play_callback this.rcb=",this.rcb);
+        //};
+        //this.video.addEventListener('play', this.play_callback);
     }
     // Capture and cache the frame and optinally draw the bitmap
     captureFrame(draw) {
@@ -70,11 +73,13 @@ class MovieStepper {
             if (draw) {
                 this.ctx.drawImage(bitmap, 0, 0, this.canvas.width, this.canvas.height);
                 this.displayedFrame = this.videoFrame;
+                if (this.annotator) this.annotator(this.canvas, this.ctx, this.displayedFrame);
             }
         });
     }
     // callback for the requestVideoFrameCallback when running...
     run_callback(now, metadata) {
+        this.rcb = null;
         console.log("run_callback videoFrame=",this.videoFrame,"now=",now,"diff=",now-metadata.expectedDisplayTime,"metadata=",metadata);
         this.videoFrame ++;
         if (this.videoFrame == this.requestedFrame) {
@@ -83,12 +88,13 @@ class MovieStepper {
             this.captureFrame(true);
         } else {
             console.log("current frame is not requested frame. Carry on");
-            this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+            this.rcb = this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
         }
         console.log("run_allback finished. videoFrame=",this.videoFrame);
     }
     // callback for load when reset button is pressed
     load_callback(now, metadata) {
+        this.rcb = null;
         this.videoFrame = 0;
         this.video.pause();
         this.captureFrame(true);
@@ -96,7 +102,7 @@ class MovieStepper {
 
     // callback for the requestVideoFrameCallback when loading
     load_run_callback(now, metadata) {
-        this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+        this.rcb = this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
         this.videoFrame = 0;
         this.video.play();
     }
@@ -105,37 +111,39 @@ class MovieStepper {
         this.video.src = "./tracked.mp4";
         this.video.play();               // can we do this
 
-        document.querySelector('#step').addEventListener('click', (e) => {
-            this.requestedFrame = this.displayedFrame + 1;
+        const incache = () => {
             let b = this.cache.get(this.requestedFrame);
             if (b) {
                 this.ctx.drawImage(b, 0, 0, this.canvas.width, this.canvas.height);
                 this.displayedFrame = this.requestedFrame;
-                return;
+                if (this.annotator) this.annotator(this.canvas, this.ctx, this.displayedFrame);
+                return true;
             }
+            return false;
+        };
+
+
+        document.querySelector('#step').addEventListener('click', (e) => {
+            this.requestedFrame = this.displayedFrame + 1;
+            if (incache()) return;
             console.log("step click. videoFrame=",this.videoFrame,"requestedFrame=",this.requestedFrame);
-            this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
+            this.rcb = this.video.requestVideoFrameCallback((a,b) => {this.run_callback(a,b);} );
             this.video.play();
         });
         document.querySelector('#back').addEventListener('click', (e) => {
             console.log("step click");
             this.requestedFrame = this.displayedFrame>0 ? this.displayedFrame - 1 : 0;
-            let b = this.cache.get(this.requestedFrame);
-            if (b) {
-                this.ctx.drawImage(b, 0, 0, this.canvas.width, this.canvas.height);
-                this.displayedFrame = this.requestedFrame;
-                return;
-            }
+            if (incache()) return;
 
             // If the requested frame is in the cache
             // jump to the beginning and run to the requested frame
 
-            this.video.requestVideoFrameCallback((a,b) => {this.load_run_callback(a,b);} );
+            this.rcb = this.video.requestVideoFrameCallback((a,b) => {this.load_run_callback(a,b);} );
             console.log("Reloading and seeking to ",this.requestedFrame);
             this.video.src = "./tracked.mp4";
         });
         document.querySelector('#reset').addEventListener('click', (e) => {
-            this.video.requestVideoFrameCallback((a,b) => {this.load_callback(a,b);} );
+            this.rcb = this.video.requestVideoFrameCallback((a,b) => {this.load_callback(a,b);} );
             this.requestedFrame = 0;
             this.video.src = "./tracked.mp4";
         });
@@ -143,5 +151,14 @@ class MovieStepper {
 }
 
 var ms = new MovieStepper();
+const annotate = (canvas,ctx,frame) => {
+    console.log("ANNOTATE",canvas,ctx,frame);
+    ctx.save();
+    ctx.fillStyle = "red";
+    ctx.font = '18px sanserif';
+    ctx.fillText( `frame ${frame}`, 10, 50, 60);
+    ctx.restore();
+};
+// ms.annotator  = annotate;
 const startDrawing = () => { ms.load("./tracked.mp4"); };
 window.addEventListener('load', startDrawing);
