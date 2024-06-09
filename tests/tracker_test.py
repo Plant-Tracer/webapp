@@ -75,8 +75,8 @@ def test_track_movie():
                                       movie_trackpoints=trackpoints)
         assert os.path.getsize(tf.name)>100
 
-    for tp in trackpoints:
-        logging.info("tp=%s",tp)
+    #for tp in trackpoints:
+    #    logging.info("tp=%s",tp)
 
     # Check the trackpoints
     assert len(trackpoints) == 3 * 296

@@ -6,9 +6,10 @@ known_hosts:
 	ssh-keyscan downloads.digitalcorpora.org > known_hosts
 
 schema.sql:
-	grep -v '^database' credentials.ini > credentials-db.ini
+	echo updating $$(bash database_name credentials-localhost.ini)
+	grep -v '^database' credentials-localhost.ini > credentials-db.ini
 	mysqldump --defaults-file=credentials-db.ini         \
-            -d --single-transaction --no-tablespaces $$(bash database_name) \
+            -d --single-transaction --no-tablespaces $$(bash database_name credentials-localhost.ini) \
 	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
 	    | sed 's/CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci //g' \
 	    | sed 's/COLLATE utf8mb4_general_ci //g' \
