@@ -5,10 +5,11 @@ force:
 known_hosts:
 	ssh-keyscan downloads.digitalcorpora.org > known_hosts
 
+DATABASE := $(shell grep database= credentials-localhost.ini | head -1 | sed s/database=//)
 schema.sql:
-	grep -v '^database' credentials.ini > credentials-db.ini
+	grep -v 'database=' credentials-localhost.ini > credentials-db.ini
 	mysqldump --defaults-file=credentials-db.ini         \
-            -d --single-transaction --no-tablespaces $$(bash database_name) \
+            -d --single-transaction --no-tablespaces $(DATABASE) \
 	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
 	    | sed 's/CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci //g' \
 	    | sed 's/COLLATE utf8mb4_general_ci //g' \
@@ -17,13 +18,6 @@ schema.sql:
 	/bin/rm -f credentials-db.ini
 	touch Makefile		# so we can repeat!
 	git diff schema.sql
-
-schema-local.sql:
-	mysqldump --defaults-extra-file=credentials-local.ini \
-            -d --single-transaction --no-tablespaces planttracer_local \
-	    | sed 's/ AUTO_INCREMENT=[0-9]*//g' \
-	    | grep -v 'character_set_client' \
-	    | grep -v 'Dump completed on' > schema-local.sql
 
 database-dump.sql: Makefile ../Makefile
 	(source $$HOME/plant_dev.bash;mysqldump -h$$MYSQL_HOST -u$$MYSQL_USER -p$$MYSQL_PASSWORD --single-transaction --no-tablespaces $$MYSQL_DATABASE) > database-dump.sql
