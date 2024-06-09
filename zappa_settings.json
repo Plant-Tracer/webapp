@@ -23,8 +23,8 @@
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_S3_BUCKET":"planttracermovies"
+            "PLANTTRACER_S3_BUCKET":"planttracer-app",
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
         }
     },
     "dev": {
@@ -51,8 +51,8 @@
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_S3_BUCKET":"planttracermovies"
+            "PLANTTRACER_S3_BUCKET":"planttracer-dev",
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
         }
     },
     "demo": {
@@ -77,8 +77,8 @@
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_S3_BUCKET":"planttracermovies"
+            "PLANTTRACER_S3_BUCKET":"planttracer-demo",
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
         }
     }
 

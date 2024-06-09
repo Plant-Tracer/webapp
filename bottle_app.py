@@ -79,7 +79,9 @@ LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript consol
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
-# Upgrade the server if it needs upgrading. This gets run when this file gets loaded
+# Upgrade the server if it needs upgrading.
+# This gets run when this file gets loaded and where dbwriter() gets cached
+#
 dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
 ################################################################

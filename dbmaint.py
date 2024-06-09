@@ -73,11 +73,11 @@ def purge_test_data():
                   'where email like "%admin+test%"',
                   'where email like "%demo+admin%"']:
         del_movies = f"(select id from movies where user_id in (select id from users {where}))"
-        for table in ['movie_frame_analysis','movie_frame_trackpoints']:
-            cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+        for table in ['movie_frame_trackpoints']:
+            cmd = f"delete from {table} where movie_id in {del_movies})"
             print(cmd)
             c.execute(cmd)
-        for table in ['movie_analysis','movie_data','movie_frames']:
+        for table in ['movie_frames']:
             cmd = f"delete from {table} where movie_id in {del_movies}"
             print(cmd)
             c.execute(cmd)
@@ -93,7 +93,7 @@ def purge_all_movies():
     """Remove all test data from the database"""
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
-    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+    for table in ['object_store','objects','movie_frame_trackpoints','movie_frames','movies']:
         print("wiping",table)
         c.execute( f"delete from {table}")
 
@@ -328,9 +328,6 @@ def dump(config,dumpdir):
         with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
             f.write(movie_data)
 
-
-
-
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Database Maintenance Program",
@@ -389,7 +386,8 @@ if __name__ == "__main__":
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
         new_api_key = db.make_new_api_key(email=args.sendlink)
-        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint, new_api_key=new_api_key)
+        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
+                      new_api_key=new_api_key)
         sys.exit(0)
 
     ################################################################
@@ -403,7 +401,8 @@ if __name__ == "__main__":
 
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
-                createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
+                createdb(droot=droot, createdb_name = args.createdb,
+                         write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.upgradedb:
