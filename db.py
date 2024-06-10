@@ -499,37 +499,21 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie_data(*, movie_id:int):
+def get_movie_data(*, movie_id:int, zipfile=False):
     """Returns the movie contents for a movie_id.
-    If there is a urn, use that.
-    If the data is stored in the movie_data, return that.
-    If a sha256 is stored, redirect through the objects table.
+    Should not be used to provide data to the user.
     """
-    if movie_id<0:
-        raise InvalidMovie_Id(movie_id)
+    what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
+    row = dbfile.DBMySQL.csfr(get_dbreader(),
+                              f"""SELECT {what} from movies where movie_id=%s""",
+                              (movie_id,))[0]
     try:
-        row = dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movies.movie_data_urn as movie_data_urn,
-                                         movies.movie_data_sha256 as movie_data_sha256,
-                                         objects.urn as object_urn,
-                                         object_store.data as object_data
-                               FROM movies
-                               LEFT JOIN objects on movies.movie_data_sha256=objects.sha256
-                               LEFT JOIN object_store on object_store.sha256=objects.sha256
-                               WHERE movies.id=%s
-                               LIMIT 1""",
-                                  (movie_id,),
-                                  asDicts=True)[0]
+        urn = row[0][0]
     except IndexError as e:
         raise InvalidMovie_Id(movie_id) from e
 
-    if row['object_data'] is not None and len(row['object_data'])>0:
-        return row['object_data']
-
-    for name in ['movie_data_urn','object_urn']:
-        urn = row[name]
-        if urn:
-            return db_object.read_object(urn)
+    if urn:
+        return db_object.read_object(urn)
     return None
 
 
@@ -680,6 +664,10 @@ def course_id_for_movie_id(movie_id):
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
+    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
+
+@functools.lru_cache(maxsize=128)
+def movie_zipfile_urn_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
 
 # New implementation that writes to s3
@@ -944,6 +932,7 @@ SET_MOVIE_METADATA = {
     'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
     'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
     'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
+    'movie_zipfile_urn':'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1053,6 +1042,10 @@ class Movie():
     def movie_data_urn(self):
         return movie_data_urn_for_movie_id(self.movie_id)
 
+    @property
+    def movie_zipfile_urn(self):
+        return movie_zipfile_urn_for_movie_id(self.movie_id)
+
     @data.setter
     def data(self, movie_data):
         set_movie_data(movie_id=self.movie_id, movie_data=movie_data)
@@ -1061,6 +1054,11 @@ class Movie():
     def url(self):
         """Return a URL for accessing the data. This is a self-signed URL"""
         return db_object.make_signed_url(urn=self.movie_data_urn)
+
+    @property
+    def zipfile_url(self):
+        """Return a URL for accessing the zipfile. This is a self-signed URL"""
+        return db_object.make_signed_url(urn=self.movie_zipfile_urn)
 
     @property
     def metadata(self):

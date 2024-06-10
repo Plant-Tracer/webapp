@@ -160,7 +160,7 @@ def cleanup_mp4(*,infile,outfile):
     subprocess.call([ FFMPEG_PATH ] + args)
 
 
-def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints):
+def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     # movie_trackpoints is an array of records where each has the form:
     # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
@@ -187,7 +187,8 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
                 break
 
             # Label the output and write it
-            cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
+            if label_frames:
+                cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
             out.write(current_frame_data)
 
         cap.release()
@@ -199,7 +200,7 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
 
 
 #pylint: disable=too-many-arguments
-def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=None):
+def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_frames=False, callback=None):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -253,6 +254,8 @@ def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=N
 
         # Call the callback if we have one
         if callback is not None:
+            if label_frames:
+                cv2_label_frame(frame=frame_this, trackpoints=[], frame_label=frame_number)
             callback(frame_number=frame_number, frame_data=frame_this, frame_trackpoints=current_trackpoints)
 
     cap.release()

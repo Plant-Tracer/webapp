@@ -142,7 +142,17 @@ def test_movie_tracking(new_movie):
         ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
 
-    # Check that the header is set
+    # Verify that there is a ZIP file
+    zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
+    with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
+        tf.write(zipfile_data)
+        tf.flush()
+        with ZipFile(tf.name, 'r') as myzip:
+            logging.info("names of files in zipfile: %s",myzip.namelist())
+            frame_count = len(myzip.namelist())
+
+
+    # Check that the CSV header is set
     fields = lines[0].split(",")
     logging.info("fields: %s",fields)
     assert fields==['frame_number','track1 x','track1 y','track2 x','track2 y']
@@ -164,6 +174,9 @@ def test_movie_tracking(new_movie):
 
     # Make sure we got a lot back
     assert len(lines) > 50
+
+    # Make sure that we got a line for every frame
+    assert frame_count == len(lines)
 
     # Check error conditions for getting incomplete metadata
     with boddle(params={'api_key': api_key,

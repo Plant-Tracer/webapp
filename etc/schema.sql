@@ -176,6 +176,7 @@ CREATE TABLE `movies` (
   `total_bytes` int DEFAULT NULL,
   `status` varchar(250) DEFAULT NULL,
   `movie_data_urn` varchar(1024) DEFAULT NULL,
+  `movie_zipfile_urn` varchar(1024) DEFAULT NULL,
   `version` int NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
@@ -202,7 +203,7 @@ CREATE TABLE `object_store` (
   `data` longblob NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `sha256` (`sha256`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Stores objects for deployments that do not use Amazon S3, such as when testing within GitHub Actions.';
 
 --
 -- Table structure for table `objects`
@@ -218,7 +219,7 @@ CREATE TABLE `objects` (
   UNIQUE KEY `urn` (`urn`(768)),
   KEY `mtime` (`mtime`),
   KEY `sha256` (`sha256`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Stores pointers from a SHA256 to a URN, which can be the object_store or in Amazon S3.';
 
 --
 -- Table structure for table `users`

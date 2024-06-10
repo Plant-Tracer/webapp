@@ -269,7 +269,8 @@ def create_course(*, course_key, course_name, admin_email,
 ################################################################
 
 def current_source_schema():
-    """Returns the current schema of the app based on the highest number schema file"""
+    """Returns the current schema of the app based on the highest number schema file.
+    Scan all current schema files."""
     glob_template = SCHEMA_TEMPLATE.format(schema='*')
     pat = re.compile("([0-9]+)[.]sql")
     ver = 0
