@@ -104,7 +104,6 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     Creadentials are stored in cp.
     """
     assert isinstance(createdb_name,str)
-    assert isinstance(write_config_fname,str)
     print("createdb_name=",createdb_name)
 
     print(f"createdb droot={droot} createdb_name={createdb_name} write_config_fname={write_config_fname} schema={schema}")
@@ -127,8 +126,8 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     if debug:
         print("Current interfaces and hostnames:")
         print("ifconfig -a:")
-    subprocess.call(['ifconfig','-a'])
-    print("Hostnames:",hostnames())
+        subprocess.call(['ifconfig','-a'])
+        print("Hostnames:",hostnames())
     for ipaddr in hostnames() + ['%']:
         print("granting dbreader and dbwriter access from ",ipaddr)
         c.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')

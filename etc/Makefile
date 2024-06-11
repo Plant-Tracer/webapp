@@ -27,7 +27,8 @@ output-ssh_priv_key:
 	@echo here is the base64 encoded private key, for pasting into the GitHub secrets section
 	cat $$HOME/.ssh/id_ed25519 | openssl base64 -e
 
-check:
+test-schema-upgrade:
+	(cd ..;make test-schema-upgrade)
 
 
 reset-db: check

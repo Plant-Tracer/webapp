@@ -113,6 +113,13 @@ pytest-quiet:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
+test-schema-upgrade:
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --createdb test_db1 --schema etc/schema_0.sql
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
+
+
 ################################################################
 
 
