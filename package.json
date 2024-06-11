@@ -1,18 +1,20 @@
 {
   "dependencies": {
+    "jquery": "^3.7.1",
     "jslint": "^0.12.1"
   },
   "devDependencies": {
-    "@html-eslint/eslint-plugin": "^0.24.0",
-    "@html-eslint/parser": "^0.24.0",
     "@babel/core": "^7.24.3",
     "@babel/preset-env": "^7.24.3",
+    "@html-eslint/eslint-plugin": "^0.24.0",
+    "@html-eslint/parser": "^0.24.0",
     "babel-jest": "^29.7.0",
     "babel-preset-airbnb": "^5.0.0",
     "eslint": "^8.57.0",
     "eslint-config-jquery": "^3.0.2",
     "eslint-formatter-friendly": "^7.0.0",
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   },
   "scripts": {
     "test": "jest",

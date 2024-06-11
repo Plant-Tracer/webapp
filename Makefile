@@ -172,7 +172,8 @@ eslint:
 	(cd templates;make eslint)
 
 jscoverage:
-	npm run coverage
+	npm install --save-dev jest
+	npm install --save-dev babel-jest @babel/core @babel/preset-e
 
 
 ################################################################
