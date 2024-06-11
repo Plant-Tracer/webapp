@@ -259,7 +259,7 @@ MIME_MAP = {'.jpg':'image/jpeg',
 
 @api.route('/get-object', method=GET)
 def api_get_object():
-    """Implement signed URLs"""
+    """Implement signed URLs. Doesn't need APIkey!"""
     # my object store doesn't implement mime types, so fake them.
     urn = get('urn')
     ext = os.path.splitext( urn )[1]

@@ -268,6 +268,14 @@ def create_course(*, course_key, course_name, admin_email,
 ## database schema management
 ################################################################
 
+"""
+etc/schema.sql --- the current schema.
+etc/schema_0.sql --- creates the initial schema and includes a statement
+                     set the current schema version number. Currently this is version 10.
+etc/schema_{n}.sql --- upgrade from schema (n-1) to (n).
+"""
+
+
 def current_source_schema():
     """Returns the current schema of the app based on the highest number schema file.
     Scan all current schema files."""
@@ -288,10 +296,6 @@ def schema_upgrade( ath, dbname ):
         dbcon.execute(f"USE {dbname}")
 
         max_version = current_source_schema()
-        # First get the current schema version, upgrading from version 0 to 1 in the process
-        # if there is no metadata table
-        with open(SCHEMA1_FILE,'r') as f:
-            dbcon.create_schema(f.read())
 
         def current_version():
             cursor = dbcon.cursor()

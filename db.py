@@ -504,13 +504,12 @@ def get_movie_data(*, movie_id:int, zipfile=False):
     Should not be used to provide data to the user.
     """
     what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
-    row = dbfile.DBMySQL.csfr(get_dbreader(),
-                              f"""SELECT {what} from movies where movie_id=%s""",
-                              (movie_id,))[0]
+    row = dbfile.DBMySQL.csfr(get_dbreader(), f"""SELECT {what} from movies where id=%s""", (movie_id,))
     try:
         urn = row[0][0]
     except IndexError as e:
         raise InvalidMovie_Id(movie_id) from e
+    logging.info("movie_id=%s zipfile=%s what=%s urn=%s",movie_id,zipfile,what,urn)
 
     if urn:
         return db_object.read_object(urn)
