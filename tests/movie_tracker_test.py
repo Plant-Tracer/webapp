@@ -18,6 +18,7 @@ import math
 import urllib
 from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
+from zipfile import ZipFile
 
 import numpy as np
 import cv2
@@ -176,7 +177,7 @@ def test_movie_tracking(new_movie):
     assert len(lines) > 50
 
     # Make sure that we got a line for every frame
-    assert frame_count == len(lines)
+    assert frame_count+1 == len(lines) # one line for the header
 
     # Check error conditions for getting incomplete metadata
     with boddle(params={'api_key': api_key,
@@ -192,23 +193,24 @@ def test_movie_tracking(new_movie):
         r = bottle_api.api_get_movie_metadata()
         assert r == E.FRAME_COUNT_GT_0
 
-    # Now test the API to make sure we can get the URL for the frames.
+    # Get the movie metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_start': 0,
                         'frame_count': 1000}):
         r = bottle_api.api_get_movie_metadata()
-        logging.debug("r10=%s",r)
-        print(json.dumps(r,indent=4),file=sys.stderr)
-        assert r['error'] == False
-        movie_id = r['metadata']['movie_id']
-        frame0 = r['frames']['0']
+    logging.debug("r10=%s",r)
+    print(json.dumps(r,indent=4),file=sys.stderr)
+    assert r['error'] == False
+    movie_id = r['metadata']['movie_id']
+    frame0 = r['frames']['0']
 
-        # Verify that the signed URL works
-        url = frame0['frame_url']
-        params = parse_qs(urlparse(url).query)
-        frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
-        assert len(frame)>100   # we should do a better job verifying JPEG
+
+    # we no longer get signed URLs
+    #url = frame0['frame_url']
+    #params = parse_qs(urlparse(url).query)
+    #frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
+    #assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
     track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
