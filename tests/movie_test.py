@@ -16,6 +16,8 @@ import hashlib
 import json
 import logging
 import requests
+import re
+import urllib
 from os.path import abspath, dirname
 
 from boddle import boddle

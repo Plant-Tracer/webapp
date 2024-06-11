@@ -254,7 +254,9 @@ def api_bulk_register():
 ##
 ## Object API
 MIME_MAP = {'.jpg':'image/jpeg',
-            '.jpeg':'image/jpeg'}
+            '.jpeg':'image/jpeg',
+            '.mov':'video/mp4',
+            '.mp4':'video/mp4' }
 
 
 @api.route('/get-object', method=GET)
