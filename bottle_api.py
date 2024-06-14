@@ -100,7 +100,7 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
-        raise auth.http404('demo accounts not allowed to execute requested action')
+        raise auth.http403('demo accounts not allowed to execute requested action')
     return userdict['id']
 
 
@@ -117,16 +117,16 @@ def get_user_dict():
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
         if bottle.request.fullpath.startswith('/api/'):
-            raise auth.http404('invalid API key')
+            raise auth.http403('invalid API key')
         # Check if we were running under an API
 
         # This will redirect to the / and produce a "Session expired" message
-        raise auth.http404('session expired')
+        raise auth.http403('session expired')
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.environ.get('REMOTE_ADDR'),request.url)
         auth.clear_cookie()
-        raise auth.http404(f'Error 404: api_key {api_key} is invalid. ')
+        raise auth.http403(f'Error 404: api_key {api_key} is invalid. ')
     return userdict
 
 ################################################################
@@ -849,7 +849,7 @@ def api_new_frame():
 ## /put-frame-trackpoints:
 ## Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.
 
-@api.route('/put-frame-trackpionts', method=POST)
+@api.route('/put-frame-trackpoints', method=POST)
 def api_put_frame_trackpoints():
     """
     Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.

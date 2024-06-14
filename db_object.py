@@ -138,7 +138,7 @@ def read_signed_url(*,urn,sig):
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise auth.http404("signature does not verify")
+    raise auth.http403("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""

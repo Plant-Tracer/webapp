@@ -4,6 +4,9 @@
 
 /**
  * Canvas Movie Controller:
+ * Subclasses CanvasController to:
+ * - Support numbered frames, where each one has an underlying image and makers.
+ * - When the frame changes, all of the objects in the canvas are removed anda  new image and objects are instantiated.
  * Holds all of the frames for a movie and changes the image and annotation in response to button press or timer
  */
 
@@ -71,7 +74,7 @@ class MovieController extends CanvasController {
         // frames is an array with [nn] frame number indexes.
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
-        // frames[0].markers[] - an array of marker objects
+        // frames[0].markers[] - an array of marker objects e.g. [{'x':10,'y':20,'label':30},...]
         console.log("load_movie(frames)=",frames);
         this.frames = frames;
 
@@ -103,7 +106,7 @@ class MovieController extends CanvasController {
      *
      */
     goto_frame( frame ) {
-        console.log(`goto_frame(${frame})`);
+        console.log(`MovieController::goto_frame(${frame})`);
 
         frame = parseInt(frame);         // make sure it is integer
         if ( isNaN(frame) || frame<0 ) {
