@@ -365,7 +365,10 @@ class WebImage extends CanvasItem {
             this.height = this.img.naturalHeight;
             this.loaded = true;
             // If we are in a canvas controller, have it redraw
-            if (this.cc) this.cc.redraw();
+            if (this.cc) {
+                console.log("redrawning called by",this.url);
+                this.cc.redraw();
+            }
         };
 
         this.img.onerror = (_) => {

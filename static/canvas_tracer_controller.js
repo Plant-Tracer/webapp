@@ -27,8 +27,10 @@ var div_template = '';          // will be set with the div template
 import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
+
+// NOTE ./static is needed below but not above!
 setOptions({
-  workerURL: './unzipit-worker.module.js',
+  workerURL: './static/unzipit-worker.module.js',
   numWorkers: 2,
 });
 
@@ -380,7 +382,7 @@ async function trace_movie_frames(div_controller, movie_zipfile, movie_metadata,
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((name, i) => {
-        console.log("name=",name,"i=",i);
+        //console.log("unzipped name=",name,"i=",i);
         frames[i] = {'frame_url':URL.createObjectURL(blobs[i])};
     });
 
