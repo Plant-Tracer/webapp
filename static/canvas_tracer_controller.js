@@ -26,6 +26,11 @@ var div_template = '';          // will be set with the div template
 
 import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
+import { unzip, setOptions } from './unzipit.module.js';
+setOptions({
+  workerURL: './unzipit-worker.module.js',
+  numWorkers: 2,
+});
 
 const DISABLED='disabled';
 
@@ -368,11 +373,20 @@ function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_k
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-function trace_movie_frames(div_controller, movie_metadata, movie_frames, api_key) {
-    console.log("trace_movie_frames. movie_frames=",movie_frames);
+async function trace_movie_frames(div_controller, movie_zipfile, movie_metadata, api_key) {
+    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile);
+    const frames = [];
+    const {entries} = await unzip(movie_zipfile);
+    const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
+    const blobs = await Promise.all(names.map(name => entries[name].blob()));
+    names.forEach((name, i) => {
+        console.log("name=",name,"i=",i);
+        frames[i] = {'frame_url':URL.createObjectURL(blobs[i])};
+    });
+
     cc = new TracerController(div_controller, movie_metadata);
-    cc.load_movie(movie_frames);
     cc.set_movie_control_buttons();
+    cc.load_movie(frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
 }
 

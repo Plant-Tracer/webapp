@@ -102,10 +102,11 @@ dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
+    full_path = os.path.join(STATIC_DIR,path)
     try:
-        kind = filetype.guess(os.path.join(STATIC_DIR,path))
+        kind = filetype.guess(full_path)
     except FileNotFoundError as e:
-        raise auth.http404(f'File not found: {path}') from e
+        raise auth.http404(f'File not found: {full_path}') from e
     if kind is not None:
         mimetype = kind.mime
     elif path.endswith(".html"):
@@ -317,6 +318,19 @@ def func_upload():
 def func_users():
     """/users - provide a users list"""
     return page_dict('List Users', require_auth=True)
+
+################################################################
+## debug/demo
+
+@bottle.route('/demo_tracer1.html', method=GET)
+@view('demo_tracer1.html')
+def demo_tracer1():
+    return page_dict('demo_tracer1',require_auth=False)
+
+@bottle.route('/demo_tracer2.html', method=GET)
+@view('demo_tracer2.html')
+def demo_tracer2():
+    return page_dict('demo_tracer2',require_auth=False)
 
 @bottle.route('/ver', method=GET_POST)
 @view('version.txt')

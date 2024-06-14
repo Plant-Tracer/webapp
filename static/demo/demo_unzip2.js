@@ -12,7 +12,6 @@ setOptions({
 
 async function onload(e) {
     console.log("onload");
-    const cc = new MovieController('div#movie_controller');
     const frames = [];
 
     const {entries} = await unzip('./tracked.zip');
@@ -20,12 +19,9 @@ async function onload(e) {
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((name, i) => {
         console.log("name=",name,"i=",i);
-        //const img = new Image();
-        //img.title = name;
-        //img.src = URL.createObjectURL(blobs[i]);
-        //document.body.appendChild(img);
         frames[i] = {'frame_url':URL.createObjectURL(blobs[i])};
     });
+    const cc = new MovieController('div#movie_controller');
     cc.load_movie(frames);
     cc.set_loop(true);
 }
