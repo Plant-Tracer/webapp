@@ -18,6 +18,7 @@ import math
 import urllib
 from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
+from zipfile import ZipFile
 
 import numpy as np
 import cv2
@@ -142,7 +143,17 @@ def test_movie_tracking(new_movie):
         ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
 
-    # Check that the header is set
+    # Verify that there is a ZIP file
+    zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
+    with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
+        tf.write(zipfile_data)
+        tf.flush()
+        with ZipFile(tf.name, 'r') as myzip:
+            logging.info("names of files in zipfile: %s",myzip.namelist())
+            frame_count = len(myzip.namelist())
+
+
+    # Check that the CSV header is set
     fields = lines[0].split(",")
     logging.info("fields: %s",fields)
     assert fields==['frame_number','track1 x','track1 y','track2 x','track2 y']
@@ -165,6 +176,9 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
+    # Make sure that we got a line for every frame
+    assert frame_count+1 == len(lines) # one line for the header
+
     # Check error conditions for getting incomplete metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
@@ -179,31 +193,32 @@ def test_movie_tracking(new_movie):
         r = bottle_api.api_get_movie_metadata()
         assert r == E.FRAME_COUNT_GT_0
 
-    # Now test the API to make sure we can get the URL for the frames.
+    # Get the movie metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_start': 0,
                         'frame_count': 1000}):
         r = bottle_api.api_get_movie_metadata()
-        logging.debug("r10=%s",r)
-        print(json.dumps(r,indent=4),file=sys.stderr)
-        assert r['error'] == False
-        movie_id = r['metadata']['movie_id']
-        frame0 = r['frames']['0']
+    logging.debug("r10=%s",r)
+    print(json.dumps(r,indent=4),file=sys.stderr)
+    assert r['error'] == False
+    movie_id = r['metadata']['movie_id']
+    frame0 = r['frames']['0']
 
-        # Verify that the signed URL works
-        url = frame0['frame_url']
-        params = parse_qs(urlparse(url).query)
-        frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
-        assert len(frame)>100   # we should do a better job verifying JPEG
+
+    # we no longer get signed URLs
+    #url = frame0['frame_url']
+    #params = parse_qs(urlparse(url).query)
+    #frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
+    #assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
-    track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
+    track1 = [tp for tp in frame0['markers'] if tp['label']=='track1'][0]
     assert track1['x']==275
     assert track1['y']==215
     assert track1['label']=='track1'
 
-    track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
+    track2 = [tp for tp in frame0['markers'] if tp['label']=='track2'][0]
     assert track2['x']==410
     assert track2['y']==175
     assert track2['label']=='track2'

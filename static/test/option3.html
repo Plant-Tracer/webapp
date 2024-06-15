@@ -1,0 +1,35 @@
+<html>
+    <head>
+        <title>Option 3</title>
+    </head>
+    <body>
+        <input type="file" id="file-input" />
+        <p/>
+        <video id="video" controls></video>
+        <canvas id="canvas"></canvas>
+        <script>
+         const video = document.getElementById('video');
+         const canvas = document.getElementById('canvas');
+         const ctx = canvas.getContext('2d');
+
+         document.getElementById('file-input').addEventListener('change', (event) => {
+             const file = event.target.files[0];
+             video.src = URL.createObjectURL(file);
+         });
+
+         var count=0;
+         video.addEventListener('play', () => {
+             const drawFrame = () => {
+                 if (!video.paused && !video.ended) {
+                     ctx.drawImage(video, 0, 0);
+                     // Annotate frame here
+                     console.log(`annotate ${count}`);
+                     count++;
+                     requestAnimationFrame(drawFrame);
+                 }
+             };
+             drawFrame();
+         });
+        </script>
+    </body>
+</html>

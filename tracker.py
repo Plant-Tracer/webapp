@@ -12,6 +12,7 @@ import logging
 import os
 from collections import defaultdict
 
+import math
 import cv2
 import numpy as np
 import paths
@@ -112,9 +113,9 @@ def extract_movie_metadata(*, movie_data):
             'height':int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
             'fps':cap.get(cv2.CAP_PROP_FPS)}
 
-def convert_frame_to_jpeg(img):
+def convert_frame_to_jpeg(img, quality=90):
     """Use CV2 to convert a frame to a jpeg"""
-    _,jpg_img = cv2.imencode('.jpg',img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    _,jpg_img = cv2.imencode('.jpg',img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     return jpg_img.tobytes()
 
 def extract_frame(*, movie_data, frame_number, fmt):
@@ -160,7 +161,7 @@ def cleanup_mp4(*,infile,outfile):
     subprocess.call([ FFMPEG_PATH ] + args)
 
 
-def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints):
+def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     # movie_trackpoints is an array of records where each has the form:
     # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
@@ -187,7 +188,8 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
                 break
 
             # Label the output and write it
-            cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
+            if label_frames:
+                cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
             out.write(current_frame_data)
 
         cap.release()
@@ -198,8 +200,10 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     logging.info("rendered movie")
 
 
-#pylint: disable=too-many-arguments
-def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=None):
+def prototype_callback(*,frame_number,frame_data,frame_trackpoints):
+    logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s",frame_number,len(frame_data),frame_trackpoints)
+
+def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_frames=False, callback=prototype_callback):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -230,30 +234,39 @@ def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, callback=N
 
         # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
         # This also copies over frame_prev at start (when frame_number=0 and frame_start=0, it is <= frame_start)
+        frame_show = frame_this # frame to show
         if frame_number <= frame_start:
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+            # Call the callback if we have one
+            if label_frames:
+                frame_show = frame_this.copy()
+                cv2_label_frame(frame=frame_show, trackpoints=current_trackpoints, frame_label=frame_number)
+            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
+            continue
 
         # If this is after the starting frame, then track it
         # This is run every time through the loop except the first time.
-        if frame_number > frame_start:
-            assert frame_prev is not None
-            trackpoints_by_label = { tp['label']:tp for tp in current_trackpoints }
-            new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
+        assert frame_prev is not None
+        trackpoints_by_label = { tp['label']:tp for tp in current_trackpoints }
+        new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
 
-            # Copy in updated trackpoints
-            for tp in new_trackpoints:
-                trackpoints_by_label[tp['label']] = tp
+        # Copy in updated trackpoints
+        for tp in new_trackpoints:
+            trackpoints_by_label[tp['label']] = tp
 
-            # create new list of trackpoints
-            current_trackpoints = trackpoints_by_label.values()
+        # create new list of trackpoints
+        current_trackpoints = trackpoints_by_label.values()
 
-            # And set their new frame numbers
-            for tp in current_trackpoints:
-                tp['frame_number'] = frame_number # set the frame number
+        # And set their new frame numbers
+        for tp in current_trackpoints:
+            tp['frame_number'] = frame_number # set the frame number
 
         # Call the callback if we have one
         if callback is not None:
-            callback(frame_number=frame_number, frame_data=frame_this, frame_trackpoints=current_trackpoints)
+            if label_frames:
+                frame_show = frame_this.copy()
+                cv2_label_frame(frame=frame_show, trackpoints=[], frame_label=frame_number)
+            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
 
     cap.release()
 
@@ -263,6 +276,55 @@ def rotate_movie(movie_input, movie_output, transpose=1):
     subprocess.call([FFMPEG_PATH,'-hide_banner','-loglevel','error',
                      '-i',movie_input,'-vf',f'transpose={int(transpose)}','-c:a','copy','-y',movie_output])
     assert os.path.getsize(movie_output) > MIN_MOVIE_BYTES
+
+################################################################
+### Code to figure convert from screen coordinatrs to actual mm
+### Given that two points are labeled "ruler xx mm" where xx is the ruler position in milimeters
+
+RULER_POINT_RE = re.compile(r'ruler? +([0-9]+) *mm')
+def identify_calibration_labels(label):
+    """returns the position on the ruler in mm or returns None"""
+    m = RULER_POINT_RE.searh(label)
+    return m.group(1) if m else None
+
+def compute_distance(pt1, pt2):
+    """Returns the distance between point1 and point2. Points are {'x':x,'y':y} dicts."""
+    return math.sqrt( (pt1['x']-pt1['x']) ** 2 + (pt1['y']-pt2['y'])**2)
+
+def calibrate_point(pt, calibration_label1, calibration_label2):
+    """Given a point and two calibration labels, compute the distance,
+    and return the point calibrated. (So in addition to having a 'x'
+    and 'y' property in dictionary, it also has a 'x_mm' and a 'y_mm'
+    in the dictionary.)
+    """
+
+    ### TODO - Evan - write the code here
+
+
+def calibrate_trackpoint_frames(trackpoints):
+    """
+    Given an array of many trackpoints for many frames, epeat for every frame:
+    Find the trackpoints for the frame, identify the the calibration points,
+    pass each trackpoint to calibrate_point with the two calibration points,
+    and create a new trackpoints list that has the non-calibration points calibrated for each frame.
+    """
+
+    ### TODO - Evan - write code here
+
+
+### OLD CODE
+#def pixels_to_mm(*, pt, calibration_points):
+#
+#    pixel_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+#    mm_per_pixel = straight_line_distance_mm / pixel_distance
+#
+#    X1_mm = x1 * mm_per_pixel
+#    Y1_mm = y1 * mm_per_pixel
+#    X2_mm = x2 * mm_per_pixel
+#    Y2_mm = y2 * mm_per_pixel
+#
+#    return round(X1_mm, 4), round(Y1_mm, 4), round(X2_mm, 4), round(Y2_mm, 4)
+
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie

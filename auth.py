@@ -50,9 +50,9 @@ def smtp_config():
         assert key in cp['smtp']
     return section
 
-def http404(msg=''):
-    return bottle.HTTPResponse(body='Authentication error 404 '+msg,
-                               status=404)
+def http403(msg=''):
+    return bottle.HTTPResponse(body='Authentication error 403 '+msg,
+                               status=403)
 
 @functools.cache
 def get_dbreader():

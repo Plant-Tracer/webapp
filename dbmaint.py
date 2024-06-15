@@ -26,7 +26,7 @@ from constants import C
 import db
 import tracker
 import auth
-from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
+from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
@@ -104,7 +104,6 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     Creadentials are stored in cp.
     """
     assert isinstance(createdb_name,str)
-    assert isinstance(write_config_fname,str)
     print("createdb_name=",createdb_name)
 
     print(f"createdb droot={droot} createdb_name={createdb_name} write_config_fname={write_config_fname} schema={schema}")
@@ -127,8 +126,8 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     if debug:
         print("Current interfaces and hostnames:")
         print("ifconfig -a:")
-    subprocess.call(['ifconfig','-a'])
-    print("Hostnames:",hostnames())
+        subprocess.call(['ifconfig','-a'])
+        print("Hostnames:",hostnames())
     for ipaddr in hostnames() + ['%']:
         print("granting dbreader and dbwriter access from ",ipaddr)
         c.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
@@ -268,8 +267,17 @@ def create_course(*, course_key, course_name, admin_email,
 ## database schema management
 ################################################################
 
+"""
+etc/schema.sql --- the current schema.
+etc/schema_0.sql --- creates the initial schema and includes a statement
+                     set the current schema version number. Currently this is version 10.
+etc/schema_{n}.sql --- upgrade from schema (n-1) to (n).
+"""
+
+
 def current_source_schema():
-    """Returns the current schema of the app based on the highest number schema file"""
+    """Returns the current schema of the app based on the highest number schema file.
+    Scan all current schema files."""
     glob_template = SCHEMA_TEMPLATE.format(schema='*')
     pat = re.compile("([0-9]+)[.]sql")
     ver = 0
@@ -287,10 +295,6 @@ def schema_upgrade( ath, dbname ):
         dbcon.execute(f"USE {dbname}")
 
         max_version = current_source_schema()
-        # First get the current schema version, upgrading from version 0 to 1 in the process
-        # if there is no metadata table
-        with open(SCHEMA1_FILE,'r') as f:
-            dbcon.create_schema(f.read())
 
         def current_version():
             cursor = dbcon.cursor()

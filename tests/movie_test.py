@@ -16,6 +16,8 @@ import hashlib
 import json
 import logging
 import requests
+import re
+import urllib
 from os.path import abspath, dirname
 
 from boddle import boddle
@@ -163,8 +165,19 @@ def test_new_movie(new_movie):
                         'movie_id': movie_id,
                         'redirect_inline':True}):
         movie_data = bottle_api.api_get_movie_data()
-        if type(movie_data)==str and movie_data.startswith("#REDIRECT "):
-            url = movie_data.replace("#REDIRECT ","")
+    if type(movie_data)==str and movie_data.startswith("#REDIRECT "):
+        logging.info("REDIRECT: movie_id=%s movie_data=%s",movie_id,movie_data)
+        url = movie_data.replace("#REDIRECT ","")
+        if url.startswith('/api/get-object?'):
+            # Decode the /get-object parameters and run the /api/get-object
+            m = re.search("urn=(.*)&sig=(.*)",url)
+            urn = urllib.parse.unquote(m.group(1))
+            sig = urllib.parse.unquote(m.group(2))
+            with boddle( params={'urn':urn,
+                                 'sig':sig} ):
+                movie_data = bottle_api.api_get_object()
+        else:
+            # Request it using http:, which is probably a call to S3
             r = requests.get(url)
             movie_data = r.content
 

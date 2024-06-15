@@ -14,7 +14,9 @@ import io
 #import urllib
 import csv
 import os
+import zipfile
 from collections import defaultdict
+from zipfile import ZipFile
 
 from validate_email_address import validate_email
 import bottle
@@ -99,7 +101,7 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requeted action")
-        raise auth.http404('demo accounts not allowed to execute requested action')
+        raise auth.http403('demo accounts not allowed to execute requested action')
     return userdict['id']
 
 
@@ -116,16 +118,16 @@ def get_user_dict():
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
         if bottle.request.fullpath.startswith('/api/'):
-            raise auth.http404('invalid API key')
+            raise auth.http403('invalid API key')
         # Check if we were running under an API
 
         # This will redirect to the / and produce a "Session expired" message
-        raise auth.http404('session expired')
+        raise auth.http403('session expired')
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.environ.get('REMOTE_ADDR'),request.url)
         auth.clear_cookie()
-        raise auth.http404(f'Error 404: api_key {api_key} is invalid. ')
+        raise auth.http403(f'Error 404: api_key {api_key} is invalid. ')
     return userdict
 
 ################################################################
@@ -253,12 +255,16 @@ def api_bulk_register():
 ##
 ## Object API
 MIME_MAP = {'.jpg':'image/jpeg',
-            '.jpeg':'image/jpeg'}
+            '.jpeg':'image/jpeg',
+            '.mov':'video/mp4',
+            '.mp4':'video/mp4',
+            '.zip':'application/zip'
+            }
 
 
 @api.route('/get-object', method=GET)
 def api_get_object():
-    """Implement signed URLs"""
+    """Implement signed URLs. Doesn't need APIkey!"""
     # my object store doesn't implement mime types, so fake them.
     urn = get('urn')
     ext = os.path.splitext( urn )[1]
@@ -351,10 +357,11 @@ def api_upload_movie():
 @api.route('/get-movie-data', method=GET_POST)
 def api_get_movie_data():
     """
-    NOTE - This gets the ENTIRE movie. This may cause memory issues at some point.
+    Redirects the user to a URL that downloads the movie.
     :param api_key:   authentication
     :param movie_id:  movie
-    :param redirect_inline: - if True and we are redirecting, return "#REDIRECT url"
+    :param format:    if 'zip' - return as as a zipfile
+    :param redirect_inline: - if True and we are redirecting, return "#REDIRECT url" (for testing)
     :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
@@ -366,21 +373,20 @@ def api_get_movie_data():
         logging.debug("user authentication error=%s",e)
         return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=403)
 
-    # If we have a movie, return it
-    if movie.data is not None:
-        bottle.response.set_header('Content-Type', movie.mime_type)
-        return movie.data
+    if get('format')=='zip':
+        url = movie.zipfile_url
+    else:
+        url = movie.url
 
-    # Looks like we need a url
-    if movie.url is None:
+    if url is None:
         logging.debug("no movie data for movie_id %s",movie_id)
         return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404)
 
     # This is used for testing redirect response in the test program
     if get_bool('redirect_inline'):
-        return "#REDIRECT " + movie.url
+        return "#REDIRECT " + url
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
-    return bottle.redirect(movie.url)
+    return bottle.redirect(url)
 
 def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
     """Update the movie metadata."""
@@ -450,7 +456,6 @@ def api_get_frame():
       movie_id     - the movie (always returned)
       frame_number - the number of the frame (always returned)
       last_tracked_frame - the frame number of the highest frame with trackpoints
-      annotations - a JSON object of annotations from the databsae.
       trackpoints - a list of the trackpoints
     """
     user_id      = get_user_id(allow_demo=True)
@@ -516,7 +521,6 @@ def api_get_frame():
     return fix_types(ret)
 
 
-
 ################################################################
 ## Movie editing
 
@@ -540,7 +544,6 @@ def api_edit_movie():
                 movie = db.Movie(movie_id, user_id=get_user_id())
                 movie_input.write( movie.data )
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
-                db.purge_movie_frames( movie_id=movie.movie_id )
                 movie_output.seek(0)
                 movie.data = movie_data = movie_output.read()
                 movie.version += 1
@@ -588,11 +591,9 @@ def api_get_movie_metadata():
 
     Returns JSON dictionary:
     ['metadata'] - movie metadata (same as get-metadata)
-    ['frames'] - annotations, trackpoints, or URLs - same format that canvas_movie_controller.load_movie() takes
-    ['frames'][10]      (where 10 is a frame number) - per-frame array, starting with frame 0.
-    ['frames'][10]['trackpoints'] - array of the trackpoints for that frame
-    ['frames'][10]['annotations'] - array of the annotations for that frame
-    ['frames'][10]['frame_url'] - signed URL for the frame, if it exists
+    ['frames']   - dictionary individual frames
+    ['frames'][10]      (where 10 is a frame number) - per-frame dictionary
+    ['frames'][10]['markers'] - array of the trackpoints for that frame
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')
@@ -614,8 +615,13 @@ def api_get_movie_metadata():
         # Add in the movie_metadata we just got
         movie_metadata = {**movie_metadata, **tracker.extract_movie_metadata(movie_data=movie_data)}
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+    # If we have a movie_zipfile_urn, create a signed url
+    if movie_metadata.get('movie_zipfile_urn',None):
+        movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
-    ret = {'error':False, 'metadata':movie_metadata}
+
+    ret = {'error':False,
+           'metadata':movie_metadata}
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -628,22 +634,15 @@ def api_get_movie_metadata():
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
             return E.FRAME_COUNT_GT_0
+        #
         # Get the trackpoints and then group by frame_number for the response
         ret['frames'] = defaultdict(dict)
         tpts = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
         for tpt in tpts:
             frame = ret['frames'][tpt['frame_number']]
-            if 'trackpoints' not in frame:
-                frame['trackpoints'] = []
-            frame['trackpoints'].append(tpt)
-
-        # Now get the URLs for every frame for which there are trackpoints
-        for row in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
-            urn = row['frame_urn']
-            if urn is None:
-                urn = api_get_frame_urn(frame_number=row['frame_number'], movie_id=movie_id, user_id=user_id)
-                assert urn is not None
-            ret['frames'][row['frame_number']]['frame_url'] = db_object.make_signed_url(urn=urn)
+            if 'markers' not in frame:
+                frame['markers'] = []
+            frame['markers'].append(tpt)
 
     return fix_types(ret)
 
@@ -694,12 +693,16 @@ def api_get_movie_trackpoints():
 ## Tracking is requested from the client and run in a background lambda function.
 
 # pylint: disable=too-few-public-methods
+# pylint: disable=consider-using-with
 class MovieTrackCallback:
     """Service class to create a callback instance to update the movie status"""
     def __init__(self, *, user_id, movie_id):
         self.user_id = user_id
         self.movie_id = movie_id
         self.movie_metadata = None
+        self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
+        self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, mode='w', compression=zipfile.ZIP_DEFLATED,compresslevel=9)
+        self.ziplen = 0
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints): # pylint: disable=unused-argument
         """Update the status and write the frame to the database.
@@ -707,24 +710,49 @@ class MovieTrackCallback:
         If there are 296 frames, they are numbered 0 to 295.
         We actually track frames 1 through 295. We add 1 to make the status look correct.
         """
-        # Update the movie status
-        total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {frame_number+1} of {total_frames}"
-        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-
         # Write the frame data to the database if we do not have it
         # Moving to an object-oriented API would make this a whole lot more efficient...
 
-        db.create_new_frame(movie_id=self.movie_id,
-                                        frame_number = frame_number,
-                                        frame_data = tracker.convert_frame_to_jpeg(frame_data))
-        # And update the trackpoints
+        logging.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
+
+        frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+        self.ziplen += len(frame_jpeg)
+        logging.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
+        self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_jpeg)
+
+        # Update the trackpoints
         db.put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
 
-    def done(self):
-        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
+        # Update the movie status (for anyone monitoring)
+        total_frames = self.movie_metadata['total_frames']
+        message = f"Tracked frames {frame_number+1} of {total_frames}"
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
+        logging.debug("NOTIFY AFTER. self=%s self.ziplen=%s",self,self.ziplen)
 
-# @task causes this to be run in background on zappa, but in foreground when run locally
+    def close(self):
+        """Close the zipfile"""
+        self.movie_zipfile.close()
+
+    @property
+    def zipfile_name(self):
+        return self.movie_zipfile_tf.name
+
+    @property
+    def zipfile_data(self):
+        logging.debug("zipfile_data %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
+        with open(self.zipfile_name,'rb') as f:
+            return f.read()
+
+    def done(self):
+        logging.debug("DONE. Set TRACKING_COMPLETED")
+        db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
+        if self.zipfile_name:
+            logging.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
+            os.unlink(self.zipfile_name)
+
+##
+## @task causes this to be run in background on zappa, but in foreground when run locally
+##
 @task
 def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
@@ -749,9 +777,15 @@ def api_track_movie(*,user_id, movie_id, frame_start):
         #
         mtc.movie_metadata = db.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
         tracker.track_movie(input_trackpoints = input_trackpoints,
-                            frame_start      = frame_start,
-                            moviefile_input  = infile.name,
+                            frame_start       = frame_start,
+                            moviefile_input   = infile.name,
                             callback = mtc.notify)
+    mtc.close() # close the zipfile
+    # Note: this puts the entire object in memory. That may be an issue at some point
+    object_name = db_object.object_name(course_id=db.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
+    urn = db_object.make_urn(object_name=object_name)
+    db_object.write_object(urn=urn, object_data=mtc.zipfile_data)
+    db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)
     mtc.done() # sets the status to tracking complete
 
 @api.route('/track-movie-queue', method=GET_POST)
@@ -786,10 +820,6 @@ def api_track_movie_queue():
     return {'error': False, 'message':'Tracking is queued'}
 
 
-################################################################
-##
-## Deprecated functions
-
 ## /new-frame is being able to create our own time lapse movie
 ## It's for a camera app that we haven't written yet
 
@@ -816,12 +846,13 @@ def api_new_frame():
     return {'error': False, 'frame_urn': frame_urn}
 
 
+## /put-frame-trackpoints:
+## Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.
 
-
-@api.route('/put-frame-trackpionts', method=POST)
+@api.route('/put-frame-trackpoints', method=POST)
 def api_put_frame_trackpoints():
     """
-    Writes analysis and trackpoints for specific frames
+    Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.
     :param: api_key  - the api_key
     :param: movie_id - the movie
     :param: frame_number - the the frame
@@ -904,7 +935,6 @@ def api_ver():
 ## Demo and debug
 ##
 @api.route('/add', method=GET_POST)
-#@api.route('/get-movie-data', method=GET_POST)
 def api_add():
     a = get_float('a')
     b = get_float('b')
