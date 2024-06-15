@@ -219,33 +219,45 @@ def delete_callback(info):
 def freshen(clean):
     dbwriter = auth.get_dbwriter()
     action = 'CLEAN' if clean else 'FRESHEN'
+    verb   = 'Deleting movies' if clean else 'Displaying movies'
     print(f"{action} ({dbwriter})")
-    print("Deleting" if clean else "","movies with no data:")
+    print(f"{verb} with no data.")
     for movie in csfr(dbwriter, "SELECT * from movies where movie_data_urn is NULL",(),asDicts=True):
         print("Movie with no data:",movie['id'])
         print(json.dumps(movie,default=str,indent=4))
         if clean:
             db.purge_movie(movie_id=movie['id'], callback=delete_callback)
-    exit(0)
-    movies = csfr(dbwriter, "SELECT * from movies",(),asDicts=True)
-    for movie in movies:
+
+    print(f"{verb} marked for deletion by author.")
+    for movie in csfr(dbwriter, "SELECT * from movies where deleted!=0",(),asDicts=True):
+        print("Deleted movie:",movie['id'])
+        print(json.dumps(movie,default=str,indent=4))
+        if clean:
+            db.purge_movie(movie_id=movie['id'], callback=delete_callback)
+
+    print(f"{verb} movies that have no bytes uploaded")
+    for movie in csfr(dbwriter, "SELECT * from movies where total_bytes is NULL",(),asDicts=True):
         movie_id = movie['id']
-        print(f"Movie {movie_id}  title: {movie['title']}")
-        if not movie['total_bytes']:
-            print("** needs refreshing...")
-            print(json.dumps(movie,default=str,indent=4))
-            try:
-                movie_data = db.get_movie_data(movie_id=movie_id)
-            except db.InvalidMovie_Id:
-                print(f"Cannot get movie data. Purging movie {movie_id}")
+        print(json.dumps(movie,default=str,indent=4))
+        try:
+            movie_data = db.get_movie_data(movie_id=movie_id)
+        except db.InvalidMovie_Id:
+            print(f"Cannot get movie data.")
+            movie_data = None
+        if movie_data is None:
+            print("Movie data is not available.")
+            if clean:
+                print("Purging movie")
                 db.purge_movie(movie_id=movie_id)
-                continue
-            assert movie_data is not None
-            movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-            print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
-            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata ]) + " WHERE id=%s"
-            args = list( movie_metadata.values()) + [movie_id]
-            csfr(dbwriter, cmd, args)
+            else:
+                print("Rerun with --clean to purge movie")
+            continue
+        print("Fixing metadata...")
+        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+        print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
+        cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata ]) + " WHERE id=%s"
+        args = list( movie_metadata.values()) + [movie_id]
+        csfr(dbwriter, cmd, args)
 
 #pylint: disable=too-many-arguments
 def create_course(*, course_key, course_name, admin_email,
@@ -298,11 +310,13 @@ def current_source_schema():
         ver = max( int(m.group(1)), ver)
     return ver
 
-def schema_upgrade( ath, dbname ):
+def schema_upgrade( ath ):
     """Upgrade the schema to the current version.
     NOTE: uses ath to create a new database connection. ath must have ability to modify database schema.
 
     """
+    dbname = ath.database
+    logging.info("schema_upgrade(%s)",ath)
     with dbfile.DBMySQL( ath ) as dbcon:
         dbcon.execute(f"USE {dbname}")
 
@@ -346,7 +360,7 @@ def dump(config,dumpdir):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Database Maintenance Program",
+    parser = argparse.ArgumentParser(description="Database Maintenance Program. Database to act upon is specified in the PLANTTRACER_CREDENTIALS environment variable for [dbreader] and [dbwriter]",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
     required.add_argument(
@@ -361,7 +375,7 @@ if __name__ == "__main__":
                         'Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER '
                         'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
                         'Outputs setenv for DBREADER and DBWRITER')
-    parser.add_argument("--upgradedb", help='Upgrade a database schema')
+    parser.add_argument("--upgradedb", help='Upgrade a database schema',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
@@ -423,7 +437,7 @@ if __name__ == "__main__":
                 sys.exit(0)
 
             if args.upgradedb:
-                schema_upgrade(ath, dbname=args.upgradedb)
+                schema_upgrade(ath)
                 sys.exit(0)
 
             if args.dropdb:

@@ -234,9 +234,17 @@ install-windows:
 update-python:
 	cat requirements.txt | cut -f1 -d= | xargs pip install -U
 
-update:
+update-dev:
 	$(ACTIVATE) && pip freeze > requirements.txt
 	$(ACTIVATE) && zappa update dev
+
+update-prod:
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update production
+
+update-demo:
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update demo
 
 %.js: %.ts
 	tsc $<
