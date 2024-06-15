@@ -213,12 +213,12 @@ def test_movie_tracking(new_movie):
     #assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
-    track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
+    track1 = [tp for tp in frame0['markers'] if tp['label']=='track1'][0]
     assert track1['x']==275
     assert track1['y']==215
     assert track1['label']=='track1'
 
-    track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
+    track2 = [tp for tp in frame0['markers'] if tp['label']=='track2'][0]
     assert track2['x']==410
     assert track2['y']==175
     assert track2['label']=='track2'

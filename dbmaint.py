@@ -26,7 +26,7 @@ from constants import C
 import db
 import tracker
 import auth
-from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
+from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL

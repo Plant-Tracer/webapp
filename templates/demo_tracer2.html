@@ -25,25 +25,24 @@
    const api_key='demo_key';
    const movie_zipfile  = './static/demo/frames.zip';
    const movie_metadata = {movie_id:movie_id, width:512, height:512};
-   const movie_frame_markers = [[{x:100,y:100,label:'first trackpoint'},
-                                 {x:100,y:150,label:'second trackpoint'},
-                                 {x:100,y:200,label:'third trackpoint'}],
-                                [{x:110,y:105,label:'first trackpoint'},
-                                 {x:120,y:155,label:'second trackpoint'},
-                                 {x:130,y:205,label:'third trackpoint'}],
-                                [{x:120,y:100,label:'first trackpoint'},
-                                 {x:140,y:150,label:'second trackpoint'},
-                                 {x:160,y:200,label:'third trackpoint'}],
-                                [{x:130,y:105,label:'first trackpoint'},
-                                 {x:160,y:155,label:'second trackpoint'},
-                                 {x:190,y:205,label:'third trackpoint'}],
-                                [{x:140,y:100,label:'first trackpoint'},
-                                 {x:180,y:150,label:'second trackpoint'},
-                                 {x:220,y:200,label:'third trackpoint'}],
-                                [{x:150,y:105,label:'first trackpoint'},
-                                 {x:200,y:155,label:'second trackpoint'},
-                                 {x:250,y:205,label:'third trackpoint'}]
-                               ];
+   const movie_frame_markers = {0:[{x:100,y:100,label:'first trackpoint'},
+                                      {x:100,y:150,label:'second trackpoint'},
+                                      {x:100,y:200,label:'third trackpoint'}],
+                                1:[{x:110,y:105,label:'first trackpoint'},
+                                   {x:120,y:155,label:'second trackpoint'},
+                                   {x:130,y:205,label:'third trackpoint'}],
+                                2:[{x:120,y:100,label:'first trackpoint'},
+                                   {x:140,y:150,label:'second trackpoint'},
+                                   {x:160,y:200,label:'third trackpoint'}],
+                                3:[{x:130,y:105,label:'first trackpoint'},
+                                   {x:160,y:155,label:'second trackpoint'},
+                                   {x:190,y:205,label:'third trackpoint'}],
+                                4:[{x:140,y:100,label:'first trackpoint'},
+                                   {x:180,y:150,label:'second trackpoint'},
+                                   {x:220,y:200,label:'third trackpoint'}],
+                                5:[{x:150,y:105,label:'first trackpoint'},
+                                   {x:200,y:155,label:'second trackpoint'},
+                                   {x:250,y:205,label:'third trackpoint'}] };
    trace_movie_frames('div#tracer', movie_metadata, movie_zipfile, movie_frame_markers, api_key);
   </script>
 </html>

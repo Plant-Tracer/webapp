@@ -14,6 +14,7 @@ import io
 #import urllib
 import csv
 import os
+import zipfile
 from collections import defaultdict
 from zipfile import ZipFile
 
@@ -256,7 +257,9 @@ def api_bulk_register():
 MIME_MAP = {'.jpg':'image/jpeg',
             '.jpeg':'image/jpeg',
             '.mov':'video/mp4',
-            '.mp4':'video/mp4' }
+            '.mp4':'video/mp4',
+            '.zip':'application/zip'
+            }
 
 
 @api.route('/get-object', method=GET)
@@ -589,10 +592,9 @@ def api_get_movie_metadata():
 
     Returns JSON dictionary:
     ['metadata'] - movie metadata (same as get-metadata)
-    ['frames'] - trackpoints, or URLs - same format that canvas_movie_controller.load_movie() takes
-    ['frames'][10]      (where 10 is a frame number) - per-frame array, starting with frame 0.
-    ['frames'][10]['trackpoints'] - array of the trackpoints for that frame
-    ['frames'][10]['frame_url'] - signed URL for the frame, if it exists
+    ['frames']   - dictionary individual frames
+    ['frames'][10]      (where 10 is a frame number) - per-frame dictionary
+    ['frames'][10]['markers'] - array of the trackpoints for that frame
     """
     user_id = get_user_id()
     movie_id = get_int('movie_id')
@@ -614,8 +616,13 @@ def api_get_movie_metadata():
         # Add in the movie_metadata we just got
         movie_metadata = {**movie_metadata, **tracker.extract_movie_metadata(movie_data=movie_data)}
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+    # If we have a movie_zipfile_urn, create a signed url
+    if movie_metadata.get('movie_zipfile_urn',None):
+        movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
-    ret = {'error':False, 'metadata':movie_metadata}
+
+    ret = {'error':False,
+           'metadata':movie_metadata}
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -628,22 +635,15 @@ def api_get_movie_metadata():
             return E.FRAME_START_NO_FRAME_COUNT
         if frame_count<1:
             return E.FRAME_COUNT_GT_0
+        #
         # Get the trackpoints and then group by frame_number for the response
         ret['frames'] = defaultdict(dict)
         tpts = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
         for tpt in tpts:
             frame = ret['frames'][tpt['frame_number']]
-            if 'trackpoints' not in frame:
-                frame['trackpoints'] = []
-            frame['trackpoints'].append(tpt)
-
-        # Now get the URLs for every frame for which there are trackpoints
-        for row in db.get_movie_frame_metadata(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
-            urn = row['frame_urn']
-            if urn is None:
-                urn = api_get_frame_urn(frame_number=row['frame_number'], movie_id=movie_id, user_id=user_id)
-                assert urn is not None
-            ret['frames'][row['frame_number']]['frame_url'] = db_object.make_signed_url(urn=urn)
+            if 'markers' not in frame:
+                frame['markers'] = []
+            frame['markers'].append(tpt)
 
     return fix_types(ret)
 
@@ -697,15 +697,13 @@ def api_get_movie_trackpoints():
 # pylint: disable=consider-using-with
 class MovieTrackCallback:
     """Service class to create a callback instance to update the movie status"""
-    def __init__(self, *, user_id, movie_id, write_frames_to_zipfile=True,write_frames_to_db=False):
+    def __init__(self, *, user_id, movie_id):
         self.user_id = user_id
         self.movie_id = movie_id
         self.movie_metadata = None
-        self.write_frames_to_zipfile = write_frames_to_zipfile
-        if write_frames_to_zipfile:
-            self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
-            self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, 'w')
-        self.write_frames_to_db   = write_frames_to_db
+        self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
+        self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, mode='w', compression=zipfile.ZIP_DEFLATED,compresslevel=9)
+        self.ziplen = 0
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints): # pylint: disable=unused-argument
         """Update the status and write the frame to the database.
@@ -713,23 +711,24 @@ class MovieTrackCallback:
         If there are 296 frames, they are numbered 0 to 295.
         We actually track frames 1 through 295. We add 1 to make the status look correct.
         """
+        # Write the frame data to the database if we do not have it
+        # Moving to an object-oriented API would make this a whole lot more efficient...
+
+        logging.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
+
+        frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+        self.ziplen += len(frame_jpeg)
+        logging.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
+        self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_jpeg)
+
+        # Update the trackpoints
+        db.put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
+
         # Update the movie status (for anyone monitoring)
         total_frames = self.movie_metadata['total_frames']
         message = f"Tracked frames {frame_number+1} of {total_frames}"
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-
-        # Write the frame data to the database if we do not have it
-        # Moving to an object-oriented API would make this a whole lot more efficient...
-
-        if self.write_frames_to_zipfile:
-            self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_data)
-
-        if self.write_frames_to_db:
-            db.create_new_frame(movie_id=self.movie_id,
-                                frame_number = frame_number,
-                                frame_data = tracker.convert_frame_to_jpeg(frame_data))
-        # And update the trackpoints
-        db.put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
+        logging.debug("NOTIFY AFTER. self=%s self.ziplen=%s",self,self.ziplen)
 
     def close(self):
         """Close the zipfile"""
@@ -737,16 +736,19 @@ class MovieTrackCallback:
 
     @property
     def zipfile_name(self):
-        return self.movie_zipfile_tf.name if self.write_frames_to_zipfile else None
+        return self.movie_zipfile_tf.name
 
     @property
     def zipfile_data(self):
+        logging.debug("zipfile_data %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
         with open(self.zipfile_name,'rb') as f:
             return f.read()
 
     def done(self):
+        logging.debug("DONE. Set TRACKING_COMPLETED")
         db.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
         if self.zipfile_name:
+            logging.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
             os.unlink(self.zipfile_name)
 
 ##
@@ -778,11 +780,10 @@ def api_track_movie(*,user_id, movie_id, frame_start):
         tracker.track_movie(input_trackpoints = input_trackpoints,
                             frame_start       = frame_start,
                             moviefile_input   = infile.name,
-
                             callback = mtc.notify)
     mtc.close() # close the zipfile
     # Note: this puts the entire object in memory. That may be an issue at some point
-    object_name = db_object.object_name(course_id=db.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='mp4.zip')
+    object_name = db_object.object_name(course_id=db.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
     urn = db_object.make_urn(object_name=object_name)
     db_object.write_object(urn=urn, object_data=mtc.zipfile_data)
     db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)

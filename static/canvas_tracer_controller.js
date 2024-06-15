@@ -278,6 +278,7 @@ class TracerController extends MovieController {
         }
 
         // Add the markers for this frame if this frame has markers
+        console.log("frame=",frame,"this.frames[frame]=",this.frames[frame]);
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
                 this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
@@ -381,8 +382,8 @@ function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_k
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frame_markers, api_key) {
-    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile,"movie_frame_markers:",movie_frame_markers);
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key) {
+    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
     const frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -390,7 +391,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     names.forEach((name, i) => {
         //console.log("unzipped name=",name,"i=",i);
         frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
-                     'markers':movie_frame_markers[i] };
+                     'markers':movie_frames[i].markers };
     });
 
     cc = new TracerController(div_controller, movie_metadata);
@@ -406,29 +407,24 @@ function trace_movie(div_controller, movie_id, api_key) {
         movie_id: movie_id,
         frame_start: 0,
         frame_count: 1e6};
-    $.post('/api/get-movie-metadata', params ).done( (data) => {
-        if (data.error==true) {
-            alert(data.message);
+    $.post('/api/get-movie-metadata', params ).done( (resp) => {
+        if (resp.error==true) {
+            alert(resp.message);
             return;
-        } else {
-            $('#firsth2').html(`Movie #${movie_id}: ready to trace`);
-            const width = data.metadata.width;
-            const height = data.metadata.height;
-            $(div_controller + ' canvas').prop('width',width).prop('height',height);
-            console.log("data=",data);
-            if (data.frames) {
-                // Note: data.frames comes in as a dict, but we need it as an array.
-                // We also need to change frame_url to web_image.
-                let frames = dict_to_array(data.frames);
-                if (frames.length>0){
-                    trace_movie_frames(div_controller, data.movie_zipfile, data.movie_metadata, data.movie_frame_markers, api_key);
-                    return;
-                }
-            }
-            // no frames, so create the URL for frame 0 and fake it
+        }
+        console.log("resp=",resp);
+        const width = resp.metadata.width;
+        const height = resp.metadata.height;
+        $(div_controller + ' canvas').prop('width',width).prop('height',height);
+        if (!resp.metadata.movie_zipfile_url) {
+            $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
             const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(div_controller, data.metadata, frame0);
-        }});
+            trace_movie_one_frame(div_controller, resp.metadata, frame0);
+            return;
+        }
+        $('#firsth2').html(`Movie #${movie_id} is already traced! Check for errors and retrace as necessary.`);
+        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+    });
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };

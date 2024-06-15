@@ -529,6 +529,7 @@ def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
                     A.fps as fps, A.width as width, A.height as height,
                     A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
                     A.movie_data_urn as movie_data_urn,
+                    A.movie_zipfile_urn as movie_zipfile_urn,
                     B.id AS tracked_movie_id
              FROM movies A
              LEFT JOIN movies B on A.id=B.orig_movie

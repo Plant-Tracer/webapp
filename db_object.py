@@ -108,7 +108,7 @@ def make_urn(*, object_name, scheme = None ):
     else:
         raise ValueError(f"Scheme {scheme} not in ALLOWED_SCHEMES {ALLOWED_SCHEMES}")
     ret = f"{scheme}://{netloc}/{object_name}"
-    logging.debug("make_urn=%s",ret)
+    logging.debug("make_urn urn=%s",ret)
     return ret
 
 API_SECRET=os.environ.get("API_SECRET","test-secret")
@@ -117,7 +117,7 @@ def sig_for_urn(urn):
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     assert isinstance(urn,str)
-    logging.debug("urn=%s",urn)
+    logging.debug("make_signed_url urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
@@ -192,10 +192,10 @@ def read_object(urn):
 def write_object(urn, object_data):
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-    elif o.scheme== C.SCHEME_DB:
+        return
+    elif o.scheme== C.SCHEME_DB and len(object_data) < C.SCHEME_DB_MAX_OBJECT_LEN:
         object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
         dbfile.DBMySQL.csfr(
@@ -206,8 +206,8 @@ def write_object(urn, object_data):
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
             (object_sha256, object_data))
-    else:
-        raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
+        return
+    raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
     logging.info("delete_object(%s)",urn)
