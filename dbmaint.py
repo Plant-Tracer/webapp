@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Database Management Tool for webapp
 """
@@ -212,9 +213,20 @@ def report():
                     get_column_names=headers)
         print(tabulate(rows,headers=headers))
 
-def freshen():
+def delete_callback(info):
+    print("Deleting:",info)
+
+def freshen(clean):
     dbwriter = auth.get_dbwriter()
-    print(f"Freshen({dbwriter})")
+    action = 'CLEAN' if clean else 'FRESHEN'
+    print(f"{action} ({dbwriter})")
+    print("Deleting" if clean else "","movies with no data:")
+    for movie in csfr(dbwriter, "SELECT * from movies where movie_data_urn is NULL",(),asDicts=True):
+        print("Movie with no data:",movie['id'])
+        print(json.dumps(movie,default=str,indent=4))
+        if clean:
+            db.purge_movie(movie_id=movie['id'], callback=delete_callback)
+    exit(0)
     movies = csfr(dbwriter, "SELECT * from movies",(),asDicts=True)
     for movie in movies:
         movie_id = movie['id']
@@ -364,7 +376,8 @@ if __name__ == "__main__":
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
-    parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
+    parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
+    parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
     parser.add_argument("--dump", help="backup all objects as JSON files and movie files to new directory called DUMP.  ")
 
@@ -485,7 +498,11 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.freshen:
-        freshen()
+        freshen(False)
+        sys.exit(0)
+
+    if args.clean:
+        freshen(True)
         sys.exit(0)
 
     if args.dump:

@@ -11,10 +11,10 @@ JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
 # Manage the virtual environment
-A   = . venv/bin/activate
+ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
-PYTHON=$(A) ; $(PY)
+PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
 venv/pyvenv.cfg:
 	$(PY) -m venv venv
@@ -121,7 +121,7 @@ test-schema-upgrade:
 
 
 ################################################################
-
+### Database management for testing and CI/CD
 
 
 create_localdb:
@@ -227,9 +227,16 @@ install-windows:
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
+################################################################
+## Python maintence and Zappa deployment
+
+# https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
+update-python:
+	cat requirements.txt | cut -f1 -d= | xargs pip install -U
+
 update:
-	$(PYTHON) pip freeze > requirements.txt
-	$(PYTHON) zappa update dev
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update dev
 
 %.js: %.ts
 	tsc $<

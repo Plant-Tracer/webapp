@@ -623,39 +623,42 @@ def set_movie_data(*,movie_id, movie_data):
 ## Deleting
 
 @log
-def purge_movie_frames(*,movie_id):
+def purge_movie_frames(*,movie_id,callback=None):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
     rows = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,))
     for row in rows:
+        if callback:
+            callback(row)
         db_object.delete_object(row[0])
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
 
 @log
-def purge_movie_data(*,movie_id):
+def purge_movie_data(*,movie_id,callback=None):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,))
-    if res:
-        db_object.delete_object(res[0][0])
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,))
+    for row in rows:
+        if callback:
+            callback(row)
+        db_object.delete_object(row[0])
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie_zipfile(*,movie_id):
+def purge_movie_zipfile(*,movie_id,callback=None):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
-    if res:
-        db_object.delete_object(res[0][0])
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
+    for row in rows:
+        db_object.delete_object(row[0])
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie(*,movie_id):
+def purge_movie(*,movie_id, callback=None):
     """Actually delete a movie and all its frames"""
-    purge_movie_frames(movie_id=movie_id)
-    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames(movie_id=movie_id, callback=callback)
+    purge_movie_data(movie_id=movie_id, callback=callback)
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
 
