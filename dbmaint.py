@@ -489,7 +489,9 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.upgradedb:
-        ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'client')
+        # the upgrade can be done with dbwriter, as long as dbwriter can update the schema.
+        # In our current versions, it can.
+        ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'dbwriter')
         schema_upgrade(ath)
         sys.exit(0)
 
