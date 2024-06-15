@@ -28,6 +28,11 @@ import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_c
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
 
+const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
+                         {'x':50,'y':100,'label':'Ruler 0mm'},
+                         {'x':50,'y':150,'label':'Ruler 20mm'}
+                        ];
+
 // NOTE ./static is needed below but not above!
 setOptions({
   workerURL: './static/unzipit-worker.module.js',
@@ -367,15 +372,16 @@ class TracerController extends MovieController {
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
 var cc;
-function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_key) {
+function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     console.log("trace_movie_one_frame.");
     cc = new TracerController(div_controller, movie_metadata);
+    cc.did_onload_callback = (_) => {
+        console.log("did_onload_callback");
+        $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
+    };
+
     var frames = [{'frame_url': frame0_url,
-                   'markers':[{'x':50,'y':50,'label':'Apex'},
-                                  {'x':50,'y':100,'label':'Ruler 0mm'},
-                                  {'x':50,'y':150,'label':'Ruler 20mm'}
-                                 ]
-                  }];
+                   'markers':DEFAULT_MARKERS }];
     cc.load_movie(frames);
     cc.create_marker_table();
     cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
@@ -417,9 +423,8 @@ function trace_movie(div_controller, movie_id, api_key) {
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
-            $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
             const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(div_controller, resp.metadata, frame0);
+            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
         $('#firsth2').html(`Movie #${movie_id} is already traced! Check for errors and retrace as necessary.`);

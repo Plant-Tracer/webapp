@@ -82,7 +82,7 @@ app.mount('/api', bottle_api.api)
 # Upgrade the server if it needs upgrading.
 # This gets run when this file gets loaded and where dbwriter() gets cached
 #
-dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
+dbmaint.schema_upgrade(auth.get_dbwriter())
 
 ################################################################
 # Bottle endpoints

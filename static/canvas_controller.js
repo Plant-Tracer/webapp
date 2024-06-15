@@ -68,6 +68,7 @@ class CanvasController {
             return;
         }
 
+        this.did_onload_callback = ((_) => {});   // by default, call nothing
         this.c         = canvas[0];                // get the element
         this.ctx       = this.c.getContext('2d');  // the drawing context
 
@@ -366,7 +367,10 @@ class WebImage extends CanvasItem {
             this.loaded = true;
             // If we are already in a canvas controller, as it to redraw.
             // If we are not yet in a canvas controller, redraw
-            if (this.cc) this.cc.redraw();
+            if (this.cc){
+                this.cc.redraw();
+                this.cc.did_onload_callback(this);
+            }
         };
 
         this.img.onerror = (_) => {
