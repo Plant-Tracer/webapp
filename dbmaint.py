@@ -405,8 +405,6 @@ if __name__ == "__main__":
         config.read(args.rootconfig)
         os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
 
-    ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'client')
-
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
         sys.exit(0)
@@ -431,6 +429,7 @@ if __name__ == "__main__":
             print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
             sys.exit(1)
 
+        ath   = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb,
@@ -490,6 +489,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.upgradedb:
+        ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'client')
         schema_upgrade(ath)
         sys.exit(0)
 
