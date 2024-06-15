@@ -83,7 +83,7 @@ pytest:  $(REQ)
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/movie_test.py
-TEST1FUNCTION="-k test_movie_extract1"
+TEST1FUNCTION="-k test_new_movie"
 pytest1:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -113,6 +113,13 @@ pytest-quiet:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
+test-schema-upgrade:
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --createdb test_db1 --schema etc/schema_0.sql
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
+
+
 ################################################################
 
 
@@ -138,17 +145,21 @@ debug:
 	make debug-local
 
 DEBUG:=$(PYTHON) bottle_app.py --loglevel DEBUG
-debug-multi:
-	@echo run bottle locally in debug mode multi-threaded
-	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
-
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
 	$(DEBUG)  --dbcredentials etc/credentials.ini
 
+debug-multi:
+	@echo run bottle locally in debug mode multi-threaded
+	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
+
 debug-local:
-	@echo run bottle locally in debug mode
+	@echo run bottle locally in debug mode, storing new data in database
 	$(DEBUG) --storelocal --dbcredentials etc/credentials-local.ini
+
+debug-dev:
+	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
+	$(DEBUG) --dbcredentials etc/credentials-dev.ini
 
 freeze:
 	$(PYTHON) -m pip freeze > requirements.txt

@@ -11,8 +11,6 @@ jobs:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
         python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
-    # This makes it only run on pull_request unless it is running on main:
-    # if: (github.event_name == 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy-dreamhost' ))
     services:
       # https://stackoverflow.com/questions/72294279/how-to-connect-to-mysql-databas-using-github-actions
       mysql:
@@ -84,7 +82,7 @@ jobs:
       - name: Lint with pylint
         run: |
           make pylint
- 
+
       - name: JavaScript and HTML eslint
         run: |
           make eslint
@@ -93,11 +91,14 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           MYSQL_ROOT_PASSWORD: testrootpass
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
 
       - name: Validate app framework
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make pytest-app-framework
 
@@ -105,6 +106,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
 
@@ -117,10 +119,14 @@ jobs:
           files: ./coverage.xml
 
       - name: Show files in directory
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make coverage
           ls -l
 
       - name: Run JavaScript tests and coverage
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make jscoverage

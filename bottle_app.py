@@ -61,6 +61,7 @@ import db
 import db_object
 import auth
 
+import paths
 from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST
 
@@ -78,7 +79,9 @@ LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript consol
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
-# Upgrade the server if it needs upgrading. This gets run when this file gets loaded
+# Upgrade the server if it needs upgrading.
+# This gets run when this file gets loaded and where dbwriter() gets cached
+#
 dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
 ################################################################
@@ -99,10 +102,11 @@ dbmaint.schema_upgrade(auth.get_dbwriter(), auth.get_dbwriter().database)
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
+    full_path = os.path.join(STATIC_DIR,path)
     try:
-        kind = filetype.guess(os.path.join(STATIC_DIR,path))
+        kind = filetype.guess(full_path)
     except FileNotFoundError as e:
-        raise bottle.HTTPResponse(body=f'Error 404: File not found: {path}', status=404) from e
+        raise auth.http403(f'File not found: {full_path}') from e
     if kind is not None:
         mimetype = kind.mime
     elif path.endswith(".html"):
@@ -130,15 +134,15 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
     :param: lookup - if true, We weren't being called in an error condition, so we can lookup the api_key in the URL
     """
-    logging.debug("page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
+    logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     o = urlparse(request.url)
     logging.debug("o=%s",o)
     if lookup:
         api_key = auth.get_user_api_key()
-        logging.info("auth.get_user_api_key=%s",api_key)
+        logging.debug("auth.get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
-            raise bottle.HTTPResponse(body='', status=303, headers={ 'Location': '/'})
+            raise auth.http403("api_key is None and require_auth is True")
     else:
         api_key = None
 
@@ -206,8 +210,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
 @view('index.html')
 def func_root():
     """/ - serve the home page"""
+    logging.debug("func_root")
     ret = page_dict()
-    logging.info("func_root")
     if DEMO_MODE:
         demo_users = db.list_demo_users()
         demo_api_key = False
@@ -239,6 +243,7 @@ def func_audit():
 @view('list.html')
 def func_list():
     """/list - list movies and edit them and user info"""
+    logging.debug("/list")
     return page_dict('List Movies', require_auth=True)
 
 @bottle.route('/analyze', method=GET)
@@ -314,6 +319,19 @@ def func_users():
     """/users - provide a users list"""
     return page_dict('List Users', require_auth=True)
 
+################################################################
+## debug/demo
+
+@bottle.route('/demo_tracer1.html', method=GET)
+@view('demo_tracer1.html')
+def demo_tracer1():
+    return page_dict('demo_tracer1',require_auth=False)
+
+@bottle.route('/demo_tracer2.html', method=GET)
+@view('demo_tracer2.html')
+def demo_tracer2():
+    return page_dict('demo_tracer2',require_auth=False)
+
 @bottle.route('/ver', method=GET_POST)
 @view('version.txt')
 def func_ver():
@@ -321,17 +339,6 @@ def func_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     return {'__version__': __version__, 'sys_version': sys.version}
-
-@bottle.route('/demo_tracer1', method=GET)
-@view('demo_tracer1.html')
-def demo_tracer1():
-    return {}
-
-@bottle.route('/demo_tracer2', method=GET)
-@view('demo_tracer2.html')
-def demo_tracer1():
-    return {}
-
 
 ################################################################
 # Bottle App
@@ -343,16 +350,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument( '--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument('--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
+    parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
+    if args.info:
+        for name in logging.root.manager.loggerDict:
+            print("Logger: ",name)
+        sys.exit(0)
+
+    if args.loglevel=='DEBUG':
+        # even though we've set the main loglevel to be debug, set the other loggers to a different log level
+        for name in logging.root.manager.loggerDict:
+            if name.startswith('boto'):
+                logging.getLogger(name).setLevel(logging.INFO)
+
+
     if args.dbcredentials:
-        os.environ[C.DBCREDENTIALS_PATH] = args.dbcredentials
+        paths.FORCE_CREDENTIALS_FILE = args.dbcredentials
+
 
     if args.storelocal:
         db_object.STORE_LOCAL=True

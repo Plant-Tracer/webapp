@@ -4,7 +4,7 @@ S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be a
 DB - db://object_store/name - Local stored in the mysql database
 
 movie_name = {course_id}/{movie_id}.mov
-frame_name = {course_id}/{movie_id}/frame_id:06d}.jpg
+frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
 
 If the environment variable PLANTTRACER_S3_BUCKET is set, use that bucket for writes, otherwise use DB.
 Reads are based on whatever is in the URN.
@@ -18,13 +18,16 @@ import os
 import logging
 import urllib.parse
 import hashlib
+import uuid
+
 import requests
 import boto3
-import bottle
-import uuid
+from botocore.exceptions import ClientError
+#import bottle
 
 from lib.ctools import dbfile
 from constants import C
+import auth
 from auth import get_dbreader,get_dbwriter
 
 """
@@ -70,7 +73,7 @@ def sha256(data):
     h.update(data)
     return h.hexdigest()
 
-def object_name(*,data=None,data_sha256=None,course_id,movie_id,frame_number=None,ext):
+def object_name(*,course_id,movie_id,frame_number=None,ext):
     """object_name is a URN that is generated according to a scheme
     that uses course_id, movie_id, and frame_number, but there is also
     a 16-bit nonce This means that you can't generate it on the fly;
@@ -105,7 +108,7 @@ def make_urn(*, object_name, scheme = None ):
     else:
         raise ValueError(f"Scheme {scheme} not in ALLOWED_SCHEMES {ALLOWED_SCHEMES}")
     ret = f"{scheme}://{netloc}/{object_name}"
-    logging.debug("make_urn=%s",ret)
+    logging.debug("make_urn urn=%s",ret)
     return ret
 
 API_SECRET=os.environ.get("API_SECRET","test-secret")
@@ -114,7 +117,7 @@ def sig_for_urn(urn):
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     assert isinstance(urn,str)
-    logging.debug("urn=%s",urn)
+    logging.debug("make_signed_url urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
@@ -135,7 +138,7 @@ def read_signed_url(*,urn,sig):
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise bottle.HTTPResponse(body="signature does not verify", status=204)
+    raise auth.http403("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
@@ -165,7 +168,11 @@ def read_object(urn):
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
         # We are getting the object, so we do not need a presigned url
-        return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
+        try:
+            return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
+        except ClientError as ex:
+            logging.error("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            return None
     elif o.scheme in ['http','https']:
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content
@@ -185,10 +192,10 @@ def read_object(urn):
 def write_object(urn, object_data):
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-    elif o.scheme== C.SCHEME_DB:
+        return
+    elif o.scheme== C.SCHEME_DB and len(object_data) < C.SCHEME_DB_MAX_OBJECT_LEN:
         object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
         dbfile.DBMySQL.csfr(
@@ -199,8 +206,8 @@ def write_object(urn, object_data):
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
             (object_sha256, object_data))
-    else:
-        raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
+        return
+    raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
     logging.info("delete_object(%s)",urn)
@@ -222,7 +229,7 @@ def delete_object(urn):
         raise ValueError(f"Cannot delete object urn={urn}")
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
     if s3_bucket is None:
         raise RuntimeError(C.PLANTTRACER_S3_BUCKET + " is not set")

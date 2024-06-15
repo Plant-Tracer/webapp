@@ -15,7 +15,6 @@ from collections import defaultdict
 import math
 import cv2
 import numpy as np
-from constants import Engines
 import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -114,9 +113,9 @@ def extract_movie_metadata(*, movie_data):
             'height':int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
             'fps':cap.get(cv2.CAP_PROP_FPS)}
 
-def convert_frame_to_jpeg(img):
+def convert_frame_to_jpeg(img, quality=90):
     """Use CV2 to convert a frame to a jpeg"""
-    _,jpg_img = cv2.imencode('.jpg',img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    _,jpg_img = cv2.imencode('.jpg',img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     return jpg_img.tobytes()
 
 def extract_frame(*, movie_data, frame_number, fmt):
@@ -162,7 +161,7 @@ def cleanup_mp4(*,infile,outfile):
     subprocess.call([ FFMPEG_PATH ] + args)
 
 
-def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints):
+def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     # movie_trackpoints is an array of records where each has the form:
     # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
@@ -189,7 +188,8 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
                 break
 
             # Label the output and write it
-            cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
+            if label_frames:
+                cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
             out.write(current_frame_data)
 
         cap.release()
@@ -200,12 +200,13 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     logging.info("rendered movie")
 
 
-#pylint: disable=too-many-arguments
-def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trackpoints, frame_start=0, callback=None):
+def prototype_callback(*,frame_number,frame_data,frame_trackpoints):
+    logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s",frame_number,len(frame_data),frame_trackpoints)
+
+def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_frames=False, callback=prototype_callback):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
-    :param: engine - the engine to use. CV2 is the only supported engine at the moment.
     :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
     :param: trackpoints - a list all current trackpoints.
                         - Each trackpoint is dictionary {'x', 'y', 'label', 'frame_number'} to track.
@@ -218,9 +219,6 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
          - Frame0 is never tracked. It's trackpoints are the provided trackpoints.
     """
-    if engine_name!=Engines.CV2:
-        raise RuntimeError(f"Engine_name={engine_name} engine_version={engine_version} but this only runs with CV2")
-
     cap = cv2.VideoCapture(moviefile_input)
     frame_this = None
 
@@ -236,30 +234,39 @@ def track_movie(*, engine_name, engine_version=None, moviefile_input, input_trac
 
         # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
         # This also copies over frame_prev at start (when frame_number=0 and frame_start=0, it is <= frame_start)
+        frame_show = frame_this # frame to show
         if frame_number <= frame_start:
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number']==frame_number]
+            # Call the callback if we have one
+            if label_frames:
+                frame_show = frame_this.copy()
+                cv2_label_frame(frame=frame_show, trackpoints=current_trackpoints, frame_label=frame_number)
+            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
+            continue
 
         # If this is after the starting frame, then track it
         # This is run every time through the loop except the first time.
-        if frame_number > frame_start:
-            assert frame_prev is not None
-            trackpoints_by_label = { tp['label']:tp for tp in current_trackpoints }
-            new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
+        assert frame_prev is not None
+        trackpoints_by_label = { tp['label']:tp for tp in current_trackpoints }
+        new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
 
-            # Copy in updated trackpoints
-            for tp in new_trackpoints:
-                trackpoints_by_label[tp['label']] = tp
+        # Copy in updated trackpoints
+        for tp in new_trackpoints:
+            trackpoints_by_label[tp['label']] = tp
 
-            # create new list of trackpoints
-            current_trackpoints = trackpoints_by_label.values()
+        # create new list of trackpoints
+        current_trackpoints = trackpoints_by_label.values()
 
-            # And set their new frame numbers
-            for tp in current_trackpoints:
-                tp['frame_number'] = frame_number # set the frame number
+        # And set their new frame numbers
+        for tp in current_trackpoints:
+            tp['frame_number'] = frame_number # set the frame number
 
         # Call the callback if we have one
         if callback is not None:
-            callback(frame_number=frame_number, frame_data=frame_this, frame_trackpoints=current_trackpoints)
+            if label_frames:
+                frame_show = frame_this.copy()
+                cv2_label_frame(frame=frame_show, trackpoints=[], frame_label=frame_number)
+            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
 
     cap.release()
 
@@ -324,7 +331,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Track movie with specified movies and initial points",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--engine',default='CV2')
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
@@ -345,8 +351,7 @@ if __name__ == "__main__":
         trackpoints.extend(frame_trackpoints)
 
 
-    track_movie(engine_name=args.engine,
-                moviefile_input=args.moviefile,
+    track_movie(moviefile_input=args.moviefile,
                 input_trackpoints=input_trackpoints,
                 callback=callback )
     # Now render the movie

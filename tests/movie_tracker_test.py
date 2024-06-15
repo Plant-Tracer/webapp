@@ -18,6 +18,7 @@ import math
 import urllib
 from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
+from zipfile import ZipFile
 
 import numpy as np
 import cv2
@@ -42,7 +43,7 @@ from PIL import Image
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME,Engines,E
+from constants import MIME,E
 import tracker
 
 # Bogus labels for generic test
@@ -61,51 +62,48 @@ def test_track_point_annotations(new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    (frame_id, frame_urn) = db.create_new_frame(movie_id=movie_id, frame_number=0)
-    db.put_frame_trackpoints(frame_id=frame_id, trackpoints=[ tp0, tp1 ])
+    frame_urn = db.create_new_frame(movie_id=movie_id, frame_number=0)
+    db.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
     assert len(tps)==2
     logging.debug("tps[0]=%s",tps[0])
     logging.debug("tp0=%s",tp0)
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
     assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
+    assert tps[0]['frame_number'] == 0
 
     assert tps[1]['x'] == tp1['x']
     assert tps[1]['y'] == tp1['y']
     assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
+    assert tps[1]['frame_number'] == 0
 
 
     # Try the other interface; this time send two trackpoints through
-    engine_name = 'CV2';
-    engine_version = '2';
     with boddle(params={'api_key': api_key,
-                        'frame_id': str(frame_id),
-                        'engine_name': engine_name,
-                        'engine_version':engine_version,
+                        'movie_id': movie_id,
+                        'frame_number':1,
                         'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_api.api_put_frame_analysis()
+        bottle_api.api_put_frame_trackpoints()
     # See if I can get it back
-    tps = db.get_frame_trackpoints(frame_id=frame_id)
+    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
     assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_id'] == frame_id
+    assert tps[0]['frame_number'] == 1
 
     assert tps[1]['x'] == tp1['x']
     assert tps[1]['y'] == tp1['y']
     assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_id'] == frame_id
+    assert tps[1]['frame_number'] == 1
 
     assert tps[2]['x'] == tp2['x']
     assert tps[2]['y'] == tp2['y']
     assert tps[2]['label'] == tp2['label']
-    assert tps[2]['frame_id'] == frame_id
+    assert tps[2]['frame_number'] == 1
 
 
 def test_movie_tracking(new_movie):
@@ -120,30 +118,20 @@ def test_movie_tracking(new_movie):
     user_id  = cfg[USER_ID]
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
-    # get frame_id with the api_new_frame
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': '0'}):
-        ret = bottle_api.api_new_frame()
-    logging.debug("new frame ret=%s",ret)
-    assert ret['error']==False
-    frame_id = int(ret['frame_id'])
-
     # save the trackpoints
     with boddle(params={'api_key': api_key,
-                        'frame_id': str(frame_id),
-                        'trackpoints' : json.dumps(tpts),
-                        'frame_number': '0'}):
-        ret = bottle_api.api_put_frame_analysis()
+                        'movie_id': movie_id,
+                        'frame_number': '0',
+                        'trackpoints' : json.dumps(tpts)
+                        }):
+        ret = bottle_api.api_put_frame_trackpoints()
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
     # Now track with CV2 - This actually does the tracking when run outsie of lambda
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_start': '0',
-                        'engine_name':Engines.CV2,
-                        'engine_version':0 }):
+                        'frame_start': '0' }):
         ret = bottle_api.api_track_movie_queue()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
@@ -155,7 +143,17 @@ def test_movie_tracking(new_movie):
         ret = bottle_api.api_get_movie_trackpoints()
     lines = ret.splitlines()
 
-    # Check that the header is set
+    # Verify that there is a ZIP file
+    zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
+    with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
+        tf.write(zipfile_data)
+        tf.flush()
+        with ZipFile(tf.name, 'r') as myzip:
+            logging.info("names of files in zipfile: %s",myzip.namelist())
+            frame_count = len(myzip.namelist())
+
+
+    # Check that the CSV header is set
     fields = lines[0].split(",")
     logging.info("fields: %s",fields)
     assert fields==['frame_number','track1 x','track1 y','track2 x','track2 y']
@@ -178,6 +176,9 @@ def test_movie_tracking(new_movie):
     # Make sure we got a lot back
     assert len(lines) > 50
 
+    # Make sure that we got a line for every frame
+    assert frame_count+1 == len(lines) # one line for the header
+
     # Check error conditions for getting incomplete metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
@@ -192,31 +193,32 @@ def test_movie_tracking(new_movie):
         r = bottle_api.api_get_movie_metadata()
         assert r == E.FRAME_COUNT_GT_0
 
-    # Now test the API to make sure we can get the URL for the frames.
+    # Get the movie metadata
     with boddle(params={'api_key': api_key,
                         'movie_id': movie_id,
                         'frame_start': 0,
                         'frame_count': 1000}):
         r = bottle_api.api_get_movie_metadata()
-        logging.debug("r10=%s",r)
-        print(json.dumps(r,indent=4),file=sys.stderr)
-        assert r['error'] == False
-        movie_id = r['metadata']['movie_id']
-        frame0 = r['frames']['0']
+    logging.debug("r10=%s",r)
+    print(json.dumps(r,indent=4),file=sys.stderr)
+    assert r['error'] == False
+    movie_id = r['metadata']['movie_id']
+    frame0 = r['frames']['0']
 
-        # Verify that the signed URL works
-        url = frame0['frame_url']
-        params = parse_qs(urlparse(url).query)
-        frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
-        assert len(frame)>100   # we should do a better job verifying JPEG
+
+    # we no longer get signed URLs
+    #url = frame0['frame_url']
+    #params = parse_qs(urlparse(url).query)
+    #frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
+    #assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
-    track1 = [tp for tp in frame0['trackpoints'] if tp['label']=='track1'][0]
+    track1 = [tp for tp in frame0['markers'] if tp['label']=='track1'][0]
     assert track1['x']==275
     assert track1['y']==215
     assert track1['label']=='track1'
 
-    track2 = [tp for tp in frame0['trackpoints'] if tp['label']=='track2'][0]
+    track2 = [tp for tp in frame0['markers'] if tp['label']=='track2'][0]
     assert track2['x']==410
     assert track2['y']==175
     assert track2['label']=='track2'

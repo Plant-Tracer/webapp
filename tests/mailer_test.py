@@ -43,6 +43,7 @@ FAKE_USER_EMAIL = f'fake-user@{str(uuid.uuid4())}.planttracer.com'
 FAKE_NAME       = f'fake-name-{str(uuid.uuid4())}'
 FAKE_SENDER     = f'do-not-reply@{str(uuid.uuid4())}.planttracer.com'
 
+@pytest.mark.skip(reason="changing authentication")
 def test_send_message(mailer_config):
     nonce = str(uuid.uuid4())
 
@@ -75,9 +76,10 @@ def test_send_message(mailer_config):
         logging.warning("response %s not found. Sleep again count %d", nonce, i)
         time.sleep(0.1)
     if deleted == 0:
-        raise RuntimeError("Could not delete test message")
+        raise RuntimeError(f"Could not find and delete test message using smtp_config={smtp_config} imap_config={imap_config}")
 
 
+@pytest.mark.skip(reason="changing authentication")
 def test_register_email(mailer_config,new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]

@@ -11,9 +11,7 @@ from os.path import join,dirname,abspath
 sys.path.append(dirname(dirname(dirname(abspath(__file__)))))
 import paths
 
-MAIL_CONFIG = paths.PRODUCTION_CONFIG_FNAME if 'TEST_PRODUCTION_EMAIL' in os.environ else paths.LOCALMAIL_CONFIG_FNAME
-
-import paths
+import auth
 
 def singleton(cls):
     instances = {}
@@ -43,7 +41,7 @@ class Localmail():
     """
     def __init__(self):
         localmail_config = configparser.ConfigParser()
-        localmail_config.read( MAIL_CONFIG )
+        localmail_config.read( auth.credentials_file() )
         if 'smtp' not in localmail_config:
             logging.error('LOCALMAIL FNAME: %s',FNAME)
             logging.error('LOCALMMAIL config: %s',localmail_config)

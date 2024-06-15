@@ -12,6 +12,7 @@ import json
 import subprocess
 import uuid
 import xml.etree.ElementTree
+import hashlib
 
 from os.path import abspath, dirname
 
@@ -23,17 +24,9 @@ from lib.ctools import dbfile
 from constants import C
 import db_object
 
-DATA = b"foobar"
-DATA_SHA256 = "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2"
-
-def test_sha256():
-    assert db_object.sha256( DATA ) == DATA_SHA256
-
 def test_object_name():
-    assert db_object.object_name(course_id=1, movie_id=2, ext='.mov', data=DATA,
-                                 data_sha256=DATA_SHA256).endswith(".mov")
-    assert db_object.object_name(course_id=1, movie_id=2,
-                                 frame_number=3, ext='.jpeg').endswith(".jpeg")
+    assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
+    assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
 class SaveEnviron:
     def __init__(self,name):
@@ -48,14 +41,19 @@ class SaveEnviron:
 
 def test_make_urn():
     with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=2, ext='.txt', data=DATA, data_sha256=DATA_SHA256)
+        name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
         a = db_object.make_urn(object_name=name, scheme=None)
         assert a.endswith(".txt")
 
 def test_write_read_delete_object():
     logging.debug("dbwriter: %s",get_dbwriter())
+    DATA = str(uuid.uuid4()).encode('utf-8')
+    hasher = hashlib.sha256()
+    hasher.update(DATA)
+    DATA_SHA256 = hasher.hexdigest()
+
     with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=3, ext='.txt', data=DATA, data_sha256=DATA_SHA256)
+        name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
         urn  = db_object.make_urn(object_name=name, scheme=None)
         db_object.write_object(urn=urn, object_data=DATA)
 

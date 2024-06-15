@@ -1,6 +1,4 @@
 [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
-![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-dev.yml/badge.svg)<br/>
-![example workflow](https://github.com/Plant-Tracer/webapp/actions/workflows/deploy-production.yml/badge.svg?branch=deploy-dreamhost)
 <a href="https://scan.coverity.com/projects/plant-tracer-webapp">
   <img alt="Coverity Scan Build Status"
        src="https://scan.coverity.com/projects/29728/badge.svg"/>

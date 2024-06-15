@@ -1,2 +1,2 @@
 #!/bin/bash
-grep mysql_database credentials.ini | awk '{print $3;}' | head -1
+grep mysql_database $1 | awk '{print $3;}' | head -1
