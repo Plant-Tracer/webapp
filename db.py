@@ -607,6 +607,10 @@ def set_movie_metadata(*, movie_id, movie_metadata):
 
 
 def set_movie_data(*,movie_id, movie_data):
+    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
+    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames( movie_id=movie_id )
+    purge_movie_zipfile( movie_id=movie_id )
     object_name= db_object.object_name( course_id = course_id_for_movie_id( movie_id ),
                                         movie_id = movie_id,
                                         ext=C.MOVIE_EXTENSION)
@@ -622,8 +626,10 @@ def set_movie_data(*,movie_id, movie_data):
 def purge_movie_frames(*,movie_id):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
+    rows = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,))
+    for row in rows:
+        db_object.delete_object(row[0])
     dbfile.DBMySQL.csfr(
         get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
 
@@ -631,10 +637,19 @@ def purge_movie_frames(*,movie_id):
 def purge_movie_data(*,movie_id):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s", (movie_id,))
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,))
     if res:
-        urn = res[0][0]
-        db_object.delete_object(urn)
+        db_object.delete_object(res[0][0])
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
+
+@log
+def purge_movie_zipfile(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
+    if res:
+        db_object.delete_object(res[0][0])
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
 
 @log
 def purge_movie(*,movie_id):

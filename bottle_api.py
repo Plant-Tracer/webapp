@@ -544,7 +544,6 @@ def api_edit_movie():
                 movie = db.Movie(movie_id, user_id=get_user_id())
                 movie_input.write( movie.data )
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
-                db.purge_movie_frames( movie_id=movie.movie_id )
                 movie_output.seek(0)
                 movie.data = movie_data = movie_output.read()
                 movie.version += 1
