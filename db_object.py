@@ -230,9 +230,11 @@ def delete_object(urn):
 
 
 if __name__ == "__main__":
-    s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
-    if s3_bucket is None:
-        raise RuntimeError(C.PLANTTRACER_S3_BUCKET + " is not set")
-    print("Updating CORS policy for ",s3_bucket)
+    import argparse
+    parser = argparse.ArgumentParser(description="Set CORS policy for an S3 Bucket",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("s3_bucket", default=os.environ.get(C.PLANTTRACER_S3_BUCKET,"my-bucket"))
+    args = parser.parse_args()
+    print("Updating CORS policy for ",args.s3_bucket)
     s3 = boto3.client( S3 )
-    s3.put_bucket_cors(Bucket=s3_bucket, CORSConfiguration=cors_configuration)
+    s3.put_bucket_cors(Bucket=args.s3_bucket, CORSConfiguration=cors_configuration)

@@ -404,7 +404,8 @@ if __name__ == "__main__":
     if args.rootconfig:
         config.read(args.rootconfig)
         os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
-        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
+
+    ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'client')
 
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
@@ -424,20 +425,16 @@ if __name__ == "__main__":
     ################################################################
     ## Startup stuff
 
-    if args.createdb or args.dropdb or args.upgradedb:
+    if args.createdb or args.dropdb:
         cp = configparser.ConfigParser()
         if args.rootconfig is None:
-            print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
+            print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
             sys.exit(1)
 
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
                 createdb(droot=droot, createdb_name = args.createdb,
                          write_config_fname=args.writeconfig, schema=args.schema)
-                sys.exit(0)
-
-            if args.upgradedb:
-                schema_upgrade(ath)
                 sys.exit(0)
 
             if args.dropdb:
@@ -490,6 +487,10 @@ if __name__ == "__main__":
                       demo_email = args.demo_email
                       )
         print(f"course_key: {course_key}")
+        sys.exit(0)
+
+    if args.upgradedb:
+        schema_upgrade(ath)
         sys.exit(0)
 
     ################################################################
