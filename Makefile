@@ -11,10 +11,10 @@ JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
 # Manage the virtual environment
-A   = . venv/bin/activate
+ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
-PYTHON=$(A) ; $(PY)
+PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
 venv/pyvenv.cfg:
 	$(PY) -m venv venv
@@ -83,7 +83,7 @@ pytest:  $(REQ)
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/movie_test.py
-TEST1FUNCTION="-k test_movie_extract1"
+TEST1FUNCTION="-k test_new_movie"
 pytest1:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -113,15 +113,23 @@ pytest-quiet:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
-################################################################
+test-schema-upgrade:
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --createdb test_db1 --schema etc/schema_0.sql
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
+	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
 
+
+################################################################
+### Database management for testing and CI/CD
 
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
+	@echo etc/credentials.ini will be used automatically by other tests
 	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --upgradedb actions_test --loglevel DEBUG
+	$(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
@@ -220,9 +228,24 @@ install-windows:
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
-update:
-	$(PYTHON) pip freeze > requirements.txt
-	$(PYTHON) zappa update dev
+################################################################
+## Python maintence and Zappa deployment
+
+# https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
+update-python:
+	cat requirements.txt | cut -f1 -d= | xargs pip install -U
+
+update-dev:
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update dev
+
+update-prod:
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update production
+
+update-demo:
+	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) && zappa update demo
 
 %.js: %.ts
 	tsc $<

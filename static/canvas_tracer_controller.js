@@ -7,7 +7,7 @@
 
 /*
  * Tracer Controller:
- * Manages the trackpoints table and retracks the movie as requested by the user.
+ * Manages the table of markers and retracks the movie as requested by the user.
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
@@ -26,6 +26,18 @@ var div_template = '';          // will be set with the div template
 
 import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
+import { unzip, setOptions } from './unzipit.module.js';
+
+const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
+                         {'x':50,'y':100,'label':'Ruler 0mm'},
+                         {'x':50,'y':150,'label':'Ruler 20mm'}
+                        ];
+
+// NOTE ./static is needed below but not above!
+setOptions({
+  workerURL: './static/unzipit-worker.module.js',
+  numWorkers: 2,
+});
 
 const DISABLED='disabled';
 
@@ -48,7 +60,7 @@ class TracerController extends MovieController {
 
         // set up the download button
         this.download_link = $(this.div_selector + " input.download_button");
-        this.download_link.attr('href',`/api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
+        this.download_link.attr('href',`/api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
         this.download_link.hide();
 
         // Size the canvas and video player
@@ -155,7 +167,7 @@ class TracerController extends MovieController {
     del_row(i) {
         this.objects.splice(i,1);
         this.create_marker_table();
-        this.put_trackpoints();
+        this.put_markers();
     }
 
     // Subclassed methods
@@ -169,37 +181,42 @@ class TracerController extends MovieController {
 
     // Movement finished; upload new annotations
     object_move_finished(_obj) {
-        this.put_trackpoints();
+        this.put_markers();
     }
 
-    // Return an array of trackpoints
-    get_trackpoints() {
-        let trackpoints = [];
+    // Return an array of markers (which are called markers elsewhere...)
+    get_markers() {
+        let markers = [];
         for (let i=0;i<this.objects.length;i++){
             const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
-                trackpoints.push( {x:obj.x, y:obj.y, label:obj.name} );
+                markers.push( {x:obj.x, y:obj.y, label:obj.name} );
             }
         }
-        return trackpoints;
+        return markers;
     }
 
-    json_trackpoints() {
-        return JSON.stringify(this.get_trackpoints());
+    json_markers() {
+        return JSON.stringify(this.get_markers());
     }
 
-    put_trackpoints() {
-        const put_frame_analysis_params = {
+    put_markers() {
+        const put_frame_markers_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
-            trackpoints  : this.json_trackpoints()
+            trackpoints  : this.json_markers()
         };
-        $.post('/api/put-frame-trackpoints', put_frame_trackpoints_params ).done( (data) => {
-            if (data.error) {
-                alert("Error saving annotations: "+data.message);
-            }
-        });
+        $.post('/api/put-frame-trackpoints', put_frame_markers_params )
+            .done( (data) => {
+                if (data.error) {
+                    alert("Error saving annotations: "+data.message);
+                }
+            })
+            .fail( (res) => {
+                console.log("error:",res);
+                alert("error from put-frame-trackpoints:\n"+res.responseText);
+            });
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
@@ -243,18 +260,19 @@ class TracerController extends MovieController {
 
     add_frame_objects( frame ){
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
-        // Add the lines for every previous frame if each previous frame has trackpoints
-        if (frame>0 && this.frames[frame-1].trackpoints && this.frames[frame].trackpoints){
+        // Add the lines for every previous frame if each previous frame has markers
+        console.log(`TraceController::add_frame_objects(${frame})`);
+        if (frame>0 && this.frames[frame-1].markers && this.frames[frame].markers){
             for (let f0=0;f0<frame;f0++){
                 var starts = [];
                 var ends   = {};
-                for (let tp of this.frames[f0].trackpoints){
+                for (let tp of this.frames[f0].markers){
                     starts.push(tp);
                 }
-                for (let tp of this.frames[f0+1].trackpoints){
+                for (let tp of this.frames[f0+1].markers){
                     ends[tp.label] = tp
                 }
-                // now add the lines between the trackpoints in the previous frames
+                // now add the lines between the markers in the previous frames
                 // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
                 for (let st of starts){
                     if (ends[st.label]){
@@ -264,9 +282,10 @@ class TracerController extends MovieController {
             }
         }
 
-        // Add the trackpoints for this frame if this frame has trackpoints
-        if (this.frames[frame].trackpoints) {
-            for (let tp of this.frames[frame].trackpoints) {
+        // Add the markers for this frame if this frame has markers
+        console.log("frame=",frame,"this.frames[frame]=",this.frames[frame]);
+        if (this.frames[frame].markers) {
+            for (let tp of this.frames[frame].markers) {
                 this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
             }
         }
@@ -334,6 +353,8 @@ class TracerController extends MovieController {
 
     rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
+        this.rotate_button.prop(DISABLED,true);
+        $('#firsth2').html(`Asking server to rotate movie ${movie_id} 90º counter-clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
@@ -353,26 +374,37 @@ class TracerController extends MovieController {
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
 var cc;
-function trace_movie_one_frame(div_controller, movie_metadata, frame0_url, api_key) {
+function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     console.log("trace_movie_one_frame.");
     cc = new TracerController(div_controller, movie_metadata);
+    cc.did_onload_callback = (_) => {
+        console.log("did_onload_callback");
+        $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
+    };
+
     var frames = [{'frame_url': frame0_url,
-                   'trackpoints':[{'x':50,'y':50,'label':'Apex'},
-                                  {'x':50,'y':100,'label':'Ruler 0mm'},
-                                  {'x':50,'y':150,'label':'Ruler 20mm'}
-                                 ]
-                  }];
+                   'markers':DEFAULT_MARKERS }];
     cc.load_movie(frames);
     cc.create_marker_table();
     cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-function trace_movie_frames(div_controller, movie_metadata, movie_frames, api_key) {
-    console.log("trace_movie_frames. movie_frames=",movie_frames);
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key) {
+    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
+    const frames = [];
+    const {entries} = await unzip(movie_zipfile);
+    const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
+    const blobs = await Promise.all(names.map(name => entries[name].blob()));
+    names.forEach((name, i) => {
+        //console.log("unzipped name=",name,"i=",i);
+        frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
+                     'markers':movie_frames[i].markers };
+    });
+
     cc = new TracerController(div_controller, movie_metadata);
-    cc.load_movie(movie_frames);
     cc.set_movie_control_buttons();
+    cc.load_movie(frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
 }
 
@@ -383,29 +415,23 @@ function trace_movie(div_controller, movie_id, api_key) {
         movie_id: movie_id,
         frame_start: 0,
         frame_count: 1e6};
-    $.post('/api/get-movie-metadata', params ).done( (data) => {
-        if (data.error==true) {
-            alert(data.message);
+    $.post('/api/get-movie-metadata', params ).done( (resp) => {
+        if (resp.error==true) {
+            alert(resp.message);
             return;
-        } else {
-            $('#firsth2').html(`Movie #${movie_id}: ready to trace`);
-            const width = data.metadata.width;
-            const height = data.metadata.height;
-            $(div_controller + ' canvas').prop('width',width).prop('height',height);
-            console.log("data=",data);
-            if (data.frames) {
-                // Note: data.frames comes in as a dict, but we need it as an array.
-                // We also need to change frame_url to web_image.
-                let frames = dict_to_array(data.frames);
-                if (frames.length>0){
-                    trace_movie_frames(div_controller, data.metadata, frames, api_key);
-                    return;
-                }
-            }
-            // no frames, so create the URL for frame 0 and fake it
+        }
+        console.log("resp=",resp);
+        const width = resp.metadata.width;
+        const height = resp.metadata.height;
+        $(div_controller + ' canvas').prop('width',width).prop('height',height);
+        if (!resp.metadata.movie_zipfile_url) {
             const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(div_controller, data.metadata, frame0);
-        }});
+            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
+            return;
+        }
+        $('#firsth2').html(`Movie #${movie_id} is already traced! Check for errors and retrace as necessary.`);
+        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+    });
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
