@@ -76,13 +76,26 @@ DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 
 
+#############################################
+### STARTUP CODE RUNS WHEN THIS IS LOADED ###
+#############################################
+
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
-# Upgrade the server if it needs upgrading.
-# This gets run when this file gets loaded and where dbwriter() gets cached
-#
-dbmaint.schema_upgrade(auth.get_dbwriter())
+def fix_boto_log_level():
+    for name in logging.root.manager.loggerDict:
+        if name.startswith('boto'):
+            logging.getLogger(name).setLevel(logging.INFO)
+
+
+if os.environ.get('AWS_LAMBDA',None)=='YES':
+    # Upgrade the server if it needs upgrading.
+    # This gets run when this file gets loaded and where dbwriter() gets cached
+    #
+    dbmaint.schema_upgrade(auth.get_dbwriter())
+    clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
+    fix_boto_log_level()
 
 ################################################################
 # Bottle endpoints
@@ -364,16 +377,8 @@ if __name__ == "__main__":
             print("Logger: ",name)
         sys.exit(0)
 
-    if args.loglevel=='DEBUG':
-        # even though we've set the main loglevel to be debug, set the other loggers to a different log level
-        for name in logging.root.manager.loggerDict:
-            if name.startswith('boto'):
-                logging.getLogger(name).setLevel(logging.INFO)
-
-
     if args.dbcredentials:
         paths.FORCE_CREDENTIALS_FILE = args.dbcredentials
-
 
     if args.storelocal:
         db_object.STORE_LOCAL=True
@@ -395,6 +400,9 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("")
             sys.exit(0)
+
+    fix_boto_log_level()
+    dbmaint.schema_upgrade(auth.get_dbwriter())
 
     # Run the single-threaded server (more debugging and the reloader)
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

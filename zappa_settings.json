@@ -24,7 +24,8 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
             "PLANTTRACER_S3_BUCKET":"planttracer-app",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_LOG_LEVEL":"INFO"
         }
     },
     "dev": {
@@ -43,7 +44,7 @@
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "cloudwatch_retention_days":1,
-        "log_level" : "DEBUG",
+        "log_level" : "INFO",
         "memory_size" : 1024,
         "s3_bucket" : "planttracer-zappa-lambda",
         "keep_warm": true,
@@ -55,7 +56,8 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
             "PLANTTRACER_S3_BUCKET":"planttracer-dev",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_LOG_LEVEL":"DEBUG"
         }
     },
     "demo": {
@@ -81,7 +83,8 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
             "PLANTTRACER_S3_BUCKET":"planttracer-demo",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_LOG_LEVEL":"INFO"
         }
     }
 
