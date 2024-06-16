@@ -51,8 +51,10 @@ def smtp_config():
     return section
 
 def http403(msg=''):
-    return bottle.HTTPResponse(body='Authentication error 403 '+msg,
-                               status=403)
+    return bottle.HTTPResponse(body='Authentication error 403 '+msg, status=403)
+
+def http404(msg=''):
+    return bottle.HTTPResponse(body='Not found error 404 '+msg, status=404)
 
 @functools.cache
 def get_dbreader():

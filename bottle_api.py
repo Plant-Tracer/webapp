@@ -400,14 +400,14 @@ def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
-def api_get_frame_jpeg(*,frame_number, movie_id, user_id):
+def api_get_frame_jpeg(*,movie_id, frame_number, user_id=0):
     """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
     If we have to extract the frame, write it to the database
     Used by get-frame below.
     """
     # Is there a movie we can access? If so, get the first frame and, while we have the movie in memory,
     # put its metadata into the computer
-    if not db.can_access_movie(user_id = user_id, movie_id=movie_id):
+    if user_id!=0 and not db.can_access_movie(user_id = user_id, movie_id=movie_id):
         raise db.InvalidFrameAccess()
     movie_data = db.get_movie_data(movie_id = movie_id)
     if movie_data is None:
@@ -457,15 +457,22 @@ def api_get_frame():
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        raise auth.http403(f'Error 404: User {user_id} cannot access movie {movie_id}')
+        return auth.http403(f'Error 404: User {user_id} cannot access movie {movie_id}')
+
+    if frame_number<0:
+        return auth.http404(f'Error 404: invalid frame number {frame_number}')
 
     # See if there is a urn
     urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
     if urn is None:
-        # the frame is not in the database, so we need to make it
-        urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
-
-    return bottle.redirect(db_object.make_signed_url(urn=urn))
+        # the frame is not in the database, so we need to make it.
+        frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+        urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
+        assert urn is not None
+    logging.debug("api_get_frame urn=%s",urn)
+    url = db_object.make_signed_url(urn=urn)
+    logging.debug("api_get_frame url=%s",url)
+    return bottle.redirect(url)
 
 
 ################################################################

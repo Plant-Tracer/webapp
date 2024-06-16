@@ -712,6 +712,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
 
     returns frame_urn
     """
+    logging.debug("create_new_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
     args = (movie_id, frame_number )
     a1 = a2 = a3 = ""
     frame_urn = None

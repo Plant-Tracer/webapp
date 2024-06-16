@@ -157,8 +157,11 @@ def test_new_movie(new_movie):
     # Make sure that we cannot delete the movie with a bad key
     with boddle(params={'api_key': 'invalid',
                         'movie_id': movie_id}):
-        with pytest.raises(bottle.HTTPResponse):
-            movie_data = bottle_api.api_delete_movie()
+        try:
+            r = bottle_api.api_delete_movie()
+            raise RuntimeError("api_get_frame should generate error. got r=%s %s",r,type(r))
+        except bottle.HTTPResponse as r:
+            assert r.status_code == 403 # authenticaiton error
 
     # Make sure that we can get data for the movie
     with boddle(params={'api_key': api_key,
@@ -297,7 +300,7 @@ def test_movie_extract1(new_movie):
     # Should produce http403
     with boddle(params={'api_key': api_key}):
         r = bottle_api.api_get_frame()
-        assert r['error']==True
+        assert r.status_code == 403
 
     # Check for invalid frame_number
     # Should produce http404
@@ -305,16 +308,18 @@ def test_movie_extract1(new_movie):
                         'movie_id': str(movie_id),
                         'frame_number': -1}):
         r = bottle_api.api_get_frame()
-        assert r['error']==True
+        assert r.status_code == 404
 
     # Check for getting by frame_number
     # should produce a redirect
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
                         'frame_number': 0 }):
-        r = bottle_api.api_get_frame()
-        logging.debug("frame0a=%s",r)
-        assert r['error']==False
+        try:
+            r = bottle_api.api_get_frame()
+            raise RuntimeError("api_get_frame should redirect. got r=%s %s",r,type(r))
+        except bottle.HTTPResponse as r:
+            assert r.status_code == 302
 
 
 def test_movie_extract2(new_movie):
@@ -346,13 +351,17 @@ def test_movie_extract2(new_movie):
         with boddle(params={'api_key': api_key,
                             'movie_id': str(movie_id),
                             'frame_number': str(number) }):
-            r =  bottle_api.api_get_frame()
-            return r
+            try:
+                r =  bottle_api.api_get_frame()
+                raise RuntimeError("r=%s should be redirect",r)
+            except bottle.HTTPResponse as r:
+                logging.debug("number=%s location=%s",number,r['Location'])
+                return r['Location'] # redirect location
 
-    jpeg_url0 = get_jpeg_frame_redirect(0)
-    jpeg_url1 = get_jpeg_frame_redirect(1)
-    jpeg_url2 = get_jpeg_frame_redirect(2)
-    assert jpeg0 != jpeg1 != jpeg2
+    jpeg0_url = get_jpeg_frame_redirect(0)
+    jpeg1_url = get_jpeg_frame_redirect(1)
+    jpeg2_url = get_jpeg_frame_redirect(2)
+    assert jpeg0_url != jpeg1_url != jpeg2_url
 
     # TODO - get the data and check?
 
