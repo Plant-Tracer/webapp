@@ -117,71 +117,20 @@ CREATE TABLE `metadata` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
--- Table structure for table `movie_analysis`
---
-
-DROP TABLE IF EXISTS `movie_analysis`;
-CREATE TABLE `movie_analysis` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `engine_id` int NOT NULL,
-  `annotations` json DEFAULT NULL,
-  `movie_id` int NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `engine_id` (`engine_id`),
-  KEY `mc1` (`movie_id`),
-  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`),
-  CONSTRAINT `mc1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Table structure for table `movie_data`
---
-
-DROP TABLE IF EXISTS `movie_data`;
-CREATE TABLE `movie_data` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `movie_id` int NOT NULL,
-  `movie_sha256` varchar(64) DEFAULT NULL,
-  `movie_data` mediumblob,
-  `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `movie_id` (`movie_id`),
-  CONSTRAINT `ctr1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Table structure for table `movie_frame_analysis`
---
-
-DROP TABLE IF EXISTS `movie_frame_analysis`;
-CREATE TABLE `movie_frame_analysis` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `frame_id` int NOT NULL,
-  `engine_id` int NOT NULL,
-  `annotations` json DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `idx4` (`frame_id`,`engine_id`),
-  KEY `frame_id` (`frame_id`),
-  KEY `engine_id` (`engine_id`),
-  CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
-  CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
 -- Table structure for table `movie_frame_trackpoints`
 --
 
 DROP TABLE IF EXISTS `movie_frame_trackpoints`;
 CREATE TABLE `movie_frame_trackpoints` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `frame_id` int NOT NULL,
+  `movie_id` int NOT NULL,
+  `frame_number` int NOT NULL,
+  `label` varchar(255) NOT NULL,
   `x` int NOT NULL,
   `y` int NOT NULL,
-  `label` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk1` (`frame_id`,`label`),
-  KEY `frame_id` (`frame_id`),
-  CONSTRAINT `movie_frame_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
+  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`),
+  CONSTRAINT `m1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -216,6 +165,7 @@ CREATE TABLE `movies` (
   `course_id` int NOT NULL,
   `published` int DEFAULT '0',
   `deleted` int DEFAULT '0',
+  `movie_data_sha256` varchar(64) DEFAULT NULL,
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `orig_movie` int DEFAULT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -226,6 +176,7 @@ CREATE TABLE `movies` (
   `total_bytes` int DEFAULT NULL,
   `status` varchar(250) DEFAULT NULL,
   `movie_data_urn` varchar(1024) DEFAULT NULL,
+  `movie_zipfile_urn` varchar(1024) DEFAULT NULL,
   `version` int NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
@@ -252,7 +203,7 @@ CREATE TABLE `object_store` (
   `data` longblob NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `sha256` (`sha256`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Stores objects for deployments that do not use Amazon S3, such as when testing within GitHub Actions.';
 
 --
 -- Table structure for table `objects`
@@ -268,7 +219,7 @@ CREATE TABLE `objects` (
   UNIQUE KEY `urn` (`urn`(768)),
   KEY `mtime` (`mtime`),
   KEY `sha256` (`sha256`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Stores pointers from a SHA256 to a URN, which can be the object_store or in Amazon S3.';
 
 --
 -- Table structure for table `users`
@@ -300,3 +251,4 @@ CREATE TABLE `users` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+

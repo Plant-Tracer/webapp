@@ -108,7 +108,7 @@ def make_urn(*, object_name, scheme = None ):
     else:
         raise ValueError(f"Scheme {scheme} not in ALLOWED_SCHEMES {ALLOWED_SCHEMES}")
     ret = f"{scheme}://{netloc}/{object_name}"
-    logging.debug("make_urn=%s",ret)
+    logging.debug("make_urn urn=%s",ret)
     return ret
 
 API_SECRET=os.environ.get("API_SECRET","test-secret")
@@ -117,7 +117,7 @@ def sig_for_urn(urn):
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     assert isinstance(urn,str)
-    logging.debug("urn=%s",urn)
+    logging.debug("make_signed_url urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
@@ -138,7 +138,7 @@ def read_signed_url(*,urn,sig):
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise auth.http404("signature does not verify")
+    raise auth.http403("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
@@ -192,10 +192,10 @@ def read_object(urn):
 def write_object(urn, object_data):
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-    elif o.scheme== C.SCHEME_DB:
+        return
+    elif o.scheme== C.SCHEME_DB and len(object_data) < C.SCHEME_DB_MAX_OBJECT_LEN:
         object_sha256 = sha256(object_data)
         assert o.netloc == DB_TABLE
         dbfile.DBMySQL.csfr(
@@ -206,8 +206,8 @@ def write_object(urn, object_data):
             get_dbwriter(),
             "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
             (object_sha256, object_data))
-    else:
-        raise ValueError(f"Cannot write object urn={urn}s len={len(object_data)}")
+        return
+    raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
     logging.info("delete_object(%s)",urn)
@@ -230,9 +230,11 @@ def delete_object(urn):
 
 
 if __name__ == "__main__":
-    s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
-    if s3_bucket is None:
-        raise RuntimeError(C.PLANTTRACER_S3_BUCKET + " is not set")
-    print("Updating CORS policy for ",s3_bucket)
+    import argparse
+    parser = argparse.ArgumentParser(description="Set CORS policy for an S3 Bucket",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("s3_bucket", default=os.environ.get(C.PLANTTRACER_S3_BUCKET,"my-bucket"))
+    args = parser.parse_args()
+    print("Updating CORS policy for ",args.s3_bucket)
     s3 = boto3.client( S3 )
-    s3.put_bucket_cors(Bucket=s3_bucket, CORSConfiguration=cors_configuration)
+    s3.put_bucket_cors(Bucket=args.s3_bucket, CORSConfiguration=cors_configuration)

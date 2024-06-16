@@ -6,7 +6,7 @@
 # pylint: disable=too-many-arguments
 
 import os
-import base64
+#import base64
 import uuid
 import logging
 import json
@@ -95,9 +95,6 @@ def logit(*, func_name, func_args, func_return):
     # Make copies of func_args and func_return so we can modify without fear
     func_args = copy.copy(func_args)
     func_return = copy.copy(func_return)
-
-    if 'movie_data' in func_args and func_args['movie_data'] is not None:
-        func_args['movie_data'] = f"({len(func_args['movie_data'])} bytes)"
 
     func_args   = json.dumps(func_args, default=str)
     func_return = json.dumps(func_return, default=str)
@@ -361,9 +358,7 @@ def delete_api_key(api_key):
     """
     if len(api_key) < 10:
         raise InvalidAPI_Key(api_key)
-    return dbfile.DBMySQL.csfr(get_dbwriter(),
-                               """DELETE FROM api_keys WHERE api_key=%s""",
-                               (api_key,))
+    return dbfile.DBMySQL.csfr(get_dbwriter(), """DELETE FROM api_keys WHERE api_key=%s""", (api_key,))
 
 @log
 def list_users(*, user_id):
@@ -504,42 +499,20 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie_data(*, movie_id:int):
+def get_movie_data(*, movie_id:int, zipfile=False):
     """Returns the movie contents for a movie_id.
-    If there is a urn, use that.
-    If the data is stored in the movie_data, return that.
-    If a sha256 is stored, redirect through the objects table.
+    Should not be used to provide data to the user.
     """
-    if movie_id<0:
-        raise InvalidMovie_Id(movie_id)
+    what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
+    row = dbfile.DBMySQL.csfr(get_dbreader(), f"""SELECT {what} from movies where id=%s""", (movie_id,))
     try:
-        row = dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movies.movie_data_urn as movie_data_urn,
-                                         movie_data.movie_data as movie_data,
-                                         movie_data.movie_sha256 as movie_sha256,
-                                         objects.urn as object_urn,
-                                         object_store.data as object_data
-                               FROM movies
-                               LEFT JOIN movie_data on movies.id=movie_data.movie_id
-                               LEFT JOIN objects on movie_data.movie_sha256=objects.sha256
-                               LEFT JOIN object_store on object_store.sha256=objects.sha256
-                               WHERE movies.id=%s
-                               LIMIT 1""",
-                                  (movie_id,),
-                                  asDicts=True)[0]
+        urn = row[0][0]
     except IndexError as e:
         raise InvalidMovie_Id(movie_id) from e
+    logging.info("movie_id=%s zipfile=%s what=%s urn=%s",movie_id,zipfile,what,urn)
 
-    if row['movie_data'] is not None and len(row['movie_data'])>0:
-        return row['movie_data']
-
-    if row['object_data'] is not None and len(row['object_data'])>0:
-        return row['object_data']
-
-    for name in ['movie_data_urn','object_urn']:
-        urn = row[name]
-        if urn:
-            return db_object.read_object(urn)
+    if urn:
+        return db_object.read_object(urn)
     return None
 
 
@@ -556,6 +529,7 @@ def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
                     A.fps as fps, A.width as width, A.height as height,
                     A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
                     A.movie_data_urn as movie_data_urn,
+                    A.movie_zipfile_urn as movie_zipfile_urn,
                     B.id AS tracked_movie_id
              FROM movies A
              LEFT JOIN movies B on A.id=B.orig_movie
@@ -633,6 +607,10 @@ def set_movie_metadata(*, movie_id, movie_metadata):
 
 
 def set_movie_data(*,movie_id, movie_data):
+    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
+    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames( movie_id=movie_id )
+    purge_movie_zipfile( movie_id=movie_id )
     object_name= db_object.object_name( course_id = course_id_for_movie_id( movie_id ),
                                         movie_id = movie_id,
                                         ext=C.MOVIE_EXTENSION)
@@ -645,31 +623,42 @@ def set_movie_data(*,movie_id, movie_data):
 ## Deleting
 
 @log
-def purge_movie_frames(*,movie_id):
+def purge_movie_frames(*,movie_id,callback=None):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frame_analysis where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frame_trackpoints where frame_id in (select id from movie_frames where movie_id=%s)", (movie_id,))
-    dbfile.DBMySQL.csfr(
-        get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
+    rows = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,))
+    for row in rows:
+        if callback:
+            callback(row)
+        db_object.delete_object(row[0])
+    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
 
 @log
-def purge_movie_data(*,movie_id):
+def purge_movie_data(*,movie_id,callback=None):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s", (movie_id,))
-    if res:
-        urn = res[0][0]
-        db_object.delete_object(urn)
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_data where movie_id=%s", (movie_id,))
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,))
+    for row in rows:
+        if callback:
+            callback(row)
+        db_object.delete_object(row[0])
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie(*,movie_id):
+def purge_movie_zipfile(*,movie_id,callback=None):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
+    for row in rows:
+        db_object.delete_object(row[0])
+    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
+
+@log
+def purge_movie(*,movie_id, callback=None):
     """Actually delete a movie and all its frames"""
-    purge_movie_frames(movie_id=movie_id)
-    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames(movie_id=movie_id, callback=callback)
+    purge_movie_data(movie_id=movie_id, callback=callback)
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
 
 
@@ -695,11 +684,15 @@ def course_id_for_movie_id(movie_id):
 def movie_data_urn_for_movie_id(movie_id):
     return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
 
+@functools.lru_cache(maxsize=128)
+def movie_zipfile_urn_for_movie_id(movie_id):
+    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
+
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
 def create_new_frame(*, movie_id, frame_number, frame_data=None):
     """Get the frame id specified by movie_id and frame_number.
-    if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_id.
+    if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_urn.
     if trackpoints are provided, replace current trackpoints with those. This is used sometimes
     just to update the frame_data
 
@@ -730,16 +723,6 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                         ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
                         args)
     return frame_urn
-
-def get_frame_id(*, movie_id, frame_number):
-    """This is only used by the trackpoint update system right now, and that will go away when movie_frames table is removed and the trackpoints table reference the movie_id and frame_number directly."""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """INSERT INTO movie_frames (movie_id, frame_number)
-                        VALUES (%s, %s)
-                        ON DUPLICATE KEY UPDATE movie_id=movie_id""",
-                        (movie_id, frame_number))
-    return dbfile.DBMySQL.csfr(get_dbreader(),"SELECT id from movie_frames where movie_id=%s and frame_number=%s LIMIT 1" ,(movie_id,frame_number))[0]
-
 
 def get_frame(*, movie_id, frame_number, get_frame_data=True):
     """Get a frame by movie_id and either frame number.
@@ -778,10 +761,7 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
 
     return  dbfile.DBMySQL.csfr(get_dbreader(),
                                f"""
-                               SELECT frame_number,x,y,label
-                               FROM movie_frame_trackpoints
-                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
-                               WHERE movie_id=%s {extra}
+                               SELECT frame_number,x,y,label FROM movie_frame_trackpoints WHERE movie_id=%s {extra}
                                """,
                                args, asDicts=True)
 
@@ -800,10 +780,7 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT max(movie_frames.frame_number)
-                               FROM movie_frame_trackpoints
-                               LEFT JOIN movie_frames ON movie_frame_trackpoints.frame_id = movie_frames.id
-                               WHERE movie_id=%s
+                               """SELECT max(frame_number) FROM movie_frame_trackpoints WHERE movie_id=%s
                                """,
                                (movie_id,))[0][0]
 
@@ -812,17 +789,16 @@ def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[di
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
-    frame_id = get_frame_id(movie_id=movie_id, frame_number = frame_number)
     dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """DELETE FROM movie_frame_trackpoints WHERE frame_id=%s""",(frame_id,))
+                        """DELETE FROM movie_frame_trackpoints WHERE movie_id=%s and frame_number=%s""",(movie_id,frame_number,))
     vals = []
     for tp in trackpoints:
         if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
             raise KeyError(f'trackpoints element {tp} missing x, y or label')
-        vals.extend([frame_id,tp['x'],tp['y'],tp['label']])
+        vals.extend([movie_id,frame_number,tp['x'],tp['y'],tp['label']])
     if vals:
-        args = ",".join(["(%s,%s,%s,%s)"]*len(trackpoints))
-        cmd = f"INSERT INTO movie_frame_trackpoints (frame_id,x,y,label) VALUES {args}"
+        args = ",".join(["(%s,%s,%s,%s,%s)"]*len(trackpoints))
+        cmd = f"INSERT INTO movie_frame_trackpoints (movie_id,frame_number,x,y,label) VALUES {args}"
         logging.debug("cmd=%s vals=%s",cmd,vals)
         dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
 
@@ -974,6 +950,7 @@ SET_MOVIE_METADATA = {
     'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
     'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
     'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
+    'movie_zipfile_urn':'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     'deleted': 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1083,6 +1060,10 @@ class Movie():
     def movie_data_urn(self):
         return movie_data_urn_for_movie_id(self.movie_id)
 
+    @property
+    def movie_zipfile_urn(self):
+        return movie_zipfile_urn_for_movie_id(self.movie_id)
+
     @data.setter
     def data(self, movie_data):
         set_movie_data(movie_id=self.movie_id, movie_data=movie_data)
@@ -1091,6 +1072,11 @@ class Movie():
     def url(self):
         """Return a URL for accessing the data. This is a self-signed URL"""
         return db_object.make_signed_url(urn=self.movie_data_urn)
+
+    @property
+    def zipfile_url(self):
+        """Return a URL for accessing the zipfile. This is a self-signed URL"""
+        return db_object.make_signed_url(urn=self.movie_zipfile_urn)
 
     @property
     def metadata(self):

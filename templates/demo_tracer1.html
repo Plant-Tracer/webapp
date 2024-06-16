@@ -3,7 +3,7 @@
   <head>
     <title>Demo</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <script type="text/javascript" charset="utf8" src="./static/dev/jquery.js"></script>
+    <script type="text/javascript" charset="utf8" src="./static/demo/jquery.js"></script>
     <script type="module" src="./static/canvas_controller.js"></script>
     <script type="module" src="./static/canvas_movie_controller.js"></script>
   </head>
@@ -13,8 +13,8 @@
   </style>
   <body>
       <p>This demo shows the TraceController <i>before</i> the image is traced.
-          The user has the ability to drag and edit the initial track points.
-      </p>
+          The user has the ability to drag and edit the initial track points.</p>
+      <p>Note that <tt>put_frame_trackpoints_params()</tt> is not loaded, so nothing happens when trackpoints are moved. </p>
       {% include 'tracer_app.html' %}
   </body>
   <script type='module'>
@@ -25,6 +25,6 @@
    const movie_id = 10;
    const movie_metadata = {'movie_id':movie_id, 'width':512, 'height':512};
    const api_key='demo_key';
-   trace_movie_one_frame('div#tracer', movie_metadata, './static/demo/frame0.jpg', api_key);
+   trace_movie_one_frame(-1, 'div#tracer', movie_metadata, './static/demo/frame0.jpg', api_key);
   </script>
 </html>

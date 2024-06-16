@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.2.0, for macos13 (arm64)
 --
--- Host: localhost    Database: pt_local
+-- Host: localhost    Database: actions_test
 -- ------------------------------------------------------
 -- Server version	8.2.0
 
@@ -104,55 +104,17 @@ CREATE TABLE `logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Table structure for table `movie_analysis`
+-- Table structure for table `metadata`
 --
 
-DROP TABLE IF EXISTS `movie_analysis`;
-CREATE TABLE `movie_analysis` (
+DROP TABLE IF EXISTS `metadata`;
+CREATE TABLE `metadata` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `engine_id` int NOT NULL,
-  `annotations` json DEFAULT NULL,
-  `movie_id` int NOT NULL,
+  `k` varchar(250) NOT NULL DEFAULT '',
+  `v` varchar(250) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
-  KEY `engine_id` (`engine_id`),
-  KEY `mc1` (`movie_id`),
-  CONSTRAINT `ma1` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`),
-  CONSTRAINT `mc1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Table structure for table `movie_data`
---
-
-DROP TABLE IF EXISTS `movie_data`;
-CREATE TABLE `movie_data` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `movie_id` int NOT NULL,
-  `movie_sha256` varchar(64) DEFAULT NULL,
-  `movie_data` mediumblob NOT NULL,
-  `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `movie_id` (`movie_id`),
-  CONSTRAINT `ctr1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Table structure for table `movie_frame_analysis`
---
-
-DROP TABLE IF EXISTS `movie_frame_analysis`;
-CREATE TABLE `movie_frame_analysis` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `frame_id` int NOT NULL,
-  `engine_id` int NOT NULL,
-  `annotations` json DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `idx4` (`frame_id`,`engine_id`),
-  KEY `frame_id` (`frame_id`),
-  KEY `engine_id` (`engine_id`),
-  CONSTRAINT `mfa1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`),
-  CONSTRAINT `mfa3` FOREIGN KEY (`engine_id`) REFERENCES `engines` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  UNIQUE KEY `uc1` (`k`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Table structure for table `movie_frame_trackpoints`
@@ -161,14 +123,14 @@ CREATE TABLE `movie_frame_analysis` (
 DROP TABLE IF EXISTS `movie_frame_trackpoints`;
 CREATE TABLE `movie_frame_trackpoints` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `frame_id` int NOT NULL,
+  `movie_id` int NOT NULL,
+  `frame_number` int NOT NULL,
+  `label` varchar(255) NOT NULL,
   `x` int NOT NULL,
   `y` int NOT NULL,
-  `label` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk1` (`frame_id`,`label`),
-  KEY `frame_id` (`frame_id`),
-  CONSTRAINT `movie_frame_trackpoints_ibfk_1` FOREIGN KEY (`frame_id`) REFERENCES `movie_frames` (`id`)
+  UNIQUE KEY `uk3` (`movie_id`,`frame_number`,`label`),
+  CONSTRAINT `m1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -183,7 +145,7 @@ CREATE TABLE `movie_frames` (
   `frame_data` mediumblob,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `frame_sha256` varchar(256) DEFAULT NULL,
+  `frame_urn` varchar(256) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `i11` (`movie_id`,`frame_number`),
   CONSTRAINT `c10` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`)
@@ -203,33 +165,43 @@ CREATE TABLE `movies` (
   `course_id` int NOT NULL,
   `published` int DEFAULT '0',
   `deleted` int DEFAULT '0',
+  `movie_data_sha256` varchar(64) DEFAULT NULL,
   `date_uploaded` int NOT NULL DEFAULT (unix_timestamp()),
   `orig_movie` int DEFAULT NULL,
   `mtime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `center_x` int DEFAULT NULL,
-  `center_y` int DEFAULT NULL,
-  `calib_x` float DEFAULT NULL,
-  `calib_y` float DEFAULT NULL,
-  `calib_user_id` int DEFAULT NULL,
-  `calib_time_t` int DEFAULT NULL,
   `fps` decimal(5,2) DEFAULT NULL,
   `width` int DEFAULT NULL,
   `height` int DEFAULT NULL,
   `total_frames` int DEFAULT NULL,
   `total_bytes` int DEFAULT NULL,
+  `status` varchar(250) DEFAULT NULL,
+  `movie_data_urn` varchar(1024) DEFAULT NULL,
+  `version` int NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `deleted` (`deleted`),
   KEY `d2` (`user_id`,`deleted`),
   KEY `title` (`title`),
   KEY `course_id` (`course_id`),
-  KEY `movies_usr` (`calib_user_id`),
+  KEY `movie_data_urn` (`movie_data_urn`(768)),
   FULLTEXT KEY `description` (`description`),
   FULLTEXT KEY `title_ft` (`title`),
   CONSTRAINT `movies_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_ibfk_2` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`),
-  CONSTRAINT `movies_usr` FOREIGN KEY (`calib_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `movies_chk_1` CHECK ((`deleted` in (0,1))),
   CONSTRAINT `movies_chk_2` CHECK ((`published` in (0,1)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `object_store`
+--
+
+DROP TABLE IF EXISTS `object_store`;
+CREATE TABLE `object_store` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `sha256` varchar(64) NOT NULL,
+  `data` longblob NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sha256` (`sha256`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -241,9 +213,11 @@ CREATE TABLE `objects` (
   `id` int NOT NULL AUTO_INCREMENT,
   `sha256` varchar(64) DEFAULT NULL,
   `mtime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `data` mediumblob,
-  `url` varchar(1024) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  `urn` varchar(1024) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `urn` (`urn`(768)),
+  KEY `mtime` (`mtime`),
+  KEY `sha256` (`sha256`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -277,3 +251,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
+INSERT INTO metadata (k,v) values ('schema_version',10) ON DUPLICATE KEY UPDATE id=id;

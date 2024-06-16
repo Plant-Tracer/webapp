@@ -1,3 +1,13 @@
+<!-- This is the HTML for the plant tracer application. It is included by:
+   -- demo_tracer1.html --- shows the image before any tracking. Only the first frame shows, and we can move the trace points. Used in development
+                            with a single frame from static/demo/frame0.jpg
+
+   -- demo_tracer2.html --- shows the image after initial tracing. Any frame can be shown, and we can move the trace points. Used in development
+                            with the zipfile in static/demo/frames.zip
+
+   -- analyze.html      --- the actual application!
+-->
+
     <div id='tracer'>
         <div class='float-movie'>
             <form action='javascript:void(0)'>
@@ -19,7 +29,7 @@
                 <input type='button' value='⏵'  class='play_forward' disabled/>
                 <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled/>
 
-                <label for="zoom">zoom:</label>
+                <label for="zoom-id">zoom:</label>
                 <select id="zoom-id" name="zoom" class='zoom'>
                     <option value="25">25%</option>
                     <option value="50">50%</option>
@@ -44,8 +54,8 @@
                 <fieldset>
                     <p>Add another marker by entering the new marker name:</p>
                     <div class='pure-control-group'>
-                        <label for='marker-name'>marker name:</label>
-                        <input class='marker_name_input' type='text' placeholder='Marker name' size='20' />
+                        <label for='marker-name-id'>marker name:</label>
+                        <input id='marker-name-id' class='marker_name_input' type='text' placeholder='Marker name' size='20' />
                         <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
                     </div>
 

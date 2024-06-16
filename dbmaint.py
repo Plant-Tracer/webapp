@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Database Management Tool for webapp
 """
@@ -26,7 +27,7 @@ from constants import C
 import db
 import tracker
 import auth
-from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE, SCHEMA1_FILE
+from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
 from lib.ctools import clogging
 from lib.ctools import dbfile
 from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
@@ -73,11 +74,11 @@ def purge_test_data():
                   'where email like "%admin+test%"',
                   'where email like "%demo+admin%"']:
         del_movies = f"(select id from movies where user_id in (select id from users {where}))"
-        for table in ['movie_frame_analysis','movie_frame_trackpoints']:
-            cmd = f"delete from {table} where frame_id in (select id from movie_frames where movie_id in {del_movies})"
+        for table in ['movie_frame_trackpoints']:
+            cmd = f"delete from {table} where movie_id in {del_movies})"
             print(cmd)
             c.execute(cmd)
-        for table in ['movie_analysis','movie_data','movie_frames']:
+        for table in ['movie_frames']:
             cmd = f"delete from {table} where movie_id in {del_movies}"
             print(cmd)
             c.execute(cmd)
@@ -93,7 +94,7 @@ def purge_all_movies():
     """Remove all test data from the database"""
     d = dbfile.DBMySQL(auth.get_dbwriter())
     c = d.cursor()
-    for table in ['object_store','objects','movie_frame_analysis','movie_frame_trackpoints','movie_frames','movie_data','movies']:
+    for table in ['object_store','objects','movie_frame_trackpoints','movie_frames','movies']:
         print("wiping",table)
         c.execute( f"delete from {table}")
 
@@ -104,7 +105,6 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     Creadentials are stored in cp.
     """
     assert isinstance(createdb_name,str)
-    assert isinstance(write_config_fname,str)
     print("createdb_name=",createdb_name)
 
     print(f"createdb droot={droot} createdb_name={createdb_name} write_config_fname={write_config_fname} schema={schema}")
@@ -127,8 +127,8 @@ def createdb(*,droot, createdb_name, write_config_fname, schema):
     if debug:
         print("Current interfaces and hostnames:")
         print("ifconfig -a:")
-    subprocess.call(['ifconfig','-a'])
-    print("Hostnames:",hostnames())
+        subprocess.call(['ifconfig','-a'])
+        print("Hostnames:",hostnames())
     for ipaddr in hostnames() + ['%']:
         print("granting dbreader and dbwriter access from ",ipaddr)
         c.execute( f'DROP   USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
@@ -213,28 +213,51 @@ def report():
                     get_column_names=headers)
         print(tabulate(rows,headers=headers))
 
-def freshen():
+def delete_callback(info):
+    print("Deleting:",info)
+
+def freshen(clean):
     dbwriter = auth.get_dbwriter()
-    print(f"Freshen({dbwriter})")
-    movies = csfr(dbwriter, "SELECT * from movies",(),asDicts=True)
-    for movie in movies:
+    action = 'CLEAN' if clean else 'FRESHEN'
+    verb   = 'Deleting movies' if clean else 'Displaying movies'
+    print(f"{action} ({dbwriter})")
+    print(f"{verb} with no data.")
+    for movie in csfr(dbwriter, "SELECT * from movies where movie_data_urn is NULL",(),asDicts=True):
+        print("Movie with no data:",movie['id'])
+        print(json.dumps(movie,default=str,indent=4))
+        if clean:
+            db.purge_movie(movie_id=movie['id'], callback=delete_callback)
+
+    print(f"{verb} marked for deletion by author.")
+    for movie in csfr(dbwriter, "SELECT * from movies where deleted!=0",(),asDicts=True):
+        print("Deleted movie:",movie['id'])
+        print(json.dumps(movie,default=str,indent=4))
+        if clean:
+            db.purge_movie(movie_id=movie['id'], callback=delete_callback)
+
+    print(f"{verb} movies that have no bytes uploaded")
+    for movie in csfr(dbwriter, "SELECT * from movies where total_bytes is NULL",(),asDicts=True):
         movie_id = movie['id']
-        print(f"Movie {movie_id}  title: {movie['title']}")
-        if not movie['total_bytes']:
-            print("** needs refreshing...")
-            print(json.dumps(movie,default=str,indent=4))
-            try:
-                movie_data = db.get_movie_data(movie_id=movie_id)
-            except db.InvalidMovie_Id:
-                print(f"Cannot get movie data. Purging movie {movie_id}")
+        print(json.dumps(movie,default=str,indent=4))
+        try:
+            movie_data = db.get_movie_data(movie_id=movie_id)
+        except db.InvalidMovie_Id:
+            print(f"Cannot get movie data.")
+            movie_data = None
+        if movie_data is None:
+            print("Movie data is not available.")
+            if clean:
+                print("Purging movie")
                 db.purge_movie(movie_id=movie_id)
-                continue
-            assert movie_data is not None
-            movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-            print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
-            cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata ]) + " WHERE id=%s"
-            args = list( movie_metadata.values()) + [movie_id]
-            csfr(dbwriter, cmd, args)
+            else:
+                print("Rerun with --clean to purge movie")
+            continue
+        print("Fixing metadata...")
+        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+        print("metadata:",json.dumps(movie_metadata,default=str,indent=4))
+        cmd = "UPDATE movies SET " + ",".join([ f"{key}=%s" for key in movie_metadata ]) + " WHERE id=%s"
+        args = list( movie_metadata.values()) + [movie_id]
+        csfr(dbwriter, cmd, args)
 
 #pylint: disable=too-many-arguments
 def create_course(*, course_key, course_name, admin_email,
@@ -268,8 +291,17 @@ def create_course(*, course_key, course_name, admin_email,
 ## database schema management
 ################################################################
 
+"""
+etc/schema.sql --- the current schema.
+etc/schema_0.sql --- creates the initial schema and includes a statement
+                     set the current schema version number. Currently this is version 10.
+etc/schema_{n}.sql --- upgrade from schema (n-1) to (n).
+"""
+
+
 def current_source_schema():
-    """Returns the current schema of the app based on the highest number schema file"""
+    """Returns the current schema of the app based on the highest number schema file.
+    Scan all current schema files."""
     glob_template = SCHEMA_TEMPLATE.format(schema='*')
     pat = re.compile("([0-9]+)[.]sql")
     ver = 0
@@ -278,19 +310,17 @@ def current_source_schema():
         ver = max( int(m.group(1)), ver)
     return ver
 
-def schema_upgrade( ath, dbname ):
+def schema_upgrade( ath ):
     """Upgrade the schema to the current version.
     NOTE: uses ath to create a new database connection. ath must have ability to modify database schema.
 
     """
+    dbname = ath.database
+    logging.info("schema_upgrade(%s)",ath)
     with dbfile.DBMySQL( ath ) as dbcon:
         dbcon.execute(f"USE {dbname}")
 
         max_version = current_source_schema()
-        # First get the current schema version, upgrading from version 0 to 1 in the process
-        # if there is no metadata table
-        with open(SCHEMA1_FILE,'r') as f:
-            dbcon.create_schema(f.read())
 
         def current_version():
             cursor = dbcon.cursor()
@@ -328,12 +358,9 @@ def dump(config,dumpdir):
         with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
             f.write(movie_data)
 
-
-
-
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Database Maintenance Program",
+    parser = argparse.ArgumentParser(description="Database Maintenance Program. Database to act upon is specified in the PLANTTRACER_CREDENTIALS environment variable for [dbreader] and [dbwriter]",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
     required.add_argument(
@@ -348,7 +375,7 @@ if __name__ == "__main__":
                         'Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER '
                         'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
                         'Outputs setenv for DBREADER and DBWRITER')
-    parser.add_argument("--upgradedb", help='Upgrade a database schema')
+    parser.add_argument("--upgradedb", help='Upgrade a database schema',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
     parser.add_argument("--readconfig",   help="specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
@@ -363,7 +390,8 @@ if __name__ == "__main__":
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
     parser.add_argument("--report",help="print a report of the database",action='store_true')
-    parser.add_argument("--freshen",help="cleans up the movie metadata for all movies",action='store_true')
+    parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
+    parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
     parser.add_argument("--dump", help="backup all objects as JSON files and movie files to new directory called DUMP.  ")
 
@@ -376,7 +404,6 @@ if __name__ == "__main__":
     if args.rootconfig:
         config.read(args.rootconfig)
         os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
-        ath = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
 
     if args.mailer_config:
         print("mailer config:",mailer.smtp_config_from_environ())
@@ -389,25 +416,24 @@ if __name__ == "__main__":
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
         new_api_key = db.make_new_api_key(email=args.sendlink)
-        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint, new_api_key=new_api_key)
+        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
+                      new_api_key=new_api_key)
         sys.exit(0)
 
     ################################################################
     ## Startup stuff
 
-    if args.createdb or args.dropdb or args.upgradedb:
+    if args.createdb or args.dropdb:
         cp = configparser.ConfigParser()
         if args.rootconfig is None:
-            print("Please specify --rootconfig for --createdb, --dropdb or --upgradedb",file=sys.stderr)
+            print("Please specify --rootconfig for --createdb or --dropdb",file=sys.stderr)
             sys.exit(1)
 
+        ath   = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
-                createdb(droot=droot, createdb_name = args.createdb, write_config_fname=args.writeconfig, schema=args.schema)
-                sys.exit(0)
-
-            if args.upgradedb:
-                schema_upgrade(ath, dbname=args.upgradedb)
+                createdb(droot=droot, createdb_name = args.createdb,
+                         write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
             if args.dropdb:
@@ -462,6 +488,13 @@ if __name__ == "__main__":
         print(f"course_key: {course_key}")
         sys.exit(0)
 
+    if args.upgradedb:
+        # the upgrade can be done with dbwriter, as long as dbwriter can update the schema.
+        # In our current versions, it can.
+        ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'dbwriter')
+        schema_upgrade(ath)
+        sys.exit(0)
+
     ################################################################
     ## Cleanup
 
@@ -482,7 +515,11 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.freshen:
-        freshen()
+        freshen(False)
+        sys.exit(0)
+
+    if args.clean:
+        freshen(True)
         sys.exit(0)
 
     if args.dump:
