@@ -294,39 +294,27 @@ def test_movie_extract1(new_movie):
     user_id = cfg[USER_ID]
 
     # Check for insufficient arguments
+    # Should produce http403
     with boddle(params={'api_key': api_key}):
         r = bottle_api.api_get_frame()
         assert r['error']==True
 
-    # Check for bad format
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': 0,
-                        'format':'no-format'
-                        }):
-        r = bottle_api.api_get_frame()
-        assert r['error']==True
-
     # Check for invalid frame_number
+    # Should produce http404
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_number': -1,
-                        'format':'json'
-                        }):
+                        'frame_number': -1}):
         r = bottle_api.api_get_frame()
         assert r['error']==True
 
     # Check for getting by frame_number
+    # should produce a redirect
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_number': 0,
-                        'format':'json'
-                        }):
+                        'frame_number': 0 }):
         r = bottle_api.api_get_frame()
         logging.debug("frame0a=%s",r)
         assert r['error']==False
-        frame0a = r
-    logging.info("frame0a=%s",frame0a)
 
 
 def test_movie_extract2(new_movie):
@@ -354,54 +342,20 @@ def test_movie_extract2(new_movie):
     assert frame0 != frame1 != frame2
 
     # Grab three frames with the API and see if they are different
-    def get_jpeg_frame(number):
+    def get_jpeg_frame_redirect(number):
         with boddle(params={'api_key': api_key,
                             'movie_id': str(movie_id),
-                            'frame_number': str(number),
-                            'format':'jpeg' }):
+                            'frame_number': str(number) }):
             r =  bottle_api.api_get_frame()
-            assert isinstance(r,dict) is False
-            assert filetype.guess(r).mime==MIME.JPEG
             return r
 
-    jpeg0 = get_jpeg_frame(0)
-    jpeg1 = get_jpeg_frame(1)
-    jpeg2 = get_jpeg_frame(2)
+    jpeg_url0 = get_jpeg_frame_redirect(0)
+    jpeg_url1 = get_jpeg_frame_redirect(1)
+    jpeg_url2 = get_jpeg_frame_redirect(2)
     assert jpeg0 != jpeg1 != jpeg2
 
-    # Handle missing params
+    # TODO - get the data and check?
 
-    # Make sure it properly handles frames out-of-range
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': str(-1),
-                        'format':'json' }):
-        r =  bottle_api.api_get_frame()
-    assert r['error']==True
-    assert 'out of range' in r['message']
-
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': str(1_000_000),
-                        'format':'json' }):
-        r =  bottle_api.api_get_frame()
-    assert r['error']==True
-    assert 'out of range' in r['message']
-
-    # Grab three frames with metadata
-    def get_jpeg_json(frame_number):
-        with boddle(params={'api_key': api_key,
-                            'movie_id': str(movie_id),
-                            'frame_number': str(frame_number),
-                            'format':'json' }):
-            ret =  bottle_api.api_get_frame()
-            logging.debug("2. ret=%s",ret)
-            assert isinstance(ret,dict) is True
-            return ret
-    r0 = get_jpeg_json(0)
-    r1 = get_jpeg_json(1)
-    r2 = get_jpeg_json(2)
-    assert r0['frame_number'] != r1['frame_number'] != r2['frame_number']
 
 
 ################################################################

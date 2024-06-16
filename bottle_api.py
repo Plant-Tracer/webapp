@@ -27,7 +27,7 @@ import db
 import db_object
 import auth
 
-from constants import C,E,__version__,GET,POST,GET_POST,MIME
+from constants import C,E,__version__,GET,POST,GET_POST
 import mailer
 import tracker
 
@@ -454,64 +454,18 @@ def api_get_frame():
     user_id      = get_user_id(allow_demo=True)
     frame_number = get_int('frame_number')
     movie_id     = get_int('movie_id')
-    fmt          = get('format', 'jpeg').lower()
-
-    if fmt not in ['jpeg', 'json']:
-        logging.info("fmt is not in jpeg or json")
-        return E.INVALID_FRAME_FORMAT
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return E.INVALID_MOVIE_ACCESS
+        raise auth.http403(f'Error 404: User {user_id} cannot access movie {movie_id}')
 
-    if fmt=='jpeg':
-        # Return just the JPEG for the frame, with no metadata
-        try:
-            bottle.response.set_header('Content-Type', MIME.JPEG)
-            return api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
-        except db.InvalidFrameAccess:
-            return bottle.HTTPResponse(body=f'<html><body>invalid frame access frame_number={frame_number} movie_id={movie_id} user_id={user_id}</body></html>', status=404)
-
-    # See if get_frame can find the movie frame
+    # See if there is a urn
     urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
     if urn is None:
         # the frame is not in the database, so we need to make it
-        frame_urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
-        ret = {'movie_id':movie_id,
-               'frame_number':frame_number,
-               'frame_urn':frame_urn }
-    else:
-        # Get any trackpoints
-        ret['trackpoints'] = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_number, frame_count=1)
+        urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
 
-
-    # If we do not have frame_data, extract it from the movie (but don't store in database)
-    if ret.get('frame_data',None) is None:
-        logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
-        movie_data = db.get_movie_data(movie_id=movie_id)
-        try:
-            ret['frame_data'] = tracker.extract_frame(movie_data=movie_data,
-                                                      frame_number=frame_number,
-                                                      fmt='jpeg')
-        except ValueError:
-            return {'error':True,
-                    'message':f'frame number {frame_number} is out of range'}
-
-    # Convert the frame_data to a data URL
-    frame_data = ret["frame_data"]
-    if frame_data is not None:
-        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
-    del ret['frame_data']
-
-    ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
-    ret['error'] = False
-    #
-    # Need to convert all datetimes to strings.
-    # We then return the dictionary, which bottle runs json.dumps() on
-    # and returns MIME type of "application/json"
-    # JQuery will then automatically decode this JSON into a JavaScript object,
-    # without having to call JSON.parse()
-    return fix_types(ret)
+    return bottle.redirect(db_object.make_signed_url(urn=urn))
 
 
 ################################################################

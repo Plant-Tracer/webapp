@@ -17,6 +17,7 @@ import uuid
 
 from tabulate import tabulate
 from pronounceable import generate_word
+from botocore.exceptions import ClientError,ParamValidationError
 
 import paths
 
@@ -33,7 +34,6 @@ from lib.ctools import dbfile
 from lib.ctools.dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
 
 import mailer
-from botocore.exceptions import ClientError,ParamValidationError
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -243,7 +243,7 @@ def freshen(clean):
         try:
             movie_data = db.get_movie_data(movie_id=movie_id)
         except (db.InvalidMovie_Id,ClientError,ParamValidationError):
-            print(f"Cannot get movie data.")
+            print("Cannot get movie data.")
             movie_data = None
         if movie_data is None:
             print("Movie data is not available.")

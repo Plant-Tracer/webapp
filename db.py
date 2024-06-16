@@ -16,8 +16,11 @@ import smtplib
 import functools
 #from typing import Optional
 
+from botocore.exceptions import ClientError,ParamValidationError
 from jinja2.nativetypes import NativeEnvironment
+
 from validate_email_address import validate_email
+
 
 import db_object
 from paths import TEMPLATE_DIR
@@ -27,7 +30,6 @@ from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
 import mailer
-from botocore.exceptions import ClientError,ParamValidationError
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
@@ -623,8 +625,12 @@ def set_movie_data(*,movie_id, movie_data):
 ################################################################
 ## Deleting
 
+# pylint: disable=unused-argument
+def null_callback(*args,**kwargs):
+    return
+
 @log
-def purge_movie_frames(*,movie_id,callback=None):
+def purge_movie_frames(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
@@ -636,35 +642,34 @@ def purge_movie_frames(*,movie_id,callback=None):
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
 
 @log
-def purge_movie_data(*,movie_id,callback=None):
+def purge_movie_data(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,))
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,), asDicts=True)
     for row in rows:
         if callback:
             callback(row)
             try:
-                db_object.delete_object(row[0])
+                db_object.delete_object(row['movie_data_urn'])
             except (ClientError,ParamValidationError):
-                logging.warning("invalid URN: %s",row[0])
-                pass
+                logging.warning("invalid URN: %s",row['movie_data_urn'])
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie_zipfile(*,movie_id,callback=None):
+def purge_movie_zipfile(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
+    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,), asDicts=True)
     for row in rows:
         try:
-            db_object.delete_object(row[0])
+            callback(row)
+            db_object.delete_object(row['movie_zipfile_urn'])
         except (ClientError,ParamValidationError):
-            logging.warning("invalid URN: %s",row[0])
-            pass
+            logging.warning("invalid URN: %s",row['movie_zipfile_urn'])
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie(*,movie_id, callback=None):
+def purge_movie(*,movie_id, callback=null_callback):
     """Actually delete a movie and all its frames"""
     purge_movie_frames(movie_id=movie_id, callback=callback)
     purge_movie_data(movie_id=movie_id, callback=callback)
@@ -759,7 +764,7 @@ def get_frame_data(*, movie_id, frame_number):
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
                                """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
                                (movie_id, frame_number), asDicts=True)
-    if len(rows)==1:
+    for row in rows:
         return db_object.read_object(row['frame_urn'])
     return None
 
