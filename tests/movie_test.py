@@ -381,20 +381,9 @@ def movie_list(api_key):
 
 def get_movie(api_key, movie_id):
     """Used for testing. Just pull the specific movie"""
-    movies = movie_list(api_key)
-    for movie in movies:
-        return movie
-
-    user_id = db.validate_api_key(api_key)['user_id']
-    logging.error("api_key=%s movie_id=%s user_id=%s",
-                  api_key, movie_id, user_id)
-    logging.error("len(movies)=%s", len(movies))
-    for movie in movies:
-        logging.error("%s", str(movie))
-    dbreader = get_dbreader()
-    logging.error("Full database: (dbreader: %s)", dbreader)
-    for movie in dbfile.DBMySQL.csfr(dbreader, "select * from movies", (), asDicts=True):
-        logging.error("%s", str(movie))
+    for movie in movie_list(api_key):
+        if movie['movie_id']==movie_id:
+            return movie
     raise RuntimeError(f"No movie has movie_id {movie_id}")
 
 
