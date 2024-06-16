@@ -634,8 +634,8 @@ def purge_movie_frames(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
-    rows = dbfile.DBMySQL.csfr(get_dbwriter(),"SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,))
-    for row in rows:
+    for row in dbfile.DBMySQL.csfr(get_dbwriter(),
+                                   "SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,)):
         if callback:
             callback(row)
         db_object.delete_object(row[0])
@@ -645,8 +645,9 @@ def purge_movie_frames(*,movie_id,callback=null_callback):
 def purge_movie_data(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL", (movie_id,), asDicts=True)
-    for row in rows:
+    for row in dbfile.DBMySQL.csfr( get_dbwriter(),
+                                    "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL",
+                                    (movie_id,), asDicts=True):
         if callback:
             callback(row)
             try:
@@ -659,8 +660,8 @@ def purge_movie_data(*,movie_id,callback=null_callback):
 def purge_movie_zipfile(*,movie_id,callback=null_callback):
     """Delete the frames associated with a movie."""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
-    rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,), asDicts=True)
-    for row in rows:
+    for row in dbfile.DBMySQL.csfr( get_dbwriter(),
+                                    "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,), asDicts=True):
         try:
             callback(row)
             db_object.delete_object(row['movie_zipfile_urn'])
@@ -747,11 +748,10 @@ def get_frame_urn(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
     """
-    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+    for row in dbfile.DBMySQL.csfr(get_dbreader(),
                                """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
-                               (movie_id, frame_number), asDicts=True)
-    if len(rows)==1:
-        return rows['frame_urn']
+                               (movie_id, frame_number), asDicts=True):
+        return row['frame_urn']
     return None
 
 
@@ -762,10 +762,9 @@ def get_frame_data(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns the frame data or None
     """
-    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+    for row in dbfile.DBMySQL.csfr(get_dbreader(),
                                """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
-                               (movie_id, frame_number), asDicts=True)
-    for row in rows:
+                               (movie_id, frame_number), asDicts=True):
         return db_object.read_object(row['frame_urn'])
     return None
 
