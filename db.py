@@ -27,6 +27,7 @@ from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
 from lib.ctools import dbfile
 from mailer import InvalidEmail
 import mailer
+from botocore.exceptions import ClientError,ParamValidationError
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
@@ -642,7 +643,11 @@ def purge_movie_data(*,movie_id,callback=None):
     for row in rows:
         if callback:
             callback(row)
-        db_object.delete_object(row[0])
+            try:
+                db_object.delete_object(row[0])
+            except (ClientError,ParamValidationError):
+                logging.warning("invalid URN: %s",row[0])
+                pass
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
 
 @log
@@ -651,7 +656,11 @@ def purge_movie_zipfile(*,movie_id,callback=None):
     logging.debug("purge_movie_data movie_id=%s",movie_id)
     rows = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,))
     for row in rows:
-        db_object.delete_object(row[0])
+        try:
+            db_object.delete_object(row[0])
+        except (ClientError,ParamValidationError):
+            logging.warning("invalid URN: %s",row[0])
+            pass
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
 
 @log
@@ -724,23 +733,35 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
                         args)
     return frame_urn
 
-def get_frame(*, movie_id, frame_number, get_frame_data=True):
-    """Get a frame by movie_id and either frame number.
+@log
+def get_frame_urn(*, movie_id, frame_number):
+    """Get a frame by movie_id and frame number.
     Don't log this to prevent blowing up.
-    Can also get trackpoints and annotations.
     :param: movie_id - the movie_id wanted
     :param: frame_number - provide one of these. Specifies which frame to get
-    :return: returns a dictionary with the frame info
+    :return: the URN or None
     """
     rows = dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT movie_id, frame_number, frame_data, frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
+                               """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
                                (movie_id, frame_number), asDicts=True)
-    if len(rows)!=1:
-        return None
-    row = rows[0]
-    if (row['frame_data'] is None) and (row['frame_urn'] is not None) and get_frame_data:
-        row['frame_data'] = db_object.read_object(row['frame_urn'])
-    return row
+    if len(rows)==1:
+        return rows['frame_urn']
+    return None
+
+
+def get_frame_data(*, movie_id, frame_number):
+    """Get a frame by movie_id and either frame number.
+    Don't log this to prevent blowing up.
+    :param: movie_id - the movie_id wanted
+    :param: frame_number - provide one of these. Specifies which frame to get
+    :return: returns the frame data or None
+    """
+    rows = dbfile.DBMySQL.csfr(get_dbreader(),
+                               """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
+                               (movie_id, frame_number), asDicts=True)
+    if len(rows)==1:
+        return db_object.read_object(row['frame_urn'])
+    return None
 
 
 ################################################################

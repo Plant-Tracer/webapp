@@ -422,41 +422,34 @@ def api_get_frame_jpeg(*,frame_number, movie_id, user_id):
 
 def api_get_frame_urn(*,frame_number,movie_id,user_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
-    data = db.get_frame(frame_number=frame_number, movie_id=movie_id)
-    if data['frame_urn'] is not None:
-        return data['frame_urn']
+    urn = db.get_frame_urn(frame_number=frame_number, movie_id=movie_id)
+    if urn is not None:
+        return urn
     # Get the frame data so we can get it a URN
     frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
     frame_urn = db.create_new_frame(movie_id=movie_id,
-                                                frame_number=frame_number,
-                                                frame_data=frame_data)
+                                    frame_number=frame_number,
+                                    frame_data=frame_data)
     assert frame_urn is not None
     return frame_urn
 
 @api.route('/get-frame', method=GET_POST)
 def api_get_frame():
     """
-    Get a frame and its annotation from a movie.
-    If frame is in frame storage:
-         - return from the frame storage.
-    If not is not in frame storage:
+    Gets a frame as a JPEG.
+    If not is not in the object store
          - Grab it from the movie
-         - Also get the width and height, and be sure they are in the database too.
+         - write to the object store.
+    Then:
+         - return with a redirect ot the object store.
 
     :param api_key:   authentication
     :param movie_id:   movie
     :param frame_number: get the frame by frame_number (starting with 0)
-    :param format:     jpeg - just get the image;
-                       json (default) - get the image (default), json annotation and trackpoints
-                       // deprecated - soon will be just jpeg
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
-      error        = true or false
-      message      - the message if there is an error
-      movie_id     - the movie (always returned)
-      frame_number - the number of the frame (always returned)
-      last_tracked_frame - the frame number of the highest frame with trackpoints
-      trackpoints - a list of the trackpoints
+      error - 404 - movie or frame does not exist
+      no error - redirect to the signed URL
     """
     user_id      = get_user_id(allow_demo=True)
     frame_number = get_int('frame_number')
@@ -480,8 +473,8 @@ def api_get_frame():
             return bottle.HTTPResponse(body=f'<html><body>invalid frame access frame_number={frame_number} movie_id={movie_id} user_id={user_id}</body></html>', status=404)
 
     # See if get_frame can find the movie frame
-    ret = db.get_frame(movie_id=movie_id, frame_number=frame_number)
-    if ret is None:
+    urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
+    if urn is None:
         # the frame is not in the database, so we need to make it
         frame_urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
         ret = {'movie_id':movie_id,
