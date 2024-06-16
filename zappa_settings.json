@@ -43,7 +43,7 @@
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "cloudwatch_retention_days":1,
-        "log_level" : "INFO",
+        "log_level" : "DEBUG",
         "memory_size" : 1024,
         "s3_bucket" : "planttracer-zappa-lambda",
         "keep_warm": true,
