@@ -388,7 +388,7 @@ def api_get_movie_data():
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
     return bottle.redirect(url)
 
-def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
+def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
     """Update the movie metadata."""
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
@@ -400,22 +400,18 @@ def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
-def api_get_frame_jpeg(*,movie_id, frame_number, user_id=0):
+def api_get_frame_jpeg(*,movie_id, frame_number):
     """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
     If we have to extract the frame, write it to the database
-    Used by get-frame below.
+    Used by get-frame below. Assumes that we have already verified access to the frame
     """
-    # Is there a movie we can access? If so, get the first frame and, while we have the movie in memory,
-    # put its metadata into the computer
-    if user_id!=0 and not db.can_access_movie(user_id = user_id, movie_id=movie_id):
-        raise db.InvalidFrameAccess()
     movie_data = db.get_movie_data(movie_id = movie_id)
     if movie_data is None:
         raise db.InvalidFrameAccess()
     try:
         ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+        set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
         return ret
     except ValueError as e:
         return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
@@ -426,7 +422,7 @@ def api_get_frame_urn(*,frame_number,movie_id):
     if urn is not None:
         return urn
     # Get the frame data so we can get it a URN
-    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id)
     frame_urn = db.create_new_frame(movie_id=movie_id,
                                     frame_number=frame_number,
                                     frame_data=frame_data)
