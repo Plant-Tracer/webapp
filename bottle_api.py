@@ -420,7 +420,7 @@ def api_get_frame_jpeg(*,movie_id, frame_number, user_id=0):
     except ValueError as e:
         return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
 
-def api_get_frame_urn(*,frame_number,movie_id,user_id):
+def api_get_frame_urn(*,frame_number,movie_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
     urn = db.get_frame_urn(frame_number=frame_number, movie_id=movie_id)
     if urn is not None:

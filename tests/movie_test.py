@@ -321,6 +321,9 @@ def test_movie_extract1(new_movie):
         except bottle.HTTPResponse as r:
             assert r.status_code == 302
 
+    # Since we got a frame, we should now be able to get a frame URN
+    urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
+    assert urn.startswith('s3:/') or urn.startswith('db:/')
 
 def test_movie_extract2(new_movie):
     """Try extracting individual movie frames"""
