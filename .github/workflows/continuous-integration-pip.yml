@@ -36,13 +36,13 @@ jobs:
           submodules: true
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: "Configure ubuntu with ffmpeg"
         if: startsWith(matrix.os, 'ubuntu')
-        uses: FedericoCarboni/setup-ffmpeg@v2
+        uses: FedericoCarboni/setup-ffmpeg@v3
         id: setup-ffmpeg
 
       - name: "Configure ubuntu"
@@ -62,7 +62,7 @@ jobs:
 
       - name: "Install Chrome"
         id: setup-chrome
-        uses: browser-actions/setup-chrome@v1.4.0
+        uses: browser-actions/setup-chrome@v1.7.1
         with:
           chrome-version: stable
 
@@ -72,7 +72,7 @@ jobs:
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
 
       - name: Install chromedriver
-        uses: nanasess/setup-chromedriver@v2.2.1
+        uses: nanasess/setup-chromedriver@v2.2.2
 
       - name: Update GITHUB_PATH and install Python dependencies
         run: |
@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true

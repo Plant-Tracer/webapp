@@ -43,9 +43,12 @@
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "cloudwatch_retention_days":1,
-        "log_level" : "INFO",
+        "log_level" : "DEBUG",
         "memory_size" : 1024,
         "s3_bucket" : "planttracer-zappa-lambda",
+        "keep_warm": true,
+        "keep_warm_expression": "rate(2 minutes)",
+        "timeout_seconds": 900,
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",

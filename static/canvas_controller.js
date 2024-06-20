@@ -4,7 +4,7 @@
 
 /***
  * Canvas Controller:
- * Implements an object system for HTML5 <canvas>. Supports:
+ * Implements an HTML5 <canvas> that can have arbitrary objects. The individual objects support:
  *  - Selection
  *  - Dragging
  *  - Arbitrary images
@@ -68,6 +68,7 @@ class CanvasController {
             return;
         }
 
+        this.did_onload_callback = ((_) => {});   // by default, call nothing
         this.c         = canvas[0];                // get the element
         this.ctx       = this.c.getContext('2d');  // the drawing context
 
@@ -364,8 +365,12 @@ class WebImage extends CanvasItem {
             this.width  = this.img.naturalWidth;
             this.height = this.img.naturalHeight;
             this.loaded = true;
-            // If we are in a canvas controller, have it redraw
-            if (this.cc) this.cc.redraw();
+            // If we are already in a canvas controller, as it to redraw.
+            // If we are not yet in a canvas controller, redraw
+            if (this.cc){
+                this.cc.redraw();
+                this.cc.did_onload_callback(this);
+            }
         };
 
         this.img.onerror = (_) => {

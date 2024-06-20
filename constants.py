@@ -30,6 +30,7 @@ class C:
     GET = 'get'
     SCHEME_S3 = 's3'
     SCHEME_DB = 'db'
+    SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
 
 
 class MIME:
