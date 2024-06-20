@@ -73,8 +73,8 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
-api_base = os.getenv(C.PLANTTRACER_API_BASE,'')
-static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
+api_base = os.getenv(C.PLANTTRACER_API_BASE,'/')
+static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
 
 
 #############################################

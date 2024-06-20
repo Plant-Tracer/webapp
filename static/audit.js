@@ -10,7 +10,7 @@
 function build_audit_table() {
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    fetch('/api/get-logs', { method:"POST", body:formData })
+    fetch(`${API_BASE}api/get-logs`, { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){
