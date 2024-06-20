@@ -245,7 +245,7 @@ class TracerController extends MovieController {
         this.tracking = true;   // we are tracking
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post(`${API_BASE}track-movie-queue`, params ).done( (data) => {
+        $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
             console.log("track-movie-queue data=",data)
             if(data.error){
                 alert(data.message);
