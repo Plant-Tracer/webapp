@@ -1,7 +1,7 @@
 "use strict";
 // code for /analyze
 /* jshint esversion: 8 */
-/*global api_key,movie_id */
+/*global api_key,movie_id,API_BASE,STATIC_BASE */
 /*global console,alert */
 /*global $ */
 
@@ -60,7 +60,7 @@ class TracerController extends MovieController {
 
         // set up the download button
         this.download_link = $(this.div_selector + " input.download_button");
-        this.download_link.attr('href',`/api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
+        this.download_link.attr('href',`${API_BASE}/api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
         this.download_link.hide();
 
         // Size the canvas and video player
@@ -207,7 +207,7 @@ class TracerController extends MovieController {
             frame_number : this.frame_number,
             trackpoints  : this.json_markers()
         };
-        $.post('/api/put-frame-trackpoints', put_frame_markers_params )
+        $.post(`${API_BASE}/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -245,7 +245,7 @@ class TracerController extends MovieController {
         this.tracking = true;   // we are tracking
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post('/api/track-movie-queue', params ).done( (data) => {
+        $.post(`${API_BASE}/track-movie-queue`, params ).done( (data) => {
             console.log("track-movie-queue data=",data)
             if(data.error){
                 alert(data.message);
@@ -312,7 +312,7 @@ class TracerController extends MovieController {
             movie_id:this.movie_id,
             get_all_if_tracking_completed: true
         };
-        $.post('/api/get-movie-metadata', params).done( (data) => {
+        $.post(`${API_BASE}/get-movie-metadata`, params).done( (data) => {
             console.log("poll_for_track_end",Date.now(),"data:",data);
             if (data.error==false){
                 // Send the status back to the UX
@@ -359,7 +359,7 @@ class TracerController extends MovieController {
             api_key: this.api_key,
             movie_id: this.movie_id,
             action: 'rotate90cw'};
-        $.post('/api/edit-movie', params ).done( (data) => {
+        $.post(`${API_BASE}/edit-movie`, params ).done( (data) => {
             if(data.error){
                 alert(data.message);
             } else {
@@ -415,7 +415,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         movie_id: movie_id,
         frame_start: 0,
         frame_count: 1e6};
-    $.post('/api/get-movie-metadata', params ).done( (resp) => {
+    $.post(`${API_BASE}/get-movie-metadata`, params ).done( (resp) => {
         if (resp.error==true) {
             alert(resp.message);
             return;
@@ -425,7 +425,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
-            const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            const frame0 = `${API_BASE}/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }

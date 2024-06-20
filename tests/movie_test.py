@@ -38,6 +38,7 @@ from auth import get_dbreader,get_dbwriter
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
 from constants import MIME
+from db_object_test import SaveS3Bucket
 import tracker
 
 # Test for edge cases
@@ -198,12 +199,8 @@ def test_new_movie(new_movie):
 
 
 
-def test_movie_upload_presigned_post(new_user):
+def test_movie_upload_presigned_post(new_user,SaveS3Bucket):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
-    hold_env = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
-    if C.PLANTTRACER_S3_BUCKET in os.environ:
-        del os.environ[C.PLANTTRACER_S3_BUCKET]
-
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     movie_title = f'test-movie title {str(uuid.uuid4())}'
@@ -226,9 +223,6 @@ def test_movie_upload_presigned_post(new_user):
     db.purge_movie(movie_id = res['movie_id'])
     logging.info("PURGE MOVIE %d",res['movie_id'])
 
-    # And put back the environment variable
-    if hold_env is not None:
-        os.environ[C.PLANTTRACER_S3_BUCKET] = hold_env
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""

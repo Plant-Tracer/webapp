@@ -36,12 +36,16 @@ def credentials_file():
         raise FileNotFoundError(name)
     return name
 
+def config():
+    cp = configparser.ConfigParser()
+    cp.read( credentials_file() )
+    return cp
+
 def smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.
     If the file specifies a AWS secret, get that.
     """
-    cp = configparser.ConfigParser()
-    cp.read( credentials_file() )
+    cp = config()
     section = cp['smtp']
     if (secret := dbfile.get_aws_secret_for_section( section )) is not None:
         return secret

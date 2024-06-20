@@ -53,7 +53,6 @@ from bottle import request
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-
 from lib.ctools import clogging
 
 import wsgiserver               # pylint: disable=syntax-error
@@ -74,6 +73,8 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+api_base = os.getenv(C.PLANTTRACER_API_BASE,'')
+static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
 
 
 #############################################
@@ -88,14 +89,18 @@ def fix_boto_log_level():
         if name.startswith('boto'):
             logging.getLogger(name).setLevel(logging.INFO)
 
-
-if os.environ.get('AWS_LAMBDA',None)=='YES':
-    # Upgrade the server if it needs upgrading.
-    # This gets run when this file gets loaded and where dbwriter() gets cached
-    #
+def startup():
     dbmaint.schema_upgrade(auth.get_dbwriter())
     clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
     fix_boto_log_level()
+    config = auth.config()
+    try:
+        db_object.S3_BUCKET = config['s3']['s3_bucket']
+    except KeyError as e:
+        logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
+
+if os.environ.get('AWS_LAMBDA',None)=='YES':
+    startup()
 
 ################################################################
 # Bottle endpoints
@@ -192,25 +197,28 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
-    logging.debug("DEMO_MODE: %s",DEMO_MODE)
-    ret= fix_types({'api_key': api_key,
-                    'user_id': user_id,
-                    'user_name': user_name,
-                    'user_email': user_email,
-                    'user_demo':  user_demo,
-                    'logged_in': logged_in,
-                    'admin':admin,
-                    'user_primary_course_id': user_primary_course_id,
-                    'primary_course_name': primary_course_name,
-                    'title':'Plant Tracer '+title,
-                    'hostname':o.hostname,
-                    'movie_id':movie_id,
-                    'enable_demo_mode':DEMO_MODE,
-                    'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-                    'dbreader_host':auth.get_dbreader().host,
-                    'version':__version__,
-                    'git_head_time':git_head_time(),
-                    'git_last_commit':git_last_commit()})
+    ret= fix_types({
+        C.API_BASE: api_base,
+        C.STATIC_BASE: static_base,
+        'api_key': api_key,
+        'user_id': user_id,
+        'user_name': user_name,
+        'user_email': user_email,
+        'user_demo':  user_demo,
+        'logged_in': logged_in,
+        'admin':admin,
+        'user_primary_course_id': user_primary_course_id,
+        'primary_course_name': primary_course_name,
+        'title':'Plant Tracer '+title,
+        'hostname':o.hostname,
+        'movie_id':movie_id,
+        'enable_demo_mode':DEMO_MODE,
+        'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
+        'dbreader_host':auth.get_dbreader().host,
+        'version':__version__,
+        'git_head_time':git_head_time(),
+        'git_last_commit':git_last_commit()
+    })
     for (k,v) in ret.items():
         if v is None:
             ret[k] = "null"
@@ -363,7 +371,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--dbcredentials', help='Specify .ini file with [dbreader] and [dbwriter] sections')
+    parser.add_argument('--dbcredentials', help=f'Specify .ini file with [dbreader] and [dbwriter] sections. Default is to the use the file specified by {C.PLANTTRACER_CREDENTIALS}')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
@@ -392,6 +400,8 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
+    startup()
+
     # Run the multi-threaded server? Needed for testing local-tracking
     if args.multi:
         httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
@@ -400,9 +410,6 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("")
             sys.exit(0)
-
-    fix_boto_log_level()
-    dbmaint.schema_upgrade(auth.get_dbwriter())
 
     # Run the single-threaded server (more debugging and the reloader)
     bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

@@ -73,10 +73,12 @@ flake:
 ## Dynamic Analysis
 
 pytest-db: $(REQ)
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 
 pytest:  $(REQ)
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
@@ -85,29 +87,35 @@ pytest:  $(REQ)
 TEST1MODULE=tests/movie_test.py
 TEST1FUNCTION="-k test_movie_extract1"
 pytest1:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest-selenium:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-debug1:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo run in debug mode but stop on first error
 	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
 
 pytest-app-framework:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo validate app framework
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
 pytest-quiet:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo quietly make pytest and stop at the firt error
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -143,23 +151,28 @@ coverage:
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	make debug-local
 
 DEBUG:=$(PYTHON) bottle_app.py --loglevel DEBUG
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(DEBUG)  --dbcredentials etc/credentials.ini
 
 debug-multi:
 	@echo run bottle locally in debug mode multi-threaded
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
 
 debug-local:
 	@echo run bottle locally in debug mode, storing new data in database
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(DEBUG) --storelocal --dbcredentials etc/credentials-local.ini
 
 debug-dev:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(DEBUG) --dbcredentials etc/credentials-dev.ini
 
 freeze:

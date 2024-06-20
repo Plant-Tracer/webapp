@@ -1,33 +1,4 @@
 {
-    "production": {
-        "app_function": "bottle_app.app",
-        "aws_region": "us-east-1",
-        "profile_name": "default",
-        "project_name": "planttracer-",
-        "runtime": "python3.11",
-        "timeout_seconds": 30,
-        "slim_handler":true,
-        "domain":"app.planttracer.com",
-        "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "*.dylib"],
-        "exclude_glob": ["selenium/**/*", "tests/**/*"],
-        "ephemeral_storage" : {"Size":1024},
-        "log_level" : "ERROR",
-        "s3_bucket" : "planttracer-zappa-lambda",
-        "delete_local_zip":false,
-        "delete_s3_zip":false,
-        "cloudwatch_retention_days":1,
-        "cors" : true,
-        "environment_variables": {
-            "AWS_LAMBDA": "YES",
-            "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
-            "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
-            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_S3_BUCKET":"planttracer-app",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"INFO"
-        }
-    },
     "dev": {
         "app_function": "bottle_app.app",
         "aws_region": "us-east-1",
@@ -50,14 +21,47 @@
         "keep_warm": true,
         "keep_warm_expression": "rate(2 minutes)",
         "timeout_seconds": 900,
+        "delete_local_zip":false,
+        "delete_s3_zip":false,
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
-            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_S3_BUCKET":"planttracer-dev",
+            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
             "PLANTTRACER_LOG_LEVEL":"DEBUG"
+        }
+    },
+    "production": {
+        "app_function": "bottle_app.app",
+        "aws_region": "us-east-1",
+        "profile_name": "default",
+        "project_name": "planttracer-",
+        "runtime": "python3.11",
+        "timeout_seconds": 300,
+        "domain":"app.planttracer.com",
+        "route53_enabled" : false,
+        "slim_handler":true,
+        "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
+        "exclude": ["*.mp4", "*.dylib"],
+        "exclude_glob": ["selenium/**/*", "tests/**/*"],
+        "ephemeral_storage" : {"Size":1024},
+        "num_retained_versions":5,
+        "cloudwatch_retention_days":1,
+        "log_level" : "INFO",
+        "s3_bucket" : "planttracer-zappa-lambda",
+        "keep_warm": true,
+        "keep_warm_expression": "rate(2 minutes)",
+        "timeout_seconds": 900,
+        "delete_local_zip":false,
+        "delete_s3_zip":false,
+        "environment_variables": {
+            "AWS_LAMBDA": "YES",
+            "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1",
+            "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
+            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-prod.ini",
+            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
+            "PLANTTRACER_LOG_LEVEL":"INFO"
         }
     },
     "demo": {
@@ -81,8 +85,7 @@
             "PLANTTRACER_DEMO":"YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
-            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws.ini",
-            "PLANTTRACER_S3_BUCKET":"planttracer-demo",
+            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-demo.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
             "PLANTTRACER_LOG_LEVEL":"INFO"
         }

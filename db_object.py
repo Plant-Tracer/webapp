@@ -6,9 +6,6 @@ DB - db://object_store/name - Local stored in the mysql database
 movie_name = {course_id}/{movie_id}.mov
 frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
 
-If the environment variable PLANTTRACER_S3_BUCKET is set, use that bucket for writes, otherwise use DB.
-Reads are based on whatever is in the URN.
-
 Note that we previously stored everything by SHA256. We aren't doing
 that anymore, and the SHA256 stuff should probably come out.
 
@@ -53,6 +50,7 @@ ALLOWED_SCHEMES = [ C.SCHEME_S3, C.SCHEME_DB ]
 S3 = 's3'
 DB_TABLE = 'object_store'
 STORE_LOCAL=False               # even if S3 is set, store local
+S3_BUCKET = None                # define to use it
 
 cors_configuration = {
     'CORSRules': [{
@@ -92,17 +90,14 @@ def make_urn(*, object_name, scheme = None ):
     If environment variable is not set, default to the database schema
     We grab this every time through so that the bucket can be changed during unit tests
     """
-    s3_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
-    if s3_bucket=="":
-        s3_bucket = None
     if STORE_LOCAL:
         scheme = C.SCHEME_DB
     if scheme is None:
-        scheme = C.SCHEME_S3 if (s3_bucket is not None) else C.SCHEME_DB
-    if scheme == C.SCHEME_S3 and s3_bucket is None:
+        scheme = C.SCHEME_S3 if (S3_BUCKET is not None) else C.SCHEME_DB
+    if scheme == C.SCHEME_S3 and S3_BUCKET is None:
         scheme = C.SCHEME_DB
     if scheme == C.SCHEME_S3:
-        netloc = s3_bucket
+        netloc = S3_BUCKET
     elif scheme == C.SCHEME_DB:
         netloc = DB_TABLE
     else:
@@ -233,7 +228,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Set CORS policy for an S3 Bucket",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("s3_bucket", default=os.environ.get(C.PLANTTRACER_S3_BUCKET,"my-bucket"))
+    parser.add_argument("s3_bucket")
     args = parser.parse_args()
     print("Updating CORS policy for ",args.s3_bucket)
     s3 = boto3.client( S3 )
