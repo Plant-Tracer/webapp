@@ -312,7 +312,7 @@ class TracerController extends MovieController {
             movie_id:this.movie_id,
             get_all_if_tracking_completed: true
         };
-        $.post(`${API_BASE}/get-movie-metadata`, params).done( (data) => {
+        $.post(`${API_BASE}/api/get-movie-metadata`, params).done( (data) => {
             console.log("poll_for_track_end",Date.now(),"data:",data);
             if (data.error==false){
                 // Send the status back to the UX
@@ -410,25 +410,28 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_id, api_key) {
+    console.log("trace_movie API_BASE=",API_BASE);
     const params = {
         api_key: api_key,
         movie_id: movie_id,
         frame_start: 0,
-        frame_count: 1e6};
-    $.post(`${API_BASE}/get-movie-metadata`, params ).done( (resp) => {
+        frame_count: 1e6
+    };
+    $.post(`${API_BASE}/api/get-movie-metadata`, params ).done( (resp) => {
         if (resp.error==true) {
             alert(resp.message);
             return;
         }
-        console.log("resp=",resp);
         const width = resp.metadata.width;
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
+            console.log("resp=",resp,"getting first frame");
             const frame0 = `${API_BASE}/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
+        console.log("resp=",resp,"getting zipfile.");
         $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.`);
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });

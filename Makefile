@@ -154,7 +154,7 @@ debug:
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	make debug-local
 
-DEBUG:=$(PYTHON) bottle_app.py --loglevel DEBUG
+DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
@@ -172,8 +172,13 @@ debug-local:
 
 debug-dev:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
-	$(DEBUG) --dbcredentials etc/credentials-dev.ini
+	@echo for debugging Python and Javascript with remote database
+	PLANTTRACER_CREDENTIALS=etc/credentials-aws-dev.ini $(DEBUG)
+
+debug-dev-api:
+	@echo Debug local JavaScript with remote server.
+	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
+	PLANTTRACER_CREDENTIALS=etc/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
 freeze:
 	$(PYTHON) -m pip freeze > requirements.txt

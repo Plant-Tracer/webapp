@@ -20,7 +20,7 @@ from zipfile import ZipFile
 
 from validate_email_address import validate_email
 import bottle
-from bottle import request
+from bottle import request,response
 from zappa.asynchronous import task
 
 import db
@@ -59,6 +59,29 @@ def git_last_commit():
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
+
+################################################################
+## CORS
+# https://stackoverflow.com/questions/17262170/bottle-py-enabling-cors-for-jquery-ajax-requests
+# Allows API calls on remote infrastructure from local JavaScript
+class EnableCors(object):
+    name = 'enable_cors'
+    api = 2
+
+    def apply(self, fn, context):
+        def _enable_cors(*args, **kwargs):
+            # set CORS headers
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
+
+            if bottle.request.method != 'OPTIONS':
+                # actual request; reply with the actual response
+                return fn(*args, **kwargs)
+
+        return _enable_cors
+
+api.install(EnableCors())
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
