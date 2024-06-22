@@ -19,5 +19,8 @@
   "scripts": {
     "test": "jest",
     "coverage": "jest --collectCoverage --"
-  }
+  },
+    "jest": {
+      "testEnvironment": "jsdom"
+    }
 }
