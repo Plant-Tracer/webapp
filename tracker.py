@@ -56,6 +56,9 @@ def cv2_track_frame(*,frame_prev, frame_this, trackpoints):
         trackpoints_out = []
         for (i,pt) in enumerate(trackpoints):
             if status_array[i]==1:
+
+                # is this where the data for JSON is created?
+                
                 trackpoints_out.append({'x':point_array_out[i][0],
                                         'y':point_array_out[i][1],
                                         'status':int(status_array[i][0]),
@@ -172,6 +175,7 @@ def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps    = cap.get(cv2.CAP_PROP_FPS)
 
+    # where does logging "go"? where is it stored and how to look at it? Is this an important step to debugging?
     logging.info("start movie rendering")
     trackpoints_by_frame = defaultdict(list)
     for tp in movie_trackpoints:
