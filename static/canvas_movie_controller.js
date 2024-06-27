@@ -100,6 +100,9 @@ class MovieController extends CanvasController {
      * Change the frame. This is called repeatedly when the movie is
      * playing, with the frame number changing First we verify the
      * next frame number, then we call the /api/get-frame call to get
+
+* where is the api being called?
+     
      * the frame, with get_frame_handler getting the data.
      *
      * Always redraws.
