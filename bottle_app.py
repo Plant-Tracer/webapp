@@ -359,6 +359,11 @@ def demo_tracer1():
 def demo_tracer2():
     return page_dict('demo_tracer2',require_auth=False)
 
+@bottle.route('/demo_tracer3.html', method=GET)
+@view('demo_tracer3.html')
+def demo_tracer2():
+    return page_dict('demo_tracer3',require_auth=False)
+
 @bottle.route('/ver', method=GET_POST)
 @view('version.txt')
 def func_ver():
