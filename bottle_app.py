@@ -73,6 +73,12 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+
+# Specify the base for the API and for the static files by Environment variables.
+# This allows them to be served from different web servers.
+# If they are not set, they default to '/' which is the same site that serves the HTML pages.
+# STATIC is used to serve JavaScript
+# API_BASE is used for the server API
 api_base = os.getenv(C.PLANTTRACER_API_BASE,'/')
 static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
 

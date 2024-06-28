@@ -207,7 +207,7 @@ class TracerController extends MovieController {
             frame_number : this.frame_number,
             trackpoints  : this.json_markers()
         };
-        $.post(`${API_BASE}put-frame-trackpoints`, put_frame_markers_params )
+        $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -359,7 +359,7 @@ class TracerController extends MovieController {
             api_key: this.api_key,
             movie_id: this.movie_id,
             action: 'rotate90cw'};
-        $.post(`${API_BASE}edit-movie`, params ).done( (data) => {
+        $.post(`${API_BASE}api/edit-movie`, params ).done( (data) => {
             if(data.error){
                 alert(data.message);
             } else {
@@ -427,7 +427,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
             console.log("resp=",resp,"getting first frame");
-            const frame0 = `${API_BASE}get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
