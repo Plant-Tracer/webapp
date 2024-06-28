@@ -273,7 +273,7 @@ def func_list():
     logging.debug("/list")
     return page_dict('List Movies', require_auth=True)
 
-@bottle.route('/analyze', method=GET)
+@bottle.route('/analyze', method=GET_POST)
 @view('analyze.html')
 def func_analyze():
     """/analyze?movie_id=<movieid> - Analyze a movie, optionally annotating it."""
@@ -376,8 +376,6 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    parser.add_argument('--dbcredentials', help=f'Specify .ini file with [dbreader] and [dbwriter] sections. Default is to the use the file specified by {C.PLANTTRACER_CREDENTIALS}')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
@@ -388,15 +386,12 @@ if __name__ == "__main__":
 
     if C.PLANTTRACER_CREDENTIALS not in os.environ:
         print(f"Please define {C.PLANTTRACER_CREDENTIALS} and restart",file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
     if args.info:
         for name in logging.root.manager.loggerDict:
             print("Logger: ",name)
         sys.exit(0)
-
-    if args.dbcredentials:
-        paths.FORCE_CREDENTIALS_FILE = args.dbcredentials
 
     if args.storelocal:
         db_object.STORE_LOCAL=True

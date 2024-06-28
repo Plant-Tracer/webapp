@@ -1,7 +1,7 @@
 "use strict";
 // code for /analyze
 /* jshint esversion: 8 */
-/*global api_key,movie_id,API_BASE,STATIC_BASE */
+/*global api_key,movie_id,API_BASE,STATIC_BASE,URL */
 /*global console,alert */
 /*global $ */
 
@@ -390,8 +390,11 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key) {
-    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames,
+                                  api_key,
+                                  show_graph=false) {
+    console.log("trace_movie_frames. div_controller=",div_controller,
+                "movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
     const frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -406,6 +409,12 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc.set_movie_control_buttons();
     cc.load_movie(frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
+
+    if (show_graph) {
+        // draw the graph using the information in frames
+        // @JoAnn TODO
+    }
+
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above

@@ -151,24 +151,20 @@ coverage:
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
 debug:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	make debug-local
 
 DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
+debug-local:
+	@echo run bottle locally in debug mode, storing new data in database
+	PLANTTRACER_CREDENTIALS=etc/credentials-localhost.ini $(DEBUG) --storelocal
+
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
-	$(DEBUG)  --dbcredentials etc/credentials.ini
+	PLANTTRACER_CREDENTIALS=etc/credentials-localhost.ini $(DEBUG)
 
 debug-multi:
 	@echo run bottle locally in debug mode multi-threaded
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
-	$(DEBUG)  --dbcredentials etc/credentials.ini --multi
-
-debug-local:
-	@echo run bottle locally in debug mode, storing new data in database
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
-	$(DEBUG) --storelocal --dbcredentials etc/credentials-local.ini
+	PLANTTRACER_CREDENTIALS=etc/credentials-localhost.ini $(DEBUG)   --multi
 
 debug-dev:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database

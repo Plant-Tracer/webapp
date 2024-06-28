@@ -64,24 +64,28 @@ def git_last_commit():
 ## CORS
 # https://stackoverflow.com/questions/17262170/bottle-py-enabling-cors-for-jquery-ajax-requests
 # Allows API calls on remote infrastructure from local JavaScript
-class EnableCors(object):
+class EnableCors:               # pylint: disable=too-few-public-methods
+    """
+    This class adds the three headers (below) to the HTTP header of every API response.
+    This allows the JavaScript running locally to execute API calls on another server.
+    This makes it possible to debug the JavaScript with the server running on AWS, or vice-versa.
+    Environment variable PLANTTRACER_API_BASE specifies where API is hosted.
+    Environment variable PLANTTRACER_STATIC_BASE specifies where the JavaScript files are hosted.
+    """
     name = 'enable_cors'
     api = 2
 
-    def apply(self, fn, context):
+    def apply(self, fn, context): # pylint: disable=unused-argument
         def _enable_cors(*args, **kwargs):
             # set CORS headers
             response.headers['Access-Control-Allow-Origin'] = '*'
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
             response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
-
-            if bottle.request.method != 'OPTIONS':
-                # actual request; reply with the actual response
-                return fn(*args, **kwargs)
-
+            # And run the original function that we wrapped.
+            return fn(*args, **kwargs)
         return _enable_cors
 
-api.install(EnableCors())
+api.install(EnableCors())       # install the callback in the Bottle stack
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string

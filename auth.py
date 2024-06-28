@@ -6,6 +6,7 @@ This provides for all authentication in the planttracer system:
 * Mailer authentication
 """
 import os
+import os.path
 import functools
 import configparser
 import logging
@@ -33,6 +34,7 @@ def credentials_file():
     except KeyError as e:
         raise RuntimeError(f"Environment variable {C.PLANTTRACER_CREDENTIALS} must be defined") from e
     if not os.path.exists(name):
+        logging.error("Cannot find %s (PLANTTRACER_CREDENTIALS=%s)",os.path.abspath(name),name)
         raise FileNotFoundError(name)
     return name
 
