@@ -386,6 +386,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
+    if C.PLANTTRACER_CREDENTIALS not in os.environ:
+        print(f"Please define {C.PLANTTRACER_CREDENTIALS} and restart",file=sys.stderr)
+        exit(1)
+
     if args.info:
         for name in logging.root.manager.loggerDict:
             print("Logger: ",name)
