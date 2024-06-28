@@ -28,34 +28,29 @@ def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
     assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
-class SaveEnviron:
-    def __init__(self,name):
-        self.name = name
-        self.save = os.environ.get(name,None)
-    def __enter__(self):
-        if self.save:
-            del os.environ[self.name]
-    def __exit__(self, *args):
-        if self.save:
-            os.environ[self.name] = self.save
+@pytest.fixture
+def SaveS3Bucket():
+    save = db_object.S3_BUCKET
+    db_object.S3_BUCKET = None
+    yield
+    db_object.S3_BUCKET = save
 
-def test_make_urn():
-    with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
-        a = db_object.make_urn(object_name=name, scheme=None)
-        assert a.endswith(".txt")
 
-def test_write_read_delete_object():
+def test_make_urn(SaveS3Bucket):
+    name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
+    a = db_object.make_urn(object_name=name, scheme=None)
+    assert a.endswith(".txt")
+
+def test_write_read_delete_object(SaveS3Bucket):
     logging.debug("dbwriter: %s",get_dbwriter())
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()
     hasher.update(DATA)
     DATA_SHA256 = hasher.hexdigest()
 
-    with SaveEnviron(C.PLANTTRACER_S3_BUCKET) as e:
-        name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
-        urn  = db_object.make_urn(object_name=name, scheme=None)
-        db_object.write_object(urn=urn, object_data=DATA)
+    name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
+    urn  = db_object.make_urn(object_name=name, scheme=None)
+    db_object.write_object(urn=urn, object_data=DATA)
 
     res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * from object_store where sha256=%s", (DATA_SHA256,), asDicts=True, debug=True)
     assert len(res)==1

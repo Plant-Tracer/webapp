@@ -53,7 +53,7 @@ function register_func() {
         return;
     }
     $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-    $.post('/api/register', {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
+    $.post(`${API_BASE}api/register`, {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
         .done( function(data) {
             if (data.error){
                 $('#message').html(`<b>Error: ${data.message}`);
@@ -74,7 +74,7 @@ function resend_func() {
         return;
     }
     $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-    $.post('/api/resend-link', {email:email, planttracer_endpoint:planttracer_endpoint})
+    $.post(`${API_BASE}api/resend-link`, {email:email, planttracer_endpoint:planttracer_endpoint})
         .done(function(data) {
             $('#message').html('Response: ' + data.message);
         })
@@ -117,7 +117,7 @@ async function computeSHA256(file) {
  */
 function first_frame_url(movie_id)
 {
-    return `/api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
+    return `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
 }
 
 /*
@@ -138,7 +138,7 @@ async function upload_movie_post(movie_title, description, movieFile)
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.fileSize);
-    const r = await fetch('/api/new-movie', { method:"POST", body:formData});
+    const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
     const obj = await r.json();
     console.log('new-movie obj=',obj);
     if (obj.error){
@@ -219,7 +219,7 @@ async function get_movie_metadata(movie_id){
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("movie_id",    movie_id);
-    const r = await fetch('/api/get-movie-metadata', { method:"POST", body:formData});
+    const r = await fetch(`${API_BASE}api/get-movie-metadata`, { method:"POST", body:formData});
     if (r.ok) {
         return await r.json()['metadata'];
     }
@@ -237,7 +237,7 @@ async function rotate_movie() {
     formData.append("api_key",     api_key);   // on the upload form
     formData.append('movie_id', movie_id);
     formData.append('action', 'rotate90cw');
-    const r = await fetch('/api/edit-movie', { method:"POST", body:formData});
+    const r = await fetch(`${API_BASE}api/edit-movie`, { method:"POST", body:formData});
     console.log("r=",r);
     if (!r.ok) {
         console.log('could not rotate. r=',r);
@@ -265,7 +265,7 @@ function upload_ready_function() {
 // callback when the play button is clicked
 function play_clicked( e, movie_id ) {
     console.log('play_clicked=',e,'movie_id=',movie_id);
-    const url = `/api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
+    const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
     //const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
     $(`#tr-${rowid}`).show();
@@ -313,7 +313,7 @@ function set_property(user_id, movie_id, property, value)
     if (movie_id) formData.append("set_movie_id", movie_id);
     formData.append("property", property);
     formData.append("value", value);
-    fetch('/api/set-metadata', { method:"POST", body:formData})
+    fetch(`${API_BASE}api/set-metadata`, { method:"POST", body:formData})
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){
@@ -589,7 +589,7 @@ function list_ready_function() {
 
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    fetch('/api/list-movies', { method:"POST", body:formData })
+    fetch(`${API_BASE}api/list-movies`, { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){
@@ -647,7 +647,7 @@ function list_users()
     $('#message').html('Listing users...');
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    fetch('/api/list-users', { method:"POST", body:formData })
+    fetch(`${API_BASE}api/list-users`, { method:"POST", body:formData })
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){

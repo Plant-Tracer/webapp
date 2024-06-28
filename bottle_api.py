@@ -20,14 +20,14 @@ from zipfile import ZipFile
 
 from validate_email_address import validate_email
 import bottle
-from bottle import request
+from bottle import request,response
 from zappa.asynchronous import task
 
 import db
 import db_object
 import auth
 
-from constants import C,E,__version__,GET,POST,GET_POST,MIME
+from constants import C,E,__version__,GET,POST,GET_POST
 import mailer
 import tracker
 
@@ -59,6 +59,33 @@ def git_last_commit():
         return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
+
+################################################################
+## CORS
+# https://stackoverflow.com/questions/17262170/bottle-py-enabling-cors-for-jquery-ajax-requests
+# Allows API calls on remote infrastructure from local JavaScript
+class EnableCors:               # pylint: disable=too-few-public-methods
+    """
+    This class adds the three headers (below) to the HTTP header of every API response.
+    This allows the JavaScript running locally to execute API calls on another server.
+    This makes it possible to debug the JavaScript with the server running on AWS, or vice-versa.
+    Environment variable PLANTTRACER_API_BASE specifies where API is hosted.
+    Environment variable PLANTTRACER_STATIC_BASE specifies where the JavaScript files are hosted.
+    """
+    name = 'enable_cors'
+    api = 2
+
+    def apply(self, fn, context): # pylint: disable=unused-argument
+        def _enable_cors(*args, **kwargs):
+            # set CORS headers
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
+            # And run the original function that we wrapped.
+            return fn(*args, **kwargs)
+        return _enable_cors
+
+api.install(EnableCors())       # install the callback in the Bottle stack
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
@@ -388,7 +415,7 @@ def api_get_movie_data():
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
     return bottle.redirect(url)
 
-def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
+def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
     """Update the movie metadata."""
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
@@ -400,125 +427,75 @@ def set_movie_metadata(*,user_id, set_movie_id,movie_metadata):
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
-def api_get_frame_jpeg(*,frame_number, movie_id, user_id):
+def api_get_frame_jpeg(*,movie_id, frame_number):
     """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
     If we have to extract the frame, write it to the database
-    Used by get-frame below.
+    Used by get-frame below. Assumes that we have already verified access to the frame
     """
-    # Is there a movie we can access? If so, get the first frame and, while we have the movie in memory,
-    # put its metadata into the computer
-    if not db.can_access_movie(user_id = user_id, movie_id=movie_id):
-        raise db.InvalidFrameAccess()
     movie_data = db.get_movie_data(movie_id = movie_id)
     if movie_data is None:
         raise db.InvalidFrameAccess()
     try:
         ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+        set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
         return ret
     except ValueError as e:
         return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
 
-def api_get_frame_urn(*,frame_number,movie_id,user_id):
+def api_get_frame_urn(*,frame_number,movie_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
-    data = db.get_frame(frame_number=frame_number, movie_id=movie_id)
-    if data['frame_urn'] is not None:
-        return data['frame_urn']
+    urn = db.get_frame_urn(frame_number=frame_number, movie_id=movie_id)
+    if urn is not None:
+        return urn
     # Get the frame data so we can get it a URN
-    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
+    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id)
     frame_urn = db.create_new_frame(movie_id=movie_id,
-                                                frame_number=frame_number,
-                                                frame_data=frame_data)
+                                    frame_number=frame_number,
+                                    frame_data=frame_data)
     assert frame_urn is not None
     return frame_urn
 
 @api.route('/get-frame', method=GET_POST)
 def api_get_frame():
     """
-    Get a frame and its annotation from a movie.
-    If frame is in frame storage:
-         - return from the frame storage.
-    If not is not in frame storage:
+    Gets a frame as a JPEG.
+    If not is not in the object store
          - Grab it from the movie
-         - Also get the width and height, and be sure they are in the database too.
+         - write to the object store.
+    Then:
+         - return with a redirect ot the object store.
 
     :param api_key:   authentication
     :param movie_id:   movie
     :param frame_number: get the frame by frame_number (starting with 0)
-    :param format:     jpeg - just get the image;
-                       json (default) - get the image (default), json annotation and trackpoints
-                       // deprecated - soon will be just jpeg
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
-      error        = true or false
-      message      - the message if there is an error
-      movie_id     - the movie (always returned)
-      frame_number - the number of the frame (always returned)
-      last_tracked_frame - the frame number of the highest frame with trackpoints
-      trackpoints - a list of the trackpoints
+      error - 404 - movie or frame does not exist
+      no error - redirect to the signed URL
     """
     user_id      = get_user_id(allow_demo=True)
     frame_number = get_int('frame_number')
     movie_id     = get_int('movie_id')
-    fmt          = get('format', 'jpeg').lower()
-
-    if fmt not in ['jpeg', 'json']:
-        logging.info("fmt is not in jpeg or json")
-        return E.INVALID_FRAME_FORMAT
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return E.INVALID_MOVIE_ACCESS
+        return auth.http403(f'Error 404: User {user_id} cannot access movie {movie_id}')
 
-    if fmt=='jpeg':
-        # Return just the JPEG for the frame, with no metadata
-        try:
-            bottle.response.set_header('Content-Type', MIME.JPEG)
-            return api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id, user_id=user_id)
-        except db.InvalidFrameAccess:
-            return bottle.HTTPResponse(body=f'<html><body>invalid frame access frame_number={frame_number} movie_id={movie_id} user_id={user_id}</body></html>', status=404)
+    if frame_number<0:
+        return auth.http404(f'Error 404: invalid frame number {frame_number}')
 
-    # See if get_frame can find the movie frame
-    ret = db.get_frame(movie_id=movie_id, frame_number=frame_number)
-    if ret is None:
-        # the frame is not in the database, so we need to make it
-        frame_urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number)
-        ret = {'movie_id':movie_id,
-               'frame_number':frame_number,
-               'frame_urn':frame_urn }
-    else:
-        # Get any trackpoints
-        ret['trackpoints'] = db.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_number, frame_count=1)
-
-
-    # If we do not have frame_data, extract it from the movie (but don't store in database)
-    if ret.get('frame_data',None) is None:
-        logging.debug('no frame_data provided. extracting movie_id=%s frame_number=%s',movie_id,frame_number)
-        movie_data = db.get_movie_data(movie_id=movie_id)
-        try:
-            ret['frame_data'] = tracker.extract_frame(movie_data=movie_data,
-                                                      frame_number=frame_number,
-                                                      fmt='jpeg')
-        except ValueError:
-            return {'error':True,
-                    'message':f'frame number {frame_number} is out of range'}
-
-    # Convert the frame_data to a data URL
-    frame_data = ret["frame_data"]
-    if frame_data is not None:
-        ret['data_url'] = f'data:image/jpeg;base64,{base64.b64encode(frame_data).decode()}'
-    del ret['frame_data']
-
-    ret['last_tracked_frame'] = db.last_tracked_frame(movie_id = movie_id)
-    ret['error'] = False
-    #
-    # Need to convert all datetimes to strings.
-    # We then return the dictionary, which bottle runs json.dumps() on
-    # and returns MIME type of "application/json"
-    # JQuery will then automatically decode this JSON into a JavaScript object,
-    # without having to call JSON.parse()
-    return fix_types(ret)
+    # See if there is a urn
+    urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
+    if urn is None:
+        # the frame is not in the database, so we need to make it.
+        frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+        urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
+        assert urn is not None
+    logging.debug("api_get_frame urn=%s",urn)
+    url = db_object.make_signed_url(urn=urn)
+    logging.debug("api_get_frame url=%s",url)
+    return bottle.redirect(url)
 
 
 ################################################################

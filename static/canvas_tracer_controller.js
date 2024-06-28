@@ -1,7 +1,7 @@
 "use strict";
 // code for /analyze
 /* jshint esversion: 8 */
-/*global api_key,movie_id */
+/*global api_key,movie_id,API_BASE,STATIC_BASE,URL */
 /*global console,alert */
 /*global $ */
 
@@ -60,7 +60,7 @@ class TracerController extends MovieController {
 
         // set up the download button
         this.download_link = $(this.div_selector + " input.download_button");
-        this.download_link.attr('href',`/api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
+        this.download_link.attr('href',`${API_BASE}api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
         this.download_link.hide();
 
         // Size the canvas and video player
@@ -207,7 +207,7 @@ class TracerController extends MovieController {
             frame_number : this.frame_number,
             trackpoints  : this.json_markers()
         };
-        $.post('/api/put-frame-trackpoints', put_frame_markers_params )
+        $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -220,7 +220,7 @@ class TracerController extends MovieController {
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
-     * It calls the /api/track-movie-quque on the server, queuing movie tracking (which takes a while).
+     * It calls the api/track-movie-quque on the server, queuing movie tracking (which takes a while).
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
@@ -245,7 +245,7 @@ class TracerController extends MovieController {
         this.tracking = true;   // we are tracking
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post('/api/track-movie-queue', params ).done( (data) => {
+        $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
             console.log("track-movie-queue data=",data)
             if(data.error){
                 alert(data.message);
@@ -312,7 +312,7 @@ class TracerController extends MovieController {
             movie_id:this.movie_id,
             get_all_if_tracking_completed: true
         };
-        $.post('/api/get-movie-metadata', params).done( (data) => {
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done( (data) => {
             console.log("poll_for_track_end",Date.now(),"data:",data);
             if (data.error==false){
                 // Send the status back to the UX
@@ -359,7 +359,7 @@ class TracerController extends MovieController {
             api_key: this.api_key,
             movie_id: this.movie_id,
             action: 'rotate90cw'};
-        $.post('/api/edit-movie', params ).done( (data) => {
+        $.post(`${API_BASE}api/edit-movie`, params ).done( (data) => {
             if(data.error){
                 alert(data.message);
             } else {
@@ -390,8 +390,11 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key) {
-    console.log("trace_movie_frames. div_controller=",div_controller,"movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames,
+                                  api_key,
+                                  show_graph=false) {
+    console.log("trace_movie_frames. div_controller=",div_controller,
+                "movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
     const frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -406,30 +409,39 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc.set_movie_control_buttons();
     cc.load_movie(frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
+
+    if (show_graph) {
+        // draw the graph using the information in frames
+        // @JoAnn TODO
+    }
+
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_id, api_key) {
+    console.log("trace_movie API_BASE=",API_BASE);
     const params = {
         api_key: api_key,
         movie_id: movie_id,
         frame_start: 0,
-        frame_count: 1e6};
-    $.post('/api/get-movie-metadata', params ).done( (resp) => {
+        frame_count: 1e6
+    };
+    $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
         if (resp.error==true) {
             alert(resp.message);
             return;
         }
-        console.log("resp=",resp);
         const width = resp.metadata.width;
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
-            const frame0 = `./api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            console.log("resp=",resp,"getting first frame");
+            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
-        $('#firsth2').html(`Movie #${movie_id} is already traced! Check for errors and retrace as necessary.`);
+        console.log("resp=",resp,"getting zipfile.");
+        $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.`);
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
 }
