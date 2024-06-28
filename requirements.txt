@@ -119,7 +119,7 @@ troposphere==4.8.0
 Twisted==24.3.0
 typeguard==4.3.0
 typing_extensions==4.12.2
-urllib3==2.2.1
+urllib3==2.2.2
 validate-email-address==1
 w3lib==2.1.2
 waitress==3.0.0
