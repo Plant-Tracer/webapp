@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Installation &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h1>
+<section id="requirements-and-preparation">
+<h2>Requirements and Preparation<a class="headerlink" href="#requirements-and-preparation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>A home directory on Dreamhost (or another web hosting provider) that provides passengers, or some other wsgi-based approach for running a Python Bottle app (e.g. <cite>mod_wsgi</cite> on Apache).</p></li>
+<li><p>A MySQL database with three users defined in a mysql credentials file:
+* <cite>[client]</cite> which can modify the schema
+* <cite>[dbreader]</cite> which can read the database
+* <cite>[dbwriter]</cite> which can write the database.</p></li>
+<li><p>python3.11 installed. Verify that typing ‘python’ gives you python3.11. If it doesn’t, make sure that your PATH is up-to-date.</p></li>
+</ul>
+</section>
+<section id="id1">
+<h2>Installation<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><dl class="simple">
+<dt>Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is <cite>demo.plantracer.com</cite>:</dt><dd><p>$ mv demo.planttracer.com demo-old</p>
+</dd>
+</dl>
+</li>
+<li><p>Clone the planttracer web app into the hosting directory:</p>
+<blockquote>
+<div><p>$ git clone –recurse-submodules <a class="reference external" href="https://github.com/Plant-Tracer/webapp.git">https://github.com/Plant-Tracer/webapp.git</a> demo.planttracer.com</p>
+</div></blockquote>
+</li>
+<li><p>Install the prerequisits with make install-&lt;your-os&gt;, e.g.:</p>
+<blockquote>
+<div><p>$ make install-ubuntu</p>
+</div></blockquote>
+</li>
+<li><p>Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for <cite>[client]</cite>, <cite>[dbreader]</cite> and <cite>[dbwriter]</cite>.</p></li>
+<li><p>Now you need to create the database. This should be pretty automatic:</p>
+<p>$ export MYSQL_ROOT_PASSWORD=testrootpass &lt;br&gt;
+$ make create_localdb</p>
+</li>
+</ol>
+<ol class="arabic" start="7">
+<li><p>Run the self-tests</p>
+<p>$ make pytest-quiet</p>
+</li>
+<li><p>Create your first course! If you want, give it a demo account too:</p>
+<p>$ python dbmaint.py –create_course “Demo Course Name” –admin_email <a class="reference external" href="mailto:your_admin_email&#37;&#52;&#48;company&#46;com">your_admin_email<span>&#64;</span>company<span>&#46;</span>com</a> –admin_name “Your Name” [–create_demo]
+course_key: leact-skio-proih
+$</p>
+</li>
+<li><p>You have a course key! If the demo account is made, you have that too.</p></li>
+</ol>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.3.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/Installation.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

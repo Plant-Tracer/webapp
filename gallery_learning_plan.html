@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>&lt;no title&gt; &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <p>This document describes steps for learning how to use Bottle and Jinja, and then using that knowledge to add a report to the webapp.</p>
+<p># Getting Started</p>
+<p>## Read the Docs
+Read and be familiar with the documentation for Bottle:</p>
+<ul class="simple">
+<li><p>[ ] Bottle, the framework we are using: <a class="reference external" href="https://bottlepy.org/docs/stable/index.html">https://bottlepy.org/docs/stable/index.html</a></p></li>
+</ul>
+<p>## Run Bottle Locally
+Now that you are familiar with Bottle, see if you can get this tutorial working on your local machine:</p>
+<ul class="simple">
+<li><p>[ ] <a class="reference external" href="https://realpython.com/developing-with-bottle-part-1/">https://realpython.com/developing-with-bottle-part-1/</a></p></li>
+</ul>
+<p>## Add the adder application</p>
+<p>The current [index.html](<a class="reference external" href="https://github.com/Plant-Tracer/webapp/commit/1081873f2fc2af0f623a84777b9646fdcd4b43b8">https://github.com/Plant-Tracer/webapp/commit/1081873f2fc2af0f623a84777b9646fdcd4b43b8</a>) implements a simple adder that runs in JavaScript. To get the hang of building a web application, your goal is to take your demo program you created above and:</p>
+<ul class="simple">
+<li><p>[ ] Create a new page called <cite>/add.html</cite> that displays the adder HTML</p></li>
+<li><p>[ ] Run the demo app and verify that your add.html can be displayed in your web browser.</p></li>
+<li><p>[ ] Make a change to add.html and reload the web browser to verify that the change gets made.</p></li>
+<li><p>[ ] Create a new page called <cite>/add.js</cite> that serves the JavaScript adder code (currently at <a class="reference external" href="https://github.com/Plant-Tracer/webapp/blob/main/static/add_numbers.js">https://github.com/Plant-Tracer/webapp/blob/main/static/add_numbers.js</a>)</p></li>
+<li><p>[ ] Add the HTML code to <cite>add.html</cite> to load <cite>add.js</cite></p></li>
+<li><p>[ ] Reload, try typing numbers into the two boxes, and verify that you can add them.</p></li>
+</ul>
+<p># Future work
+After you get to this opint, it’s time to start thinking about the jinja templating engine</p>
+<p>## Understanding Jinja</p>
+<ul class="simple">
+<li><p>[ ] Jinja, the template engine we are using: <a class="reference external" href="https://jinja.palletsprojects.com/en/3.1.x/">https://jinja.palletsprojects.com/en/3.1.x/</a>  [Tutorial](<a class="reference external" href="https://realpython.com/primer-on-jinja-templating/#render-your-first-jinja-template">https://realpython.com/primer-on-jinja-templating/#render-your-first-jinja-template</a>)</p></li>
+</ul>
+<p>## Setting up Bottle files (route, run, template, static_files)
+- setting up HTML (.tpl) <a class="reference external" href="https://www.youtube.com/watch?v=Qp-3DBzAEkQ">https://www.youtube.com/watch?v=Qp-3DBzAEkQ</a>
+- routing static files (.css) <a class="reference external" href="https://www.youtube.com/watch?v=iLX_iYoNCyU&amp;t=10s">https://www.youtube.com/watch?v=iLX_iYoNCyU&amp;t=10s</a></p>
+<p>## routing and callback (advanced tutorial)
+- <a class="reference external" href="https://bottlepy.org/docs/stable/routing.html">https://bottlepy.org/docs/stable/routing.html</a></p>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.3.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/gallery_learning_plan.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
