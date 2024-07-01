@@ -16,7 +16,6 @@ import glob
 import uuid
 
 from tabulate import tabulate
-from pronounceable import generate_word
 from botocore.exceptions import ClientError,ParamValidationError
 
 import paths
@@ -478,7 +477,7 @@ if __name__ == "__main__":
             print("Must provide --admin_name",file=sys.stderr)
         if not args.admin_email or not args.admin_name:
             sys.exit(1)
-        course_key = "-".join([generate_word(),generate_word(),generate_word()])
+        course_key = str(uuid.uuid4())[9:18]
         create_course(course_key = course_key,
                       course_name = args.create_course,
                       admin_email = args.admin_email,
