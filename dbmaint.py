@@ -17,6 +17,7 @@ import uuid
 
 from tabulate import tabulate
 from pronounceable import generate_word
+from botocore.exceptions import ClientError,ParamValidationError
 
 import paths
 
@@ -241,8 +242,8 @@ def freshen(clean):
         print(json.dumps(movie,default=str,indent=4))
         try:
             movie_data = db.get_movie_data(movie_id=movie_id)
-        except db.InvalidMovie_Id:
-            print(f"Cannot get movie data.")
+        except (db.InvalidMovie_Id,ClientError,ParamValidationError):
+            print("Cannot get movie data.")
             movie_data = None
         if movie_data is None:
             print("Movie data is not available.")

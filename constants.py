@@ -12,9 +12,16 @@ GET_POST = [GET,POST]
 
 class C:
     """Constants"""
+    # Environment variables:
+    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
+    PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
     AWS_LAMBDA_ENVIRON = 'AWS_LAMBDA'
-    TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS'
+
+    # Other
+    API_BASE='API_BASE'
+    STATIC_BASE='STATIC_BASE'
+    TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     MAX_FILE_UPLOAD = 1024*1024*64
     MAX_FRAMES = 1e6            # max possible frames in a movie
     NOTIFY_UPDATE_INTERVAL = 5.0
@@ -23,7 +30,6 @@ class C:
     DEFAULT_GET_TIMEOUT = 10
     YES = 'YES'
     NO = 'NO'
-    PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     MOVIE_EXTENSION = ".mov"
     JPEG_EXTENSION = ".jpg"
     PUT = 'put'
@@ -31,6 +37,7 @@ class C:
     SCHEME_S3 = 's3'
     SCHEME_DB = 'db'
     SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
+    REDIRECT_FOUND = 302        # bottle default
 
 
 class MIME:

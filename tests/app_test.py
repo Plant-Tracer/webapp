@@ -67,12 +67,14 @@ def test_static_path():
         with boddle(params={}):
             res = bottle_app.static_path('test_not_vound.txt')
 
-
-
 def test_icon():
     with boddle(params={}):
         res = bottle_app.favicon()
     assert open(os.path.join(STATIC_DIR, 'favicon.ico'), 'rb').read() == res.body.read()
+
+def test_zappa_startup():
+    bottle_app.fix_boto_log_level()
+
 
 #
 # Test various error conditions

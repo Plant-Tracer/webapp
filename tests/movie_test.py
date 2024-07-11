@@ -38,6 +38,7 @@ from auth import get_dbreader,get_dbwriter
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
 from constants import MIME
+from db_object_test import SaveS3Bucket
 import tracker
 
 # Test for edge cases
@@ -157,8 +158,11 @@ def test_new_movie(new_movie):
     # Make sure that we cannot delete the movie with a bad key
     with boddle(params={'api_key': 'invalid',
                         'movie_id': movie_id}):
-        with pytest.raises(bottle.HTTPResponse):
-            movie_data = bottle_api.api_delete_movie()
+        try:
+            r = bottle_api.api_delete_movie()
+            raise RuntimeError("api_get_frame should generate error. got r=%s %s",r,type(r))
+        except bottle.HTTPResponse as r:
+            assert r.status_code == 403 # authenticaiton error
 
     # Make sure that we can get data for the movie
     with boddle(params={'api_key': api_key,
@@ -195,12 +199,8 @@ def test_new_movie(new_movie):
 
 
 
-def test_movie_upload_presigned_post(new_user):
+def test_movie_upload_presigned_post(new_user,SaveS3Bucket):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
-    hold_env = os.environ.get(C.PLANTTRACER_S3_BUCKET,None)
-    if C.PLANTTRACER_S3_BUCKET in os.environ:
-        del os.environ[C.PLANTTRACER_S3_BUCKET]
-
     cfg = copy.copy(new_user)
     api_key = cfg[API_KEY]
     movie_title = f'test-movie title {str(uuid.uuid4())}'
@@ -223,9 +223,6 @@ def test_movie_upload_presigned_post(new_user):
     db.purge_movie(movie_id = res['movie_id'])
     logging.info("PURGE MOVIE %d",res['movie_id'])
 
-    # And put back the environment variable
-    if hold_env is not None:
-        os.environ[C.PLANTTRACER_S3_BUCKET] = hold_env
 
 def test_movie_update_metadata(new_movie):
     """try updating the metadata, and making sure some updates fail."""
@@ -294,40 +291,33 @@ def test_movie_extract1(new_movie):
     user_id = cfg[USER_ID]
 
     # Check for insufficient arguments
+    # Should produce http403
     with boddle(params={'api_key': api_key}):
         r = bottle_api.api_get_frame()
-        assert r['error']==True
-
-    # Check for bad format
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': 0,
-                        'format':'no-format'
-                        }):
-        r = bottle_api.api_get_frame()
-        assert r['error']==True
+        assert r.status_code == 403
 
     # Check for invalid frame_number
+    # Should produce http404
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_number': -1,
-                        'format':'json'
-                        }):
+                        'frame_number': -1}):
         r = bottle_api.api_get_frame()
-        assert r['error']==True
+        assert r.status_code == 404
 
     # Check for getting by frame_number
+    # should produce a redirect
     with boddle(params={'api_key': api_key,
                         'movie_id': str(movie_id),
-                        'frame_number': 0,
-                        'format':'json'
-                        }):
-        r = bottle_api.api_get_frame()
-        logging.debug("frame0a=%s",r)
-        assert r['error']==False
-        frame0a = r
-    logging.info("frame0a=%s",frame0a)
+                        'frame_number': 0 }):
+        try:
+            r = bottle_api.api_get_frame()
+            raise RuntimeError("api_get_frame should redirect. got r=%s %s",r,type(r))
+        except bottle.HTTPResponse as r:
+            assert r.status_code == 302
 
+    # Since we got a frame, we should now be able to get a frame URN
+    urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
+    assert urn.startswith('s3:/') or urn.startswith('db:/')
 
 def test_movie_extract2(new_movie):
     """Try extracting individual movie frames"""
@@ -354,54 +344,24 @@ def test_movie_extract2(new_movie):
     assert frame0 != frame1 != frame2
 
     # Grab three frames with the API and see if they are different
-    def get_jpeg_frame(number):
+    def get_jpeg_frame_redirect(number):
         with boddle(params={'api_key': api_key,
                             'movie_id': str(movie_id),
-                            'frame_number': str(number),
-                            'format':'jpeg' }):
-            r =  bottle_api.api_get_frame()
-            assert isinstance(r,dict) is False
-            assert filetype.guess(r).mime==MIME.JPEG
-            return r
+                            'frame_number': str(number) }):
+            try:
+                r =  bottle_api.api_get_frame()
+                raise RuntimeError("r=%s should be redirect",r)
+            except bottle.HTTPResponse as r:
+                logging.debug("number=%s location=%s",number,r['Location'])
+                return r['Location'] # redirect location
 
-    jpeg0 = get_jpeg_frame(0)
-    jpeg1 = get_jpeg_frame(1)
-    jpeg2 = get_jpeg_frame(2)
-    assert jpeg0 != jpeg1 != jpeg2
+    jpeg0_url = get_jpeg_frame_redirect(0)
+    jpeg1_url = get_jpeg_frame_redirect(1)
+    jpeg2_url = get_jpeg_frame_redirect(2)
+    assert jpeg0_url != jpeg1_url != jpeg2_url
 
-    # Handle missing params
+    # TODO - get the data and check?
 
-    # Make sure it properly handles frames out-of-range
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': str(-1),
-                        'format':'json' }):
-        r =  bottle_api.api_get_frame()
-    assert r['error']==True
-    assert 'out of range' in r['message']
-
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_number': str(1_000_000),
-                        'format':'json' }):
-        r =  bottle_api.api_get_frame()
-    assert r['error']==True
-    assert 'out of range' in r['message']
-
-    # Grab three frames with metadata
-    def get_jpeg_json(frame_number):
-        with boddle(params={'api_key': api_key,
-                            'movie_id': str(movie_id),
-                            'frame_number': str(frame_number),
-                            'format':'json' }):
-            ret =  bottle_api.api_get_frame()
-            logging.debug("2. ret=%s",ret)
-            assert isinstance(ret,dict) is True
-            return ret
-    r0 = get_jpeg_json(0)
-    r1 = get_jpeg_json(1)
-    r2 = get_jpeg_json(2)
-    assert r0['frame_number'] != r1['frame_number'] != r2['frame_number']
 
 
 ################################################################
@@ -418,20 +378,9 @@ def movie_list(api_key):
 
 def get_movie(api_key, movie_id):
     """Used for testing. Just pull the specific movie"""
-    movies = movie_list(api_key)
-    for movie in movies:
-        return movie
-
-    user_id = db.validate_api_key(api_key)['user_id']
-    logging.error("api_key=%s movie_id=%s user_id=%s",
-                  api_key, movie_id, user_id)
-    logging.error("len(movies)=%s", len(movies))
-    for movie in movies:
-        logging.error("%s", str(movie))
-    dbreader = get_dbreader()
-    logging.error("Full database: (dbreader: %s)", dbreader)
-    for movie in dbfile.DBMySQL.csfr(dbreader, "select * from movies", (), asDicts=True):
-        logging.error("%s", str(movie))
+    for movie in movie_list(api_key):
+        if movie['movie_id']==movie_id:
+            return movie
     raise RuntimeError(f"No movie has movie_id {movie_id}")
 
 

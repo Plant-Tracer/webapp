@@ -18,6 +18,8 @@
     <script>
       // These variables will be substituted by the template engine
       const version = '0.9.0';
+      const API_BASE = "{{API_BASE}}";
+      const STATIC_BASE = "{{STATIC_BASE}}";
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = {{user_id}};

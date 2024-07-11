@@ -18,11 +18,15 @@
       </p>
       {% include 'tracer_app.html' %}
   </body>
+  <script>
+   const API_BASE='/';
+   const api_key='demo_key';
+  </script>
+
   <script type='module'>
     // This demo draws three dragable objects and adds some text.
    import { TracerController, trace_movie_one_frame, trace_movie_frames } from "./static/canvas_tracer_controller.js";
    const movie_id = 10;
-   const api_key='demo_key';
    const movie_zipfile  = './static/demo/frames.zip';
    const movie_metadata = {movie_id:movie_id, width:512, height:512};
    const movie_frame_markers = {0:[{x:100,y:100,label:'first trackpoint'},

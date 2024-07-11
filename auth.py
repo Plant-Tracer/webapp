@@ -6,6 +6,7 @@ This provides for all authentication in the planttracer system:
 * Mailer authentication
 """
 import os
+import os.path
 import functools
 import configparser
 import logging
@@ -33,15 +34,20 @@ def credentials_file():
     except KeyError as e:
         raise RuntimeError(f"Environment variable {C.PLANTTRACER_CREDENTIALS} must be defined") from e
     if not os.path.exists(name):
+        logging.error("Cannot find %s (PLANTTRACER_CREDENTIALS=%s)",os.path.abspath(name),name)
         raise FileNotFoundError(name)
     return name
+
+def config():
+    cp = configparser.ConfigParser()
+    cp.read( credentials_file() )
+    return cp
 
 def smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.
     If the file specifies a AWS secret, get that.
     """
-    cp = configparser.ConfigParser()
-    cp.read( credentials_file() )
+    cp = config()
     section = cp['smtp']
     if (secret := dbfile.get_aws_secret_for_section( section )) is not None:
         return secret
@@ -51,8 +57,10 @@ def smtp_config():
     return section
 
 def http403(msg=''):
-    return bottle.HTTPResponse(body='Authentication error 403 '+msg,
-                               status=403)
+    return bottle.HTTPResponse(body='Authentication error 403 '+msg, status=403)
+
+def http404(msg=''):
+    return bottle.HTTPResponse(body='Not found error 404 '+msg, status=404)
 
 @functools.cache
 def get_dbreader():
