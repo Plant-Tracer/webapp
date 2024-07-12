@@ -2,14 +2,16 @@
  * @jest-environment jsdom
  */
 
-const list_movies_data = require('../static/planttracer');
+
 const $ = require('jquery');
+global.$ = $;
 
+const list_movies_data = require('../static/planttracer')
 
-jest.mock('jquery', () => ({
-  ...jest.requireActual('jquery'),
-  html: jest.fn()
-}));
+global.Audio = function() {
+  this.play = jest.fn();
+};
+
 
   describe('list_movies_data', () => {
     beforeEach(() => {
