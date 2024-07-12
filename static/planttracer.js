@@ -677,4 +677,4 @@ $( document ).ready( function() {
 });
 
 
-module.exports=list_movies_data, list_ready_function, register_func, resend_func, check_upload_metadata, computeSHA256, upload_movie_post, add_func
+module.exports=list_movies_data
