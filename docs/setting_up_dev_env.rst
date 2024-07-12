@@ -11,7 +11,7 @@ Read and be familiar with the documentation for venv:
 The following commands will help you get the virtual development environment up and running locally:
 
 - [ ] `make install-macos`
-- [ ] `python -m venv venv`
+- [ ] `make venv`
 
 This should get you to a good starting point for developing for Plant Tracer
 
