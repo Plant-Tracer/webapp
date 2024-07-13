@@ -13,23 +13,19 @@
         "exclude": ["*.mp4", "*.dylib"],
         "exclude_glob": ["selenium/**/*", "tests/**/*"],
         "ephemeral_storage" : {"Size":1024},
-        "num_retained_versions":5,
+        "num_retained_versions":1,
         "cloudwatch_retention_days":1,
-        "log_level" : "INFO",
+        "log_level" : "WARNING",
         "memory_size" : 1024,
         "s3_bucket" : "planttracer-zappa-lambda",
-        "keep_warm": true,
-        "keep_warm_expression": "rate(2 minutes)",
         "timeout_seconds": 900,
-        "delete_local_zip":false,
-        "delete_s3_zip":false,
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"DEBUG"
+            "PLANTTRACER_LOG_LEVEL":"INFO"
         }
     },
     "production": {
@@ -48,7 +44,7 @@
         "ephemeral_storage" : {"Size":1024},
         "num_retained_versions":5,
         "cloudwatch_retention_days":1,
-        "log_level" : "INFO",
+        "log_level" : "WARNING",
         "s3_bucket" : "planttracer-zappa-lambda",
         "keep_warm": true,
         "keep_warm_expression": "rate(2 minutes)",
@@ -61,16 +57,17 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-prod.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"INFO"
+            "PLANTTRACER_LOG_LEVEL":"WARNING"
         }
     },
     "demo": {
+        "x-comment":"Prevously demo was a stand-alone system; I've changed this so that demo uses the dev database and secrets to simplify deployment during the grant evaluation.",
         "app_function": "bottle_app.app",
         "aws_region": "us-east-1",
         "profile_name": "default",
         "project_name": "planttracer-",
         "runtime": "python3.11",
-        "timeout_seconds": 300,
+        "timeout_seconds": 900,
         "domain":"demo.planttracer.com",
         "cloudwatch_retention_days":1,
         "slim_handler":true,
@@ -80,12 +77,13 @@
         "log_level" : "ERROR",
         "ephemeral_storage" : {"Size":1024},
         "s3_bucket" : "planttracer-zappa-lambda",
+        "num_retained_versions":1,
         "environment_variables": {
             "AWS_LAMBDA": "YES",
             "PLANTTRACER_DEMO":"YES",
-            "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
-            "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
-            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-demo.ini",
+            "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
+            "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
+            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
             "PLANTTRACER_LOG_LEVEL":"INFO"
         }
