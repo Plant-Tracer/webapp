@@ -92,7 +92,7 @@
           <li class="pure-menu-item">
             <a href="/privacy" class="pure-menu-link">Privacy</a>
           </li>
-          {% if not demo_mode %}
+          {% if not user_demo %}
           {% if logged_in %}
           <li class="pure-menu-item">
             <a href="/logout" class="pure-menu-link">Logout</a>
@@ -125,7 +125,7 @@
         <p id="copyright" class="legal-license"><a href='/tos'>Copyright &#169; 2023, 2024</a></p>
         <hr/>
         <p><small>
-            {% if demo_mode %}
+            {% if user_demo %}
             <b>demo mode</b>
             {% endif %}
             ver {{version}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>

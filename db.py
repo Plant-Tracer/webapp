@@ -400,6 +400,16 @@ def list_demo_users():
                                "select *,users.id as user_id from users where demo=1",
                                asDicts=True)
 
+def get_demo_user_api_key(*,user_id):
+    keys = dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select api_key from api_keys where user_id=%s and user_id in (select id from users where demo=1)",
+                               (user_id,))
+    if keys:
+        return keys[0][0]
+    return None
+
+
+
 
 #########################
 ### Course Management ###

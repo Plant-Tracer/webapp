@@ -92,7 +92,7 @@ DEMO_MODE_AVAILABLE = os.environ.get(C.PLANTTRACER_DEMO_MODE_AVAILABLE,' ')[0:1]
 def demo_mode_api_key():
     """Return the api key of the first demo user"""
     for demo_user in db.list_demo_users():
-        api_key = demo_user['api_key']
+        api_key = db.get_demo_user_api_key(user_id = demo_user['user_id'])
         if api_key is None:
             # Make an api key for the demo user if we do not have one
             api_key = db.make_new_api_key(email=demo_user['email'])
