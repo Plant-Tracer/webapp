@@ -122,8 +122,11 @@
       <div class='pure-u-1 u-sm-1-2'>
         <p id="copyright" class="legal-license"><a href='/tos'>Copyright &#169; 2023, 2024</a></p>
         <hr/>
-        <p><small>ver {{version}} {{git_last_commit}}
-        {{git_head_time}} ({{dbreader_host}})</small></p>
+        <p><small>
+            {% if demo_mode %}
+            <b>demo mode</b>
+            {% endif %}
+            ver {{version}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
       </div>
     </div>
   </body>
