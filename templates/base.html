@@ -92,6 +92,7 @@
           <li class="pure-menu-item">
             <a href="/privacy" class="pure-menu-link">Privacy</a>
           </li>
+          {% if not demo_mode %}
           {% if logged_in %}
           <li class="pure-menu-item">
             <a href="/logout" class="pure-menu-link">Logout</a>
@@ -100,6 +101,7 @@
           <li class="pure-menu-item">
             <a href="/login" class="pure-menu-link">Login</a>
           </li>
+          {% endif %}
           {% endif %}
         </ul>
       </div>

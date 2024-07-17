@@ -175,7 +175,6 @@ def test_templates(new_user):
             bottle_app.func_users()
         validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
 
-
     # Test templates to see if they work with an API key
     with boddle(params={'api_key': api_key}):
         validate_html(bottle_app.func_root())
@@ -191,10 +190,17 @@ def test_templates(new_user):
         validate_html(bottle_app.func_users())
         validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
 
-    # Test template to see if demo text appears
-    demo_key = db.list_demo_users()[0]['api_key']
-    with boddle(params={'api_key': demo_key}):
-        validate_html(bottle_app.func_list(), include_text='Demo mode')
+    # Test template to see if demo text appears when using a demo API key
+    # but only if there is a demo user in the database
+    demo_users = db.list_demo_users()
+    if demo_users:
+        user = demo_users[0]
+        demo_api_key = db.make_new_api_key(email=user['email'])
+        with boddle(params={'api_key': demo_api_key}):
+            validate_html(bottle_app.func_list(), include_text='Demo mode')
+        db.delete_api_key(demo_api_key)
+    else:
+        logging.warning("no demo users; cannot test demo mode text")
 
 def test_check_api_key(new_user):
     api_key = new_user[API_KEY]
