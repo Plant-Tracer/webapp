@@ -130,5 +130,5 @@ wsproto==1.2.0
 zappa==0.59.0
 zc.lockfile==3.0.post1
 zope.interface==6.4.post2
-setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
+setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
