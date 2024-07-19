@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Demo Mode &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="demo-mode">
+<h1>Demo Mode<a class="headerlink" href="#demo-mode" title="Link to this heading">¶</a></h1>
+<p>Goals:</p>
+<ul class="simple">
+<li><p>Allows anyone on the web to anonymously use some aspects of the Plant Tracer web app. Specifically:
+- View the list of movies
+- Play a movie without tracking
+- Click on ‘analyze’ to show the user interface for playing a movie that has stored tracks.
+- Download a spreadsheet</p></li>
+<li><p>Will not allow:
+- No uploading of videos
+- No deleting of videos
+- No renaming of titles, descriptions.
+- No deleting or adding trackpoints
+- No editing any text</p></li>
+</ul>
+<p>Required in the database:
+- Demo mode user with their own API key and course.
+- Tracked movies in the demo mode user’s course.</p>
+<p>Implementation:
+- Only checks for demo mode if ENABLE_DEMO_MODE environment variable is set to 1.
+- If ENABLE_DEMO_MODE is set and there is no user logged in, then we are in DEMO_MODE.</p>
+<dl class="simple">
+<dt>If we are in DEMO_MODE:</dt><dd><ul class="simple">
+<li><p>auth.get_user_api_key():
+- If there is a user logged in, we get that user.
+- If there is no user logged in, we get the demo user.
+- Once we get the demo user, the web browser’s API_KEY cookie will be set to the demo user. So logging out will remove it and the immediately set back it.
+- (To get out of demo mode, you’ll need to click on a link that has a different API key)</p></li>
+</ul>
+</dd>
+</dl>
+<ul class="simple">
+<li><p><cite>demo</cite> JavaScript global variable set to <cite>true</cite> if in demo mode).</p></li>
+<li><p><cite>demo</cite> Jinja2 variable will get set to true (otherwise it is false)</p></li>
+</ul>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/demo_mode.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

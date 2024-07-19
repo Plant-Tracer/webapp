@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API calls on that the JavaScript movie player can use &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <p>Design of the movie player:</p>
+<section id="api-calls-on-that-the-javascript-movie-player-can-use">
+<h1>API calls on that the JavaScript movie player can use<a class="headerlink" href="#api-calls-on-that-the-javascript-movie-player-can-use" title="Link to this heading">¶</a></h1>
+<ul>
+<li><p>get-frame - returns the frame as JPEG
+Gets an individual frame. Returns a JPEG of the frame that is
+fetched from S3 (if the frame is available) or from the movie (by
+single-framing through the movie if the frame is not available).</p>
+<p>If it has to single frame through the movie, it saves the frame.</p>
+<p>Status: Implemented</p>
+</li>
+<li><p>edit-movie
+If movie is rotated, all of the frames and trackpoints have to be
+deleted. This should be done automatically on the server.</p>
+<p>Status: Implemented</p>
+</li>
+<li><p>get-movie-metadata
+Gets information about individual frames. Parameters:
+frame_start - starting frame to get;
+frame_count - count of frames to get; 0 for no frames
+what - comma-delimited string - ‘trackpoints’, ‘annotations’, ‘urls’</p>
+<p>Returns JSON dictionary:
+[‘metadata’] - movie metadata (same as get-metadata)
+[‘frames’] - annotations, trackpoints, or URLS.
+[‘frames’][‘10’]      (where ‘10’ is a frame number) - per-frame dictionary.
+[‘frames’][‘10’][‘trackpoints’] - array of the trackpoints for that frame
+[‘frames’][‘10’][‘annotations’] - array of the annotations for that frame
+[‘frames’][‘10’][‘frame_url’] - signed URL for the frame</p>
+</li>
+</ul>
+</section>
+<section id="client-side">
+<h1>Client Side<a class="headerlink" href="#client-side" title="Link to this heading">¶</a></h1>
+<section id="tunable-constants">
+<h2>Tunable Constants<a class="headerlink" href="#tunable-constants" title="Link to this heading">¶</a></h2>
+<p>FRAME_BATCH_SIZE - number of frames that get loaded at once
+FRAME_LOW_WATER_MARK - When this close to last</p>
+</section>
+<section id="state-variables">
+<h2>State Variables<a class="headerlink" href="#state-variables" title="Link to this heading">¶</a></h2>
+<p>api_key - user’s API key
+movie_id - movie being tracked
+total_frames - Total number of frames, which go from from 0 to (total_frames-1)
+last_tracked_frame - last frame that was tracked. Typically 0 or total_frames-1. (Frame 0 is manually tracked.)
+current_frame  - current frame of movie displayed
+tracking - true if server is currently tracking frames and player is waiting for tracking to be done.
+playing - true if player is currently playing a movie.
+frames[] - dictionary that matches what was returned above</p>
+<blockquote>
+<div><p>‘url’ is the URL to load for the frame
+‘jpeg’ is a JPEG for the frame, or null if it hasn’t loaded yet.</p>
+</div></blockquote>
+<p>fps - frames for per second for playback</p>
+</section>
+<section id="class-hiearchy">
+<h2>Class Hiearchy<a class="headerlink" href="#class-hiearchy" title="Link to this heading">¶</a></h2>
+<p>CanvasController.
+* native (w,h)
+* zoomed (w,h) (the &lt;canvas&gt; is actually resized.)
+* future: put in a scroller.
+* HTML objects it owns:</p>
+<blockquote>
+<div><blockquote>
+<div><ul class="simple">
+<li><p>&lt;canvas&gt; where things get drawn</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>&lt;div&gt; where canvas marker inventory is displayed</p></li>
+<li><p>zoom pull-down</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>Functions:
+* display list with draggable objects.
+* Zoom with objects that can be zoomable or not zoomable
+* Button to create new objects</p></li>
+</ul>
+<p>CanvasItem - root class for things that goes on the CanvasController:
+* (x,y) (w,h) rectangle
+* draw method (in canvas coordinates; zooming is invisible to items.)
+* Hit detection</p>
+<p>MarkerItem(CanvasItem)- Markers/Trackpoints
+ImageItem(CanvasItem) - draws an image (does not load it.)</p>
+<p>MovieController
+* Subclass of CanvasController.
+* Loaded with URLs of every frame.
+* Outlets for movement buttons:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Forward</p></li>
+<li><p>Backward</p></li>
+<li><p>Play</p></li>
+<li><p>Start</p></li>
+<li><p>Jump Forward 10 sec</p></li>
+<li><p>Jump Backward 10 sec</p></li>
+<li><p>Frame counter</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>Implements load logic.</p></li>
+</ul>
+<p>TrackerController
+* Owns a Canvas Controller (not a subclass of it)
+* Callback when Trackers are moved
+* On end of drag, sends new trackpoints to server - but this does not retrack the movie or delete other trackpoints.</p>
+<p>Invariants:
+* (playing == false &amp;&amp; tracking == false) or (playing==true and tracking==false) or (tracking==true and playing==false)
+* 0 &lt;= last_tracked_frame &lt; total_frames
+* total_frames &gt; 0
+* 0 &lt;= current_frame &lt; total_frames</p>
+</section>
+<section id="user-stories">
+<h2>User Stories<a class="headerlink" href="#user-stories" title="Link to this heading">¶</a></h2>
+<p>Initial Page Loads:
+* MoviePlayer gets first frame and trackpoints to display (give user immediate freedback).
+* MoviePlayer requests background load of first FRAME_BATCH_SIZE frames.</p>
+<p>Movie playing:
+* When player gets to LAST_FRAME_LOADED-BUFFER, it requests the next N frames. (with an async load request.)
+* If we get to frame N and frame N+1 isn’t loaded, we do a request to load just it and a request to do the next FRAME_BATCH_SIZE.
+* checkbox to ‘show trails’ which causes track trails to be display from 0..current_frame</p>
+<p>Moving track points:
+* Whenever a track point is moved, the ‘retrack from here to end’ is displayed.
+* When ‘track from here’ button is clicked, all other buttons are disabled until track  ing is finished.</p>
+<p>When tracking:
+* All buttons are disabled.
+* Track status displays. When the last frame is tracked, buttons are re-enabled.</p>
+<p>Download buttons:
+* Original movie
+* Tracked movie (Do we need this?)
+* GIF showing the tracking (<a class="reference external" href="https://stackoverflow.com/questions/753190/programmatically-generate-video-or-animated-gif-in-python">https://stackoverflow.com/questions/753190/programmatically-generate-video-or-animated-gif-in-python</a>)
+* Download trackpoints</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/movie_player.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
