@@ -25,7 +25,8 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"INFO"
+            "PLANTTRACER_LOG_LEVEL":"INFO",
+            "PLANTTRACER_DEMO_MODE_AVAILABLE":"YES"
         }
     },
     "production": {
@@ -59,34 +60,5 @@
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
             "PLANTTRACER_LOG_LEVEL":"WARNING"
         }
-    },
-    "demo": {
-        "x-comment":"Prevously demo was a stand-alone system; I've changed this so that demo uses the dev database and secrets to simplify deployment during the grant evaluation.",
-        "app_function": "bottle_app.app",
-        "aws_region": "us-east-1",
-        "profile_name": "default",
-        "project_name": "planttracer-",
-        "runtime": "python3.11",
-        "timeout_seconds": 900,
-        "domain":"demo.planttracer.com",
-        "cloudwatch_retention_days":1,
-        "slim_handler":true,
-        "certificate_arn": "arn:aws:acm:us-east-1:376778049323:certificate/7afdf627-d4fa-4ecf-8507-20dee1f34f9e",
-        "exclude": ["*.mp4", "*.dylib"],
-        "exclude_glob": ["selenium/**/*", "tests/**/*"],
-        "log_level" : "ERROR",
-        "ephemeral_storage" : {"Size":1024},
-        "s3_bucket" : "planttracer-zappa-lambda",
-        "num_retained_versions":1,
-        "environment_variables": {
-            "AWS_LAMBDA": "YES",
-            "PLANTTRACER_DEMO":"YES",
-            "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU",
-            "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
-            "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
-            "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"INFO"
-        }
     }
-
 }

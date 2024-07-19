@@ -23,7 +23,7 @@
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = {{user_id}};
-      const user_demo = {{user_demo}};
+      const user_demo = {{user_demo}}; // set true if we are in demo mode
       const user_primary_course_id   = {{user_primary_course_id}};
       const primary_course_name = "{{primary_course_name}}";
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
@@ -67,12 +67,14 @@
           <li class="pure-menu-item">
             <a href="/list" class="pure-menu-link">Movies</a>
           </li>
+          {% if demo_user==0 %}
           <li class="pure-menu-item">
             <a href="/upload" class="pure-menu-link">Upload</a>
           </li>
           <li class="pure-menu-item">
             <a href="/users" class="pure-menu-link">Users</a>
           </li>
+          {% endif %}
           {% if admin %}
           <li class="pure-menu-item">
             <a href="/audit" class="pure-menu-link">Audit</a>
@@ -92,6 +94,7 @@
           <li class="pure-menu-item">
             <a href="/privacy" class="pure-menu-link">Privacy</a>
           </li>
+          {% if not user_demo %}
           {% if logged_in %}
           <li class="pure-menu-item">
             <a href="/logout" class="pure-menu-link">Logout</a>
@@ -100,6 +103,7 @@
           <li class="pure-menu-item">
             <a href="/login" class="pure-menu-link">Login</a>
           </li>
+          {% endif %}
           {% endif %}
         </ul>
       </div>
@@ -122,9 +126,27 @@
       <div class='pure-u-1 u-sm-1-2'>
         <p id="copyright" class="legal-license"><a href='/tos'>Copyright &#169; 2023, 2024</a></p>
         <hr/>
-        <p><small>ver {{version}} {{git_last_commit}}
-        {{git_head_time}} ({{dbreader_host}})</small></p>
+        <p><small>
+            {% if user_demo %}
+            <b>demo mode</b>
+            {% endif %}
+            ver {{version}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
       </div>
     </div>
+    <script>
+
+      // demo mode: show the 'demo' CSS class and hide the 'nodemo'
+      // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
+      // if we are in demo mode.
+      $( document ).ready( function() {
+        if (user_demo) {
+          $('.demo').show();
+          $('.nodemo').hide();
+        } else {
+          $('.demo').hide();
+          $('.nodemo').show();
+        }
+      });
+    </script>
   </body>
 </html>

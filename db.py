@@ -352,7 +352,6 @@ def make_new_api_key(*,email):
         return api_key
     return None
 
-
 @log
 def delete_api_key(api_key):
     """Deletes an api_key
@@ -396,10 +395,20 @@ def list_admins():
                                asDicts=True)
 
 def list_demo_users():
-    """Returns a list of all demo accounts and their API keys. This can be downloaded without authentication!"""
+    """Returns a list of all demo accounts."""
     return dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select *,users.id as user_id from users left join api_keys on api_keys.user_id=users.id where demo=1 and api_keys.enabled=1",
+                               "select *,users.id as user_id from users where demo=1",
                                asDicts=True)
+
+def get_demo_user_api_key(*,user_id):
+    keys = dbfile.DBMySQL.csfr(get_dbreader(),
+                               "select api_key from api_keys where user_id=%s and user_id in (select id from users where demo=1)",
+                               (user_id,))
+    if keys:
+        return keys[0][0]
+    return None
+
+
 
 
 #########################

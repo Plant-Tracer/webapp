@@ -17,6 +17,7 @@ from bottle import request
 #import paths
 from lib.ctools import dbfile
 
+import db
 from constants import C
 
 API_KEY_COOKIE_BASE = 'api_key'
@@ -82,6 +83,24 @@ def get_dbwriter():
 
 
 ################################################################
+# Demo mode
+
+# Check to see if PLANTTRACER_DEMO environment variable is set.
+# If so, then we use the DEMO user if the user is not logged in
+DEMO_MODE_AVAILABLE = os.environ.get(C.PLANTTRACER_DEMO_MODE_AVAILABLE,' ')[0:1] in 'yYtT1'
+
+def demo_mode_api_key():
+    """Return the api key of the first demo user"""
+    for demo_user in db.list_demo_users():
+        api_key = db.get_demo_user_api_key(user_id = demo_user['user_id'])
+        if api_key is None:
+            # Make an api key for the demo user if we do not have one
+            api_key = db.make_new_api_key(email=demo_user['email'])
+        return api_key
+    logging.error("demo_mode_api_key requested but there are no demo users")
+    return None
+
+################################################################
 # Authentication API - for clients
 ##
 
@@ -99,8 +118,16 @@ def clear_cookie():
     bottle.response.delete_cookie(cookie_name(), path='/')
 
 def get_user_api_key():
-    """Gets the user APIkey from either the URL or the cookie or the form, but does not validate it.
-    :return: None if user is not logged in
+    """Gets the user APIkey from either the URL or the cookie or the
+    form, but does not validate it.  If we are running in an
+    environment that offers demo mode and there is no api_key in the
+    browser's cookie or the URL GET string, grab the first api_key
+    from the database that corresponds to a demo user.
+
+    :return:
+       a string of an API key if the user is logged in
+       a string of the demo mode's API key if no user is logged in and demo mode is available.
+       None if user is not logged in and no demo mode
     """
     # check the query string
     try:
@@ -119,8 +146,13 @@ def get_user_api_key():
     if api_key:
         return api_key
 
-    # Return the api_key if it is in a cookie, otherwise None
-    return request.get_cookie(cookie_name(), None)
+    # Return the api_key if it is in a cookie.
+    # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
+    # return the api_key for the demo user.
+    api_key = request.get_cookie(cookie_name(), None)
+    if (api_key is None) and (DEMO_MODE_AVAILABLE):
+        api_key = demo_mode_api_key()
+    return api_key
 
 def get_user_ipaddr():
     """This is the only place where db.py knows about bottle."""
