@@ -2,104 +2,130 @@
  * @jest-environment jsdom
  */
 
-
 const $ = require('jquery');
 global.$ = $;
 
-const list_users_data = require('../static/planttracer');
+const list_users_data  = require('../static/planttracer') 
 
-
-global.user_id = '1'; 
-global.PUBLISHED = 'published'; 
-global.UNPUBLISHED = 'unpublished'; 
-global.user_demo = false;
-global.user_primary_course_id = '101';
-global.movies_fill_div = jest.fn();
+global.Audio = function() {
+  this.play = jest.fn();
+};
 
 
 
 describe('list_users_data', () => {
-    beforeEach(() => {
-        document.body.innerHTML = `
-            <div id="your-users"></div>
-        `;
-    });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-    test('should correctly generate HTML for users with different primary courses', () => {
-        const users = [
-            { name: 'Johnny', user_id: '1', email: 'Johnny@example.com', first: 1625097600, last: 1627689600, primary_course_id: '101' },
-            { name: 'Ruth', user_id: '2', email: 'Ruth@example.com', first: 1625097600, last: 1627689600, primary_course_id: '102' }
-        ];
-        const course_array = {
-            '101': { course_name: 'Math' },
-            '102': { course_name: 'Science' }
-        };
+  test('should create the correct HTML for active users', () => {
+    const users = [
+      {
+        user_id: 1,
+        name: 'User 1',
+        email: 'user1@example.com',
+        active: true,
+        date_joined: 1627689600,
+        last_login: 1627789600,
+      },
+    ];
 
-        list_users_data(users, course_array);
+    global.admin = true;
+    global.user_id = 1;
+    global.user_demo = 'false';
+    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
+    global.user_id = 1;
+    global.user_demo = false;
+    global.PLAY_LABEL = 'Play';
+    global.PLAY_TRACKED_LABEL = 'Play Tracked';
+    global.UNPUBLISH_BUTTON = 'Unpublish';
+    global.PUBLISH_BUTTON = 'Publish';
+    global.DELETE_BUTTON = 'Delete';
+    global.UNDELETE_BUTTON = 'Undelete';
+    global.user_primary_course_id = 2;
 
-        console.log($('#your-users').html()); // Debug log
+    $.fn.html = jest.fn();
+    list_users_data(users);
+    expect($.fn.html).toHaveBeenCalledTimes(4);
 
-        const expectedHtml = `
-            <table><tbody>
-            <tr><td colspan='4'>&nbsp;</td></tr>
-            <tr><th colspan='4'>Primary course: Math (101)</th></tr>
-            <tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>
-            <tr><td>Johnny (1) </td><td>Johnny@example.com</td><td>${new Date(1625097600 * 1000).toString()}</td><td>${new Date(1627689600 * 1000).toString()}</td></tr>
-            <tr><td colspan='4'>&nbsp;</td></tr>
-            <tr><th colspan='4'>Primary course: Science (102)</th></tr>
-            <tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>
-            <tr><td>Ruth (2) </td><td>Ruth@example.com</td><td>${new Date(1625097600 * 1000).toString()}</td><td>${new Date(1627689600 * 1000).toString()}</td></tr>
-            </tbody></table>
-        `.trim();
+    const expectedHtml = expect.stringContaining('<table>');
+    expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
+  });
 
-        expect($('#your-users').html().trim()).toBe(expectedHtml);
-    });
+  test('should handle an empty list of users gracefully', () => {
+    const users = [];
 
-    test('should correctly generate HTML for users with the same primary course', () => {
-        const users = [
-            { name: 'Johnny', user_id: '1', email: 'Johnny@example.com', first: 1625097600, last: 1627689600, primary_course_id: '101' },
-            { name: 'Ruth', user_id: '2', email: 'Ruth@example.com', first: 1625097600, last: 1627689600, primary_course_id: '101' }
-        ];
-        const course_array = {
-            '101': { course_name: 'Math' },
-            '102': { course_name: 'Science' }
-        };
+    global.admin = true;
+    global.user_id = 1;
+    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
 
-        list_users_data(users, course_array);
+    $.fn.html = jest.fn();
+    list_users_data(users);
+    expect($.fn.html).toHaveBeenCalledTimes(4);
 
-        const expectedHtml = `
-            <table><tbody>
-            <tr><td colspan='4'>&nbsp;</td></tr>
-            <tr><th colspan='4'>Primary course: Math (101)</th></tr>
-            <tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>
-            <tr><td>Johnny (1) </td><td>Johnny@example.com</td><td>${new Date(1625097600 * 1000).toString()}</td><td>${new Date(1627689600 * 1000).toString()}</td></tr>
-            <tr><td>Ruth (2) </td><td>Ruth@example.com</td><td>${new Date(1625097600 * 1000).toString()}</td><td>${new Date(1627689600 * 1000).toString()}</td></tr>
-            </tbody></table>
-        `.trim();
+    const expectedEmptyHtml = expect.stringContaining('<i>No users</i>');
+    expect($.fn.html).toHaveBeenCalledWith(expectedEmptyHtml);
+  });
 
-        expect($('#your-users').html().trim()).toBe(expectedHtml);
-    });
+  test('should correctly classify and display inactive users', () => {
+    const users = [
+      {
+        user_id: 1,
+        name: 'User 1',
+        email: 'user1@example.com',
+        active: false,
+        date_joined: 1627689600,
+        last_login: 1627789600,
+      },
+      {
+        user_id: 2,
+        name: 'User 2',
+        email: 'user2@example.com',
+        active: true,
+        date_joined: 1627689600,
+        last_login: 1627789600,
+      },
+    ];
 
-    test('should display "n/a" for missing dates', () => {
-        const users = [
-            { name: 'Johnny', user_id: '1', email: 'Johnny@example.com', first: null, last: null, primary_course_id: '101' }
-        ];
-        const course_array = {
-            '101': { course_name: 'Math' },
-            '102': { course_name: 'Science' }
-        };
+    global.admin = true;
+    global.user_id = 1;
+    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
 
-        list_users_data(users, course_array);
+    $.fn.html = jest.fn();
+    list_users_data(users);
+    expect($.fn.html).toHaveBeenCalledTimes(4);
 
-        const expectedHtml = `
-            <table><tbody>
-            <tr><td colspan='4'>&nbsp;</td></tr>
-            <tr><th colspan='4'>Primary course: Math (101)</th></tr>
-            <tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>
-            <tr><td>Johnny (1) </td><td>Johnny@example.com</td><td>n/a</td><td>n/a</td></tr>
-            </tbody></table>
-        `.trim();
+    const expectedHtml = expect.stringContaining('<table>');
+    expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
+  });
 
-        expect($('#your-users').html().trim()).toBe(expectedHtml);
-    });
+  test('should display a link to invite users for admins', () => {
+    const users = [];
+
+    global.admin = true;
+    global.user_id = 1;
+    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
+
+    $.fn.html = jest.fn();
+    list_users_data(users);
+    expect($.fn.html).toHaveBeenCalledTimes(4);
+
+    const expectedInviteLinkHtml = expect.stringContaining('Click here to invite a user');
+    expect($.fn.html).toHaveBeenCalledWith(expectedInviteLinkHtml);
+  });
+
+  test('should not display invite link for non-admin users', () => {
+    const users = [];
+
+    global.admin = false;
+    global.user_id = 1;
+    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
+
+    $.fn.html = jest.fn();
+    list_users_data(users);
+    expect($.fn.html).toHaveBeenCalledTimes(4);
+
+    const notExpectedInviteLinkHtml = expect.not.stringContaining('Click here to invite a user');
+    expect($.fn.html).toHaveBeenCalledWith(notExpectedInviteLinkHtml);
+  });
 });

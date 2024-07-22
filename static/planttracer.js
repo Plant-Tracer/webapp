@@ -677,4 +677,4 @@ $( document ).ready( function() {
 });
 
 
-module.exports=list_movies_data, list_users, list_users_data
+module.exports=list_movies_data, list_users_data
