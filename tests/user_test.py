@@ -130,7 +130,7 @@ def test_new_course(new_course):
     for (ct,r) in enumerate(res):
         logging.debug("%s: %s",ct,r)
     assert len(res)>=1
-    assert len([r for r in res if r['email']==demo_email and r['api_key'] is not None])>0
+    assert len([r for r in res if r['email']==demo_email])>0
 
     # Check to make sure that the correct number of course enrollment remains
     assert db.remaining_course_registrations(course_key=course_key) == dbmaint.DEFAULT_MAX_ENROLLMENT - 2

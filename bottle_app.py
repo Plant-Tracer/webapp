@@ -59,13 +59,13 @@ import wsgiserver               # pylint: disable=syntax-error
 import db
 import db_object
 import auth
+from auth import DEMO_MODE_AVAILABLE
 
-import paths
 from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST
 
 import bottle_api
-from bottle_api import git_head_time,git_last_commit,get_user_dict,fix_types,DEMO_MODE
+from bottle_api import git_head_time,git_last_commit,get_user_dict,fix_types
 import dbmaint
 
 DEFAULT_OFFSET = 0
@@ -156,7 +156,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: title - the title we should give the page
     :param: require_auth  - if true, the user must already be authenticated, or throws an error
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
-    :param: lookup - if true, We weren't being called in an error condition, so we can lookup the api_key in the URL
+    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key in the URL or the cookie
     """
     logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     o = urlparse(request.url)
@@ -171,6 +171,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         api_key = None
 
     if (api_key is not None) and (logout is False):
+        # Get the user_dict is from the database
         user_dict = get_user_dict()
         user_name = user_dict['name']
         user_email = user_dict['email']
@@ -180,7 +181,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         logged_in = 1
         primary_course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
         admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
-        # If this is a demo account, the user cannot be an admin
+        # If this is a demo account, the user cannot be an admin (security)
         if user_demo:
             assert not admin
         # if this is not a demo account and the user_id is set, make sure we set the cookie
@@ -197,7 +198,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         admin = 0
         logged_in = 0
 
-
     try:
         movie_id = int(request.query.get('movie_id'))
     except (AttributeError, KeyError, TypeError):
@@ -206,11 +206,11 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     ret= fix_types({
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
-        'api_key': api_key,
-        'user_id': user_id,
-        'user_name': user_name,
-        'user_email': user_email,
-        'user_demo':  user_demo,
+        'api_key': api_key,     # the API key that is currently active
+        'user_id': user_id,     # the user_id that is active
+        'user_name': user_name, # the user's name
+        'user_email': user_email, # the user's email
+        'user_demo':  user_demo,  # true if this is a demo user
         'logged_in': logged_in,
         'admin':admin,
         'user_primary_course_id': user_primary_course_id,
@@ -218,7 +218,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'title':'Plant Tracer '+title,
         'hostname':o.hostname,
         'movie_id':movie_id,
-        'enable_demo_mode':DEMO_MODE,
+        'demo_mode_available':DEMO_MODE_AVAILABLE,
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
         'dbreader_host':auth.get_dbreader().host,
         'version':__version__,
@@ -239,13 +239,6 @@ def func_root():
     """/ - serve the home page"""
     logging.debug("func_root")
     ret = page_dict()
-    if DEMO_MODE:
-        demo_users = db.list_demo_users()
-        demo_api_key = False
-        if len(demo_users)>0:
-            demo_api_key   = demo_users[0].get('api_key',False)
-            logging.debug("demo_api_key=%s",demo_api_key)
-            ret['demo_api_key'] = demo_api_key
     return ret
 
 @bottle.route('/about', method=GET_POST)
@@ -285,13 +278,7 @@ def func_analyze():
 @bottle.route('/login', method=GET_POST)
 @view('login.html')
 def func_login():
-    ret = page_dict('Login')
-    if DEMO_MODE:
-        demo_users = db.list_demo_users()
-        if len(demo_users)>0:
-            ret['demo_api_key']   = demo_users[0].get('api_key',False)
-
-    return ret
+    return page_dict('Login')
 
 @bottle.route('/logout', method=GET_POST)
 @view('logout.html')
@@ -361,7 +348,7 @@ def demo_tracer2():
 
 @bottle.route('/demo_tracer3.html', method=GET)
 @view('demo_tracer3.html')
-def demo_tracer2():
+def demo_tracer3():
     return page_dict('demo_tracer3',require_auth=False)
 
 @bottle.route('/ver', method=GET_POST)

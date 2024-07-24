@@ -29,7 +29,8 @@
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
-            "PLANTTRACER_LOG_LEVEL":"DEBUG"
+            "PLANTTRACER_LOG_LEVEL":"DEBUG",
+            "PLANTTRACER_DEMO_MODE_AVAILABLE":"YES"
         }
     },
     "production": {
@@ -82,7 +83,7 @@
         "s3_bucket" : "planttracer-zappa-lambda",
         "environment_variables": {
             "AWS_LAMBDA": "YES",
-            "PLANTTRACER_DEMO":"YES",
+            "PLANTTRACER_DEMO_MODE_AVAILABLE":"YES",
             "DBREADER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_demo-kvJFNF",
             "DBWRITER":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_demo-OgpVEn",
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-demo.ini",

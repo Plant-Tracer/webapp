@@ -33,8 +33,6 @@ import tracker
 
 api = bottle.Bottle()
 
-DEMO_MODE = os.environ.get('PLANTTRACER_DEMO',' ')[0:1] in 'yYtT1'
-
 ################################################################
 ## Utility
 def expand_memfile_max():
@@ -778,7 +776,7 @@ def api_track_movie_queue():
 
     # pylint: disable=unsupported-membership-test
     movie_id       = get_int('movie_id')
-    user_id        = get_user_id(allow_demo=True)
+    user_id        = get_user_id(allow_demo=False)
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
 
@@ -835,7 +833,7 @@ def api_put_frame_trackpoints():
     :param: frame_number - the the frame
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    user_id   = get_user_id(allow_demo=True)
+    user_id   = get_user_id(allow_demo=False)
     movie_id = get_int('movie_id')
     frame_number = get_int('frame_number')
     logging.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie_id,frame_number)
@@ -900,7 +898,7 @@ def api_list_users():
 
 @api.route('/ver', method=GET_POST)
 def api_ver():
-    """Demo for reporting python version. Allows us to validate we are using Python3.
+    """Report the python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     logging.debug("api_ver")
@@ -909,7 +907,7 @@ def api_ver():
 
 ################################################################
 ##
-## Demo and debug
+## For debug
 ##
 @api.route('/add', method=GET_POST)
 def api_add():

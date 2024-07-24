@@ -1,4 +1,5 @@
 <!-- -*- mode: html -*- -->
+<!-- index.html - this is the home page of the plant tracer app website -->
 
 {% extends 'base.html' %}
 
@@ -8,6 +9,10 @@
 <p>A method to explore the genetics of plant movement</p>
 
 {% if logged_in %}
+{% if demo_mode %}
+<b>This is the Plant Tracer Demo!</b>
+{% endif %}
+
 <i>You are logged in. You can:</i>
 <ul>
     <li><a href='/list'> List the movies that you can work with</a></li>
@@ -16,17 +21,11 @@
 
 {% else %}
 
-  {% if enable_demo_mode %}
-    {% include 'demo.html' %}
-     <hr/>
-      You may also log into this server if you have an account.
-    {% else %}
-      <i>You are not logged in. You can:</i>
-      To log into the PlantTracer website, you need to click on the account
-      login link sent by this website. You get the link by registering for a new account by
-      clicking the link below. If you have already registered, please use
-      the second link below to resend it:
-  {% endif %}
-  {% include 'register_resend.html' %}
+<i>You are not logged in. You can:</i>
+To log into the PlantTracer website, you need to click on the account
+login link sent by this website. You get the link by registering for a new account by
+clicking the link below. If you have already registered, please use
+the second link below to resend it:
+{% include 'register_resend.html' %}
 {% endif %}
 {% endblock %}
