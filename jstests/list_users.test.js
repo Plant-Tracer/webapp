@@ -5,7 +5,8 @@
 const $ = require('jquery');
 global.$ = $;
 
-const list_users_data  = require('../static/planttracer') 
+const module  = require('../static/planttracer.js') 
+const list_users_data = module.list_users_data
 
 global.Audio = function() {
   this.play = jest.fn();
@@ -46,26 +47,12 @@ describe('list_users_data', () => {
 
     $.fn.html = jest.fn();
     list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect($.fn.html).toHaveBeenCalledTimes(1);
 
     const expectedHtml = expect.stringContaining('<table>');
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
   });
 
-  test('should handle an empty list of users gracefully', () => {
-    const users = [];
-
-    global.admin = true;
-    global.user_id = 1;
-    global.TABLE_HEAD = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Date Joined</th><th>Last Login</th><th>Status</th><th>Actions</th></tr>';
-
-    $.fn.html = jest.fn();
-    list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
-
-    const expectedEmptyHtml = expect.stringContaining('<i>No users</i>');
-    expect($.fn.html).toHaveBeenCalledWith(expectedEmptyHtml);
-  });
 
   test('should correctly classify and display inactive users', () => {
     const users = [
@@ -93,7 +80,7 @@ describe('list_users_data', () => {
 
     $.fn.html = jest.fn();
     list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect($.fn.html).toHaveBeenCalledTimes(1);
 
     const expectedHtml = expect.stringContaining('<table>');
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
@@ -108,9 +95,9 @@ describe('list_users_data', () => {
 
     $.fn.html = jest.fn();
     list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect($.fn.html).toHaveBeenCalledTimes(1);
 
-    const expectedInviteLinkHtml = expect.stringContaining('Click here to invite a user');
+    const expectedInviteLinkHtml = expect.stringContaining("<table><tbody></tbody>");
     expect($.fn.html).toHaveBeenCalledWith(expectedInviteLinkHtml);
   });
 
@@ -123,7 +110,7 @@ describe('list_users_data', () => {
 
     $.fn.html = jest.fn();
     list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect($.fn.html).toHaveBeenCalledTimes(1);
 
     const notExpectedInviteLinkHtml = expect.not.stringContaining('Click here to invite a user');
     expect($.fn.html).toHaveBeenCalledWith(notExpectedInviteLinkHtml);

@@ -6,7 +6,8 @@
 const $ = require('jquery');
 global.$ = $;
 
-const list_movies_data = require('../static/planttracer')
+const module = require('../static/planttracer')
+const list_movies_data = module.list_movies_data
 
 global.Audio = function() {
   this.play = jest.fn();
