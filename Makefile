@@ -194,7 +194,9 @@ eslint:
 	(cd templates;make eslint)
 
 jscoverage:
-	npm run coverage
+	npm install --save-dev jest
+	npm install --save-dev babel-jest @babel/core @babel/preset-env
+	npm test
 
 
 ################################################################
@@ -233,7 +235,7 @@ install-macos:
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
+	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 # Includes Windows dependencies
