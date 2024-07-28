@@ -42,51 +42,50 @@ input[type=checkbox] {
 
 </style>
 
-{% if user_demo==1 %}
-<p><i>Demo mode: This page lists the movies that have been uploaded to
-    the system. It is divided into three sections: <b>Your
-    Movies</b>, <b>Course Movies</b> and <b>Deleted</b></i></p>
+<div class='demo'>
+  <p><b>Plant Tracer Demo</b></p>
+  <p><i>This page lists the movies that have been uploaded to the system.</i></p>
+</div>
 
-{% endif %}
+<div class='nodemo'>
+  <h2>User Info </h2>
 
-<h2>User Info </h2>
-
-<div class='pure-control-group'>
-  <label for='name'>Name</label>
-  <span  id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
-  {% if user_demo==0 %}
+  <div class='pure-control-group'>
+    <label for='name'>Name</label>
+    <span  id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
     <span class='editor'   x-target-id='user-name' onclick='row_pencil_clicked(this)'> ✏️  </span>
     <span class="pure-form-message-inline">required; click pencil to change</span>
-  {% endif %}
-</div>
+  </div>
 
-<div class='pure-control-group'>
-  <label for='email'>Email Address</label>
-  <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
-  {% if user_demo==0 %}
+  <div class='pure-control-group'>
+    <label for='email'>Email Address</label>
+    <span id='user-email' x-user_id='{{user_id}}' x-property='email'>{{user_email}}</span>
     <span class='editor'  x-target-id='user-email' onclick='row_pencil_clicked(this)'> ✏️  </span>
     <span class="pure-form-message-inline">required; click pencil to change</span>
-  {% endif %}
+  </div>
 </div>
 
-<h2>Your Movies</h2>
-<p>(<a href="/upload">click here to upload a new movie</a>)</p>
-<h3>Published</h3>
-<p class='instructions'><i>Published movies can be viewed by anyone in
-    your course. Click the 'unpublish' button to unpublish a
-    movie. Click the 'delete' button to delete a movie.</i></p>
-<div class='mtable' id='your-published-movies'></div>
+<div class='nodemo'>
+  <h2>Your Movies</h2>
+  <p>(<a href="/upload">click here to upload a new movie</a>)</p>
+  <h3>Published</h3>
+  <p class='instructions'><i>Published movies can be viewed by anyone in
+      your course. Click the 'unpublish' button to unpublish a
+      movie. Click the 'delete' button to delete a movie.</i></p>
+  <div class='mtable' id='your-published-movies'></div>
 
-<h3>Unpublished</h3>
-<p class='instructions'><i>Unpublished movies can only be seen by you
-    and the course instructor. Only the course instructor can
-    published a movie. Click the 'delete' button to delete a movie.</i></p>
-<div class='mtable' id='your-unpublished-movies'></div>
+  <h3>Unpublished</h3>
+  <p class='instructions'><i>Unpublished movies can only be seen by you
+      and the course instructor. Only the course instructor can
+      published a movie. Click the 'delete' button to delete a movie.</i></p>
+  <div class='mtable' id='your-unpublished-movies'></div>
+</div>
 
-<h3> Course movies for {{primary_course_name}}</h3>
-<p class='instructions'><i>These are the course movies available to you from other students in your course.</i></p>
+<h3 class='nodemo'> Course movies for {{primary_course_name}}</h3>
+<h3 class='demo'> Course movies for demo mode</h3>
+<p class='instructions' class='nodemo'><i>These are the course movies available to you from other students in your course.</i></p>
 <p class='instructions'> Students can only see the published movies of
-    other students, while the course admin can see all of the movies. </p>
+  other students, while the course admin can see all of the movies. </p>
 
 {% if admin %}
 <p class='instructions'>Admins can publish or unpublish movies by checking or unchecking
@@ -95,9 +94,13 @@ students can delete or undelete their own movies.</p>
 {% endif %}
 <div class='mtable' id='course-movies'></div>
 
-<h3>Deleted</h3>
-<p class='instructions'><i>Deleted movies will be automatically purged after two weeks. To restore a movie, uncheck its 'deleted' box.</i></p>
-<div class='mtable' id='your-deleted-movies'></div>
+<div class='nodemo'>
+  <h3>Deleted</h3>
+  <p class='instructions'>
+    <i>Deleted movies will be automatically purged
+      after two weeks.  To restore a movie, uncheck its 'deleted' box.</i></p>
+  <div class='mtable' id='your-deleted-movies'></div>
+</div>
 
 <script>
 $( document ).ready( function() {

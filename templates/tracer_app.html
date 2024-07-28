@@ -1,8 +1,10 @@
 <!-- This is the HTML for the plant tracer application. It is included by:
-   -- demo_tracer1.html --- shows the image before any tracking. Only the first frame shows, and we can move the trace points. Used in development
+   -- demo_tracer1.html --- shows the image before any tracking. Only the first frame shows,
+                            and we can move the trace points. Used in development
                             with a single frame from static/demo/frame0.jpg
 
-   -- demo_tracer2.html --- shows the image after initial tracing. Any frame can be shown, and we can move the trace points. Used in development
+   -- demo_tracer2.html --- shows the image after initial tracing. Any frame can be shown,
+                             and we can move the trace points. Used in development
                             with the zipfile in static/demo/frames.zip
 
    -- analyze.html      --- the actual application!
@@ -10,7 +12,7 @@
 
     <div id='tracer'>
         <div class='float-movie'>
-            <form action='javascript:void(0)'>
+            <form action='javascript:void(0)' class='nodemo'>
                 <input type='button' value='rotate movie 90º' class='rotate_movie' disabled/>
             </form>
             <canvas id="canvas-id" width='640' height='480'> </canvas>
@@ -41,16 +43,21 @@
                 </select>
             </form>
         </div>
+        <!-- Marker table start -->
         <div class='float-controls'>
             <table class="pure-table pure-table-horizontal pure-table-striped">
                 <thead>
-                    <tr><th>Marker</th><th>Name</th><th>Location (pixels)</th><th>Location (cm)</th><th>Delete</th></tr>
+                    <tr><th>Marker</th>
+                        <th>Name</th>
+                        <th>Location (pixels)</th>
+                        <th>Location (cm)</th>
+                        <th class='nodemo'>Delete</th></tr>
                 </thead>
                 <tbody class='marker_table_body'>
                 </tbody>
             </table>
             <hr>
-            <form class='pure-form pure-form-aligned marker_form' action="javascript:void(0)" >
+            <form class='pure-form pure-form-aligned marker_form nodemo' action="javascript:void(0)" >
                 <fieldset>
                     <p>Add another marker by entering the new marker name:</p>
                     <div class='pure-control-group'>
@@ -76,5 +83,17 @@
                     </div>
                 </fieldset>
             </form>
-        </div> <!-- right controls -->
+        </div>
+        <!-- Marker table end -->
     </div> <!-- tracer controller -->
+
+<!-- popup content is normally hidden -->
+    <div id='demo-popup' class="popup" popup-name="popup-1">
+        <div class="popup-content">
+            <h2>Running in Demo Mode!</h2>
+            <p>Analysis is running in demo mode.
+                Moved trace points are not saved,
+                and will be lost when you change to a different movie frame.</p>
+            <a id='demo-popup-close' class="close-button" popup-close="popup-1" href="javascript:void(0)">x</a>
+        </div>
+    </div>
