@@ -16,7 +16,7 @@
         "num_retained_versions":1,
         "cloudwatch_retention_days":1,
         "log_level" : "WARNING",
-        "memory_size" : 1024,
+        "memory_size" : 512,
         "s3_bucket" : "planttracer-zappa-lambda",
         "timeout_seconds": 900,
         "environment_variables": {
