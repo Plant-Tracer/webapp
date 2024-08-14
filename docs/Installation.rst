@@ -23,7 +23,7 @@ Installation
 
     $ make install-ubuntu
 
-4. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`.
+4. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (If you give your credentials file a different name for any reason, make sure NOT to sync it bak to the GitHub repository; this is too easy to do, so be careful!)
 
 5. Now you need to create the database. This should be pretty automatic:
 
