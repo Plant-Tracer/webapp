@@ -86,7 +86,13 @@ Installation
 
     $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
 
-13. A specifc case: running with movies stored in MySQL rather than S3 and in demo mode::
+13. A specific case: running with movies stored in MySQL rather than S3::
+
+.. code-block::
+
+    $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py --storelocal
+
+14. Another case: running in demo mode, with movies stored in MySQL rather than S3::
 
 .. code-block::
 
