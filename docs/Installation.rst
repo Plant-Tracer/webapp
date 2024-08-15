@@ -13,10 +13,6 @@ Requirements and Preparation
 
 * python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
-* A python venv (Virtual Environment) directory for working with this repository. For example, to create one::
-
-    $ python -m venv ~/venv/planttracer
-
 Installation
 ------------
 
@@ -24,19 +20,27 @@ Installation
 
     $ mv demo.planttracer.com demo-old
 
-2. Clone the planttracer web app into the hosting directory::
+2. Clone the planttracer web app into the hosting directory, for example demo.planttracer.com::
 
     $ git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git demo.planttracer.com
 
-3. Create a link to the Python venv under the local repository directory::
+3. Change to the local repository directory::
 
-    $ cd demo.planttracer.com; ln -s ~/venv/planttracer venv
+    $ cd demo.planttracer.com
 
 4. Install the prerequisites with make install-<your-os>, e.g.::
 
     $ make install-ubuntu
 
 5. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (Do not add your .ini files to the repo. This is blocked by the .gitignore file, but it can be overridden.)
+
+6. Make or use a Python Virtual Environment (venv). If you want to create a new venv to use when working with this repository::
+
+   $ make venv
+
+If you'd prefer to use a pre-existing venv (not recommended for deployment)::
+
+   $ ln -s ~/venv/planttracer venv # or whatever location you keep your venvs
 
 6. Now you need to create the database. This should be pretty automatic::
 
