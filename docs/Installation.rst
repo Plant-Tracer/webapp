@@ -82,5 +82,13 @@ Installation
 
 12. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is::
 
+.. code-block::
+
     $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
+
+13. A specifc case: running with movies stored in MySQL rather than S3 and in demo mode::
+
+.. code-block::
+
+    $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal
 
