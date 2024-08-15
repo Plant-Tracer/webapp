@@ -44,23 +44,43 @@ Installation
 
    $ ln -s ~/venv/planttracer venv # or whatever location you keep your venvs
 
-6. Now you need to create the database. This should be pretty automatic::
+   * Active the venv::
+
+   $ . venv/bin/activate
+
+7. Now you need to create the database. This should be pretty automatic::
 
    $ export MYSQL_ROOT_PASSWORD=testrootpass
    $ make create_localdb
 
-7. Run the self-tests::
+8. Run the self-tests::
 
    $ make pytest-quiet
 
-8. Create your first course! If you want, give it a demo account too::
+9. Create your first course! If you want, give it a demo account too::
 
    $ python dbmaint.py --create_course "Demo Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
    course_key: leact-skio-proih
 
-9. You now have a course key! If the demo account is made, you have that too.
+10. You now have a course key! If the demo account is made, you have that too.
 
-10. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is::
+11. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
+
+.. code-block::
+
+    [smtp]
+    SMTP_USERNAME=plantadmin@mycompany.com
+    SMTP_PASSWORD=MyPassword
+    SMTP_PORT=587
+    SMTP_HOST=smtp.mycompany.com
+       
+    [imap]
+    IMAP_USERNAME=plantadmin@mycompany.com
+    IMAP_PASSWORD=MyPassword
+    IMAP_HOST=imap.mycompany.com
+    IMAP_PORT=993
+
+12. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is::
 
     $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
 
