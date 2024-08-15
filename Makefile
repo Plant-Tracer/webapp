@@ -137,7 +137,7 @@ create_localdb:
 	@echo etc/credentials.ini will be used automatically by other tests
 	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
-	$(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
