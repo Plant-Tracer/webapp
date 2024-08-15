@@ -16,7 +16,7 @@ Requirements and Preparation
 Installation
 ------------
 
-1. Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is `demo.plantracer.com`:
+1. Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is `demo.plantracer.com`::
 
     $ mv demo.planttracer.com demo-old
 
@@ -34,11 +34,13 @@ Installation
 
 5. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (Do not add your .ini files to the repo. This is blocked by the .gitignore file, but it can be overridden.)
 
-6. Make or use a Python Virtual Environment (venv). If you want to create a new venv to use when working with this repository::
+6. Make or use a Python Virtual Environment (venv).
+
+   * If you want to create a new venv to use when working with this repository::
 
    $ make venv
 
-If you'd prefer to use a pre-existing venv (not recommended for deployment)::
+   * If you'd prefer to use a pre-existing venv (not recommended for deployment)::
 
    $ ln -s ~/venv/planttracer venv # or whatever location you keep your venvs
 
