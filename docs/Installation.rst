@@ -28,13 +28,7 @@ Installation
 
     $ cd demo.planttracer.com
 
-4. Install the prerequisites with make install-<your-os>, e.g.::
-
-    $ make install-ubuntu
-
-5. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (Do not add your .ini files to the repo. This is blocked by the .gitignore file, but it can be overridden.)
-
-6. Make or use a Python Virtual Environment (venv).
+4. Make or use a Python Virtual Environment (venv).
 
    * If you want to create a new venv to use when working with this repository::
 
@@ -48,23 +42,43 @@ Installation
 
    $ . venv/bin/activate
 
-7. Now you need to create the database. This should be pretty automatic::
+5. Install the prerequisites with make install-<your-os>, e.g.::
+
+    $ make install-ubuntu
+
+6. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (Do not add your .ini files to the repo. This is blocked by the .gitignore file, but it can be overridden.)
+
+7. Make or use a Python Virtual Environment (venv).
+
+   * If you want to create a new venv to use when working with this repository::
+
+   $ make venv
+
+   * If you'd prefer to use a pre-existing venv (not recommended for deployment)::
+
+   $ ln -s ~/venv/planttracer venv # or whatever location you keep your venvs
+
+   * Active the venv::
+
+   $ . venv/bin/activate
+
+8. Now you need to create the database. This should be pretty automatic::
 
    $ export MYSQL_ROOT_PASSWORD=testrootpass
    $ make create_localdb
 
-8. Run the self-tests::
+9. Run the self-tests::
 
    $ make pytest-quiet
 
-9. Create your first course! If you want, give it a demo account too::
+10. Create your first course! If you want, give it a demo account too::
 
    $ python dbmaint.py --create_course "Demo Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
    course_key: leact-skio-proih
 
-10. You now have a course key! If the demo account is made, you have that too.
+11. You now have a course key! If the demo account is made, you have that too.
 
-11. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
+12. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
 
 .. code-block::
 
@@ -80,19 +94,19 @@ Installation
     IMAP_HOST=imap.mycompany.com
     IMAP_PORT=993
 
-12. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is::
+13. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is::
 
 .. code-block::
 
     $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
 
-13. A specific case: running with movies stored in MySQL rather than S3::
+14. A specific case: running with movies stored in MySQL rather than S3::
 
 .. code-block::
 
     $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py --storelocal
 
-14. Another case: running in demo mode, with movies stored in MySQL rather than S3::
+15. Another case: running in demo mode, with movies stored in MySQL rather than S3::
 
 .. code-block::
 
