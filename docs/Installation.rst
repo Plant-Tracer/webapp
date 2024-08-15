@@ -5,13 +5,16 @@ Requirements and Preparation
 ----------------------------
 * A home directory on Dreamhost (or another web hosting provider) that provides passengers, or some other wsgi-based approach for running a Python Bottle app (e.g. `mod_wsgi` on Apache).
 
-* A MySQL database with three users defined in a mysql credentials file:
+* A MySQL database and a locally installed mysql client. 
+  - You may use a pre-existing MySQL database, and if so, please prepare a mysql credentials file with three users defined:
 
     * `[client]` which can modify the schema
     * `[dbreader]` which can read the database
     * `[dbwriter]` which can write the database
 
-* python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
+  - Alternatively, if desired, these instructions will create a database that can be used locally, usually for development purposes. This process creates a mysql credentials file for this new database in etc/credentials.ini
+
+* If installing on ubuntu or windows, ensure that python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date. (Python is installed automatically using brew on MacOS if not present, using the steps in this document.)
 
 * If installing on a MacOS machine, HomeBrew must be installed prior to performing the steps below.
 
@@ -48,9 +51,11 @@ Installation
 
     $ make install-ubuntu
 
-6. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. (Do not add your .ini files to the repo. This is blocked by the .gitignore file, but it can be overridden.)
+6. If using a pre-created MySQL database, copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for `[client]`, `[dbreader]` and `[dbwriter]`. 
 
-7. Now you need to create the database. This should be pretty automatic::
+   * Do not add any other .ini files to the repo. etc/credentials.ini is blocked by the .gitignore file, but it can be overridden.
+
+7. If not using a pre-created MySQL database, you may automatically create a new local database named actions_test::
 
    $ export MYSQL_ROOT_PASSWORD=testrootpass
    $ make create_localdb
@@ -61,7 +66,7 @@ Installation
 
 9. Create your first course! If you want, give it a demo account too::
 
-   $ python dbmaint.py --create_course "Demo Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+   $ python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
    course_key: leact-skio-proih
 
    * You now have a course key! If the demo account is made, you have that too.
