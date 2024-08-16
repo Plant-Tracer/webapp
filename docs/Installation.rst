@@ -66,7 +66,7 @@ Installation
 
 9. Create your first course! If you want, give it a demo account too::
 
-   $ python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
    course_key: leact-skio-proih
 
    * You now have a course key! If the demo account is made, you have that too.
