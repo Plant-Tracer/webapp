@@ -122,7 +122,7 @@ validate-email-address==1
 w3lib==2.1.2
 waitress==3.0.0
 webdriver-manager==4.0.1
-WebOb==1.8.7
+WebOb==1.8.8
 WebTest==3.0.0
 Werkzeug==3.0.3
 WSGIserver==1.3
