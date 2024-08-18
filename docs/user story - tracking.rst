@@ -4,20 +4,28 @@ User Story
 ==========
 
 #. User uploads a movie with the (existing) **upload** feature. Movie is uploaded as an MP4.  IMPLEMENTED
+
    - [ ]  If the user uploads a quicktime, convert it to an MP4 with ffpmeg: https://superuser.com/questions/1155186/convert-mov-video-to-mp4-with-ffmpeg.
+
 #. User clicks "analyze" on the movie list.  IMPLEMENTED
+
    * Screen clears and shows the first frame of the movie with the tools for adding and moving trackpoints.
+
    - [ ] `frame_start` is set to 0.
    - [ ] A text field with the frame number is shown.
    - [ ] A new button `goto frame N` is available.  We use frame number.
    - [ ] Requires update to get-frame API that gets frame N from the movie
    - [ ] Requires update to get-frame implementation to use Quicktime API to stream through the movie and choose the Nth frame.
+
 #. User identifies four points:
+
    * ruler0  - the origin of the calibration ruler.
    * rulerNN - the location of milimeter NN on the ruler. (e.g. ruler10 for the 10mm/1cm mark)
    * plant1  - a control point on the plant being monitored
    * plant2  - Another control point on the plant being monitored.
-   - [ ] The above message is displayed as a help message in the analysis pane. The message is specified in the file analysis.js.
+
+     - [ ] The above message is displayed as a help message in the analysis pane. The message is specified in the file analysis.js.
+
 #. User clicks "track movie"
 
    - [ ] `analyze.js` sends the trackpoints to the server with the `/api/put-frame-analysis` API call.
