@@ -26,7 +26,7 @@ Download the .dmg from dev.mysql.com:
 
 - If you want, sign Up for an Oracle Web account if you don't already have one, or Login if you do
 
-- But you can just click on the *No thanks, just start my download link underneat the big Login/Sign Up buttons
+- But you can just click on the *No thanks, just start my download link underneat the big Login/Sign Up buttons*
 
 Install the DMG:
 
