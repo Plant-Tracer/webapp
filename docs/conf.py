@@ -15,7 +15,7 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from constants import __version__
 
 project = 'Plant Tracer Web Application'
-copyright = ' 2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
+copyright = '2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
 author = 'Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
 release = '1.0'
 
