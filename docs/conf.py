@@ -7,7 +7,6 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 # Add project root to pythonpath
-import os
 import sys
 
 from os.path import dirname,abspath
@@ -16,8 +15,8 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from constants import __version__
 
 project = 'Plant Tracer Web Application'
-copyright = '2024, Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner'
-author = 'Simson Garfinkel, Steve Barber, JoAnn Juzefyk, Eric Brenner'
+copyright = ' 2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
+author = 'Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
 release = '1.0'
 
 # -- General configuration ---------------------------------------------------
