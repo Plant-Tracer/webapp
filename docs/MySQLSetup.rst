@@ -69,15 +69,15 @@ Verify the installation:
 
 - Open a Terminal and execute::
 
-mysqladmin -u root -p
-Enter password: (enter root password here)
+   $ mysqladmin -u root -p
+   Enter password: (enter root password here)
 
 - If that looks successful -- no errors, great.
 
 - Connect to the server with the mysql client::
 
-mysql -u root -p
-Enter password: (enter root password here)
+   $ mysql -u root -p
+   Enter password: (enter root password here)
 
 - If you get a mysql> prompt, then the client is able to connect to the server. Also great.
 - Enter the quit command to quit the mysql client
