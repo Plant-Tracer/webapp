@@ -81,6 +81,8 @@ Setup Steps
 
 #. Another case: running in demo mode, with movies stored in MySQL rather than S3:
 
+   * Note: there must be no user logged in for demo mode to take effect. May have to clear browser cookies.
+
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal
+       $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal

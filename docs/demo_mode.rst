@@ -36,9 +36,9 @@ Required in the database
 Implementation
 --------------
 
-- Only checks for demo mode if PLANTTRACER_DEMO_MODE_AVAILABLE environment variable is set to 1
+- Only checks for demo mode if ``PLANTTRACER_DEMO_MODE_AVAILABLE`` environment variable is set to 1
 
-- If PLANTTRACER_DEMO_MODE_AVAILABLE is set and there is no user logged in, then we are in DEMO_MODE
+- If ``PLANTTRACER_DEMO_MODE_AVAILABLE`` is set and there is no user logged in, then we are in DEMO_MODE
 
 - If we are in DEMO_MODE
 
@@ -52,7 +52,7 @@ Implementation
 
     - (To get out of demo mode, you'll need to click on a link that has a different API key)
 
-- 'demo' JavaScript global variable set to `true` (if in demo mode)
+- ``demo`` JavaScript global variable set to ``true`` (if in demo mode)
 
-- 'demo' Jinja2 variable will get set to true (otherwise it is false)
+- ``demo`` Jinja2 variable will get set to ``true`` (otherwise it is ``false``)
 
