@@ -18,53 +18,55 @@ Requirements and Preparation
 Installation
 ------------
 
-1. Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is `demo.plantracer.com`::
+#. Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is `demo.plantracer.com`::
 
     $ mv demo.planttracer.com demo-old
 
-2. Clone the planttracer web app into the hosting directory, for example demo.planttracer.com::
+#. Clone the planttracer web app into the hosting directory, for example demo.planttracer.com::
 
     $ git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git demo.planttracer.com
 
-3. Change to the local repository directory::
+#. Change to the local repository directory::
 
     $ cd demo.planttracer.com
 
-4. Make Python Virtual Environment (venv)::
+#. Make Python Virtual Environment (venv)::
 
    $ make venv
 
-5. Activate the venv::
+#. Activate the venv::
 
    $ . venv/bin/activate
 
-6. Install the prerequisites with make install-<your-os>, e.g.::
+#. Install the prerequisites with make install-<your-os>, e.g.::
 
     $ make install-ubuntu
 
-7. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for ``[client]``, ``[dbreader]`` and ``[`dbwriter]``. 
+#. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for ``[client]``, ``[dbreader]`` and ``[`dbwriter]``. 
 
    * Do not add any other .ini files to the repo. etc/credentials.ini is blocked by the .gitignore file, but it can be overridden.
 
-8. Create a new local database (named actions_test)::
+#. Create a new local database (named actions_test)::
 
    $ export MYSQL_ROOT_PASSWORD=testrootpass
    $ make create_localdb
 
-8. Run the self-tests::
+#. Run the self-tests::
 
-   $ make pytest-quiet
+   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
 
-9. Create your first course! If you want, give it a demo account too::
+#. Create your first course! If you want, give it a demo account too:
 
-   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
-   course_key: leact-skio-proih
+   .. code-block::
 
-   * You now have a course key! If the demo account is made, you have that too.
+    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+    course_key: leact-skio-proih
 
-10. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
+#. You now have a course key! If the demo account is made, you have that too.
 
-.. code-block::
+#. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
+
+   .. code-block::
 
     [smtp]
     SMTP_USERNAME=plantadmin@mycompany.com

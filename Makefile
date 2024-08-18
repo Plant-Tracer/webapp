@@ -8,7 +8,6 @@ PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
-
 ################################################################
 # Manage the virtual environment
 ACTIVATE   = . venv/bin/activate
@@ -24,7 +23,6 @@ venv:
 
 ################################################################
 #
-
 # By default, PYLINT generates an error if your code does not rank 10.0.
 # This makes us tolerant of minor problems.
 
@@ -63,7 +61,6 @@ isort-check:
 flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
-
 
 #
 # In the tests below, we always test the database connectivity first
@@ -127,10 +124,8 @@ test-schema-upgrade:
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
 
-
 ################################################################
 ### Database management for testing and CI/CD
-
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
@@ -138,7 +133,7 @@ create_localdb:
 	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
 	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
 	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
@@ -183,7 +178,6 @@ clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
 
-
 tracker-debug:
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
@@ -195,7 +189,6 @@ eslint:
 
 jscoverage:
 	npm run coverage
-
 
 ################################################################
 # Installations are used by the CI pipeline:
@@ -243,7 +236,7 @@ install-windows:
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 ################################################################
-## Python maintence and Zappa deployment
+## Python maintenance and Zappa deployment
 
 # https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
 update-python:
