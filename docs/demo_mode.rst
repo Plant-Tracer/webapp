@@ -56,3 +56,14 @@ Implementation
 
 - ``demo`` Jinja2 variable will get set to ``true`` (otherwise it is ``false``)
 
+Troubleshooting/Development Note
+--------------------------------
+
+Plant-Tracer webapp creates an api_key-<database name> cookie in order to tracker
+the login state of a session. Sometimes this cookie does not clear itself upon logout
+and it is necessary to manually delete the cookie, especially in order to have a valid
+demo mode enabled.
+
+Here is an example of such a cookie:
+
+.. image:: media/PlantTracerCookieExample.png
