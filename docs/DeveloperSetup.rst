@@ -75,6 +75,9 @@ Setup Steps
     IMAP_HOST=imap.mycompany.com
     IMAP_PORT=993
 
+Running Locally Quick Start
+---------------------------
+
 #. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is:
 
    .. code-block::
