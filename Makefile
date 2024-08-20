@@ -1,7 +1,8 @@
 # Makefile for Planttracer web application
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
-# - Updated to handle virtual environment.
+# - Updated to handle virtual environment
+# - Simple CRUD management of local database instance for developers
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
@@ -127,17 +128,19 @@ test-schema-upgrade:
 ################################################################
 ### Database management for testing and CI/CD
 
+LOCAL_DB_NAME=actions_test
+
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
 	@echo etc/credentials.ini will be used automatically by other tests
-	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig etc/github_actions_mysql_rootconfig.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb $(LOCAL_DB_NAME) --schema etc/schema_0.sql --writeconfig etc/credentials.ini
 	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
 	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb $(LOCAL_DB_NAME) --writeconfig etc/credentials.ini
 	/bin/rm -f etc/credentials.ini
 
 coverage:
