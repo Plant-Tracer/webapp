@@ -1,7 +1,7 @@
 # https://coderefinery.github.io/documentation/gh_workflow/
 name: doctest
 
-on: [workflow_dispatch]
+on: [push, workflow_dispatch]
 
 permissions:
   contents: write
