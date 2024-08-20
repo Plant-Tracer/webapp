@@ -128,7 +128,7 @@ test-schema-upgrade:
 ################################################################
 ### Database management for testing and CI/CD
 
-PLANTTRACER_LOCALDB_NAME=actions_test
+PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
