@@ -148,6 +148,10 @@ coverage:
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
+run-local:
+	@echo run bottle locally, storing new data in database
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PY) bottle_app.py --storelocal
+
 debug:
 	make debug-local
 

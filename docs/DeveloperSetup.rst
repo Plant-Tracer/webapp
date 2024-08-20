@@ -78,6 +78,12 @@ Setup Steps
 Running Locally Quick Start
 ---------------------------
 
+#. Run Plant-Tracer/webapp locally using the database created above and the default etc/credentials.ini file
+
+   .. code-block::
+
+    make run-local # Ctrl-C to quit
+
 #. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is:
 
    .. code-block::
