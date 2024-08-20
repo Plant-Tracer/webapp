@@ -15,39 +15,47 @@ Setup Steps
 
 #. Clone the Plant Tracer webapp into a directory that will be the local repository, for example::
 
-    $ git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git webapp
+    git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git webapp
 
 #. Change to the local repository directory::
 
-    $ cd webapp
+    cd webapp
 
 #. Make a Python Virtual Environment (venv)::
 
-    $ make venv
+    make venv
 
 #. Activate the venv::
 
-   $ . venv/bin/activate
+    . venv/bin/activate
 
 #. Install the prerequisites with make install-<your-os>, e.g.::
 
-    $ make install-macos
+    make install-macos
 
-#. Create a new local database, which will be named actions_test::
+#. Create a new local database
 
-   $ export MYSQL_ROOT_PASSWORD=testrootpass
-   $ make create_localdb
+    * The database will be named actions_test by default
 
-#. Run the self-tests::
+    * You may override the default with the ``PLANTTRACER_LOCALDB_NAME`` environment variable
 
-   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
+    .. code-block::
+
+       export MYSQL_ROOT_PASSWORD="your-mysql-root-password"
+       make create_localdb
+
+#. Run the self-tests:
+
+   .. code-block::
+
+    PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
 
 #. Create your first course! If you want, give it a demo account too:
 
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
-    course_key: leact-skio-proih #save this course_key, you will need it later!
+    PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+    >>> course_key: leact-skio-proih #save this course_key, you will need it later!
 
 #. You now have a course key! If the demo account is made, you have that too.
 
@@ -71,13 +79,13 @@ Setup Steps
 
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
+    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
 
 #. A specific case: running with movies stored in MySQL rather than S3:
 
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py --storelocal
+    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py --storelocal
 
 #. Another case: running in demo mode, with movies stored in MySQL rather than S3:
 
@@ -85,7 +93,7 @@ Setup Steps
 
    .. code-block::
 
-       $ PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal
+       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 
