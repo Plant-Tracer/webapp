@@ -1,13 +1,13 @@
 # Makefile for Planttracer web application
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
-# - Updated to handle virtual environment.
+# - Updated to handle virtual environment
+# - Simple CRUD management of local database instance for developers
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
-
 
 ################################################################
 # Manage the virtual environment
@@ -24,7 +24,6 @@ venv:
 
 ################################################################
 #
-
 # By default, PYLINT generates an error if your code does not rank 10.0.
 # This makes us tolerant of minor problems.
 
@@ -63,7 +62,6 @@ isort-check:
 flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
-
 
 #
 # In the tests below, we always test the database connectivity first
@@ -127,28 +125,32 @@ test-schema-upgrade:
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
 
-
 ################################################################
 ### Database management for testing and CI/CD
 
+PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
 	@echo etc/credentials.ini will be used automatically by other tests
-	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig etc/github_actions_mysql_rootconfig.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema etc/schema_0.sql --writeconfig etc/credentials.ini
 	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME) --writeconfig etc/credentials.ini
 	/bin/rm -f etc/credentials.ini
 
 coverage:
 	$(PYTHON) -m pip install --upgrade pip
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
+
+run-local:
+	@echo run bottle locally, storing new data in database
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PY) bottle_app.py --storelocal
 
 debug:
 	make debug-local
@@ -183,7 +185,6 @@ clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
 
-
 tracker-debug:
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
@@ -195,7 +196,6 @@ eslint:
 
 jscoverage:
 	npm run coverage
-
 
 ################################################################
 # Installations are used by the CI pipeline:
@@ -233,7 +233,7 @@ install-macos:
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-ubuntu.txt ; fi
+	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
 	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 # Includes Windows dependencies
@@ -243,7 +243,7 @@ install-windows:
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 ################################################################
-## Python maintence and Zappa deployment
+## Python maintenance and Zappa deployment
 
 # https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
 update-python:
