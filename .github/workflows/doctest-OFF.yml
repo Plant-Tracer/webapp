@@ -1,7 +1,17 @@
 # https://coderefinery.github.io/documentation/gh_workflow/
-name: documentation
+name: doctest
 
-on: [push, pull_request, workflow_dispatch]
+# This workflow is for testing out documentation builds while working in branches
+
+# Really the only differences between this and documentation.yml are:
+# 1) trigger conditions (on)
+# 2) publish to the gh-pages-test branch, not gh-pages
+# 3) deployment isn't conditional on the branch being 'main'
+#
+# Beware of this file getting out of sync with documentation.yml. Might be easier to just
+# copy and edit from documentation.yml each time!
+
+on: [push, workflow_dispatch]
 
 permissions:
   contents: write
@@ -22,9 +32,8 @@ jobs:
           sphinx-build docs _build
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
-          publish_branch: gh-pages
+          publish_branch: gh-pages-test
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: _build/
           force_orphan: true

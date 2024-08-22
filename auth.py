@@ -67,7 +67,7 @@ def http404(msg=''):
 def get_dbreader():
     """Get the dbreader authentication info from:
     1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbreader] section of the file etc/credentials.ini
+    2 - the [dbreader] section of the credentials file
     """
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbreader')
 
@@ -76,7 +76,7 @@ def get_dbreader():
 def get_dbwriter():
     """Get the dbwriter authentication info from:
     1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbwriter] section of the file etc/credentials.ini
+    2 - the [dbwriter] section of the credentials file
     """
     logging.debug("get_dbwriter. credentials_file=%s",credentials_file())
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
