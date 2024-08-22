@@ -384,7 +384,8 @@ if __name__ == "__main__":
     parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
     parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
-    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ')
+    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ',
+                        action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)

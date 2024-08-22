@@ -1,13 +1,13 @@
 # Makefile for Planttracer web application
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
-# - Updated to handle virtual environment
-# - Simple CRUD management of local database instance for developers
+# - Updated to handle virtual environment.
 
 PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
+
 
 ################################################################
 # Manage the virtual environment
@@ -24,6 +24,7 @@ venv:
 
 ################################################################
 #
+
 # By default, PYLINT generates an error if your code does not rank 10.0.
 # This makes us tolerant of minor problems.
 
@@ -63,6 +64,7 @@ flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
+
 #
 # In the tests below, we always test the database connectivity first
 # It makes no sense to run the tests otherwise
@@ -71,12 +73,12 @@ flake:
 ## Dynamic Analysis
 
 pytest-db: $(REQ)
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 
 pytest:  $(REQ)
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
@@ -85,35 +87,35 @@ pytest:  $(REQ)
 TEST1MODULE=tests/app_test.py
 TEST1FUNCTION="-k test_templates"
 pytest1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest-selenium:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-debug1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo run in debug mode but stop on first error
 	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
 
 pytest-app-framework:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo validate app framework
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
 pytest-quiet:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDETIALS is not set; exit 1; fi
 	@echo quietly make pytest and stop at the firt error
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -125,32 +127,28 @@ test-schema-upgrade:
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) dbmaint.py --rootconfig etc/mysql-root-localhost.ini --dropdb test_db1
 
+
 ################################################################
 ### Database management for testing and CI/CD
 
-PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to etc/credentials.ini using etc/github_actions_mysql_rootconfig.ini
 	@echo etc/credentials.ini will be used automatically by other tests
-	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema etc/schema_0.sql --writeconfig etc/credentials.ini
-	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
-	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) dbmaint.py --create_client=$$MYSQL_ROOT_PASSWORD                 --writeconfig etc/github_actions_mysql_rootconfig.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini  --createdb actions_test --schema etc/schema_0.sql --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --upgradedb --loglevel DEBUG
+	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using etc/github_actions_mysql_rootconfig.ini
-	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME) --writeconfig etc/credentials.ini
+	$(PYTHON) dbmaint.py --rootconfig etc/github_actions_mysql_rootconfig.ini --dropdb actions_test --writeconfig etc/credentials.ini
 	/bin/rm -f etc/credentials.ini
 
 coverage:
 	$(PYTHON) -m pip install --upgrade pip
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
-
-run-local:
-	@echo run bottle locally, storing new data in database
-	PLANTTRACER_CREDENTIALS=etc/credentials.ini $(PY) bottle_app.py --storelocal
 
 debug:
 	make debug-local
@@ -185,6 +183,7 @@ clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
 
+
 tracker-debug:
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
@@ -198,6 +197,7 @@ jscoverage:
 	npm install --save-dev jest
 	npm install --save-dev babel-jest @babel/core @babel/preset-env
 	npm test
+
 
 ################################################################
 # Installations are used by the CI pipeline:
@@ -245,7 +245,7 @@ install-windows:
 	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 ################################################################
-## Python maintenance and Zappa deployment
+## Python maintence and Zappa deployment
 
 # https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
 update-python:
