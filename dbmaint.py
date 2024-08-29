@@ -360,39 +360,39 @@ def dump(config,dumpdir):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Database Maintenance Program. Database to act upon is specified in the PLANTTRACER_CREDENTIALS environment variable for [dbreader] and [dbwriter]",
+    parser = argparse.ArgumentParser(description="Database Maintenance Program. The database to act upon is specified in the ini file specified by the PLANTTRACER_CREDENTIALS environment variable, in the sections for [dbreader] and [dbwriter]",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
     required.add_argument(
         "--rootconfig",
-        help='specify config file with MySQL database root credentials in [client] section. '
+        help='Specify config file with MySQL database root credentials in [client] section. '
         'Format is the same as the mysql --defaults-extra-file= argument')
-    parser.add_argument("--sendlink", help="send link to the given email address, registering it if necessary.")
-    parser.add_argument("--mailer_config", help="print mailer configuration",action='store_true')
+    parser.add_argument("--sendlink", help="Send link to the given email address, registering it if necessary.")
+    parser.add_argument("--mailer_config", help="Print mailer configuration",action='store_true')
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb",
                         help='Create a new database and a dbreader and dbwriter user. Database must not exist. '
-                        'Requires that the variables MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, and MYSQL_USER '
-                        'are all set with a MySQL username that can issue the "CREATE DATABASE" command. '
+                        'Requires that the variables MYSQL_DATABASE and MYSQL_HOST are set, and that MYSQL_PASSWORD and MYSQL_USER '
+                        'are set with a MySQL username that can issue the "CREATE DATABASE" command.'
                         'Outputs setenv for DBREADER and DBWRITER')
     parser.add_argument("--upgradedb", help='Upgrade a database schema',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
-    parser.add_argument("--readconfig",   help="specify the config.ini file to read")
-    parser.add_argument("--writeconfig",  help="specify the config.ini file to write.")
+    parser.add_argument("--readconfig",   help="Specify the config.ini file to read")
+    parser.add_argument("--writeconfig",  help="Specify the config.ini file to write.")
     parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
     parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database', action='store_true')
-    parser.add_argument("--purge_movie",help="remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--create_client",help="create a [client] section with a root username and the specified password")
+    parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
+    parser.add_argument("--create_client",help="Create a [client] section with a root username and the specified password")
     parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload two demo movies ')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
-    parser.add_argument("--report",help="print a report of the database",action='store_true')
+    parser.add_argument("--report",help="Print a report of the database",action='store_true')
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
-    parser.add_argument("--schema", help="specify schema file to use", default=SCHEMA_FILE)
-    parser.add_argument("--dump", help="backup all objects as JSON files and movie files to new directory called DUMP.  ")
+    parser.add_argument("--schema", help="Specify schema file to use", default=SCHEMA_FILE)
+    parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
