@@ -594,9 +594,9 @@ def api_get_movie_metadata():
     if movie_metadata.get('movie_zipfile_urn',None):
         movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
-
     ret = {'error':False,
-           'metadata':movie_metadata}
+           'metadata':movie_metadata
+        }
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
