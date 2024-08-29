@@ -344,8 +344,8 @@ class TracerController extends MovieController {
         this.load_movie( dict_to_array(data.frames)); // reload the movie
         console.log("after load_movie. this.frames=",this.frames);
         this.download_link.show();
-        // change from 'track movie' to 'retrack movie' and re-enable it
-        $(this.div_selector + ' input.track_button').val( 'retrack movie.' );
+        // change from 'track movie' to 'Retrack movie' and re-enable it
+        $(this.div_selector + ' input.track_button').val( RETRACK_MOVIE );
         this.track_button.prop(DISABLED,false);
         // We do not need to redraw, because the frame hasn't changed
         */
