@@ -144,7 +144,7 @@ def test_templates(new_user):
             except FileNotFoundError:
                 pass
             raise
-        
+
     # Test the test infrastructure
     with pytest.raises(xml.etree.ElementTree.ParseError):
         validate_html("<a><b> this is invalid HTML</a></b>")
@@ -169,7 +169,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
         validate_html(bottle_app.func_privacy())
-        # validate_html(bottle_app.func_tos()) # throwing exception on perfectly valid HTML, comment out for now
+        validate_html(bottle_app.func_tos())
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_upload()
         with pytest.raises(bottle.HTTPResponse):
@@ -187,7 +187,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
         validate_html(bottle_app.func_privacy())
-        # validate_html(bottle_app.func_tos()) # throwing exception on perfectly valid HTML, comment out for now
+        validate_html(bottle_app.func_tos())
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
         validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
