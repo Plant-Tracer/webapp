@@ -124,19 +124,24 @@ def test_templates(new_user):
     # Add more entities as needed
     }   
 
+    def entity_handler(entity_name):
+        return entities.get(entity_name, None)
+
+    class XHTMLParser(xml.etree.ElementTree.XMLParser):
+        ''' An XMLParser that can handle a subset of XHTML predefined entities'''
+  
+        def __init(self):
+            self.parser = xml.parsers.expat.ParserCreate()
+            self.parser.EntityDeclHandler = entity_handler
+         
     # Create a custom XML parser with the entity resolver
     def create_parser():
         # parser = expat.ParserCreate()
-        parser = xml.etree.ElementTree.XMLParser()
+        parser = XHTMLParser()
         logging.info(str(parser.__class__))
         for attr in dir(parser):
             logging.info("parser.%s = %r" % (attr, getattr(parser, attr)))
 
-        # Register the entity handler
-        def entity_handler(entity_name):
-            return entities.get(entity_name, None)
-  
-        #parser.parser.EntityDeclHandler = entity_handler # no such attribute parser.parser, hmm
         return parser
 
     def dump_lines(text):
@@ -146,7 +151,7 @@ def test_templates(new_user):
     def validate_html(html, include_text=None, exclude_text=None):
         '''If xml.etree.ElementTree can't properly parse the (x)html, raise an error.'''
         try:
-            xml.etree.ElementTree.fromstring(html, create_parser())
+            xml.etree.ElementTree.fromstring(html, parser=create_parser())
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
