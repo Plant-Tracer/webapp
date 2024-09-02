@@ -2,8 +2,6 @@
 Tests for the application
 """
 
-
-import pytest
 import sys
 import os
 import bottle
@@ -15,6 +13,9 @@ import uuid
 from os.path import abspath, dirname
 
 import xml.etree.ElementTree
+from xml.parsers import expat
+
+import pytest
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
@@ -22,7 +23,7 @@ from boddle import boddle
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
-from paths import STATIC_DIR,TEST_DATA_DIR
+from paths import STATIC_DIR
 import db
 import bottle_api
 import bottle_app
@@ -113,14 +114,39 @@ def test_api_key_null(mocker):
 def test_templates(new_user):
     api_key = new_user[API_KEY]
 
+    entities = {
+    'nbsp': ' ',
+    'lt': '<',
+    'gt': '>',
+    'amp': '&',
+    'quot': '"',
+    'apos': "'",
+    # Add more entities as needed
+    }   
+
+    # Create a custom XML parser with the entity resolver
+    def create_parser():
+        # parser = expat.ParserCreate()
+        parser = xml.etree.ElementTree.XMLParser()
+        logging.info(str(parser.__class__))
+        for attr in dir(parser):
+            logging.info("parser.%s = %r" % (attr, getattr(parser, attr)))
+
+        # Register the entity handler
+        def entity_handler(entity_name):
+            return entities.get(entity_name, None)
+  
+        #parser.parser.EntityDeclHandler = entity_handler # no such attribute parser.parser, hmm
+        return parser
+
     def dump_lines(text):
         for (ct, line) in enumerate(text.split("\n"), 1):
             logging.error("%s: %s",ct, line)
 
     def validate_html(html, include_text=None, exclude_text=None):
-        '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
+        '''If xml.etree.ElementTree can't properly parse the (x)html, raise an error.'''
         try:
-            doc = xml.etree.ElementTree.fromstring(html)
+            xml.etree.ElementTree.fromstring(html, create_parser())
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
