@@ -441,7 +441,7 @@ function trace_movie(div_controller, movie_id, api_key) {
             return;
         }
         console.log("resp=",resp,"getting zipfile.");
-        $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.`);
+        $('#firsth2').html(`Movie #${movie_id} is traced! <span class='nodemo'>Check for errors and retrace as necessary.</a>`);
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
 }
