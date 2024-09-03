@@ -181,7 +181,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
         validate_html(bottle_app.func_audit())
-        validate_html(bottle_app.func_list(), exclude_text='Demo mode')
+        validate_html(bottle_app.func_list(), exclude_text='user_demo = 1;')
         validate_html(bottle_app.func_login())
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
@@ -199,7 +199,7 @@ def test_templates(new_user):
         user = demo_users[0]
         demo_api_key = db.make_new_api_key(email=user['email'])
         with boddle(params={'api_key': demo_api_key}):
-            validate_html(bottle_app.func_list(), include_text='Demo mode')
+            validate_html(bottle_app.func_list(), include_text='user_demo = 1;')
         db.delete_api_key(demo_api_key)
     else:
         logging.warning("no demo users; cannot test demo mode text")

@@ -1,5 +1,5 @@
 """
-Single handy place for paths.
+Should this be moved to constants?
 """
 
 import os
