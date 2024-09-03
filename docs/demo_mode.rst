@@ -52,9 +52,9 @@ Implementation
 
     - (To get out of demo mode, you'll need to click on a link that has a different API key)
 
-- ``demo`` JavaScript global variable set to ``true`` (if in demo mode)
+- ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
 
-- ``demo`` Jinja2 variable will get set to ``true`` (otherwise it is ``false``)
+- ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
 
 Troubleshooting/Development Note
 --------------------------------
