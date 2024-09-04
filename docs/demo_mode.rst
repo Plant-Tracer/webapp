@@ -56,6 +56,12 @@ Implementation
 
 - ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
 
+- More straightforward than conditional page rendering is using css classes to control the
+  displaying of HTML elements for demo mode
+
+  - Class ``demo`` elements display only if in demo mode
+  - Class ``nodemo`` elements display only if not in demo mode
+
 Troubleshooting/Development Note
 --------------------------------
 
