@@ -21,6 +21,8 @@
     "coverage": "jest --collectCoverage --"
   },
     "jest": {
-      "testEnvironment": "jsdom"
+      "testEnvironment": "jsdom",
+      "coverageDirectory": "coverage",
+      "coverageReporters": ["json", "lcov", "text", "clover"]
     }
 }
