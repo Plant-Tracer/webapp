@@ -29,9 +29,11 @@ Goals
 Required in the database
 ------------------------
 
-- Demo mode user with their own API key and course
+- Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
 
-- Tracked movies in the demo mode user's course
+- Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)
+
+- Currently, be aware that the demo movies must be tracked and published manually after the demo movies are populated into the database
 
 Implementation
 --------------
@@ -52,9 +54,15 @@ Implementation
 
     - (To get out of demo mode, you'll need to click on a link that has a different API key)
 
-- ``demo`` JavaScript global variable set to ``true`` (if in demo mode)
+- ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
 
-- ``demo`` Jinja2 variable will get set to ``true`` (otherwise it is ``false``)
+- ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
+
+- More straightforward than conditional page rendering is using css classes to control the
+  displaying of HTML elements for demo mode
+
+  - Class ``demo`` elements display only if in demo mode
+  - Class ``nodemo`` elements display only if not in demo mode
 
 Troubleshooting/Development Note
 --------------------------------
