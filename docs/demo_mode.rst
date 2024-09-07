@@ -31,9 +31,9 @@ Required in the database
 
 - Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
 
-- Tracked movies in the demo mode user's course
+- Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)
 
-Currently, be aware that the 3 demo movies must be traced manually after the database is populated.
+- Currently, be aware that the demo movies must be tracked and published manually after the demo movies are populated into the database
 
 Implementation
 --------------
