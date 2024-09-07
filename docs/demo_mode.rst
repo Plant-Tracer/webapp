@@ -29,9 +29,11 @@ Goals
 Required in the database
 ------------------------
 
-- Demo mode user with their own API key and course
+- Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
 
 - Tracked movies in the demo mode user's course
+
+Currently, be aware that the 3 demo movies must be traced manually after the database is populated.
 
 Implementation
 --------------
