@@ -125,7 +125,7 @@ def get_user_id(allow_demo=True):
     """
     userdict = get_user_dict()
     if userdict['demo'] and not allow_demo:
-        logging.info("demo account blocks requeted action")
+        logging.info("demo account blocks requested action")
         raise auth.http403('demo accounts not allowed to execute requested action')
     return userdict['id']
 
