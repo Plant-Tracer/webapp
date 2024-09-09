@@ -580,7 +580,7 @@ function list_movies_data( movies ) {
     movies_fill_div( $('#your-unpublished-movies'),
                      UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
     movies_fill_div( $('#course-movies'),
-                     COURSE, movies.filter( m => (m.course_id==user_primary_course_id && m.user_id!=user_id && !m.orig_movie)));
+                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (user_demo || (m.user_id!=user_id)) && !m.orig_movie)));
     movies_fill_div( $('#your-deleted-movies'),
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
