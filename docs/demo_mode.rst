@@ -4,27 +4,38 @@ Demo Mode
 Goals
 -----
 
-- Allows anyone on the web to anonymously use some aspects of the Plant Tracer web app. Specifically:
+- Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app
 
-  - View the list of movies
+- Allow the anonymous demo user to experience plant movement tracking in the app without requiring the user to create an account in a course or to be aware of the movie lifecycle of upload, track, publish, delete
+
+- Disallow the persistence of modifications to all webapp-managed data while in demo mode
+
+Functions
+---------
+
+- Will allow:
+
+  - View the list of movies in a single table
 
   - Play a movie without tracking
 
-  - Click on 'analyze' to show the user interface for playing a movie that has stored tracks.
+  - Click on 'analyze' to show the user interface for playing a movie that has a stored trace
 
-  - Download a spreadsheet
+  - Download a CSV representation of movie trace data
 
 - Will not allow:
 
-  - No uploading of videos
+  - No uploading of movies
 
-  - No deleting of videos
+  - No deleting of movies
 
   - No renaming of titles, descriptions
 
   - No deleting or adding trackpoints
 
   - No editing any text
+
+  - No re-tracking of movies
 
 Required in the database
 ------------------------
@@ -41,6 +52,8 @@ Implementation
 - Only checks for demo mode if ``PLANTTRACER_DEMO_MODE_AVAILABLE`` environment variable is set to 1
 
 - If ``PLANTTRACER_DEMO_MODE_AVAILABLE`` is set and there is no user logged in, then we are in DEMO_MODE
+
+- If the logged-in user's demo attribute is true (1), then demo mode is available
 
 - If we are in DEMO_MODE
 

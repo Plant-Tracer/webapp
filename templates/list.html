@@ -66,14 +66,19 @@ input[type=checkbox] {
 </div>
 
 
-  <h2>Your Movies</h2>
-  <p>(<a href="/upload">click here to upload a new movie</a>)</p>
+  <h2 class="nodemo">Your Movies</h2>
+  <h2 class="demo">Demo Movies</h2>
+  <p class="nodemo">
+    (<a href="/upload">click here to upload a new movie</a>)
+  </p>
+
+  <div class="nodemo">
   <h3>Published</h3>
   <p class='instructions'><i>Published movies can be viewed by anyone in
       your course. Click the 'unpublish' button to unpublish a
       movie. Click the 'delete' button to delete a movie.</i></p>
   <div class='mtable' id='your-published-movies'></div>
-
+</div>
 <div class='nodemo'>
   <h3>Unpublished</h3>
   <p class='instructions'><i>Unpublished movies can only be seen by you
@@ -82,11 +87,10 @@ input[type=checkbox] {
   <div class='mtable' id='your-unpublished-movies'></div>
 </div>
 
-<h3 class='nodemo'> Course movies for {{primary_course_name}}</h3>
-<h3 class='demo'> Course movies for demo mode</h3>
+<h3 class='nodemo'>Course movies for {{primary_course_name}}</h3>
 <p class='instructions nodemo'><i>These are the course movies available to you from other students in your course.</i></p>
-<p class='instructions'> Students can only see the published movies of
-  other students in this course, while the course admin can see all of the movies. </p>
+<p class='instructions nodemo'> Students can only see the published movies of
+    other students in this course, while the course admin can see all of the movies. </p>
 
 {% if admin %}
 <p class='instructions'>Admins can publish or unpublish movies by pressing the PUBLISH or UNPUBLISH buttons, respectively. Admins cannot delete or undelete movies; only
