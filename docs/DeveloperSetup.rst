@@ -75,6 +75,8 @@ Setup Steps
     IMAP_HOST=imap.mycompany.com
     IMAP_PORT=993
 
+#. If you have created a demo account, that action has also added demo movies to the database. To finish setting up demo mode, run the server in non-demo mode, track all the demo movies manually, and publish them.
+
 Running Locally Quick Start
 ---------------------------
 

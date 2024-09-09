@@ -31,6 +31,12 @@
   import { MovieController } from "./static/canvas_movie_controller.js";
   import { TracerController, trace_movie } from "./static/canvas_tracer_controller.js";
   let params = new URLSearchParams(window.location.search);
-  trace_movie('div#tracer', params.get('movie_id'), api_key);
+
+  // When the document loads, run the trace_movie() functions.
+  $( document ).ready( function() {
+    trace_movie('div#tracer', params.get('movie_id'), api_key);
+  });
+
+
 </script>
 {% endblock %}

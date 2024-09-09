@@ -152,15 +152,18 @@ class TracerController extends MovieController {
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
-                    `<td>n/a</td><td class="del-row" object_index="${i}" >🚫</td></tr>`;
+                    `<td>n/a</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
         $(this.div_selector + " tbody.marker_table_body").html( rows );
         $(this.div_selector + " .del-row").on('click',
-                                              (event) => {this.del_row(event.target.getAttribute('object_index'));});
+                     (event) => {this.del_row(event.target.getAttribute('object_index'));});
         $(this.div_selector + " .del-row").css('cursor','default');
         this.redraw();          // redraw with the markers
+        if (user_demo) {        // be sure to hide the just-added delete option
+            $('.nodemo').hide();
+        }
     }
 
     // Delete a row and update the server
@@ -200,7 +203,13 @@ class TracerController extends MovieController {
         return JSON.stringify(this.get_markers());
     }
 
+    // Send the list of current markers to the server.
+    // In demo mode, just print a message.
     put_markers() {
+        if (user_demo) {
+            $('#demo-popup').fadeIn(300);
+            return;
+        }
         const put_frame_markers_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
@@ -425,6 +434,12 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_id, api_key) {
     console.log("trace_movie API_BASE=",API_BASE);
+
+    // Wire up the close button on the demo pop-up
+    $('#demo-popup-close').on('click',function() {
+        $('#demo-popup').fadeOut(300);
+    });
+
     const params = {
         api_key: api_key,
         movie_id: movie_id,
@@ -446,7 +461,11 @@ function trace_movie(div_controller, movie_id, api_key) {
             return;
         }
         console.log("resp=",resp,"getting zipfile.");
-        $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.`);
+        if (user_demo) {
+            $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
+        } else {
+            $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
+        }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
 }

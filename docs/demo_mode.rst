@@ -4,21 +4,30 @@ Demo Mode
 Goals
 -----
 
-- Allows anyone on the web to anonymously use some aspects of the Plant Tracer web app. Specifically:
+- Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app
 
-  - View the list of movies
+- Allow the anonymous demo user to experience plant movement tracking in the app without requiring the user to create an account in a course or to be aware of the movie lifecycle of upload, track, publish, delete
+
+- Disallow the persistence of modifications to all webapp-managed data while in demo mode
+
+Functions
+---------
+
+- Will allow:
+
+  - View the list of movies in a single table
 
   - Play a movie without tracking
 
-  - Click on 'analyze' to show the user interface for playing a movie that has stored tracks.
+  - Click on 'analyze' to show the user interface for playing a movie that has a stored trace
 
-  - Download a spreadsheet
+  - Download a CSV representation of movie trace data
 
 - Will not allow:
 
-  - No uploading of videos
+  - No uploading of movies
 
-  - No deleting of videos
+  - No deleting of movies
 
   - No renaming of titles, descriptions
 
@@ -26,12 +35,16 @@ Goals
 
   - No editing any text
 
+  - No re-tracking of movies
+
 Required in the database
 ------------------------
 
-- Demo mode user with their own API key and course
+- Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
 
-- Tracked movies in the demo mode user's course
+- Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)
+
+- Currently, be aware that the demo movies must be tracked and published manually after the demo movies are populated into the database
 
 Implementation
 --------------
@@ -39,6 +52,8 @@ Implementation
 - Only checks for demo mode if ``PLANTTRACER_DEMO_MODE_AVAILABLE`` environment variable is set to 1
 
 - If ``PLANTTRACER_DEMO_MODE_AVAILABLE`` is set and there is no user logged in, then we are in DEMO_MODE
+
+- If the logged-in user's demo attribute is true (1), then demo mode is available
 
 - If we are in DEMO_MODE
 
@@ -52,9 +67,15 @@ Implementation
 
     - (To get out of demo mode, you'll need to click on a link that has a different API key)
 
-- ``demo`` JavaScript global variable set to ``true`` (if in demo mode)
+- ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
 
-- ``demo`` Jinja2 variable will get set to ``true`` (otherwise it is ``false``)
+- ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
+
+- More straightforward than conditional page rendering is using css classes to control the
+  displaying of HTML elements for demo mode
+
+  - Class ``demo`` elements display only if in demo mode
+  - Class ``nodemo`` elements display only if not in demo mode
 
 Troubleshooting/Development Note
 --------------------------------

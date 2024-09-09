@@ -124,13 +124,14 @@ def test_templates(new_user):
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
-                    raise RuntimeError(f"'{include_text}' not in text  {new_user}")
+                    raise RuntimeError(f"'{include_text}' not in text {new_user}")
             if exclude_text is not None:
                 if exclude_text in html:
                     dump_lines(html)
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
         except xml.etree.ElementTree.ParseError as e:
+            logging.error(e)
             dump_lines(html)
             invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'
             logging.error(f"invalid html written to {invalid_fname}")
@@ -143,7 +144,6 @@ def test_templates(new_user):
             except FileNotFoundError:
                 pass
             raise
-        assert "404 Not Found" not in data
 
     # Test the test infrastructure
     with pytest.raises(xml.etree.ElementTree.ParseError):
@@ -168,6 +168,7 @@ def test_templates(new_user):
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
+        validate_html(bottle_app.func_privacy())
         validate_html(bottle_app.func_tos())
         with pytest.raises(bottle.HTTPResponse):
             bottle_app.func_upload()
@@ -180,11 +181,12 @@ def test_templates(new_user):
         validate_html(bottle_app.func_root())
         validate_html(bottle_app.func_about())
         validate_html(bottle_app.func_audit())
-        validate_html(bottle_app.func_list(), exclude_text='Demo mode')
+        validate_html(bottle_app.func_list(), exclude_text='user_demo = 1;')
         validate_html(bottle_app.func_login())
         validate_html(bottle_app.func_logout())
         validate_html(bottle_app.func_register())
         validate_html(bottle_app.func_resend())
+        validate_html(bottle_app.func_privacy())
         validate_html(bottle_app.func_tos())
         validate_html(bottle_app.func_upload())
         validate_html(bottle_app.func_users())
@@ -197,7 +199,7 @@ def test_templates(new_user):
         user = demo_users[0]
         demo_api_key = db.make_new_api_key(email=user['email'])
         with boddle(params={'api_key': demo_api_key}):
-            validate_html(bottle_app.func_list(), include_text='Demo mode')
+            validate_html(bottle_app.func_list(), include_text='user_demo = 1;')
         db.delete_api_key(demo_api_key)
     else:
         logging.warning("no demo users; cannot test demo mode text")
