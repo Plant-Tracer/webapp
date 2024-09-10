@@ -399,33 +399,32 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames,
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
                                   api_key,
                                   show_graph=false) {
     console.log("trace_movie_frames. div_controller=",div_controller,
-                "movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
-    const frames = [];
+                "movie_zipfile=",movie_zipfile,"metadata_frames:",metadata_frames);
+    const movie_frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((name, i) => {
-        //console.log("unzipped name=",name,"i=",i);
-        frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
-                     'markers':movie_frames[i].markers };
+        movie_frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
+                     'markers':metadata_frames[i].markers };
     });
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.set_movie_control_buttons();
-    cc.load_movie(frames);
+    cc.load_movie(movie_frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
-    console.log("frames.length="+frames.length)
-    if (frames.length > 0 ){
+    console.log("movie_frames.length="+movie_frames.length)
+    if (movie_frames.length > 0 ){
         cc.track_button.val( RETRACK_MOVIE );
         cc.download_link.show();
     }
 
     if (show_graph) {
-        // draw the graph using the information in frames
+        // draw the graph using the information in movie_frames
         // @JoAnn TODO
     }
 
