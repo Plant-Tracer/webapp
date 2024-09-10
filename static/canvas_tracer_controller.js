@@ -61,7 +61,7 @@ class TracerController extends MovieController {
         // set up the download button
         this.download_link = $(this.div_selector + " input.download_button");
         this.download_link.attr('href',`${API_BASE}api/get-movie-markers?api_key=${api_key}&movie_id=${this.movie_id}`);
-        this.download_link.hide();
+        //this.download_link.hide();
 
         // Size the canvas and video player
         $(this.div_selector + " canvas").attr('width',this.movie_metadata.width);
@@ -83,7 +83,14 @@ class TracerController extends MovieController {
 
         // We need to be able to enable or display the
         this.track_button = $(this.div_selector + " input.track_button");
-        this.track_button.on('click', () => {this.track_to_end();});
+        this.track_button.on('click', () => { this.track_to_end(); });
+        
+        this.graph_data_button = $(this.div_selector + " input.graph_data_button");
+
+        // Set up the click event listener
+        this.graph_data_button.on('click', () => {
+        // When the button is clicked, set show_graph to true
+        const show_graph = true;
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
@@ -402,7 +409,10 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     names.forEach((name, i) => {
         //console.log("unzipped name=",name,"i=",i);
         frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
-                     'markers':movie_frames[i].markers };
+            'markers': movie_frames[i].markers
+        };
+        console.log("markers=", frames[i].markers);
+        console.log("i=",i);
     });
 
     cc = new TracerController(div_controller, movie_metadata);
@@ -413,7 +423,15 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     if (show_graph) {
         // draw the graph using the information in frames
         // @JoAnn TODO
-    }
+        for (let i = 0; i < frames.length; i++) {
+            let apexMarker = markers.find(marker => marker.label === 'Apex');
+
+            // If you want to graph frame number vs x value of the Apex marker
+            if (apexMarker) {
+                let frameNumber = apexMarker.frame_number;
+                let xValue = apexMarker.x;
+            }
+        }    
 
 }
 
