@@ -60,9 +60,9 @@ class TracerController extends MovieController {
         this.movie_id = movie_metadata.movie_id;
 
         // set up the download button
-        this.download_link = $(this.div_selector + " input.download_button");
-        this.download_link.attr('href',`${API_BASE}api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
-        this.download_link.hide(); // Hide the download link until we track or retrack
+        this.download_button = $(this.div_selector + " input.download_button");
+        this.download_button.attr('href',`${API_BASE}api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
+        this.download_button.hide(); // Hide the download link until we track or retrack
 
         // Size the canvas and video player
         $(this.div_selector + " canvas").attr('width',this.movie_metadata.width);
@@ -80,7 +80,7 @@ class TracerController extends MovieController {
         this.add_marker_button = $(this.div_selector + " input.add_marker_button");
         this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
 
-        // We need to be able to enable or display the
+        // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.on('click', () => {this.track_to_end();});
 
@@ -94,7 +94,7 @@ class TracerController extends MovieController {
         console.log("this.last_tracked_frame=" + this.last_tracked_frame);
         if (this.last_tracked_frame > 0 ){
             this.track_button.val( RETRACK_MOVIE );
-            this.download_link.show();
+            this.download_button.show();
         }
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
     }
@@ -352,7 +352,7 @@ class TracerController extends MovieController {
         console.log("before load_movie. this.frames=",this.frames);
         this.load_movie( dict_to_array(data.frames)); // reload the movie
         console.log("after load_movie. this.frames=",this.frames);
-        this.download_link.show();
+        this.download_button.show();
         // change from 'track movie' to 'Retrack movie' and re-enable it
         $(this.div_selector + ' input.track_button').val( RETRACK_MOVIE );
         this.track_button.prop(DISABLED,false);
@@ -377,6 +377,7 @@ class TracerController extends MovieController {
         });
         location.reload(true);
     }
+
 }
 
 
@@ -420,7 +421,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     console.log("movie_frames.length="+movie_frames.length)
     if (movie_frames.length > 0 ){
         cc.track_button.val( RETRACK_MOVIE );
-        cc.download_link.show();
+        cc.download_button.show();
     }
 
     if (show_graph) {
