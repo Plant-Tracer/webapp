@@ -96,6 +96,12 @@ class TracerController extends MovieController {
             this.track_button.val( 'retrack movie' );
             this.download_link.show();
         }
+        
+        this.graph_data_button = $(this.div_selector + " input.graph_data_button");
+        this.graph_data_button.on('click', () => {
+            const show_graph = true; trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key, show_graph);
+        });
+
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
     }
 
@@ -400,8 +406,7 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames,
-                                  api_key,
-                                  show_graph=false) {
+                                  api_key) {
     console.log("trace_movie_frames. div_controller=",div_controller,
                 "movie_zipfile=",movie_zipfile,"movie_frames:",movie_frames);
     const frames = [];
@@ -419,12 +424,68 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc.load_movie(frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
 
-    if (show_graph) {
+    
         // draw the graph using the information in frames
         // @JoAnn TODO
+    showGraphButton(div_controller);
+    // Event listener for the "Graph Data" button using jQuery
+    $(`${div_controller} input.graph_data_button`).on('click', function () {
+        graph_movie_data(frames);
+    });
+    }
+    
+    function showGraphButton(div_selector) {
+        // Using jQuery to show the button by selecting it with the correct div_selector
+        $(div_selector + " #graph-data-container").show();
     }
 
-}
+
+    function graph_movie_data(frames) {
+        console.log("Graphing data...");
+    
+        // Extract data needed for the graph
+        const apexData = frames.map((frame, i) => {
+            let apexMarker = frame.markers.find(marker => marker.label === 'Apex');
+            if (apexMarker) {
+                return {
+                    frameNumber: i,
+                    xValue: apexMarker.x
+                };
+            }
+        }).filter(data => data); // Filter out any undefined entries
+    
+        // Example of graphing logic using Chart.js
+        const ctx = document.getElementById('myChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: apexData.map(d => d.frameNumber),
+                datasets: [{
+                    label: 'Apex X Value',
+                    data: apexData.map(d => d.xValue),
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Frame Number'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'X Value'
+                        }
+                    }
+                }
+            }
+        });
+    }
+ 
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_id, api_key) {

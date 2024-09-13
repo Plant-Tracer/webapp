@@ -9,7 +9,7 @@
 
    -- analyze.html      --- the actual application!
 -->
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <div id='tracer'>
         <div class='float-movie'>
             <form action='javascript:void(0)' class='nodemo'>
@@ -75,6 +75,14 @@
                         <input class='track_button pure-button pure-button-primary' type='button' value='track movie'/>
                     </div>
 
+                    
+                    <div class='pure-control-group' id="graph-data-container" style="display:none;">
+                        <label></label>
+                        <a class='download_link' href=''>
+                            <input class='graph_data_button pure-button pure-button-primary' type='button' value='Graph Data'/>
+                        </a>
+                    </div>                    
+                    
                     <div class='pure-control-group'>
                         <label></label>
                         <a class='download_link' href=''>
