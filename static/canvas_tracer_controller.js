@@ -479,6 +479,8 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
                ]
            },
            options: {
+            responsive: false,  // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false, 
                scales: {
                    x: {
                        title: {
@@ -517,11 +519,14 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
                ]
            },
            options: {
-               scales: {
+            responsive: false,  // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false, 
+                scales: {
                    x: {
                        title: {
                            display: true,
                            text: 'Frame Number'
+                           
                        }
                    },
                    y: {
