@@ -59,9 +59,14 @@ class TracerController extends MovieController {
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
 
-        // set up the download button
-        this.download_button = $(this.div_selector + " input.download_button");
-        this.download_button.attr('href',`${API_BASE}api/get-movie-trackpoints?api_key=${api_key}&movie_id=${this.movie_id}`);
+        // set up the download form & button
+        this.download_form = $("#download_form");
+        this.download_form.attr('action',`${API_BASE}api/get-movie-trackpoints`);
+        this.dl_api_key = $("#dl_api_key");
+        this.dl_api_key.attr("value", api_key);
+        this.dl_movie_id = $("#dl_movie_id");
+        this.dl_movie_id.attr("value", this.movie_id);
+        this.download_button = $("#download_button");
         this.download_button.hide(); // Hide the download link until we track or retrack
 
         // Size the canvas and video player
