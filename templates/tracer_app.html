@@ -43,7 +43,7 @@
                 </select>
             </form>
         </div>
-        <!-- Marker table start -->
+        <!-- Control start -->
         <div class='float-controls'>
             <table class="pure-table pure-table-horizontal pure-table-striped">
                 <thead>
@@ -74,17 +74,25 @@
                         <label></label>
                         <input class='track_button pure-button pure-button-primary' type='button' value='Track movie'/>
                     </div>
-
-                    <div class='pure-control-group'>
+                </fieldset>
+            </form>
+            <form id="download_form" 
+                  class="pure-form pure-form-aligned download_button" 
+                  action="javascript:void(0)"
+                  method="post">
+                  <input id="dl_api_key" type="hidden" name="api_key" value=""/>
+                  <input id="dl_movie_id" type="hidden" name="movie_id" value=""/>
+                <fieldset>
+                    <div class="pure-control-group">
                         <label></label>
-                        <a class='download_button' href=''>
-                            <input class='download_button pure-button pure-button-primary' type='button' value='Download trackpoints'/>
-                        </a>
+                        <input class="download_button pure-button pure-button-primary"
+                                type="submit" 
+                                value="Download trackpoints"/>
                     </div>
                 </fieldset>
             </form>
         </div>
-        <!-- Marker table end -->
+        <!-- Control end -->
     </div> <!-- tracer controller -->
 
 <!-- popup content is normally hidden -->
