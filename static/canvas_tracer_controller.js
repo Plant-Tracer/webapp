@@ -97,6 +97,13 @@ class TracerController extends MovieController {
             this.download_link.show();
         }
 
+        // frame_rate_input is the text field for the marker name
+        //this.frame_rate_input = $("#fpm_id");
+        //this.frame_rate_input.oninput(this.frame_rate_in);
+        $("#fpm-id").oninput = this.frame_rate_in;
+        $(".capture_form").hide(); // not working yet; hide for now -SEB
+
+        // show graphs or not
         this.graph_data_button = $(this.div_selector + " input.graph_data_button");
         this.graph_data_button.on('click', () => {
             const show_graph = true; trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key, show_graph);
@@ -234,6 +241,10 @@ class TracerController extends MovieController {
             });
     }
 
+    frame_rate_in(e) {
+        this.fpm = parseInt(e.target.value, null);
+        console.log("this.fpm", this.fpm)
+    }
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
      * It calls the api/track-movie-quque on the server, queuing movie tracking (which takes a while).
      * Here are some pages for notes about playing the video:
@@ -441,11 +452,11 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
 
     if (show_graph) {
         // draw the graph using the information in movie_frames
-        graph_data(frames);
+        graph_data(cc, frames);
     }
 }
 
-function graph_data(frames) {
+function graph_data(cc, frames) {
     const frame_labels = [];
     const x_values_mm = [];
     const y_values_mm = [];
@@ -458,7 +469,9 @@ function graph_data(frames) {
         .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
         .filter(x => x.number !== null)
         .sort((a, b) => a.number - b.number);
-    let ruler_start = null, ruler_end = null, scale = 1;;
+    let ruler_start = null, ruler_end = null, scale = 1; 
+    let pos_units = "pixels";
+    let time_units = "frames";
     if (marker_labels.length >= 2) {
         const extract_ruler_start = marker_labels[0];
         const extract_ruler_end = marker_labels[marker_labels.length - 1];
@@ -469,10 +482,16 @@ function graph_data(frames) {
         const x_ruler_end = ruler_end.x;
         const y_ruler_end = ruler_end.y;
         const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
-        const real_distance = x_ruler_end - x_ruler_start;
+        const real_distance = extract_ruler_end.number - extract_ruler_start.number;
         scale = real_distance / pixel_distance;
+        pos_units = "mm";
     } else {
         console.log('Ruler markers not found. The distance will be in pixels.');
+    }
+
+    if (cc.fpm != null) {
+        pos_units = "minutes";
+
     }
     frames.forEach((frame) => {
         // Filter for the 'Apex' marker
@@ -480,7 +499,7 @@ function graph_data(frames) {
 
         // If 'Apex' marker is found, push the frame number and the x, y positions
         if (apexMarker) {
-            frame_labels.push(apexMarker.frame_number); // frame rate = 1 frame/min
+            frame_labels.push(cc.fpm ? (Math.floor(1/cc.fpm) * apexMarker.frame_number) : apexMarker.frame_number); // frame rate = 1 frame/min
             x_values_mm.push((apexMarker.x - x_apex_0) * scale);
             y_values_mm.push((apexMarker.y - y_apex_0) * scale);
         }
@@ -489,7 +508,7 @@ function graph_data(frames) {
     const ctxX = document.getElementById('xChart').getContext('2d');
     const ctxY = document.getElementById('yChart').getContext('2d');
 
-    // Graph for Frame Number vs X Position
+    // Graph for Frame Number or Time vs X Position
     const xChart = new Chart(ctxX, {
         type: 'line',
         data: {
@@ -511,13 +530,13 @@ function graph_data(frames) {
                 x: {
                     title: {
                         display: true,
-                        text: 'Time (minutes)'
+                        text: 'Time (' + time_units + ')'
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'X Position (mm)'
+                        text: 'X Position (' + pos_units + ')'
                     }
                 }
             },
@@ -551,13 +570,13 @@ function graph_data(frames) {
                 x: {
                     title: {
                         display: true,
-                        text: 'Time (minutes)'
+                        text: 'Time (' + time_units + ')'
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'Y Position (mm)'
+                        text: 'Y Position (' + pos_units + ')'
                     }
                 }
             },
