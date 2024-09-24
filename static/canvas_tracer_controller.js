@@ -411,8 +411,8 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames,
     api_key, show_graph = true) {
-    console.log("trace_movie_frames. div_controller=", div_controller,
-        "movie_zipfile=", movie_zipfile, "movie_frames:", movie_frames);
+    //console.log("trace_movie_frames. div_controller=", div_controller,
+    //    "movie_zipfile=", movie_zipfile, "movie_frames:", movie_frames);
     const frames = [];
     const { entries } = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -424,12 +424,12 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
             'markers': movie_frames[i].markers
         };
         // Log the entire frame for context
-        console.log(`Frame ${i}:`, frames[i]);
+        //console.log(`Frame ${i}:`, frames[i]);
 
         // Log each marker in the markers array
-        frames[i].markers.forEach((marker, index) => {
-            console.log(`Marker ${index} for Frame ${i}:`, marker);
-        });
+        //frames[i].markers.forEach((marker, index) => {
+        //    console.log(`Marker ${index} for Frame ${i}:`, marker);
+        //});
     });
 
 
@@ -441,188 +441,183 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
 
     if (show_graph) {
         // draw the graph using the information in movie_frames
-        // @JoAnn TODO
-        const frame_labels = [];
-        const x_values = [];
-        const y_values = [];
-
-        frames.forEach((frame) => {
-            // Filter for the 'Apex' marker
-            const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
-            
-            // If 'Apex' marker is found, push the frame number and the x, y positions
-            if (apexMarker) {
-                frame_labels.push(apexMarker.frame_number);  // Use the frame number
-                x_values.push(apexMarker.x);  // Use the X position for 'Apex'
-                y_values.push(apexMarker.y);  // Use the Y position for 'Apex'
-            }
-        });
-
-       // const ctx = document.getElementById('myChart').getContext('2d');
-
-       const ctxX = document.getElementById('xChart').getContext('2d');
-       const ctxY = document.getElementById('yChart').getContext('2d');
-       
-       // Graph for Frame Number vs X Position
-       const xChart = new Chart(ctxX, {
-           type: 'line',
-           data: {
-               labels: frame_labels,  // X-axis will use the frame numbers
-               datasets: [
-                   {
-                       label: 'Frame Number vs X Position',  // Label for X dataset
-                       data: x_values,  // Data points for X position
-                       borderColor: 'rgba(255, 0, 0, 1)',  // Pure red line (R: 255, G: 0, B: 0, A: 1)
-                       fill: false,  // Disable filling under the line
-                       pointRadius: 0 
-                   }
-               ]
-           },
-           options: {
-            responsive: false,  // Disable Chart.js responsiveness and respect HTML canvas size
-            maintainAspectRatio: false, 
-               scales: {
-                   x: {
-                       title: {
-                           display: true,
-                           text: 'Frame Number'
-                       }
-                   },
-                   y: {
-                       title: {
-                           display: true,
-                           text: 'X Position'
-                       }
-                   }
-               },
-               plugins: {
-                   legend: {
-                       display: true,  // Show the dataset label
-                   }
-               }
-           }
-       });
-       
-       // Graph for Frame Number vs Y Position
-       const yChart = new Chart(ctxY, {
-           type: 'line',
-           data: {
-               labels: frame_labels,  // X-axis will use the frame numbers
-               datasets: [
-                   {
-                       label: 'Frame Number vs Y Position',  // Label for Y dataset
-                       data: y_values,  // Data points for Y position
-                       borderColor: 'rgba(255, 0, 0, 1)',  // Pure red line (R: 255, G: 0, B: 0, A: 1)
-                       fill: false,  // Disable filling under the line
-                       pointRadius: 0 
-                   }
-               ]
-           },
-           options: {
-            responsive: false,  // Disable Chart.js responsiveness and respect HTML canvas size
-            maintainAspectRatio: false, 
-                scales: {
-                   x: {
-                       title: {
-                           display: true,
-                           text: 'Frame Number'
-                           
-                       }
-                   },
-                   y: {
-                       title: {
-                           display: true,
-                           text: 'Y Position'
-                       }
-                   }
-               },
-               plugins: {
-                   legend: {
-                       display: true,  // Show the dataset label
-                   }
-               }
-           }
-       });
-       
-
-        /*         const myChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: frame_labels,
-                        datasets: [
-                            {
-                                label: 'Frame Number vs X Position',  // Label for the X dataset
-                                data: x_values,  // Data points for the X position
-                                borderColor: 'rgba(75, 192, 192, 1)',  // Line color
-                                fill: false  // Disable filling under the line
-                            },
-                            {
-                                label: 'Frame Number vs Y Position',  // Label for the Y dataset
-                                data: y_values,  // Data points for the Y position
-                                borderColor: 'rgba(255, 99, 132, 1)',  // Line color
-                                fill: false  // Disable filling under the line
-                            }
-                        ]
-                    },
-                    options: {
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Frame Number'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Position'
-                                }
-                            }
-                        }
-                    }
-                });
-        
-            } */
+        graph_data(frames);
     }
 }
 
-// Not sure what we have, so ask the server and then dispatch to one of the two methods above
-function trace_movie(div_controller, movie_id, api_key) {
-    console.log("trace_movie API_BASE=", API_BASE);
+function graph_data(frames) {
+    const frame_labels = [];
+    const x_values_mm = [];
+    const y_values_mm = [];
+    const x_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').x;
+    const y_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').y;
 
-    // Wire up the close button on the demo pop-up
-    $('#demo-popup-close').on('click', function () {
-        $('#demo-popup').fadeOut(300);
+    // Function to extract numeric portion from a 
+    //const marker_labels = frames[0].markers.map(marker => { label: marker.label, "number": get_ruler_size(marker.label) }).sort(x.number);
+    const marker_labels = frames[0].markers
+        .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
+        .filter(x => x.number !== null)
+        .sort((a, b) => a.number - b.number);
+    let ruler_start = null, ruler_end = null, scale = 1;;
+    if (marker_labels.length >= 2) {
+        const extract_ruler_start = marker_labels[0];
+        const extract_ruler_end = marker_labels[marker_labels.length - 1];
+        ruler_start = frames[0].markers.find(marker => marker.label === extract_ruler_start.label); // Use only the value at the first frame
+        ruler_end = frames[0].markers.find(marker => marker.label === extract_ruler_end.label); // We could take the average over all frames
+        const x_ruler_start = ruler_start.x;
+        const y_ruler_start = ruler_start.y;
+        const x_ruler_end = ruler_end.x;
+        const y_ruler_end = ruler_end.y;
+        const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
+        const real_distance = x_ruler_end - x_ruler_start;
+        scale = real_distance / pixel_distance;
+    } else {
+        console.log('Ruler markers not found. The distance will be in pixels.');
+    }
+    frames.forEach((frame) => {
+        // Filter for the 'Apex' marker
+        const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
+
+        // If 'Apex' marker is found, push the frame number and the x, y positions
+        if (apexMarker) {
+            frame_labels.push(apexMarker.frame_number); // frame rate = 1 frame/min
+            x_values_mm.push((apexMarker.x - x_apex_0) * scale);
+            y_values_mm.push((apexMarker.y - y_apex_0) * scale);
+        }
     });
 
-    const params = {
-        api_key: api_key,
-        movie_id: movie_id,
-        frame_start: 0,
-        frame_count: 1e6
-    };
-    $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
-        if (resp.error == true) {
-            alert(resp.message);
-            return;
+    const ctxX = document.getElementById('xChart').getContext('2d');
+    const ctxY = document.getElementById('yChart').getContext('2d');
+
+    // Graph for Frame Number vs X Position
+    const xChart = new Chart(ctxX, {
+        type: 'line',
+        data: {
+            labels: frame_labels, // X-axis will use the frame numbers
+            datasets: [
+                {
+                    label: 'Time vs X Position', // Label for X dataset
+                    data: x_values_mm, // Data points for X position
+                    borderColor: 'rgba(255, 0, 0, 1)', // Pure red line (R: 255, G: 0, B: 0, A: 1)
+                    fill: false, // Disable filling under the line
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (minutes)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'X Position (mm)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                }
+            }
         }
-        const width = resp.metadata.width;
-        const height = resp.metadata.height;
-        $(div_controller + ' canvas').prop('width', width).prop('height', height);
-        if (!resp.metadata.movie_zipfile_url) {
-            console.log("resp=", resp, "getting first frame");
-            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
-            return;
-        }
-        console.log("resp=", resp, "getting zipfile.");
-        if (user_demo) {
-            $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
-        } else {
-            $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
-        }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
+
+    // Graph for Y Position
+    const yChart = new Chart(ctxY, {
+        type: 'line',
+        data: {
+            labels: frame_labels, // X-axis will use the frame numbers
+            datasets: [
+                {
+                    label: 'Time vs Y Position', // Label for Y dataset
+                    data: y_values_mm, // Data points for Y position
+                    borderColor: 'rgba(255, 0, 0, 1)', // Pure red line (R: 255, G: 0, B: 0, A: 1)
+                    fill: false, // Disable filling under the line
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (minutes)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Y Position (mm)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                }
+            }
+        }
+    });
+
+    function get_ruler_size(str) {
+        // Match digits in the RulerXXXmm 
+
+        const match = str.match(/^Ruler\s*(\d+)mm$/);
+
+
+        //const match = str.match(/^Ruler(\s*)(\d+)mm$/);
+        // Return the matched number as an integer, or null if no match
+        return match ? parseInt(match[1], 10) : null;
+    }
 }
+
+    // Not sure what we have, so ask the server and then dispatch to one of the two methods above
+    function trace_movie(div_controller, movie_id, api_key) {
+        console.log("trace_movie API_BASE=", API_BASE);
+
+        // Wire up the close button on the demo pop-up
+        $('#demo-popup-close').on('click', function () {
+            $('#demo-popup').fadeOut(300);
+        });
+
+        const params = {
+            api_key: api_key,
+            movie_id: movie_id,
+            frame_start: 0,
+            frame_count: 1e6
+        };
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
+            if (resp.error == true) {
+                alert(resp.message);
+                return;
+            }
+            const width = resp.metadata.width;
+            const height = resp.metadata.height;
+            $(div_controller + ' canvas').prop('width', width).prop('height', height);
+            if (!resp.metadata.movie_zipfile_url) {
+                console.log("resp=", resp, "getting first frame");
+                const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+                trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
+                return;
+            }
+            console.log("resp=", resp, "getting zipfile.");
+            if (user_demo) {
+                $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
+            } else {
+                $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
+            }
+            trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+        });
+    }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
