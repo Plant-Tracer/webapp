@@ -9,7 +9,8 @@
 
    -- analyze.html      --- the actual application!
 -->
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <div id='tracer'>
         <div class='float-movie'>
             <form action='javascript:void(0)' class='nodemo'>
@@ -72,9 +73,17 @@
 
                     <div class='pure-control-group nodemo'>
                         <label></label>
-                        <input class='track_button pure-button pure-button-primary' type='button' value='Track movie'/>
+                        <input class='track_button pure-button pure-button-primary' type='button' value='track movie'/>
                     </div>
 
+                    
+                    <div class='pure-control-group' id="graph-data-container" style="display:none;">
+                        <label></label>
+                        <a class='download_link' href=''>
+                            <input class='graph_data_button pure-button pure-button-primary' type='button' value='Graph Data'/>
+                        </a>
+                    </div>                    
+                    
                     <div class='pure-control-group'>
                         <label></label>
                         <a class='graph_link' href=''>
@@ -83,18 +92,12 @@
                     </div>
                 </fieldset>
             </form>
-            <form id="download_form" 
-                  class="pure-form pure-form-aligned download_button" 
-                  action="javascript:void(0)"
-                  method="post">
-                  <input id="dl_api_key" type="hidden" name="api_key" value=""/>
-                  <input id="dl_movie_id" type="hidden" name="movie_id" value=""/>
+            <form class='pure-form pure-form-aligned capture_form' action="javascript:void(0)" >
                 <fieldset>
-                    <div class="pure-control-group">
-                        <label></label>
-                        <input class="download_button pure-button pure-button-primary"
-                                type="submit" 
-                                value="Download trackpoints"/>
+                    <p>Enter the rate at which movie frames were captured:</p>
+                    <div class='pure-control-group'>
+                        <label for='fpm-id'>Frames per minute:</label>
+                        <input id='fpm-id' class='frame_rate_input' type='text' placeholder='Frames per minute' size='20' />
                     </div>
                 </fieldset>
             </form>
@@ -103,7 +106,7 @@
         </div>
         <!-- Control end -->
     </div> <!-- tracer controller -->
-
+    
 <!-- popup content is normally hidden -->
     <div id='demo-popup' class="popup" popup-name="popup-1">
         <div class="popup-content">

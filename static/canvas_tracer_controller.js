@@ -16,33 +16,33 @@ const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const ENGINE = 'CV2';
 const ENGINE_VERSION = '1.0';
-const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
-const TRACKING_POLL_MSEC=1000;
+const TRACKING_COMPLETED_FLAG = 'TRACKING COMPLETED';
+const ADD_MARKER_STATUS_TEXT = "Drag each marker to the appropriate place on the image. You can also create additional markers."
+const TRACKING_POLL_MSEC = 1000;
 const RETRACK_MOVIE='Retrack movie';
 
 var cell_id_counter = 0;
-var div_id_counter  = 0;
+var div_id_counter = 0;
 var div_template = '';          // will be set with the div template
 
 import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
 
-const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
-                         {'x':50,'y':100,'label':'Ruler 0mm'},
-                         {'x':50,'y':150,'label':'Ruler 20mm'}
-                        ];
+const DEFAULT_MARKERS = [{ 'x': 50, 'y': 50, 'label': 'Apex' },
+{ 'x': 50, 'y': 100, 'label': 'Ruler 0mm' },
+{ 'x': 50, 'y': 150, 'label': 'Ruler 20mm' }
+];
 
 // NOTE ./static is needed below but not above!
 setOptions({
-  workerURL: './static/unzipit-worker.module.js',
-  numWorkers: 2,
+    workerURL: './static/unzipit-worker.module.js',
+    numWorkers: 2,
 });
 
-const DISABLED='disabled';
+const DISABLED = 'disabled';
 
-function dict_to_array( dict ) {
+function dict_to_array(dict) {
     let array = [];
     for (const key in dict) {
         array[parseInt(key)] = dict[key];
@@ -52,8 +52,8 @@ function dict_to_array( dict ) {
 
 
 class TracerController extends MovieController {
-    constructor( div_selector, movie_metadata, api_key) {
-        super( div_selector );
+    constructor(div_selector, movie_metadata, api_key) {
+        super(div_selector);
         this.tracking = false;  // are we tracking a movie?
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
@@ -61,7 +61,7 @@ class TracerController extends MovieController {
 
         // set up the download form & button
         this.download_form = $("#download_form");
-        this.download_form.attr('action',`${API_BASE}api/get-movie-trackpoints`);
+        this.download_form.attr('action', `${API_BASE}api/get-movie-trackpoints`);
         this.dl_api_key = $("#dl_api_key");
         this.dl_api_key.attr("value", api_key);
         this.dl_movie_id = $("#dl_movie_id");
@@ -70,24 +70,24 @@ class TracerController extends MovieController {
         this.download_button.hide(); // Hide the download link until we track or retrack
 
         // Size the canvas and video player
-        $(this.div_selector + " canvas").attr('width',this.movie_metadata.width);
-        $(this.div_selector + " canvas").attr('height',this.movie_metadata.height);
-        $(this.div_selector + " video").attr('width',this.movie_metadata.width);
-        $(this.div_selector + " video").attr('height',this.movie_metadata.height);
+        $(this.div_selector + " canvas").attr('width', this.movie_metadata.width);
+        $(this.div_selector + " canvas").attr('height', this.movie_metadata.height);
+        $(this.div_selector + " video").attr('width', this.movie_metadata.width);
+        $(this.div_selector + " video").attr('height', this.movie_metadata.height);
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
-        this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
-        this.marker_name_input.on('keydown', (e) => { if (e.keyCode==13) this.add_marker_onclick_handler(event);});
+        this.marker_name_input.on('input', (_) => { this.marker_name_changed(); });
+        this.marker_name_input.on('keydown', (e) => { if (e.keyCode == 13) this.add_marker_onclick_handler(event); });
         this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(this.div_selector + " input.add_marker_button");
-        this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
+        this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event); });
 
         // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
-        this.track_button.on('click', () => { this.track_to_end(); });
+        this.track_button.on('click', () => {  this.track_to_end();  });
         
         this.graph_data_button = $(this.div_selector + " input.graph_data_button");
 
@@ -99,47 +99,60 @@ class TracerController extends MovieController {
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
         this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        this.rotate_button.prop(DISABLED,false);
-        this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
+        this.rotate_button.prop(DISABLED, false);
+        this.rotate_button.on('click', (_event) => { this.rotate_button_pressed(); });
 
         this.track_button = $(this.div_selector + " input.track_button");
         console.log("this.last_tracked_frame=" + this.last_tracked_frame);
-        if (this.last_tracked_frame > 0 ){
-            this.track_button.val( RETRACK_MOVIE );
+        if (this.last_tracked_frame > 0) {
+            this.track_button.val(RETRACK_MOVIE);
             this.download_button.show();
         }
+
+        // frame_rate_input is the text field for the marker name
+        //this.frame_rate_input = $("#fpm_id");
+        //this.frame_rate_input.oninput(this.frame_rate_in);
+        $("#fpm-id").oninput = this.frame_rate_in;
+        $(".capture_form").hide(); // not working yet; hide for now -SEB
+
+        // show graphs or not
+        this.graph_data_button = $(this.div_selector + " input.graph_data_button");
+        this.graph_data_button.on('click', () => {
+            const show_graph = true; trace_movie_frames(div_controller, movie_metadata, movie_zipfile, movie_frames, api_key, show_graph);
+        });
+
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
     }
 
 
     // on each change of input, validate the marker name
-    marker_name_changed ( ) {
+    marker_name_changed() {
         const val = this.marker_name_input.val();
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
-            this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
-            this.add_marker_button.prop(DISABLED,true);
+            this.add_marker_status.text("Marker name must be at least " + MIN_MARKER_NAME_LEN + " letters long");
+            this.add_marker_button.prop(DISABLED, true);
             return;
         } else {
             this.add_marker_status.text("");
-            this.add_marker_button.prop(DISABLED,false);
+            this.add_marker_button.prop(DISABLED, false);
         }
         // Make sure it isn't in use
-        for (let i=0;i<this.objects.length; i++){
-            if(this.objects[i].name == val){
+        for (let i = 0; i < this.objects.length; i++) {
+            if (this.objects[i].name == val) {
                 this.add_marker_status.text("That name is in use, choose another.");
-                this.add_marker_button.prop(DISABLED,true);
+                this.add_marker_button.prop(DISABLED, true);
                 return;
             }
         }
         this.add_marker_status.text('');
-        this.add_marker_button.prop(DISABLED,false);
+        this.add_marker_button.prop(DISABLED, false);
     }
 
     // new marker added
     add_marker_onclick_handler(_e) {
         if (this.marker_name_input.val().length >= MIN_MARKER_NAME_LEN) {
-            this.add_marker( 50, 50, this.marker_name_input.val());
+            this.add_marker(50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
         }
     }
@@ -147,18 +160,18 @@ class TracerController extends MovieController {
     // add a tracking circle with the next color
     add_marker(x, y, name) {
         let color = PLANT_MARKER_COLOR;
-        this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
+        this.objects.push(new Marker(x, y, MARKER_RADIUS, color, color, name));
         this.create_marker_table(); // redraw table
         // Finally enable the track-to-end button
-        this.track_button.prop(DISABLED,false);
+        this.track_button.prop(DISABLED, false);
     }
 
     create_marker_table() {
         // Generate the HTML for the table body
         let rows = '';
-        for (let i=0;i<this.objects.length;i++){
+        for (let i = 0; i < this.objects.length; i++) {
             const obj = this.objects[i];
-            if (obj.constructor.name == Marker.name){
+            if (obj.constructor.name == Marker.name) {
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
@@ -168,10 +181,10 @@ class TracerController extends MovieController {
             }
         }
         // put the HTML in the window and wire up the delete object method
-        $(this.div_selector + " tbody.marker_table_body").html( rows );
+        $(this.div_selector + " tbody.marker_table_body").html(rows);
         $(this.div_selector + " .del-row").on('click',
-                     (event) => {this.del_row(event.target.getAttribute('object_index'));});
-        $(this.div_selector + " .del-row").css('cursor','default');
+            (event) => { this.del_row(event.target.getAttribute('object_index')); });
+        $(this.div_selector + " .del-row").css('cursor', 'default');
         this.redraw();          // redraw with the markers
         if (user_demo) {        // be sure to hide the just-added delete option
             $('.nodemo').hide();
@@ -180,7 +193,7 @@ class TracerController extends MovieController {
 
     // Delete a row and update the server
     del_row(i) {
-        this.objects.splice(i,1);
+        this.objects.splice(i, 1);
         this.create_marker_table();
         this.put_markers();
     }
@@ -188,9 +201,9 @@ class TracerController extends MovieController {
     // Subclassed methods
     // Update the matrix location of the object the moved
     object_did_move(obj) {
-        $( "#"+obj.table_cell_id ).text( obj.loc() );
-        if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
-            this.track_button.prop(DISABLED,false); // enable the button if track point is moved
+        $("#" + obj.table_cell_id).text(obj.loc());
+        if (this.frame_number == 0 || this.frame_number < this.movie_metadata.total_frames) {
+            this.track_button.prop(DISABLED, false); // enable the button if track point is moved
         }
     }
 
@@ -202,10 +215,10 @@ class TracerController extends MovieController {
     // Return an array of markers (which are called markers elsewhere...)
     get_markers() {
         let markers = [];
-        for (let i=0;i<this.objects.length;i++){
+        for (let i = 0; i < this.objects.length; i++) {
             const obj = this.objects[i];
-            if (obj.constructor.name == Marker.name){
-                markers.push( {x:obj.x, y:obj.y, label:obj.name} );
+            if (obj.constructor.name == Marker.name) {
+                markers.push({ x: obj.x, y: obj.y, label: obj.name });
             }
         }
         return markers;
@@ -223,23 +236,27 @@ class TracerController extends MovieController {
             return;
         }
         const put_frame_markers_params = {
-            api_key      : this.api_key,
-            movie_id     : this.movie_id,
-            frame_number : this.frame_number,
-            trackpoints  : this.json_markers()
+            api_key: this.api_key,
+            movie_id: this.movie_id,
+            frame_number: this.frame_number,
+            trackpoints: this.json_markers()
         };
-        $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
-            .done( (data) => {
+        $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params)
+            .done((data) => {
                 if (data.error) {
-                    alert("Error saving annotations: "+data.message);
+                    alert("Error saving annotations: " + data.message);
                 }
             })
-            .fail( (res) => {
-                console.log("error:",res);
-                alert("error from put-frame-trackpoints:\n"+res.responseText);
+            .fail((res) => {
+                console.log("error:", res);
+                alert("error from put-frame-trackpoints:\n" + res.responseText);
             });
     }
 
+    frame_rate_in(e) {
+        this.fpm = parseInt(e.target.value, null);
+        console.log("this.fpm", this.fpm)
+    }
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
      * It calls the api/track-movie-quque on the server, queuing movie tracking (which takes a while).
      * Here are some pages for notes about playing the video:
@@ -254,21 +271,22 @@ class TracerController extends MovieController {
         // Ask the server to track from this frame to the end of the movie.
         // If successfull, set up a status worker to poll
         this.tracking_status.text("Asking server to track movie...");
-        this.track_button.prop(DISABLED,true); // disable it until tracking is finished
+        this.track_button.prop(DISABLED, true); // disable it until tracking is finished
 
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
-            frame_start: this.frame_number };
+            frame_start: this.frame_number
+        };
 
         // post is non-blocking, but running locally on bottle the tracking happens
         // before the post returns.
         this.tracking = true;   // we are tracking
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
-            console.log("track-movie-queue data=",data)
-            if(data.error){
+        $.post(`${API_BASE}api/track-movie-queue`, params).done((data) => {
+            console.log("track-movie-queue data=", data)
+            if (data.error) {
                 alert(data.message);
                 this.track_button.prop(DISABLED,false); // re-enable
                 this.tracking=false;
@@ -279,48 +297,48 @@ class TracerController extends MovieController {
         });
     }
 
-    add_frame_objects( frame ){
+    add_frame_objects(frame) {
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has markers
         console.log(`TraceController::add_frame_objects(${frame})`);
-        if (frame>0 && this.frames[frame-1].markers && this.frames[frame].markers){
-            for (let f0=0;f0<frame;f0++){
+        if (frame > 0 && this.frames[frame - 1].markers && this.frames[frame].markers) {
+            for (let f0 = 0; f0 < frame; f0++) {
                 var starts = [];
-                var ends   = {};
-                for (let tp of this.frames[f0].markers){
+                var ends = {};
+                for (let tp of this.frames[f0].markers) {
                     starts.push(tp);
                 }
-                for (let tp of this.frames[f0+1].markers){
+                for (let tp of this.frames[f0 + 1].markers) {
                     ends[tp.label] = tp
                 }
                 // now add the lines between the markers in the previous frames
                 // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
-                for (let st of starts){
-                    if (ends[st.label]){
-                        this.add_object( new Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
+                for (let st of starts) {
+                    if (ends[st.label]) {
+                        this.add_object(new Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
                     }
                 }
             }
         }
 
         // Add the markers for this frame if this frame has markers
-        console.log("frame=",frame,"this.frames[frame]=",this.frames[frame]);
+        console.log("frame=", frame, "this.frames[frame]=", this.frames[frame]);
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
-                this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
+                this.add_object(new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label));
             }
         }
         this.create_marker_table();
     }
 
-    set_movie_control_buttons()  {
+    set_movie_control_buttons() {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
-            this.rotate_button.prop(DISABLED,true);
+            $(this.div_controller + ' input').prop(DISABLED, true); // disable all the inputs
+            this.rotate_button.prop(DISABLED, true);
             return;
         }
-        this.rotate_button.prop(DISABLED,false);
+        this.rotate_button.prop(DISABLED, false);
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
@@ -329,22 +347,22 @@ class TracerController extends MovieController {
      */
     poll_for_track_end() {
         const params = {
-            api_key:this.api_key,
-            movie_id:this.movie_id,
+            api_key: this.api_key,
+            movie_id: this.movie_id,
             get_all_if_tracking_completed: true
         };
-        $.post(`${API_BASE}api/get-movie-metadata`, params).done( (data) => {
-            console.log("poll_for_track_end",Date.now(),"data:",data);
-            if (data.error==false){
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done((data) => {
+            console.log("poll_for_track_end", Date.now(), "data:", data);
+            if (data.error == false) {
                 // Send the status back to the UX
-                if (data.metadata.status==TRACKING_COMPLETED_FLAG) {
+                if (data.metadata.status == TRACKING_COMPLETED_FLAG) {
                     if (this.tracking) {
                         this.movie_tracked(data);
                     }
                 } else {
                     /* Update the status and track again in 250 msec */
                     this.tracking_status.text(data.metadata.status);
-                    this.timeout = setTimeout( ()=>{this.poll_for_track_end();}, TRACKING_POLL_MSEC );
+                    this.timeout = setTimeout(() => { this.poll_for_track_end(); }, TRACKING_POLL_MSEC);
                 }
             }
         });
@@ -352,7 +370,7 @@ class TracerController extends MovieController {
 
     /** movie is tracked - display the results */
     movie_tracked(data) {
-        console.log("Tracking complete. data=",data);
+        console.log("Tracking complete. data=", data);
 
         // This should work. but it is not. So just force a reload until I can figure out what's wrong.
         location.reload(true);
@@ -374,14 +392,15 @@ class TracerController extends MovieController {
 
     rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
-        this.rotate_button.prop(DISABLED,true);
+        this.rotate_button.prop(DISABLED, true);
         $('#firsth2').html(`Asking server to rotate movie ${this.movie_id} 90º counter-clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
-            action: 'rotate90cw'};
-        $.post(`${API_BASE}api/edit-movie`, params ).done( (data) => {
-            if(data.error){
+            action: 'rotate90cw'
+        };
+        $.post(`${API_BASE}api/edit-movie`, params).done((data) => {
+            if (data.error) {
                 alert(data.message);
             } else {
                 location.reload(true);
@@ -404,21 +423,22 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
         $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
     };
 
-    var frames = [{'frame_url': frame0_url,
-                   'markers':DEFAULT_MARKERS }];
+    var frames = [{
+        'frame_url': frame0_url,
+        'markers': DEFAULT_MARKERS
+    }];
     cc.load_movie(frames);
     cc.create_marker_table();
-    cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
+    cc.track_button.prop(DISABLED, true); // disable it until we have a marker added.
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
-                                  api_key,
-                                  show_graph=false) {
-    console.log("trace_movie_frames. div_controller=",div_controller,
-                "movie_zipfile=",movie_zipfile,"metadata_frames:",metadata_frames);
+    api_key, show_graph = true) {
+    //console.log("trace_movie_frames. div_controller=", div_controller,
+    //    "movie_zipfile=", movie_zipfile, "metadata_frames:", metadata_frames);
     const movie_frames = [];
-    const {entries} = await unzip(movie_zipfile);
+    const { entries } = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((name, i) => {
@@ -429,6 +449,20 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
         console.log("markers=", frames[i].markers);
         console.log("i=",i);
     });
+        frames[i] = {
+            'frame_url': URL.createObjectURL(blobs[i]),
+            'markers': movie_frames[i].markers
+        };
+        // Log the entire frame for context
+        //console.log(`Frame ${i}:`, frames[i]);
+
+        // Log each marker in the markers array
+        //frames[i].markers.forEach((marker, index) => {
+        //    console.log(`Marker ${index} for Frame ${i}:`, marker);
+        //});
+    });
+
+
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.set_movie_control_buttons();
@@ -599,43 +633,43 @@ function graph_data(cc, frames) {
 
 }
 
-// Not sure what we have, so ask the server and then dispatch to one of the two methods above
-function trace_movie(div_controller, movie_id, api_key) {
-    console.log("trace_movie API_BASE=",API_BASE);
+    // Not sure what we have, so ask the server and then dispatch to one of the two methods above
+    function trace_movie(div_controller, movie_id, api_key) {
+        console.log("trace_movie API_BASE=", API_BASE);
 
-    // Wire up the close button on the demo pop-up
-    $('#demo-popup-close').on('click',function() {
-        $('#demo-popup').fadeOut(300);
-    });
+        // Wire up the close button on the demo pop-up
+        $('#demo-popup-close').on('click', function () {
+            $('#demo-popup').fadeOut(300);
+        });
 
-    const params = {
-        api_key: api_key,
-        movie_id: movie_id,
-        frame_start: 0,
-        frame_count: 1e6
-    };
-    $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
-        if (resp.error==true) {
-            alert(resp.message);
-            return;
-        }
-        const width = resp.metadata.width;
-        const height = resp.metadata.height;
-        $(div_controller + ' canvas').prop('width',width).prop('height',height);
-        if (!resp.metadata.movie_zipfile_url) {
-            console.log("resp=",resp,"getting first frame");
-            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
-            return;
-        }
-        console.log("resp=",resp,"getting zipfile.");
-        if (user_demo) {
-            $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
-        } else {
-            $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
-        }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
-    });
-}
+        const params = {
+            api_key: api_key,
+            movie_id: movie_id,
+            frame_start: 0,
+            frame_count: 1e6
+        };
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
+            if (resp.error == true) {
+                alert(resp.message);
+                return;
+            }
+            const width = resp.metadata.width;
+            const height = resp.metadata.height;
+            $(div_controller + ' canvas').prop('width', width).prop('height', height);
+            if (!resp.metadata.movie_zipfile_url) {
+                console.log("resp=", resp, "getting first frame");
+                const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+                trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
+                return;
+            }
+            console.log("resp=", resp, "getting zipfile.");
+            if (user_demo) {
+                $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
+            } else {
+                $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
+            }
+            trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+        });
+    }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
