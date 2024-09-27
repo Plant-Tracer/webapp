@@ -25,7 +25,7 @@
                 <input type='button' value='-1' class='prev_frame frame_movement movement_backwards' disabled/>
 
                 <input type='number' value='0'  class='frame_number_field frame_movement'
-                       placeholder='frame' size='4' min='0' max='0' disabled/>
+                       placeholder='frame' min='0' style='width: 4em' disabled/>
                 <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled/>
                 <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled/>
                 <input type='button' value='⏵'  class='play_forward' disabled/>
@@ -43,7 +43,7 @@
                 </select>
             </form>
         </div>
-        <!-- Marker table start -->
+        <!-- Control start -->
         <div class='float-controls'>
             <table class="pure-table pure-table-horizontal pure-table-striped">
                 <thead>
@@ -57,34 +57,42 @@
                 </tbody>
             </table>
             <hr>
-            <form class='pure-form pure-form-aligned marker_form nodemo' action="javascript:void(0)" >
+            <form class='pure-form pure-form-aligned marker_form ' action="javascript:void(0)">
                 <fieldset>
-                    <p>Add another marker by entering the new marker name:</p>
-                    <div class='pure-control-group'>
+                    <p class="nodemo">Add another marker by entering the new marker name:</p>
+                    <div class='pure-control-group nodemo'>
                         <label for='marker-name-id'>marker name:</label>
-                        <input id='marker-name-id' class='marker_name_input' type='text' placeholder='Marker name' size='20' />
-                        <input class='add_marker_button pure-button  pure-button-primary' type='button' value='add new marker' disabled/>
+                        <input id='marker-name-id' class='marker_name_input' type='text' placeholder='Marker name' size='20'/>
+                        <input class='add_marker_button pure-button  pure-button-primary' type='button' value='Add new marker' disabled/>
                     </div>
 
-                    <div class='pure-control-group'>
-                        <span class='add_marker_status'></span> <!-- for errror messages -->
+                    <div class='pure-control-group nodemo'>
+                        <span class='add_marker_status'></span> <!-- for error messages -->
                     </div>
 
-                    <div class='pure-control-group'>
+                    <div class='pure-control-group nodemo'>
                         <label></label>
-                        <input class='track_button pure-button pure-button-primary' type='button' value='track movie'/>
+                        <input class='track_button pure-button pure-button-primary' type='button' value='Track movie'/>
                     </div>
-
-                    <div class='pure-control-group'>
+                </fieldset>
+            </form>
+            <form id="download_form" 
+                  class="pure-form pure-form-aligned download_button" 
+                  action="javascript:void(0)"
+                  method="post">
+                  <input id="dl_api_key" type="hidden" name="api_key" value=""/>
+                  <input id="dl_movie_id" type="hidden" name="movie_id" value=""/>
+                <fieldset>
+                    <div class="pure-control-group">
                         <label></label>
-                        <a class='download_link' href=''>
-                            <input class='download_button pure-button pure-button-primary' type='button' value='Download Trackpoints'/>
-                        </a>
+                        <input class="download_button pure-button pure-button-primary"
+                                type="submit" 
+                                value="Download trackpoints"/>
                     </div>
                 </fieldset>
             </form>
         </div>
-        <!-- Marker table end -->
+        <!-- Control end -->
     </div> <!-- tracer controller -->
 
 <!-- popup content is normally hidden -->

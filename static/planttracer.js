@@ -417,7 +417,7 @@ function action_button_clicked( e ) {
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 
 //                           #1          #2               #3               #4              #5                 #6                #7
-const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>Size</th> <th>status and action</th> </tr>";
+const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
@@ -506,6 +506,7 @@ function list_movies_data( movies ) {
                 analyze_label = 're-analyze';
             }
             const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
+
             const up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
 
             const you_class = (m.user_id == user_id) ? "you" : "";
@@ -565,7 +566,7 @@ function list_movies_data( movies ) {
             h += '<tr><td><i>No movies</i></td></tr>';
         }
 
-        // Offser to upload movies if not in demo mode.
+        // Offer to upload movies if not in demo mode.
         if (!user_demo) {
             h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
