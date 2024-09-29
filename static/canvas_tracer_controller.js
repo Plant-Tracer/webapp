@@ -469,14 +469,16 @@ function graph_data(cc, frames) {
         .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
         .filter(x => x.number !== null)
         .sort((a, b) => a.number - b.number);
+    const all_marker_labels = [];
     let ruler_start = null, ruler_end = null, scale = 1; 
     let pos_units = "pixels";
     let time_units = "frames";
+
     if (marker_labels.length >= 2) {
         const extract_ruler_start = marker_labels[0];
         const extract_ruler_end = marker_labels[marker_labels.length - 1];
-        ruler_start = frames[0].markers.find(marker => marker.label === extract_ruler_start.label); // Use only the value at the first frame
-        ruler_end = frames[0].markers.find(marker => marker.label === extract_ruler_end.label); // We could take the average over all frames
+        const ruler_start = frames[0].markers.find(marker => marker.label === extract_ruler_start.label);
+        const ruler_end = frames[0].markers.find(marker => marker.label === extract_ruler_end.label);
         const x_ruler_start = ruler_start.x;
         const y_ruler_start = ruler_start.y;
         const x_ruler_end = ruler_end.x;
@@ -485,24 +487,40 @@ function graph_data(cc, frames) {
         const real_distance = extract_ruler_end.number - extract_ruler_start.number;
         scale = real_distance / pixel_distance;
         pos_units = "mm";
+        time_units = "minutes";
     } else {
         console.log('Ruler markers not found. The distance will be in pixels.');
     }
 
     if (cc.fpm != null) {
-        pos_units = "minutes";
-
+        pos_units = "pixels";
     }
+
     frames.forEach((frame) => {
         // Filter for the 'Apex' marker
         const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
-
+        /* const rulerMarker0 = frame.markers.find(marker => marker.label === 'Ruler 0mm');
+        const rulerMarker20 = frame.markers.find(marker => marker.label === 'Ruler 20mm');
+        // const rulerRegex = /\b(\d+)mm|\b(\d+)\b/i; 
+        if (rulerMarker0 && rulerMarker20) {
+            extract_ruler_start_frame = frame.marker.find(marker => marker.label === 'Ruler 0mm');
+            extract_ruler_end_frame = frame.marker.find(marker => marker.label === 'Ruler 20mm');
+            ruler_start = frame.markers.find(marker => marker.label === extract_ruler_start_frame.label);
+            ruler_end = frame.markers.find(marker => marker.label === extract_ruler_end_frame.label);
+            const ruler_start_x = ruler_start.x;
+            const ruler_start_y = ruler_start.y;
+            const ruler_end_x = ruler_end.x;
+            const ruler_end_y = ruler_end.y;
+            const pixel_distance = Math.sqrt(Math.pow(ruler_end_x - ruler_start_x, 2) + Math.pow(ruler_end_y - ruler_start_y, 2));
+            const real_distance = extract_ruler_end_frame.number - extract_ruler_start_frame.number;
+            scale = real_distance / pixel_distance;
+        } */
         // If 'Apex' marker is found, push the frame number and the x, y positions
         if (apexMarker) {
             frame_labels.push(cc.fpm ? (Math.floor(1/cc.fpm) * apexMarker.frame_number) : apexMarker.frame_number); // frame rate = 1 frame/min
             x_values_mm.push((apexMarker.x - x_apex_0) * scale);
             y_values_mm.push((apexMarker.y - y_apex_0) * scale);
-        }
+        }    
     });
 
     const ctxX = document.getElementById('xChart').getContext('2d');
@@ -512,13 +530,13 @@ function graph_data(cc, frames) {
     const xChart = new Chart(ctxX, {
         type: 'line',
         data: {
-            labels: frame_labels, // X-axis will use the frame numbers
+            labels: frame_labels,
             datasets: [
                 {
-                    label: 'Time vs X Position', // Label for X dataset
-                    data: x_values_mm, // Data points for X position
-                    borderColor: 'rgba(255, 0, 0, 1)', // Pure red line (R: 255, G: 0, B: 0, A: 1)
-                    fill: false, // Disable filling under the line
+                    label: 'Time vs X Position',
+                    data: x_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
                     pointRadius: 0
                 }
             ]
@@ -552,13 +570,13 @@ function graph_data(cc, frames) {
     const yChart = new Chart(ctxY, {
         type: 'line',
         data: {
-            labels: frame_labels, // X-axis will use the frame numbers
+            labels: frame_labels,
             datasets: [
                 {
-                    label: 'Time vs Y Position', // Label for Y dataset
-                    data: y_values_mm, // Data points for Y position
-                    borderColor: 'rgba(255, 0, 0, 1)', // Pure red line (R: 255, G: 0, B: 0, A: 1)
-                    fill: false, // Disable filling under the line
+                    label: 'Time vs Y Position',
+                    data: y_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
                     pointRadius: 0
                 }
             ]
