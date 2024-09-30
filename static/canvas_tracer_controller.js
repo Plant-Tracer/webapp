@@ -462,59 +462,19 @@ function graph_data(cc, frames) {
     const y_values_mm = [];
     const x_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').x;
     const y_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').y;
-
-    // Function to extract numeric portion from a 
-    //const marker_labels = frames[0].markers.map(marker => { label: marker.label, "number": get_ruler_size(marker.label) }).sort(x.number);
-    const marker_labels = frames[0].markers
-        .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
-        .filter(x => x.number !== null)
-        .sort((a, b) => a.number - b.number);
-    const all_marker_labels = [];
-    let ruler_start = null, ruler_end = null, scale = 1; 
     let pos_units = "pixels";
     let time_units = "frames";
 
-    if (marker_labels.length >= 2) {
-        const extract_ruler_start = marker_labels[0];
-        const extract_ruler_end = marker_labels[marker_labels.length - 1];
-        const ruler_start = frames[0].markers.find(marker => marker.label === extract_ruler_start.label);
-        const ruler_end = frames[0].markers.find(marker => marker.label === extract_ruler_end.label);
-        const x_ruler_start = ruler_start.x;
-        const y_ruler_start = ruler_start.y;
-        const x_ruler_end = ruler_end.x;
-        const y_ruler_end = ruler_end.y;
-        const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
-        const real_distance = extract_ruler_end.number - extract_ruler_start.number;
-        scale = real_distance / pixel_distance;
-        pos_units = "mm";
-        time_units = "minutes";
-    } else {
-        console.log('Ruler markers not found. The distance will be in pixels.');
-    }
-
     if (cc.fpm != null) {
-        pos_units = "pixels";
+        time_units = "minutes";
     }
 
     frames.forEach((frame) => {
-        // Filter for the 'Apex' marker
         const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
-        /* const rulerMarker0 = frame.markers.find(marker => marker.label === 'Ruler 0mm');
-        const rulerMarker20 = frame.markers.find(marker => marker.label === 'Ruler 20mm');
-        // const rulerRegex = /\b(\d+)mm|\b(\d+)\b/i; 
-        if (rulerMarker0 && rulerMarker20) {
-            extract_ruler_start_frame = frame.marker.find(marker => marker.label === 'Ruler 0mm');
-            extract_ruler_end_frame = frame.marker.find(marker => marker.label === 'Ruler 20mm');
-            ruler_start = frame.markers.find(marker => marker.label === extract_ruler_start_frame.label);
-            ruler_end = frame.markers.find(marker => marker.label === extract_ruler_end_frame.label);
-            const ruler_start_x = ruler_start.x;
-            const ruler_start_y = ruler_start.y;
-            const ruler_end_x = ruler_end.x;
-            const ruler_end_y = ruler_end.y;
-            const pixel_distance = Math.sqrt(Math.pow(ruler_end_x - ruler_start_x, 2) + Math.pow(ruler_end_y - ruler_start_y, 2));
-            const real_distance = extract_ruler_end_frame.number - extract_ruler_start_frame.number;
-            scale = real_distance / pixel_distance;
-        } */
+        const calculations = calc_scale(frame.markers);
+        const scale = calculations.scale;
+        pos_units = calculations.pos_units; // TODO - if units cahnge, revert to pixels.
+
         // If 'Apex' marker is found, push the frame number and the x, y positions
         if (apexMarker) {
             frame_labels.push(cc.fpm ? (Math.floor(1/cc.fpm) * apexMarker.frame_number) : apexMarker.frame_number); // frame rate = 1 frame/min
@@ -607,15 +567,37 @@ function graph_data(cc, frames) {
     });
 
     function get_ruler_size(str) {
-        // Match digits in the RulerXXXmm 
-
         const match = str.match(/^Ruler\s*(\d+)mm$/);
-
-
-        //const match = str.match(/^Ruler(\s*)(\d+)mm$/);
-        // Return the matched number as an integer, or null if no match
         return match ? parseInt(match[1], 10) : null;
     }
+
+    function calc_scale(markers) {
+        let scale = 1, pos_units = "pixels";
+        const ruler_markers = markers
+            .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
+            .filter(x => x.number !== null)
+            .sort((a, b) => a.number - b.number);
+        
+        if (ruler_markers.length >= 2) {
+            const extract_ruler_start = ruler_markers[0];
+            const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
+            const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
+            const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
+            const x_ruler_start = ruler_start.x;
+            const y_ruler_start = ruler_start.y;
+            const x_ruler_end = ruler_end.x;
+            const y_ruler_end = ruler_end.y;
+            const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
+            const real_distance = extract_ruler_end.number - extract_ruler_start.number;
+            scale = real_distance / pixel_distance;
+            pos_units = "mm";
+        } else {
+            console.log('Ruler markers not found. The distance will be in pixels.');
+            scale = 1;
+            pos_units = "pixels";
+        }
+        return { scale: scale, pos_units: pos_units };
+    }    
 }
 
     // Not sure what we have, so ask the server and then dispatch to one of the two methods above
