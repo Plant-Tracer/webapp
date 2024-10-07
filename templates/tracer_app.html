@@ -84,12 +84,7 @@
                         </a>
                     </div>                    
                     
-                    <div class='pure-control-group'>
-                        <label></label>
-                        <a class='graph_link' href=''>
-                            <input class='graph_button pure-button pure-button-primary' type='button' value='Graph Trackpoints'/>
-                        </a>
-                    </div>
+        
                 </fieldset>
             </form>
             <form class='pure-form pure-form-aligned capture_form' action="javascript:void(0)" >
@@ -100,13 +95,19 @@
                         <input id='fpm-id' class='frame_rate_input' type='text' placeholder='Frames per minute' size='20' />
                     </div>
                 </fieldset>
-            </form>
-            <canvas id="xChart" width="400" height="200"></canvas>
-            <canvas id="yChart" width="400" height="200"></canvas>
-        </div>
-        <!-- Control end -->
+            </form>  
+
+        </div>    
+            <div>
+                <canvas id="xChart" width="400" height="200"></canvas>  
+                <canvas id="yChart" width="400" height="200"></canvas>
+            <div/>
+        </div>   
+        <!-- Control end -->    
     </div> <!-- tracer controller -->
-    
+   
+
+
 <!-- popup content is normally hidden -->
     <div id='demo-popup' class="popup" popup-name="popup-1">
         <div class="popup-content">

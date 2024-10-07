@@ -13,6 +13,11 @@ canvas {
     padding: 2px;
 }
 
+.float-graph {
+    float: left;
+    padding: 2px;
+}
+
 
 /* Popup from https://stackoverflow.com/questions/1328723/how-to-generate-a-simple-popup-using-jquery */
 
