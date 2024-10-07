@@ -407,7 +407,7 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
                                   api_key,
-                                  show_graph=false) {
+                                  show_graph=true) {
     console.log("trace_movie_frames. div_controller=",div_controller,
                 "movie_zipfile=",movie_zipfile,"metadata_frames:",metadata_frames);
     const movie_frames = [];
@@ -428,12 +428,166 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
         cc.track_button.val( RETRACK_MOVIE );
         cc.download_button.show();
     }
-
     if (show_graph) {
         // draw the graph using the information in movie_frames
-        // @JoAnn TODO
+        graph_data(cc, movie_frames);
+    }
+}
+
+function graph_data(cc, frames) {
+    const frame_labels = [];
+    const x_values_mm = [];
+    const y_values_mm = [];
+    const x_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').x;
+    const y_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').y;
+    let pos_units = "pixels";
+    let time_units = "frames";
+
+    if (cc.fpm != null) {
+        time_units = "minutes";
     }
 
+    frames.forEach((frame) => {
+        const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
+        const calculations = calc_scale(frame.markers);
+        const scale = calculations.scale;
+        pos_units = calculations.pos_units; // TODO - if units cahnge, revert to pixels.
+
+        // If 'Apex' marker is found, push the frame number and the x, y positions
+        if (apexMarker) {
+            frame_labels.push(cc.fpm ? (Math.floor(1 / cc.fpm) * apexMarker.frame_number) : apexMarker.frame_number); // frame rate = 1 frame/min
+            x_values_mm.push((apexMarker.x - x_apex_0) * scale);
+            y_values_mm.push((apexMarker.y - y_apex_0) * scale);
+        }
+    });
+
+    const ctxX = document.getElementById('xChart').getContext('2d');
+    const ctxY = document.getElementById('yChart').getContext('2d');
+
+    // Graph for Frame Number or Time vs X Position
+    const xChart = new Chart(ctxX, {
+        type: 'line',
+        data: {
+            labels: frame_labels,
+            datasets: [
+                {
+                    label: 'Time vs X Position',
+                    data: x_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (' + time_units + ')'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'X Position (' + pos_units + ')'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                        display: true,
+                    labels: {
+                        usePointStyle: true,  // Use line instead of a box in the legend
+                        boxWidth: 4,         // Make the line shorter in the legend
+                        pointStyle: 'line',  // Show a line instead of the default box
+                        borderColor: 'rgba(255, 0, 0, 1)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Graph for Y Position
+    const yChart = new Chart(ctxY, {
+        type: 'line',
+        data: {
+            labels: frame_labels,
+            datasets: [
+                {
+                    label: 'Time vs Y Position',
+                    data: y_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (' + time_units + ')'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Y Position (' + pos_units + ')'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        usePointStyle: true,  // Use line instead of a box in the legend
+                        boxWidth: 4,         // Make the line shorter in the legend
+                        pointStyle: 'line',  // Show a line instead of the default box
+                        borderColor: 'rgba(255, 0, 0, 1)'
+                    }
+                }
+            }
+        }
+    });
+
+    function get_ruler_size(str) {
+        const match = str.match(/^Ruler\s*(\d+)mm$/);
+        return match ? parseInt(match[1], 10) : null;
+    }
+
+    function calc_scale(markers) {
+        let scale = 1, pos_units = "pixels";
+        const ruler_markers = markers
+            .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
+            .filter(x => x.number !== null)
+            .sort((a, b) => a.number - b.number);
+
+        if (ruler_markers.length >= 2) {
+            const extract_ruler_start = ruler_markers[0];
+            const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
+            const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
+            const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
+            const x_ruler_start = ruler_start.x;
+            const y_ruler_start = ruler_start.y;
+            const x_ruler_end = ruler_end.x;
+            const y_ruler_end = ruler_end.y;
+            const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
+            const real_distance = extract_ruler_end.number - extract_ruler_start.number;
+            scale = real_distance / pixel_distance;
+            pos_units = "mm";
+        } else {
+            console.log('Ruler markers not found. The distance will be in pixels.');
+            scale = 1;
+            pos_units = "pixels";
+        }
+        return { scale: scale, pos_units: pos_units };
+    }
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
