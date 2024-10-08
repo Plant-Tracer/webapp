@@ -26,20 +26,21 @@ Release Notes
 0.9.3 Summary
 *************
 
-    * Analyze page now presents two line graphs of plant motion: x vs time and y vs time
-    * Analyze page *Download Trackpoints* button is fixed
-    * Analyze default Ruler markers are at 0 and 10 mm, rather than 0 and 20 mm
-    * Analyze page now has explanatory text
-    * Analyze page has *rotate movie 90°* function
-    * Movies list in demo mode is consistent with demo mode capabilities: a single list with no categories
-    * All functions not available in demo mode removed from the UI while in demo mode
-    * Movies list publish/unpublish control now are buttons rather than checkboxes
-    * Copyright and Terms of Use page cleanup
-    * dbmaint help documentation cleanup
-    * Documentation converted from Markup to ReStructuredText. Index created.
-    * Developer documentation updated and more complete, including MySQL setup instructions
-    * Installation documentation updated
-    * Fixed several movie tracking errors and hangs
-    * Move some movie processing from server to client
-    * Movie playback no longer flashes
-
+    * Analyze: Add two line graphs of plant motion: x vs time and y vs time
+    * Analyze: *Download Trackpoints* button is fixed
+    * Analyze: Default Ruler markers are at 0 and 10 mm, rather than 0 and 20 mm
+    * Analyze: Add explanatory text
+    * Analyze: Add *rotate movie 90°* function
+    * Analyze: Fix several movie tracking errors and hangs
+    * Movies list: in demo mode is consistent with demo mode capabilities -- a single list with no categories
+    * Demo Mode: All functions not available in demo mode removed from the UI while in demo mode
+    * Movies list: publish/unpublish control now are buttons rather than checkboxes
+    * List and Analyze: Move some movie processing from server to client
+    * List and Analyze: Movie playback no longer flashes
+    * Copyright and Terms of Use: page cleanup
+    * dbmaint: help documentation cleanup
+    * Documentation: converted from Markup to ReStructuredText. Index created.
+    * Documentation: update and make more complete, including MySQL setup instructions
+    * Documentation: Installation steps updated
+    * Documentation: Add ReleaseHistory page
+  
