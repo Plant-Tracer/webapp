@@ -20,6 +20,7 @@ Welcome to Plant Tracer Web Application's documentation!
    movie_player
    resources
    user story - tracking
+   ReleaseHistory
 
 Indices and tables
 ==================
