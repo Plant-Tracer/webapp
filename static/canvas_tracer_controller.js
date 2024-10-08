@@ -31,7 +31,7 @@ import { unzip, setOptions } from './unzipit.module.js';
 
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
-                         {'x':50,'y':150,'label':'Ruler 20mm'}
+                         {'x':50,'y':150,'label':'Ruler 10mm'}
                         ];
 
 // NOTE ./static is needed below but not above!
