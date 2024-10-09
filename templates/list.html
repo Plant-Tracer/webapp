@@ -82,15 +82,15 @@ input[type=checkbox] {
 <div class='nodemo'>
   <h3>Unpublished</h3>
   <p class='instructions'><i>Unpublished movies can only be seen by you
-      and the course instructor. Only the course instructor can
-      published a movie. Click the 'delete' button to delete a movie.</i></p>
+      and the course admins. Only the course admins can
+      publish a movie. Click the 'delete' button to delete a movie.</i></p>
   <div class='mtable' id='your-unpublished-movies'></div>
 </div>
 
 <h3 class='nodemo'>Course movies for {{primary_course_name}}</h3>
 <p class='instructions nodemo'><i>These are the course movies available to you from other students in your course.</i></p>
 <p class='instructions nodemo'> Students can only see the published movies of
-    other students in this course, while the course admin can see all of the movies. </p>
+    other students in this course, while the course admins can see all of the movies. </p>
 
 {% if admin %}
 <p class='instructions'>Admins can publish or unpublish movies by pressing the PUBLISH or UNPUBLISH buttons, respectively. Admins cannot delete or undelete movies; only
