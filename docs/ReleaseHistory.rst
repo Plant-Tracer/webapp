@@ -34,7 +34,8 @@ Release Notes
     * Analyze: Fix several movie tracking errors and hangs
     * Movies list: in demo mode is consistent with demo mode capabilities -- a single list with no categories
     * Demo Mode: All functions not available in demo mode removed from the UI while in demo mode
-    * Movies list: publish/unpublish control now are buttons rather than checkboxes
+    * Movies list: publish/unpublish control now are now described as buttons rather than checkboxes
+    * Movies list: publish/unpublish/delete/undelete buttons now properly refresh the page
     * List and Analyze: Move some movie processing from server to client
     * List and Analyze: Movie playback no longer flashes
     * Copyright and Terms of Use: page cleanup
