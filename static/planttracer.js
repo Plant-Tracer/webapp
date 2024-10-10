@@ -19,8 +19,15 @@ const UPLOAD_TIMEOUT_SECONDS = 20;
 
 // sounds for buttons
 var SOUNDS = [];
-SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
-SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+if (typeof Audio !== 'undefined') {
+  SOUNDS[DELETE_BUTTON] = new Audio('static/pop-up-something-160353.mp3');
+  SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+} else {
+  // Provide fallbacks or empty mock objects for testing
+  SOUNDS[DELETE_BUTTON] = { play: () => {} };
+  SOUNDS[UNDELETE_BUTTON] = { play: () => {} };
+}
+
 
 
 ////////////////////////////////////////////////////////////////
@@ -319,7 +326,7 @@ function set_property(user_id, movie_id, property, value)
             if (data.error!=false){
                 $('#message').html('error: '+data.message);
             } else {
-                list_ready_function();
+                list_movies();
             }
         })
         .catch(console.error);
@@ -585,7 +592,7 @@ function list_movies_data( movies ) {
 // The functions after this implement the interactivity
 //
 function list_ready_function() {
-    console.log("list_ready_function()");
+    console.log("list_movies");
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
@@ -669,3 +676,6 @@ $( document ).ready( function() {
     $('#register_button').click( register_func );
     $('#resend_button').click( resend_func );
 });
+
+
+module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post}
