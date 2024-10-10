@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>MySQL Setup for Plant Tracer &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="Installation.html" />
+    <link rel="prev" title="Developer Setup" href="DeveloperSetup.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="mysql-setup-for-plant-tracer">
+<h1>MySQL Setup for Plant Tracer<a class="headerlink" href="#mysql-setup-for-plant-tracer" title="Link to this heading">¶</a></h1>
+<p>Doing development on the Plant Tracer webapp currently requires a MySQL database. While we’re not sure later versions of MySQL won’t work, the webapp was developed against MySQL 8.0 and recommend using the latest 8.0.x available. Deployment is to and 8.0 server, so if you are making any changes to the database part of the application, it had better work with 8.0.</p>
+<p>It’s been worth having a local installation of MySQL for development so that developers don’t smash into each other trying to share remote database instances that someone else has to administer. Plant Tracer’s use of MySQL is fairy straightforward and there’s not much admin work to do.</p>
+<section id="macos-development-environment">
+<h2>MacOS Development Environment<a class="headerlink" href="#macos-development-environment" title="Link to this heading">¶</a></h2>
+<p>Homebrew: Three of us have tried to install MySQL on MacOS with HomeBrew and were unsuccessful, so we recommend going to the MySQL.com download site and downloading a .dmg installer instead.</p>
+<p>These instructions assume there is no existing MySQL installation on the machine. If there is, you are assumed to have facility with MySQL already, and on your own to make sure you’ve configured it properly or maybe having multiple versions of MySQL on your machine. That gets complicated and is beyond the scope of these instructions intended for those new to MySQL admin and development.</p>
+<p>Download the .dmg from dev.mysql.com:</p>
+<ul class="simple">
+<li><p>Navigate to the MySQL Developer download page at <a class="reference external" href="https://dev.mysql.com/downloads/mysql/">https://dev.mysql.com/downloads/mysql/</a></p></li>
+<li><p>Select Version: 8.0.39 (or whatever the current 8.0.x release is)</p></li>
+<li><p>Select Operating System: macOS</p></li>
+<li><p>Select OS Version: whatever you have, presumably macOS 14 (ARM, 64 bit)</p></li>
+<li><p>Press the Download button to the right of <em>macOS 14 (ARM, 64-bit), DMG Archive</em></p></li>
+<li><p>If you want, sign Up for an Oracle Web account if you don’t already have one, or Login if you do</p></li>
+<li><p>But you can just click on the <em>No thanks, just start my download link underneat the big Login/Sign Up buttons</em></p></li>
+</ul>
+<p>Install the DMG:</p>
+<ul class="simple">
+<li><p>The MySQL documentation for this procedure is quite good: <a class="reference external" href="https://dev.mysql.com/doc/refman/8.0/en/macos-installation-pkg.html">https://dev.mysql.com/doc/refman/8.0/en/macos-installation-pkg.html</a>
+The following steps are the minimal happy path for a straight installation, assuming no customization is necessary and everything Just Works.</p></li>
+<li><p>Double-click on the mysql-8.0.39-macos-arm64.dmg to open the dmg</p></li>
+<li><p>Double-click on mysql-8.0.39-macos-arm64.pkg to start the installation</p></li>
+<li><p>On the “The package will run a program to determine if the software can be installed. pop-up, press the Allow button</p></li>
+<li><p>Press Continue on the Introduction page</p></li>
+<li><p>Press Continue on the License page</p></li>
+<li><p>Press Agree on the To continue installing the software you must agree to the terms of the software license agreement page</p></li>
+<li><p>Press Continue to Install for all users on this computer (or choose a different option)</p></li>
+<li><p>Press Install on the Installation Type page</p></li>
+<li><p>Installation page: ???</p></li>
+<li><p>Leave User Strong Password Encryption selected and then Press Next on the Configuration page</p></li>
+<li><p>Enter a root password, leave Start MySQL Server once the installation is complete checked, and press Finish. Make sure you have a way to not forget your root password, as it is very annoying to recover from losing it</p></li>
+<li><p>Press Close on the Summary page</p></li>
+</ul>
+<p>Verify the installation:</p>
+<ul>
+<li><p>On the MacOS System Settings app, search for MySQL</p></li>
+<li><p>Verify that the Active Instance and Installed Instances have green and not red dots to their left. Green means they are running; Red means they are stopped and if they are start them. But if they go red again, something is not good and troubleshooting is in order</p></li>
+<li><p>Consider (strongly consider) making sure the Start MySQL when your computer starts up checkbox is checked</p></li>
+<li><p>There is no need to Initialize Database. We’ll make a database later when setting up webapp development</p></li>
+<li><p>Open a Terminal and execute:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ mysqladmin -u root -p
+Enter password: (enter root password here)
+</pre></div>
+</div>
+</li>
+<li><p>If that looks successful – no errors, great.</p></li>
+<li><p>Connect to the server with the mysql client:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ mysql -u root -p
+Enter password: (enter root password here)
+</pre></div>
+</div>
+</li>
+<li><p>If you get a mysql&gt; prompt, then the client is able to connect to the server. Also great.</p></li>
+<li><p>Enter the quit command to quit the mysql client</p></li>
+<li><p>If you’ve gotten this far, the MySQL installation is in good shape.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">MySQL Setup for Plant Tracer</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#macos-development-environment">MacOS Development Environment</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#note">Note</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#agenda">Agenda</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="DeveloperSetup.html" title="previous chapter">Developer Setup</a></li>
+      <li>Next: <a href="Installation.html" title="next chapter">Installation</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/MySQLSetup.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
