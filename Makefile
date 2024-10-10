@@ -199,8 +199,9 @@ eslint:
 	(cd templates;make eslint)
 
 jscoverage:
+	npm install --save-dev babel-jest @babel/core @babel/preset-env
 	npm run coverage
-
+	npm test
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:
