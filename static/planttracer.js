@@ -678,4 +678,4 @@ $( document ).ready( function() {
 });
 
 
-module.exports = {_data, list_users_data, register_func, upload_movie_post}
+module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post}
