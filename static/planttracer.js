@@ -592,7 +592,7 @@ function list_movies_data( movies ) {
 // The functions after this implement the interactivity
 //
 function list_ready_function() {
-    console.log("list_ready_function");
+    console.log("list_ready_function()");
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
