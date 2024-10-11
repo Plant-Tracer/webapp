@@ -19,8 +19,15 @@ const UPLOAD_TIMEOUT_SECONDS = 20;
 
 // sounds for buttons
 var SOUNDS = [];
-SOUNDS[DELETE_BUTTON]   = new Audio('static/pop-up-something-160353.mp3');
-SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+if (typeof Audio !== 'undefined') {
+  SOUNDS[DELETE_BUTTON] = new Audio('static/pop-up-something-160353.mp3');
+  SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+} else {
+  // Provide fallbacks or empty mock objects for testing
+  SOUNDS[DELETE_BUTTON] = { play: () => {} };
+  SOUNDS[UNDELETE_BUTTON] = { play: () => {} };
+}
+
 
 
 ////////////////////////////////////////////////////////////////
@@ -669,3 +676,6 @@ $( document ).ready( function() {
     $('#register_button').click( register_func );
     $('#resend_button').click( resend_func );
 });
+
+
+module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post}

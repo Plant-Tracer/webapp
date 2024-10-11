@@ -200,7 +200,7 @@ eslint:
 
 jscoverage:
 	npm run coverage
-
+	npm test
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:
