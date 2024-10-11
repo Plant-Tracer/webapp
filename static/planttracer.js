@@ -326,7 +326,7 @@ function set_property(user_id, movie_id, property, value)
             if (data.error!=false){
                 $('#message').html('error: '+data.message);
             } else {
-                list_movies();
+                list_ready_function();
             }
         })
         .catch(console.error);
@@ -592,7 +592,7 @@ function list_movies_data( movies ) {
 // The functions after this implement the interactivity
 //
 function list_ready_function() {
-    console.log("list_movies");
+    console.log("list_ready_function");
     $('#message').html('Listing movies...');
 
     let formData = new FormData();
@@ -678,4 +678,4 @@ $( document ).ready( function() {
 });
 
 
-module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post}
+module.exports = {_data, list_users_data, register_func, upload_movie_post}
