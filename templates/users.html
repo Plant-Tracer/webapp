@@ -14,36 +14,25 @@ Below is a list of all users registered on this system for your course
 {% endif %}
 
 <div id='your-users'></div>
-
-
-
 {% if admin %}
 <h2>Register</h2>
 
 <form class='pure-form pure-form-aligned'>
 
-  <p >You can register students for your class by entering their email
+  <p>You can register students for your class by entering their email
     addresses into the text box below.</p>
 
   <p>Please put each email address on
 its own line, or separate the email addresses with spaces, commas or
 semicolons.</p>
 
-  <p/>
-
   <label for='register-emails'>Email Addresses:</label>
   <textarea name='register-emails' rows=10 cols=50> </textarea>
 
   <div class='pure-controls'>
-  <input id='register-emails-button' type='button' value='REGISTER' class="pure-button pure-button-primary"/>
+    <input id='register-emails-button' type='button' value='REGISTER' class="pure-button pure-button-primary"/>
   </div>
-
-   --- form better set planttracer_endpoint
-
-
 </form>
-
-
 {% endif %}
 
 <script>

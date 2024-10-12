@@ -67,20 +67,19 @@
           <li class="pure-menu-item">
             <a href="/list" class="pure-menu-link">Movies</a>
           </li>
-          {% if demo_user==0 %}
+          {% if not user_demo %}
           <li class="pure-menu-item">
             <a href="/upload" class="pure-menu-link">Upload</a>
           </li>
           <li class="pure-menu-item">
             <a href="/users" class="pure-menu-link">Users</a>
           </li>
-          {% endif %}
-          {% if admin %}
+          {% endif %}          
           <li class="pure-menu-item">
             <a href="/audit" class="pure-menu-link">Audit</a>
           </li>
           {% endif %}
-          {% else %}
+          {% if not logged_in %}
           <li class="pure-menu-item">
             <a href="/register" class="pure-menu-link">Register</a>
           </li>
