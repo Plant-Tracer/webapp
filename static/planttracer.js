@@ -652,7 +652,6 @@ function list_users_data( users, course_array ) {
 
 function list_users()
 {
-    $('#message').html('Listing users...');
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
     fetch(`${API_BASE}api/list-users`, { method:"POST", body:formData })
