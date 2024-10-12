@@ -18,7 +18,6 @@ function build_audit_table() {
                 return;
             }
             let logs = data.logs;
-            console.log(logs);
             // get the columns
             var columns = [];
             for (const key in logs[0]) {
