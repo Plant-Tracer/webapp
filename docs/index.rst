@@ -10,17 +10,18 @@ Welcome to Plant Tracer Web Application's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   UserTutorial
+   ReleaseHistory
+   demo_mode
    DeveloperSetup
    MySQLSetup
    Installation
    THEORY_OF_DESIGN
-   demo_mode
    gallery
    gallery_learning_plan
    movie_player
    resources
    user story - tracking
-   ReleaseHistory
 
 Indices and tables
 ==================
