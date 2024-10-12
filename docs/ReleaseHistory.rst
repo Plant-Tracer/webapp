@@ -39,6 +39,7 @@ Release Notes
     * List and Analyze: Move some movie processing from server to client
     * List and Analyze: Movie playback no longer flashes
     * Users: page cleanup
+    * Audit: populate Audit Log section of page; was errroneously always empty
     * Menu: Show Users page, show Register and Resend when not logged in, adjust for demo mode, add Help
     * Copyright and Terms of Use: page cleanup
     * dbmaint: help documentation cleanup
