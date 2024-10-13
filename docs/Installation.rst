@@ -11,7 +11,7 @@ Requirements and Preparation
     * ``[dbreader]`` which can read the database
     * ``[dbwriter]`` which can write the database
 
-* Ensure that python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date. 
+* Ensure that python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
   - Python is installed automatically using brew on MacOS if not present, using the steps in this document.
 
@@ -42,7 +42,7 @@ Installation
 
     $ make install-ubuntu
 
-#. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for ``[client]``, ``[dbreader]`` and ``[`dbwriter]``. 
+#. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for ``[client]``, ``[dbreader]`` and ``[`dbwriter]``.
 
    * Do not add any other .ini files to the repo. etc/credentials.ini is blocked by the .gitignore file, but it can be overridden.
 
@@ -73,9 +73,29 @@ Installation
     SMTP_PASSWORD=MyPassword
     SMTP_PORT=587
     SMTP_HOST=smtp.mycompany.com
-       
+
     [imap]
     IMAP_USERNAME=plantadmin@mycompany.com
     IMAP_PASSWORD=MyPassword
     IMAP_HOST=imap.mycompany.com
     IMAP_PORT=993
+
+Push to Lambda
+--------------
+
+```
+cd gits/webapp
+source venv/bin/activate
+zappa status dev
+make update-dev
+
+
+```
+* If this is the first time the zappa function was published, update the DNS to point to the new API Gateway URL.
+
+  For example, this `zappa status dev` shows that dev.planttracer.com should be a CNAME for uga7dh2bxj.execute-api.us-east-1.amazonaws.com.
+
+```
+	API Gateway URL:      https://uga7dh2bxj.execute-api.us-east-1.amazonaws.com/dev
+	Domain URL:           https://dev.planttracer.com
+```

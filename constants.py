@@ -4,7 +4,7 @@ Constants are created in classes so we can import the class and don't have to im
 
 #pylint: disable=too-few-public-methods
 
-__version__ = '0.9.2'
+__version__ = '0.9.3'
 
 GET='GET'
 POST='POST'
