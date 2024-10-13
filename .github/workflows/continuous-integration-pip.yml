@@ -130,3 +130,9 @@ jobs:
           PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make jscoverage
+
+      - name: Run JavaScript tests and coverage
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
+        run: |
+          npx playwright test

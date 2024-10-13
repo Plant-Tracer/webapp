@@ -8,6 +8,8 @@
     "@babel/preset-env": "^7.25.8",
     "@html-eslint/eslint-plugin": "^0.24.0",
     "@html-eslint/parser": "^0.24.0",
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.7.5",
     "babel-jest": "^29.7.0",
     "babel-preset-airbnb": "^5.0.0",
     "eslint": "^8.57.0",
