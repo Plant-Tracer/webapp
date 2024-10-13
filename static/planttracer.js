@@ -676,6 +676,6 @@ $( document ).ready( function() {
     $('#resend_button').click( resend_func );
 });
 
-//if (typeof module != 'undefined'){
+if (typeof module != 'undefined'){
 module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post}
-//}
+}
