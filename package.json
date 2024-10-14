@@ -23,6 +23,7 @@
     "coverage": "jest --collectCoverage --"
   },
   "jest": {
+    "modulePathIgnorePatterns": ["spec.js"],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",
     "coverageReporters": [
