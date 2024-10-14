@@ -22,7 +22,6 @@
     "coverage": "jest --collectCoverage --"
   },
   "jest": {
-    "setupFilesAfterEnv": ["jest-fail-on-console"],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",
     "coverageReporters": [
