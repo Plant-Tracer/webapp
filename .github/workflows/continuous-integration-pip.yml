@@ -110,13 +110,19 @@ jobs:
         run: |
           CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
 
+      - name: Run JavaScript tests and coverage
+        env:
+          PLANTTRACER_CREDENTIALS: etc/credentials.ini
+        run: |
+          make jscoverage
+
       - name: Upload to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-          files: ./coverage.xml
+          files: ./coverage.xml,./coverage/coverage-final.json
 
       - name: Show files in directory
         env:
@@ -125,8 +131,4 @@ jobs:
           make coverage
           ls -l
 
-      - name: Run JavaScript tests and coverage
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
-        run: |
-          make jscoverage
+      
