@@ -135,6 +135,35 @@ def test_new_course(new_course):
     # Check to make sure that the correct number of course enrollment remains
     assert db.remaining_course_registrations(course_key=course_key) == dbmaint.DEFAULT_MAX_ENROLLMENT - 2
 
+    # Check course lookup functions
+    assert db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_key'] == cfg[COURSE_KEY]
+    course = db.lookup_course_by_name(course_name = cfg[COURSE_NAME])
+    assert course['course_name'] == cfg[COURSE_NAME]
+    assert db.lookup_course_by_id(course_id = course['id'])['id'] == course['id']
+
+def test_add_remove_admin(new_course):
+    cfg = copy.copy(new_course)
+    course_key = cfg[COURSE_KEY]
+    logging.info("Created course %s", course_key)
+    admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
+    user_id = db.register_email(email=admin_email,
+                                course_key=cfg[COURSE_KEY],
+                                name='Dr. Admin')['user_id']
+    logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
+    course_id = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['id']
+    db.make_course_admin(email = admin_email, course_key = course_key)
+    assert db.check_course_admin(user_id=user_id, course_id=course_id)
+    db.remove_course_admin(email= admin_email, course_name= cfg[COURSE_NAME])
+    assert not db.check_course_admin(user_id=user_id, course_id=course_id)
+    course = db.lookup_course_by_name(course_name=cfg[COURSE_NAME])
+    assert course['course_name'] == cfg[COURSE_NAME]
+    db.make_course_admin(email = admin_email, course_id = course['id'])
+    assert db.check_course_admin(user_id=user_id, course_id=course_id)
+    db.remove_course_admin(email = admin_email, course_id = course['id'])
+    assert not db.check_course_admin(user_id=user_id, course_id=course_id)
+    db.delete_user(email=admin_email)
+    
+
 def test_new_user(new_user):
     cfg = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
