@@ -148,6 +148,7 @@ def test_new_user(new_user):
 
     assert 'admin' in ret2
     assert 'courses' in ret3
+    assert ret3['courses'][0]['course_key'] == cfg[COURSE_KEY]
 
 
 def test_get_logs(new_user):
