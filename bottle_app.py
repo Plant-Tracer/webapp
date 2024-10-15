@@ -179,7 +179,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         user_id = user_dict['id']
         user_primary_course_id = user_dict['primary_course_id']
         logged_in = 1
-        primary_course_name = db.lookup_course(course_id=user_primary_course_id)['course_name']
+        primary_course_name = db.lookup_course_by_id(course_id=user_primary_course_id)['course_name']
         admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
         # If this is a demo account, the user cannot be an admin (security)
         if user_demo:
