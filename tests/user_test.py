@@ -161,7 +161,7 @@ def test_add_remove_admin(new_course):
     assert db.check_course_admin(user_id=user_id, course_id=course_id)
     db.remove_course_admin(email = admin_email, course_id = course['id'])
     assert not db.check_course_admin(user_id=user_id, course_id=course_id)
-    db.delete_user(email=admin_email) 
+    db.delete_user(email=admin_email)
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)
