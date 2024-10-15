@@ -14,7 +14,8 @@
     "eslint-config-jquery": "^3.0.2",
     "eslint-formatter-friendly": "^7.0.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0"
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-fail-on-console": "^3.3.1"
   },
   "scripts": {
     "test": "jest",

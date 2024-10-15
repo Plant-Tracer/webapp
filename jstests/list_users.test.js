@@ -49,7 +49,7 @@ describe('list_users_data', () => {
     list_users_data(users);
     expect($.fn.html).toHaveBeenCalledTimes(1);
 
-    const expectedHtml = expect.stringContaining('<table>');
+    const expectedHtml = expect.stringContaining("<table><tbody><tr><td>User 1 (1) </td><td>user1@example.com</td><td>n/a</td><td>n/a</td></tr>");
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
   });
 
@@ -82,8 +82,10 @@ describe('list_users_data', () => {
     list_users_data(users);
     expect($.fn.html).toHaveBeenCalledTimes(1);
 
-    const expectedHtml = expect.stringContaining('<table>');
+    const expectedHtml = expect.stringContaining('<table><tbody><tr><td>User 1 (1) </td><td>user1@example.com</td><td>n/a</td><td>n/a</td></tr>');
+    const expectedHtml2 = expect.stringContaining('<tr><td>User 2 (2) </td><td>user2@example.com</td><td>n/a</td><td>n/a</td></tr>');
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
+    expect($.fn.html).toHaveBeenCalledWith(expectedHtml2);
   });
 
   test('should display a link to invite users for admins', () => {

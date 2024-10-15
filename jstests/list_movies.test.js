@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer')
+const module = require('../static/planttracer.js')
 const list_movies_data = module.list_movies_data
 
 global.Audio = function() {
@@ -55,7 +55,7 @@ global.Audio = function() {
       list_movies_data(movies);
       expect($.fn.html).toHaveBeenCalledTimes(4);
   
-      const expectedPublishedHtml = expect.stringContaining('<table>');
+      const expectedPublishedHtml = expect.stringContaining("<table><tbody><tr><td><i>");
       expect($.fn.html).toHaveBeenCalledWith(expectedPublishedHtml);
     });
   
@@ -78,7 +78,7 @@ global.Audio = function() {
       list_movies_data(movies);
       expect($.fn.html).toHaveBeenCalledTimes(4);
   
-      const expectedEmptyHtml = expect.stringContaining('<i>No movies</i>');
+      const expectedEmptyHtml = expect.stringContaining('<table><tbody><tr><td><i>No movies</i></td></tr><tr><td colspan=\"6\"><a href=\"/upload\">Click here to upload a movie</a></td></tr></tbody></table>');
       expect($.fn.html).toHaveBeenCalledWith(expectedEmptyHtml);
     });
   
@@ -145,7 +145,7 @@ global.Audio = function() {
       list_movies_data(movies);
       expect($.fn.html).toHaveBeenCalledTimes(4);
 
-      const expectedUploadLinkHtml = expect.stringContaining('Click here to upload a movie');
+      const expectedUploadLinkHtml = expect.stringContaining('<table><tbody><tr><td><i>No movies</i></td></tr><tr><td colspan=\"6\"><a href=\"/upload\">Click here to upload a movie</a></td></tr></tbody></table>');
       expect($.fn.html).toHaveBeenCalledWith(expectedUploadLinkHtml);
     });
   
