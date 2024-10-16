@@ -1,7 +1,7 @@
 {
     "user_id":"1",
     "admin":"true",
-    "user-mode":"false",
+    "user_demo":"false",
     "PLAY_LABEL" : "Play",
     "PLAY_TRACKED_LABEL" : "Play Tracked",
     "UNPUBLISH_BUTTON" : "Unpublish",
