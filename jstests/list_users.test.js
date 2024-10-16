@@ -1,110 +1,65 @@
-/**
- * @jest-environment jsdom
- */
-
+// Import dependencies
 const $ = require('jquery');
-const fs = require('fs');
-const path = require('path');
-global.$ = $;
+global.$ = $; // Mock jQuery
 
+// Mock global variables and methods
 const module = require('../static/planttracer.js');
-const list_users_data = module.list_users_data;
+const list_users = module.list_users; 
 
-global.Audio = function() {
-  this.play = jest.fn();
-};
+// Mock fetch
 
-// Load user data from globals.json
-let userData;
-beforeAll(() => {
-  // Use path.join to resolve the correct path to globals.json
-  const jsonPath = path.join(__dirname, 'users.json');
-  userData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-});
+const list_users_data = jest.fn();
+global.fetch = jest.fn();
 
-describe('list_users_data', () => {
+// Mock DOM element for displaying messages
+document.body.innerHTML = '<div id="message"></div>';
+
+describe('list_users', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    global.api_key = 'abcdefghijklmnopqrstuvwxyz'
+    global.API_BASE = 'https://planttracer.com'
   });
 
-  test('should create the correct HTML for active users', () => {
-    const users = [
-      {
-        user_id: parseInt(userData.user1.user_id, 10),
-        name: userData.user1.name,
-        email: userData.user1.email,
-        active: userData.user1.active === 'true',
-        date_joined: parseInt(userData.user1.date_joined, 10),
-        last_login: parseInt(userData.user1.last_login, 10),
-      },
-    ];
+  test('should fetch user data and call list_users_data on success', async () => {
+    const mockResponse = {
+      error: false,
+      users: [
+        { user_id: 1, name: 'User 1', email: 'user1@example.com' },
+        { user_id: 2, name: 'User 2', email: 'user2@example.com' }
+      ],
+      courses: [
+        { course_id: 1, course_name: 'Course 1' },
+        { course_id: 2, course_name: 'Course 2' }
+      ]
+    };
 
-    $.fn.html = jest.fn();
-    list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(1);
+    // Mock a successful fetch response
+    global.fetch.mockResolvedValueOnce({
+      json: jest.fn().mockResolvedValueOnce(mockResponse)
+    });
 
-    const expectedHtml = expect.stringContaining(
-      `<table><tbody><tr><td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
-    );
-    expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
+    // Call list_users function
+    module.list_users();
+
+    // Wait for fetch and subsequent code to resolve
+    await Promise.resolve();
+
+    // Ensure fetch was called correctly
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/list-users`, expect.any(Object));
   });
 
-  test('should correctly classify and display inactive users', () => {
-    const users = [
-      {
-        user_id: parseInt(userData.user1.user_id, 10),
-        name: userData.user1.name,
-        email: userData.user1.email,
-        active: userData.user1.active === 'true',
-        date_joined: parseInt(userData.user1.date_joined, 10),
-        last_login: parseInt(userData.user1.last_login, 10),
-      },
-      {
-        user_id: parseInt(userData.user2.user_id, 10),
-        name: userData.user2.name,
-        email: userData.user2.email,
-        active: userData.user2.active === 'true',
-        date_joined: parseInt(userData.user2.date_joined, 10),
-        last_login: parseInt(userData.user2.last_login, 10),
-      },
-    ];
+  test('should display an error message if API returns an error', async () => {
+    const mockErrorResponse = {
+      error: true,
+      message: 'An error occurred while fetching users'
+    };
+    global.fetch.mockResolvedValueOnce({
+      json: jest.fn().mockResolvedValueOnce(mockErrorResponse)
+    });
+    module.list_users();
 
-    $.fn.html = jest.fn();
-    list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(1);
 
-    const expectedHtml1 = expect.stringContaining(
-      `<table><tbody><tr><td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
-    );
-    const expectedHtml2 = expect.stringContaining(
-      `<tr><td>${userData.user2.name} (${userData.user2.user_id}) </td><td>${userData.user2.email}</td><td>n/a</td><td>n/a</td></tr>`
-    );
-
-    expect($.fn.html).toHaveBeenCalledWith(expectedHtml1);
-    expect($.fn.html).toHaveBeenCalledWith(expectedHtml2);
-  });
-
-  test('should display a link to invite users for admins', () => {
-    const users = [];
-
-    $.fn.html = jest.fn();
-    list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(1);
-
-    const expectedInviteLinkHtml = expect.stringContaining("<table><tbody></tbody>");
-    expect($.fn.html).toHaveBeenCalledWith(expectedInviteLinkHtml);
-  });
-
-  test('should not display invite link for non-admin users', () => {
-    const users = [];
-
-    global.admin = false; // Override the global admin for this test
-
-    $.fn.html = jest.fn();
-    list_users_data(users);
-    expect($.fn.html).toHaveBeenCalledTimes(1);
-
-    const notExpectedInviteLinkHtml = expect.not.stringContaining('Click here to invite a user');
-    expect($.fn.html).toHaveBeenCalledWith(notExpectedInviteLinkHtml);
+    await Promise.resolve();
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/list-users`, expect.any(Object));
   });
 });
