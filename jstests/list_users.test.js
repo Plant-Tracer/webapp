@@ -1,17 +1,13 @@
-// Import dependencies
 const $ = require('jquery');
-global.$ = $; // Mock jQuery
+global.$ = $; 
 
-// Mock global variables and methods
+
 const module = require('../static/planttracer.js');
 const list_users = module.list_users; 
-
-// Mock fetch
 
 const list_users_data = jest.fn();
 global.fetch = jest.fn();
 
-// Mock DOM element for displaying messages
 document.body.innerHTML = '<div id="message"></div>';
 
 describe('list_users', () => {
@@ -33,18 +29,14 @@ describe('list_users', () => {
       ]
     };
 
-    // Mock a successful fetch response
     global.fetch.mockResolvedValueOnce({
       json: jest.fn().mockResolvedValueOnce(mockResponse)
     });
 
-    // Call list_users function
     module.list_users();
 
-    // Wait for fetch and subsequent code to resolve
     await Promise.resolve();
 
-    // Ensure fetch was called correctly
     expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/list-users`, expect.any(Object));
   });
 
