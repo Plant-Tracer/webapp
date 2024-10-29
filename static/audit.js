@@ -2,6 +2,9 @@
 /* jshint esversion: 8 */
 /* global api_key */
 
+const $ = require('jquery');
+global.$ = $;
+
 ////////////////////////////////////////////////////////////////
 // page: /audit
 // This could fill in the table with search keys; right now we just search for everything
