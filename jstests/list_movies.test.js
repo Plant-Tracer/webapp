@@ -106,7 +106,7 @@ describe('list_movies_data', () => {
 
   test('should display a link to upload movies for non-demo users', () => {
     const movies = [];
-    global.user_demo = false
+    global.user_demo = false;
     $.fn.html = jest.fn();
     list_movies_data(movies);
     expect($.fn.html).toHaveBeenCalledTimes(4);
@@ -118,7 +118,7 @@ describe('list_movies_data', () => {
   test('should not display upload link for demo users', () => {
     const movies = [];
 
-    global.user_demo = true; 
+    global.user_demo = true;
 
     $.fn.html = jest.fn();
     list_movies_data(movies);
@@ -126,5 +126,45 @@ describe('list_movies_data', () => {
 
     const notExpectedUploadLinkHtml = expect.not.stringContaining('Click here to upload a movie');
     expect($.fn.html).toHaveBeenCalledWith(notExpectedUploadLinkHtml);
+  });
+
+  // Action Button Tests
+
+  test('should display a publish button for unpublished movies (admin)', () => {
+    global.admin = true; // Set admin privileges
+
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 0,
+        deleted: 0,
+        title: 'Unpublished Movie',
+      }
+    ];
+
+    $.fn.html = jest.fn();
+    list_movies_data(movies);
+
+    const expectedButtonHtml = expect.stringContaining(`<td> Status: Not published<br/>`);
+    expect($.fn.html).toHaveBeenCalledWith(expectedButtonHtml);
+  });
+
+  test('should display an unpublish button for published movies', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        deleted: 0,
+        title: 'Published Movie',
+      }
+    ];
+
+    $.fn.html = jest.fn();
+    list_movies_data(movies);
+
+    const expectedButtonHtml = expect.stringContaining(`<td> Status: <b>Published</b>`);
+    expect($.fn.html).toHaveBeenCalledWith(expectedButtonHtml);
   });
 });
