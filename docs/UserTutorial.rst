@@ -15,7 +15,7 @@ Welcome and Registration
 .. image:: webapp/docs/tutorial/admin_email.png
     :alt: Uploading Movies on Plant Tracer
 
-Viewing movies
+Viewing Movies
 --------------
 - The second link in the email will bring you to the home page. 
 - Click on "Movies" in the menu bar at the to of the page to see a list of movies to analyze.
