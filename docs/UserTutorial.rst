@@ -13,7 +13,7 @@ Welcome and Registration
 
 - Look for an email from `admin@planttracer.com`. Click on the second link to view movies. The first link will allow you to upload movies.
    
-.. image:: tutorial_images/admin_email.png
+.. image:: tutorial_images/admin_email_link.png
     :alt: email from Plant Tracer
 
 Viewing movies
