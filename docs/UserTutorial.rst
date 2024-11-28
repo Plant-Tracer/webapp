@@ -58,7 +58,7 @@ Tracking the Uploaded Movie
 
 Viewing the trace of a Movie
 ----------------------------
-- Once the tracked movie has loaded you will see the image if the first frame, the data table and the graphs of the movement.
+- Once the tracked movie has loaded you will see the image of the first frame, the data table and the graphs of the movement.
 
 .. image:: tutorial_images/analyzed_movie.png
    :alt: Viewing the tracked movie, data and graphs on Plant Tracer
