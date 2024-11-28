@@ -75,7 +75,7 @@ Interpreting and Reading Results
 - When you are satisfied with the tracking, you can hit the button "Download Trackpoints".
 - At this point, you are ready to use a spreadsheet to analyze and graph the data.
 
-.. image:: tutorial_images/results_of_analysis.png
+.. image:: tutorial_images/download_trackpoints.png
    :alt: Reading Results in Plant Tracer
 
 Further Adjustments to Tracking
