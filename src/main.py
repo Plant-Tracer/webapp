@@ -17,11 +17,10 @@ def dump_files(path="."):
         for fn in files:
             logging.error("%s/%s",root,fn)
 
-dump_files("/")
 root_path = "/Prod"
 
 
-logging.error("** STARTING UP. root_path=%s",root_path)
+logging.error("** COLD START. root_path=%s",root_path)
 
 app = FastAPI(root_path=root_path)
 
