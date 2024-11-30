@@ -12,8 +12,6 @@ import db_object
 import auth
 from auth import DEMO_MODE_AVAILABLE
 
-from paths import view, STATIC_DIR
-from constants import C,__version__,GET,GET_POST
 
 import bottle_api
 from bottle_api import git_head_time,git_last_commit,get_user_dict,fix_types

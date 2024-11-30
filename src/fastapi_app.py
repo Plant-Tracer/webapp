@@ -27,6 +27,12 @@ from urllib.parse import urlparse
 from fastapi import FastAPI,Request
 from mangum import Mangum
 
+import clogging
+
+from paths import view, STATIC_DIR
+from constants import C,__version__,GET,GET_POST
+
+
 # Automatically determine root_path from API Gateway stage
 logging.error("Hello World")
 
