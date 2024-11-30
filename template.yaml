@@ -20,7 +20,7 @@ Resources:
   HandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./src
+      CodeUri: ./deploy         # Lambda can only deploy a single directory
       Handler: main.lambda_handler
       Runtime: python3.11
       Architectures:

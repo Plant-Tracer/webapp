@@ -5,6 +5,22 @@ Notes on Deploying to SAM
 * https://github.com/tzelleke/aws-sam-fastapi
 
 
+Commands to try:
+----------------
+
+`sam sync --stack-name planttracer-webapp`
+* Sends changes to the server
+
+`sam logs planttracer-app --tail`
+* Watches for logfile changes
+
+`sam logs planttracer-app -s"5min ago"`
+* Prints all logs from last 5 minutes
+
+
+`sam sync --stack-name planttracer-webapp --watch`
+* Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.
+
 
 Set Up:
 ------
@@ -90,11 +106,3 @@ References:
 
 * More info about API Event Source. See:
   https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-
-
-
-Commands to try:
-----------------
-
-`sam sync --stack-name planttracer-webapp --watch`
-* Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.

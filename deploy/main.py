@@ -29,7 +29,7 @@ from mangum import Mangum
 
 import clogging
 
-from paths import view, STATIC_DIR
+from paths import STATIC_DIR
 from constants import C,__version__,GET,GET_POST
 
 
