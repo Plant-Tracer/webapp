@@ -182,3 +182,4 @@ activate
 *.gz
 node_modules
 coverage
+.aws-sam
