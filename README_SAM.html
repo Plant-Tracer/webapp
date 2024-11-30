@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>planttracer-webapp &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="planttracer-webapp">
+<h1>planttracer-webapp<a class="headerlink" href="#planttracer-webapp" title="Link to this heading">¶</a></h1>
+<p>This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.</p>
+<ul class="simple">
+<li><p>hello_world - Code for the application’s Lambda function.</p></li>
+<li><p>events - Invocation events that you can use to invoke the function.</p></li>
+<li><p>tests - Unit tests for the application code.</p></li>
+<li><p>template.yaml - A template that defines the application’s AWS resources.</p></li>
+</ul>
+<p>The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the <code class="docutils literal notranslate"><span class="pre">template.yaml</span></code> file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.</p>
+<p>If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.<br />
+The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">CLion</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">GoLand</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">IntelliJ</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">WebStorm</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">Rider</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">PhpStorm</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">PyCharm</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">RubyMine</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html">DataGrip</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html">VS Code</a></p></li>
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html">Visual Studio</a></p></li>
+</ul>
+<section id="deploy-the-sample-application">
+<h2>Deploy the sample application<a class="headerlink" href="#deploy-the-sample-application" title="Link to this heading">¶</a></h2>
+<p>The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application’s build environment and API.</p>
+<p>To use the SAM CLI, you need the following tools.</p>
+<ul class="simple">
+<li><p>SAM CLI - <a class="reference external" href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html">Install the SAM CLI</a></p></li>
+<li><p><a class="reference external" href="https://www.python.org/downloads/">Python 3 installed</a></p></li>
+<li><p>Docker - <a class="reference external" href="https://hub.docker.com/search/?type=edition&amp;amp;offering=community">Install Docker community edition</a></p></li>
+</ul>
+<p>To build and deploy your application for the first time, run the following in your shell:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sam<span class="w"> </span>build<span class="w"> </span>--use-container
+sam<span class="w"> </span>deploy<span class="w"> </span>--guided
+</pre></div>
+</div>
+<p>The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:</p>
+<ul class="simple">
+<li><p><strong>Stack Name</strong>: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.</p></li>
+<li><p><strong>AWS Region</strong>: The AWS region you want to deploy your app to.</p></li>
+<li><p><strong>Confirm changes before deploy</strong>: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.</p></li>
+<li><p><strong>Allow SAM CLI IAM role creation</strong>: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the <code class="docutils literal notranslate"><span class="pre">CAPABILITY_IAM</span></code> value for <code class="docutils literal notranslate"><span class="pre">capabilities</span></code> must be provided. If permission isn’t provided through this prompt, to deploy this example you must explicitly pass <code class="docutils literal notranslate"><span class="pre">--capabilities</span> <span class="pre">CAPABILITY_IAM</span></code> to the <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">deploy</span></code> command.</p></li>
+<li><p><strong>Save arguments to samconfig.toml</strong>: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">deploy</span></code> without parameters to deploy changes to your application.</p></li>
+</ul>
+<p>You can find your API Gateway Endpoint URL in the output values displayed after deployment.</p>
+</section>
+<section id="use-the-sam-cli-to-build-and-test-locally">
+<h2>Use the SAM CLI to build and test locally<a class="headerlink" href="#use-the-sam-cli-to-build-and-test-locally" title="Link to this heading">¶</a></h2>
+<p>Build your application with the <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">build</span> <span class="pre">--use-container</span></code> command.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>planttracer-webapp$<span class="w"> </span>sam<span class="w"> </span>build<span class="w"> </span>--use-container
+</pre></div>
+</div>
+<p>The SAM CLI installs dependencies defined in <code class="docutils literal notranslate"><span class="pre">hello_world/requirements.txt</span></code>, creates a deployment package, and saves it in the <code class="docutils literal notranslate"><span class="pre">.aws-sam/build</span></code> folder.</p>
+<p>Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the <code class="docutils literal notranslate"><span class="pre">events</span></code> folder in this project.</p>
+<p>Run functions locally and invoke them with the <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">local</span> <span class="pre">invoke</span></code> command.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>planttracer-webapp$<span class="w"> </span>sam<span class="w"> </span><span class="nb">local</span><span class="w"> </span>invoke<span class="w"> </span>HelloWorldFunction<span class="w"> </span>--event<span class="w"> </span>events/event.json
+</pre></div>
+</div>
+<p>The SAM CLI can also emulate your application’s API. Use the <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">local</span> <span class="pre">start-api</span></code> to run the API locally on port 3000.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>planttracer-webapp$<span class="w"> </span>sam<span class="w"> </span><span class="nb">local</span><span class="w"> </span>start-api
+planttracer-webapp$<span class="w"> </span>curl<span class="w"> </span>http://localhost:3000/
+</pre></div>
+</div>
+<p>The SAM CLI reads the application template to determine the API’s routes and the functions that they invoke. The <code class="docutils literal notranslate"><span class="pre">Events</span></code> property on each function’s definition includes the route and method for each path.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="w">      </span><span class="nt">Events</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">HelloWorld</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">Type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Api</span>
+<span class="w">          </span><span class="nt">Properties</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">Path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/hello</span>
+<span class="w">            </span><span class="nt">Method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">get</span>
+</pre></div>
+</div>
+</section>
+<section id="add-a-resource-to-your-application">
+<h2>Add a resource to your application<a class="headerlink" href="#add-a-resource-to-your-application" title="Link to this heading">¶</a></h2>
+<p>The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in <a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md">the SAM specification</a>, you can use standard <a class="reference external" href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html">AWS CloudFormation</a> resource types.</p>
+</section>
+<section id="fetch-tail-and-filter-lambda-function-logs">
+<h2>Fetch, tail, and filter Lambda function logs<a class="headerlink" href="#fetch-tail-and-filter-lambda-function-logs" title="Link to this heading">¶</a></h2>
+<p>To simplify troubleshooting, SAM CLI has a command called <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">logs</span></code>. <code class="docutils literal notranslate"><span class="pre">sam</span> <span class="pre">logs</span></code> lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.</p>
+<p><code class="docutils literal notranslate"><span class="pre">NOTE</span></code>: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>planttracer-webapp$<span class="w"> </span>sam<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>HelloWorldFunction<span class="w"> </span>--stack-name<span class="w"> </span><span class="s2">&quot;planttracer-webapp&quot;</span><span class="w"> </span>--tail
+</pre></div>
+</div>
+<p>You can find more information and examples about filtering Lambda function logs in the <a class="reference external" href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html">SAM CLI Documentation</a>.</p>
+</section>
+<section id="tests">
+<h2>Tests<a class="headerlink" href="#tests" title="Link to this heading">¶</a></h2>
+<p>Tests are defined in the <code class="docutils literal notranslate"><span class="pre">tests</span></code> folder in this project. Use PIP to install the test dependencies and run tests.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>planttracer-webapp$<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>tests/requirements.txt<span class="w"> </span>--user
+<span class="c1"># unit test</span>
+planttracer-webapp$<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/unit<span class="w"> </span>-v
+<span class="c1"># integration test, requiring deploying the stack first.</span>
+<span class="c1"># Create the env variable AWS_SAM_STACK_NAME with the name of the stack we are testing</span>
+planttracer-webapp$<span class="w"> </span><span class="nv">AWS_SAM_STACK_NAME</span><span class="o">=</span><span class="s2">&quot;planttracer-webapp&quot;</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/integration<span class="w"> </span>-v
+</pre></div>
+</div>
+</section>
+<section id="cleanup">
+<h2>Cleanup<a class="headerlink" href="#cleanup" title="Link to this heading">¶</a></h2>
+<p>To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sam<span class="w"> </span>delete<span class="w"> </span>--stack-name<span class="w"> </span><span class="s2">&quot;planttracer-webapp&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="resources">
+<h2>Resources<a class="headerlink" href="#resources" title="Link to this heading">¶</a></h2>
+<p>See the <a class="reference external" href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html">AWS SAM developer guide</a> for an introduction to SAM specification, the SAM CLI, and serverless application concepts.</p>
+<p>Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: <a class="reference external" href="https://aws.amazon.com/serverless/serverlessrepo/">AWS Serverless Application Repository main page</a></p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">How to Use Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MySQLSetup.html">MySQL Setup for Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#note">Note</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#agenda">Agenda</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/README_SAM.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
