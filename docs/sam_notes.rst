@@ -1,6 +1,97 @@
 Notes on Deploying to SAM
 =========================
 
+* https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html
+* https://github.com/tzelleke/aws-sam-fastapi
+
+
+
+Set Up:
+------
+
+Request a certificate for simson-dev.planttracer.com:
+
+``
+aws acm request-certificate \
+  --domain-name simson-dev.planttracer.com \
+  --validation-method DNS \
+  --region us-east-1 \
+  --idempotency-token simson-cert \
+  --domain-validation-options DomainName=simson-dev.planttracer.com,ValidationDomain=planttracer.com
+``
+
+After requesting the certificate, retrieve the validation DNS records:
+``
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
+  --region us-east-1
+``
+
+Afterwards, create the Route 53 DNS Record:
+``
+aws route53 change-resource-record-sets \
+  --hosted-zone-id HOSTED_ZONE_ID \
+  --change-batch '{
+    "Changes": [
+      {
+        "Action": "UPSERT",
+        "ResourceRecordSet": {
+          "Name": "CNAME_NAME_FROM_PREVIOUS_STEP",
+          "Type": "CNAME",
+          "TTL": 300,
+          "ResourceRecords": [
+            {
+              "Value": "CNAME_VALUE_FROM_PREVIOUS_STEP"
+            }
+          ]
+        }
+      }
+    ]
+  }'
+``
+
+Finally, verify the certificate validation:
+``
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
+  --region us-east-1
+``
+
+
+Once the certificate is validated, you  can use its ARN in your `template.yaml` file under CertificateArn:
+``
+Resources:
+  CustomDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: simson-dev.planttracer.com
+      DomainNameConfigurations:
+        - CertificateArn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+          EndpointType: REGIONAL
+``
+
+Then you can bind the custom domain to the API gateway using the CLI:
+``
+aws apigatewayv2 create-api-mapping \
+  --domain-name simson-dev.planttracer.com \
+  --api-id API_ID \
+  --stage-name Prod
+``
+
+Reference: https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576
+
+References:
+-----------
+* More info about Globals:
+  https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+
+* More info about Function Resource:
+  https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+* More info about API Event Source. See:
+  https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+
+
 
 Commands to try:
 ----------------

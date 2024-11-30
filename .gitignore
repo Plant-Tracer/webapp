@@ -183,3 +183,4 @@ activate
 node_modules
 coverage
 .aws-sam
+layer

@@ -23,6 +23,13 @@ venv:
 	$(PY) -m venv venv
 
 ################################################################
+# Manage the SAM layer
+layer-update:
+	mkdir -p layer/python
+	$(PY) -m pip install -r layer/python/requirements.txt -t layer/python
+
+
+################################################################
 #
 # By default, PYLINT generates an error if your code does not rank 10.0.
 # This makes us tolerant of minor problems.
