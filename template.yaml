@@ -20,7 +20,7 @@ Resources:
   HandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./
+      CodeUri: ./src
       Handler: main.lambda_handler
       Runtime: python3.11
       Architectures:
