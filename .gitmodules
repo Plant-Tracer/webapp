@@ -1,7 +1,3 @@
 [submodule "ctools"]
 	path = lib/ctools
 	url = https://github.com/simsong/ctools.git
-[submodule "lib/ctools"]
-	path = lib/ctools
-	url = https://github.com/simsong/ctools.git
-	branch = main

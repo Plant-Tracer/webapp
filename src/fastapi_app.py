@@ -1,6 +1,28 @@
+"""
+Application file for FastAPI.
+
+Debug points:
+
+BASE=https://2onng01pv7.execute-api.us-east-1.amazonaws.com/Prod
+curl $BASE/docs
+curl $BASE/redocs
+curl $BASE/fastapi.json
+
+
+Debug locally:
+
+"""
+
+# pylint: disable=too-many-lines
+# pylint: disable=too-many-return-statements
+
 import os
 import platform
 import logging
+import sys
+import filetype
+
+from urllib.parse import urlparse
 
 from fastapi import FastAPI,Request
 from mangum import Mangum

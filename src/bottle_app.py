@@ -1,54 +1,5 @@
-"""
-WSGI file used for bottle interface.
 
-The goal is to only have the bottle code in this file and nowhere else.
-
-Debug on Dreamhost:
-(cd ~/apps.digitalcorpora.org/;make touch)
-https://downloads.digitalcorpora.org/
-https://downloads.digitalcorpora.org/ver
-https://downloads.digitalcorpora.org/reports
-
-Debug locally:
-
-$ python bottle_app.py
-Bottle v0.12.23 server starting up (using WSGIRefServer())...
-Listening on http://localhost:8080/
-Hit Ctrl-C to quit.
-
-Then go to the URL printed above (e.g. http://localhost:8080). Note that you must have the environment variables set:
-export MYSQL_DATABASE=***
-export MYSQL_HOST=***
-export MYSQL_PASSWORD=***
-export MYSQL_USER=***
-export SMTP_HOST=***
-export SMTP_PASSWORD=***
-export SMTP_PORT=***
-export SMTP_USERNAME=***
-
-For testing, you must also set:
-export IMAP_PASSWORD=****
-export IMAP_SERVER=****
-export IMAP_USERNAME=****
-export TEST_ENDPOINT='http://localhost:8080' (or whatever it is above)
-
-For automated tests, we are using the localmail server.
-
-And you will need a valid user in the current databse (or create your own with dbutil.py)
-export TEST_USER_APIKEY=****
-export TEST_USER_EMAIL=****
-"""
-
-# pylint: disable=too-many-lines
-# pylint: disable=too-many-return-statements
-
-import sys
-import os
-import logging
-from urllib.parse import urlparse
-
-import filetype
-import bottle
+fastaimport bottle
 from bottle import request
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
