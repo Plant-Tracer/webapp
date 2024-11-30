@@ -59,7 +59,7 @@ Resources:
     Type: AWS::Serverless::LayerVersion
     Properties:
       CompatibleRuntimes:
-        - python3.9
+        - python3.11
       CompatibleArchitectures:
         - arm64
       ContentUri: layer/

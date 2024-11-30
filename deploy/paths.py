@@ -15,9 +15,17 @@ HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
 
+import logging
+logging.error("__file__=%s",__file__)
+
 SRC_DIR          = dirname(abspath(__file__))
-ROOT_DIR         = dirname(SRC_DIR)
+logging.error("SRC_DIR=%s",SRC_DIR)
+
+ROOT_DIR         = SRC_DIR
+
 STATIC_DIR       = join(ROOT_DIR, 'static')
+logging.error("STATIC_DIR=%s",STATIC_DIR)
+
 ETC_DIR          = join(ROOT_DIR, 'etc')
 TEMPLATE_DIR     = join(ROOT_DIR, 'templates')
 TEST_DIR         = join(ROOT_DIR, 'tests')

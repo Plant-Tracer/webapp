@@ -17,6 +17,8 @@ Commands to try:
 `sam logs planttracer-app -s"5min ago"`
 * Prints all logs from last 5 minutes
 
+`sam validate && sam build && sam deploy --no-confirm-changeset`
+* validates, builds, and deploys without asking questions
 
 `sam sync --stack-name planttracer-webapp --watch`
 * Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.
