@@ -1,3 +1,8 @@
+#
+# Don't trust ChatGPT for layers — it's trained on too much bogus data.
+# Read the docs:
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/building-layers.html
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
@@ -21,12 +26,12 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./deploy         # Lambda can only deploy a single directory
-      Handler: main.lambda_handler
+      Handler: lambda_handler.lambda_handler
       Runtime: python3.11
       Architectures:
-        - arm64
+        - x86_64                # move to arm64 when we have an arm ffmpeg
       Layers:
-        - !Ref OpenCVLayer
+        - !Ref PythonLayer
       MemorySize: 512
       Timeout: 15
       Tracing: Active
@@ -55,14 +60,18 @@ Resources:
       Tags:
         LambdaPowertools: python
 
-  OpenCVLayer:
+  PythonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
+      ContentUri: layers/python-layer
       CompatibleRuntimes:
+        - python3.9
+        - python3.10
         - python3.11
-      CompatibleArchitectures:
-        - arm64
-      ContentUri: layer/
+    Metadata:
+      BuildMethod: python3.9   # Required to have AWS SAM build this layer
+      BuildArchitecture: x86_64
+
 
 Outputs:
   ApiUrl:

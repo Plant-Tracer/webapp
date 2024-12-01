@@ -4,6 +4,25 @@ Notes on Deploying to SAM
 * https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html
 * https://github.com/tzelleke/aws-sam-fastapi
 
+`sam build` takes what's in the requirements.txt file, installs it into the directory `.aws-sam/build/HandlerFunction`, makes it into a
+ZIP file, and uploads the ZIP file to S3.  The ZIP file needs to be unzipped when the lambda does a cold-start.
+
+Layers
+------
+
+To make things somewhat faster, it's preferable to create a Layer which has the big files in it (opencv, numpy, etc).
+
+The layer is defined in the template.yaml file. Here it is in the directory `layer/`. Inside that is `layer/python/requirements.txt` which contains the referenced python files to be installed in the layer by `sam build`.  Ideally the layer doesn't change much, so it doesn't need to be uploaded much.
+
+Virtual Environment
+-------------------
+
+For local debugging, we install the files in both `requirements.txt`
+and `layer/python/requirements.txt` into the virtual environment. The deployed runtime doesn't use a virtual environment.
+
+Size
+----
+We are limited to 256MiB on lambda functions. One way around this is by using Docker containers. But another way is to delay the loading of ffmpeg to the times that we need it, and not having it always load.
 
 Commands to try:
 ----------------

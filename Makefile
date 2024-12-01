@@ -24,9 +24,10 @@ venv:
 
 ################################################################
 # Manage the SAM layer
-layer-update:
-	mkdir -p layer/python
-	$(PY) -m pip install -r layer/python/requirements.txt -t layer/python
+sam-rebuild-layer:
+	mkdir -p layers/python-layer/python
+	$(PY) -m pip install -r layers/python-layer/requirements.txt --target layers/python-layer/python/
+	ls -l .aws-sam/build/PythonLayer/python/
 
 
 ################################################################

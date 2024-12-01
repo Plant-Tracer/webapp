@@ -22,7 +22,7 @@ import boto3
 from botocore.exceptions import ClientError
 #import bottle
 
-from lib.ctools import dbfile
+import dbfile
 from constants import C
 import auth
 from auth import get_dbreader,get_dbwriter

@@ -19,7 +19,7 @@ import functools
 from botocore.exceptions import ClientError,ParamValidationError
 from jinja2.nativetypes import NativeEnvironment
 
-from validate_email_address import validate_email
+# from validate_email_address import validate_email
 
 
 import db_object
@@ -27,7 +27,7 @@ from paths import TEMPLATE_DIR
 import auth
 from constants import MIME,C
 from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
-from lib.ctools import dbfile
+import dbfile
 from mailer import InvalidEmail
 import mailer
 
@@ -274,8 +274,8 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
-    if not validate_email(email, check_mx=CHECK_MX):
-        raise InvalidEmail(email)
+    #if not validate_email(email, check_mx=CHECK_MX):
+    #    raise InvalidEmail(email)
 
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")

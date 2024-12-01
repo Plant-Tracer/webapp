@@ -1,4 +1,6 @@
-fastapi
+apig-wsgi
+bottle
+filetype
 jinja2
 mangum
-filetype
+tabulate

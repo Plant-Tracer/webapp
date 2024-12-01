@@ -15,7 +15,7 @@ import bottle
 from bottle import request
 
 #import paths
-from lib.ctools import dbfile
+import dbfile
 
 import db
 from constants import C

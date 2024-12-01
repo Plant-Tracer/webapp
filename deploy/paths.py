@@ -7,7 +7,8 @@ from os.path import dirname, abspath, relpath, join
 import functools
 import shutil
 
-#from bottle import jinja2_view
+import bottle
+from bottle import jinja2_view
 
 from constants import C
 
@@ -41,10 +42,10 @@ AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
 
 # Add the relative template path (since jinja2 doesn't like absolute paths)
-# bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
+bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
 
 # Create the @view decorator to add template to the function output
-#view = functools.partial(jinja2_view)
+view = functools.partial(jinja2_view)
 
 def running_in_aws_lambda():
     return C.AWS_LAMBDA_ENVIRON in os.environ
