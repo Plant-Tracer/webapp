@@ -31,6 +31,7 @@ Resources:
       Architectures:
         - x86_64                # move to arm64 when we have an arm ffmpeg
       Layers:
+        - !Ref OpenCVLayer
         - !Ref PythonLayer
       MemorySize: 512
       Timeout: 15
@@ -60,6 +61,18 @@ Resources:
       Tags:
         LambdaPowertools: python
 
+  OpenCVLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layers/opencv-layer
+      CompatibleRuntimes:
+        - python3.9
+        - python3.10
+        - python3.11
+    Metadata:
+      BuildMethod: python3.9   # Required to have AWS SAM build this layer
+      BuildArchitecture: x86_64
+
   PythonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -69,7 +82,7 @@ Resources:
         - python3.10
         - python3.11
     Metadata:
-      BuildMethod: python3.9   # Required to have AWS SAM build this layer
+      BuildMethod: python3.9
       BuildArchitecture: x86_64
 
 

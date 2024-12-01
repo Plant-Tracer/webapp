@@ -23,11 +23,18 @@ venv:
 	$(PY) -m venv venv
 
 ################################################################
-# Manage the SAM layer
+# Manage the SAM layers
 sam-rebuild-layer:
+	rm -rf layers/opencv-layer/python
+	mkdir -p layers/python-layer/python
+	$(PY) -m pip install -r layers/opencv-layer/requirements.txt --target layers/opencv-layer/python/
+	rm -rf layers/python-layer/python
 	mkdir -p layers/python-layer/python
 	$(PY) -m pip install -r layers/python-layer/requirements.txt --target layers/python-layer/python/
-	ls -l .aws-sam/build/PythonLayer/python/
+	find layers -name '*.dylib' -delete
+	find layers -name '*.dylibs' -delete
+	sam build
+	sam deploy --no-confirm-changeset
 
 
 ################################################################
