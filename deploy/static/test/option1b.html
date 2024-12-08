@@ -1,0 +1,47 @@
+<html>
+<!-- https://chatgpt.com/c/21ecb5b3-ea98-4c2e-bfa5-3eb8c1dc017e -->
+    <head>
+        <title>Option 1</title>
+    </head>
+    <body>
+        <input type="file" id="file-input" />
+        <p/>
+        <p>Canvas:</p>
+        <canvas id='canvas' width='1024' height='512'></canvas>
+        <script>
+         var frames=[];
+
+         async function decodeVideo(file) {
+             console.log("decodeVideo file=",file);
+             const video = document.createElement('video');
+             const canvas = document.getElementById('canvas');
+             const ctx = canvas.getContext('2d');
+             video.src = URL.createObjectURL(file);
+             await video.play();
+             const videoTrack = video.captureStream().getVideoTracks()[0];
+             const videoProcessor = new MediaStreamTrackProcessor(videoTrack);
+             const reader = videoProcessor.readable.getReader();
+
+             var count=0;
+             while (true) {
+                 const { done, value } = await reader.read();
+                 console.log("done=",done,"value=",value,"count=",count);
+                 if (done) break;
+                 const bitmap = await createImageBitmap(value);
+                 frames[count] = bitmap;
+                 ctx.drawImage(bitmap, 0, 0);
+                 ctx.font = '24px sanserif';
+                 ctx.fillStyle = 'yellow';
+                 ctx.fillText( `frame ${count}`, 25, 200);
+                 count++;
+                 // Annotate frame here
+             }
+         }
+
+         document.getElementById('file-input').addEventListener('change', (event) => {
+             const file = event.target.files[0];
+             decodeVideo(file);
+         });
+        </script>
+    </body>
+</html>

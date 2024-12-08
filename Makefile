@@ -10,7 +10,8 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
-# Manage the virtual environment
+# Manage the virtual environment.
+# THis is only used for virtual testing and under Zappo
 ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
@@ -21,6 +22,15 @@ venv/pyvenv.cfg:
 
 venv:
 	$(PY) -m venv venv
+
+################################################################
+# SAM Commands
+
+sam-deploy:
+	sam validate
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
+	sam deploy --no-confirm-changeset
+
 
 ################################################################
 #

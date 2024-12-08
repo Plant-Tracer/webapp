@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>requestVideoFrameCallback Demo</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- import the webpage's stylesheet -->
+    <link rel="stylesheet" href="./rvfc_demo.css" />
+
+    <!-- import the webpage's javascript file -->
+    <script src="./rvfc3.js" defer></script>
+  </head>
+  <body>
+    <h1><code>requestVideoFrameCallback</code> Demo</h1>
+    <p>
+      Start <button type="button">⏯</button> playing the video. Pause the video to read the metadata.
+      Drawing video frames on the canvas is synced with the actual video framerate.
+      For details, check out the blog post
+      <a href="https://blog.tomayac.com/2020/05/15/the-requestvideoframecallback-api/">
+        The requestVideoFrameCallback API
+      </a>.
+    </p>
+    <video width="640" height="360" controls playsinline></video>
+    <span id='back' >[back]</span>
+    <span id='step' >[step]</span>
+    <span id='reset' >[reset]</span>
+    <canvas width="640" height="360"></canvas>
+    <p><span id="fps-info">0</span>fps</p>
+    <p><pre id="metadata-info"></pre></p>
+  </body>
+</html>

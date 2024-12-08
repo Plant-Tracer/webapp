@@ -1,0 +1,79 @@
+#
+# Read the docs:
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/building-layers.html
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  planttracer-webapp
+
+  SAM Template for planttracer-webapp. Uses docker.
+
+# https://stackoverflow.com/questions/67065130/how-to-enable-cors-with-aws-sam
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+  Api:
+    Cors:
+      AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
+      AllowHeaders: "'content-type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+Resources:
+  HandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64                # move to arm64 when we have an arm ffmpeg
+      CodeUri: ./deploy         # Lambda can only deploy a single directory
+      MemorySize: 512
+      Timeout: 15
+      Environment:
+        Variables:
+          AWS_LAMBDA: "YES"
+          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+          PLANTTRACER_CREDENTIALS: "etc/credentials-aws-prod.ini"
+          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+          PLANTTRACER_LOG_LEVEL: "WARNING"
+          POWERTOOLS_SERVICE_NAME: FastAPI
+          POWERTOOLS_METRICS_NAMESPACE: Powertools
+          LOG_LEVEL: INFO
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+
+      Events:
+        RootPath:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+        ProxyPath:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./deploy
+      DockerTag: python3.11-v1
+      Tags:
+        LambdaPowertools: python
+
+Outputs:
+  ApiUrl:
+    Description: "URL of the API Gateway Endpoint"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Export:
+      Name: ApiUrl
+
+  HandlerFunction:
+    Description: "Mangum Handler Function ARN"
+    Value: !GetAtt HandlerFunction.Arn

@@ -1,0 +1,4 @@
+# Everything in the CodeUri: src/ directory is included except things that match
+# the .aws-sam-ignore rules
+*~
+[#]*

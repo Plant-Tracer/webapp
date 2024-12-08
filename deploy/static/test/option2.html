@@ -1,0 +1,57 @@
+<html>
+<!-- https://chatgpt.com/c/21ecb5b3-ea98-4c2e-bfa5-3eb8c1dc017e -->
+    <head>
+        <title>Option 2</title>
+        <!-- <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@latest"></script> -->
+        <!-- https://www.npmjs.com/package/@ffmpeg/ffmpeg/v/0.8.3 -->
+        <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.8.3/dist/ffmpeg.min.js"></script>
+
+    </head>
+    <body>
+        <input type="file" id="file-input" />
+        <p/>
+        <p>Canvas:</p>
+        <canvas id='canvas' width='1024' height='512'></canvas>
+        <script>
+         const { createFFmpeg, fetchFile } = FFmpeg;
+         const ffmpeg = createFFmpeg({ log: true });
+
+         async function extractFrames(file) {
+             await ffmpeg.load();
+             ffmpeg.FS('writeFile', 'video.mp4', await fetchFile(file));
+             await ffmpeg.run('-i', 'video.mp4', 'output_%03d.jpg');
+             const frames = [];
+             for (let i = 1; ; i++) {
+                 try {
+                     const frame = ffmpeg.FS('readFile', `output_${String(i).padStart(3, '0')}.jpg`);
+                     const url = URL.createObjectURL(new Blob([frame.buffer], { type: 'image/jpeg' }));
+                     frames.push(url);
+                 } catch (e) {
+                     break;
+                 }
+             }
+             displayFrames(frames);
+         }
+
+         function displayFrames(frames) {
+             const canvas = document.getElementById('canvas');
+             const ctx = canvas.getContext('2d');
+             let index = 0;
+             setInterval(() => {
+                 const img = new Image();
+                 img.src = frames[index];
+                 img.onload = () => {
+                     ctx.drawImage(img, 0, 0);
+                     // Annotate frame here
+                 };
+                 index = (index + 1) % frames.length;
+             }, 1000 / 30); // Adjust for frame rate
+         }
+
+         document.getElementById('file-input').addEventListener('change', (event) => {
+             const file = event.target.files[0];
+             extractFrames(file);
+         });
+        </script>
+    </body>
+</html>
