@@ -1,0 +1,18 @@
+{
+"user1": {
+    "user_id": "1",
+    "name": "User 1",
+    "email": "user1@example.com",
+    "active": "false",
+    "date_joined": "1627689600",
+    "last_login": "1627789600"
+  },
+"user2":{
+    "user_id": 2,
+    "name": "User 2",
+    "email": "user2@example.com",
+    "active": "true",
+    "date_joined": "1627689600",
+    "last_login": "1627789600"
+  }
+}

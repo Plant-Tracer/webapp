@@ -34,3 +34,5 @@ function build_audit_table() {
 $( document ).ready( function() {
     build_audit_table();
 });
+
+module.exports = {build_audit_table}

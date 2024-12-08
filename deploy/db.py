@@ -193,7 +193,8 @@ def validate_api_key(api_key):
 def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
     """
     :param: user_id - user ID to get information about.
-    :param: group_info - if True get information about the user's groups
+    :param: get_admin - if True get information user's admin roles
+    :param: get_courses - if True get information about the user's courses
     :return: User dictionary augmented with additional information.
     """
     cmd = "select *,id as user_id from users WHERE "
@@ -220,7 +221,7 @@ def lookup_user(*, email=None, user_id=None, get_admin=None, get_courses=None):
         ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),
                                            """SELECT *,id as course_id from courses where id = %s
                                            OR id in (select course_id from admins where user_id=%s)
-                                           """, (user_id,user_id),asDicts=True)
+                                           """, (ret['primary_course_id'],user_id),asDicts=True)
     return ret
 
 
@@ -415,14 +416,26 @@ def get_demo_user_api_key(*,user_id):
 ### Course Management ###
 #########################
 
-def lookup_course(*, course_id):
+def lookup_course_by_id(*, course_id):
     try:
         return dbfile.DBMySQL.csfr(get_dbreader(),
                                    "SELECT * FROM courses WHERE id=%s", (course_id,), asDicts=True)[0]
     except IndexError:
         return {}
 
+def lookup_course_by_key(*, course_key):
+    try:
+        return dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT * FROM courses WHERE course_key=%s", (course_key,), asDicts=True)[0]
+    except IndexError:
+        return {}
 
+def lookup_course_by_name(*, course_name):
+    try:
+        return dbfile.DBMySQL.csfr(get_dbreader(),
+                                   "SELECT * FROM courses WHERE course_name=%s", (course_name,), asDicts=True)[0]
+    except IndexError:
+        return {}
 @log
 def create_course(*, course_key, course_name, max_enrollment, course_section=None):
     """Create a new course
@@ -464,7 +477,7 @@ def make_course_admin(*, email, course_key=None, course_id=None):
 
 
 @log
-def remove_course_admin(*, email, course_key=None, course_id=None):
+def remove_course_admin(*, email, course_key=None, course_id=None, course_name=None):
     if course_id:
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             "DELETE FROM admins WHERE course_id=%s and user_id in (select id from users where email=%s)",
@@ -474,6 +487,12 @@ def remove_course_admin(*, email, course_key=None, course_id=None):
                             "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_key=%s) "
                             "AND user_id IN (SELECT id FROM users WHERE email=%s)",
                             (course_key, email))
+    if course_name:
+        dbfile.DBMySQL.csfr(get_dbwriter(),
+                            "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_name=%s) "
+                            "AND user_id IN (SELECT id FROM users WHERE email=%s)",
+                            (course_name, email))
+
 
 
 @log

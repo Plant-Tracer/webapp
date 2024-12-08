@@ -89,10 +89,11 @@ static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
 ## API SUPPORT
 ## Commented out for now
 
-# import bottle_api
-# from bottle_api import page_dict
-# app = bottle.default_app()      # for Lambda
-# app.mount('/api', bottle_api.api)
+import bottle_api
+from bottle_api import page_dict
+app = bottle.default_app()      # for Lambda
+app.mount('/api', bottle_api.api)
+
 def page_dict():
     return {}
 

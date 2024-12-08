@@ -286,6 +286,16 @@ def create_course(*, course_key, course_name, admin_email,
                 ct += 1
     return admin_id
 
+def add_admin_to_course(*, admin_email, course_id=None, course_key=None):
+    db.make_course_admin(email=admin_email, course_key=course_key, course_id=course_id)
+
+def remove_admin_from_course(*, admin_email, course_id=None, course_key=None, course_name=None):
+    db.remove_course_admin(
+                        email=admin_email,
+                        course_key=course_key,
+                        course_id=course_id,
+                        course_name=course_name
+                    )
 
 ################################################################
 ## database schema management
@@ -383,7 +393,7 @@ if __name__ == "__main__":
     parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database', action='store_true')
     parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
     parser.add_argument("--create_client",help="Create a [client] section with a root username and the specified password")
-    parser.add_argument("--create_course",help="Create a course and register --admin as the administrator")
+    parser.add_argument("--create_course",help="Create a course and register --admin_email --admin_name as the administrator")
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload demo movies ')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
@@ -393,6 +403,11 @@ if __name__ == "__main__":
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--schema", help="Specify schema file to use", default=SCHEMA_FILE)
     parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
+    parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id, --course_name, or --course_name", action='store_true')
+    parser.add_argument("--course_id", help="integer course id", type=int)
+    parser.add_argument("--course_key", help="integer course id")
+    parser.add_argument("--course_name", help="integer course id")
+    parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id, --course_name, or --course_name", action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -492,6 +507,63 @@ if __name__ == "__main__":
         # In our current versions, it can.
         ath   = dbfile.DBMySQLAuth.FromConfigFile(os.environ[C.PLANTTRACER_CREDENTIALS], 'dbwriter')
         schema_upgrade(ath)
+        sys.exit(0)
+
+    if args.add_admin:
+        print("adding admin to course...")
+        if not args.admin_email:
+            print("Must provide --admin_email",file=sys.stderr)
+            sys.exit(1)
+        user = db.lookup_user(email=args.admin_email)
+        if not user.get('id'):
+            print(f"User {args.admin_email} does not exist")
+            sys.exit(1)
+        if not args.course_key and not args.course_id and not args.course_name:
+            print("Must provide one of --course_key, --course_id, or --course_name",file=sys.stderr)
+            sys.exit(1)
+        if args.course_id:
+            course = db.lookup_course_by_id(course_id=args.course_id)
+            if course.get('id'):
+                add_admin_to_course(admin_email = args.admin_email, course_id = args.course_id)
+                sys.exit(0)
+            else:
+                print(f"Course with id {args.course_id} does not exist.",file=sys.stderr)
+                sys.exit(1)
+        elif args.course_key:
+            course = db.lookup_course_by_key(course_key=args.course_key)
+            if course.get('course_key'):
+                add_admin_to_course(admin_email = args.admin_email, course_key = course['course_key'])
+                sys.exit(0)
+            else:
+                print(f"Course with key {args.course_key} does not exist.",file=sys.stderr)
+                sys.exit(1)
+        elif args.course_name:
+            course = db.lookup_course_by_name(course_name = args.course_name)
+            if course.get('id'):
+                add_admin_to_course(admin_email=args.admin_email, course_id=course['id'])
+                sys.exit(0)
+            else:
+                print(f'Course with name {args.course_name} does not exist.',file=sys.stderr)
+                sys.exit(1)
+
+    if args.remove_admin:
+        print("removing admin from course...")
+        if not args.admin_email:
+            print("Must provide --admin_email",file=sys.stderr)
+            sys.exit(1)
+        user = db.lookup_user(email=args.admin_email)
+        if not user.get('id'):
+            print(f"User {args.admin_email} does not exist")
+            sys.exit(1)
+        if not args.course_key and not args.course_id and not args.course_name:
+            print("Must provide one of --course_key, --course_id, or --course_name",file=sys.stderr)
+            sys.exit(1)
+        remove_admin_from_course(
+            admin_email = args.admin_email,
+            course_id = args.course_id,
+            course_key = args.course_key,
+            course_name = args.course_name
+        )
         sys.exit(0)
 
     ################################################################
