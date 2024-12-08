@@ -1,5 +1,4 @@
 #
-# Don't trust ChatGPT for layers — it's trained on too much bogus data.
 # Read the docs:
 # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/building-layers.html
 
@@ -8,7 +7,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   planttracer-webapp
 
-  SAM Template for planttracer-webapp
+  SAM Template for planttracer-webapp. Uses docker.
 
 # https://stackoverflow.com/questions/67065130/how-to-enable-cors-with-aws-sam
 Globals:
@@ -25,28 +24,31 @@ Resources:
   HandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./deploy         # Lambda can only deploy a single directory
-      Handler: lambda_handler.lambda_handler
-      Runtime: python3.11
+      PackageType: Image
       Architectures:
         - x86_64                # move to arm64 when we have an arm ffmpeg
-      Layers:
-        - !Ref OpenCVLayer
-        - !Ref PythonLayer
+      CodeUri: ./deploy         # Lambda can only deploy a single directory
       MemorySize: 512
       Timeout: 15
-      Tracing: Active
       Environment:
         Variables:
           AWS_LAMBDA: "YES"
-          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_prod-ui2Hf1"
-          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_prod-OOt56r"
+          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
           PLANTTRACER_CREDENTIALS: "etc/credentials-aws-prod.ini"
           PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
           PLANTTRACER_LOG_LEVEL: "WARNING"
           POWERTOOLS_SERVICE_NAME: FastAPI
           POWERTOOLS_METRICS_NAMESPACE: Powertools
           LOG_LEVEL: INFO
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+
       Events:
         RootPath:
           Type: Api
@@ -58,33 +60,12 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./deploy
+      DockerTag: python3.11-v1
       Tags:
         LambdaPowertools: python
-
-  OpenCVLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      ContentUri: layers/opencv-layer
-      CompatibleRuntimes:
-        - python3.9
-        - python3.10
-        - python3.11
-    Metadata:
-      BuildMethod: python3.9   # Required to have AWS SAM build this layer
-      BuildArchitecture: x86_64
-
-  PythonLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      ContentUri: layers/python-layer
-      CompatibleRuntimes:
-        - python3.9
-        - python3.10
-        - python3.11
-    Metadata:
-      BuildMethod: python3.9
-      BuildArchitecture: x86_64
-
 
 Outputs:
   ApiUrl:

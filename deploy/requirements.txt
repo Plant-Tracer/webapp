@@ -1,6 +1,11 @@
 apig-wsgi
+boto3
 bottle
 filetype
 jinja2
 mangum
+opencv-python-headless
+pymysql
+requests
 tabulate
+validate_email_address

@@ -7,10 +7,40 @@ Notes on Deploying to SAM
 `sam build` takes what's in the requirements.txt file, installs it into the directory `.aws-sam/build/HandlerFunction`, makes it into a
 ZIP file, and uploads the ZIP file to S3.  The ZIP file needs to be unzipped when the lambda does a cold-start.
 
-Layers
+Docker
 ------
 
-To make things somewhat faster, it's preferable to create a Layer which has the big files in it (opencv, numpy, etc).
+Normal SAM is limited to 512MiB. The only way around this is by using Docker containers.
+
+I had no problem building and deploying a Lambda function with a Docker Container from EC2. However, from my mac, I could not build the container, even when Docker was installed.
+
+I was able to run x86 AWS Linux on my M1 Mac using Docker:
+
+Dockerfile:
+
+```
+FROM amazonlinux:latest
+
+RUN yum install -y shadow-utils sudo && \
+    useradd -m ec2-user && \
+    echo "ec2-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+USER ec2-user
+WORKDIR /home/ec2-user
+```
+
+Makefile:
+```
+build:
+	echo build an x86 aws linux container with an ec2-user account
+	docker build -t amazonlinux-ec2 .
+	docker run --platform linux/amd64 -it amazonlinux-ec2 bash
+```
+
+I haven't yet tried running SAM inside the docker container
+
+
+--- To make things somewhat faster, it's preferable to create a Layer which has the big files in it (opencv, numpy, etc).
 
 The layer is defined in the template.yaml file. Here it is in the directory `layer/`. Inside that is `layer/python/requirements.txt` which contains the referenced python files to be installed in the layer by `sam build`.  Ideally the layer doesn't change much, so it doesn't need to be uploaded much.
 

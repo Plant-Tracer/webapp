@@ -19,7 +19,7 @@ confirm_changeset = true
 resolve_s3 = true
 s3_prefix = "planttracer-webapp"
 region = "us-east-1"
-image_repositories = []
+resolve_image_repos = true
 
 [default.package.parameters]
 resolve_s3 = true

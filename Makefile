@@ -10,7 +10,8 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
-# Manage the virtual environment
+# Manage the virtual environment.
+# THis is only used for virtual testing and under Zappo
 ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
@@ -23,17 +24,11 @@ venv:
 	$(PY) -m venv venv
 
 ################################################################
-# Manage the SAM layers
-sam-rebuild-layer:
-	rm -rf layers/opencv-layer/python
-	mkdir -p layers/python-layer/python
-	$(PY) -m pip install -r layers/opencv-layer/requirements.txt --target layers/opencv-layer/python/
-	rm -rf layers/python-layer/python
-	mkdir -p layers/python-layer/python
-	$(PY) -m pip install -r layers/python-layer/requirements.txt --target layers/python-layer/python/
-	find layers -name '*.dylib' -delete
-	find layers -name '*.dylibs' -delete
-	sam build
+# SAM Commands
+
+sam-deploy:
+	sam validate
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
 
 

@@ -5,7 +5,7 @@ def dump_files(path="."):
         for fn in files:
             logging.error("%s/%s",root,fn)
 
-dump_files('/')
+# dump_files('/')
 
 from apig_wsgi import make_lambda_handler
 from bottle_app import app
