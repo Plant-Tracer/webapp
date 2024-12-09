@@ -16,8 +16,7 @@ const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
-const crypto = require('crypto'); 
-
+const CryptoJS = require('crypto-js');
 // sounds for buttons
 var SOUNDS = [];
 if (typeof Audio !== 'undefined') {
@@ -108,16 +107,10 @@ function check_upload_metadata()
 // You get the results with
 //        var sha256 = await computeSHA256(file);
 async function computeSHA256(file) {
-    // Read the file as an ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
-
-    // Compute the SHA-256 hash
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-
-    // Convert the hash to a hexadecimal string
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    const wordArray = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer));
+    const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+    return hash;
 }
 
 /*

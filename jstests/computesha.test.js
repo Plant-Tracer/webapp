@@ -25,7 +25,6 @@ class MockFile {
 
 // Test suite for computeSHA256
 describe('computeSHA256', () => {
-    
     it('should return the correct SHA-256 hash for a known file', async () => {
         const fileContent = 'Hello, World!';  // Known content
         const expectedHash = 'dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f'; // Precomputed SHA-256 for "Hello, World!"
@@ -44,5 +43,4 @@ describe('computeSHA256', () => {
 
         expect(result).toBe(expectedHash);
     });
-
 });
