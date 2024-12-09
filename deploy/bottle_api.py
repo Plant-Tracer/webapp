@@ -25,10 +25,12 @@ from validate_email_address import validate_email
 import db
 import db_object
 import auth
-
+from auth import DEMO_MODE_AVAILABLE
 from constants import C,E,__version__,GET,POST,GET_POST
+
 import mailer
 import tracker
+
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.

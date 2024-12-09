@@ -59,7 +59,6 @@ import clogging
 import db
 import db_object
 import auth
-from auth import DEMO_MODE_AVAILABLE
 
 from paths import view, STATIC_DIR
 from constants import C,__version__,GET,GET_POST

@@ -4,7 +4,6 @@
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
 
-PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
@@ -52,7 +51,7 @@ check:
 ## Static Analysis
 
 pylint: $(REQ)
-	$(PYTHON) -m pylint --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose $(PYLINT_FILES)
+	$(ACTIVATE) ; cd deploy; $(PY) -m pylint --rcfile ../.pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose *.py
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
