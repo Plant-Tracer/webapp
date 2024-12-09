@@ -16,7 +16,6 @@ const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 20;
-const crypto = require('crypto'); 
 
 // sounds for buttons
 var SOUNDS = [];
@@ -108,7 +107,6 @@ function check_upload_metadata()
 // You get the results with
 //        var sha256 = await computeSHA256(file);
 async function computeSHA256(file) {
-    // Read the file as an ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
 
     // Compute the SHA-256 hash
