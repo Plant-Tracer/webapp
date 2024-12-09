@@ -3,6 +3,10 @@
  */
 
 
+//ESM Support in Jest is experimental, which means this test can either pass, 
+//and we have an error in the console (Uncaught ReferenceError: require is not defined)
+//or we can keep this test inactive until ESM support is stable within Jest. 
+
 const $ = require('jquery');
 global.$ = $;
 
