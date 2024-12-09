@@ -94,10 +94,6 @@ from bottle_api import page_dict
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
-def page_dict():
-    return {}
-
-
 def fix_boto_log_level():
     for name in logging.root.manager.loggerDict:
         if name.startswith('boto'):
