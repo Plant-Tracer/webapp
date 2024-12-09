@@ -1,3 +1,5 @@
+# We aren't using this anymore...
+
 {
     "dev": {
         "app_function": "bottle_app.app",

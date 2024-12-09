@@ -30,6 +30,7 @@ sam-deploy:
 	sam validate
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
+	sam logs --tail
 
 
 ################################################################
