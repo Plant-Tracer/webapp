@@ -30,6 +30,16 @@ from constants import C,E,__version__,GET,POST,GET_POST
 import mailer
 import tracker
 
+# Specify the base for the API and for the static files by Environment variables.
+# This allows them to be served from different web servers.
+# If they are not set, they default to '/' which is the same site that serves the HTML pages.
+# STATIC is used to serve JavaScript
+# API_BASE is used for the server API
+api_base = os.getenv(C.PLANTTRACER_API_BASE,'/')
+static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
+
+
+
 api = bottle.Bottle()
 
 ################################################################
