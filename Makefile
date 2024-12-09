@@ -193,9 +193,6 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	PLANTTRACER_CREDENTIALS=etc/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
-freeze:
-	$(PYTHON) -m pip freeze > requirements.txt
-
 clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
@@ -217,7 +214,9 @@ jscoverage:
 # Generic:
 install-python-dependencies: $(REQ)
 	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
+	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
+	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser
@@ -233,9 +232,9 @@ install-ubuntu: $(REQ)
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
 	npm ci
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
-	if [ -r requirements.txt ];        then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+
 
 # Includes MacOS dependencies managed through Brew
 install-macos:
@@ -247,34 +246,13 @@ install-macos:
 	brew install npm
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
-	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 # Includes Windows dependencies
 install-windows:
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
-	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
-
-################################################################
-## Python maintenance and Zappa deployment
-
-# https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
-update-python:
-	cat requirements.txt | cut -f1 -d= | xargs pip install -U
-
-update-dev:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update dev
-
-update-prod:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update production
-
-update-demo:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update demo
 
 %.js: %.ts
 	tsc $<

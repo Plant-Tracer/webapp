@@ -14,13 +14,13 @@ import io
 import csv
 import os
 import zipfile
+from urllib.parse import urlparse
 from collections import defaultdict
 from zipfile import ZipFile
 
 import bottle
 from bottle import request,response
 from validate_email_address import validate_email
-#from zappa.asynchronous import task
 
 import db
 import db_object
