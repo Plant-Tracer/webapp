@@ -35,6 +35,7 @@ Resources:
           AWS_LAMBDA: "YES"
           DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
           DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+          DEMO_MODE: "YES"
           PLANTTRACER_CREDENTIALS: "etc/credentials-aws-dev.ini"
           PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
           PLANTTRACER_LOG_LEVEL: "WARNING"
