@@ -164,7 +164,7 @@ run-local:
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	PLANTTRACER_CREDENTIALS=etc/credentials.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 $(PY) bottle_app.py --storelocal
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini DEMO_MODE=1 $(PY) bottle_app.py --storelocal
 
 debug:
 	make debug-local

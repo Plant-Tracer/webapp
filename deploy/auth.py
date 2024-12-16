@@ -85,9 +85,9 @@ def get_dbwriter():
 ################################################################
 # Demo mode
 
-# Check to see if PLANTTRACER_DEMO environment variable is set.
+# Check to see if DEMO_MODE environment variable is set.
 # If so, then we use the DEMO user if the user is not logged in
-DEMO_MODE_AVAILABLE = os.environ.get(C.PLANTTRACER_DEMO_MODE_AVAILABLE,' ')[0:1] in 'yYtT1'
+DEMO_MODE = os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
 
 def demo_mode_api_key():
     """Return the api key of the first demo user"""
@@ -150,7 +150,7 @@ def get_user_api_key():
     # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
     # return the api_key for the demo user.
     api_key = request.get_cookie(cookie_name(), None)
-    if (api_key is None) and (DEMO_MODE_AVAILABLE):
+    if (api_key is None) and (DEMO_MODE):
         api_key = demo_mode_api_key()
     return api_key
 

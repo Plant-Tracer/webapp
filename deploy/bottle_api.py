@@ -25,7 +25,7 @@ from validate_email_address import validate_email
 import db
 import db_object
 import auth
-from auth import DEMO_MODE_AVAILABLE
+from auth import DEMO_MODE
 from constants import C,E,__version__,GET,POST,GET_POST
 
 import mailer
@@ -233,7 +233,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'title':'Plant Tracer '+title,
         'hostname':o.hostname,
         'movie_id':movie_id,
-        'demo_mode_available':DEMO_MODE_AVAILABLE,
+        'demo_mode':DEMO_MODE,
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
         'dbreader_host':auth.get_dbreader().host,
         'version':__version__,
