@@ -70,6 +70,7 @@ DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
+CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
 
 
 #############################################
@@ -85,6 +86,10 @@ app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
 ################################################################
+
+def encode_binary_content():
+    """Check if we should encode binary content, which is required if the function is running in AWS Lambda."""
+    return 'ENCODE_BINARY_CONTENT' in os.environ
 
 def fix_boto_log_level():
     for name in logging.root.manager.loggerDict:
@@ -122,22 +127,46 @@ if os.environ.get('AWS_LAMBDA',None)=='YES':
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-    full_path = os.path.join(STATIC_DIR,path)
+
     try:
         kind = filetype.guess(full_path)
     except FileNotFoundError as e:
-        raise auth.http403(f'File not found: {full_path}') from e
-    if kind is not None:
+        raise bottle.HTTPError(404, f'File not found: {full_path}') from e
+
+    kind = filetype.guess(full_path)
+    if kind:
         mimetype = kind.mime
     elif path.endswith(".html"):
         mimetype = 'text/html'
     elif path.endswith(".js"):
         mimetype = 'text/javascript'
     else:
-        mimetype = 'text/plain'
-    response = bottle.static_file( path, root=STATIC_DIR, mimetype=mimetype )
-    response.set_header('Cache-Control', 'public, max-age=5')
-    return response
+        mimetype = 'application/octet-stream'  # Default for unknown binary types
+
+    response.set_header('Cache-Control', f'public, max-age={CACHE_MAX_AGE}')
+    if encode_binary_content():
+        with open(full_path, "rb") as f:
+            binary_data = f.read()
+
+        encoded_data = base64.b64encode(binary_data).decode('utf-8')
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": mimetype,
+                "Cache-Control": "public, max-age=5"
+            },
+            "isBase64Encoded": True,
+            "body": encoded_content
+        }
+
+        response.content_type = mimetype
+        with open(full_path, "rb") as f:
+            binary_data = f.read()
+        return binary_data
+    else:
+        # Local development or other environments
+        return response
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():

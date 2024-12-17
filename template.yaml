@@ -12,8 +12,8 @@ Description: >
 # https://stackoverflow.com/questions/67065130/how-to-enable-cors-with-aws-sam
 Globals:
   Function:
-    Timeout: 3
-    MemorySize: 128
+    Timeout: 15
+    MemorySize: 512
   Api:
     Cors:
       AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
@@ -21,6 +21,23 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      BinaryMediaTypes:
+        - image/x-icon
+        - image/png
+        - image/jpeg
+        - audio/mpeg
+        - application/octet-stream
+        - application/json
+      Cors:
+        AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
+        AllowHeaders: "'content-type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+
   HandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -28,8 +45,6 @@ Resources:
       Architectures:
         - x86_64                # move to arm64 when we have an arm ffmpeg
       CodeUri: ./deploy         # Lambda can only deploy a single directory
-      MemorySize: 512
-      Timeout: 15
       Environment:
         Variables:
           AWS_LAMBDA: "YES"
@@ -42,6 +57,7 @@ Resources:
           POWERTOOLS_SERVICE_NAME: FastAPI
           POWERTOOLS_METRICS_NAMESPACE: Powertools
           LOG_LEVEL: INFO
+          ENCODE_BINARY_CONTENT: "YES"
       Policies:
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
@@ -54,27 +70,29 @@ Resources:
         RootPath:
           Type: Api
           Properties:
+            RestApiId: !Ref MyApi # Link to the explicitly defined API
             Path: /
             Method: ANY
+            Auth: NONE
         ProxyPath:
           Type: Api
           Properties:
+            RestApiId: !Ref MyApi # Link to the explicitly defined API
             Path: /{proxy+}
             Method: ANY
+            Auth: NONE
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./deploy
       DockerTag: python3.11-v1
-      Tags:
-        LambdaPowertools: python
 
 Outputs:
   ApiUrl:
     Description: "URL of the API Gateway Endpoint"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
     Export:
       Name: ApiUrl
 
-  HandlerFunction:
+  HandlerFunctionArn:
     Description: "Mangum Handler Function ARN"
     Value: !GetAtt HandlerFunction.Arn
