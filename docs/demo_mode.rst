@@ -49,9 +49,9 @@ Required in the database
 Implementation
 --------------
 
-- Only checks for demo mode if ``PLANTTRACER_DEMO_MODE_AVAILABLE`` environment variable is set to 1
+- Only checks for demo mode if ``DEMO_MODE`` environment variable is set to 1
 
-- If ``PLANTTRACER_DEMO_MODE_AVAILABLE`` is set and there is no user logged in, then we are in DEMO_MODE
+- If ``DEMO_MODE`` is set and there is no user logged in, then we are in DEMO_MODE
 
 - If the logged-in user's demo attribute is true (1), then demo mode is available
 

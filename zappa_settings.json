@@ -1,3 +1,5 @@
+# We aren't using this anymore...
+
 {
     "dev": {
         "app_function": "bottle_app.app",
@@ -26,7 +28,7 @@
             "PLANTTRACER_CREDENTIALS":"etc/credentials-aws-dev.ini",
             "PLANTTRACER_SMTP":"arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf",
             "PLANTTRACER_LOG_LEVEL":"INFO",
-            "PLANTTRACER_DEMO_MODE_AVAILABLE":"YES"
+            "DEMO_MODE":"YES"
         }
     },
     "production": {

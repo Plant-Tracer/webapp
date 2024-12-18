@@ -4,13 +4,13 @@
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
 
-PYLINT_FILES=$(shell /bin/ls *.py  | grep -v bottle.py | grep -v app_wsgi.py)
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
-# Manage the virtual environment
+# Manage the virtual environment.
+# THis is only used for virtual testing and under Zappo
 ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
@@ -21,6 +21,16 @@ venv/pyvenv.cfg:
 
 venv:
 	$(PY) -m venv venv
+
+################################################################
+# SAM Commands
+
+sam-deploy:
+	sam validate
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
+	sam deploy --no-confirm-changeset
+	sam logs --tail
+
 
 ################################################################
 #
@@ -41,7 +51,7 @@ check:
 ## Static Analysis
 
 pylint: $(REQ)
-	$(PYTHON) -m pylint --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose $(PYLINT_FILES)
+	$(ACTIVATE) ; cd deploy; $(PY) -m pylint --rcfile ../.pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose *.py
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
@@ -154,7 +164,7 @@ run-local:
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	PLANTTRACER_CREDENTIALS=etc/credentials.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 $(PY) bottle_app.py --storelocal
+	PLANTTRACER_CREDENTIALS=etc/credentials.ini DEMO_MODE=1 $(PY) bottle_app.py --storelocal
 
 debug:
 	make debug-local
@@ -182,9 +192,6 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	PLANTTRACER_CREDENTIALS=etc/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
-freeze:
-	$(PYTHON) -m pip freeze > requirements.txt
-
 clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
@@ -206,7 +213,9 @@ jscoverage:
 # Generic:
 install-python-dependencies: $(REQ)
 	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
+	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
+	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser
@@ -222,9 +231,9 @@ install-ubuntu: $(REQ)
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
 	npm ci
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
-	if [ -r requirements.txt ];        then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
+
 
 # Includes MacOS dependencies managed through Brew
 install-macos:
@@ -236,34 +245,13 @@ install-macos:
 	brew install npm
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
-	if [ -r requirements.txt ];       then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
 
 # Includes Windows dependencies
 install-windows:
-	$(PYTHON) -m pip install --upgrade pip
+	make install-python-dependencies
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
-	if [ -r requirements.txt ];         then $(PIP_INSTALL) -r requirements.txt ; else echo no requirements.txt ; fi
-
-################################################################
-## Python maintenance and Zappa deployment
-
-# https://stackoverflow.com/questions/24764549/upgrade-python-packages-from-requirements-txt-using-pip-command
-update-python:
-	cat requirements.txt | cut -f1 -d= | xargs pip install -U
-
-update-dev:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update dev
-
-update-prod:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update production
-
-update-demo:
-	$(ACTIVATE) && pip freeze > requirements.txt
-	$(ACTIVATE) && zappa update demo
 
 %.js: %.ts
 	tsc $<

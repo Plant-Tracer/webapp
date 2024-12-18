@@ -68,7 +68,7 @@ Setup Steps
     SMTP_PASSWORD=MyPassword
     SMTP_PORT=587
     SMTP_HOST=smtp.mycompany.com
-       
+
     [imap]
     IMAP_USERNAME=plantadmin@mycompany.com
     IMAP_PASSWORD=MyPassword
@@ -104,9 +104,8 @@ Running Locally Quick Start
 
    .. code-block::
 
-       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini PLANTTRACER_DEMO_MODE_AVAILABLE=1 python bottle_app.py --storelocal
+       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini DEMO_MODE=1 python bottle_app.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 
 .. image:: media/PlantTracerCookieExample.png
-

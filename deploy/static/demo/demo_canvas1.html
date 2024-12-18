@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Demo</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <script type="text/javascript" charset="utf8" src="./jquery.js"></script>
+    <script type="module" src="../canvas_controller.js"></script>
+  </head>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+    </style>
+  <body>
+    <p>This demo shows the drag-and-drop of the CanvasController.</p>
+    <canvas id="canvas-id" width='640' height='480'> </canvas>
+    <form action="javascript:void(0)" >
+    <label for="zoom">zoom:</label>
+    <select id="zoom-id" name="zoom" class='zoom'>
+      <option value="25">25%</option>
+      <option value="50">50%</option>
+      <option value="75">75%</option>
+      <option value="100" selected>100%</option>
+      <option value="150">150%</option>
+      <option value="200">200%</option>
+      <option value="300">300%</option>
+    </select>
+    </form>
+  </body>
+  <script type='module'>
+    // This demo draws three dragable objects and adds some text.
+    import { CanvasController, CanvasItem, Marker, WebImage } from "../canvas_controller.js";
+    const cc = new CanvasController('#canvas-id','#zoom-id');
+    cc.add_object( new Marker(100, 100, 30, "red", "blue", "Test Marker 1"));
+    cc.add_object( new Marker(300, 300, 20, "blue", "red", "Test Marker 2"));
+    cc.redraw();
+  </script>
+</html>
