@@ -1,8 +1,8 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
 COPY requirements.txt ./
 
-RUN python3.11 -m pip install -r requirements.txt -t .
+RUN python3 -m pip install -r requirements.txt -t . --no-warn-script-location
 
 COPY *.py ./
 COPY etc/*       ./etc/

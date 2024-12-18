@@ -37,7 +37,6 @@ Resources:
         AllowHeaders: "'content-type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
 
-
   HandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -73,14 +72,12 @@ Resources:
             RestApiId: !Ref MyApi # Link to the explicitly defined API
             Path: /
             Method: ANY
-            Auth: NONE
         ProxyPath:
           Type: Api
           Properties:
             RestApiId: !Ref MyApi # Link to the explicitly defined API
             Path: /{proxy+}
             Method: ANY
-            Auth: NONE
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./deploy

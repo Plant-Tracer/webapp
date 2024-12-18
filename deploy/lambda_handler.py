@@ -1,3 +1,4 @@
+import os
 import logging
 
 logging.basicConfig(
@@ -8,8 +9,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def dump_files(path="."):
-    import logging
-    import os
     for (root, dirs, files) in os.walk(path):
         for fn in files:
             logging.error("%s/%s",root,fn)

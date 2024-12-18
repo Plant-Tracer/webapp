@@ -45,11 +45,12 @@ export TEST_USER_EMAIL=****
 import sys
 import os
 import logging
+import base64
 from urllib.parse import urlparse
 
 import filetype
 import bottle
-from bottle import request
+from bottle import request,response
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -127,7 +128,8 @@ if os.environ.get('AWS_LAMBDA',None)=='YES':
 
 @bottle.route('/static/<path:path>', method=['GET'])
 def static_path(path):
-
+    full_path = os.path.join(STATIC_DIR, path)
+    logging.debug("full_path=%s",full_path)
     try:
         kind = filetype.guess(full_path)
     except FileNotFoundError as e:
