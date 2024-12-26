@@ -17,7 +17,6 @@ import configparser
 import threading
 import copy
 
-from boddle import boddle
 from os.path import abspath, dirname, join
 
 from fixtures.localmail_config import mailer_config
@@ -76,8 +75,15 @@ def test_send_message(mailer_config):
         raise RuntimeError(f"Could not find and delete test message using smtp_config={smtp_config} imap_config={imap_config}")
 
 
+@pytest.fixture
+def app():
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    return app
+
+
 @pytest.mark.skip(reason="changing authentication")
-def test_register_email(mailer_config,new_course):
+def test_register_email(app, mailer_config,new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
 
@@ -93,10 +99,12 @@ def test_register_email(mailer_config,new_course):
 
 
     # try register api
-    with boddle(params={'email':FAKE_USER_EMAIL,
-                        'course_key':course_key,
-                        'name':FAKE_NAME}):
-        res = bottle_api.api_register()
+    with app.test_client() as client:
+        response = client.post('/api/register',
+                               data = {'email':FAKE_USER_EMAIL,
+                                       'course_key':course_key,
+                                       'name':FAKE_NAME})
+        assert response.status_code == 200
 
     # TODO: verify if registratione mail appeared
     # Now delete the user

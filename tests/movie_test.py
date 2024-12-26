@@ -229,7 +229,7 @@ def test_movie_upload_presigned_post(app, new_user,SaveS3Bucket):
     assert res['error'] == False
 
     # Now try the upload post
-    # Unfortunately, boddle doesn't seem to have a way to upload post requests.
+    # TODO: boddle didn't have a way to upload post requests, but we do now!
     assert 'presigned_post' in res;
 
     db.purge_movie(movie_id = res['movie_id'])

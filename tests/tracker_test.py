@@ -20,8 +20,6 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from boddle import boddle
-
 import lib.ctools.dbfile as dbfile
 import bottle_api
 import bottle_app
