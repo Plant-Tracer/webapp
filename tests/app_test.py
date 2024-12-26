@@ -6,17 +6,12 @@ Tests for the application
 import pytest
 import sys
 import os
-import bottle
 import logging
 import json
 import subprocess
 import uuid
 
 import xml.etree.ElementTree
-
-from flask import Flask
-
-# https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
 from deploy.paths import STATIC_DIR,TEST_DATA_DIR
 import deploy.db as db
@@ -27,39 +22,31 @@ import deploy.apikey as apikey
 
 from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie
-
-
-@pytest.fixture
-def client():
-    app = bottle_app.app
-    app.config['TESTING'] = True
-    with app.app_context():
-        with app.test_client() as client:
-            yield client
-
+from fixtures.app_client import client
 
 def test_version(client):  # Use the app fixture
     response = client.get('/version.txt')
     assert bottle_app.__version__ in response.text
 
 def test_get_float(mocker):
-    mocker.patch("bottle_api.get", return_value="3")
+    mocker.patch("deploy.bottle_api.get", return_value="3")
     assert bottle_api.get_float("key")==3
-    mocker.patch("bottle_api.get", return_value="xxx")
+    mocker.patch("deploy.bottle_api.get", return_value="xxx")
     assert bottle_api.get_float("key",default=4)==4
 
 def test_get_bool(mocker):
-    mocker.patch("bottle_api.get", return_value="YES")
+    mocker.patch("deploy.bottle_api.get", return_value="YES")
     assert bottle_api.get_bool("key")==True
-    mocker.patch("bottle_api.get", return_value="xxx")
+    mocker.patch("deploy.bottle_api.get", return_value="xxx")
     assert bottle_api.get_bool("key",default=False)==False
-    mocker.patch("bottle_api.get", return_value=3.4)
+    mocker.patch("deploy.bottle_api.get", return_value=3.4)
     assert bottle_api.get_bool("key",default=True)==True
 
 
 def test_static_path(client):
     response = client.get('/static/test.txt')
-    assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == response.text
+    with open(os.path.join(STATIC_DIR, 'test.txt'),'r') as f:
+        assert f.read() == response.text
 
     # Test file not found
     response = client.get('/static/no-file')
@@ -68,7 +55,7 @@ def test_static_path(client):
 #
 # Test various error conditions
 
-def test_error(app):
+def test_error(client):
     """Make sure authentication errors result in the session being expired and the cookie being cleared."""
     response = client.post('/api/list-movies',
                            data = {'api_key':'invalid'})
@@ -76,7 +63,6 @@ def test_error(app):
     cookie_name = apikey.cookie_name()
     set_cookie_header = response.headers.get('Set-Cookie')
     assert set_cookie_header == 'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
-
 
 # make sure we get no api_key with a bad request
 def test_null_api_key(mocker):

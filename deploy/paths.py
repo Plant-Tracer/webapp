@@ -31,6 +31,7 @@ TEST_DIR        = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR   = join(ROOT_DIR, 'tests', 'data')
 
 STANDALONE_PATH = join(ROOT_DIR, 'standalone.py')
+TEST_MOVIE_FILENAME = join(TEST_DATA_DIR,'2019-07-31 plantmovie-rotated.mov')
 
 AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 

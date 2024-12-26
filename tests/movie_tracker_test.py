@@ -5,7 +5,6 @@ import subprocess
 import pytest
 import sys
 import os
-import bottle
 import logging
 import json
 import tempfile
@@ -18,8 +17,6 @@ from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
 from zipfile import ZipFile
 import copy
-
-from flask import Flask, request
 
 import numpy as np
 import cv2
@@ -37,6 +34,7 @@ from deploy.constants import MIME,E
 # get the first MOV
 
 # Get the fixtures from user_test
+from fixtures.app_client import client
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
 
@@ -45,13 +43,7 @@ TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
 
-@pytest.fixture
-def app():
-    app = Flask(__name__)
-    app.config['TESTING'] = True
-    return app
-
-def test_track_point_annotations(app, new_movie):
+def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -81,34 +73,33 @@ def test_track_point_annotations(app, new_movie):
     assert tps[1]['frame_number'] == 0
 
     # Try the other interface; this time send two trackpoints through
-    with app.test_client() as client:
-        response = client.post('/api/put-frame-trackpoints',
-                               data = {'api_key': api_key,
-                                       'movie_id': movie_id,
-                                       'frame_number':1,
-                                       'trackpoints':json.dumps([tp0,tp1,tp2])})
-        assert response.status_code == 200
+    response = client.post('/api/put-frame-trackpoints',
+                           data = {'api_key': api_key,
+                                   'movie_id': movie_id,
+                                   'frame_number':1,
+                                   'trackpoints':json.dumps([tp0,tp1,tp2])})
+    assert response.status_code == 200
 
-        # Validate that the trackpoints were written into the database
-        tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
-        assert len(tps)==3
-        assert tps[0]['x'] == tp0['x']
-        assert tps[0]['y'] == tp0['y']
-        assert tps[0]['label'] == tp0['label']
-        assert tps[0]['frame_number'] == 1
+    # Validate that the trackpoints were written into the database
+    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
+    assert len(tps)==3
+    assert tps[0]['x'] == tp0['x']
+    assert tps[0]['y'] == tp0['y']
+    assert tps[0]['label'] == tp0['label']
+    assert tps[0]['frame_number'] == 1
 
-        assert tps[1]['x'] == tp1['x']
-        assert tps[1]['y'] == tp1['y']
-        assert tps[1]['label'] == tp1['label']
-        assert tps[1]['frame_number'] == 1
+    assert tps[1]['x'] == tp1['x']
+    assert tps[1]['y'] == tp1['y']
+    assert tps[1]['label'] == tp1['label']
+    assert tps[1]['frame_number'] == 1
 
-        assert tps[2]['x'] == tp2['x']
-        assert tps[2]['y'] == tp2['y']
-        assert tps[2]['label'] == tp2['label']
-        assert tps[2]['frame_number'] == 1
+    assert tps[2]['x'] == tp2['x']
+    assert tps[2]['y'] == tp2['y']
+    assert tps[2]['label'] == tp2['label']
+    assert tps[2]['frame_number'] == 1
 
 
-def test_movie_tracking(app, new_movie):
+def test_movie_tracking(client, new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
     Note: We no longer create an output movie: we just test the trackpoints
@@ -121,38 +112,35 @@ def test_movie_tracking(app, new_movie):
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
     # save the trackpoints
-    with app.test_client() as client:
-        response = client.post('/api/put-frame-trackpoints',
-                               data = {'api_key': api_key,
-                                       'movie_id': movie_id,
-                                       'frame_number': '0',
-                                       'trackpoints' : json.dumps(tpts)
-                                       })
-        assert response.status_code == 200
-        ret = response.get_json()
-        logging.debug("save trackpoints ret=%s",ret)
-        assert ret['error']==False
+    response = client.post('/api/put-frame-trackpoints',
+                           data = {'api_key': api_key,
+                                   'movie_id': movie_id,
+                                   'frame_number': '0',
+                                   'trackpoints' : json.dumps(tpts)
+                                   })
+    assert response.status_code == 200
+    ret = response.get_json()
+    logging.debug("save trackpoints ret=%s",ret)
+    assert ret['error']==False
 
     # Now track with CV2 - This actually does the tracking when run outsie of lambda
-    with app.test_client() as client:
-        response = client.post('/api/track-movie-queue',
-                               data = {'api_key': api_key,
-                                       'movie_id': str(movie_id),
-                                       'frame_start': '0' })
-        assert response.status_code == 200
-        ret = response.get_json()
-        logging.debug("track movie ret=%s",ret)
-        assert ret['error']==False
+    response = client.post('/api/track-movie-queue',
+                           data = {'api_key': api_key,
+                                   'movie_id': str(movie_id),
+                                   'frame_start': '0' })
+    assert response.status_code == 200
+    ret = response.get_json()
+    logging.debug("track movie ret=%s",ret)
+    assert ret['error']==False
 
     # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
-    with app.test_client() as client:
-        response = client.post('/api/get-movie-trackpoints',
-                               data={'api_key': api_key,
-                                     'movie_id': movie_id})
-        assert response.status_code == 200
-        ret = response.get_json()
-        lines = ret.splitlines()
+    response = client.post('/api/get-movie-trackpoints',
+                           data={'api_key': api_key,
+                                 'movie_id': movie_id})
+    assert response.status_code == 200
+    ret = response.get_json()
+    lines = ret.splitlines()
 
     # Verify a ZIP file with the individual frames was created
     zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
@@ -191,29 +179,26 @@ def test_movie_tracking(app, new_movie):
     assert frame_count+1 == len(lines) # one line for the header
 
     # Check error conditions for getting incomplete metadata
-    with app.test_client() as client:
-        response = client.post('/api/get-movie-metadata',
-                               data={'api_key': api_key,
-                                     'movie_id': movie_id,
-                                     'frame_start': 0})
-        assert response.get_json() == E.FRAME_START_NO_FRAME_COUNT
+    response = client.post('/api/get-movie-metadata',
+                           data={'api_key': api_key,
+                                 'movie_id': movie_id,
+                                 'frame_start': 0})
+    assert response.get_json() == E.FRAME_START_NO_FRAME_COUNT
 
-    with app.test_client() as client:
-        response = client.post('/api/get-movie-metadata',
-                               data = {'api_key': api_key,
-                                       'movie_id': movie_id,
-                                       'frame_start': 0,
-                                       'frame_count': 0})
-        assert response.get_json() == E.FRAME_COUNT_GT_0
+    response = client.post('/api/get-movie-metadata',
+                           data = {'api_key': api_key,
+                                   'movie_id': movie_id,
+                                   'frame_start': 0,
+                                   'frame_count': 0})
+    assert response.get_json() == E.FRAME_COUNT_GT_0
 
     # Get the movie metadata
-    with app.test_client() as client:
-        response = client.post('/api/get-movie-metadata',
-                               data = {'api_key': api_key,
-                                     'movie_id': movie_id,
-                                     'frame_start': 0,
-                                     'frame_count': 1000})
-        ret = response.get_json()
+    response = client.post('/api/get-movie-metadata',
+                           data = {'api_key': api_key,
+                                 'movie_id': movie_id,
+                                 'frame_start': 0,
+                                 'frame_count': 1000})
+    ret = response.get_json()
     logging.debug("r10=%s",ret)
     print(json.dumps(ret,indent=4),file=sys.stderr)
     assert ret['error'] == False

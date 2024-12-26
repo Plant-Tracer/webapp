@@ -5,7 +5,6 @@ import subprocess
 import pytest
 import sys
 import os
-import bottle
 import logging
 import json
 import tempfile

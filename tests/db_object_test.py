@@ -6,7 +6,6 @@ Tests the DB object storage layer
 import pytest
 import sys
 import os
-import bottle
 import logging
 import json
 import subprocess

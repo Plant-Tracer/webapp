@@ -13,5 +13,3 @@ APP_DIR = dirname(MY_DIR)
 DEPLOY_DIR   = join(APP_DIR,'deploy')
 sys.path.append(APP_DIR)
 sys.path.append(MY_DIR)
-
-from endpoint_test import http_endpoint

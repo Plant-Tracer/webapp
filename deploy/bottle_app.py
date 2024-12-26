@@ -167,7 +167,7 @@ def demo_tracer2():
 def demo_tracer3():
     return render_template('demo_tracer3.html', **page_dict('demo_tracer3',require_auth=False))
 
-@app.route('/version.txt', methods=GET_POST)
+@app.route('/ver', methods=GET_POST)
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.

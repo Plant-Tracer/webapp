@@ -10,3 +10,4 @@ requests
 tabulate
 validate_email_address
 aws-lambda-powertools
+cryptography
