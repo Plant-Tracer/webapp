@@ -26,21 +26,19 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from PIL import Image
-
 import deploy.dbfile as dbfile
 import deploy.bottle_api as bottle_api
 import deploy.bottle_app as bottle_app
 import deploy.db as db
-import db.db_object as db_object
+import deploy.db_object as db_object
+import deploy.tracker as tracker
+from deploy.constants import MIME,E
 
 # get the first MOV
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME,E
-import tracker
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
@@ -211,7 +209,7 @@ def test_movie_tracking(app, new_movie):
     # Get the movie metadata
     with app.test_client() as client:
         response = client.post('/api/get-movie-metadata',
-                               data {'api_key': api_key,
+                               data = {'api_key': api_key,
                                      'movie_id': movie_id,
                                      'frame_start': 0,
                                      'frame_count': 1000})

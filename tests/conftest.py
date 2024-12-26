@@ -8,9 +8,10 @@ import sys
 from os.path import abspath, dirname,join
 import pytest
 
-MYDIR = dirname(abspath(__file__))
-APP_DIR = dirname(MYDIR)
+MY_DIR = dirname(abspath(__file__))
+APP_DIR = dirname(MY_DIR)
 DEPLOY_DIR   = join(APP_DIR,'deploy')
 sys.path.append(APP_DIR)
+sys.path.append(MY_DIR)
 
 from endpoint_test import http_endpoint

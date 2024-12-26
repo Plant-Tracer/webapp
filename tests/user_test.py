@@ -15,6 +15,8 @@ import copy
 import hashlib
 from os.path import abspath, dirname
 
+from flask import Flask
+
 from deploy.auth import get_dbreader,get_dbwriter
 import deploy.db as db
 import deploy.dbmaint as dbmaint

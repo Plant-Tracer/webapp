@@ -29,10 +29,10 @@ import pytest
 
 import deploy.db as db
 from deploy.paths import TEST_DIR, STANDALONE_PATH
+from deploy.constants import C,E,__version__,GET,POST,GET_POST
 
 import user_test
 from user_test import new_course, new_user, api_key
-from constants import C,E,__version__,GET,POST,GET_POST
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")

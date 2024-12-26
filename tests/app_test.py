@@ -14,9 +14,11 @@ import uuid
 
 import xml.etree.ElementTree
 
+from flask import Flask
+
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from paths import STATIC_DIR,TEST_DATA_DIR
+from deploy.paths import STATIC_DIR,TEST_DATA_DIR
 import deploy.db as db
 import deploy.bottle_api as bottle_api
 import deploy.bottle_app as bottle_app
@@ -24,6 +26,7 @@ import deploy.auth as auth
 
 from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie
+
 
 @pytest.fixture
 def app():
@@ -76,7 +79,7 @@ def test_error(app):
                                data = {'api_key':'invalid'})
 
     cookie_name = apikey.cookie_name()
-    set_cookie-header = response.headers.get('Set-Cookie')
+    set_cookie_header = response.headers.get('Set-Cookie')
     assert set_cookie_header == 'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
 
 

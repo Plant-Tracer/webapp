@@ -14,22 +14,20 @@ import base64
 import csv
 import math
 from os.path import abspath, dirname
+import copy
 
 import numpy as np
 import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import lib.ctools.dbfile as dbfile
-import bottle_api
-import bottle_app
-import copy
+import deploy.dbfile as dbfile
 
-from PIL import Image
-
-
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
 import deploy.db as db
 import deploy.tracker as tracker
+
 from deploy.constants import MIME
 
 # Get the fixtures from user_test

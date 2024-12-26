@@ -5,7 +5,7 @@ import logging
 import pymysql
 
 import deploy.paths as paths
-import dploy.dbfile as dbfile
+import deploy.dbfile as dbfile
 import deploy.db as db
 from deploy.auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
 

@@ -24,21 +24,20 @@ import filetype
 
 from flask import Flask, request
 
-from deploy.paths import TEST_DATA_DIR
-from deploy.constants import C
-import deploy.dbfile as dbfile
 import deploy.db as db
 import deploy.db_object as db_object
 import deploy.bottle_api as bottle_api
 import deploy.bottle_app as bottle_app
+import deploy.dbfile as dbfile
+import deploy.tracker as tracker
 
-from auth import get_dbreader,get_dbwriter
+from deploy.paths import TEST_DATA_DIR
+from deploy.constants import C,MIME
+from deploy.auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
-from constants import MIME
 from db_object_test import SaveS3Bucket
-import tracker
 
 @pytest.fixture
 def app():

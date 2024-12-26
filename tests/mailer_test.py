@@ -19,10 +19,10 @@ import copy
 
 from os.path import abspath, dirname, join
 
+from flask import Flask
+
 from fixtures.localmail_config import mailer_config
 from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
-
-import bottle_api
 
 import deploy.db as db
 import deploy.mailer as mailer

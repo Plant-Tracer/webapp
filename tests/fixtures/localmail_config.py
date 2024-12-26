@@ -1,4 +1,3 @@
-import localmail
 import pytest
 import configparser
 import logging
@@ -8,10 +7,7 @@ import sys
 import os
 from os.path import join,dirname,abspath
 
-sys.path.append(dirname(dirname(dirname(abspath(__file__)))))
-import paths
-
-import auth
+import deploy.auth as auth
 
 def singleton(cls):
     instances = {}

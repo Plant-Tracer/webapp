@@ -16,8 +16,8 @@ import hashlib
 
 from deploy.auth import get_dbreader,get_dbwriter
 from deploy.paths import STATIC_DIR,TEST_DATA_DIR
-from deploy.ctools import dbfile
 from deploy.constants import C
+import deploy.dbfile as dbfile
 import deploy.db_object as db_object
 
 def test_object_name():
@@ -28,16 +28,17 @@ def test_object_name():
 def SaveS3Bucket():
     save = db_object.S3_BUCKET
     db_object.S3_BUCKET = None
-    yield
+    yield save
     db_object.S3_BUCKET = save
 
-
 def test_make_urn(SaveS3Bucket):
+    logging.info("Saved S3 bucket=%s",SaveS3Bucket)
     name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
     a = db_object.make_urn(object_name=name, scheme=None)
     assert a.endswith(".txt")
 
 def test_write_read_delete_object(SaveS3Bucket):
+    logging.info("Saved S3 bucket=%s",SaveS3Bucket)
     logging.debug("dbwriter: %s",get_dbwriter())
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()
@@ -62,4 +63,4 @@ def test_write_read_delete_object(SaveS3Bucket):
     assert obj_data == DATA
 
     db_object.delete_object(urn=urn)
-    assert db_object.read_object(urn=urn) == None
+    assert db_object.read_object(urn=urn) is None
