@@ -18,21 +18,17 @@ import uuid
 from tabulate import tabulate
 from botocore.exceptions import ClientError,ParamValidationError
 
-import paths
+from . import paths
+from . import db
+from . import tracker
+from . import auth
+from . import clogging
+from . import dbfile
+from .constants import C
+from .paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
+from .dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
 
-from constants import C
-
-# pylint: disable=no-member
-
-import db
-import tracker
-import auth
-from paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
-import clogging
-import dbfile
-from dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
-
-import mailer
+from . import mailer
 
 assert os.path.exists(TEMPLATE_DIR)
 
@@ -378,7 +374,6 @@ if __name__ == "__main__":
         help='Specify config file with MySQL database root credentials in [client] section. '
         'Format is the same as the mysql --defaults-extra-file= argument')
     parser.add_argument("--sendlink", help="Send link to the given email address, registering it if necessary.")
-    parser.add_argument("--mailer_config", help="Print mailer configuration",action='store_true')
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb",
                         help='Create a new database and a dbreader and dbwriter user. Database must not exist. '
@@ -418,10 +413,6 @@ if __name__ == "__main__":
     if args.rootconfig:
         config.read(args.rootconfig)
         os.environ[C.PLANTTRACER_CREDENTIALS] = args.rootconfig
-
-    if args.mailer_config:
-        print("mailer config:",mailer.smtp_config_from_environ())
-        sys.exit(0)
 
     if args.readconfig:
         paths.CREDENTIALS_FILE = paths.AWS_CREDENTIALS_FILE = args.readconfig

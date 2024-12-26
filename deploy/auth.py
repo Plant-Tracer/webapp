@@ -1,26 +1,19 @@
 """Authentication Layer
 
-This layer is necessarily customized to bottle.
+This layer is necessarily customized to Flask.
 This provides for all authentication in the planttracer system:
 * Database authentication
 * Mailer authentication
 """
 import os
 import os.path
-import functools
 import configparser
 import logging
+import functools
 
-import bottle
-from bottle import request
+from . import dbfile
+from .constants import C
 
-#import paths
-import dbfile
-
-import db
-from constants import C
-
-API_KEY_COOKIE_BASE = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
 SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 
@@ -57,12 +50,6 @@ def smtp_config():
         assert key in cp['smtp']
     return section
 
-def http403(msg=''):
-    return bottle.HTTPResponse(body='Authentication error 403 '+msg, status=403)
-
-def http404(msg=''):
-    return bottle.HTTPResponse(body='Not found error 404 '+msg, status=404)
-
 @functools.cache
 def get_dbreader():
     """Get the dbreader authentication info from:
@@ -82,82 +69,21 @@ def get_dbwriter():
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
 
 
-################################################################
-# Demo mode
+class AuthError(Exception):
+    """Integrated error handling"""
+    status_code = 403
 
-# Check to see if DEMO_MODE environment variable is set.
-# If so, then we use the DEMO user if the user is not logged in
-DEMO_MODE = os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
+    def __init__(self, message, status_code=None, payload=None):
+        Exception.__init__(self)
+        self.message = message
+        if status_code is not None:
+            self.status_code = status_code
+        self.payload = payload
 
-def demo_mode_api_key():
-    """Return the api key of the first demo user"""
-    for demo_user in db.list_demo_users():
-        api_key = db.get_demo_user_api_key(user_id = demo_user['user_id'])
-        if api_key is None:
-            # Make an api key for the demo user if we do not have one
-            api_key = db.make_new_api_key(email=demo_user['email'])
-        return api_key
-    logging.error("demo_mode_api_key requested but there are no demo users")
-    return None
+    def to_dict(self):
+        rv = dict(self.payload or ())
+        rv['message'] = self.message
+        return rv
 
-################################################################
-# Authentication API - for clients
-##
-
-@functools.cache
-def cookie_name():
-    """We append the database name to the cookie name to make development easier.
-    This way, the localhost: cookies can be for the prod, demo, or dev databases.
-    """
-    return API_KEY_COOKIE_BASE + "-" + get_dbreader().database
-
-def set_cookie(api_key):
-    bottle.response.set_cookie(cookie_name(), api_key, path='/', max_age=COOKIE_MAXAGE)
-
-def clear_cookie():
-    bottle.response.delete_cookie(cookie_name(), path='/')
-
-def get_user_api_key():
-    """Gets the user APIkey from either the URL or the cookie or the
-    form, but does not validate it.  If we are running in an
-    environment that offers demo mode and there is no api_key in the
-    browser's cookie or the URL GET string, grab the first api_key
-    from the database that corresponds to a demo user.
-
-    :return:
-       a string of an API key if the user is logged in
-       a string of the demo mode's API key if no user is logged in and demo mode is available.
-       None if user is not logged in and no demo mode
-    """
-    # check the query string
-    try:
-        api_key = request.query.get('api_key', None) # must be 'api_key', because may be in URL
-        if api_key is not None:
-            return api_key
-    except KeyError:
-        return None             # not running in WSGI
-
-    # check for a form submission
-    try:
-        api_key = request.forms.get('api_key', None) # must be 'api_key', because may be in a form
-    except KeyError:
-        return None             # not running in WSGI
-
-    if api_key:
-        return api_key
-
-    # Return the api_key if it is in a cookie.
-    # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
-    # return the api_key for the demo user.
-    api_key = request.get_cookie(cookie_name(), None)
-    if (api_key is None) and (DEMO_MODE):
-        api_key = demo_mode_api_key()
-    return api_key
-
-def get_user_ipaddr():
-    """This is the only place where db.py knows about bottle."""
-    return request.environ.get('REMOTE_ADDR')
-
-def get_param(k, default=None):
-    """Get param v from the reqeust"""
-    return request.query.get(k, request.forms.get(k, default))
+class EmailNotInDatabase(Exception):
+    """Handle error condition below"""

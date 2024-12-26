@@ -6,7 +6,6 @@
 # pylint: disable=too-many-arguments
 
 import os
-#import base64
 import uuid
 import logging
 import json
@@ -14,7 +13,8 @@ import sys
 import copy
 import smtplib
 import functools
-#from typing import Optional
+
+from flask import request
 
 from botocore.exceptions import ClientError,ParamValidationError
 from jinja2.nativetypes import NativeEnvironment
@@ -22,14 +22,14 @@ from jinja2.nativetypes import NativeEnvironment
 # from validate_email_address import validate_email
 
 
-import db_object
-from paths import TEMPLATE_DIR
-import auth
-from constants import MIME,C
-from auth import get_user_api_key, get_user_ipaddr, get_dbreader, get_dbwriter
-import dbfile
-from mailer import InvalidEmail
-import mailer
+from . import auth
+from . import db_object
+from . import dbfile
+from . import mailer
+from .paths import TEMPLATE_DIR
+from .constants import MIME,C
+from .auth import get_dbreader, get_dbwriter
+from .apikey import get_user_api_key
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
@@ -93,10 +93,10 @@ logit_DEBUG = False
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
     user_api_key = get_user_api_key()
-    user_ipaddr  = get_user_ipaddr()
+    user_ipaddr  = request.environ.get('REMOTE_ADDR')
 
     # Make copies of func_args and func_return so we can modify without fear
-    func_args = copy.copy(func_args)
+    func_args   = copy.copy(func_args)
     func_return = copy.copy(func_return)
 
     func_args   = json.dumps(func_args, default=str)
@@ -274,9 +274,6 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     :param: demo_user  - True if this is a demo user
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
-
-    #if not validate_email(email, check_mx=CHECK_MX):
-    #    raise InvalidEmail(email)
 
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")

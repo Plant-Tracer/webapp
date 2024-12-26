@@ -2,13 +2,18 @@
 # Bottle App
 ##
 
+import sys
+import os
+import uvicorn
+import argparse
+
+import deploy.clogging as clogging
+from deploy.constants import C
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
     parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
     parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
     clogging.add_argument(parser, loglevel_default='WARNING')
@@ -36,16 +41,5 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
-    startup()
-
-    # Run the multi-threaded server? Needed for testing local-tracking
-    if args.multi:
-        httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("")
-            sys.exit(0)
-
-    # Run the single-threaded server (more debugging and the reloader)
-    bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)
+    cmd = 'gunicorn --workers 2 --reload --log-level DEBUG deploy.bottle_app:app '
+    os.system(cmd)

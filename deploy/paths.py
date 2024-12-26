@@ -3,29 +3,25 @@ Should this be moved to constants?
 """
 
 import os
-from os.path import dirname, abspath, relpath, join
-import functools
+from os.path import dirname, abspath, join
 import shutil
+import logging
 
-import bottle
-from bottle import jinja2_view
-
-from constants import C
+from .constants import C
 
 HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
 
-import logging
-logging.error("__file__=%s",__file__)
+logging.debug("__file__=%s",__file__)
 
 SRC_DIR          = dirname(abspath(__file__))
-logging.error("SRC_DIR=%s",SRC_DIR)
+logging.debug("SRC_DIR=%s",SRC_DIR)
 
 ROOT_DIR         = SRC_DIR
 
 STATIC_DIR       = join(ROOT_DIR, 'static')
-logging.error("STATIC_DIR=%s",STATIC_DIR)
+logging.debug("STATIC_DIR=%s",STATIC_DIR)
 
 ETC_DIR          = join(ROOT_DIR, 'etc')
 TEMPLATE_DIR     = join(ROOT_DIR, 'templates')
@@ -37,15 +33,6 @@ SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
 SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
 
 AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
-
-# used by test program:
-BOTTLE_APP_PATH = join(ROOT_DIR, 'bottle_app.py')
-
-# Add the relative template path (since jinja2 doesn't like absolute paths)
-bottle.TEMPLATE_PATH.append(relpath(TEMPLATE_DIR))
-
-# Create the @view decorator to add template to the function output
-view = functools.partial(jinja2_view)
 
 def running_in_aws_lambda():
     return C.AWS_LAMBDA_ENVIRON in os.environ

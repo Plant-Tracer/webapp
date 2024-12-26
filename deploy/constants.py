@@ -6,9 +6,9 @@ Constants are created in classes so we can import the class and don't have to im
 
 __version__ = '0.9.3'
 
-GET='GET'
-POST='POST'
-GET_POST = [GET,POST]
+GET=['GET']
+POST=['POST']
+GET_POST = ['GET','POST']
 
 class C:
     """Constants"""
@@ -38,7 +38,8 @@ class C:
     SCHEME_S3 = 's3'
     SCHEME_DB = 'db'
     SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
-    REDIRECT_FOUND = 302        # bottle default
+    REDIRECT_FOUND = 302
+    API_KEY_COOKIE_BASE = 'api_key'
 
 
 class MIME:

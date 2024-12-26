@@ -1,5 +1,6 @@
-# dbfile.py
-
+"""
+dbfile.py
+"""
 
 from os.path import basename, abspath, dirname
 from collections import OrderedDict
@@ -158,7 +159,7 @@ def get_aws_secret_for_section(section):
     return None
 
 
-def timet_iso(t=time.time()):
+def timet_iso():
     """Report a time_t as an ISO-8601 time format. Defaults to now."""
     return datetime.datetime.now().isoformat()[0:19]
 

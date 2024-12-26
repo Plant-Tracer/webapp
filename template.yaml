@@ -15,9 +15,9 @@ Globals:
     Timeout: 15
     MemorySize: 512
   Api:
-    Cors:
+    CorsConfiguration:
       AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
-      AllowHeaders: "'content-type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
       AllowOrigin: "'*'"
 
 Resources:
@@ -31,10 +31,9 @@ Resources:
         - image/jpeg
         - audio/mpeg
         - application/octet-stream
-        - application/json
-      Cors:
+      CorsConfiguration:
         AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
-        AllowHeaders: "'content-type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
 
   HandlerFunction:

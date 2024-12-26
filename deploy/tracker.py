@@ -14,7 +14,8 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
-import paths
+
+from . import paths
 
 FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT='point_array_out'

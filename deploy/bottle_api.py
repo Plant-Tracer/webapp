@@ -17,90 +17,30 @@ from urllib.parse import urlparse
 from collections import defaultdict
 from zipfile import ZipFile
 
-import bottle
-from bottle import request,response
+from flask import Blueprint, request, abort, make_response, redirect
 from validate_email_address import validate_email
 
-import db
-import db_object
-import auth
-from auth import DEMO_MODE
-from constants import C,E,__version__,GET,POST,GET_POST
+from . import db
+from . import db_object
+from . import auth
+from . import mailer
+from . import tracker
+from .apikey import get_user_api_key,DEMO_MODE,cookie_name
+from .auth import AuthError,EmailNotInDatabase
+from .constants import C,E,GET,POST,GET_POST
 
-import mailer
-import tracker
 
-# Specify the base for the API and for the static files by Environment variables.
-# This allows them to be served from different web servers.
-# If they are not set, they default to '/' which is the same site that serves the HTML pages.
-# STATIC is used to serve JavaScript
-# API_BASE is used for the server API
-api_base = os.getenv(C.PLANTTRACER_API_BASE,'/')
-static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
+api_bp = Blueprint('api', __name__)
 
-api = bottle.Bottle()
-
-################################################################
-## Utility
-def expand_memfile_max():
-    logging.info("Changing MEMFILE_MAX from %d to %d",
-                 bottle.BaseRequest.MEMFILE_MAX, C.MAX_FILE_UPLOAD)
-    bottle.BaseRequest.MEMFILE_MAX = C.MAX_FILE_UPLOAD
-
-def is_true(s):
-    return str(s)[0:1] in 'yY1tT'
-
-@functools.cache
-def git_head_time():
-    try:
-        return subprocess.check_output("git log --no-walk --pretty=format:%cd".split(),encoding='utf-8')
-    except (subprocess.SubprocessError,FileNotFoundError):
-        return ""
-
-@functools.cache
-def git_last_commit():
-    try:
-        return subprocess.check_output("git log --pretty=[%h] -1 HEAD".split(),encoding='utf-8')
-    except (subprocess.SubprocessError,FileNotFoundError):
-        return ""
-
-################################################################
-## CORS
-# https://stackoverflow.com/questions/17262170/bottle-py-enabling-cors-for-jquery-ajax-requests
-# Allows API calls on remote infrastructure from local JavaScript
-class EnableCors:               # pylint: disable=too-few-public-methods
-    """
-    This class adds the three headers (below) to the HTTP header of every API response.
-    This allows the JavaScript running locally to execute API calls on another server.
-    This makes it possible to debug the JavaScript with the server running on AWS, or vice-versa.
-    Environment variable PLANTTRACER_API_BASE specifies where API is hosted.
-    Environment variable PLANTTRACER_STATIC_BASE specifies where the JavaScript files are hosted.
-    """
-    name = 'enable_cors'
-    api = 2
-
-    def apply(self, fn, context): # pylint: disable=unused-argument
-        def _enable_cors(*args, **kwargs):
-            # set CORS headers
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
-            # And run the original function that we wrapped.
-            return fn(*args, **kwargs)
-        return _enable_cors
-
-api.install(EnableCors())       # install the callback in the Bottle stack
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
-    logging.debug("%s request.forms.get(%s)=%s",request.forms.keys(),key,request.forms.get(key))
-    logging.debug("%s request.query.get(%s)=%s",request.query.keys(),key,request.query.get(key))
-    return request.forms.get(key, request.query.get(key, default))
+    return request.values.get(key, default)
 
 def get_json(key):
     try:
-        return json.loads(request.forms.get(key))
+        return json.loads(request.values.get(key))
     except (TypeError,ValueError,json.decoder.JSONDecodeError):
         return None
 
@@ -132,154 +72,51 @@ def get_user_id(allow_demo=True):
     userdict = get_user_dict()
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requested action")
-        raise auth.http403('demo accounts not allowed to execute requested action')
+        raise AuthError('demo accounts not allowed to execute requested action')
     return userdict['id']
 
-def fix_types(obj):
-    """Process JSON so that it dumps without `default=str`, since we can't
-    seem to get bottle to do that."""
-    return json.loads(json.dumps(obj,default=str))
-
-def get_user_dict():
-    """Returns the user_id of the currently logged in user, or throws a response"""
-    logging.debug("get_user_dict(). request.url=%s",request.url)
-    api_key = auth.get_user_api_key()
-    logging.debug("get_user_dict(). api_key=%s",api_key)
-    if api_key is None:
-        logging.info("api_key is none or invalid. request=%s",bottle.request.fullpath)
-        if bottle.request.fullpath.startswith('/api/'):
-            raise auth.http403('invalid API key')
-        # Check if we were running under an API
-
-        # This will redirect to the / and produce a "Session expired" message
-        raise auth.http403('session expired')
-    userdict = db.validate_api_key(api_key)
-    if not userdict:
-        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.environ.get('REMOTE_ADDR'),request.url)
-        auth.clear_cookie()
-        raise auth.http403(f'Error 404: api_key {api_key} is invalid. ')
-    return userdict
-
-def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=False):
-    """Returns a dictionary that can be used by post of the templates.
-    :param: title - the title we should give the page
-    :param: require_auth  - if true, the user must already be authenticated, or throws an error
-    :param: logout - if true, force the user to log out by issuing a clear-cookie command
-    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key in the URL or the cookie
-    """
-    logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
-    o = urlparse(request.url)
-    logging.debug("o=%s",o)
-    if lookup:
-        api_key = auth.get_user_api_key()
-        logging.debug("auth.get_user_api_key=%s",api_key)
-        if api_key is None and require_auth is True:
-            logging.debug("api_key is None and require_auth is True")
-            raise auth.http403("api_key is None and require_auth is True")
-    else:
-        api_key = None
-
-    if (api_key is not None) and (logout is False):
-        # Get the user_dict is from the database
-        user_dict = get_user_dict()
-        user_name = user_dict['name']
-        user_email = user_dict['email']
-        user_demo  = user_dict['demo']
-        user_id = user_dict['id']
-        user_primary_course_id = user_dict['primary_course_id']
-        logged_in = 1
-        primary_course_name = db.lookup_course_by_id(course_id=user_primary_course_id)['course_name']
-        admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
-        # If this is a demo account, the user cannot be an admin (security)
-        if user_demo:
-            assert not admin
-        # if this is not a demo account and the user_id is set, make sure we set the cookie
-        if (user_id is not None) and (not user_demo):
-            auth.set_cookie(api_key)
-
-    else:
-        user_name  = None
-        user_email = None
-        user_demo  = 0
-        user_id    = None
-        user_primary_course_id = None
-        primary_course_name = None
-        admin = 0
-        logged_in = 0
-
-    try:
-        movie_id = int(request.query.get('movie_id'))
-    except (AttributeError, KeyError, TypeError):
-        movie_id = 0            # to avoid errors
-
-    ret= fix_types({
-        C.API_BASE: api_base,
-        C.STATIC_BASE: static_base,
-        'api_key': api_key,     # the API key that is currently active
-        'user_id': user_id,     # the user_id that is active
-        'user_name': user_name, # the user's name
-        'user_email': user_email, # the user's email
-        'user_demo':  user_demo,  # true if this is a demo user
-        'logged_in': logged_in,
-        'admin':admin,
-        'user_primary_course_id': user_primary_course_id,
-        'primary_course_name': primary_course_name,
-        'title':'Plant Tracer '+title,
-        'hostname':o.hostname,
-        'movie_id':movie_id,
-        'demo_mode':DEMO_MODE,
-        'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-        'dbreader_host':auth.get_dbreader().host,
-        'version':__version__,
-        'git_head_time':git_head_time(),
-        'git_last_commit':git_last_commit()
-    })
-    for (k,v) in ret.items():
-        if v is None:
-            ret[k] = "null"
-    if debug:
-        logging.debug("fixed page_dict=%s",ret)
-    return ret
 
 ################################################################
 # /api URLs
 ################################################################
 
-@api.route('/check-api_key', method=GET_POST)
+@api_bp.route('/check-api_key', methods=GET_POST)
 def api_check_api_key():
     """API to check the user key and, if valid, return usedict or returns an error."""
 
-    userdict = db.validate_api_key(auth.get_user_api_key())
+    userdict = db.validate_api_key(get_user_api_key())
     if userdict:
         return {'error': False, 'userinfo': fix_types(userdict)}
     return E.INVALID_API_KEY
 
-@api.route('/get-logs', method=POST)
+
+@api_bp.route('/get-logs', methods=POST)
 def api_get_logs():
     """Get logs and return in JSON. The database function does all of the security checks, but we need to have a valid user."""
     kwargs = {}
     for kw in ['start_time','end_time','course_id','course_key',
                'movie_id','log_user_id','ipaddr','count','offset']:
-        if kw in request.forms.keys():
-            kwargs[kw] = request.forms.get(kw)
+        val = request.values.get(kw,None)
+        if val:
+            kwargs[kw] = val
 
     logs    = db.get_logs(user_id=get_user_id(),**kwargs)
     return {'error':False, 'logs': logs}
 
-@api.route('/register', method=GET_POST)
+@api_bp.route('/register', methods=GET_POST)
 def api_register():
     """Register the email address if it does not exist. Send a login and upload link"""
-    email = request.forms.get('email')
-    planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    email = request.values.get('email')
+    planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
-    course_key = request.forms.get('course_key')
+    course_key = request.values.get('course_key')
     if not db.validate_course_key(course_key=course_key):
         return E.INVALID_COURSE_KEY
     if db.remaining_course_registrations(course_key=course_key) < 1:
         return E.NO_REMAINING_REGISTRATIONS
-    name = request.forms.get('name')
+    name = request.values.get('name')
     db.register_email(email=email, course_key=course_key, name=name)
     new_api_key = db.make_new_api_key(email=email)
     if not new_api_key:
@@ -300,9 +137,6 @@ def api_register():
         ret = {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
     return ret
 
-class EmailNotInDatabase(Exception):
-    """Handle error condition below"""
-
 def send_link(*, email, planttracer_endpoint):
     new_api_key = db.make_new_api_key(email=email)
     if not new_api_key:
@@ -310,11 +144,12 @@ def send_link(*, email, planttracer_endpoint):
         raise EmailNotInDatabase(email)
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
 
-@api.route('/resend-link', method=GET_POST)
+
+@api_bp.route('/resend-link', methods=GET_POST)
 def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
-    email = request.forms.get('email')
-    planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    email = request.values.get('email')
+    planttracer_endpoint = request.values.get('planttracer_endpoint')
     logging.info("resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=C.CHECK_MX):
         logging.info("email not valid: %s", email)
@@ -331,16 +166,16 @@ def api_send_link():
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
-@api.route('/bulk-register', method=POST)
+@api_bp.route('/bulk-register', methods=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
-    course_id =  int(request.forms.get('course_id'))
+    course_id =  int(request.values.get('course_id'))
     user_id   = get_user_id()
-    planttracer_endpoint = request.forms.get('planttracer_endpoint')
+    planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not db.check_course_admin(course_id = course_id, user_id=user_id):
         return E.INVALID_COURSE_ACCESS
 
-    email_addresses = request.forms.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
+    email_addresses = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     try:
         for email in email_addresses:
             if not validate_email(email, check_mx=C.CHECK_MX):
@@ -368,21 +203,23 @@ MIME_MAP = {'.jpg':'image/jpeg',
             }
 
 
-@api.route('/get-object', method=GET)
+@api_bp.route('/get-object', methods=GET)
 def api_get_object():
     """Implement signed URLs. Doesn't need APIkey!"""
     # my object store doesn't implement mime types, so fake them.
     urn = get('urn')
     ext = os.path.splitext( urn )[1]
-    bottle.response.set_header('Content-Type', MIME_MAP[ext])
-    return db_object.read_signed_url(urn=get('urn'), sig=get('sig'))
+    response = make_response( db_object.read_signed_url(urn=get('urn'), sig=get('sig')) )
+    response.headers['Content-Type'] = MIME_MAP[ext]
+    return response
+
 
 ################################################################
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
 
-@api.route('/new-movie', method=POST)
+@api_bp.route('/new-movie', methods=POST)
 def api_new_movie():
     """Creates a new movie for which we can upload frame-by-frame or all at once.
     Moving can appear here as a file or as a base64 encoded data.
@@ -408,8 +245,8 @@ def api_new_movie():
 
     # This is where the movie_id is assigned
     ret['movie_id'] = db.create_new_movie(user_id=user_id,
-                                          title=request.forms.get('title'),
-                                          description=request.forms.get('description') )
+                                          title=request.values.get('title'),
+                                          description=request.values.get('description') )
 
     # Get the object name and create the upload URL
     object_name= db_object.object_name( course_id = db.course_id_for_movie_id( ret['movie_id']),
@@ -422,7 +259,7 @@ def api_new_movie():
                                                           sha256=movie_data_sha256)
     return ret
 
-@api.route('/upload-movie', method=POST)
+@api_bp.route('/upload-movie', methods=POST)
 def api_upload_movie():
     """
     Upload a movie that has already been created. This is our receiver for 'presigned posts.'
@@ -456,7 +293,7 @@ def api_upload_movie():
     db_object.write_object(urn, movie_data)
     return {'error':False,'message':'Upload ok.'}
 
-@api.route('/get-movie-data', method=GET_POST)
+@api_bp.route('/get-movie-data', methods=GET_POST)
 def api_get_movie_data():
     """
     Redirects the user to a URL that downloads the movie.
@@ -471,9 +308,9 @@ def api_get_movie_data():
     try:
         movie_id = get_int('movie_id')
         movie = db.Movie(movie_id, user_id=get_user_id())
-    except (db.UnauthorizedUser,bottle.HTTPResponse) as e:
+    except db.UnauthorizedUser as e:
         logging.debug("user authentication error=%s",e)
-        return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=403)
+        return make_response(f'user={get_user_id()} movie_id={movie_id}', 403)
 
     if get('format')=='zip':
         url = movie.zipfile_url
@@ -482,13 +319,13 @@ def api_get_movie_data():
 
     if url is None:
         logging.debug("no movie data for movie_id %s",movie_id)
-        return bottle.HTTPResponse(body=f'user={get_user_id()} movie_id={movie_id}', status=404)
+        return make_response(f'user={get_user_id()} movie_id={movie_id}', 404)
 
     # This is used for testing redirect response in the test program
     if get_bool('redirect_inline'):
         return "#REDIRECT " + url
     logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
-    return bottle.redirect(url)
+    return redirect(url)
 
 def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
     """Update the movie metadata."""
@@ -496,8 +333,9 @@ def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
         if prop in movie_metadata:
             db.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
 
+
 ################
-# get-frame api.
+# get-frame api_bp.
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
@@ -515,7 +353,7 @@ def api_get_frame_jpeg(*,movie_id, frame_number):
         set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
         return ret
     except ValueError as e:
-        return bottle.HTTPResponse(status=500, body=f"frame number {frame_number} out of range: "+e.args[0])
+        return make_response(f"frame number {frame_number} out of range: "+e.args[0], 500)
 
 def api_get_frame_urn(*,frame_number,movie_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
@@ -530,7 +368,7 @@ def api_get_frame_urn(*,frame_number,movie_id):
     assert frame_urn is not None
     return frame_urn
 
-@api.route('/get-frame', method=GET_POST)
+@api_bp.route('/get-frame', methods=GET_POST)
 def api_get_frame():
     """
     Gets a frame as a JPEG.
@@ -554,10 +392,10 @@ def api_get_frame():
 
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return auth.http403(f'Error 404: User {user_id} cannot access movie {movie_id}')
+        return AuthError(f'Error 404: User {user_id} cannot access movie {movie_id}')
 
     if frame_number<0:
-        return auth.http404(f'Error 404: invalid frame number {frame_number}')
+        return AuthError(f'Error 404: invalid frame number {frame_number}')
 
     # See if there is a urn
     urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
@@ -569,13 +407,13 @@ def api_get_frame():
     logging.debug("api_get_frame urn=%s",urn)
     url = db_object.make_signed_url(urn=urn)
     logging.debug("api_get_frame url=%s",url)
-    return bottle.redirect(url)
+    return redirect(url)
 
 
 ################################################################
 ## Movie editing
 
-@api.route('/edit-movie', method=POST)
+@api_bp.route('/edit-movie', methods=POST)
 def api_edit_movie():
     """ edit a movie
     :param api_key: user authentication
@@ -605,7 +443,8 @@ def api_edit_movie():
     else:
         return E.INVALID_EDIT_ACTION
 
-@api.route('/delete-movie', method=POST)
+
+@api_bp.route('/delete-movie', methods=POST)
 def api_delete_movie():
     """ delete a movie
     :param api_key: - the User's API key.
@@ -619,15 +458,14 @@ def api_delete_movie():
                     delete=get_bool('delete',True))
     return {'error': False}
 
-
 ################################################################
 ## get movie list and movie metadata data
 
-@api.route('/list-movies', method=POST)
+@api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
     return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
 
-@api.route('/get-movie-metadata', method=GET_POST)
+@api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
     """
     Gets the metadata for a specific movie and its last tracked frame
@@ -695,7 +533,7 @@ def api_get_movie_metadata():
     return fix_types(ret)
 
 
-@api.route('/get-movie-trackpoints',method=GET_POST)
+@api_bp.route('/get-movie-trackpoints',methods=GET_POST)
 def api_get_movie_trackpoints():
     """Downloads the movie trackpoints as a CSV or JSON
     :param api_key:   authentication
@@ -731,11 +569,47 @@ def api_get_movie_trackpoints():
             for frame in frame_numbers:
                 frame_dicts[frame]['frame_number'] = frame
                 writer.writerow(frame_dicts[frame])
-            bottle.response.set_header('Content-Type', 'text/csv')
-            return f.getvalue()
+            response = make_response(f.getvalue())
+            response.headers['Content-Type'] =  'text/csv'
+            return response
     return E.INVALID_MOVIE_ACCESS
 
 
+################################################################
+## User management
+
+##
+## All of the users that this person can see
+##
+@api_bp.route('/list-users', methods=POST)
+def api_list_users():
+    return {**{'error': False}, **db.list_users(user_id=get_user_id())}
+
+
+@api_bp.route('/ver', methods=GET_POST)
+def api_ver():
+    """Report the python version. Allows us to validate we are using Python3.
+    Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
+    """
+    logging.debug("api_ver")
+    return {'__version__': __version__, 'sys_version': sys.version}
+
+################################################################
+##
+## For debug
+##
+@api_bp.route('/add', methods=GET_POST)
+def api_add():
+    a = get_float('a')
+    b = get_float('b')
+    try:
+        return {'result': a+b, 'error': False}
+    except (TypeError, ValueError):
+        return {'error': True, 'message': 'arguments malformed'}
+
+
+
+################################################################
 ################################################################
 ## Movie tracking
 ## Tracking is requested from the client and run in a background lambda function.
@@ -798,12 +672,12 @@ class MovieTrackCallback:
             logging.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
             os.unlink(self.zipfile_name)
 
+
 ##
 ## @task causes this to be run in background on zappa, but in foreground when run locally
 ## It's specific to zappa
-## TODO - replace with a reasonable background task, or give up on background tasks
+## TODO - replace with a reasonable background task, or give up on background tasks, like SQS
 ##
-#@task
 def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
     Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
@@ -838,7 +712,8 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     db.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)
     mtc.done() # sets the status to tracking complete
 
-@api.route('/track-movie-queue', method=GET_POST)
+
+@api_bp.route('/track-movie-queue', methods=GET_POST)
 def api_track_movie_queue():
     """Tracks a movie that has been uploaded.
     :param api_key: the user's api_key
@@ -873,7 +748,7 @@ def api_track_movie_queue():
 ## /new-frame is being able to create our own time lapse movie
 ## It's for a camera app that we haven't written yet
 
-@api.route('/new-frame', method=POST)
+@api_bp.route('/new-frame', methods=POST)
 def api_new_frame():
     """Create a new frame and return its frame_urn.
     If frame exists, just update the frame_data (if frame data is provided).
@@ -884,10 +759,10 @@ def api_new_frame():
     :return: frame_urn - that's what we care about
 
     """
-    if not db.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=request.forms.get('movie_id')):
+    if not db.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=request.values.get('movie_id')):
         return E.INVALID_MOVIE_ACCESS
     try:
-        frame_data = base64.b64decode( request.forms.get('frame_base64_data'))
+        frame_data = base64.b64decode( request.values.get('frame_base64_data'))
     except TypeError:
         frame_data = None
     frame_urn = db.create_new_frame( movie_id = get_int('movie_id'),
@@ -899,7 +774,7 @@ def api_new_frame():
 ## /put-frame-trackpoints:
 ## Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.
 
-@api.route('/put-frame-trackpoints', method=POST)
+@api_bp.route('/put-frame-trackpoints', methods=POST)
 def api_put_frame_trackpoints():
     """
     Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.
@@ -924,7 +799,7 @@ def api_put_frame_trackpoints():
 ##
 # Log API
 #
-@api.route('/get-log', method=POST)
+@api_bp.route('/get-log', methods=POST)
 def api_get_log():
     """Get what log entries we can. get_user_id() provides access control.
     TODO - add search capabilities.
@@ -936,7 +811,7 @@ def api_get_log():
 ## Metdata Management (movies and users, it's a common API!)
 
 
-@api.route('/set-metadata', method='POST')
+@api_bp.route('/set-metadata', methods=POST)
 def api_set_metadata():
     """ set some aspect of the metadata
     :param api_key: authorization key
@@ -958,37 +833,3 @@ def api_set_metadata():
                              value=get('value'))
 
     return {'error': False, 'result': result}
-
-
-################################################################
-## User management
-
-##
-## All of the users that this person can see
-##
-@api.route('/list-users', method=POST)
-def api_list_users():
-    return {**{'error': False}, **db.list_users(user_id=get_user_id())}
-
-
-@api.route('/ver', method=GET_POST)
-def api_ver():
-    """Report the python version. Allows us to validate we are using Python3.
-    Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
-    """
-    logging.debug("api_ver")
-    return {'__version__': __version__, 'sys_version': sys.version}
-
-
-################################################################
-##
-## For debug
-##
-@api.route('/add', method=GET_POST)
-def api_add():
-    a = get_float('a')
-    b = get_float('b')
-    try:
-        return {'result': a+b, 'error': False}
-    except (TypeError, ValueError):
-        return {'error': True, 'message': 'arguments malformed'}

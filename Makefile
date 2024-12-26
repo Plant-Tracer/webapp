@@ -9,18 +9,23 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
-# Manage the virtual environment.
-# THis is only used for virtual testing and under Zappo
+# Create the virtual enviornment for testing and CI/CD
 ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
 PY=python3.11
 PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
-venv/pyvenv.cfg:
-	$(PY) -m venv venv
 
 venv:
 	$(PY) -m venv venv
+	$(PYTHON) -m pip install --upgrade pip
+	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
+	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
+	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
+
+.PHONY: venv
+
+
 
 ################################################################
 # SAM Commands
@@ -51,7 +56,7 @@ check:
 ## Static Analysis
 
 pylint: $(REQ)
-	$(ACTIVATE) ; cd deploy; $(PY) -m pylint --rcfile ../.pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose *.py
+	$(ACTIVATE) ; $(PY) -m pylint --output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose deploy
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
@@ -211,11 +216,6 @@ jscoverage:
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:
-install-python-dependencies: $(REQ)
-	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
-	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
-	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser
@@ -227,12 +227,13 @@ install-chromium-browser-macos: $(REQ)
 # Includes ubuntu dependencies
 install-ubuntu: $(REQ)
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
+	make venv
 	which ffmpeg || sudo apt install ffmpeg
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
 	npm ci
-	make install-python-dependencies
-	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; else echo no requirements-ubuntu.txt ; fi
+	make venv
+	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
 
 # Includes MacOS dependencies managed through Brew
@@ -245,13 +246,13 @@ install-macos:
 	brew install npm
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make install-python-dependencies
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; else echo no requirements-macos.txt ; fi
+	make venv
+	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
 # Includes Windows dependencies
 install-windows:
-	make install-python-dependencies
-	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; else echo no requirements-ubuntu.txt ; fi
+	make venv
+	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
 %.js: %.ts
 	tsc $<

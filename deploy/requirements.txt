@@ -1,6 +1,6 @@
 apig-wsgi
 boto3
-bottle
+flask
 filetype
 jinja2
 mangum

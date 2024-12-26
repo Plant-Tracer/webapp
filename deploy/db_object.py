@@ -20,12 +20,10 @@ import uuid
 import requests
 import boto3
 from botocore.exceptions import ClientError
-#import bottle
 
-import dbfile
-from constants import C
-import auth
-from auth import get_dbreader,get_dbwriter
+from . import dbfile
+from .constants import C
+from .auth import get_dbreader,get_dbwriter,AuthError
 
 """
 Note tht to allow for local access the bucket must have this CORSRule:
@@ -133,7 +131,7 @@ def read_signed_url(*,urn,sig):
         logging.info("URL signature matches. urn=%s",urn)
         return read_object(urn)
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise auth.http403("signature does not verify")
+    raise AuthError("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
