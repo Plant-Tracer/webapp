@@ -182,6 +182,9 @@ def setup_syslog(facility=logging.handlers.SysLogHandler.LOG_LOCAL1,
     logging.getLogger().addHandler(handler)
 
 
+# pylint: disable=too-many-arguments
+# pylint: disable=unused-argument
+# pylint: disable=too-many-positional-arguments
 @functools.lru_cache(maxsize=1)
 def setup(level='INFO',
           syslog=False,
@@ -189,7 +192,7 @@ def setup(level='INFO',
           filename=None,
           facility=logging.handlers.SysLogHandler.LOG_LOCAL1,
           log_format=LOG_FORMAT,
-          syslog_format=SYSLOG_FORMAT): # pylint: disable=too-many-arguments
+          syslog_format=SYSLOG_FORMAT):
     """Set up logging as specified by ArgumentParse. Checks to see if it was previously called and, if so, does a fast return.
     @param syslog     - if True, also create the syslog handler.
     @param filename   - if provided, log to this file, too.

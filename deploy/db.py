@@ -29,7 +29,6 @@ from . import mailer
 from .paths import TEMPLATE_DIR
 from .constants import MIME,C
 from .auth import get_dbreader, get_dbwriter
-from .apikey import get_user_api_key
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
@@ -92,7 +91,7 @@ class NoMovieData(DB_Errors):
 logit_DEBUG = False
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
-    user_api_key = get_user_api_key()
+    user_api_key = 0 # FIXME; was get_user_api_key()
     user_ipaddr  = request.environ.get('REMOTE_ADDR')
 
     # Make copies of func_args and func_return so we can modify without fear
