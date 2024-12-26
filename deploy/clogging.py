@@ -90,10 +90,10 @@ def applicationId():
     The environment variables are only set if we are running in a Yarn container.
     """
     try:
-        import cspark
-    except ImportError as e:
+        import cspark           # pylint: disable=import-outside-toplevel
+    except ImportError:
         sys.path.append(os.path.dirname(__file__))
-        import cspark
+        import cspark           # pylint: disable=import-outside-toplevel
 
     if not cspark.spark_running():
         if FAKE_APPLICATION_ID not in os.environ:
@@ -107,7 +107,7 @@ def applicationId():
 
     # Perhaps we are running on the head-end. If so, run a Spark job that finds it.
     try:
-        from pyspark import SparkConf, SparkContext
+        from pyspark import SparkContext # pylint: disable=import-outside-toplevel
         sc = SparkContext.getOrCreate()
         if "local" in sc.getConf().get("spark.master"):
             return f"local{os.getpid()}"

@@ -57,7 +57,8 @@ from bottle import request,response
 import clogging
 
 #import wsgiserver               # pylint: disable=syntax-error
-import db
+import bottle_api
+from bottle_api import page_dict
 import db_object
 import auth
 
@@ -81,8 +82,6 @@ CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
 ################################################################
 ## API SUPPORT
 
-import bottle_api
-from bottle_api import page_dict
 app = bottle.default_app()      # for Lambda
 app.mount('/api', bottle_api.api)
 
@@ -159,16 +158,16 @@ def static_path(path):
                 "Cache-Control": "public, max-age=5"
             },
             "isBase64Encoded": True,
-            "body": encoded_content
+            "body": encoded_data
         }
-
+    else:
         response.content_type = mimetype
         with open(full_path, "rb") as f:
             binary_data = f.read()
         return binary_data
-    else:
-        # Local development or other environments
-        return response
+    #else:
+    #    # Local development or other environments
+    #    return response
 
 @bottle.route('/favicon.ico', method=['GET'])
 def favicon():
@@ -303,55 +302,3 @@ def func_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     return {'__version__': __version__, 'sys_version': sys.version}
-
-################################################################
-# Bottle App
-##
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--multi', help='Run multi-threaded server (no auto-reloader)', action='store_true')
-    parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
-    parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
-    clogging.add_argument(parser, loglevel_default='WARNING')
-    args = parser.parse_args()
-    clogging.setup(level=args.loglevel)
-
-    if C.PLANTTRACER_CREDENTIALS not in os.environ:
-        print(f"Please define {C.PLANTTRACER_CREDENTIALS} and restart",file=sys.stderr)
-        sys.exit(1)
-
-    if args.info:
-        for name in logging.root.manager.loggerDict:
-            print("Logger: ",name)
-        sys.exit(0)
-
-    if args.storelocal:
-        db_object.STORE_LOCAL=True
-
-    # Now make sure that the credentials work
-    # We only do this with the standalone program
-    # the try/except is for when we run under a fixture in the pytest unit tests, which messes up ROOT_DIR
-    try:
-        from tests.dbreader_test import test_db_connection
-        test_db_connection()
-    except ModuleNotFoundError:
-        pass
-
-    startup()
-
-    # Run the multi-threaded server? Needed for testing local-tracking
-    if args.multi:
-        httpd = wsgiserver.Server(app, listen='localhost', port=args.port)
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("")
-            sys.exit(0)
-
-    # Run the single-threaded server (more debugging and the reloader)
-    bottle.default_app().run(host='localhost', debug=True, reloader=True, port=args.port)

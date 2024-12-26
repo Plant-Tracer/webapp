@@ -1,7 +1,6 @@
 """
 API
 """
-
 import json
 import logging
 import sys
@@ -31,7 +30,6 @@ from constants import C,E,__version__,GET,POST,GET_POST
 import mailer
 import tracker
 
-
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
 # If they are not set, they default to '/' which is the same site that serves the HTML pages.
@@ -39,8 +37,6 @@ import tracker
 # API_BASE is used for the server API
 api_base = os.getenv(C.PLANTTRACER_API_BASE,'/')
 static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'/')
-
-
 
 api = bottle.Bottle()
 
@@ -50,7 +46,6 @@ def expand_memfile_max():
     logging.info("Changing MEMFILE_MAX from %d to %d",
                  bottle.BaseRequest.MEMFILE_MAX, C.MAX_FILE_UPLOAD)
     bottle.BaseRequest.MEMFILE_MAX = C.MAX_FILE_UPLOAD
-
 
 def is_true(s):
     return str(s)[0:1] in 'yY1tT'
@@ -139,7 +134,6 @@ def get_user_id(allow_demo=True):
         logging.info("demo account blocks requested action")
         raise auth.http403('demo accounts not allowed to execute requested action')
     return userdict['id']
-
 
 def fix_types(obj):
     """Process JSON so that it dumps without `default=str`, since we can't
@@ -247,13 +241,9 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         logging.debug("fixed page_dict=%s",ret)
     return ret
 
-
-
-
 ################################################################
 # /api URLs
 ################################################################
-
 
 @api.route('/check-api_key', method=GET_POST)
 def api_check_api_key():
@@ -263,7 +253,6 @@ def api_check_api_key():
     if userdict:
         return {'error': False, 'userinfo': fix_types(userdict)}
     return E.INVALID_API_KEY
-
 
 @api.route('/get-logs', method=POST)
 def api_get_logs():
@@ -314,14 +303,12 @@ def api_register():
 class EmailNotInDatabase(Exception):
     """Handle error condition below"""
 
-
 def send_link(*, email, planttracer_endpoint):
     new_api_key = db.make_new_api_key(email=email)
     if not new_api_key:
         logging.info("email not in database: %s",email)
         raise EmailNotInDatabase(email)
     db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
-
 
 @api.route('/resend-link', method=GET_POST)
 def api_send_link():
@@ -343,7 +330,6 @@ def api_send_link():
         logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
-
 
 @api.route('/bulk-register', method=POST)
 def api_bulk_register():
@@ -391,7 +377,6 @@ def api_get_object():
     bottle.response.set_header('Content-Type', MIME_MAP[ext])
     return db_object.read_signed_url(urn=get('urn'), sig=get('sig'))
 
-
 ################################################################
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
@@ -411,7 +396,6 @@ def api_new_movie():
     :return: dict['movie_id'] - The movie_id that is allocated
              dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
     """
-
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
@@ -437,7 +421,6 @@ def api_new_movie():
                                                           mime_type='video/mp4',
                                                           sha256=movie_data_sha256)
     return ret
-
 
 @api.route('/upload-movie', method=POST)
 def api_upload_movie():
@@ -472,7 +455,6 @@ def api_upload_movie():
     urn = db_object.make_urn(object_name=key, scheme=scheme)
     db_object.write_object(urn, movie_data)
     return {'error':False,'message':'Upload ok.'}
-
 
 @api.route('/get-movie-data', method=GET_POST)
 def api_get_movie_data():
@@ -513,7 +495,6 @@ def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
             db.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
-
 
 ################
 # get-frame api.
@@ -624,8 +605,6 @@ def api_edit_movie():
     else:
         return E.INVALID_EDIT_ACTION
 
-
-
 @api.route('/delete-movie', method=POST)
 def api_delete_movie():
     """ delete a movie
@@ -647,7 +626,6 @@ def api_delete_movie():
 @api.route('/list-movies', method=POST)
 def api_list_movies():
     return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
-
 
 @api.route('/get-movie-metadata', method=GET_POST)
 def api_get_movie_metadata():

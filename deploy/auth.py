@@ -22,7 +22,7 @@ from constants import C
 
 API_KEY_COOKIE_BASE = 'api_key'
 COOKIE_MAXAGE = 60*60*24*180
-SMTP_ATTRIBS = ['SMTP_USERNAME','SMTP_PASSWORD','SMTP_PORT','SMTP_HOST']
+SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 
 ################################################################
 # Authentication configuration - for server

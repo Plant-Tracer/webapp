@@ -25,10 +25,6 @@ except ImportError:
     pass
 
 
-from os.path import basename, abspath, dirname
-from collections import OrderedDict
-from abc import ABC, abstractmethod
-
 """
 This is the dbfile.py (database file)
 
@@ -135,7 +131,7 @@ AWS_REGION_NAME = 'AWS_REGION_NAME'
 SECRETSMANAGER = 'secretsmanager'
 DEFAULT_PORT = 3306
 CACHE_SIZE = 2000000
-SQL_SET_CACHE = "PRAGMA cache_size = {};".format(CACHE_SIZE)
+SQL_SET_CACHE = f"PRAGMA cache_size = {CACHE_SIZE};"
 
 sys.path.append(dirname(dirname(abspath(__file__))))
 
@@ -156,7 +152,7 @@ def get_aws_secret_for_section(section):
         try:
             get_secret_value_response = client.get_secret_value( SecretId=secret_name )
         except ClientError as e:
-            raise SecretsManagerError(e)
+            raise SecretsManagerError(e) from e
         secret = json.loads(get_secret_value_response['SecretString'])
         return secret
     return None
