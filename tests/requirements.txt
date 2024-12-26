@@ -2,3 +2,4 @@ pytest
 boto3
 requests
 selenium
+pytest-mock
