@@ -23,15 +23,13 @@ from os.path import abspath, dirname
 from boddle import boddle
 import filetype
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-from paths import TEST_DATA_DIR
-from constants import C
-import lib.ctools.dbfile as dbfile
-import db
-import db_object
-import bottle_api
-import bottle_app
+from deploy.paths import TEST_DATA_DIR
+from deploy.constants import C
+import deploy.dbfile as dbfile
+import deploy.db as db
+import deploy.db_object as db_object
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
 
 from auth import get_dbreader,get_dbwriter
 

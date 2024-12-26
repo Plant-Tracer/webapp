@@ -25,12 +25,9 @@ from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KE
 
 import bottle_api
 
-sys.path.append(dirname(dirname(abspath(__file__))))
+import deploy.db as db
+import deploy.mailer as mailer
 
-import db
-import mailer
-from mailer import InvalidEmail
-from db import InvalidCourse_Key
 
 MSG = """to: {{ to_addrs }}
 from: {{ from_addr }}
@@ -85,13 +82,13 @@ def test_register_email(mailer_config,new_course):
     course_key = cfg[COURSE_KEY]
 
     """Some tests of the email registration software in db"""
-    with pytest.raises(InvalidEmail):
+    with pytest.raises(mailer.InvalidEmail):
         db.register_email(email='invalid-email', name='valid-name')
 
     with pytest.raises(ValueError):
         db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key=None, course_id=None)
 
-    with pytest.raises(InvalidCourse_Key):
+    with pytest.raises(db.InvalidCourse_Key):
         db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key='invalid-course-key', course_id=None)
 
 

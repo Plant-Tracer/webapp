@@ -1,8 +1,6 @@
 """
 movie_tracker_test.py - test the api tracking
 """
-
-
 import subprocess
 import pytest
 import sys
@@ -19,24 +17,22 @@ import urllib
 from urllib.parse import urlparse,parse_qs
 from os.path import abspath, dirname
 from zipfile import ZipFile
+import copy
+
+from flask import Flask, request
 
 import numpy as np
 import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from boddle import boddle
-
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-import lib.ctools.dbfile as dbfile
-import bottle_api
-import bottle_app
-import copy
-import db
-import db_object
-
 from PIL import Image
+
+import deploy.dbfile as dbfile
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
+import deploy.db as db
+import db.db_object as db_object
 
 # get the first MOV
 
@@ -51,7 +47,13 @@ TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
 
-def test_track_point_annotations(new_movie):
+@pytest.fixture
+def app():
+    app = Flask(__name__)
+    app.config['TESTING'] = True
+    return app
+
+def test_track_point_annotations(app, mocker, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -80,33 +82,35 @@ def test_track_point_annotations(new_movie):
     assert tps[1]['label'] == tp1['label']
     assert tps[1]['frame_number'] == 0
 
-
     # Try the other interface; this time send two trackpoints through
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id,
-                        'frame_number':1,
-                        'trackpoints':json.dumps([tp0,tp1,tp2])}):
-        bottle_api.api_put_frame_trackpoints()
-    # See if I can get it back
-    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
-    assert len(tps)==3
-    assert tps[0]['x'] == tp0['x']
-    assert tps[0]['y'] == tp0['y']
-    assert tps[0]['label'] == tp0['label']
-    assert tps[0]['frame_number'] == 1
+    with app.test_client() as client:
+        response = client.post('/api/put-frame-trackpoints',
+                               data = {'api_key': api_key,
+                                       'movie_id': movie_id,
+                                       'frame_number':1,
+                                       'trackpoints':json.dumps([tp0,tp1,tp2])})
+        assert response.status_code == 200
 
-    assert tps[1]['x'] == tp1['x']
-    assert tps[1]['y'] == tp1['y']
-    assert tps[1]['label'] == tp1['label']
-    assert tps[1]['frame_number'] == 1
+        # Validate that the trackpoints were written into the database
+        tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
+        assert len(tps)==3
+        assert tps[0]['x'] == tp0['x']
+        assert tps[0]['y'] == tp0['y']
+        assert tps[0]['label'] == tp0['label']
+        assert tps[0]['frame_number'] == 1
 
-    assert tps[2]['x'] == tp2['x']
-    assert tps[2]['y'] == tp2['y']
-    assert tps[2]['label'] == tp2['label']
-    assert tps[2]['frame_number'] == 1
+        assert tps[1]['x'] == tp1['x']
+        assert tps[1]['y'] == tp1['y']
+        assert tps[1]['label'] == tp1['label']
+        assert tps[1]['frame_number'] == 1
+
+        assert tps[2]['x'] == tp2['x']
+        assert tps[2]['y'] == tp2['y']
+        assert tps[2]['label'] == tp2['label']
+        assert tps[2]['frame_number'] == 1
 
 
-def test_movie_tracking(new_movie):
+def test_movie_tracking(app, mocker, new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
     Note: We no longer create an output movie: we just test the trackpoints
@@ -119,31 +123,40 @@ def test_movie_tracking(new_movie):
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
     # save the trackpoints
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id,
-                        'frame_number': '0',
-                        'trackpoints' : json.dumps(tpts)
-                        }):
-        ret = bottle_api.api_put_frame_trackpoints()
-    logging.debug("save trackpoints ret=%s",ret)
-    assert ret['error']==False
+    with app.test_client() as client:
+        response = client.post('/api/put-frame-trackpoints',
+                               data = {'api_key': api_key,
+                                       'movie_id': movie_id,
+                                       'frame_number': '0',
+                                       'trackpoints' : json.dumps(tpts)
+                                       })
+        assert response.status_code == 200
+        ret = response.get_json()
+        logging.debug("save trackpoints ret=%s",ret)
+        assert ret['error']==False
 
     # Now track with CV2 - This actually does the tracking when run outsie of lambda
-    with boddle(params={'api_key': api_key,
-                        'movie_id': str(movie_id),
-                        'frame_start': '0' }):
-        ret = bottle_api.api_track_movie_queue()
-    logging.debug("track movie ret=%s",ret)
-    assert ret['error']==False
+    with app.test_client() as client:
+        response = client.post('/api/track-movie-queue',
+                               data = {'api_key': api_key,
+                                       'movie_id': str(movie_id),
+                                       'frame_start': '0' })
+        assert response.status_code == 200
+        ret = response.get_json()
+        logging.debug("track movie ret=%s",ret)
+        assert ret['error']==False
 
     # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id}):
-        ret = bottle_api.api_get_movie_trackpoints()
-    lines = ret.splitlines()
+    with app.test_client() as client:
+        response = client.post('/api/get-movie-trackpoints',
+                               data={'api_key': api_key,
+                                     'movie_id': movie_id})
+        assert response.status_code == 200
+        ret = response.get_json()
+        lines = ret.splitlines()
 
-    # Verify that there is a ZIP file
+    # Verify a ZIP file with the individual frames was created
     zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
     with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
         tf.write(zipfile_data)
@@ -180,30 +193,34 @@ def test_movie_tracking(new_movie):
     assert frame_count+1 == len(lines) # one line for the header
 
     # Check error conditions for getting incomplete metadata
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id,
-                        'frame_start': 0}):
-        r = bottle_api.api_get_movie_metadata()
-        assert r == E.FRAME_START_NO_FRAME_COUNT
+    with app.test_client() as client:
+        response = client.post('/api/get-movie-metadata',
+                               data={'api_key': api_key,
+                                     'movie_id': movie_id,
+                                     'frame_start': 0})
+        assert response.get_json() == E.FRAME_START_NO_FRAME_COUNT
 
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id,
-                        'frame_start': 0,
-                        'frame_count': 0}): # not implemented
-        r = bottle_api.api_get_movie_metadata()
-        assert r == E.FRAME_COUNT_GT_0
+    with app.test_client() as client:
+        response = client.post('/api/get-movie-metadata',
+                               data = {'api_key': api_key,
+                                       'movie_id': movie_id,
+                                       'frame_start': 0,
+                                       'frame_count': 0})
+        assert response.get_json() == E.FRAME_COUNT_GT_0
 
     # Get the movie metadata
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie_id,
-                        'frame_start': 0,
-                        'frame_count': 1000}):
-        r = bottle_api.api_get_movie_metadata()
-    logging.debug("r10=%s",r)
-    print(json.dumps(r,indent=4),file=sys.stderr)
-    assert r['error'] == False
-    movie_id = r['metadata']['movie_id']
-    frame0 = r['frames']['0']
+    with app.test_client() as client:
+        response = client.post('/api/get-movie-metadata',
+                               data {'api_key': api_key,
+                                     'movie_id': movie_id,
+                                     'frame_start': 0,
+                                     'frame_count': 1000})
+        ret = response.get_json()
+    logging.debug("r10=%s",ret)
+    print(json.dumps(ret,indent=4),file=sys.stderr)
+    assert ret['error'] == False
+    movie_id = ret['metadata']['movie_id']
+    frame0 = ret['frames']['0']
 
 
     # we no longer get signed URLs

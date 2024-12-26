@@ -27,10 +27,9 @@ import requests
 
 import pytest
 
-sys.path.append(dirname(dirname(abspath(__file__))))
+import deploy.db as db
+from deploy.paths import TEST_DIR, STANDALONE_PATH
 
-import db
-from paths import TEST_DIR, BOTTLE_APP_PATH
 import user_test
 from user_test import new_course, new_user, api_key
 from constants import C,E,__version__,GET,POST,GET_POST
@@ -59,8 +58,8 @@ def next_port():
 def http_endpoint():
     """Create an endpoint running on localhost."""
     port = next_port()
-    p = subprocess.Popen([sys.executable, BOTTLE_APP_PATH, '--port',
-                         str(port)], stderr=subprocess.PIPE, encoding='utf-8')
+    p = subprocess.Popen([sys.executable, STANDALONE_PATH,
+                          '--port', str(port)], stderr=subprocess.PIPE, encoding='utf-8')
     for want in ['server starting up', 'Listening on', 'Hit Ctrl-C to quit.']:
         line = p.stderr.readline()
         logging.info('%s', line)

@@ -189,7 +189,7 @@ def setup(level='INFO',
           filename=None,
           facility=logging.handlers.SysLogHandler.LOG_LOCAL1,
           log_format=LOG_FORMAT,
-          syslog_format=SYSLOG_FORMAT):
+          syslog_format=SYSLOG_FORMAT): # pylint: disable=too-many-arguments
     """Set up logging as specified by ArgumentParse. Checks to see if it was previously called and, if so, does a fast return.
     @param syslog     - if True, also create the syslog handler.
     @param filename   - if provided, log to this file, too.
@@ -200,7 +200,6 @@ def setup(level='INFO',
     # getLevelName sometimes returns a string and sometimes returns an int, and we want it always to be an integer
     loglevel = level if isinstance(
         level, int) else logging.getLevelName(level)
-    filename_to_use = None if filename is None else filename
 
     # Check to see if the logger already has handlers.
     if logging.getLogger().hasHandlers():

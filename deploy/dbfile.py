@@ -170,15 +170,18 @@ def hostname():
 
 
 class DBSQL(ABC):
-    def __init__(self, dicts=True, time_zone=None, debug=False):
+    """Abstract base class for DB operations."""
+    def __init__(self, dicts=True, time_zone=None, debug=False): # pylint: disable=unused-argument
         self.dicts = dicts
         self.debug = debug
+        self.conn = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, a, b, c):
-        self.conn.close()
+        if self.conn is not None:
+            self.conn.close()
 
     def execute(self, cmd, *args, debug=False, **kwargs):
         """Execute a SQL command and return the the iterator"""
@@ -190,7 +193,7 @@ class DBSQL(ABC):
         except (sqlite3.Error, pymysql.MySQLError) as e:
             print(cmd, *args, file=sys.stderr)
             print(e, file=sys.stderr)
-            exit(1)
+            sys.exit(1)
         if self.debug or debug:
             t1 = time.time()
             print(f"time: {t1-t0}", file=sys.stderr)
@@ -216,7 +219,7 @@ class DBSQL(ABC):
                 except (sqlite3.Error, pymysql.MySQLError) as e:
                     print("SQL:", line, file=sys.stderr)
                     print("Error:", e, file=sys.stderr)
-                    exit(1)
+                    sys.exit(1)
 
     def execselect(self, sql, vals=()):
         """Execute a SQL query and return the first line"""
@@ -230,16 +233,17 @@ class DBSQL(ABC):
 
 
 class DBSqlite3(DBSQL):
-    def __init__(self, time_zone=None, fname=None, *args, **kwargs):
+    """DBSQlite3 interface"""
+    def __init__(self, *args, time_zone=None, fname=None, **kwargs):
         super().__init__(*args, **kwargs)
         try:
             self.conn = sqlite3.connect(fname)
             if self.dicts:
                 self.conn.row_factory = sqlite3.Row    # user wants dicts
 
-        except sqlite3.OperationalError as e:
+        except sqlite3.OperationalError:
             print(f"Cannot open database file: {fname}")
-            exit(1)
+            sys.exit(1)
 
     def set_cache_bytes(self, b):
         # negative numbers are multiples of 1024
@@ -247,14 +251,16 @@ class DBSqlite3(DBSQL):
 
     # For sqlite3, csfr doesn't need to be a static method, because we don't disconnect from the database
     # Notice that we try to keep API compatiability, but we lose 'auth'. We also change '%s' into '?'
-    def csfr(self, auth, cmd, vals=[], *, quiet=True, rowcount=None, time_zone=None,
+    def csfr(self, auth, cmd, vals=None, *, quiet=True, rowcount=None, time_zone=None,
              get_column_names=None, asDicts=False, debug=False, cache=True):
         assert auth is None
         assert get_column_names is None  # not implemented yet
+        if vals is None:
+            vals = []
         cmd = cmd.replace("%s", "?")
         cmd = cmd.replace("INSERT IGNORE", "INSERT OR IGNORE")
 
-        if quiet == False:
+        if quiet is False:
             print(f"PID{os.getpid()}: cmd:{cmd} vals:{vals}")
         if debug or self.debug:
             print(f"PID{os.getpid()}: cmd:{cmd} vals:{vals}", file=sys.stderr)
@@ -265,7 +271,7 @@ class DBSqlite3(DBSQL):
             print(f"cmd: {cmd}", file=sys.stderr)
             print(f"vals: {vals}", file=sys.stderr)
             print(str(e), file=sys.stderr)
-            raise RuntimeError("Invalid SQL")
+            raise RuntimeError("Invalid SQL") from e
 
         verb = cmd.split()[0].upper()
         if verb in ['INSERT', 'DELETE', 'UPDATE']:

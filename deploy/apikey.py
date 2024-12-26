@@ -11,10 +11,10 @@ import functools
 import subprocess
 import json
 
-from flask import request
+from flask import request,abort,make_response
 
 from . import db
-from .auth import get_dbreader
+from .auth import get_dbreader,AuthError
 from .constants import C,__version__
 
 # Specify the base for the API and for the static files by Environment variables.

@@ -4,30 +4,26 @@ API
 import json
 import logging
 import sys
-import subprocess
 import smtplib
 import tempfile
 import base64
-import functools
 import io
 import csv
 import os
 import zipfile
-from urllib.parse import urlparse
 from collections import defaultdict
 from zipfile import ZipFile
 
-from flask import Blueprint, request, abort, make_response, redirect
+from flask import Blueprint, request, make_response, redirect
 from validate_email_address import validate_email
 
 from . import db
 from . import db_object
-from . import auth
 from . import mailer
 from . import tracker
-from .apikey import get_user_api_key,DEMO_MODE,cookie_name
+from .apikey import get_user_api_key,get_user_dict,fix_types
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C,E,GET,POST,GET_POST
+from .constants import C,E,GET,POST,GET_POST,__version__
 
 
 api_bp = Blueprint('api', __name__)
@@ -676,7 +672,6 @@ class MovieTrackCallback:
 ##
 ## @task causes this to be run in background on zappa, but in foreground when run locally
 ## It's specific to zappa
-## TODO - replace with a reasonable background task, or give up on background tasks, like SQS
 ##
 def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.

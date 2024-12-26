@@ -12,21 +12,17 @@ import json
 import subprocess
 import uuid
 
-from os.path import abspath, dirname
-
 import xml.etree.ElementTree
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
 from boddle import boddle
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
 from paths import STATIC_DIR,TEST_DATA_DIR
-import db
-import bottle_api
-import bottle_app
-import auth
+import deploy.db as db
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
+import deploy.auth as auth
 
 from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie

@@ -24,23 +24,21 @@ import cv2
 
 from boddle import boddle
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
 import lib.ctools.dbfile as dbfile
 import bottle_api
 import bottle_app
 import copy
-import db
 
 from PIL import Image
 
-# get the first MOV
+
+import deploy.db as db
+import deploy.tracker as tracker
+from deploy.constants import MIME
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME
-import tracker
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},

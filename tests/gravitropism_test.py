@@ -3,10 +3,8 @@ import logging
 import sys
 from os.path import dirname,abspath
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-from constants import E
-from gravitropism import calculate_results_gravitropism
+from deploy.constants import E
+from deploy.gravitropism import calculate_results_gravitropism
 
 
 # Configuring the logging module

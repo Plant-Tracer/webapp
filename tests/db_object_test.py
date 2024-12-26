@@ -14,15 +14,11 @@ import uuid
 import xml.etree.ElementTree
 import hashlib
 
-from os.path import abspath, dirname
-
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-from auth import get_dbreader,get_dbwriter
-from paths import STATIC_DIR,TEST_DATA_DIR
-from lib.ctools import dbfile
-from constants import C
-import db_object
+from deploy.auth import get_dbreader,get_dbwriter
+from deploy.paths import STATIC_DIR,TEST_DATA_DIR
+from deploy.ctools import dbfile
+from deploy.constants import C
+import deploy.db_object as db_object
 
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")

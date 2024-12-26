@@ -2,16 +2,12 @@ import sys
 import os
 import logging
 
-from os.path import abspath, dirname, basename
-
-sys.path.append(dirname(dirname(abspath(__file__))))
-
 import pymysql
 
-import paths
-from auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
-import db
-import ctools.dbfile as dbfile
+import deploy.paths as paths
+import dploy.dbfile as dbfile
+import deploy.db as db
+from deploy.auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")

@@ -28,8 +28,6 @@ from .constants import C
 from .paths import TEMPLATE_DIR, SCHEMA_FILE, TEST_DATA_DIR, SCHEMA_TEMPLATE
 from .dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
 
-from . import mailer
-
 assert os.path.exists(TEMPLATE_DIR)
 
 SCHEMA_VERSION = 'schema_version'

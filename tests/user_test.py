@@ -2,7 +2,6 @@
 Test the various functions in the database involving user creation.
 """
 
-from boddle import boddle
 import sys
 import os
 import uuid
@@ -16,15 +15,13 @@ import copy
 import hashlib
 from os.path import abspath, dirname
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-from auth import get_dbreader,get_dbwriter
-import db
-import dbmaint
-import bottle_api
-import bottle_app
-import ctools.dbfile as dbfile
-from paths import TEST_DIR, TEST_DATA_DIR
+from deploy.auth import get_dbreader,get_dbwriter
+import deploy.db as db
+import deploy.dbmaint as dbmaint
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
+import deploy.dbfile as dbfile
+from deploy.paths import TEST_DIR, TEST_DATA_DIR
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'

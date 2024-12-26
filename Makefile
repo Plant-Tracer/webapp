@@ -55,8 +55,13 @@ check:
 ##
 ## Static Analysis
 
+PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(ACTIVATE) ; $(PY) -m pylint --output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose deploy
+	$(ACTIVATE) ; $(PY) -m pylint $(PYLINT_OPTS) deploy
+
+pylint-tests: $(REQ)
+	$(ACTIVATE) ; $(PY) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
+
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .

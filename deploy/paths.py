@@ -15,24 +15,26 @@ if HOME is None:
 
 logging.debug("__file__=%s",__file__)
 
-SRC_DIR          = dirname(abspath(__file__))
-logging.debug("SRC_DIR=%s",SRC_DIR)
+DEPLOY_DIR      = dirname(abspath(__file__))
+ROOT_DIR        = dirname(DEPLOY_DIR)
 
-ROOT_DIR         = SRC_DIR
+STATIC_DIR      = join(DEPLOY_DIR, 'static')
+ETC_DIR         = join(DEPLOY_DIR, 'etc')
+TEMPLATE_DIR    = join(DEPLOY_DIR, 'templates')
+SCHEMA_FILE     = join(DEPLOY_DIR, 'etc', 'schema.sql')
+SCHEMA_TEMPLATE = join(DEPLOY_DIR, 'etc', 'schema_{schema}.sql')
 
-STATIC_DIR       = join(ROOT_DIR, 'static')
-logging.debug("STATIC_DIR=%s",STATIC_DIR)
-
-ETC_DIR          = join(ROOT_DIR, 'etc')
-TEMPLATE_DIR     = join(ROOT_DIR, 'templates')
-TEST_DIR         = join(ROOT_DIR, 'tests')
-TEST_DATA_DIR    = join(ROOT_DIR, 'tests', 'data')
-SCHEMA_FILE      = join(ROOT_DIR, 'etc', 'schema.sql')
-SCHEMA_TEMPLATE  = join(ROOT_DIR, 'etc', 'schema_{schema}.sql')
 SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
 SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
 
+TEST_DIR        = join(ROOT_DIR, 'tests')
+TEST_DATA_DIR   = join(ROOT_DIR, 'tests', 'data')
+
+STANDALONE_PATH = join(ROOT_DIR, 'standalone.py')
+
 AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
+
+logging.debug("DEPLOY_DIR=%s STATIC_DIR=%s",DEPLOY_DIR, STATIC_DIR)
 
 def running_in_aws_lambda():
     return C.AWS_LAMBDA_ENVIRON in os.environ
