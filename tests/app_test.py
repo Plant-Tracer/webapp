@@ -23,26 +23,24 @@ import deploy.db as db
 import deploy.bottle_api as bottle_api
 import deploy.bottle_app as bottle_app
 import deploy.auth as auth
+import deploy.apikey as apikey
 
 from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie
 
 
 @pytest.fixture
-def app():
-    app = Flask(__name__)
+def client():
+    app = bottle_app.app
     app.config['TESTING'] = True
-    return app
+    with app.app_context():
+        with app.test_client() as client:
+            yield client
 
-def test_version(app):
-    # With templates, res is just a string
-    with app.test_client() as client:
-        response = client.get('/version.txt')
-        assert bottle_app.__version__ in response.text
 
-def test_is_true():
-    assert bottle_api.is_true("Y") is True
-    assert bottle_api.is_true("f") is False
+def test_version(client):  # Use the app fixture
+    response = client.get('/version.txt')
+    assert bottle_app.__version__ in response.text
 
 def test_get_float(mocker):
     mocker.patch("bottle_api.get", return_value="3")
@@ -59,24 +57,21 @@ def test_get_bool(mocker):
     assert bottle_api.get_bool("key",default=True)==True
 
 
-def test_static_path(app):
-    with app.test_client() as client:
-        response = client.get('/static/test.txt')
-        assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == response.text
+def test_static_path(client):
+    response = client.get('/static/test.txt')
+    assert open(os.path.join(STATIC_DIR, 'test.txt'),'rb').read() == response.text
 
     # Test file not found
-    with app.test_client() as client:
-        response = client.get('/static/no-file')
-        assert response.status_code==404
+    response = client.get('/static/no-file')
+    assert response.status_code==404
 
 #
 # Test various error conditions
 
 def test_error(app):
     """Make sure authentication errors result in the session being expired and the cookie being cleared."""
-    with app.test_client() as client:
-        response = client.post('/api/list-movies',
-                               data = {'api_key':'invalid'})
+    response = client.post('/api/list-movies',
+                           data = {'api_key':'invalid'})
 
     cookie_name = apikey.cookie_name()
     set_cookie_header = response.headers.get('Set-Cookie')

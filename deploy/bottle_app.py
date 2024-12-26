@@ -9,7 +9,7 @@ import sys
 import os
 import logging
 
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, make_response
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -96,6 +96,11 @@ def func_list():
 def func_analyze():
     return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
 
+## debug page
+@app.route('/debug', methods=GET)
+def app_debug():
+    return render_template('debug.html', routes=app.url_map)
+
 ##
 ## Login page includes the api keys of all the demo users.
 ##
@@ -162,11 +167,13 @@ def demo_tracer2():
 def demo_tracer3():
     return render_template('demo_tracer3.html', **page_dict('demo_tracer3',require_auth=False))
 
-@app.route('/ver', methods=GET_POST)
+@app.route('/version.txt', methods=GET_POST)
 def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
-    return render_template('version.txt',
-                           __version__=__version__,
-                           sys_version= sys.version)
+    response = make_response(render_template('version.txt',
+                                             __version__=__version__,
+                                             sys_version= sys.version))
+    response.headers['Content-Type'] = 'text/plain'
+    return response

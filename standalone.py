@@ -1,3 +1,5 @@
+#!/usr/bin/env python3.11
+
 ################################################################
 # Bottle App
 ##
@@ -41,5 +43,7 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
-    cmd = 'gunicorn --workers 2 --reload --log-level DEBUG deploy.bottle_app:app '
+    cmd = f'gunicorn --bind 127.0.0.1:{args.port} --workers 2 --reload --log-level DEBUG deploy.bottle_app:app '
+    print(cmd)
+    exit(0)
     os.system(cmd)

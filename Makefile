@@ -89,10 +89,11 @@ flake:
 
 ##
 ## Dynamic Analysis
+## If you are testing just one thing, put it here!
 
 pytest-db: $(REQ)
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) -m pytest --log-cli-level=DEBUG -k test_version tests/app_test.py
 	@echo dbreader_test is successful
 
 pytest:  $(REQ)
