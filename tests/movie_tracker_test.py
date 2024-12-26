@@ -53,7 +53,7 @@ def app():
     app.config['TESTING'] = True
     return app
 
-def test_track_point_annotations(app, mocker, new_movie):
+def test_track_point_annotations(app, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -110,7 +110,7 @@ def test_track_point_annotations(app, mocker, new_movie):
         assert tps[2]['frame_number'] == 1
 
 
-def test_movie_tracking(app, mocker, new_movie):
+def test_movie_tracking(app, new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
     Note: We no longer create an output movie: we just test the trackpoints

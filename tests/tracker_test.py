@@ -1,8 +1,6 @@
 """
 tracker_test.py - test the tracker.py module.
 """
-
-
 import subprocess
 import pytest
 import sys
