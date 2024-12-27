@@ -72,21 +72,17 @@ def test_null_api_key(mocker):
     assert apikey.get_user_api_key() == None
 
 
-
-
-"""
-
 ################################################################
 # Validate HTML produced by templates below.
 # https://stackoverflow.com/questions/35538/validate-xhtml-in-python
-def test_templates(new_user):
+def test_templates(client,new_user):
     api_key = new_user[API_KEY]
 
     def dump_lines(text):
         for (ct, line) in enumerate(text.split("\n"), 1):
             logging.error("%s: %s",ct, line)
 
-    def validate_html(html, include_text=None, exclude_text=None):
+    def validate_html(url, html, include_text=None, exclude_text=None):
         '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
         try:
             doc = xml.etree.ElementTree.fromstring(html)
@@ -100,7 +96,7 @@ def test_templates(new_user):
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
         except xml.etree.ElementTree.ParseError as e:
-            logging.error(e)
+            logging.error("url=%s error=%s",url,e)
             dump_lines(html)
             invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'
             logging.error(f"invalid html written to {invalid_fname}")
@@ -114,64 +110,24 @@ def test_templates(new_user):
                 pass
             raise
 
-    # Test the test infrastructure
-    with pytest.raises(xml.etree.ElementTree.ParseError):
-        validate_html("<a><b> this is invalid HTML</a></b>")
+    for with_api_key in [False,True]:
+        if with_api_key:
+            client.set_cookie('localhost','api_key',api_key)
+        for url in ['/','/about','/error','/audit','/list','/analyze','/debug','/login','/logout','/privacy','/register',
+                    '/resend','/tos','/upload','/users']:
+            include_text = None
+            exclude_text = None
+            if with_api_key==True and url=='/list':
+                exclude_text = 'user_demo = 1;'
+            resp = client.get(url)
+            logging.info('with_api_key=%s url=%s',with_api_key,url)
+            if (not with_api_key) and (url in ['/audit','/list','/analyze', '/upload', '/users']):
+                # These should all be error conditions because they require being logged in
+                assert resp.text[0]=='{' # should be an error
+                assert resp.status_code!=200
+            else:
+                validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
 
-    with pytest.raises(RuntimeError):
-        validate_html("<p>one two three</p>",include_text="four")
-
-    with pytest.raises(RuntimeError):
-        validate_html("<p>one two three</p>",exclude_text="two")
-
-    # Test templates without an API_KEY
-    with boddle(params={}):
-        # These work without an api_key
-        validate_html(bottle_app.func_root())
-        validate_html(bottle_app.func_about())
-        with pytest.raises(bottle.HTTPResponse):
-            bottle_app.func_audit()
-        with pytest.raises(bottle.HTTPResponse):
-            bottle_app.func_list()
-        validate_html(bottle_app.func_login())
-        validate_html(bottle_app.func_logout())
-        validate_html(bottle_app.func_register())
-        validate_html(bottle_app.func_resend())
-        validate_html(bottle_app.func_privacy())
-        validate_html(bottle_app.func_tos())
-        with pytest.raises(bottle.HTTPResponse):
-            bottle_app.func_upload()
-        with pytest.raises(bottle.HTTPResponse):
-            bottle_app.func_users()
-        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
-
-    # Test templates to see if they work with an API key
-    with boddle(params={'api_key': api_key}):
-        validate_html(bottle_app.func_root())
-        validate_html(bottle_app.func_about())
-        validate_html(bottle_app.func_audit())
-        validate_html(bottle_app.func_list(), exclude_text='user_demo = 1;')
-        validate_html(bottle_app.func_login())
-        validate_html(bottle_app.func_logout())
-        validate_html(bottle_app.func_register())
-        validate_html(bottle_app.func_resend())
-        validate_html(bottle_app.func_privacy())
-        validate_html(bottle_app.func_tos())
-        validate_html(bottle_app.func_upload())
-        validate_html(bottle_app.func_users())
-        validate_html("<pre>"+bottle_app.func_ver()+"\n</pre>")
-
-    # Test template to see if demo text appears when using a demo API key
-    # but only if there is a demo user in the database
-    demo_users = db.list_demo_users()
-    if demo_users:
-        user = demo_users[0]
-        demo_api_key = db.make_new_api_key(email=user['email'])
-        with boddle(params={'api_key': demo_api_key}):
-            validate_html(bottle_app.func_list(), include_text='user_demo = 1;')
-        db.delete_api_key(demo_api_key)
-    else:
-        logging.warning("no demo users; cannot test demo mode text")
 
 def test_check_api_key(new_user):
     api_key = new_user[API_KEY]
@@ -210,4 +166,3 @@ def test_api_edit_movie(new_movie):
     movie_metadata2 = movie.metadata
     # Make sure that the version number incremented
     assert movie_metadata['version'] +1 == movie_metadata2['version']
-"""

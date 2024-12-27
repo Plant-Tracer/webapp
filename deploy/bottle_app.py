@@ -114,7 +114,7 @@ def func_login():
 
 @app.route('/logout', methods=GET_POST)
 def func_logout():
-    resp = render_template('logout.html', **page_dict('Logout',logout=True))
+    resp = make_response(render_template('logout.html', **page_dict('Logout',logout=True)))
     resp.set_cookie(cookie_name(), '', expires=0)
     return resp
 

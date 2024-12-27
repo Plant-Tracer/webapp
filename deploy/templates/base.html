@@ -6,7 +6,7 @@
     <meta name="google"   content="notranslate"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/x-icon">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/x-icon"/>
 
     <!-- use Pure.css - https://purecss.io/ -->
     <link rel="stylesheet"
@@ -63,11 +63,11 @@
         {% if admin %}
         <b> ADMIN </b>
         {% endif %}
-        <!-- Note - URLs cannot begin with '/' because that assumes --
-          -- that deployment will be in root of the domain. That
-        doesn't happen when deploying in a AWS Lambda domain followed
-        by a prefix such as Prod/ or Test/.
-        -->
+        <!-- Note - URLs cannot begin with '/' because that assumes
+          that deployment will be in root of the domain. That
+          doesn't happen when deploying in a AWS Lambda domain followed
+          by a prefix such as Prod/ or Test/.
+          -->
         <a href="." class="pure-menu-heading pure-menu-link">PlantTracer</a>
         <ul class="pure-menu-list">
           {% if logged_in %}
