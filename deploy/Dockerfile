@@ -1,16 +1,17 @@
 FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
-COPY requirements.txt ./
+WORKDIR /app
+
+# Copy deploy/requirements.txt file for deployed app requirements
+COPY requirements.txt .
 
 RUN python3 -m pip install -r requirements.txt -t . --no-warn-script-location
 
-COPY *.py ./
-COPY etc/*       ./etc/
-COPY static/*    ./static/
-COPY static/demo ./static/demo/
-COPY static/test ./static/test/
-COPY templates/* ./templates/
+# Copy the the app
+COPY *.py       ./deploy/
+COPY etc/       ./deploy/etc/
+COPY static/    ./deploy/static/
+COPY templates/ ./deploy/templates/
 
-
-# Command can be overwritten by providing a different command in the template directly.
-CMD ["lambda_handler.lambda_handler"]
+# CMD is used for local deployment:
+CMD ["deploy.lambda_handler.lambda_handler"]

@@ -1,13 +1,14 @@
 """
 Handle the AWS Lambda function
+
+The AWS runtime looks for a function lambda_handler inside a file called
+lambda_handler.py (this file)
 """
 
 import os
 import logging
 
 from apig_wsgi import make_lambda_handler
-
-from .bottle_app import app
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +26,5 @@ def dump_files(path="."):
 if os.environ.get('DEBUG_DUMP_FILES', 'NO') == 'YES':
     dump_files('/')
 
-# Configure this as your entry point in AWS Lambda
-#
+from .bottle_app import app
 lambda_handler = make_lambda_handler(app)
