@@ -139,8 +139,7 @@ def test_movie_tracking(client, new_movie):
                            data={'api_key': api_key,
                                  'movie_id': movie_id})
     assert response.status_code == 200
-    ret = response.get_json()
-    lines = ret.splitlines()
+    lines = response.text.splitlines()
 
     # Verify a ZIP file with the individual frames was created
     zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
