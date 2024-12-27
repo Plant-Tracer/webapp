@@ -292,7 +292,7 @@ def api_upload_movie():
 @api_bp.route('/get-movie-data', methods=GET_POST)
 def api_get_movie_data():
     """
-    Redirects the user to a URL that downloads the movie.
+    Gets the user the movie.
     :param api_key:   authentication
     :param movie_id:  movie
     :param format:    if 'zip' - return as as a zipfile

@@ -63,6 +63,10 @@ app.register_blueprint(api_bp, url_prefix='/api')
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
+    """Raise AuthError('message') will result in a JSON response:
+    {'message':message, 'error':True}
+    as defined in auth.AuthError
+    """
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
     return response

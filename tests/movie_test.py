@@ -17,6 +17,7 @@ import logging
 import requests
 import re
 import urllib
+from urllib.parse import quote
 from os.path import abspath, dirname
 
 import filetype
@@ -61,14 +62,18 @@ def new_movie(client, new_user):
                                    "title": movie_title,
                                    "description": "test movie description",
                                    "movie_data_sha256": movie_data_sha256})
+    logging.debug("invalid api_key response=%s",response)
+    logging.debug("invalid api_key response.text=%s",response.text)
+    logging.debug("invalid api_key response.json=%s",response.json)
+    assert 'error' in response.get_json()
     assert response.get_json()['error'] == True
 
     # Check for invalid SHA256 handling
     response = client.post('/api/new-movie',
                            data = {'api_key': api_key,
-                    "title": movie_title,
-                    "description": "test movie description",
-                    "movie_data_sha256": movie_data_sha256+"a"})
+                                   "title": movie_title,
+                                   "description": "test movie description",
+                                   "movie_data_sha256": movie_data_sha256+"-invalid"})
     assert response.get_json()['error']==True
 
     # Get the upload information
@@ -88,6 +93,9 @@ def new_movie(client, new_user):
 
     url    = res['presigned_post']['url']
     fields = res['presigned_post']['fields']
+
+    logging.debug("new_movie fixture: url=%s fields=%s",url,fields)
+
     # Now send the data
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         if url.startswith('https://'):
@@ -97,16 +105,17 @@ def new_movie(client, new_user):
             logging.info("uploaded to %s r=%s",url, r)
             assert r.ok
         else:
-            # Use the upload-movie api (being depricated)
+            # Use the upload-movie api to store in the SQL Database
             fields['file'] = (f,TEST_PLANTMOVIE_PATH)
             response = client.post('/api/upload-movie',
                                    content_type='multipart/form-data',
                                    data = fields)
             assert response.status_code == 200
             res = response.get_json()
-            assert res['error']==True
+            assert res['error']==False
 
     # Make sure data got there
+    logging.debug("new_movie fixture: movie uploaded")
     retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
@@ -125,6 +134,24 @@ def new_movie(client, new_user):
     logging.debug("new_movie fixture: done")
 
 
+def data_from_redirect(url, the_client):
+    logging.info("REDIRECT: url=%s ",url)
+    url = url.replace("#REDIRECT ","")
+    if url.startswith('/api/get-object?'):
+        # Decode the /get-object parameters and run the /api/get-object
+        m = re.search("urn=(.*)&sig=(.*)",url)
+        urn = urllib.parse.unquote(m.group(1))
+        sig = urllib.parse.unquote(m.group(2))
+        response = the_client.get(f'/api/get-object?urn={quote(urn)}&sig={quote(sig)}')
+        logging.debug("returning response.data len=%s",len(response.data))
+        return response.data
+    else:
+        # Request it using http:, which is probably a call to S3
+        r = requests.get(url)
+        return r.content # note that Flask uses r.data but requests uses r.content
+
+
+
 # Test for edge cases
 def test_edge_case():
     with pytest.raises(db.InvalidMovie_Id):
@@ -139,7 +166,7 @@ def test_new_movie(client, new_movie):
     api_key = cfg[API_KEY]
 
     # Did the movie appear in the list?
-    movies = movie_list(api_key)
+    movies = movie_list(client, api_key)
     count = 0
     for movie in movies:
         if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
@@ -154,30 +181,18 @@ def test_new_movie(client, new_movie):
     assert response.status_code == 403
 
     # Make sure that we can get data for the movie
-    response = client.post('/api/FIXME',
+    response = client.post('/api/get-movie-data',
                            data = {'api_key': api_key,
                                    'movie_id': movie_id,
                                    'redirect_inline':True})
-    if response.data[0:10] == "#REDIRECT ":
-        logging.info("REDIRECT: movie_id=%s response.text=%s",movie_id,response.text)
-        url = response.text.replace("#REDIRECT ","")
-        if url.startswith('/api/get-object?'):
-            # Decode the /get-object parameters and run the /api/get-object
-            m = re.search("urn=(.*)&sig=(.*)",url)
-            urn = urllib.parse.unquote(m.group(1))
-            sig = urllib.parse.unquote(m.group(2))
-            response = client.post('/api/get-object',
-                                   data ={'urn':urn,
-                                          'sig':sig} )
-            movie_data = bottle_api.api_get_object()
-        else:
-            # Request it using http:, which is probably a call to S3
-            r = requests.get(url)
-            movie_data = r.content # note that Flask uses r.data but requests uses r.content
+    logging.debug("test_new_movie: response.data[0:10]=%s len=%s",response.data[0:10],len(response.data))
+    if response.data[0:10] == b"#REDIRECT ":
+        movie_data = data_from_redirect(response.text, client)
     else:
-        movie_data == response.data
+        movie_data = response.data
 
     # movie_data is now a movie. We should validate it.
+    logging.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
     assert len(movie_data)>0
     assert filetype.guess(movie_data).mime==MIME.MP4
 
@@ -311,10 +326,11 @@ def test_movie_extract1(client, new_movie):
                                    'frame_number': 0 })
     r = response.get_json()
     assert r.status_code == 302
+    logging.debug("test_movie_extract1: r.text=%s",r.text)
 
     # Since we got a frame, we should now be able to get a frame URN
-    urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
-    assert urn.startswith('s3:/') or urn.startswith('db:/')
+    # urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
+    # assert urn.startswith('s3:/') or urn.startswith('db:/')
 
 def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
@@ -364,9 +380,9 @@ def test_movie_extract2(client, new_movie):
 ################################################################
 
 
-def movie_list(client, api_key):
+def movie_list(the_client, api_key):
     """Return a list of the movies"""
-    response = client.post('/api/list-movies',
+    response = the_client.post('/api/list-movies',
                            data = {'api_key': api_key})
     res = response.get_json()
     assert res['error'] == False

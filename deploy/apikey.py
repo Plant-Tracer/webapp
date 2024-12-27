@@ -111,7 +111,7 @@ def get_user_dict():
     userdict = db.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.remote_addr,request.url)
-        raise AuthError()
+        raise AuthError(f"api_key '{api_key}' is invalid")
     return userdict
 
 def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=False):

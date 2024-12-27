@@ -473,7 +473,7 @@ class DBMySQL(DBSQL):
                 return "'" + v + "'"
             return str(v)
         if vals is not None:
-            return (cmd % [myquote(v) for v in vals] )[0:DBMySQL.MAX_EXPLAIN_LEN]
+            return (cmd % tuple([myquote(v) for v in vals]) )[0:DBMySQL.MAX_EXPLAIN_LEN]
         else:
             return cmd
 

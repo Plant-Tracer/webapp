@@ -70,7 +70,7 @@ def get_dbwriter():
 
 
 class AuthError(Exception):
-    """Integrated error handling"""
+    """Integrated error handling,"""
     status_code = 403
 
     def __init__(self, message, status_code=None, payload=None):
@@ -83,6 +83,7 @@ class AuthError(Exception):
     def to_dict(self):
         rv = dict(self.payload or ())
         rv['message'] = self.message
+        rv['error'] = True
         return rv
 
 class EmailNotInDatabase(Exception):

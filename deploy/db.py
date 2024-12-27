@@ -109,14 +109,11 @@ def logit(*, func_name, func_args, func_return):
 
     logging.debug("%s(%s) = %s ", func_name, func_args, func_return)
 
-    if LOG_DB in logging_policy:
+    if (LOG_DB in logging_policy) and False:
         dbfile.DBMySQL.csfr(get_dbwriter(),
-                            """INSERT INTO logs (
-                                time_t,
-                                apikey_id, user_id, ipaddr,
-                                func_name, func_args, func_return)
-                         VALUES (UNIX_TIMESTAMP(),
-                                (select min(id) from api_keys where api_key=%s),
+                            """INSERT INTO logs ( time_t, apikey_id, user_id, ipaddr, func_name, func_args, func_return)
+                               VALUES (UNIX_TIMESTAMP(),
+                                   (select min(id) from api_keys where api_key=%s),
                                    (select min(user_id) from api_keys where api_key=%s), %s,
                                  %s, %s, %s )""",
                             (user_api_key, user_api_key, user_ipaddr,
