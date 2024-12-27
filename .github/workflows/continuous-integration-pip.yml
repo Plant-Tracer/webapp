@@ -74,10 +74,10 @@ jobs:
       - name: Install chromedriver
         uses: nanasess/setup-chromedriver@v2.2.2
 
-      - name: Update GITHUB_PATH and install Python dependencies
+      - name: Update GITHUB_PATH and install Python dependencies for local development
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          make install-python-dependencies
+          make venv
 
       - name: Lint with pylint
         run: |
@@ -130,5 +130,3 @@ jobs:
         run: |
           make coverage
           ls -l
-
-      
