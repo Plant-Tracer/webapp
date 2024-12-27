@@ -105,8 +105,8 @@ pytest:  $(REQ)
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/movie_test.py
-TEST1FUNCTION="-k test_new_movie"
+TEST1MODULE=tests/endpoint_test.py
+#TEST1FUNCTION="-k test_new_movie"
 pytest1:
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py

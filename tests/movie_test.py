@@ -12,9 +12,9 @@ import base64
 import time
 import copy
 import hashlib
+import requests
 import json
 import logging
-import requests
 import re
 import urllib
 from urllib.parse import quote
@@ -27,6 +27,7 @@ import deploy.db_object as db_object
 import deploy.bottle_api as bottle_api
 import deploy.bottle_app as bottle_app
 import deploy.dbfile as dbfile
+import deploy.db_object as db_object
 import deploy.tracker as tracker
 
 from deploy.paths import TEST_DATA_DIR

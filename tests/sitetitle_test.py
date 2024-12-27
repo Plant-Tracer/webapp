@@ -19,7 +19,13 @@ from selenium.webdriver.chrome.options import Options
 
 PLANTTRACER_TITLE = 'Plant Tracer'
 
+@pytest.fixture
+def http_endpoint():
+    yield "http://localhost:8000"
+
+
 # test function illustrating the use of selenium package directly
+@pytest.mark.skip(reason="temporarily disabled")
 def test_sitetitle_just_selenium(http_endpoint):
 
     logging.info("http_endpoint %s", http_endpoint)

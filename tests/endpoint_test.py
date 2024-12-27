@@ -1,4 +1,5 @@
-"""endpoint_test.py - can test either the local endpoint or remote endpoints (with a fixture that uses requests)
+"""endpoint_test.py - can test either the local endpoint or remote endpoints
+(with a fixture that uses requests)
 """
 
 import logging
@@ -14,12 +15,10 @@ import json
 import base64
 from urllib3.util import Retry
 
-from requests.adapters import HTTPAdapter
-import requests
-
 import pytest
 
 import deploy.db as db
+import deploy.db_object as db_object
 from deploy.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
 from deploy.constants import C,E,__version__,GET,POST,GET_POST
 
@@ -47,29 +46,29 @@ def test_ver2(client):
 
 
 def test_add(client):
-    r = requests.post('/api/add', {'a': 10, 'b': 20})
+    r = client.post('/api/add', data={'a': 10, 'b': 20})
     assert r.status_code == 200
-    assert r.json() == {'result': 30, 'error': False}
+    assert r.json == {'result': 30, 'error': False}
 
 
 def test_api_key(client, api_key):
-    r = client.post('/api/check-api_key', {'api_key': api_key})
+    r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
-    assert r.json()['error'] == False
-    assert r.json()['userinfo']['name'] == 'Test User Name'
+    assert r.json['error'] == False
+    assert r.json['userinfo']['name'] == 'Test User Name'
 
-    r = requests.post('/api/check-api_key', {'api_key': 'invalid'})
+    r = client.post('/api/check-api_key', data={'api_key': 'invalid'})
     assert r.status_code == 200
-    assert r.json()['error'] == True
+    assert r.json['error'] == True
 
 def test_api_get_logs(client, new_user):
     api_key = new_user[user_test.API_KEY]
     user_id = new_user[user_test.USER_ID]
 
     r = client.post('/api/get-logs',
-                      {'api_key': api_key, 'log_user_id' : user_id})
+                    data={'api_key': api_key, 'log_user_id' : user_id})
     assert r.status_code == 200
-    obj = r.json()
+    obj = r.json
     assert obj['error'] == False
     assert 'logs' in obj
 
@@ -79,24 +78,29 @@ def test_api_get_logs(client, new_user):
 
 
 def test_upload_movie_data(client, api_key):
-    """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user"""
+    """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user.
+    This is redundent with movie_test.py::new_movie
+    """
     assert len(FRAME_FILES) > 0
     with open(TEST_MOVIE_FILENAME, 'rb') as f:
-        movie_base64_data = base64.b64encode(f.read())
-    post_data = {'api_key': api_key,
-                 'title': 'Test Title at '+time.asctime(),
-                 'description': 'test-upload',
-                 'movie_base64_data': movie_base64_data}
-    r = client.post('/api/new-movie', post_data)
-    res = r.json()
+        movie_data = f.read()
+    movie_base64_data = base64.b64encode(movie_data)
+    movie_data_sha256 = db_object.sha256(movie_data)
+    r = client.post('/api/new-movie',
+                    data={'api_key': api_key,
+                          'title': 'Test Title at '+time.asctime(),
+                          'description': 'test-upload',
+                          'movie_base64_data': movie_base64_data,
+                          'movie_data_sha256': movie_data_sha256 })
+    logging.debug("r.json=%s",r.json)
+    res = r.json
     assert res['error'] == False
     movie_id = res['movie_id']
 
     # Now delete the movie
-    post_data2 = {'api_key': TEST_USER_APIKEY,
-                  'movie_id': movie_id}
-    r = client.post('/api/delete-movie', post_data2)
-    res = r.json()
+    r = client.post('/api/delete-movie', data = {'api_key': api_key,
+                  'movie_id': movie_id})
+    res = r.json
     assert res['error'] == False
 
     # Purge the movie (to clean up)
