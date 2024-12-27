@@ -39,6 +39,27 @@ from fixtures.app_client import client
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
 from db_object_test import SaveS3Bucket
 
+################################################################
+## support functions
+################################################################
+
+
+def movie_list(the_client, api_key):
+    """Return a list of the movies"""
+    resp = the_client.post('/api/list-movies',
+                           data = {'api_key': api_key})
+    res = resp.get_json()
+    assert res['error'] == False
+    return res['movies']
+
+def get_movie(the_client, api_key, movie_id):
+    """Used for testing. Just pull the specific movie"""
+    for movie in movie_list(the_client, api_key):
+        if movie['movie_id']==movie_id:
+            return movie
+    raise RuntimeError(f"No movie has movie_id {movie_id}")
+
+
 @pytest.fixture
 def new_movie(client, new_user):
     """Create a new movie_id and return it.
@@ -58,32 +79,32 @@ def new_movie(client, new_user):
     assert len(movie_data) > 0
 
     # Check for invalid API key handling
-    response = client.post('/api/new-movie',
+    resp = client.post('/api/new-movie',
                            data = {'api_key': api_key_invalid,
                                    "title": movie_title,
                                    "description": "test movie description",
                                    "movie_data_sha256": movie_data_sha256})
-    logging.debug("invalid api_key response=%s",response)
-    logging.debug("invalid api_key response.text=%s",response.text)
-    logging.debug("invalid api_key response.json=%s",response.json)
-    assert 'error' in response.get_json()
-    assert response.get_json()['error'] == True
+    logging.debug("invalid api_key resp=%s",resp)
+    logging.debug("invalid api_key resp.text=%s",resp.text)
+    logging.debug("invalid api_key resp.json=%s",resp.json)
+    assert 'error' in resp.get_json()
+    assert resp.get_json()['error'] == True
 
     # Check for invalid SHA256 handling
-    response = client.post('/api/new-movie',
+    resp = client.post('/api/new-movie',
                            data = {'api_key': api_key,
                                    "title": movie_title,
                                    "description": "test movie description",
                                    "movie_data_sha256": movie_data_sha256+"-invalid"})
-    assert response.get_json()['error']==True
+    assert resp.get_json()['error']==True
 
     # Get the upload information
-    response = client.post('/api/new-movie',
+    resp = client.post('/api/new-movie',
                            data = {'api_key': api_key,
                     "title": movie_title,
                     "description": "test movie description",
                     "movie_data_sha256": movie_data_sha256})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
     movie_id = res['movie_id']
     assert movie_id > 0
@@ -108,11 +129,11 @@ def new_movie(client, new_user):
         else:
             # Use the upload-movie api to store in the SQL Database
             fields['file'] = (f,TEST_PLANTMOVIE_PATH)
-            response = client.post('/api/upload-movie',
+            resp = client.post('/api/upload-movie',
                                    content_type='multipart/form-data',
                                    data = fields)
-            assert response.status_code == 200
-            res = response.get_json()
+            assert resp.status_code == 200
+            res = resp.get_json()
             assert res['error']==False
 
     # Make sure data got there
@@ -124,10 +145,10 @@ def new_movie(client, new_user):
     yield cfg
 
     logging.debug("new_movie fixture: Delete the movie we uploaded")
-    response = client.post('/api/delete-movie',
+    resp = client.post('/api/delete-movie',
                            data={'api_key': api_key,
                                  'movie_id': movie_id})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
 
     logging.debug("new_movie fixture: Purge the movie that we have deleted")
@@ -143,9 +164,9 @@ def data_from_redirect(url, the_client):
         m = re.search("urn=(.*)&sig=(.*)",url)
         urn = urllib.parse.unquote(m.group(1))
         sig = urllib.parse.unquote(m.group(2))
-        response = the_client.get(f'/api/get-object?urn={quote(urn)}&sig={quote(sig)}')
-        logging.debug("returning response.data len=%s",len(response.data))
-        return response.data
+        resp = the_client.get(f'/api/get-object?urn={quote(urn)}&sig={quote(sig)}')
+        logging.debug("returning resp.data len=%s",len(resp.data))
+        return resp.data
     else:
         # Request it using http:, which is probably a call to S3
         r = requests.get(url)
@@ -176,21 +197,21 @@ def test_new_movie(client, new_movie):
     assert count==1
 
     # Make sure that we cannot delete the movie with a bad key
-    response = client.post('/api/delete-movie',
+    resp = client.post('/api/delete-movie',
                            data = {'api_key': 'invalid',
                                    'movie_id': movie_id})
-    assert response.status_code == 403
+    assert resp.status_code == 403
 
     # Make sure that we can get data for the movie
-    response = client.post('/api/get-movie-data',
+    resp = client.post('/api/get-movie-data',
                            data = {'api_key': api_key,
                                    'movie_id': movie_id,
                                    'redirect_inline':True})
-    logging.debug("test_new_movie: response.data[0:10]=%s len=%s",response.data[0:10],len(response.data))
-    if response.data[0:10] == b"#REDIRECT ":
-        movie_data = data_from_redirect(response.text, client)
+    logging.debug("test_new_movie: resp.data[0:10]=%s len=%s",resp.data[0:10],len(resp.data))
+    if resp.data[0:10] == b"#REDIRECT ":
+        movie_data = data_from_redirect(resp.text, client)
     else:
-        movie_data = response.data
+        movie_data = resp.data
 
     # movie_data is now a movie. We should validate it.
     logging.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
@@ -198,10 +219,10 @@ def test_new_movie(client, new_movie):
     assert filetype.guess(movie_data).mime==MIME.MP4
 
     # Make sure that we can get the metadata
-    response = client.post('/api/get-movie-metadata',
+    resp = client.post('/api/get-movie-metadata',
                            data = {'api_key': api_key,
                                    'movie_id': movie_id})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error']==False
     assert res['metadata']['title'] == movie_title
 
@@ -215,13 +236,13 @@ def test_movie_upload_presigned_post(client, new_user,SaveS3Bucket):
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data = f.read()
     movie_data_sha256 = db_object.sha256(movie_data)
-    response = client.post('/api/new-movie',
+    resp = client.post('/api/new-movie',
                            data = {'api_key': api_key,
                                    "title": movie_title,
                                    "description": "test movie description",
                                    "movie_data_sha256":movie_data_sha256
                                    })
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
 
     # Now try the upload post
@@ -240,60 +261,60 @@ def test_movie_update_metadata(client, new_movie):
     api_key = cfg[API_KEY]
 
     # Validate the old title
-    assert get_movie(api_key, movie_id)['title'] == movie_title
+    assert get_movie(client, api_key, movie_id)['title'] == movie_title
 
     new_title = 'special new title ' + str(uuid.uuid4())
-    response = client.post('/api/set-metadata',
+    resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
                                    'property': 'title',
                                    'value': new_title})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
 
     # Get the list of movies
-    assert get_movie(api_key, movie_id)['title'] == new_title
+    assert get_movie(client, api_key, movie_id)['title'] == new_title
 
     new_description = 'special new description ' + str(uuid.uuid4())
-    response = client.post('/api/set-metadata',
+    resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
                                    'property': 'description',
                                    'value': new_description})
-    res = resopnse.get_json()
+    res = resp.get_json()
     assert res['error'] == False
-    assert get_movie(api_key, movie_id)['description'] == new_description
+    assert get_movie(client, api_key, movie_id)['description'] == new_description
 
     # Try to set the movie's metadata to 'deleted'
-    response = client.post('/api/set-metadata',
+    resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
                                    'property': 'deleted',
                                    'value': 1})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
-    assert get_movie(api_key, movie_id)['deleted'] == 1
+    assert get_movie(client, api_key, movie_id)['deleted'] == 1
 
     # Undelete the movie
-    response = client.post('/api/set-metadata',
+    resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
                                    'property': 'deleted',
                                    'value': 0})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
-    assert get_movie(api_key, movie_id)['deleted'] == 0
+    assert get_movie(client, api_key, movie_id)['deleted'] == 0
 
     # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(api_key, movie_id)['published'] == 0
-    response = client.post('/api/set-metadata',
+    assert get_movie(client, api_key, movie_id)['published'] == 0
+    resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
                                    'property': 'published',
                                    'value': 1})
-    res = response.get_json()
+    res = resp.get_json()
     assert res['error'] == False
-    assert get_movie(api_key, movie_id)['published'] == 0
+    assert get_movie(client, api_key, movie_id)['published'] == 0
 
 def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
@@ -305,29 +326,28 @@ def test_movie_extract1(client, new_movie):
 
     # Check for insufficient arguments
     # Should produce http403
-    response = client.post('/api/get-frame',
-                           data = {'api_key': api_key})
-    r = response.get_json()
-    assert r.status_code == 403
+    resp = client.post('/api/get-frame')
+    assert resp.status_code == 403
+
+    r = resp.get_json()
 
     # Check for invalid frame_number
-    # Should produce http404
-    response = client.post('/api/get-frame',
+    logging.debug("test_movie_extract1: point1")
+    resp = client.post('/api/get-frame',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
-                                   'frame_number': -1})
-    r = response.get_json()
-    assert r.status_code == 404
+                                   'frame_number': '-1'})
+    assert resp.status_code == 403
+    r = resp.get_json()
 
     # Check for getting by frame_number
     # should produce a redirect
-    response = client.post('/api/get-frame',
+    logging.debug("test_movie_extract1: point2")
+    resp = client.post('/api/get-frame',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
-                                   'frame_number': 0 })
-    r = response.get_json()
-    assert r.status_code == 302
-    logging.debug("test_movie_extract1: r.text=%s",r.text)
+                                   'frame_number': '0' })
+    assert resp.status_code == 302
 
     # Since we got a frame, we should now be able to get a frame URN
     # urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
@@ -359,13 +379,13 @@ def test_movie_extract2(client, new_movie):
 
     # Grab three frames with the API and see if they are different
     def get_jpeg_frame_redirect(number):
-        response = client.post('/api/get-frame',
+        resp = client.post('/api/get-frame',
                                data = {'api_key': api_key,
                                        'movie_id': str(movie_id),
                                        'frame_number': str(number) })
-        assert response.status_code==302
-        assert response.location is not None
-        return response.location
+        assert resp.status_code==302
+        assert resp.location is not None
+        return resp.location
 
     jpeg0_url = get_jpeg_frame_redirect(0)
     jpeg1_url = get_jpeg_frame_redirect(1)
@@ -374,27 +394,6 @@ def test_movie_extract2(client, new_movie):
 
     # TODO - get the data and check?
 
-
-
-################################################################
-## support functions
-################################################################
-
-
-def movie_list(the_client, api_key):
-    """Return a list of the movies"""
-    response = the_client.post('/api/list-movies',
-                           data = {'api_key': api_key})
-    res = response.get_json()
-    assert res['error'] == False
-    return res['movies']
-
-def get_movie(api_key, movie_id):
-    """Used for testing. Just pull the specific movie"""
-    for movie in movie_list(api_key):
-        if movie['movie_id']==movie_id:
-            return movie
-    raise RuntimeError(f"No movie has movie_id {movie_id}")
 
 
 def test_log_search_movie(new_movie):

@@ -382,27 +382,34 @@ def api_get_frame():
       error - 404 - movie or frame does not exist
       no error - redirect to the signed URL
     """
+    logging.debug('getframe 0')
     user_id      = get_user_id(allow_demo=True)
-    frame_number = get_int('frame_number')
-    movie_id     = get_int('movie_id')
+    frame_number = get_int('frame_number',0)
+    movie_id     = get_int('movie_id',0)
 
+    logging.debug('getframe 1')
     if not db.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return AuthError(f'Error 404: User {user_id} cannot access movie {movie_id}')
+        raise AuthError(f'Error 404: User {user_id} cannot access movie {movie_id}')
 
+    logging.debug('getframe 2')
     if frame_number<0:
-        return AuthError(f'Error 404: invalid frame number {frame_number}')
+        raise AuthError(f'Error 404: invalid frame number {frame_number}')
 
+    logging.debug('getframe 3')
     # See if there is a urn
     urn = db.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
     if urn is None:
         # the frame is not in the database, so we need to make it.
+        logging.debug('getframe 5')
         frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
         urn = db.create_new_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
+    logging.debug('getframe 4')
     logging.debug("api_get_frame urn=%s",urn)
     url = db_object.make_signed_url(urn=urn)
     logging.debug("api_get_frame url=%s",url)
+    logging.debug('getframe 10 ')
     return redirect(url)
 
 

@@ -106,7 +106,7 @@ def get_user_dict():
         logging.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API
         if request.full_path.startswith('/api/'):
-            abort('invalid API key', 403)
+            raise AuthError('invalid API key')
 
     userdict = db.validate_api_key(api_key)
     if not userdict:

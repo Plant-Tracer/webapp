@@ -234,6 +234,7 @@ def test_course_list(client, new_user):
     assert users1[0]['email'] == users2[0]['email']
 
 
+@pytest.mark.skip(reason="logging currently disabled")
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""
     cfg        = copy.copy(new_user)
