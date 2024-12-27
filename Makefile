@@ -219,8 +219,8 @@ tracker-debug:
 	open outfile.mp4
 
 eslint:
-	(cd static;make eslint)
-	(cd templates;make eslint)
+	(cd deploy/static;make eslint)
+	(cd deploy/templates;make eslint)
 
 jscoverage:
 	npm run coverage
