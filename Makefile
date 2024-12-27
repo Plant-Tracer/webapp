@@ -27,8 +27,10 @@ venv:
 	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
 
-.PHONY: venv
+$(REQ):
+	make venv
 
+.PHONY: venv
 
 
 ################################################################
