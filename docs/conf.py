@@ -9,10 +9,14 @@
 # Add project root to pythonpath
 import sys
 
-from os.path import dirname,abspath
-sys.path.insert(0, dirname(dirname(abspath(__file__))))
+from os.path import dirname,abspath,join
+MY_DIR = dirname(abspath(__file__))
+ROOT_DIR = dirname(MY_DIR)
+DEPLOY_DIR = join(ROOT_DIR,'deploy')
 
-from constants import __version__
+sys.path.insert(0, ROOT_DIR)
+
+from deploy.constants import __version__
 
 project = 'Plant Tracer Web Application'
 copyright = '2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'

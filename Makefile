@@ -19,11 +19,13 @@ ETC=deploy/etc
 DBMAINT=-m deploy.dbmaint
 
 venv:
+	@echo install venv for the development environment
 	$(PY) -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
 	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
+	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
 
 .PHONY: venv
 
