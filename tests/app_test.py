@@ -130,40 +130,23 @@ def test_templates(client,new_user):
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
 
 
-def test_check_api_key(new_user):
-    api_key = new_user[API_KEY]
-    # no parameter should generate error
-    with boddle(params={}):
-        r = bottle_api.api_check_api_key()
-        assert r['error'] == True
-
-    # invalid API key should generate error
-    with boddle(params={'api_key': 'invalid'}):
-        r = bottle_api.api_check_api_key()
-        assert r['error'] == True
-
-    # valid key should generate no error
-    with boddle(params={'api_key': api_key}):
-        r = bottle_api.api_check_api_key()
-        assert r['error'] == False, f'API_KEY {API_KEY} should be valid'
-
-def test_api_edit_movie(new_movie):
+def test_api_edit_movie(new_movie,client):
     # Verifies that editing the movie version has updated
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]
     movie = db.Movie(movie_id = movie_id)
     movie_metadata = movie.metadata
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie.movie_id,
-                        'action' : 'bad-action'}):
-        r = bottle_api.api_edit_movie()
-        assert r['error']==True
+    resp = client.post('/api/edit-movie',
+                       data={'api_key': api_key,
+                             'movie_id': movie.movie_id,
+                             'action' : 'bad-action'})
+    assert resp.json['error']==True
 
-    with boddle(params={'api_key': api_key,
-                        'movie_id': movie.movie_id,
-                        'action' : 'rotate90cw'}):
-        r = bottle_api.api_edit_movie()
-        assert r['error']==False
+    resp = client.post('/api/edit-movie',
+                       data={'api_key': api_key,
+                             'movie_id': movie.movie_id,
+                             'action' : 'rotate90cw'})
+    assert resp.json['error']==False
     movie_metadata2 = movie.metadata
     # Make sure that the version number incremented
     assert movie_metadata['version'] +1 == movie_metadata2['version']
