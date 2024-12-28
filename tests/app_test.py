@@ -111,18 +111,19 @@ def test_templates(client,new_user):
             raise
 
     for with_api_key in [False,True]:
-        if with_api_key:
-            client.set_cookie('api_key',api_key)
         for url in ['/','/about','/error','/audit','/list','/analyze','/debug','/login','/logout','/privacy','/register',
                     '/resend','/tos','/upload','/users']:
             include_text = None
             exclude_text = None
             if with_api_key==True and url=='/list':
                 exclude_text = 'user_demo = 1;'
+            if with_api_key:
+                client.set_cookie( apikey.cookie_name(), api_key)
             resp = client.get(url)
             logging.info('with_api_key=%s url=%s',with_api_key,url)
             if (not with_api_key) and (url in ['/audit','/list','/analyze', '/upload', '/users']):
                 # These should all be error conditions because they require being logged in
+                logging.debug('not checking html')
                 assert resp.text[0]=='{' # should be an error
                 assert resp.status_code!=200
             else:

@@ -88,12 +88,14 @@ def get_user_api_key():
     # check the query string
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
     if api_key is not None:
+        logging.debug("api_key set in request.values=%s",api_key)
         return api_key
 
     # Return the api_key if it is in a cookie.
     # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
     # return the api_key for the demo user.
     api_key = request.cookies.get(cookie_name(), None)
+    logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
     if (api_key is None) and (DEMO_MODE):
         api_key = demo_mode_api_key()
     return api_key

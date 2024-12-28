@@ -149,6 +149,7 @@ def func_tos():
 @app.route('/upload', methods=GET)
 def func_upload():
     """/upload - Upload a new file"""
+    logging.debug("/upload require_auth=True")
     return render_template('upload.html', **page_dict('Upload a Movie', require_auth=True))
 
 @app.route('/users', methods=GET)
