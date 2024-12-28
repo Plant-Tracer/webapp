@@ -6,6 +6,9 @@ on: [push, pull_request]
 
 jobs:
   build:
+    env:
+      PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
+      MYSQL_ROOT_PASSWORD: testrootpass
     strategy:
       matrix:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
@@ -20,7 +23,6 @@ jobs:
           # so we can create and migrate the test database.
           # See: https://hub.docker.com/_/mysql
           MYSQL_DATABASE: testdb
-          MYSQL_ROOT_PASSWORD: testrootpass
         ports:
           # Opens port 3306 on service container and host
           # https://docs.github.com/en/actions/using-containerized-services/about-service-containers
@@ -89,30 +91,24 @@ jobs:
 
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
-        env:
-          MYSQL_ROOT_PASSWORD: testrootpass
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
 
       - name: Validate app framework
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
+          pwd
+          ls -l
           make pytest-app-framework
 
       - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
 
       - name: Run JavaScript tests and coverage
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make jscoverage
 
@@ -125,8 +121,6 @@ jobs:
           files: ./coverage.xml,./coverage/coverage-final.json
 
       - name: Show files in directory
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make coverage
           ls -l
