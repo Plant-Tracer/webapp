@@ -3,12 +3,12 @@
 # There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of RANDOM_PASSWORD
 name: CI (pip)
 on: [push, pull_request]
+env:
+  PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
+  MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
 
 jobs:
   build:
-    env:
-      PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
-      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
     strategy:
       matrix:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
