@@ -213,7 +213,7 @@ create_localdb:
 
 remove_localdb:
 	@echo Removing local database using $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME) --writeconfig $(ETC)/credentials.ini
+	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
 	/bin/rm -f $(ETC)/credentials.ini
 
 install-chromium-browser-ubuntu: $(REQ)
