@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 global.$ = $;
 
-const module = require('../static/planttracer.js');
+const module = require('planttracer');
 const list_users_data = module.list_users_data;
 
 global.Audio = function() {

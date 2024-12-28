@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer.js')
+const module = require('planttracer')
 const purge_movie = module.purge_movie
 
 describe('purge_movie', () => {

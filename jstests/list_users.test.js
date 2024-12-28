@@ -1,9 +1,9 @@
 const $ = require('jquery');
-global.$ = $; 
+global.$ = $;
 
 
-const module = require('../static/planttracer.js');
-const list_users = module.list_users; 
+const module = require('planttracer');
+const list_users = module.list_users;
 
 const list_users_data = jest.fn();
 global.fetch = jest.fn();
