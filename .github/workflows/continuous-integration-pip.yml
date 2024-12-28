@@ -5,7 +5,6 @@ name: CI (pip)
 on: [push, pull_request]
 env:
   PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
-  MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
 
 jobs:
   build:
@@ -23,6 +22,7 @@ jobs:
           # so we can create and migrate the test database.
           # See: https://hub.docker.com/_/mysql
           MYSQL_DATABASE: testdb
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         ports:
           # Opens port 3306 on service container and host
           # https://docs.github.com/en/actions/using-containerized-services/about-service-containers
@@ -91,6 +91,8 @@ jobs:
 
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
