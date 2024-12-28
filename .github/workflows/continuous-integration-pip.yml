@@ -8,7 +8,7 @@ jobs:
   build:
     env:
       PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
-      MYSQL_ROOT_PASSWORD: testrootpass
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
     strategy:
       matrix:
         os: ['ubuntu-latest']   # with MySQL service, we now only run on ubuntu
