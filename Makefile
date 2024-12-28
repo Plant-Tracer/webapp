@@ -68,7 +68,6 @@ pylint: $(REQ)
 pylint-tests: $(REQ)
 	$(ACTIVATE) ; $(PY) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
 
-
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
 
@@ -89,24 +88,14 @@ flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
+################################################################
+##
+## Dynamic Analysis
+## If you are testing just one thing, put it here!
 #
 # In the tests below, we always test the database connectivity first
 # It makes no sense to run the tests otherwise
 
-##
-## Dynamic Analysis
-## If you are testing just one thing, put it here!
-
-pytest-db: $(REQ)
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG -k test_version tests/app_test.py
-	@echo dbreader_test is successful
-
-pytest:  $(REQ)
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/movie_tracker_test.py
@@ -117,6 +106,12 @@ pytest1:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
+pytest:  $(REQ)
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
+	@echo dbreader_test is successful
+	$(PYTHON) -m pytest -v --log-cli-level=INFO .
+
 pytest-selenium:
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
@@ -126,13 +121,6 @@ pytest-debug:
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
-
-pytest-debug1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	@echo run in debug mode but stop on first error
-	$(PYTHON) -m pytest --log-cli-level=DEBUG --maxfail=1 tests/dbreader_test.py
-	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG -k test_new_movie tests/movie_test.py
 
 pytest-app-framework:
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
@@ -152,28 +140,12 @@ test-schema-upgrade:
 	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --dropdb test_db1
 
-################################################################
-### Database management for testing and CI/CD
-
-PLANTTRACER_LOCALDB_NAME ?= actions_test
-
-create_localdb:
-	@echo Creating local database, exercise the upgrade code and write credentials to $(ETC)/credentials.ini using $(ETC)/github_actions_mysql_rootconfig.ini
-	@echo $(ETC)/credentials.ini will be used automatically by other tests
-	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(ETC)/schema_0.sql --writeconfig $(ETC)/credentials.ini
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials.ini $(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
-
-remove_localdb:
-	@echo Removing local database using $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME) --writeconfig $(ETC)/credentials.ini
-	/bin/rm -f $(ETC)/credentials.ini
-
-coverage:
-	$(PYTHON) -m pip install --upgrade pip
+pytest-coverage: $(REQ)
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
+
+################################################################
+### Debug targets run running locally
 
 run-local:
 	@echo run bottle locally, storing new data in database
@@ -183,10 +155,10 @@ run-local-demo:
 	@echo run bottle locally in demo mode, using local database
 	PLANTTRACER_CREDENTIALS=$(ETC)/credentials.ini DEMO_MODE=1 $(PY) bottle_app.py --storelocal
 
+DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
 debug:
 	make debug-local
 
-DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
 debug-local:
 	@echo run bottle locally in debug mode, storing new data in database
 	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-localhost.ini $(DEBUG) --storelocal
@@ -209,14 +181,13 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
-clean:
-	find . -name '*~' -exec rm {} \;
-	/bin/rm -rf __pycache__ */__pycache__
-
 tracker-debug:
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
+
+################################################################
+### JavaScript
 
 eslint:
 	(cd deploy/static;make eslint)
@@ -225,9 +196,25 @@ eslint:
 jscoverage:
 	npm run coverage
 	npm test
+
+
 ################################################################
 # Installations are used by the CI pipeline:
 # Generic:
+PLANTTRACER_LOCALDB_NAME ?= actions_test
+
+create_localdb:
+	@echo Creating local database, exercise the upgrade code and write credentials to $(ETC)/credentials.ini using $(ETC)/github_actions_mysql_rootconfig.ini
+	@echo $(ETC)/credentials.ini will be used automatically by other tests
+	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ETC)/github_actions_mysql_rootconfig.ini
+	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(ETC)/schema_0.sql --writeconfig $(ETC)/credentials.ini
+	PLANTTRACER_CREDENTIALS=$(ETC)/credentials.ini $(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
+	PLANTTRACER_CREDENTIALS=$(ETC)/credentials.ini $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+
+remove_localdb:
+	@echo Removing local database using $(ETC)/github_actions_mysql_rootconfig.ini
+	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME) --writeconfig $(ETC)/credentials.ini
+	/bin/rm -f $(ETC)/credentials.ini
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser
@@ -247,7 +234,6 @@ install-ubuntu: $(REQ)
 	make venv
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
-
 # Includes MacOS dependencies managed through Brew
 install-macos:
 	brew update
@@ -265,6 +251,16 @@ install-macos:
 install-windows:
 	make venv
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
+
+################################################################
+### Cleanup
+
+clean:
+	find . -name '*~' -exec rm {} \;
+	/bin/rm -rf __pycache__ */__pycache__
+
+################################################################
+### Compile JavaScript to TypeScript
 
 %.js: %.ts
 	tsc $<
