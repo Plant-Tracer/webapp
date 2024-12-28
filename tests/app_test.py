@@ -112,7 +112,7 @@ def test_templates(client,new_user):
 
     for with_api_key in [False,True]:
         if with_api_key:
-            client.set_cookie('localhost','api_key',api_key)
+            client.set_cookie('api_key',api_key)
         for url in ['/','/about','/error','/audit','/list','/analyze','/debug','/login','/logout','/privacy','/register',
                     '/resend','/tos','/upload','/users']:
             include_text = None
