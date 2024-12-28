@@ -1,13 +1,10 @@
 """
 tracker_test.py - test the tracker.py module.
 """
-
-
 import subprocess
 import pytest
 import sys
 import os
-import bottle
 import logging
 import json
 import tempfile
@@ -16,31 +13,25 @@ import base64
 import csv
 import math
 from os.path import abspath, dirname
+import copy
 
 import numpy as np
 import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from boddle import boddle
+import deploy.dbfile as dbfile
 
-sys.path.append(dirname(dirname(abspath(__file__))))
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
+import deploy.db as db
+import deploy.tracker as tracker
 
-import lib.ctools.dbfile as dbfile
-import bottle_api
-import bottle_app
-import copy
-import db
-
-from PIL import Image
-
-# get the first MOV
+from deploy.constants import MIME
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
-from constants import MIME
-import tracker
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},

@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer')
+const module = require('planttracer')
 const resend_func = module.resend_func
 
 global.Audio = function() {
@@ -23,8 +23,8 @@ describe('resend_func', () => {
     });
 
     beforeEach(() => {
-        mockVal = jest.fn(); 
-        mockHtml = jest.fn(); 
+        mockVal = jest.fn();
+        mockHtml = jest.fn();
 
         global.$ = jest.fn((selector) => {
             if (selector === '#email') {
@@ -39,7 +39,7 @@ describe('resend_func', () => {
     });
 
     test('displays error message when email is empty', () => {
-        mockVal.mockReturnValue(''); 
+        mockVal.mockReturnValue('');
 
         resend_func();
         expect(mockHtml).toHaveBeenCalledWith("<b>Please provide an email address</b>");

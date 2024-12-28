@@ -1,0 +1,92 @@
+#
+# Read the docs:
+# https://aws.amazon.com/blogs/compute/using-container-image-support-for-aws-lambda-with-aws-sam/
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  planttracer-webapp
+
+  SAM Template for planttracer-webapp. Uses docker.
+
+Globals:
+  Function:
+    Timeout: 15
+    MemorySize: 512
+  Api:
+    Cors:
+      AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      BinaryMediaTypes:
+        - image/x-icon
+        - image/png
+        - image/jpeg
+        - audio/mpeg
+        - application/octet-stream
+      Cors:
+        AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  HandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64                # move to arm64 when we have an arm ffmpeg
+      Environment:
+        Variables:
+          AWS_LAMBDA: "YES"
+          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+          DEBUG_DUMP_FILES: "YES"
+          DEMO_MODE: "YES"
+          PLANTTRACER_CREDENTIALS: "etc/credentials-aws-dev.ini"
+          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+          PLANTTRACER_LOG_LEVEL: "WARNING"
+          POWERTOOLS_SERVICE_NAME: FastAPI
+          POWERTOOLS_METRICS_NAMESPACE: Powertools
+          LOG_LEVEL: INFO
+          ENCODE_BINARY_CONTENT: "YES"
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+      Events:
+        RootPath:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi # Link to the explicitly defined API
+            Path: /
+            Method: ANY
+        ProxyPath:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi # Link to the explicitly defined API
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile    # identifies dockerfile for creating image
+      DockerContext: ./deploy   # points to the folder containing the function code
+      DockerTag: python3.11-v1  # which tag to use
+
+Outputs:
+  ApiUrl:
+    Description: "URL of the API Gateway Endpoint"
+    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Export:
+      Name: ApiUrl
+
+  HandlerFunctionArn:
+    Description: "Mangum Handler Function ARN"
+    Value: !GetAtt HandlerFunction.Arn

@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer')
+const module = require('planttracer')
 const register_func = module.register_func
 
 describe('register_func', () => {

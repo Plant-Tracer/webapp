@@ -1,0 +1,73 @@
+<!-- -*- mode: html -*- -->
+{% extends 'base.html' %}
+
+{% block head %}
+{% endblock %}
+
+
+{% block body %}
+
+<h1>Plant Movie Analyzer</h1>
+
+<style>
+  {% include 'tracer_app.css' %}
+
+.dot {
+  text-align:center;
+  font-size:32px;
+  position:relative;
+  line-height:0px;
+}
+</style>
+
+<h2 id='firsth2'>Movie Loading...</h2>
+
+{% include 'tracer_app.html' %}
+
+<br/>
+<div style="float:left" id="explain">
+<h3>Plant Motion Analysis</h3>
+
+<p class='demo'>
+    In demo mode, you may only play an already tracked movie. You may also move markers,
+    but the movement won't be saved.
+
+    When logged in as a user (not in demo mode), you may add and delete markers, position them and
+    have their new positions saved,
+    and track and re-track movies. When in demo mode, these features are disabled.
+</p>
+
+<p>Analyze the motion of the plant in the video by placing the Apex marker on the plant's apex, and then
+    move the Ruler markers to the corresponding parts of the ruler in the video (if any). You may add
+    markers to track additional points of interest. Press the <i>Track movie</i> or <i>Re-track movie</i>
+    button to initiate tracking.
+</p>
+
+<p>
+    Once the movie is tracked, you may play the tracked movie using the controls on the movie player
+    section of the page. You may play the whole movie from the current point, step forwards or backwards
+    one frame at a time, or go to a specified frame.
+</p>
+
+<p>
+    If you notice that tracking a given marker has not been successful for the entire length of
+    the movie, go find the frame where tracking is lost, re-position the marker, and press <i>Re-track movie</i>
+    to re-track from that point forward. You may have to repeat this process.
+</p>
+</div>
+
+<script type='module'>
+  // This draws three dragable objects and adds some text.
+  import { CanvasController, CanvasItem, Marker, WebImage } from "./static/canvas_controller.js";
+  import { MovieController } from "./static/canvas_movie_controller.js";
+  import { TracerController, trace_movie } from "./static/canvas_tracer_controller.js";
+  let params = new URLSearchParams(window.location.search);
+
+  // When the document loads, run the trace_movie() functions.
+  $( document ).ready( function() {
+    trace_movie('div#tracer', params.get('movie_id'), api_key);
+  });
+
+
+</script>
+{% endblock %}

@@ -1,0 +1,1 @@
+* possibly add CORS headers

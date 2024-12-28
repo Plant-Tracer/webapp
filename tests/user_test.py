@@ -2,7 +2,6 @@
 Test the various functions in the database involving user creation.
 """
 
-from boddle import boddle
 import sys
 import os
 import uuid
@@ -11,20 +10,21 @@ import pytest
 import uuid
 import base64
 import time
-import bottle
 import copy
 import hashlib
 from os.path import abspath, dirname
 
-sys.path.append(dirname(dirname(abspath(__file__))))
+from fixtures.app_client import client
 
-from auth import get_dbreader,get_dbwriter
-import db
-import dbmaint
-import bottle_api
-import bottle_app
-import ctools.dbfile as dbfile
-from paths import TEST_DIR, TEST_DATA_DIR
+from deploy.auth import get_dbreader,get_dbwriter
+import deploy.db as db
+import deploy.dbmaint as dbmaint
+import deploy.bottle_api as bottle_api
+import deploy.bottle_app as bottle_app
+import deploy.dbfile as dbfile
+from deploy.paths import TEST_DIR, TEST_DATA_DIR
+
+
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
@@ -179,7 +179,8 @@ def test_new_user(new_user):
     assert ret3['courses'][0]['course_key'] == cfg[COURSE_KEY]
 
 
-def test_get_logs(new_user):
+
+def test_get_logs(client, new_user):
     """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
     dbreader = get_dbreader()
     for security in [False,True]:
@@ -194,13 +195,13 @@ def test_get_logs(new_user):
 
     api_key = new_user[API_KEY]
     user_id   = new_user['user_id']
-    with boddle(params={'api_key': api_key, 'user_id':user_id}):
-        res = bottle_api.api_get_logs()
+    response = client.post('/api/get-logs',
+                           data = {'api_key': api_key, 'user_id':user_id})
 
     # Turns out that there are no logs with this user, since the scaffolding calls register_email
     # for the new_user with a NULL user_id....
 
-def test_course_list(new_user):
+def test_course_list(client, new_user):
     cfg        = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
     api_key    = cfg[API_KEY]
@@ -221,8 +222,10 @@ def test_course_list(new_user):
     assert len(matches)==1
 
     # Make sure that the endpoint works
-    with boddle(params={'api_key': api_key}):
-        res = bottle_api.api_list_users()
+    response = client.post('/api/list-users',
+                           data = {'api_key': api_key})
+
+    res = response.get_json()
     assert res['error'] is False
     users2 = res['users']
     # There is the user and the admin; there may also be a demo user
@@ -231,6 +234,7 @@ def test_course_list(new_user):
     assert users1[0]['email'] == users2[0]['email']
 
 
+@pytest.mark.skip(reason="logging currently disabled")
 def test_log_search_user(new_user):
     """Currently we just run logfile queries and count the number of results."""
     cfg        = copy.copy(new_user)

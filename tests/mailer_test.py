@@ -17,20 +17,16 @@ import configparser
 import threading
 import copy
 
-from boddle import boddle
 from os.path import abspath, dirname, join
 
 from fixtures.localmail_config import mailer_config
+from fixtures.app_client import client
+
 from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
 
-import bottle_api
+import deploy.db as db
+import deploy.mailer as mailer
 
-sys.path.append(dirname(dirname(abspath(__file__))))
-
-import db
-import mailer
-from mailer import InvalidEmail
-from db import InvalidCourse_Key
 
 MSG = """to: {{ to_addrs }}
 from: {{ from_addr }}
@@ -80,26 +76,27 @@ def test_send_message(mailer_config):
 
 
 @pytest.mark.skip(reason="changing authentication")
-def test_register_email(mailer_config,new_course):
+def test_register_email(client, mailer_config,new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
 
     """Some tests of the email registration software in db"""
-    with pytest.raises(InvalidEmail):
+    with pytest.raises(mailer.InvalidEmail):
         db.register_email(email='invalid-email', name='valid-name')
 
     with pytest.raises(ValueError):
         db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key=None, course_id=None)
 
-    with pytest.raises(InvalidCourse_Key):
+    with pytest.raises(db.InvalidCourse_Key):
         db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key='invalid-course-key', course_id=None)
 
 
     # try register api
-    with boddle(params={'email':FAKE_USER_EMAIL,
-                        'course_key':course_key,
-                        'name':FAKE_NAME}):
-        res = bottle_api.api_register()
+    response = client.post('/api/register',
+                           data = {'email':FAKE_USER_EMAIL,
+                                   'course_key':course_key,
+                                   'name':FAKE_NAME})
+    assert response.status_code == 200
 
     # TODO: verify if registratione mail appeared
     # Now delete the user

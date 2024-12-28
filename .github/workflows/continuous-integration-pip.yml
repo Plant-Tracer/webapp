@@ -3,6 +3,8 @@
 # There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of RANDOM_PASSWORD
 name: CI (pip)
 on: [push, pull_request]
+env:
+  PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
 
 jobs:
   build:
@@ -20,7 +22,7 @@ jobs:
           # so we can create and migrate the test database.
           # See: https://hub.docker.com/_/mysql
           MYSQL_DATABASE: testdb
-          MYSQL_ROOT_PASSWORD: testrootpass
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         ports:
           # Opens port 3306 on service container and host
           # https://docs.github.com/en/actions/using-containerized-services/about-service-containers
@@ -74,10 +76,10 @@ jobs:
       - name: Install chromedriver
         uses: nanasess/setup-chromedriver@v2.2.2
 
-      - name: Update GITHUB_PATH and install Python dependencies
+      - name: Update GITHUB_PATH and install Python dependencies for local development
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          make install-python-dependencies
+          make venv
 
       - name: Lint with pylint
         run: |
@@ -90,29 +92,25 @@ jobs:
       - name: Create local MySQL database
         if: startsWith(matrix.os, 'ubuntu')
         env:
-          MYSQL_ROOT_PASSWORD: testrootpass
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         run: |
           echo the following assumes that the root configuration is in etc/github_actions_mysql_rootconfig.ini
           make create_localdb
 
       - name: Validate app framework
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
+          pwd
+          ls -l
           make pytest-app-framework
 
       - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:
           SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
-          CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make coverage
+          CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make pytest-coverage
 
       - name: Run JavaScript tests and coverage
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make jscoverage
 
@@ -125,10 +123,6 @@ jobs:
           files: ./coverage.xml,./coverage/coverage-final.json
 
       - name: Show files in directory
-        env:
-          PLANTTRACER_CREDENTIALS: etc/credentials.ini
         run: |
           make coverage
           ls -l
-
-      

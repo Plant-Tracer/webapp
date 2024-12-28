@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer.js')
+const module = require('planttracer')
 const check_upload_metadata = module.check_upload_metadata
 
 global.Audio = function() {

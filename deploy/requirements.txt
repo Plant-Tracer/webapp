@@ -1,0 +1,13 @@
+apig-wsgi
+boto3
+flask
+filetype
+jinja2
+mangum
+opencv-python-headless
+pymysql
+requests
+tabulate
+validate_email_address
+aws-lambda-powertools
+cryptography

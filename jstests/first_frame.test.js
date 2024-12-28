@@ -6,7 +6,7 @@
 const $ = require('jquery');
 global.$ = $;
 
-const module = require('../static/planttracer.js')
+const module = require('planttracer')
 const first_frame_url = module.first_frame_url
 
 
@@ -15,7 +15,7 @@ describe('first_frame_url', () => {
     const API_BASE = 'https://planttracer.com';
     const api_key = 'abcdefghijklmnopqrstuvwxyz';
     const movie_id = '600';
-    
+
     // Mock Date object to control the timestamp
     beforeEach(() => {
         global.API_BASE = API_BASE;
@@ -33,10 +33,9 @@ describe('first_frame_url', () => {
         // Use regex to check that t= is followed by a numeric timestamp
         expect(result).toMatch(/t=\d+/);
     });
-    
+
     test('should include the correct movie ID in the URL', () => {
         const result = first_frame_url('test_movie');
         expect(result).toContain('movie_id=test_movie');
     });
 });
-
