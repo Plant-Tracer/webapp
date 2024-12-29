@@ -233,6 +233,8 @@ install-ubuntu: $(REQ)
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
 # Install for AWS Linux for running SAM
+# Start with:
+# sudo dfn install git && git clone --recursive https://github.com/Plant-Tracer/webapp && (cd webapp; make aws-install)
 install-aws: 
 	echo install for AWS Linux, for making the lambda.
 	echo note does not install ffmpeg currently
