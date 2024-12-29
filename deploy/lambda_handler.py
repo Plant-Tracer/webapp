@@ -27,4 +27,4 @@ if os.environ.get('DEBUG_DUMP_FILES', 'NO') == 'YES':
     dump_files('/')
 
 from .bottle_app import app
-lambda_handler = make_lambda_handler(app)
+handler = make_lambda_handler(app)

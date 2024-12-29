@@ -236,6 +236,13 @@ install-ubuntu: $(REQ)
 install-aws: 
 	echo install for AWS Linux, for making the lambda.
 	echo note does not install ffmpeg currently
+	(cd $HOME; \
+	 	wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip; \
+		unzip aws-sam-cli-linux-x86_64.zip -d sam-installation; \
+		sudo ./sam-installation/install )
+	sudo dnf install -y docker
+	sudo systemctl enable docker
+	sudo systemctl start docker
 	sudo dnf install -y python3.11
 	sudo dnf install -y nodejs npm
 	npm ci
