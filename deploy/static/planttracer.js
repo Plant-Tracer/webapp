@@ -20,8 +20,8 @@ const UPLOAD_TIMEOUT_SECONDS = 20;
 // sounds for buttons
 var SOUNDS = [];
 if (typeof Audio !== 'undefined') {
-  SOUNDS[DELETE_BUTTON] = new Audio('static/pop-up-something-160353.mp3');
-  SOUNDS[UNDELETE_BUTTON] = new Audio('static/soap-bubbles-pop-96873.mp3');
+  SOUNDS[DELETE_BUTTON] = new Audio('https://planttracer.com/pop-up-something-160353.mp3');
+  SOUNDS[UNDELETE_BUTTON] = new Audio('https://planttracer.com/soap-bubbles-pop-96873.mp3');
 } else {
   // Provide fallbacks or empty mock objects for testing
   SOUNDS[DELETE_BUTTON] = { play: () => {} };
