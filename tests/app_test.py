@@ -43,9 +43,10 @@ def test_get_bool(mocker):
     assert bottle_api.get_bool("key",default=True)==True
 
 
+PLANTTRACER_JS = 'planttracer.js'
 def test_static_path(client):
-    response = client.get('/static/planttracer.js')
-    with open(os.path.join(STATIC_DIR, 'test.txt'),'r') as f:
+    response = client.get(f'/static/{PLANTTRACER_JS}')
+    with open(os.path.join(STATIC_DIR, PLANTTRACER_JS),'r') as f:
         assert f.read() == response.text
 
     # Test file not found
