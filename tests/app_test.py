@@ -44,7 +44,7 @@ def test_get_bool(mocker):
 
 
 def test_static_path(client):
-    response = client.get('/static/test.txt')
+    response = client.get('/static/planttracer.js')
     with open(os.path.join(STATIC_DIR, 'test.txt'),'r') as f:
         assert f.read() == response.text
 
