@@ -1,5 +1,5 @@
 import pytest
-import deploy.bottle_app as bottle_app
+import app.bottle_app as bottle_app
 
 @pytest.fixture
 def client():

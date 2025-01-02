@@ -23,13 +23,13 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import deploy.dbfile as dbfile
-import deploy.bottle_api as bottle_api
-import deploy.bottle_app as bottle_app
-import deploy.db as db
-import deploy.db_object as db_object
-import deploy.tracker as tracker
-from deploy.constants import MIME,E
+import app.dbfile as dbfile
+import app.bottle_api as bottle_api
+import app.bottle_app as bottle_app
+import app.db as db
+import app.db_object as db_object
+import app.tracker as tracker
+from app.constants import MIME,E
 
 # get the first MOV
 

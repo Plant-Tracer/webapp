@@ -22,17 +22,17 @@ from os.path import abspath, dirname
 
 import filetype
 
-import deploy.db as db
-import deploy.db_object as db_object
-import deploy.bottle_api as bottle_api
-import deploy.bottle_app as bottle_app
-import deploy.dbfile as dbfile
-import deploy.db_object as db_object
-import deploy.tracker as tracker
+import app.db as db
+import app.db_object as db_object
+import app.bottle_api as bottle_api
+import app.bottle_app as bottle_app
+import app.dbfile as dbfile
+import app.db_object as db_object
+import app.tracker as tracker
 
-from deploy.paths import TEST_DATA_DIR
-from deploy.constants import C,MIME
-from deploy.auth import get_dbreader,get_dbwriter
+from app.paths import TEST_DATA_DIR
+from app.constants import C,MIME
+from app.auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
 from fixtures.app_client import client

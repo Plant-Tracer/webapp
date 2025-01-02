@@ -20,14 +20,14 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import deploy.dbfile as dbfile
+import app.dbfile as dbfile
 
-import deploy.bottle_api as bottle_api
-import deploy.bottle_app as bottle_app
-import deploy.db as db
-import deploy.tracker as tracker
+import app.bottle_api as bottle_api
+import app.bottle_app as bottle_app
+import app.db as db
+import app.tracker as tracker
 
-from deploy.constants import MIME
+from app.constants import MIME
 
 # Get the fixtures from user_test
 from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH

@@ -9,8 +9,8 @@ import os
 import uvicorn
 import argparse
 
-import deploy.clogging as clogging
-from deploy.constants import C
+import deploy.app.clogging as clogging
+from deploy.app.constants import C
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     except ModuleNotFoundError:
         pass
 
-    cmd = f'gunicorn --bind 127.0.0.1:{args.port} --workers 2 --reload --log-level DEBUG deploy.bottle_app:app '
+    cmd = f'gunicorn --bind 127.0.0.1:{args.port} --workers 2 --reload --log-level DEBUG deploy.app.bottle_app:app '
     print(cmd)
     exit(0)
     os.system(cmd)

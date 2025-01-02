@@ -16,13 +16,13 @@ from os.path import abspath, dirname
 
 from fixtures.app_client import client
 
-from deploy.auth import get_dbreader,get_dbwriter
-import deploy.db as db
-import deploy.dbmaint as dbmaint
-import deploy.bottle_api as bottle_api
-import deploy.bottle_app as bottle_app
-import deploy.dbfile as dbfile
-from deploy.paths import TEST_DIR, TEST_DATA_DIR
+from app.auth import get_dbreader,get_dbwriter
+import app.db as db
+import app.dbmaint as dbmaint
+import app.bottle_api as bottle_api
+import app.bottle_app as bottle_app
+import app.dbfile as dbfile
+from app.paths import TEST_DIR, TEST_DATA_DIR
 
 
 

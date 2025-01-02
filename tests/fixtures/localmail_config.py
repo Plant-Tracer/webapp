@@ -7,7 +7,7 @@ import sys
 import os
 from os.path import join,dirname,abspath
 
-import deploy.auth as auth
+import app.auth as auth
 
 def singleton(cls):
     instances = {}
