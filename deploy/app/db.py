@@ -41,6 +41,7 @@ LOG_INFO = 'LOG_INFO'
 LOG_WARNING = 'LOG_WARNING'
 logging_policy = set()
 logging_policy.add(LOG_DB)
+never_log = True                # disabled for the moment
 
 LOG_MAX_RECORDS = 5000
 MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
@@ -109,7 +110,7 @@ def logit(*, func_name, func_args, func_return):
 
     logging.debug("%s(%s) = %s ", func_name, func_args, func_return)
 
-    if (LOG_DB in logging_policy) and False:
+    if (LOG_DB in logging_policy) and (not never_log):
         dbfile.DBMySQL.csfr(get_dbwriter(),
                             """INSERT INTO logs ( time_t, apikey_id, user_id, ipaddr, func_name, func_args, func_return)
                                VALUES (UNIX_TIMESTAMP(),

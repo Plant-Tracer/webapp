@@ -41,14 +41,14 @@ def smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.
     If the file specifies a AWS secret, get that.
     """
-    cp = config()
-    section = cp['smtp']
-    if (secret := dbfile.get_aws_secret_for_section( section )) is not None:
-        return secret
+    if C.SMTPCONFIG_ARN in os.environ:
+        return dbfile.get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
 
+    cp = config()
+    ret = cp['smtp']
     for key in SMTP_ATTRIBS:
-        assert key in cp['smtp']
-    return section
+        assert key in ret
+    return ret
 
 @functools.cache
 def get_dbreader():
@@ -56,6 +56,8 @@ def get_dbreader():
     1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
     2 - the [dbreader] section of the credentials file
     """
+    if C.DBREADER_ARN in os.environ:
+        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBREADER_ARN] )
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbreader')
 
 
@@ -65,7 +67,8 @@ def get_dbwriter():
     1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
     2 - the [dbwriter] section of the credentials file
     """
-    logging.debug("get_dbwriter. credentials_file=%s",credentials_file())
+    if C.DBWRITER_ARN in os.environ:
+        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBWRITER_ARN] )
     return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
 
 

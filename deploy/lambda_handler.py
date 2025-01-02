@@ -9,6 +9,9 @@ import os
 import logging
 
 from apig_wsgi import make_lambda_handler
+from app.bottle_app import app
+
+lambda_app = make_lambda_handler(app)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +28,3 @@ def dump_files(path="."):
 
 if os.environ.get('DEBUG_DUMP_FILES', 'NO') == 'YES':
     dump_files('/app')
-
-from app.bottle_app import app
-lambda_app = make_lambda_handler(app)

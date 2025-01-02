@@ -143,22 +143,25 @@ class SecretsManagerError(Exception):
     """ SecretsManagerError """
 
 
-def get_aws_secret_for_section(section):
-    if (AWS_SECRET_NAME in section) and (AWS_REGION_NAME) in section:
-        secret_name = os.path.expandvars(section[AWS_SECRET_NAME])
-        region_name = os.path.expandvars(section[AWS_REGION_NAME])
-        logging.debug("secret_name=%s region_name=%s",secret_name, region_name)
-        session = boto3.session.Session()
-        client = session.client( service_name=SECRETSMANAGER,
-                                 region_name=region_name)
-        try:
-            get_secret_value_response = client.get_secret_value( SecretId=secret_name )
-        except ClientError as e:
-            raise SecretsManagerError(e) from e
-        secret = json.loads(get_secret_value_response['SecretString'])
-        return secret
-    return None
+def get_aws_secret_for_arn(secret_name):
+    region_name = secret_name.split(':')[3]
+    logging.debug("secret_name=%s region_name=%s",secret_name, region_name)
+    session = boto3.session.Session()
+    client = session.client( service_name=SECRETSMANAGER,
+                             region_name=region_name)
+    try:
+        get_secret_value_response = client.get_secret_value( SecretId=secret_name )
+    except ClientError as e:
+        raise SecretsManagerError(e) from e
+    secret = json.loads(get_secret_value_response['SecretString'])
+    return secret
 
+
+def get_aws_secret_for_section(section):
+    if AWS_SECRET_NAME in section:
+        secret_name = os.path.expandvars(section[AWS_SECRET_NAME])
+        return get_aws_secret_for_arn(secret_name)
+    return None
 
 def timet_iso():
     """Report a time_t as an ISO-8601 time format. Defaults to now."""
@@ -260,8 +263,8 @@ class DBSqlite3(DBSQL):
         assert get_column_names is None  # not implemented yet
         if vals is None:
             vals = []
-        cmd = cmd.replace("%s", "?")
-        cmd = cmd.replace("INSERT IGNORE", "INSERT OR IGNORE")
+            cmd = cmd.replace("%s", "?")
+            cmd = cmd.replace("INSERT IGNORE", "INSERT OR IGNORE")
 
         if quiet is False:
             print(f"PID{os.getpid()}: cmd:{cmd} vals:{vals}")
@@ -332,7 +335,7 @@ class DBMySQLAuth:
                         # Check for quotes
                         if val[0] in "'\"" and val[0] == val[-1]:
                             val = val[1:-1]
-                        ret[name] = val
+                            ret[name] = val
         for name in (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE):
             if name not in ret:
                 try:
@@ -363,6 +366,17 @@ class DBMySQLAuth:
             for var in env.items():
                 logging.error("env[%s] = %s", var, env[var])
             raise e
+
+    @staticmethod
+    def FromSecret(secret_arn, debug=None):
+        secret = get_aws_secret_for_arn( secret_arn )
+        return DBMySQLAuth(host=secret['host'],
+                           user=secret['username'],
+                           password=secret['password'],
+                           database=secret['dbname'],
+                           port=int(secret['port']),
+                           debug=debug )
+
 
     @staticmethod
     def FromConfig(section, debug=None):
@@ -473,6 +487,7 @@ class DBMySQL(DBSQL):
                 return "'" + v + "'"
             return str(v)
         if vals is not None:
+            # pylint: disable=consider-using-generator
             return (cmd % tuple([myquote(v) for v in vals]) )[0:DBMySQL.MAX_EXPLAIN_LEN]
         else:
             return cmd
