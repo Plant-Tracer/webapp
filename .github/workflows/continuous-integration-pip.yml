@@ -4,7 +4,7 @@
 name: CI (pip)
 on: [push, pull_request]
 env:
-  PLANTTRACER_CREDENTIALS: deploy/etc/credentials.ini
+  PLANTTRACER_CREDENTIALS: etc/credentials.ini
 
 jobs:
   build:
