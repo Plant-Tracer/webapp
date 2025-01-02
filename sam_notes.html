@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Notes on Deploying to SAM &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="notes-on-deploying-to-sam">
+<h1>Notes on Deploying to SAM<a class="headerlink" href="#notes-on-deploying-to-sam" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html">https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html</a></p></li>
+<li><p><a class="reference external" href="https://github.com/tzelleke/aws-sam-fastapi">https://github.com/tzelleke/aws-sam-fastapi</a></p></li>
+</ul>
+<p><cite>sam build</cite> takes what’s in the requirements.txt file, installs it into the directory <cite>.aws-sam/build/HandlerFunction</cite>, makes it into a
+ZIP file, and uploads the ZIP file to S3.  The ZIP file needs to be unzipped when the lambda does a cold-start.</p>
+<section id="docker">
+<h2>Docker<a class="headerlink" href="#docker" title="Link to this heading">¶</a></h2>
+<p>Normal SAM is limited to 512MiB. The only way around this is by using Docker containers.</p>
+<p>I had no problem building and deploying a Lambda function with a Docker Container from EC2. However, from my mac, I could not build the container, even when Docker was installed.</p>
+<p>I was able to run x86 AWS Linux on my M1 Mac using Docker:</p>
+<p>Dockerfile:</p>
+<p><a href="#id1"><span class="problematic" id="id2">``</span></a>`
+FROM amazonlinux:latest</p>
+<dl class="simple">
+<dt>RUN yum install -y shadow-utils sudo &amp;&amp; </dt><dd><p>useradd -m ec2-user &amp;&amp; echo “ec2-user ALL=(ALL) NOPASSWD:ALL” &gt;&gt; /etc/sudoers</p>
+</dd>
+</dl>
+<p>USER ec2-user
+WORKDIR /home/ec2-user
+<a href="#id3"><span class="problematic" id="id4">``</span></a><a href="#id5"><span class="problematic" id="id6">`</span></a></p>
+<p>Makefile:
+<a href="#id7"><span class="problematic" id="id8">``</span></a>`
+build:</p>
+<blockquote>
+<div><p>echo build an x86 aws linux container with an ec2-user account
+docker build -t amazonlinux-ec2 .
+docker run –platform linux/amd64 -it amazonlinux-ec2 bash</p>
+</div></blockquote>
+<p><a href="#id9"><span class="problematic" id="id10">``</span></a><a href="#id11"><span class="problematic" id="id12">`</span></a></p>
+<p>I haven’t yet tried running SAM inside the docker container</p>
+<p>— To make things somewhat faster, it’s preferable to create a Layer which has the big files in it (opencv, numpy, etc).</p>
+<p>The layer is defined in the template.yaml file. Here it is in the directory <cite>layer/</cite>. Inside that is <cite>layer/python/requirements.txt</cite> which contains the referenced python files to be installed in the layer by <cite>sam build</cite>.  Ideally the layer doesn’t change much, so it doesn’t need to be uploaded much.</p>
+</section>
+<section id="virtual-environment">
+<h2>Virtual Environment<a class="headerlink" href="#virtual-environment" title="Link to this heading">¶</a></h2>
+<p>For local debugging, we install the files in both <cite>requirements.txt</cite>
+and <cite>layer/python/requirements.txt</cite> into the virtual environment. The deployed runtime doesn’t use a virtual environment.</p>
+</section>
+<section id="size">
+<h2>Size<a class="headerlink" href="#size" title="Link to this heading">¶</a></h2>
+<p>We are limited to 256MiB on lambda functions. One way around this is by using Docker containers. But another way is to delay the loading of ffmpeg to the times that we need it, and not having it always load.</p>
+</section>
+<section id="commands-to-try">
+<h2>Commands to try:<a class="headerlink" href="#commands-to-try" title="Link to this heading">¶</a></h2>
+<p><cite>sam sync –stack-name planttracer-webapp</cite>
+* Sends changes to the server</p>
+<p><cite>sam logs planttracer-app –tail</cite>
+* Watches for logfile changes</p>
+<p><cite>sam logs planttracer-app -s”5min ago”</cite>
+* Prints all logs from last 5 minutes</p>
+<p><cite>sam validate &amp;&amp; sam build &amp;&amp; sam deploy –no-confirm-changeset</cite>
+* validates, builds, and deploys without asking questions</p>
+<p><cite>sam sync –stack-name planttracer-webapp –watch</cite>
+* Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.</p>
+</section>
+<section id="set-up">
+<h2>Set Up:<a class="headerlink" href="#set-up" title="Link to this heading">¶</a></h2>
+<p>Request a certificate for simson-dev.planttracer.com:</p>
+<p>``
+aws acm request-certificate </p>
+<blockquote>
+<div><p>–domain-name simson-dev.planttracer.com –validation-method DNS –region us-east-1 –idempotency-token simson-cert –domain-validation-options DomainName=simson-dev.planttracer.com,ValidationDomain=planttracer.com</p>
+</div></blockquote>
+<p><a href="#id13"><span class="problematic" id="id14">``</span></a></p>
+<p>After requesting the certificate, retrieve the validation DNS records:
+``
+aws acm describe-certificate </p>
+<blockquote>
+<div><p>–certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID –region us-east-1</p>
+</div></blockquote>
+<p><a href="#id15"><span class="problematic" id="id16">``</span></a></p>
+<p>Afterwards, create the Route 53 DNS Record:
+``
+aws route53 change-resource-record-sets </p>
+<blockquote>
+<div><p>–hosted-zone-id HOSTED_ZONE_ID –change-batch ‘{</p>
+<blockquote>
+<div><dl>
+<dt>“Changes”: [</dt><dd><dl>
+<dt>{</dt><dd><p>“Action”: “UPSERT”,
+“ResourceRecordSet”: {</p>
+<blockquote>
+<div><p>“Name”: “CNAME_NAME_FROM_PREVIOUS_STEP”,
+“Type”: “CNAME”,
+“TTL”: 300,
+“ResourceRecords”: [</p>
+<blockquote>
+<div><dl class="simple">
+<dt>{</dt><dd><p>“Value”: “CNAME_VALUE_FROM_PREVIOUS_STEP”</p>
+</dd>
+</dl>
+<p>}</p>
+</div></blockquote>
+<p>]</p>
+</div></blockquote>
+<p>}</p>
+</dd>
+</dl>
+<p>}</p>
+</dd>
+</dl>
+<p>]</p>
+</div></blockquote>
+<p>}’</p>
+</div></blockquote>
+<p><a href="#id17"><span class="problematic" id="id18">``</span></a></p>
+<p>Finally, verify the certificate validation:
+``
+aws acm describe-certificate </p>
+<blockquote>
+<div><p>–certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID –region us-east-1</p>
+</div></blockquote>
+<p><a href="#id19"><span class="problematic" id="id20">``</span></a></p>
+<p>Once the certificate is validated, you  can use its ARN in your <cite>template.yaml</cite> file under CertificateArn:
+``
+Resources:</p>
+<blockquote>
+<div><dl>
+<dt>CustomDomainName:</dt><dd><p>Type: AWS::ApiGatewayV2::DomainName
+Properties:</p>
+<blockquote>
+<div><p>DomainName: simson-dev.planttracer.com
+DomainNameConfigurations:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>CertificateArn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+EndpointType: REGIONAL</p></li>
+</ul>
+</div></blockquote>
+</div></blockquote>
+</dd>
+</dl>
+</div></blockquote>
+<p><a href="#id21"><span class="problematic" id="id22">``</span></a></p>
+<p>Then you can bind the custom domain to the API gateway using the CLI:
+``
+aws apigatewayv2 create-api-mapping </p>
+<blockquote>
+<div><p>–domain-name simson-dev.planttracer.com –api-id API_ID –stage-name Prod</p>
+</div></blockquote>
+<p><a href="#id23"><span class="problematic" id="id24">``</span></a></p>
+<p>Reference: <a class="reference external" href="https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576">https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576</a></p>
+</section>
+<section id="references">
+<h2>References:<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>More info about Globals:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst">https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst</a></p></li>
+<li><p>More info about Function Resource:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction">https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction</a></p></li>
+<li><p>More info about API Event Source. See:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api">https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api</a></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">How to Use Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="MySQLSetup.html">MySQL Setup for Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#note">Note</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html#agenda">Agenda</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/sam_notes.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
