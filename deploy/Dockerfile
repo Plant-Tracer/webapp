@@ -8,10 +8,7 @@ COPY requirements.txt .
 RUN python3 -m pip install -r requirements.txt -t . --no-warn-script-location
 
 # Copy the the app
-COPY *.py       ./deploy/
-COPY etc/       ./deploy/etc/
-COPY static/    ./deploy/static/
-COPY templates/ ./deploy/templates/
+COPY ./         ./deploy/
 
 # CMD is used for local deployment:
-CMD ["deploy.lambda_handler.lambda_handler"]
+CMD ["app.lambda_handler.lambda_app"]

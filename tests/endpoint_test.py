@@ -17,10 +17,10 @@ from urllib3.util import Retry
 
 import pytest
 
-import deploy.db as db
-import deploy.db_object as db_object
-from deploy.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
-from deploy.constants import C,E,__version__,GET,POST,GET_POST
+import app.db as db
+import app.db_object as db_object
+from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
+from app.constants import C,E,__version__,GET,POST,GET_POST
 
 from fixtures.app_client import client
 import user_test

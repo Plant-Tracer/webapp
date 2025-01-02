@@ -3,8 +3,8 @@ import logging
 import sys
 from os.path import dirname,abspath
 
-from deploy.constants import E
-from deploy.gravitropism import calculate_results_gravitropism
+from app.constants import E
+from app.gravitropism import calculate_results_gravitropism
 
 
 # Configuring the logging module

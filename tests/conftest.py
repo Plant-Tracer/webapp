@@ -9,7 +9,7 @@ from os.path import abspath, dirname,join
 import pytest
 
 MY_DIR = dirname(abspath(__file__))
-APP_DIR = dirname(MY_DIR)
-DEPLOY_DIR   = join(APP_DIR,'deploy')
-sys.path.append(APP_DIR)
-sys.path.append(MY_DIR)
+GIT_ROOT = dirname(MY_DIR)
+DEPLOY_DIR   = join(GIT_ROOT,'deploy')
+APP_DIR   = join(DEPLOY_DIR,'app')
+sys.path.append(DEPLOY_DIR)

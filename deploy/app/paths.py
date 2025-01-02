@@ -15,14 +15,15 @@ if HOME is None:
 
 logging.debug("__file__=%s",__file__)
 
-DEPLOY_DIR      = dirname(abspath(__file__))
+APP_DIR         = dirname(abspath(__file__))
+DEPLOY_DIR      = dirname(APP_DIR)
 ROOT_DIR        = dirname(DEPLOY_DIR)
 
-STATIC_DIR      = join(DEPLOY_DIR, 'static')
-ETC_DIR         = join(DEPLOY_DIR, 'etc')
-TEMPLATE_DIR    = join(DEPLOY_DIR, 'templates')
-SCHEMA_FILE     = join(DEPLOY_DIR, 'etc', 'schema.sql')
-SCHEMA_TEMPLATE = join(DEPLOY_DIR, 'etc', 'schema_{schema}.sql')
+ETC_DIR         = join(APP_DIR, 'etc')
+STATIC_DIR      = join(APP_DIR, 'static')
+TEMPLATE_DIR    = join(APP_DIR, 'templates')
+SCHEMA_FILE     = join(ETC_DIR, 'schema.sql')
+SCHEMA_TEMPLATE = join(ETC_DIR, 'schema_{schema}.sql')
 
 SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
 SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)

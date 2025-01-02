@@ -16,7 +16,7 @@ PY=python3.11
 PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
 ETC=deploy/etc
-DBMAINT=-m deploy.dbmaint
+DBMAINT=-m deploy.app.dbmaint
 
 venv:
 	@echo install venv for the development environment

@@ -24,7 +24,7 @@ def dump_files(path="."):
             logging.error("%s/%s",root,fn)
 
 if os.environ.get('DEBUG_DUMP_FILES', 'NO') == 'YES':
-    dump_files('/')
+    dump_files('/app')
 
-from .bottle_app import app
-lambda_handler = make_lambda_handler(app)
+from app.bottle_app import app
+lambda_app = make_lambda_handler(app)

@@ -24,8 +24,8 @@ from fixtures.app_client import client
 
 from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
 
-import deploy.db as db
-import deploy.mailer as mailer
+import app.db as db
+import app.mailer as mailer
 
 
 MSG = """to: {{ to_addrs }}

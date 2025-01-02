@@ -13,11 +13,11 @@ import uuid
 import xml.etree.ElementTree
 import hashlib
 
-from deploy.auth import get_dbreader,get_dbwriter
-from deploy.paths import STATIC_DIR,TEST_DATA_DIR
-from deploy.constants import C
-import deploy.dbfile as dbfile
-import deploy.db_object as db_object
+from app.auth import get_dbreader,get_dbwriter
+from app.paths import STATIC_DIR,TEST_DATA_DIR
+from app.constants import C
+import app.dbfile as dbfile
+import app.db_object as db_object
 
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")

@@ -4,10 +4,10 @@ import logging
 
 import pymysql
 
-import deploy.paths as paths
-import deploy.dbfile as dbfile
-import deploy.db as db
-from deploy.auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
+import app.paths as paths
+import app.dbfile as dbfile
+import app.db as db
+from app.auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
