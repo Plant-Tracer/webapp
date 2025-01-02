@@ -11,4 +11,4 @@ RUN python3 -m pip install -r requirements.txt -t . --no-warn-script-location
 COPY ./         ./deploy/
 
 # CMD is used for local deployment:
-CMD ["app.lambda_handler.lambda_app"]
+CMD ["lambda_handler.lambda_app"]
