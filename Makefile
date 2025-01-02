@@ -190,8 +190,10 @@ tracker-debug:
 ### JavaScript
 
 eslint:
-	(cd deploy/static;make eslint)
-	(cd deploy/templates;make eslint)
+	if [ ! -d deploy/app/static ]; then echo no deploy/app/static ; exit 1 ; fi
+	(cd deploy/app/static;make eslint)
+	if [ ! -d deploy/app/templates ]; then echo no deploy/app/templates ; exit 1 ; fi
+	(cd deploy/app/templates;make eslint)
 
 jscoverage:
 	NODE_PATH=deploy/static npm run coverage
