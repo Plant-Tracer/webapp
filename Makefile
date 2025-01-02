@@ -199,8 +199,8 @@ eslint:
 	(cd deploy/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=deploy/static npm run coverage
-	NODE_PATH=deploy/static npm test
+	NODE_PATH=deploy/app/static npm run coverage
+	NODE_PATH=deploy/app/static npm test
 
 
 ################################################################
