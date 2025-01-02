@@ -40,10 +40,9 @@ Resources:
     Properties:
       PackageType: Image
       Architectures:
-        - x86_64                # move to arm64 when we have an arm ffmpeg
+        - x86_64
       Environment:
         Variables:
-          AWS_LAMBDA: "YES"
           DBREADER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
           DBWRITER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
           DEBUG_DUMP_FILES: "YES"

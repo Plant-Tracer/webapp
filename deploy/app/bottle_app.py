@@ -19,7 +19,7 @@ from . import dbmaint
 from . import clogging
 
 from .bottle_api import api_bp
-from .constants import __version__,GET,GET_POST
+from .constants import __version__,GET,GET_POST,C
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 
@@ -38,18 +38,19 @@ def fix_boto_log_level():
         if name.startswith('boto'):
             logging.getLogger(name).setLevel(logging.INFO)
 
-def startup():
+def lambda_startup():
     dbmaint.schema_upgrade(auth.get_dbwriter())
     clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
     fix_boto_log_level()
-    config = auth.config()
-    try:
-        db_object.S3_BUCKET = config['s3']['s3_bucket']
-    except KeyError as e:
-        logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
 
-if os.environ.get('AWS_LAMBDA',None)=='YES':
-    startup()
+    if C.PLANTTRACER_S3_BUCKET in os.environ:
+        db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
+    else:
+        config = auth.config()
+        try:
+            db_object.S3_BUCKET = config['s3']['s3_bucket']
+        except KeyError as e:
+            logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
 
 ################################################################
 ## API SUPPORT

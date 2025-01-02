@@ -1,14 +1,18 @@
+#
+# Dockerfile to create the container with the Plant-Tracer app
+#
+# Note that AWS Lambda deploys the application in /var/task
+#
+
 FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
-WORKDIR /app
-
-# Copy deploy/requirements.txt file for deployed app requirements
-COPY requirements.txt .
+COPY demo.py requirements.txt ./
 
 RUN python3 -m pip install -r requirements.txt -t . --no-warn-script-location
 
 # Copy the the app
-COPY ./         ./deploy/
+COPY ./                ./
 
 # CMD is used for local deployment:
-CMD ["deploy.lambda_handler.lambda_app"]
+#CMD ["demo.lambda_handler"]
+CMD ["lambda_handler.lambda_app"]

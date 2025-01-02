@@ -36,13 +36,9 @@ TEST_MOVIE_FILENAME = join(TEST_DATA_DIR,'2019-07-31 plantmovie-rotated.mov')
 
 AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 
-logging.debug("DEPLOY_DIR=%s STATIC_DIR=%s",DEPLOY_DIR, STATIC_DIR)
-
-def running_in_aws_lambda():
-    return C.AWS_LAMBDA_ENVIRON in os.environ
-
 def ffmpeg_path():
-    if running_in_aws_lambda():
+    if C.FFMPEG_PATH in os.environ:
+        return os.environ[C.FFMPEG_PATH]
+    if os.path.exists(AWS_LAMBDA_LINUX_STATIC_FFMPEG):
         return AWS_LAMBDA_LINUX_STATIC_FFMPEG
-    else:
-        return shutil.which('ffmpeg')
+    return shutil.which('ffmpeg')
