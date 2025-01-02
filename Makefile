@@ -15,7 +15,8 @@ REQ = venv/pyvenv.cfg
 PY=python3.11
 PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
-ETC=deploy/app/etc
+ETC=etc				# use local etc, not app
+APP_ETC=deploy/app/etc
 DBMAINT=-m deploy.app.dbmaint
 
 # Note: PLANTTRACER_CREDENTIALS must be set
@@ -211,7 +212,7 @@ create_localdb:
 	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
 	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(ETC)/schema_0.sql --writeconfig $(PLANTTRACER_CREDENTIALS)
+	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(APP_ETC)/schema_0.sql --writeconfig $(PLANTTRACER_CREDENTIALS)
 	$(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
