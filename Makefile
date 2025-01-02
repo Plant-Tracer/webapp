@@ -17,7 +17,8 @@ PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
 ETC=deploy/app/etc
 DBMAINT=-m deploy.app.dbmaint
-TEST_CREDENTIALS=$(ETC)/test_credentials.ini
+
+# Note: PLANTTRACER_CREDENTIALS must be set
 
 venv:
 	@echo install venv for the development environment
@@ -150,11 +151,11 @@ pytest-coverage: $(REQ)
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	PLANTTRACER_CREDENTIALS=$(TEST_CREDENTIALS) $(PY) bottle_app.py --storelocal
+	$(PY) bottle_app.py --storelocal
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	PLANTTRACER_CREDENTIALS=$(TEST_CREDENTIALS) DEMO_MODE=1 $(PY) bottle_app.py --storelocal
+	DEMO_MODE=1 $(PY) bottle_app.py --storelocal
 
 DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
 debug:
@@ -203,21 +204,21 @@ jscoverage:
 
 ################################################################
 # Installations are used by the CI pipeline:
-# Generic:
+# Use actions_test unless a local db is already defined
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
-	@echo Creating local database, exercise the upgrade code and write credentials to $(TEST_CREDENTIALS) using $(ETC)/github_actions_mysql_rootconfig.ini
-	@echo $(TEST_CREDENTIALS) will be used automatically by other tests
+	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ETC)/github_actions_mysql_rootconfig.ini
+	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
 	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(ETC)/schema_0.sql --writeconfig $(TEST_CREDENTIALS)
-	PLANTTRACER_CREDENTIALS=$(TEST_CREDENTIALS) $(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
-	PLANTTRACER_CREDENTIALS=$(TEST_CREDENTIALS) $(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  --createdb $(PLANTTRACER_LOCALDB_NAME) --schema $(ETC)/schema_0.sql --writeconfig $(PLANTTRACER_CREDENTIALS)
+	$(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
+	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
 	@echo Removing local database using $(ETC)/github_actions_mysql_rootconfig.ini
 	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
-	/bin/rm -f $(TEST_CREDENTIALS)
+
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser
