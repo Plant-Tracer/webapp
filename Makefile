@@ -15,7 +15,7 @@ REQ = venv/pyvenv.cfg
 PY=python3.11
 PYTHON=$(ACTIVATE) ; $(PY)
 PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
-ETC=etc				# use local etc, not app
+ETC=etc
 APP_ETC=deploy/app/etc
 DBMAINT=-m deploy.app.dbmaint
 
