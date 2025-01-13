@@ -23,6 +23,7 @@ class C:
     FFMPEG_PATH = 'FFMPEG_PATH'
 
     # Other
+    FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
     TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag

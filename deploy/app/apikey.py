@@ -10,10 +10,14 @@ import os
 import functools
 import subprocess
 import json
+from functools import lru_cache
+import base64
+from os.path import join
 
 from flask import request
 
 from . import db
+from .paths import ETC_DIR
 from .auth import get_dbreader,AuthError
 from .constants import C,__version__
 
@@ -115,9 +119,15 @@ def get_user_dict():
 
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.remote_addr,request.url)
+        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
+                     api_key,request.remote_addr,request.url)
         raise AuthError(f"api_key '{api_key}' is invalid")
     return userdict
+
+@lru_cache(maxsize=1)
+def favicon_base64():
+    with open( join( ETC_DIR, C.FAVICON), 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
 
 def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=False):
     """Returns a dictionary that can be used by post of the templates.
@@ -169,6 +179,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     ret= fix_types({
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
+        'favicon_base64':favicon_base64(),
         'api_key': api_key,     # the API key that is currently active
         'user_id': user_id,     # the user_id that is active
         'user_name': user_name, # the user's name
