@@ -39,7 +39,12 @@ AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 
 def ffmpeg_path():
     if C.FFMPEG_PATH in os.environ:
-        return os.environ[C.FFMPEG_PATH]
+        pth = os.environ[C.FFMPEG_PATH]
+        if os.path.exists(path):
+            return pth
+    pth = shutil.which('ffmpeg')
+    if pth:
+        return pth
     if os.path.exists(AWS_LAMBDA_LINUX_STATIC_FFMPEG):
         return AWS_LAMBDA_LINUX_STATIC_FFMPEG
-    return shutil.which('ffmpeg')
+    raise FileNotFoundError("ffmpeg")

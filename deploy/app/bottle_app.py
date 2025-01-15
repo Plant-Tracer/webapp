@@ -43,7 +43,7 @@ def lambda_startup():
     clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
     fix_boto_log_level()
 
-    if C.PLANTTRACER_S3_BUCKET in os.environ:
+    if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
         db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
     else:
         config = auth.config()

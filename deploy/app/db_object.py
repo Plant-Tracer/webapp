@@ -95,6 +95,7 @@ def make_urn(*, object_name, scheme = None ):
     if scheme == C.SCHEME_S3 and S3_BUCKET is None:
         scheme = C.SCHEME_DB
     if scheme == C.SCHEME_S3:
+        assert len(S3_BUCKET)>0
         netloc = S3_BUCKET
     elif scheme == C.SCHEME_DB:
         netloc = DB_TABLE
