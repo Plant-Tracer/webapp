@@ -19,12 +19,13 @@ APP_DIR         = dirname(abspath(__file__))
 DEPLOY_DIR      = dirname(APP_DIR)
 ROOT_DIR        = dirname(DEPLOY_DIR)
 
-ETC_DIR         = join(APP_DIR, 'etc')
+ETC_DIR         = join(DEPLOY_DIR, 'etc')
 STATIC_DIR      = join(APP_DIR, 'static')
 TEMPLATE_DIR    = join(APP_DIR, 'templates')
 SCHEMA_FILE     = join(ETC_DIR, 'schema.sql')
 SCHEMA_TEMPLATE = join(ETC_DIR, 'schema_{schema}.sql')
 
+DEFAULT_CREDENTIALS_FILE = join(ETC_DIR,'credentials.ini')
 SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
 SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
 
