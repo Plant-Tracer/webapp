@@ -13,12 +13,12 @@ import uuid
 
 import xml.etree.ElementTree
 
-from deploy.paths import STATIC_DIR,TEST_DATA_DIR
-import deploy.db as db
-import deploy.bottle_api as bottle_api
-import deploy.bottle_app as bottle_app
-import deploy.auth as auth
-import deploy.apikey as apikey
+from app.paths import STATIC_DIR,TEST_DATA_DIR
+import app.db as db
+import app.bottle_api as bottle_api
+import app.bottle_app as bottle_app
+import app.auth as auth
+import app.apikey as apikey
 
 from user_test import new_course,new_user,API_KEY,MOVIE_ID
 from movie_test import new_movie
@@ -29,23 +29,24 @@ def test_version(client):  # Use the app fixture
     assert bottle_app.__version__ in response.text
 
 def test_get_float(mocker):
-    mocker.patch("deploy.bottle_api.get", return_value="3")
+    mocker.patch("app.bottle_api.get", return_value="3")
     assert bottle_api.get_float("key")==3
-    mocker.patch("deploy.bottle_api.get", return_value="xxx")
+    mocker.patch("app.bottle_api.get", return_value="xxx")
     assert bottle_api.get_float("key",default=4)==4
 
 def test_get_bool(mocker):
-    mocker.patch("deploy.bottle_api.get", return_value="YES")
+    mocker.patch("app.bottle_api.get", return_value="YES")
     assert bottle_api.get_bool("key")==True
-    mocker.patch("deploy.bottle_api.get", return_value="xxx")
+    mocker.patch("app.bottle_api.get", return_value="xxx")
     assert bottle_api.get_bool("key",default=False)==False
-    mocker.patch("deploy.bottle_api.get", return_value=3.4)
+    mocker.patch("app.bottle_api.get", return_value=3.4)
     assert bottle_api.get_bool("key",default=True)==True
 
 
+PLANTTRACER_JS = 'planttracer.js'
 def test_static_path(client):
-    response = client.get('/static/test.txt')
-    with open(os.path.join(STATIC_DIR, 'test.txt'),'r') as f:
+    response = client.get(f'/static/{PLANTTRACER_JS}')
+    with open(os.path.join(STATIC_DIR, PLANTTRACER_JS),'r') as f:
         assert f.read() == response.text
 
     # Test file not found

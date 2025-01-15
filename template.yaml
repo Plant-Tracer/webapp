@@ -40,21 +40,24 @@ Resources:
     Properties:
       PackageType: Image
       Architectures:
-        - x86_64                # move to arm64 when we have an arm ffmpeg
+        - x86_64
       Environment:
         Variables:
           AWS_LAMBDA: "YES"
           DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+          DBREADER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
           DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
+          DBWRITER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
           DEBUG_DUMP_FILES: "NO"
           DEMO_MODE: "YES"
-          PLANTTRACER_CREDENTIALS: "app/etc/credentials-aws-dev.ini"
-          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
-          PLANTTRACER_LOG_LEVEL: "WARNING"
-          POWERTOOLS_SERVICE_NAME: FastAPI
-          POWERTOOLS_METRICS_NAMESPACE: Powertools
-          LOG_LEVEL: INFO
           ENCODE_BINARY_CONTENT: "YES"
+          LOG_LEVEL: INFO
+          PLANTTRACER_CREDENTIALS: "app/etc/credentials-aws-dev.ini"
+          PLANTTRACER_LOG_LEVEL: "WARNING"
+          PLANTTRACER_S3_BUCKET: "planttracer-dev"
+          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+          POWERTOOLS_METRICS_NAMESPACE: Powertools
+          POWERTOOLS_SERVICE_NAME: FastAPI
       Policies:
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
@@ -76,9 +79,9 @@ Resources:
             Path: /{proxy+}
             Method: ANY
     Metadata:
-      Dockerfile: Dockerfile    # identifies dockerfile for creating image
-      DockerContext: ./deploy   # points to the folder containing the function code
       DockerTag: python3.11-v1  # which tag to use
+      DockerContext: ./deploy   # points to the folder containing the function code
+      Dockerfile: Dockerfile    # identifies dockerfile for creating image
 
 Outputs:
   ApiUrl:

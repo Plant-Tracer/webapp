@@ -16,7 +16,7 @@ DEPLOY_DIR = join(ROOT_DIR,'deploy')
 
 sys.path.insert(0, ROOT_DIR)
 
-from deploy.constants import __version__
+from deploy.app.constants import __version__
 
 project = 'Plant Tracer Web Application'
 copyright = '2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'

@@ -1,0 +1,110 @@
+<!-- This is the HTML for the plant tracer application. It is included by:
+   - demo_tracer1.html - shows the image before any tracking. Only the first frame shows,
+                            and we can move the trace points. Used in development
+                            with a single frame from https://planttracer.com/demo/frame0.jpg
+
+   - demo_tracer2.html - shows the image after initial tracing. Any frame can be shown,
+                             and we can move the trace points. Used in development
+                            with the zipfile in static/demo/frames.zip
+
+   - analyze.html      - the actual application!
+-->
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <div id='tracer'>
+        <div class='float-movie'>
+            <form action='javascript:void(0)' class='nodemo'>
+                <input type='button' value='rotate movie 90º' class='rotate_movie' disabled='true'/>
+            </form>
+            <canvas id="canvas-id" width='640' height='480'> </canvas>
+            <form action="javascript:void(0)" >
+                <!-- https://en.wikipedia.org/wiki/Media_control_symbols -->
+                <!-- https://stackoverflow.com/questions/22885702/html-for-the-pause-symbol-in-audio-and-video-control -->
+
+                <input type='button' value='⏮ ' class='first_button frame_movement movement_backwards' disabled='true'/>
+                <input type='button' value='⏴'  class='play_reverse' disabled='true'/>
+                <input type='button' value='-1' class='prev_frame frame_movement movement_backwards' disabled='true'/>
+
+                <input type='number' value='0'  class='frame_number_field frame_movement'
+                       placeholder='frame' min='0' style='width: 4em' disabled='true'/>
+                <input type='button' value='⏸'  class='pause_button frame_stoppage' disabled='true'/>
+                <input type='button' value='+1' class='next_frame frame_movement movement_forwards' disabled='true'/>
+                <input type='button' value='⏵'  class='play_forward' disabled='true'/>
+                <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled='true'/>
+
+                <label for="zoom-id">zoom:</label>
+                <select id="zoom-id" name="zoom" class='zoom'>
+                    <option value="25">25%</option>
+                    <option value="50">50%</option>
+                    <option value="75">75%</option>
+                    <option value="100" selected='true'>100%</option>
+                    <option value="150">150%</option>
+                    <option value="200">200%</option>
+                    <option value="300">300%</option>
+                </select>
+            </form>
+        </div>
+        <!-- Control start -->
+        <div class='float-controls'>
+            <table class="pure-table pure-table-horizontal pure-table-striped">
+                <thead>
+                    <tr><th>Marker</th>
+                        <th>Name</th>
+                        <th>Location (pixels)</th>
+                        <th>Location (cm)</th>
+                        <th class='nodemo'>Delete</th></tr>
+                </thead>
+                <tbody class='marker_table_body'>
+                </tbody>
+            </table>
+            <hr/>
+            <form class='pure-form pure-form-aligned marker_form ' action="javascript:void(0)">
+                <fieldset>
+                    <p class="nodemo">Add another marker by entering the new marker name:</p>
+                    <div class='pure-control-group nodemo'>
+                        <label for='marker-name-id'>marker name:</label>
+                        <input id='marker-name-id' class='marker_name_input' type='text' placeholder='Marker name' size='20'/>
+                        <input class='add_marker_button pure-button  pure-button-primary' type='button' value='Add new marker' disabled='true'/>
+                    </div>
+
+                    <div class='pure-control-group nodemo'>
+                        <span class='add_marker_status'></span> <!-- for error messages -->
+                    </div>
+
+                    <div class='pure-control-group nodemo'>
+                        <label></label>
+                        <input class='track_button pure-button pure-button-primary' type='button' value='Track movie'/>
+                    </div>
+                </fieldset>
+            </form>
+            <form id="download_form"
+                  class="pure-form pure-form-aligned download_button"
+                  action="javascript:void(0)"
+                  method="post">
+                  <input id="dl_api_key" type="hidden" name="api_key" value=""/>
+                  <input id="dl_movie_id" type="hidden" name="movie_id" value=""/>
+                <fieldset>
+                    <div class="pure-control-group">
+                        <label></label>
+                        <input class="download_button pure-button pure-button-primary"
+                                type="submit"
+                                value="Download trackpoints"/>
+                    </div>
+                </fieldset>
+            </form>
+            <canvas id="xChart" width="400" height="200"></canvas>
+            <canvas id="yChart" width="400" height="200"></canvas>
+        </div>
+        <!-- Control end -->
+    </div> <!-- tracer controller -->
+
+<!-- popup content is normally hidden -->
+    <div id='demo-popup' class="popup" popup-name="popup-1">
+        <div class="popup-content">
+            <h2>Running in Demo Mode!</h2>
+            <p>Analysis is running in demo mode.
+                Moved trace points are not saved,
+                and will be lost when you change to a different movie frame.</p>
+            <a id='demo-popup-close' class="close-button" popup-close="popup-1" href="javascript:void(0)">x</a>
+        </div>
+    </div>

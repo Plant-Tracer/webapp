@@ -4,7 +4,7 @@ Created by SAM template.
 
 import json
 import pytest
-import deploy.lambda_handler as lambda_handler
+from lambda_handler import lambda_app
 
 
 @pytest.fixture()
@@ -66,7 +66,7 @@ def apigw_event():
 
 @pytest.mark.skip(reason="not working yet")
 def test_lambda_handler(apigw_event):
-    ret = lambda_handler.lambda_handler(apigw_event, "")
+    ret = lambda_app(apigw_event, "")
     data = json.loads(ret["body"])
 
     assert ret["statusCode"] == 200
