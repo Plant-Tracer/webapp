@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import os
+
 # Define the instances we are creating.
 
 def readfile(fname):
@@ -27,3 +29,5 @@ for def in DEFS.split('\n'):
     for (name,port,demo) in def.split(','):
         writefile('/etc/httpd/conf.d/planttracer-{name}.conf', name, content.format(name=name, port=port, demo=demo))
         writefile('/etc/systemd/system/planttracer-{name}.service', name, content.format(name=name, port=port, demo=demo))
+
+os.system("sudo systemctl daemon-reload")
