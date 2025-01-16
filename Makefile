@@ -10,11 +10,9 @@ JS_FILES := $(TS_FILES:.ts=.js)
 
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
-ACTIVATE   = . venv/bin/activate
 REQ = venv/pyvenv.cfg
-PY=python3.11
-PYTHON=$(ACTIVATE) ; $(PY)
-PIP_INSTALL=$(PYTHON) -m pip install --no-warn-script-location
+PYTHON=venv/bin/python
+PIP_INSTALL=venv/bin/pip install --no-warn-script-location
 ETC=etc
 APP_ETC=deploy/app/etc
 DBMAINT=-m deploy.app.dbmaint
@@ -23,7 +21,7 @@ DBMAINT=-m deploy.app.dbmaint
 
 venv:
 	@echo install venv for the development environment
-	$(PY) -m venv venv
+	python3 -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
@@ -66,10 +64,10 @@ check:
 
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(ACTIVATE) ; $(PY) -m pylint $(PYLINT_OPTS) deploy
+	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy
 
 pylint-tests: $(REQ)
-	$(ACTIVATE) ; $(PY) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
+	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
 
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
@@ -204,13 +202,8 @@ jscoverage:
 
 
 ################################################################
-<<<<<<< HEAD
 # Installations are used by the CI pipeline and by developers
 # $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
-=======
-# Installations are used by the CI pipeline:
-# Use actions_test unless a local db is already defined
->>>>>>> main
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
