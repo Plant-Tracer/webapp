@@ -204,8 +204,13 @@ jscoverage:
 
 
 ################################################################
+<<<<<<< HEAD
+# Installations are used by the CI pipeline and by developers
+# $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
+=======
 # Installations are used by the CI pipeline:
 # Use actions_test unless a local db is already defined
+>>>>>>> main
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
@@ -237,16 +242,33 @@ install-chromium-browser-macos: $(REQ)
 # Includes ubuntu dependencies
 install-ubuntu: $(REQ)
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
-	make venv
 	which ffmpeg || sudo apt install ffmpeg
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
 	npm ci
-	make venv
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
+# Install for AWS Linux for running SAM
+# Start with:
+# sudo dfn install git && git clone --recursive https://github.com/Plant-Tracer/webapp && (cd webapp; make aws-install)
+install-aws: 
+	echo install for AWS Linux, for making the lambda.
+	echo note does not install ffmpeg currently
+	(cd $HOME; \
+	 	wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip; \
+		unzip aws-sam-cli-linux-x86_64.zip -d sam-installation; \
+		sudo ./sam-installation/install )
+	sudo dnf install -y docker
+	sudo systemctl enable docker
+	sudo systemctl start docker
+	sudo dnf install -y python3.11
+	sudo dnf install -y nodejs npm
+	npm ci
+	make $(REQ)
+	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
+
 # Includes MacOS dependencies managed through Brew
-install-macos:
+install-macos: 
 	brew update
 	brew upgrade
 	brew install python3
@@ -255,12 +277,11 @@ install-macos:
 	brew install npm
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make venv
+	make $(REQ)
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
 # Includes Windows dependencies
-install-windows:
-	make venv
+install-windows: $(REQ)
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
 ################################################################

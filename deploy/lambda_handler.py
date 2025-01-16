@@ -35,3 +35,4 @@ except Exception as e:
                 "body": "error:\n" + f.read()
             }
     lambda_app = lambda_handler
+
