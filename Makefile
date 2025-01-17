@@ -13,8 +13,8 @@ JS_FILES := $(TS_FILES:.ts=.js)
 REQ = venv/pyvenv.cfg
 PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
-ETC=etc
-APP_ETC=deploy/app/etc
+ROOT_ETC=etc
+DEPLOY_ETC=deploy/etc
 DBMAINT=-m deploy.app.dbmaint
 
 # Note: PLANTTRACER_CREDENTIALS must be set
@@ -136,10 +136,10 @@ pytest-quiet:
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
 test-schema-upgrade:
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --createdb test_db1 --schema $(ETC)/schema_0.sql
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --upgradedb test_db1
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/mysql-root-localhost.ini --dropdb test_db1
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --createdb test_db1 --schema $(ROOT_ETC)/schema_0.sql
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --upgradedb test_db1
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1
 
 pytest-coverage: $(REQ)
 	$(PIP_INSTALL) codecov pytest pytest_cov
@@ -162,25 +162,25 @@ debug:
 
 debug-local:
 	@echo run bottle locally in debug mode, storing new data in database
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-localhost.ini $(DEBUG) --storelocal
+	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG) --storelocal
 
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-localhost.ini $(DEBUG)
+	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)
 
 debug-multi:
 	@echo run bottle locally in debug mode multi-threaded
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-localhost.ini $(DEBUG)   --multi
+	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)   --multi
 
 debug-dev:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
 	@echo for debugging Python and Javascript with remote database
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-aws-dev.ini $(DEBUG)
+	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini $(DEBUG)
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
-	PLANTTRACER_CREDENTIALS=$(ETC)/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
+	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
 tracker-debug:
 	/bin/rm -f outfile.mp4
@@ -207,22 +207,22 @@ jscoverage:
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
-	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ETC)/github_actions_mysql_rootconfig.ini
+	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
-	mkdir -p $(ETC)
-	ls -l $(ETC)
-	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ETC)/github_actions_mysql_rootconfig.ini
-	ls -l $(ETC)
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini  \
+	mkdir -p $(ROOT_ETC)
+	ls -l $(ROOT_ETC)
+	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
+	ls -l $(ROOT_ETC)
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini  \
                              --createdb $(PLANTTRACER_LOCALDB_NAME) \
-                             --schema $(APP_ETC)/schema_0.sql \
+                             --schema $(DEPLOY_ETC)/schema_0.sql \
                              --writeconfig $(PLANTTRACER_CREDENTIALS)
 	$(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
 
 remove_localdb:
-	@echo Removing local database using $(ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
+	@echo Removing local database using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
+	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
 
 
 install-chromium-browser-ubuntu: $(REQ)
@@ -244,7 +244,7 @@ install-ubuntu: $(REQ)
 # Install for AWS Linux for running SAM
 # Start with:
 # sudo dfn install git && git clone --recursive https://github.com/Plant-Tracer/webapp && (cd webapp; make aws-install)
-install-aws: 
+install-aws:
 	echo install for AWS Linux, for making the lambda.
 	echo note does not install ffmpeg currently
 	(cd $HOME; \
@@ -261,7 +261,7 @@ install-aws:
 	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
 # Includes MacOS dependencies managed through Brew
-install-macos: 
+install-macos:
 	brew update
 	brew upgrade
 	brew install python3
