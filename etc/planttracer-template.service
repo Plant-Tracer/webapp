@@ -11,9 +11,13 @@ Environment="PATH={base}/venv/bin"
 Environment="PLANTTRACER_CREDENTIALS={base}/deploy/etc/credentials-{name}.ini"
 Environment="DEMO_MODE={demo}"
 ExecStart={base}/venv/bin/gunicorn -w 2 -b 127.0.0.1:{port} \
-			  --access-logfile /home/ec2-user/logs/planttracer-{name}.log \
-			  --error-logfile /home/ec2-user/logs/planttracer-{name}-error.log\
+			  --access-logfile /home/ec2-user/logs/planttracer-{name}-access.log \
+			  --error-logfile /home/ec2-user/logs/planttracer-{name}-error.log \
 			  --reload deploy.app.bottle_app:app
 
+Restart=always
+RestartSec=60
+StandardOutput=append:/home/ec2-user/logs/planttracer-{name}-error.log
+StandardError=append:/home/ec2-user/logs/planttracer-{name}-error.log
 [Install]
 WantedBy=multi-user.target

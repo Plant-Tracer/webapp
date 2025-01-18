@@ -10,6 +10,8 @@ import os
 import logging
 
 from flask import Flask, request, render_template, jsonify, make_response
+from flask.logging import default_handler
+from logging.config import dictConfig
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -17,6 +19,7 @@ from . import auth
 from . import db_object
 from . import dbmaint
 from . import clogging
+from . import apikey
 
 from .bottle_api import api_bp
 from .constants import __version__,GET,GET_POST,C
@@ -55,12 +58,32 @@ def lambda_startup():
 ################################################################
 ## API SUPPORT
 
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] [%(process)d] %(levelname)s %(filename)s:%(lineno)d %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['wsgi']
+    }
+})
+
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
+root = logging.getLogger()
+fix_boto_log_level()
+app.logger.info("Application logging is configured.  __name__=%s",__name__)
 
-# Note - Flask automatically serves /static
 
-## Error handling
+################################################################
+### Error Handling
+################################################################
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
@@ -75,6 +98,9 @@ def handle_auth_error(ex):
 ################################################################
 # HTML Pages served with template system
 ################################################################
+
+################
+## These mostly do forms or static content
 
 @app.route('/', methods=GET)
 def func_root():
@@ -93,18 +119,9 @@ def func_error():
 def func_audit():
     return render_template('audit.html', **page_dict("Audit", require_auth=True))
 
-@app.route('/list', methods=GET)
-def func_list():
-    return render_template('list.html', **page_dict('List Movies', require_auth=True))
-
 @app.route('/analyze', methods=GET)
 def func_analyze():
     return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
-
-## debug page
-@app.route('/debug', methods=GET)
-def app_debug():
-    return render_template('debug.html', routes=app.url_map)
 
 ##
 ## Login page includes the api keys of all the demo users.
@@ -134,7 +151,6 @@ def func_register():
                            hostname=request.host,
                            register=True)
 
-
 @app.route('/resend', methods=GET)
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
@@ -147,19 +163,38 @@ def func_resend():
 def func_tos():
     return render_template('tos.html', **page_dict('Terms of Service'))
 
-@app.route('/upload', methods=GET)
-def func_upload():
-    """/upload - Upload a new file"""
-    logging.debug("/upload require_auth=True")
-    return render_template('upload.html', **page_dict('Upload a Movie', require_auth=True))
-
 @app.route('/users', methods=GET)
 def func_users():
     """/users - provide a users list"""
     return render_template('users.html', **page_dict('List Users', require_auth=True))
 
+################
+# These are the two links that might have an ?apikey=; if we got that, set the cookie
+@app.route('/list', methods=GET)
+def func_list():
+    response = make_response(render_template('list.html',
+                                             **page_dict('List Movies',
+                                                         require_auth=True)))
+    # if api_key was in the query string, set the cookie
+    apikey.add_cookie(response)
+    return response
+
+@app.route('/upload', methods=GET)
+def func_upload():
+    """/upload - Upload a new file. Can also set cookie."""
+    logging.debug("/upload require_auth=True")
+    response = make_response(render_template('upload.html',
+                                         **page_dict('Upload a Movie',
+                                                     require_auth=True)))
+    apikey.add_cookie(response)
+    return response
+
 ################################################################
 ## debug/demo
+
+@app.route('/debug', methods=GET)
+def app_debug():
+    return render_template('debug.html', routes=app.url_map)
 
 @app.route('/demo_tracer1.html', methods=GET)
 def demo_tracer1():

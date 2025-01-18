@@ -15,7 +15,6 @@ from . import dbfile
 from .constants import C
 from .paths import DEFAULT_CREDENTIALS_FILE
 
-COOKIE_MAXAGE = 60*60*24*180
 SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 
 ################################################################

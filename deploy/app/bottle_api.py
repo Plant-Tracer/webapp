@@ -14,7 +14,7 @@ import zipfile
 from collections import defaultdict
 from zipfile import ZipFile
 
-from flask import Blueprint, request, make_response, redirect
+from flask import Blueprint, request, make_response, redirect, current_app
 from validate_email_address import validate_email
 
 from . import db
@@ -267,6 +267,9 @@ def api_upload_movie():
     :param: key    - where the file gets uploaded -from api_new_movie()
     :param: request.files['file'] - the file!
     """
+    print("HELLO",file=sys.stderr)
+    current_app.logger.info("info")
+    current_app.logger.error("error")
     scheme = get('scheme')
     key = get('key')
     movie_data_sha256 = get('sha256') # claimed SHA256

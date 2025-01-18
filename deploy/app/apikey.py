@@ -2,6 +2,7 @@
 apikey.py
 
 Implements the user_dict and APIKEY functions - the high-level authentication system.
+All done through get_user_dict() below, which is kind of gross.
 
 """
 
@@ -80,6 +81,14 @@ def cookie_name():
     return C.API_KEY_COOKIE_BASE + "-" + get_dbreader().database
 
 
+def add_cookie(response):
+    """Add the cookie if the apikey was in the get value"""
+    api_key = request.values.get('api_key', None)
+    if api_key:
+        response.set_cookie(cookie_name(), api_key,
+                            max_age = C.API_KEY_COOKIE_MAX_AGE)
+
+
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
     form, but does not validate it.  If we are running in an
@@ -92,10 +101,9 @@ def get_user_api_key():
        a string of the demo mode's API key if no user is logged in and demo mode is available.
        None if user is not logged in and no demo mode
     """
-    # check the query string
+    # check the query string.
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
     if api_key is not None:
-        logging.debug("api_key set in request.values=%s",api_key)
         return api_key
 
     # Return the api_key if it is in a cookie.
