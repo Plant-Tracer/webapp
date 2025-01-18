@@ -6,6 +6,7 @@ from deploy.app import clogging
 from deploy.app import dbmaint
 from deploy.app import db
 from deploy.app import dbfile
+from deploy.app import paths
 
 
 if __name__ == "__main__":
@@ -40,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("--report",help="Print a report of the database",action='store_true')
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
-    parser.add_argument("--schema", help="Specify schema file to use", default=dbmaint.SCHEMA_FILE)
+    parser.add_argument("--schema", help="Specify schema file to use", default=paths.SCHEMA_FILE)
     parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id, --course_name, or --course_name", action='store_true')
     parser.add_argument("--course_id", help="integer course id", type=int)

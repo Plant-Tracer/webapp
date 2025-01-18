@@ -11,6 +11,7 @@ import logging
 from logging.config import dictConfig
 
 from flask import Flask, request, render_template, jsonify, make_response
+from flask.logging import default_handler
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -45,14 +46,18 @@ def lambda_startup():
     clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
     fix_boto_log_level()
 
+    logging.info("p1")
     if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
         db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
+        logging.info("p2a %s",db_object.S3_BUCKET)
     else:
         config = auth.config()
         try:
             db_object.S3_BUCKET = config['s3']['s3_bucket']
+            logging.info("p2b %s",db_object.S3_BUCKET)
         except KeyError as e:
             logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
+    logging.info("p3 %s",db_object.S3_BUCKET)
 
 ################################################################
 ## API SUPPORT
@@ -62,22 +67,19 @@ dictConfig({
     'formatters': {'default': {
         'format': '[%(asctime)s] [%(process)d] %(levelname)s %(filename)s:%(lineno)d %(message)s',
     }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
     'root': {
         'level': 'DEBUG',
-        'handlers': ['wsgi']
     }
 })
 
+fix_boto_log_level()
+lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
-root = logging.getLogger()
-fix_boto_log_level()
-app.logger.info("Application logging is configured.  __name__=%s",__name__)
+app.logger.info("new Flask(__name__=%s)",__name__)
+app.logger.info("PLANTTRACER_CREDENTIALS=%s",os.environ.get(C.PLANTTRACER_CREDENTIALS,None))
+app.logger.info("db_object.S3_BUCKET=%s",db_object.S3_BUCKET)
+logging.info("regular logging works too")
 
 
 ################################################################
@@ -212,6 +214,7 @@ def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
+    logging.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
                                              sys_version= sys.version))

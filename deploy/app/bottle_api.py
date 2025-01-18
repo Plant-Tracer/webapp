@@ -267,9 +267,8 @@ def api_upload_movie():
     :param: key    - where the file gets uploaded -from api_new_movie()
     :param: request.files['file'] - the file!
     """
-    print("HELLO",file=sys.stderr)
-    current_app.logger.info("info")
-    current_app.logger.error("error")
+    logging.info("info")
+    logging.error("error")
     scheme = get('scheme')
     key = get('key')
     movie_data_sha256 = get('sha256') # claimed SHA256
@@ -597,7 +596,7 @@ def api_ver():
     """Report the python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
-    logging.debug("api_ver")
+    current_app.logger.error("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
 
 ################################################################

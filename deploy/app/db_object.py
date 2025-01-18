@@ -134,7 +134,7 @@ def read_signed_url(*,urn,sig):
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
     raise AuthError("signature does not verify")
 
-def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
