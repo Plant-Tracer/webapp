@@ -8,10 +8,9 @@ Main Flask application for planttracer.
 import sys
 import os
 import logging
+from logging.config import dictConfig
 
 from flask import Flask, request, render_template, jsonify, make_response
-from flask.logging import default_handler
-from logging.config import dictConfig
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
