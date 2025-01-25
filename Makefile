@@ -15,7 +15,7 @@ PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
 ROOT_ETC=etc
 DEPLOY_ETC=deploy/etc
-DBMAINT=-m deploy.app.dbmaint
+DBMAINT=dbutil.py
 
 # Note: PLANTTRACER_CREDENTIALS must be set
 
@@ -207,8 +207,10 @@ jscoverage:
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
-	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
+	@echo Creating local database, exercise the upgrade code and write credentials
+	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
+	pwd
 	mkdir -p $(ROOT_ETC)
 	ls -l $(ROOT_ETC)
 	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
