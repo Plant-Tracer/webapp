@@ -16,7 +16,7 @@ ExecStart={base}/venv/bin/gunicorn -w 2 -b 127.0.0.1:{port} \
 			  --reload deploy.app.bottle_app:app
 
 Restart=always
-RestartSec=60
+RestartSec=10
 StandardOutput=append:/home/ec2-user/logs/planttracer-{name}-error.log
 StandardError=append:/home/ec2-user/logs/planttracer-{name}-error.log
 [Install]

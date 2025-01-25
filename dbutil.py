@@ -1,6 +1,11 @@
+"""
+dbutil.py - CLI for dbmaint module.
+"""
+
 import sys
 import os
 import configparser
+import uuid
 
 from deploy.app import clogging
 from deploy.app import dbmaint
@@ -83,7 +88,7 @@ if __name__ == "__main__":
         ath   = dbfile.DBMySQLAuth.FromConfigFile(args.rootconfig, 'client')
         with dbfile.DBMySQL( ath ) as droot:
             if args.createdb:
-                createdb(droot=droot, createdb_name = args.createdb,
+                dbmaint.createdb(droot=droot, createdb_name = args.createdb,
                          write_config_fname=args.writeconfig, schema=args.schema)
                 sys.exit(0)
 
@@ -92,7 +97,7 @@ if __name__ == "__main__":
                 dbreader_user = 'dbreader_' + args.dropdb
                 dbwriter_user = 'dbwriter_' + args.dropdb
                 c = droot.cursor()
-                for ipaddr in hostnames():
+                for ipaddr in dbmaint.hostnames():
                     c.execute(f'DROP USER IF EXISTS `{dbreader_user}`@`{ipaddr}`')
                     c.execute(f'DROP USER IF EXISTS `{dbwriter_user}`@`{ipaddr}`')
                 c.execute(f'DROP DATABASE IF EXISTS {args.dropdb}')
