@@ -7,6 +7,7 @@ from deploy.app import dbmaint
 from deploy.app import db
 from deploy.app import dbfile
 from deploy.app import paths
+from deploy.app.constants import C
 
 
 if __name__ == "__main__":
