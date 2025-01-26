@@ -15,7 +15,6 @@ from . import dbfile
 from .constants import C
 from .paths import DEFAULT_CREDENTIALS_FILE
 
-COOKIE_MAXAGE = 60*60*24*180
 SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 
 ################################################################
@@ -24,7 +23,7 @@ SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 
 
 def credentials_file():
-    name = os.environ.get(C.PLANTTRACER_CREDENTIALS,DEFAULT_CREDENTIALS_FILE)
+    name = os.environ.get(C.PLANTTRACER_CREDENTIALS, DEFAULT_CREDENTIALS_FILE)
     if not os.path.exists(name):
         logging.error("Cannot find %s (PLANTTRACER_CREDENTIALS=%s)",os.path.abspath(name),name)
         raise FileNotFoundError(name)

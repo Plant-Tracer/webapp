@@ -8,6 +8,7 @@ Main Flask application for planttracer.
 import sys
 import os
 import logging
+from logging.config import dictConfig
 
 from flask import Flask, request, render_template, jsonify, make_response
 
@@ -17,6 +18,7 @@ from . import auth
 from . import db_object
 from . import dbmaint
 from . import clogging
+from . import apikey
 
 from .bottle_api import api_bp
 from .constants import __version__,GET,GET_POST,C
@@ -43,24 +45,45 @@ def lambda_startup():
     clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
     fix_boto_log_level()
 
-    if C.PLANTTRACER_S3_BUCKET in os.environ:
+    logging.info("p1")
+    if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
         db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
+        logging.info("p2a %s",db_object.S3_BUCKET)
     else:
         config = auth.config()
         try:
             db_object.S3_BUCKET = config['s3']['s3_bucket']
+            logging.info("p2b %s",db_object.S3_BUCKET)
         except KeyError as e:
             logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
+    logging.info("p3 %s",db_object.S3_BUCKET)
 
 ################################################################
 ## API SUPPORT
 
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] [%(process)d] %(levelname)s %(filename)s:%(lineno)d %(message)s',
+    }},
+    'root': {
+        'level': 'DEBUG',
+    }
+})
+
+fix_boto_log_level()
+lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
+app.logger.info("new Flask(__name__=%s)",__name__)
+app.logger.info("PLANTTRACER_CREDENTIALS=%s",os.environ.get(C.PLANTTRACER_CREDENTIALS,None))
+app.logger.info("db_object.S3_BUCKET=%s",db_object.S3_BUCKET)
+logging.info("regular logging works too")
 
-# Note - Flask automatically serves /static
 
-## Error handling
+################################################################
+### Error Handling
+################################################################
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
@@ -75,6 +98,9 @@ def handle_auth_error(ex):
 ################################################################
 # HTML Pages served with template system
 ################################################################
+
+################
+## These mostly do forms or static content
 
 @app.route('/', methods=GET)
 def func_root():
@@ -93,18 +119,9 @@ def func_error():
 def func_audit():
     return render_template('audit.html', **page_dict("Audit", require_auth=True))
 
-@app.route('/list', methods=GET)
-def func_list():
-    return render_template('list.html', **page_dict('List Movies', require_auth=True))
-
 @app.route('/analyze', methods=GET)
 def func_analyze():
     return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
-
-## debug page
-@app.route('/debug', methods=GET)
-def app_debug():
-    return render_template('debug.html', routes=app.url_map)
 
 ##
 ## Login page includes the api keys of all the demo users.
@@ -134,7 +151,6 @@ def func_register():
                            hostname=request.host,
                            register=True)
 
-
 @app.route('/resend', methods=GET)
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
@@ -147,19 +163,38 @@ def func_resend():
 def func_tos():
     return render_template('tos.html', **page_dict('Terms of Service'))
 
-@app.route('/upload', methods=GET)
-def func_upload():
-    """/upload - Upload a new file"""
-    logging.debug("/upload require_auth=True")
-    return render_template('upload.html', **page_dict('Upload a Movie', require_auth=True))
-
 @app.route('/users', methods=GET)
 def func_users():
     """/users - provide a users list"""
     return render_template('users.html', **page_dict('List Users', require_auth=True))
 
+################
+# These are the two links that might have an ?apikey=; if we got that, set the cookie
+@app.route('/list', methods=GET)
+def func_list():
+    response = make_response(render_template('list.html',
+                                             **page_dict('List Movies',
+                                                         require_auth=True)))
+    # if api_key was in the query string, set the cookie
+    apikey.add_cookie(response)
+    return response
+
+@app.route('/upload', methods=GET)
+def func_upload():
+    """/upload - Upload a new file. Can also set cookie."""
+    logging.debug("/upload require_auth=True")
+    response = make_response(render_template('upload.html',
+                                         **page_dict('Upload a Movie',
+                                                     require_auth=True)))
+    apikey.add_cookie(response)
+    return response
+
 ################################################################
 ## debug/demo
+
+@app.route('/debug', methods=GET)
+def app_debug():
+    return render_template('debug.html', routes=app.url_map)
 
 @app.route('/demo_tracer1.html', methods=GET)
 def demo_tracer1():
@@ -178,6 +213,7 @@ def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
+    logging.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
                                              sys_version= sys.version))

@@ -1,9 +1,12 @@
-import json
+"""
+Amazon-provided demo.
+"""
+
 import os
 import os.path
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context): # pylint: disable=unused-argument
     """Sample pure Lambda function
 
     Parameters

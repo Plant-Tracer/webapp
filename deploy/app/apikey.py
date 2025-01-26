@@ -2,6 +2,7 @@
 apikey.py
 
 Implements the user_dict and APIKEY functions - the high-level authentication system.
+All done through get_user_dict() below, which is kind of gross.
 
 """
 
@@ -10,10 +11,14 @@ import os
 import functools
 import subprocess
 import json
+from functools import lru_cache
+import base64
+from os.path import join
 
 from flask import request
 
 from . import db
+from .paths import ETC_DIR
 from .auth import get_dbreader,AuthError
 from .constants import C,__version__
 
@@ -76,6 +81,14 @@ def cookie_name():
     return C.API_KEY_COOKIE_BASE + "-" + get_dbreader().database
 
 
+def add_cookie(response):
+    """Add the cookie if the apikey was in the get value"""
+    api_key = request.values.get('api_key', None)
+    if api_key:
+        response.set_cookie(cookie_name(), api_key,
+                            max_age = C.API_KEY_COOKIE_MAX_AGE)
+
+
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
     form, but does not validate it.  If we are running in an
@@ -88,10 +101,9 @@ def get_user_api_key():
        a string of the demo mode's API key if no user is logged in and demo mode is available.
        None if user is not logged in and no demo mode
     """
-    # check the query string
+    # check the query string.
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
     if api_key is not None:
-        logging.debug("api_key set in request.values=%s",api_key)
         return api_key
 
     # Return the api_key if it is in a cookie.
@@ -115,9 +127,15 @@ def get_user_dict():
 
     userdict = db.validate_api_key(api_key)
     if not userdict:
-        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s", api_key,request.remote_addr,request.url)
+        logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
+                     api_key,request.remote_addr,request.url)
         raise AuthError(f"api_key '{api_key}' is invalid")
     return userdict
+
+@lru_cache(maxsize=1)
+def favicon_base64():
+    with open( join( ETC_DIR, C.FAVICON), 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
 
 def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=False):
     """Returns a dictionary that can be used by post of the templates.
@@ -169,6 +187,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     ret= fix_types({
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
+        'favicon_base64':favicon_base64(),
         'api_key': api_key,     # the API key that is currently active
         'user_id': user_id,     # the user_id that is active
         'user_name': user_name, # the user's name

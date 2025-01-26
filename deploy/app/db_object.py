@@ -95,6 +95,7 @@ def make_urn(*, object_name, scheme = None ):
     if scheme == C.SCHEME_S3 and S3_BUCKET is None:
         scheme = C.SCHEME_DB
     if scheme == C.SCHEME_S3:
+        assert len(S3_BUCKET)>0
         netloc = S3_BUCKET
     elif scheme == C.SCHEME_DB:
         netloc = DB_TABLE
@@ -133,7 +134,7 @@ def read_signed_url(*,urn,sig):
     logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
     raise AuthError("signature does not verify")
 
-def make_presigned_post(*, urn, maxsize=10_000_000, mime_type='video/mp4',expires=3600, sha256=None):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:

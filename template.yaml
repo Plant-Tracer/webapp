@@ -43,17 +43,21 @@ Resources:
         - x86_64
       Environment:
         Variables:
+          AWS_LAMBDA: "YES"
+          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
           DBREADER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
+          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
           DBWRITER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
-          DEBUG_DUMP_FILES: "YES"
+          DEBUG_DUMP_FILES: "NO"
           DEMO_MODE: "YES"
-          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+          ENCODE_BINARY_CONTENT: "YES"
+          LOG_LEVEL: INFO
+          PLANTTRACER_CREDENTIALS: "app/etc/credentials-aws-dev.ini"
           PLANTTRACER_LOG_LEVEL: "WARNING"
           PLANTTRACER_S3_BUCKET: "planttracer-dev"
-          POWERTOOLS_SERVICE_NAME: FastAPI
+          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
           POWERTOOLS_METRICS_NAMESPACE: Powertools
-          LOG_LEVEL: INFO
-          ENCODE_BINARY_CONTENT: "YES"
+          POWERTOOLS_SERVICE_NAME: FastAPI
       Policies:
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"

@@ -1,4 +1,6 @@
-#!/usr/bin/env python3.11
+"""
+CLI for running standalone webserver.
+"""
 
 ################################################################
 # Bottle App
@@ -6,11 +8,12 @@
 
 import sys
 import os
-import uvicorn
 import argparse
+import logging
 
-import deploy.app.clogging as clogging
+from deploy.app import clogging
 from deploy.app.constants import C
+from deploy.app import db_object
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
@@ -27,7 +30,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if args.info:
-        for name in logging.root.manager.loggerDict:
+        for name in logging.root.manager.loggerDict: # pylint: disable=no-member
             print("Logger: ",name)
         sys.exit(0)
 
@@ -45,5 +48,4 @@ if __name__ == "__main__":
 
     cmd = f'gunicorn --bind 127.0.0.1:{args.port} --workers 2 --reload --log-level DEBUG deploy.app.bottle_app:app '
     print(cmd)
-    exit(0)
     os.system(cmd)

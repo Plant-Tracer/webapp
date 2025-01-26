@@ -70,3 +70,7 @@ Keep your Lambda functions optimized for performance and cost.
 
 # Lambda and S3
 Lamda limits returns to 6MB and uploads to around 256K. So large uploads are done with presigned POST to S3 and large downloads by putting the data into S3 and having it pulled with a presigned URL.
+
+
+colima start
+docker ps -a
