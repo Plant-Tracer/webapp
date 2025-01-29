@@ -8,14 +8,16 @@ Requirements and Preparation
 
 * Python3.11. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
-* HomeBrew. If installing on a MacOS machine, `HomeBrew <https://brew.sh>`_ must be installed prior to performing the steps below.
-
+* Package installer
+    * Homebrew. If installing on a MacOS machine, `HomeBrew <https://brew.sh>`_ must be installed prior to performing the steps below.
+    * Chocolatey. If installing on a Windows machine, the Chocolatey package manager is recommended.
+    
 Setup Steps
 -----------
 
 #. Clone the Plant Tracer webapp into a directory that will be the local repository, for example::
 
-    git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git webapp
+    git clone https://github.com/Plant-Tracer/webapp.git webapp
 
 #. Change to the local repository directory::
 
@@ -84,19 +86,19 @@ Running Locally Quick Start
 
    .. code-block::
 
-    make run-local # Ctrl-C to quit
+    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini make run-local # Ctrl-C to quit
 
 #. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is:
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py [arguments]
+    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python standalone.py [arguments]
 
 #. A specific case: running with movies stored in MySQL rather than S3:
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python bottle_app.py --storelocal
+    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python standalone.py --storelocal
 
 #. Another case: running in demo mode, with movies stored in MySQL rather than S3:
 
@@ -104,7 +106,7 @@ Running Locally Quick Start
 
    .. code-block::
 
-       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini DEMO_MODE=1 python bottle_app.py --storelocal
+       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini DEMO_MODE=1 python standablone.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 

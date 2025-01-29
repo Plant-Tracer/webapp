@@ -15,6 +15,7 @@ PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
 ROOT_ETC=etc
 DEPLOY_ETC=deploy/etc
+APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
 # Note: PLANTTRACER_CREDENTIALS must be set
@@ -151,13 +152,14 @@ pytest-coverage: $(REQ)
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	$(PY) bottle_app.py --storelocal
+	cd deploy/app
+	$(PYTHON) standalone.py --storelocal
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	DEMO_MODE=1 $(PY) bottle_app.py --storelocal
+	DEMO_MODE=1 $(PYTHON) standalone.py --storelocal
 
-DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
+DEBUG:=$(PYTHON) standalone.py --loglevel DEBUG
 debug:
 	make debug-local
 
