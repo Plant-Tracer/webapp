@@ -152,7 +152,6 @@ pytest-coverage: $(REQ)
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	cd deploy/app
 	$(PYTHON) standalone.py --storelocal
 
 run-local-demo:
