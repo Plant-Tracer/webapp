@@ -22,7 +22,7 @@ DBMAINT=dbutil.py
 
 venv:
 	@echo install venv for the development environment
-	python3 -m venv venv
+	python -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
@@ -278,7 +278,15 @@ install-macos:
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
 # Includes Windows dependencies
+# restart the shell after installs are done	
+# choco install as administrator	
 install-windows: $(REQ)
+	choco install -y make
+	choco install -y ffmpeg
+	choco install -y nodejs
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
 ################################################################
