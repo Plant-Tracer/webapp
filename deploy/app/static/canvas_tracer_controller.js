@@ -153,11 +153,14 @@ class TracerController extends MovieController {
             const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
+                
+                // TODO - change n/a to value from conversion of "obj.loc()" 
+                //write to 
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
-                    `<td>n/a</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
+                    `<td>${obj.scale()}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -451,7 +454,7 @@ function graph_data(cc, frames) {
         const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
         const calculations = calc_scale(frame.markers);
         const scale = calculations.scale;
-        pos_units = calculations.pos_units; // TODO - if units cahnge, revert to pixels.
+        pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
 
         // If 'Apex' marker is found, push the frame number and the x, y positions
         if (apexMarker) {
@@ -536,6 +539,7 @@ function graph_data(cc, frames) {
                     }
                 },
                 y: {
+                    reverse: true, // flips the pixel y value to bottom left
                     title: {
                         display: true,
                         text: 'Y Position (' + pos_units + ')'
