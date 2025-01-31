@@ -11,6 +11,7 @@ Welcome to Plant Tracer Web Application's documentation!
    :caption: Contents:
 
    UserTutorial
+   VideoResizing
    ReleaseHistory
    demo_mode
    DeveloperSetup
@@ -22,6 +23,11 @@ Welcome to Plant Tracer Web Application's documentation!
    movie_player
    resources
    user story - tracking
+   NOTES_ON_SIMPLIFYING
+   configuring_aws
+   README_SAM
+   sam_notes
+   mv1
 
 Indices and tables
 ==================

@@ -78,24 +78,24 @@ Set Up:
 
 Request a certificate for simson-dev.planttracer.com:
 
-``
-aws acm request-certificate \
-  --domain-name simson-dev.planttracer.com \
-  --validation-method DNS \
-  --region us-east-1 \
-  --idempotency-token simson-cert \
+```
+aws acm request-certificate
+  --domain-name simson-dev.planttracer.com
+  --validation-method DNS
+  --region us-east-1
+  --idempotency-token simson-cert
   --domain-validation-options DomainName=simson-dev.planttracer.com,ValidationDomain=planttracer.com
-``
+```
 
 After requesting the certificate, retrieve the validation DNS records:
-``
+```
 aws acm describe-certificate \
   --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
   --region us-east-1
-``
+```
 
 Afterwards, create the Route 53 DNS Record:
-``
+```
 aws route53 change-resource-record-sets \
   --hosted-zone-id HOSTED_ZONE_ID \
   --change-batch '{
@@ -115,18 +115,18 @@ aws route53 change-resource-record-sets \
       }
     ]
   }'
-``
+```
 
 Finally, verify the certificate validation:
-``
+```
 aws acm describe-certificate \
   --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
   --region us-east-1
-``
+```
 
 
 Once the certificate is validated, you  can use its ARN in your `template.yaml` file under CertificateArn:
-``
+```
 Resources:
   CustomDomainName:
     Type: AWS::ApiGatewayV2::DomainName
@@ -135,15 +135,15 @@ Resources:
       DomainNameConfigurations:
         - CertificateArn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
           EndpointType: REGIONAL
-``
+```
 
 Then you can bind the custom domain to the API gateway using the CLI:
-``
+```
 aws apigatewayv2 create-api-mapping \
   --domain-name simson-dev.planttracer.com \
   --api-id API_ID \
   --stage-name Prod
-``
+```
 
 Reference: https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576
 

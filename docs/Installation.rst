@@ -83,19 +83,19 @@ Installation
 Push to Lambda
 --------------
 
-```
-cd gits/webapp
-source venv/bin/activate
-zappa status dev
-make update-dev
+.. code-block::
+
+    cd gits/webapp
+    source venv/bin/activate
+    zappa status dev
+    make update-dev
 
 
-```
 * If this is the first time the zappa function was published, update the DNS to point to the new API Gateway URL.
 
   For example, this `zappa status dev` shows that dev.planttracer.com should be a CNAME for uga7dh2bxj.execute-api.us-east-1.amazonaws.com.
 
-```
+.. code-block::
+
 	API Gateway URL:      https://uga7dh2bxj.execute-api.us-east-1.amazonaws.com/dev
 	Domain URL:           https://dev.planttracer.com
-```

@@ -31,9 +31,11 @@ Viewing movies
 
 Uploading Movies (optional)
 ---------------------------
-- From the menu bar at the top select Upload. 
+- Ensure that your video is of a size that works well with PlantTracer. You may have to resize it before uploading. The movement tracking algorithm(s) PlantTracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1000 frames per movie. Your movie file must be 256MB or less or you won't be able to upload it all. Eventually, PlantTracer will automatically resize (downsample) uploaded movies, but for now, the user must do this prior to upload. See :doc:`VideoResizing` for some ways to resize videos.
+- PlantTracer will accept videos in most well-known video file formats, but MP4 is probably best.
+- To upload your movie, select Upload from the menu bar at the top of the browser frame. 
 - Enter the title of the file and a description of the movie.
-- Choose a file to upload. Your movie file must be 256MB or less. If your file is larger than 256MB, you must use some other tool to reduce the file size prior to uploading.
+- Choose a file to upload.
 
 .. image:: tutorial_images/upload_movie.png
    :alt: Uploading Movies on Plant Tracer
