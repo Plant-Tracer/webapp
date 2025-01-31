@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT_DIR)
 from deploy.app.constants import __version__
 
 project = 'Plant Tracer Web Application'
-copyright = '2024 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
+copyright = '2024-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
 author = 'Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
 release = '1.0'
 
@@ -36,12 +36,12 @@ extensions = [
 
 source_suffix = {
     ".rst": "restructuredtext",
-    ".txt": "markdown",
+    '.txt': 'markdown',
     ".md": "markdown",
 }
 
 templates_path = ['_templates']
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "requirements.txt"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
