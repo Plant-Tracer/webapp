@@ -1,3 +1,6 @@
+Configuring AWS
+===============
+
 Type these commands to configure
 
 .. code-block ::

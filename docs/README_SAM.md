@@ -1,4 +1,6 @@
-# planttracer-webapp
+# SAM Readme
+
+## planttracer-webapp
 
 This project contains source code and supporting files for a serverless application that we deploy with the SAM CLI. It includes the following files and folders.
 
@@ -108,12 +110,12 @@ To delete the sample application that you created, use the AWS CLI. Assuming you
 sam delete --stack-name "planttracer-webapp"
 ```
 
-## Edcuational Resources
+## Educational Resources
 
 * [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
 * [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
 
-# Programmer notes
+# SAM Programmer notes
 ## Handling binary types
 https://chatgpt.com/share/676099eb-30a8-8010-841a-f2ed04a8dcff
 

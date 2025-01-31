@@ -1,7 +1,10 @@
+Upload and Track User Story
+===========================
+
 Here is the simple user story for how a movie is uploaded and tracked.
 
 User Story
-==========
+----------
 
 #. User uploads a movie with the (existing) **upload** feature. Movie is uploaded as an MP4.  IMPLEMENTED
 
@@ -76,7 +79,7 @@ User Story
    - [ ] The students will have to do the triangle math to turn the two ruler points and the tracked point into an (x,y) on a mm scale. This requires high school trig.
 
 Note
-====
+----
 
 #. Do we want to use frame numbers, or always use msec?
 
@@ -91,7 +94,7 @@ Note
 #. If we are using real time, how do we get the scaling factor?
 
 Agenda
-======
+------
 
 - [ ] Implement /api/track-movie
 - [ ] Remove tracking code from get-frame and implement get-frame N code.
