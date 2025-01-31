@@ -58,7 +58,7 @@ Here is a sample command that will resize a video to have at most 640 pixels in 
 
 .. code-block::
 
-    ffmpeg -i input.mp4 -vf "scale='if(gt(iw,ih),640,-1)':'if(gt(iw,ih),-1,640)'" -c:v libx264 -crf 23 -preset medium -an copy output.mp4
+    ffmpeg -i input.mp4 -vf "scale='if(gt(iw,ih),640,-1)':'if(gt(iw,ih),-1,640)'" -c:v libx264 -crf 23 -preset medium -an output.mp4
 
 Explanation
 ^^^^^^^^^^^
