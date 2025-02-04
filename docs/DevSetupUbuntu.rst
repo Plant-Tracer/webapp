@@ -1,7 +1,7 @@
-Setting Up Plant-Tracer webapp on Ubuntu 24
-===========================================
+Setting Up Plant-Tracer webapp on Ubuntu 24.04
+==============================================
 
-- Install ubuntu server (example from ARM 24.01 LTS (on UTM on MacOS))::
+- Install ubuntu server (example from `ARM 24.04.5 LTS <https://cdimage.ubuntu.com/releases/22.04/release/>` (on UTM on MacOS)) then::
 
     sudo apt update
     sudo apt upgrade
@@ -11,6 +11,7 @@ Setting Up Plant-Tracer webapp on Ubuntu 24
     sudo apt-get install -y nodejs
     sudo apt install python3
     sudo apt install gh
+    sudo apt install net-tools
     sudo apt install spice-vdagent
     sudo apt install chromium-browser
     sudo apt-get install lynx
