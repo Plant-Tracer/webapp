@@ -15,6 +15,7 @@ Welcome to Plant Tracer Web Application's documentation!
    ReleaseHistory
    demo_mode
    DeveloperSetup
+   DevSetupUbuntu
    MySQLSetup
    Installation
    THEORY_OF_DESIGN

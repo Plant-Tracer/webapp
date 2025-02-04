@@ -84,3 +84,19 @@ Verify the installation:
 
 - If you've gotten this far, the MySQL installation is in good shape.
 
+Ubuntu Linux Development Environment
+------------------------------------
+
+Login and execute at a shell prompt::
+
+    sudo apt install mysql-server -y # MySQL 8.0.latest
+    sudo systemctl enable mysql
+    sudo systemctl start mysql
+    sudo systemctl status mysql
+    sudo mysql_secure_installation
+    sudo mysql -uroot # undo some of that secure installation
+    FLUSH PRIVIELGES;
+    ALTER USER 'root'@'localhost' IDENTIFIED BY 'password' PASSWORD EXPIRE NEVER;
+    ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';UNINSTALL COMPONENT 'file://component_validate_password'
+    sudo systemctl stop mysql
+    sudo systemctl start mysql
