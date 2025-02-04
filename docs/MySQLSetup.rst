@@ -87,16 +87,21 @@ Verify the installation:
 Ubuntu Linux Development Environment
 ------------------------------------
 
-Login and execute at a shell prompt::
+Roughly following `these instructions <https://docs.vultr.com/how-to-install-mysql-on-ubuntu-24-04>`.
+
+Login with a non-root user and execute the following at a shell prompt::
 
     sudo apt install mysql-server -y # MySQL 8.0.latest
     sudo systemctl enable mysql
     sudo systemctl start mysql
     sudo systemctl status mysql
+
+mysql_secure_installation seems like a good idea, but we may not need everything it does, and it sometimes skips setting a new root password. I had to undo/redo some of it to get things to work with the Plant-Tracer/webapp Makefile::
+
     sudo mysql_secure_installation
     sudo mysql -uroot # undo some of that secure installation
-    FLUSH PRIVIELGES;
+    FLUSH PRIVILEGES;
     ALTER USER 'root'@'localhost' IDENTIFIED BY 'password' PASSWORD EXPIRE NEVER;
-    ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';UNINSTALL COMPONENT 'file://component_validate_password'
-    sudo systemctl stop mysql
-    sudo systemctl start mysql
+    ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
+    UNINSTALL COMPONENT 'file://component_validate_password';
+    sudo systemctl restart mysql

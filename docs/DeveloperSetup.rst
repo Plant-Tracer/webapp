@@ -8,7 +8,7 @@ Requirements and Preparation
 
 * Python3.11. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
-* On ubuntu, sudo apt install python3.1x-venv (if venv not available by default)
+* On ubuntu, sudo apt install python3.11-venv (if venv not available by default)
 
 * make
 
@@ -121,7 +121,7 @@ Running Locally Quick Start
 
    .. code-block::
 
-       DEMO_MODE=1 python standablone.py --storelocal
+       DEMO_MODE=1 python standalone.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 
