@@ -8,6 +8,12 @@ Requirements and Preparation
 
 * Python3.11. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
+* On ubuntu, sudo apt install python3.1x-venv (if venv not available by default)
+
+* make
+
+* git
+
 * Package installer
     * Homebrew. If installing on a MacOS machine, `HomeBrew <https://brew.sh>`_ must be installed prior to performing the steps below.
     * Chocolatey. If installing on a Windows machine, the Chocolatey package manager is recommended.
@@ -44,19 +50,28 @@ Setup Steps
     .. code-block::
 
        export MYSQL_ROOT_PASSWORD="your-mysql-root-password"
+       export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
        make create_localdb
 
 #. Run the self-tests:
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
+    make pytest-quiet
 
 #. Create your first course! If you want, give it a demo account too:
 
+   * "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+
+   * --admin-email is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is joecool@company.com, then an admin email address might be joecool+admin@company.com
+
+   * --admin-name "Your Name" should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
+
+   * --demo_email is the email address for a demo user. A demo user is logged in by default when the PlantTracer server is started in demo mode. Omit this parameter if there is no need to use this course in demo mode.
+
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+    python dbutil.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
     >>> course_key: leact-skio-proih #save this course_key, you will need it later!
 
 #. You now have a course key! If the demo account is made, you have that too.
@@ -82,23 +97,23 @@ Setup Steps
 Running Locally Quick Start
 ---------------------------
 
-#. Run Plant-Tracer/webapp locally using the database created above and the default etc/credentials.ini file
+#. Run Plant-Tracer/webapp locally using the database created above and the credentials file already specified in the PLANTTRACER_CREDENTIALS environment variable
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini make run-local # Ctrl-C to quit
+    make run-local # Ctrl-C to quit
 
 #. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is:
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python standalone.py [arguments]
+    python standalone.py [arguments]
 
 #. A specific case: running with movies stored in MySQL rather than S3:
 
    .. code-block::
 
-    PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini python standalone.py --storelocal
+    python standalone.py --storelocal
 
 #. Another case: running in demo mode, with movies stored in MySQL rather than S3:
 
@@ -106,7 +121,7 @@ Running Locally Quick Start
 
    .. code-block::
 
-       PLANTTRACER_CREDENTIALS=${MY_INI_FILES}/credentials-myconfig.ini DEMO_MODE=1 python standablone.py --storelocal
+       DEMO_MODE=1 python standablone.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 

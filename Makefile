@@ -209,6 +209,8 @@ jscoverage:
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
+	test -n "$(PLANTTRACER_CREDENTIALS)" || (echo "PLANTTRACER_CREDENTIALS must be set"; exit 1)
+	test -n "$(MYSQL_ROOT_PASSWORD)" || (echo "MYSQL_ROOT_PASSWORD must be set"; exit 1)
 	@echo Creating local database, exercise the upgrade code and write credentials
 	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
