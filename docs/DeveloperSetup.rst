@@ -4,19 +4,26 @@ Developer Setup
 Requirements and Preparation
 ----------------------------
 
-* MySQL 8.0. See :doc:`MySQLSetup`
+* Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that's going to be the best place for runtime debugging. MacOS works well. Windows is not favored, but may work. This file was developed on MacOS Sonoma but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: `DevSetupUbuntu` and :doc: `WindowsDevSetup` for more detail on setting up on those platforms.
+
+* Install the following things on your development machine, in roughly the order presented, if they aren't already there. How to do that is beyond the scope of this document.
+
+* Chrome web browser. While you can use most web browsers with Plant-Tracer/webapp, only Google Chrome and Chromium are used for application testing. So when dealing with development issues, make sure that work on Chrome before getting concerned about other browsers.
+
+* Package installer. Have a package installer.
+    * Homebrew. If installing on a MacOS machine, `HomeBrew <https://brew.sh>`_ must be installed prior to performing the steps below.
+    * Chocolatey. If installing on a Windows machine, the Chocolatey package manager is recommended.
+    * For Linux, use whatever is the favored package manager for that distro. For Ubuntu, it will be apt.
 
 * Python3.11. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
-* On ubuntu, sudo apt install python3.11-venv (if venv not available by default)
+   * On ubuntu, sudo apt install python3.11-venv (if venv not available by default)
 
 * make
 
-* git
+* git and gh
 
-* Package installer
-    * Homebrew. If installing on a MacOS machine, `HomeBrew <https://brew.sh>`_ must be installed prior to performing the steps below.
-    * Chocolatey. If installing on a Windows machine, the Chocolatey package manager is recommended.
+* MySQL 8.0. See :doc:`MySQLSetup`
     
 Setup Steps
 -----------
