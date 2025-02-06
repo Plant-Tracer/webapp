@@ -22,7 +22,7 @@ DBMAINT=dbutil.py
 
 venv:
 	@echo install venv for the development environment
-	python -m venv venv
+	python3 -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
