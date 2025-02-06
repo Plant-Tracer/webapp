@@ -279,11 +279,15 @@ install-macos:
 	make $(REQ)
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
+install-windows-prereqs:
+	choco install -y git
+	choco install -y gh
+	choco install -y python311
+
 # Includes Windows dependencies
 # restart the shell after installs are done	
 # choco install as administrator	
 install-windows: $(REQ)
-	choco install -y make
 	choco install -y ffmpeg
 	choco install -y nodejs
 	npm ci
