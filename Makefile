@@ -22,7 +22,7 @@ DBMAINT=dbutil.py
 
 venv:
 	@echo install venv for the development environment
-	python3 -m venv venv
+	python -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
@@ -209,6 +209,8 @@ jscoverage:
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
+	test -n "$(PLANTTRACER_CREDENTIALS)" || (echo "PLANTTRACER_CREDENTIALS must be set"; exit 1)
+	test -n "$(MYSQL_ROOT_PASSWORD)" || (echo "MYSQL_ROOT_PASSWORD must be set"; exit 1)
 	@echo Creating local database, exercise the upgrade code and write credentials
 	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
@@ -277,8 +279,20 @@ install-macos:
 	make $(REQ)
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
+install-windows-prereqs:
+	choco install -y git
+	choco install -y gh
+	choco install -y python311
+
 # Includes Windows dependencies
+# restart the shell after installs are done	
+# choco install as administrator	
 install-windows: $(REQ)
+	choco install -y ffmpeg
+	choco install -y nodejs
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
 ################################################################
