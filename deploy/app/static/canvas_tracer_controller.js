@@ -155,12 +155,12 @@ class TracerController extends MovieController {
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 
                 // TODO - change n/a to value from conversion of "obj.loc()" 
-                //write to 
+                //write "from" ${obj.scale()} ???
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
-                    `<td>${obj.scale()}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
+                    `<td>n/a</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
