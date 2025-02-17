@@ -112,11 +112,15 @@ Using mysql_secure_installation seems like a good idea, but we are not currently
 
 Follow the script prompts below to (perhaps) set up a new root user password, remove anonymous users, disallow remote root login, and remove test databases on your MySQL database server.
 
-   * VALIDATE PASSWORD component: Enter N and press ENTER to not enable password validation on your server.
-         * ToDo: Hopefully, this is refusal is temporary. In testing, once password validation is turned on, the server rejects even supposedly valid passwords. Not good.
+   * At the Enter password for user root prompt, enter the password for the root user account. Amazon Linux 2023 (and all RPM-based mysql 8.0 installations), generates a random temporary root password into the mysql error log file. This file is probably /var/log/mysqld.log and look for a line with the words "temporary password". Use that password. You will be prompted with::
 
-   * New password: Enter a new strong password to assign the root database user.
-         * We have seen this step skipped when the default installation uses the auth_socket authentication plugin. If that happens, proceed here and the password will be set later in these instructions.
+      "The existing password for the user account root has expired. Please set a new password."
+   
+   * Enter a new root password. Make it a strong password. You may have to go through the new password setting process more than once; no idea why::
+   
+      New password: Enter a new strong password to assign the root database user.
+
+   * We have seen this step skipped when the default installation uses the auth_socket authentication plugin (as it does on Ubuntu). If that happens, proceed here and the password will be set later in these instructions.
 
    * Re-enter new password: Enter your password again to verify the root user password.
          * Again, this might be skipped by the program and if so, we'll take care of it below.
@@ -124,8 +128,12 @@ Follow the script prompts below to (perhaps) set up a new root user password, re
    * Do you wish to continue with the password provided?: Enter Y to apply the new user password.
          * Might be skipped as mentioned above.
 
-   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.
+   * VALIDATE PASSWORD component: Enter N and press ENTER to not enable password validation on your server.
+         * ToDo: Hopefully, this is refusal is temporary. In testing, once password validation is turned on, the server rejects even supposedly valid passwords. Not good.
+         * This may or may not even be asked.
 
+   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.  
+ 
    * Disallow root login remotely?: Enter Y to disable remote access to the MySQL root user account on your server.
 
    * Remove test database and access to it?: Enter Y to delete the MySQL test databases.
