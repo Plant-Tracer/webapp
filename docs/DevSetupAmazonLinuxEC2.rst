@@ -26,15 +26,15 @@ Lab 3 Summary and Modifications
 
 * Modify your instance's Security Group to allow inbound HTTP and HTTPS IPv4 traffic from anywhere (0.0.0.0).
 
-* set the hostname to something, perhaps your-userid.planttracer.com::
+* set the hostname to something, perhaps to dev-youruserid.planttracer.com::
 
-    sudo hostnamectl hostname your-userid.planttracer.com
+    sudo hostnamectl hostname dev-youruserid.planttracer.com
 
 * Install Apache HTTP Server
 
 .. code-block::
 
-    sudo dnf -y install httpd mod_ssl sqlite #we aren't using sqlite, maybe don't do this?
+    sudo dnf -y install httpd mod_ssl sqlite #we aren't using sqlite, maybe don't install that?
     sudo systemctl enable httpd.service
     sudo systemctl start httpd.service
     sudo systemctl status httpd.service
@@ -46,10 +46,12 @@ Lab 3 Summary and Modifications
     sudo mkdir /home/ec2-user/www
     sudo chown ec2-user /home/ec2-user/www
 
-* Create /etc/httpd/conf.d/your-username.conf with contents::
+* Our AWS account admin has to enter your subdomain dev-youruserid.planttracer.com into Route 53.
+
+* Create /etc/httpd/conf.d/your-userid.conf with contents::
 
 <VirtualHost *:80>
-    ServerName your-username.planttracer.com
+    ServerName dev-youruserid.planttracer.com
     DocumentRoot /home/ec2-user/www
 </VirtualHost>
 
@@ -57,4 +59,24 @@ Lab 3 Summary and Modifications
 
     sudo systemctl restart httpd.service
 
+* Follow the `EFF Certbot tutorial for Apache on pip <https://certbot.eff.org/instructions?ws=apache&os=pip&tab=standard>`::
 
+    sudo dnf install python3 augeas-libs
+    sudo python3 -m venv /opt/certbot/
+    sudo /opt/certbot/bin/pip install --upgrade pip
+    sudo /opt/certbot/bin/pip install certbot certbot-apache
+    sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
+    sudo certbot --apache
+
+* Got this message::
+
+    Certbot failed to authenticate some domains (authenticator: apache). The Certificate Authority reported these problems:
+  Domain: dev-seb.planttracer.com
+  Type:   dns
+  Detail: DNS problem: NXDOMAIN looking up A for dev-seb.planttracer.com - check that a DNS record exists for this domain; DNS problem: NXDOMAIN looking up AAAA for dev-seb.planttracer.com - check that a DNS record exists for this domain
+
+    Hint: The Certificate Authority failed to verify the temporary Apache configuration changes made by Certbot. Ensure that the listed domains point to this Apache server and that it is accessible from the internet.
+
+    Some challenges have failed.
+
+* Ignoring, oh wait, the machine is not responding.

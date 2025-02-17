@@ -102,9 +102,9 @@ Login as ec2-user and execute the following at a shell prompt::
    sudo dnf install mysql-community-server -y
 
    # run and verify status
-   sudo systemctl enable mysql
-   sudo systemctl start mysql
-   sudo systemctl status mysql
+   sudo systemctl enable mysqld
+   sudo systemctl start mysqld
+   sudo systemctl status mysqld
 
 Using mysql_secure_installation seems like a good idea, but we are not currently using everything it does, and it sometimes skips setting a new root password. I had to undo/redo some of it to get things to work with the Plant-Tracer/webapp Makefile::
 
