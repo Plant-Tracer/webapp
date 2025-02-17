@@ -49,7 +49,7 @@ Install the DMG:
   
 - Press Install on the Installation Type page
   
-- Installation page: ???
+- Installation page: TODO
   
 - Leave User Strong Password Encryption selected and then Press Next on the Configuration page
   

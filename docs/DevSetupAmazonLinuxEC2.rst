@@ -80,3 +80,19 @@ Lab 3 Summary and Modifications
     Some challenges have failed.
 
 * Ignoring, oh wait, the machine is not responding.
+
+Further setup
+-------------
+
+Install gh for dnf version 4::
+
+    # DNF4 installation commands
+    sudo dnf install 'dnf-command(config-manager)'
+    sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+    sudo dnf install gh --repo gh-cli -y
+
+Login to git how-to-install-mysql-on-ubuntu-24-04
+
+gh auth login
+
+

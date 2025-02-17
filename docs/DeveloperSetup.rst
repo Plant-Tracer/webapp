@@ -27,6 +27,23 @@ Requirements and Preparation
     
 Setup Steps
 -----------
+#. Set your Git Hub name and username::
+    git config --global --edit
+
+#. Authenticate to GitHub. This steps to do this differs per platform, but probably involves install the gh (GitHub) CLI. See the platform specific Dev setup instructions for details of how to install gh. For example::
+
+    gh auth login
+    [ec2-user@dev-seb webapp]$ gh auth login
+    ? Where do you use GitHub? GitHub.com
+    ? What is your preferred protocol for Git operations on this host? HTTPS
+    ? Authenticate Git with your GitHub credentials? Yes
+    ?How would you like to authenticate GitHub CLI? Paste an authentication token
+    ? Tip: you can generate a Personal Access Token here https://github.com/settings/tokens
+    ? The minimum required scopes are 'repo', 'read:org', 'workflow'.
+    ? Paste your authentication token: ***************************************************- gh - - gh config set -h github.com git_protocol https
+    ✓ Configured git protocol
+    ! Authentication credentials saved in plain text
+    ✓ Logged in as yourusername
 
 #. Clone the Plant Tracer webapp into a directory that will be the local repository, for example::
 
