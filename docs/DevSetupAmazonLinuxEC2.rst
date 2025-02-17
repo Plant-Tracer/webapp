@@ -1,6 +1,10 @@
 Developer Setup on Amazon Linux 2023 on AWS EC2
 ===============================================
 
+Written for Amazon Linux release 2023.6.20250203 (Amazon Linux)
+
+Once the fresh Amazon Linux 2023 EC2 instance has been created and started, connect to it as ec2-user and follow the instructions in this file.
+
 For more complete instructions, Simson Garfinkel has generously provided us with lab notes from one of his Harvard Extension courses.
 
 See `CSCI E-11 Spring 2025 Lab #1 <https://docs.google.com/document/d/1bSqXSuKfL3TWN_RDS-hhkt9NVz8eRDuSaLUcGVvCeGg/edit?tab=t.0>` to create an AWS account, and to startup and configure an EC2 instance, and to install git.
@@ -26,11 +30,15 @@ Lab 3 Summary and Modifications
 
 * Modify your instance's Security Group to allow inbound HTTP and HTTPS IPv4 traffic from anywhere (0.0.0.0).
 
-* set the hostname to something, perhaps to dev-youruserid.planttracer.com::
+* Set the hostname to something, perhaps to dev-youruserid.planttracer.com::
 
     sudo hostnamectl hostname dev-youruserid.planttracer.com
 
-* Install Apache HTTP Server
+* If you wish for this hostname to actually be routed on the public Internet, contact a Plant-Tracer AWS administrator at plantadmin@planttracer.com and ask to configure your sub-domain for routing. This, however, would require a stable IP address, likely through the AWS Elastic IP service if you are going to be starting and stopping your instance. Elastic IP addresses cost money, at this writing (Feb 2025), about US $3.50/month.
+
+* Lab 3 beyond this point is optional for PlantTracer/webapp developers who are only working on app functionality, as developers may run their developer webapp servers without a secure proxy. But if HTTPS: access to the developer server is needed, proceed further. If not, continue with the Setup Steps section, as github setup will be needed for all developers.
+
+* Optional: Install Apache HTTP Server
 
 .. code-block::
 
@@ -81,8 +89,8 @@ Lab 3 Summary and Modifications
 
 * Ignoring, oh wait, the machine is not responding.
 
-Further setup
--------------
+Setup Steps Specifics
+---------------------
 
 Install gh for dnf version 4::
 
