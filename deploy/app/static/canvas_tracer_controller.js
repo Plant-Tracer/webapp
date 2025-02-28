@@ -96,7 +96,6 @@ class TracerController extends MovieController {
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         this.track_button = $(this.div_selector + " input.track_button");
-        console.log("this.last_tracked_frame=" + this.last_tracked_frame);
         if (this.last_tracked_frame > 0 ){
             this.track_button.val( RETRACK_MOVIE );
             this.download_button.show();
@@ -153,9 +152,6 @@ class TracerController extends MovieController {
             const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
-                
-                // TODO - change n/a to value from conversion of "obj.loc()" 
-                //write "from" ${obj.scale()} ???
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
@@ -263,7 +259,6 @@ class TracerController extends MovieController {
         this.poll_for_track_end();
         this.set_movie_control_buttons();
         $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
-            console.log("track-movie-queue data=",data)
             if(data.error){
                 alert(data.message);
                 this.track_button.prop(DISABLED,false); // re-enable
@@ -278,7 +273,6 @@ class TracerController extends MovieController {
     add_frame_objects( frame ){
         // called back canvie_movie_controller to add additional objects for 'frame' beyond base image.
         // Add the lines for every previous frame if each previous frame has markers
-        console.log(`TraceController::add_frame_objects(${frame})`);
         if (frame>0 && this.frames[frame-1].markers && this.frames[frame].markers){
             for (let f0=0;f0<frame;f0++){
                 var starts = [];
@@ -300,7 +294,6 @@ class TracerController extends MovieController {
         }
 
         // Add the markers for this frame if this frame has markers
-        console.log("frame=",frame,"this.frames[frame]=",this.frames[frame]);
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
                 this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
@@ -330,7 +323,6 @@ class TracerController extends MovieController {
             get_all_if_tracking_completed: true
         };
         $.post(`${API_BASE}api/get-movie-metadata`, params).done( (data) => {
-            console.log("poll_for_track_end",Date.now(),"data:",data);
             if (data.error==false){
                 // Send the status back to the UX
                 if (data.metadata.status==TRACKING_COMPLETED_FLAG) {
@@ -348,7 +340,6 @@ class TracerController extends MovieController {
 
     /** movie is tracked - display the results */
     movie_tracked(data) {
-        console.log("Tracking complete. data=",data);
 
         // This should work. but it is not. So just force a reload until I can figure out what's wrong.
         location.reload(true);
@@ -393,10 +384,8 @@ class TracerController extends MovieController {
 // set up the default
 var cc;
 function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
-    console.log("trace_movie_one_frame.");
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
-        console.log("did_onload_callback");
         $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
     };
 
@@ -411,8 +400,6 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
                                   api_key,
                                   show_graph=true) {
-    console.log("trace_movie_frames. div_controller=",div_controller,
-                "movie_zipfile=",movie_zipfile,"metadata_frames:",metadata_frames);
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -426,7 +413,6 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
-    console.log("movie_frames.length="+movie_frames.length)
     if (movie_frames.length > 0 ){
         cc.track_button.val( RETRACK_MOVIE );
         cc.download_button.show();
@@ -596,7 +582,6 @@ function graph_data(cc, frames) {
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
 function trace_movie(div_controller, movie_id, api_key) {
-    console.log("trace_movie API_BASE=",API_BASE);
 
     // Wire up the close button on the demo pop-up
     $('#demo-popup-close').on('click',function() {
@@ -618,12 +603,10 @@ function trace_movie(div_controller, movie_id, api_key) {
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
-            console.log("resp=",resp,"getting first frame");
             const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
-        console.log("resp=",resp,"getting zipfile.");
         if (user_demo) {
             $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
         } else {
