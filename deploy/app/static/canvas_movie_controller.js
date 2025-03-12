@@ -75,7 +75,6 @@ class MovieController extends CanvasController {
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects e.g. [{'x':10,'y':20,'label':30},...]
-        console.log("load_movie(frames)=",frames);
         this.frames = frames;
 
         /* Now preload all of the images, downloading new ones as necessary.
@@ -106,7 +105,6 @@ class MovieController extends CanvasController {
      *
      */
     goto_frame( frame ) {
-        console.log(`MovieController::goto_frame(${frame})`);
 
         frame = parseInt(frame);         // make sure it is integer
         if ( isNaN(frame) || frame<0 ) {
