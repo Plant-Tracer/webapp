@@ -44,6 +44,9 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
 
 - Now proceed with the relevant :doc: `DeveloperSetup` steps::
 
+    git config --global --edit #set Git name and username/email for commits
+    gh auth login # generate Personal Access Token if necessary
+    git clone https://github.com/Plant-Tracer/webapp.git webapp
     make venv
     . venv/bin/activate
     make create_localdb

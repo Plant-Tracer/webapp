@@ -49,7 +49,7 @@ Install the DMG:
   
 - Press Install on the Installation Type page
   
-- Installation page: ???
+- Installation page: TODO
   
 - Leave User Strong Password Encryption selected and then Press Next on the Configuration page
   
@@ -84,6 +84,70 @@ Verify the installation:
 
 - If you've gotten this far, the MySQL installation is in good shape.
 
+Amazon Linux 2023 Development Environment (EC2)
+-----------------------------------------------
+
+TODO: This section is a draft and has not yet been tested. See also `<https://stackoverflow.com/questions/78246416/unable-to-install-mysql-on-amazon-linux-2023>` and `https://dev.to/aws-builders/installing-mysql-on-amazon-linux-2023-1512`
+
+Login as ec2-user and execute the following at a shell prompt::
+
+   # retrieve rpm file as it's not in the Amazon Linux 2023 repository
+   sudo wget https://dev.mysql.com/get/mysql80-community-release-el9-1.noarch.rpm
+
+   # download gpg key
+   sudo rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+
+   # install
+   sudo dnf install mysql80-community-release-el9-1.noarch.rpm -y
+   sudo dnf install mysql-community-server -y
+
+   # run and verify status
+   sudo systemctl enable mysqld
+   sudo systemctl start mysqld
+   sudo systemctl status mysqld
+
+Using mysql_secure_installation seems like a good idea, but we are not currently using everything it does, and it sometimes skips setting a new root password. I had to undo/redo some of it to get things to work with the Plant-Tracer/webapp Makefile::
+
+    sudo mysql_secure_installation
+
+Follow the script prompts below to (perhaps) set up a new root user password, remove anonymous users, disallow remote root login, and remove test databases on your MySQL database server.
+
+   * At the Enter password for user root prompt, enter the password for the root user account. Amazon Linux 2023 (and all RPM-based mysql 8.0 installations), generates a random temporary root password into the mysql error log file. This file is probably /var/log/mysqld.log and look for a line with the words "temporary password". Use that password. You will be prompted with::
+
+      "The existing password for the user account root has expired. Please set a new password."
+   
+   * Enter a new root password. Make it a strong password. You may have to go through the new password setting process more than once; no idea why::
+   
+      New password: Enter a new strong password to assign the root database user.
+
+   * We have seen this step skipped when the default installation uses the auth_socket authentication plugin (as it does on Ubuntu). If that happens, proceed here and the password will be set later in these instructions.
+
+   * Re-enter new password: Enter your password again to verify the root user password.
+         * Again, this might be skipped by the program and if so, we'll take care of it below.
+
+   * Do you wish to continue with the password provided?: Enter Y to apply the new user password.
+         * Might be skipped as mentioned above.
+
+   * VALIDATE PASSWORD component: Enter N and press ENTER to not enable password validation on your server.
+         * ToDo: Hopefully, this is refusal is temporary. In testing, once password validation is turned on, the server rejects even supposedly valid passwords. Not good.
+         * This may or may not even be asked.
+
+   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.  
+ 
+   * Disallow root login remotely?: Enter Y to disable remote access to the MySQL root user account on your server.
+
+   * Remove test database and access to it?: Enter Y to delete the MySQL test databases.
+
+   * Reload privilege tables now?: Enter Y to refresh the MySQL privilege tables and apply your new configuration changes.
+
+If the mysql_secure_installation program does not prompt for a new root password, set it this way::
+
+    sudo mysql -uroot # undo some of that secure installation
+    FLUSH PRIVILEGES;
+    ALTER USER 'root'@'localhost' IDENTIFIED BY 'choose-a-root-password' PASSWORD EXPIRE NEVER;
+    ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
+    sudo systemctl restart mysql
+
 Ubuntu Linux Development Environment
 ------------------------------------
 
@@ -96,12 +160,32 @@ Login with a non-root user and execute the following at a shell prompt::
     sudo systemctl start mysql
     sudo systemctl status mysql
 
-mysql_secure_installation seems like a good idea, but we may not need everything it does, and it sometimes skips setting a new root password. I had to undo/redo some of it to get things to work with the Plant-Tracer/webapp Makefile::
+Follow the script prompts below to (perhaps) set up a new root user password, remove anonymous users, disallow remote root login, and remove test databases on your MySQL database server.
 
-    sudo mysql_secure_installation
-    sudo mysql -uroot # undo some of that secure installation
+   * VALIDATE PASSWORD component: Enter N and press ENTER to not enable password validation on your server.
+         * ToDo: Hopefully, this is refusal is temporary. In testing, once password validation is turned on, the server rejects even supposedly valid passwords. Not good.
+
+   * New password: Enter a new strong password to assign the root database user.
+         * We have seen this step skipped when the default installation uses the auth_socket authentication plugin. If that happens, proceed here and the password will be set later in these instructions.
+
+   * Re-enter new password: Enter your password again to verify the root user password.
+         * Again, this might be skipped by the program and if so, we'll take care of it below.
+
+   * Do you wish to continue with the password provided?: Enter Y to apply the new user password.
+         * Might be skipped as mentioned above.
+
+   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.
+
+   * Disallow root login remotely?: Enter Y to disable remote access to the MySQL root user account on your server.
+
+   * Remove test database and access to it?: Enter Y to delete the MySQL test databases.
+
+   * Reload privilege tables now?: Enter Y to refresh the MySQL privilege tables and apply your new configuration changes.
+
+If the mysql_secure_installation program does not prompt for a new root password, set it this way::
+
+    sudo mysql -uroot
     FLUSH PRIVILEGES;
-    ALTER USER 'root'@'localhost' IDENTIFIED BY 'password' PASSWORD EXPIRE NEVER;
+    ALTER USER 'root'@'localhost' IDENTIFIED BY 'choose-a-root-password' PASSWORD EXPIRE NEVER;
     ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
-    UNINSTALL COMPONENT 'file://component_validate_password';
     sudo systemctl restart mysql

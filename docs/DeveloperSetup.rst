@@ -4,6 +4,10 @@ Developer Setup
 Requirements and Preparation
 ----------------------------
 
+* GitHub: In order to commit to the `Plant-Tracer/webapp <https://github.com/Plant-Tracer/webapp>` GitHub repository, you must first have a GitHub account. Then your GitHub account must be added as a member of the Plant-Tracer Organization. You may ask any of the Organization owners to do that, or send an email request to plantadmin@planttracer.com.
+ 
+* While there are multiple ways to authenticate a login to  GitHub, it has proven to be convenient for development purposes to use a Personal Access Token for acccess via a command line. See `<https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>` and `<https://github.com/settings/personal-access-tokens>` for more details. (Specific token settings not yet fully documented, but you want Read and Write access to Contents. Depending on your role and your own toolset, you may also want access to Actions, Discussions, Pages, and Pull Requests, but also consider whether all those permissions should exist in the same PAT.)
+
 * Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that's going to be the best place for runtime debugging. MacOS works well. Windows is not favored, but may work. This file was developed on MacOS Sonoma but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: `DevSetupUbuntu` and :doc: `WindowsDevSetup` for more detail on setting up on those platforms.
 
 * Install the following things on your development machine, in roughly the order presented, if they aren't already there. How to do that is beyond the scope of this document.
@@ -27,6 +31,23 @@ Requirements and Preparation
     
 Setup Steps
 -----------
+#. Set your Git Hub name and username::
+    git config --global --edit
+
+#. Authenticate to GitHub. This steps to do this differs per platform, but probably involves install the gh (GitHub) CLI. See the platform specific Dev setup instructions for details of how to install gh. For example::
+
+    gh auth login
+    [ec2-user@dev-seb webapp]$ gh auth login
+    ? Where do you use GitHub? GitHub.com
+    ? What is your preferred protocol for Git operations on this host? HTTPS
+    ? Authenticate Git with your GitHub credentials? Yes
+    ?How would you like to authenticate GitHub CLI? Paste an authentication token
+    ? Tip: you can generate a Personal Access Token here https://github.com/settings/tokens
+    ? The minimum required scopes are 'repo', 'read:org', 'workflow'.
+    ? Paste your authentication token: ***************************************************- gh - - gh config set -h github.com git_protocol https
+    ✓ Configured git protocol
+    ! Authentication credentials saved in plain text
+    ✓ Logged in as yourusername
 
 #. Clone the Plant Tracer webapp into a directory that will be the local repository, for example::
 
