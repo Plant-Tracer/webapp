@@ -18,7 +18,8 @@ SYSTEMD_TEMPLATE=readfile('planttracer-template.service')
 # name,port,demo,base
 DEFS = """mv1,8000,no,/home/ec2-user/webapp
 app,8010,no,/home/ec2-user/webapp
-demo1,8020,no,/home/ec2-user/webapp
+demo,8015,yes,/home/ec2-user/webapp
+demo1,8020,yes,/home/ec2-user/webapp
 dev-slg,8030,no,/home/ec2-user/dev-slg"""
 
 
