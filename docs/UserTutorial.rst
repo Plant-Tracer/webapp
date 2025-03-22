@@ -105,3 +105,30 @@ Further Adjustments to Tracking
 
 .. image:: tutorial_images/retrack_movie.png
    :alt: Retrack Movie in Plant Tracer
+
+Converting Frames to Time
+-------------------------
+
+Currently, the Plant Tracer webapp tracks time only as frame numbers in the uploaded movie file. It is up to the the user to convert frames to elapsed timestamps from the beginning of the video. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 30 frames per hour.
+
+To convert frame numbers to time, multiply the frame number by the frame period:
+
+- t[n] = n * FP
+
+For example if the period FP = 2 minutes, then:
+
+- t[0] = 0 * 2 minutes = 0 minutes
+- t[1] = 1 * 2 minutes = 2 minutes
+- t[2] = 2 * 2 minutes = 4 minutes
+- etc.
+
+If you have a frame rate (frames per unit of time) rather than a frame period, the frame rate is just the inverse of the period. If the frame period is 2 seconds, the frame rate is 1 frame/2 seconds or 0.5 frames/second.
+
+Let FR be the frame rate. The time t[n] at frame[n] is therefore (N * (1/FR)).
+
+For example, if FR = 0.5, then:
+
+- t[0] = 0 * 1/0.5 = 0 seconds
+- t[1] = 1 * 1/0.5 = 2 seconds
+- t[2] = 2 * 1/0.5 = 4 seconds
+- etc.
