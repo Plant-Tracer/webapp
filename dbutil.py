@@ -48,6 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--course_key", help="integer course id")
     parser.add_argument("--course_name", help="integer course id")
     parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id, --course_name, or --course_name", action='store_true')
+    parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -67,7 +68,7 @@ if __name__ == "__main__":
             raise RuntimeError("Please specify --planttracer_endpoint")
         new_api_key = db.make_new_api_key(email=args.sendlink)
         db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
-                      new_api_key=new_api_key)
+                      new_api_key=new_api_key, debug=args.debug)
         sys.exit(0)
 
     ################################################################
