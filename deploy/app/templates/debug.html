@@ -17,6 +17,19 @@
   </head>
 
   <body lang='en-US' style='background:white'>
+    <h1>Environment</h1>
+    <pre>
+      {% for k,v in environ | dictsort -%}
+      {{k}}={{v}}
+      {% endfor %}
+    </pre>
+    </table>
+    <h1>Python Runtime</h1>
+    <table>
+      {% for k,v in python_keys.items() %}
+      <tr><th>{{k}}</th><td style='max-width: 600px; word-wrap: break-word;'> {{ v }} </td></tr>
+      {% endfor %}
+    </table>
     <h1>Routes</h1>
     <pre>
     {{routes}}

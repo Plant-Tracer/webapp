@@ -15,7 +15,8 @@ PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
 ROOT_ETC=etc
 DEPLOY_ETC=deploy/etc
-DBMAINT=-m deploy.app.dbmaint
+APP_ETC=$(DEPLOY_ETC)
+DBMAINT=dbutil.py
 
 # Note: PLANTTRACER_CREDENTIALS must be set
 
@@ -65,6 +66,7 @@ check:
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
 	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy
+	$(PYTHON) -m pylint $(PYLINT_OPTS) *.py
 
 pylint-tests: $(REQ)
 	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
@@ -150,13 +152,13 @@ pytest-coverage: $(REQ)
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	$(PY) bottle_app.py --storelocal
+	$(PYTHON) standalone.py --storelocal
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	DEMO_MODE=1 $(PY) bottle_app.py --storelocal
+	DEMO_MODE=1 $(PYTHON) standalone.py --storelocal
 
-DEBUG:=$(PY) bottle_app.py --loglevel DEBUG
+DEBUG:=$(PYTHON) standalone.py --loglevel DEBUG
 debug:
 	make debug-local
 
@@ -207,8 +209,10 @@ jscoverage:
 PLANTTRACER_LOCALDB_NAME ?= actions_test
 
 create_localdb:
-	@echo Creating local database, exercise the upgrade code and write credentials to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
+	@echo Creating local database, exercise the upgrade code and write credentials
+	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
+	pwd
 	mkdir -p $(ROOT_ETC)
 	ls -l $(ROOT_ETC)
 	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
