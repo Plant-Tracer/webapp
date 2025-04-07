@@ -16,11 +16,10 @@ HTTPD_TEMPLATE=readfile('planttracer-template.conf')
 SYSTEMD_TEMPLATE=readfile('planttracer-template.service')
 
 # name,port,demo,base
-DEFS = """mv1,8000,no,/home/ec2-user/webapp
-app,8010,no,/home/ec2-user/webapp
-demo,8015,yes,/home/ec2-user/webapp
-demo1,8020,yes,/home/ec2-user/webapp
-dev-slg,8030,no,/home/ec2-user/dev-slg"""
+DEFS = """app,8010,NO,/home/ec2-user/webapp
+demo,8020,yes,/home/ec2-user/webapp
+dev2,8030,NO,/home/ec2-user/dev2
+dev-slg,8040,NO,/home/ec2-user/dev-slg"""
 
 
 for d in DEFS.split('\n'):
@@ -32,3 +31,10 @@ for d in DEFS.split('\n'):
               SYSTEMD_TEMPLATE.format(name=name, port=port, demo=demo,base=base))
 
 os.system("sudo systemctl daemon-reload")
+
+for d in DEFS.split('\n'):
+    (name,port,demo,base) = d.split(',')
+    service = f'planttracer-{name}'
+    os.system(f"sudo systemctl enable {service}")
+    os.system(f"sudo systemctl start {service}")
+    os.system(f"sudo systemctl restart {service}")
