@@ -340,6 +340,7 @@ def schema_upgrade( ath ):
             assert cv == current_version()
 
 def dump(config,dumpdir):
+    """Dump all objects as JSON files and movie files to new directory called DUMP."""
     if os.path.exists(dumpdir):
         raise FileExistsError(f"{dumpdir} exists")
     os.mkdir(dumpdir)
@@ -358,3 +359,22 @@ def dump(config,dumpdir):
             json.dump(movie, f, default=str)
         with open(os.path.join(dumpdir,f"movie_{movie_id}.mp4"),"wb") as f:
             f.write(movie_data)
+
+def sqlbackup(config,fname,all_databases=False):
+    """Backup to an sqlfile"""
+    if os.path.exists(fname):
+        raise FileExistsError(f"{fname} exists")
+    dbreader = dbfile.DBMySQLAuth.FromConfig(config['dbreader'])
+    cmd = ['mysqldump','-h' + dbreader.host,'-u' + dbreader.user, '-p' + dbreader.password, '--single-transaction', '--no-tablespaces']
+    if all_databases:
+        cmd.append('--all-databases')
+    else:
+        cmd.append(dbreader.database)
+    if fname.startswith('s3://'):
+        print("Dumping to ",fname)
+        with subprocess.Popen(['aws','s3','cp','-',fname], stdin=subprocess.PIPE) as p_s3:
+            subprocess.run(cmd, stdout=p_s3.stdin)
+        print("done")
+        return
+    with open(fname,'w') as outfile:
+        subprocess.call(cmd, stdout=outfile)
