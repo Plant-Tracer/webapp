@@ -298,7 +298,7 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
 
 
 @log
-def send_links(*, email, planttracer_endpoint, new_api_key):
+def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
     PROJECT_EMAIL = 'admin@planttracer.com'
 
@@ -315,7 +315,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key):
                          api_key=new_api_key)
 
     DRY_RUN = False
-    SMTP_DEBUG = "No"
+    SMTP_DEBUG = 'YES' if debug else ''
     try:
         smtp_config = auth.smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG

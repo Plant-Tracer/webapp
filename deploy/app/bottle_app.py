@@ -194,7 +194,9 @@ def func_upload():
 
 @app.route('/debug', methods=GET)
 def app_debug():
-    return render_template('debug.html', routes=app.url_map)
+    python_keys = {"path":sys.path,
+                   "sys.version":sys.version}
+    return render_template('debug.html', routes=app.url_map, python_keys = python_keys, environ=os.environ)
 
 @app.route('/demo_tracer1.html', methods=GET)
 def demo_tracer1():
