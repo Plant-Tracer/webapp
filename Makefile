@@ -263,6 +263,7 @@ install-aws:
 	sudo dnf install -y python3.11
 	sudo dnf install -y nodejs npm
 	sudo dnf install -y make
+	sudo dnf install -y cronie
 	npm ci
 	make $(REQ)
 	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
