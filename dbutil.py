@@ -122,7 +122,6 @@ if __name__ == "__main__":
         if cp['dbreader']['mysql_database'] != cp['dbwriter']['mysql_database']:
             raise RuntimeError("dbreader and dbwriter do not address the same database")
 
-
     if args.writeconfig:
         with open(args.writeconfig, 'w') as fp:
             cp.write(fp)
@@ -238,8 +237,8 @@ if __name__ == "__main__":
         dbmaint.freshen(True)
         sys.exit(0)
 
-    # THese need a database config
-    if 'dbreader' not in config:
+    # These need a database config
+    if ('dbreader' not in config) and (args.dump or arts.sqlbackup):
         print("Please use --rootconfig to specify which configuration file to use")
         exit(1)
 
