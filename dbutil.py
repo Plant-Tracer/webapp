@@ -238,7 +238,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # These need a database config
-    if ('dbreader' not in config) and (args.dump or arts.sqlbackup):
+    if ('dbreader' not in config) and (args.dump or args.sqlbackup):
         print("Please use --rootconfig to specify which configuration file to use")
         exit(1)
 
