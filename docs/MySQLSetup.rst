@@ -112,6 +112,10 @@ Using mysql_secure_installation seems like a good idea, but we are not currently
 
 Follow the script prompts below to (perhaps) set up a new root user password, remove anonymous users, disallow remote root login, and remove test databases on your MySQL database server.
 
+   * If you are prompted to 'Enter password for user root', that means the mysql install assigned a temporary root password. You can find it by executing:
+
+      grep 'temporary password' /var/log/mysqld.log
+
    * At the Enter password for user root prompt, enter the password for the root user account. Amazon Linux 2023 (and all RPM-based mysql 8.0 installations), generates a random temporary root password into the mysql error log file. This file is probably /var/log/mysqld.log and look for a line with the words "temporary password". Use that password. You will be prompted with::
 
       "The existing password for the user account root has expired. Please set a new password."
@@ -146,7 +150,18 @@ If the mysql_secure_installation program does not prompt for a new root password
     FLUSH PRIVILEGES;
     ALTER USER 'root'@'localhost' IDENTIFIED BY 'choose-a-root-password' PASSWORD EXPIRE NEVER;
     ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
+    QUIT;
     sudo systemctl restart mysql
+
+We have seen apparently buggy behavior with the VALIDATE PASSWORD component, which is why we (with great hesitation) suggest not enabling it. That is, we a "Your password does not satisfy the current policy requirements" even when the password does indeed satisfy the current policy requirements so far as we understand them. Not knowing how to workaround or resolve that, we just turn if off!
+
+That said, we've also seen VALIDATE PASSWORD being enabled even without asking about it. If that's the case and you want to disable it:
+
+   systemctl stop mysqld
+   sudo mysql -uroot # use whatever authentication you can here; the installs are inconsistent!
+   UNINSTALL COMPONENT 'file://component_validate_password';
+   QUIT;
+   systemctl start mysqld
 
 Ubuntu Linux Development Environment
 ------------------------------------
