@@ -540,7 +540,7 @@ function list_movies_data( movies ) {
                     rows += make_action_button( UNPUBLISH_BUTTON );
                 }
                 // Do we create a publish button?
-                if ((m.published==0) && ((which==COURSE && admin))){
+                if ((m.published==0) && (((which==UNPUBLISHED || which==COURSE) && admin))){
                     rows += make_action_button( PUBLISH_BUTTON );
                 }
                 // Do we create a delete button? (users can only delete their own movies)
