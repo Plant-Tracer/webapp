@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload demo movies ')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
-    parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=20)
+    parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=50)
     parser.add_argument("--report",help="Print a report of the database",action='store_true')
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
