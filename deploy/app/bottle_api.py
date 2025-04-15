@@ -107,7 +107,7 @@ def api_register():
     if not validate_email(email, check_mx=False):
         logging.info("email not valid: %s", email)
         return E.INVALID_EMAIL
-    course_key = request.values.get('course_key')
+    course_key = request.values.get('course_key').strip()
     if not db.validate_course_key(course_key=course_key):
         return E.INVALID_COURSE_KEY
     if db.remaining_course_registrations(course_key=course_key) < 1:
