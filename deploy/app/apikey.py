@@ -47,6 +47,13 @@ def git_last_commit():
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
 
+@functools.cache
+def git_branch():
+    try:
+        return subprocess.check_output("git rev-parse --abbrev-ref HEAD".split(),encoding='utf-8')
+    except (subprocess.SubprocessError,FileNotFoundError):
+        return ""
+    
 def fix_types(obj):
     """Process JSON so that it dumps without `default=str`"""
     return json.loads(json.dumps(obj,default=str))
@@ -205,7 +212,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'dbreader_host':get_dbreader().host,
         'version':__version__,
         'git_head_time':git_head_time(),
-        'git_last_commit':git_last_commit()
+        'git_last_commit':git_last_commit(),
+        'git_branch': git_branch()
     })
     for (k,v) in ret.items():
         if v is None:
