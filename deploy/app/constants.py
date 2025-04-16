@@ -60,6 +60,7 @@ class E:
     NO_FILE_PARAMETER = {'error':True, 'message':'upload request a file parameter named "file".'}
     INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
     INVALID_COURSE_ACCESS = { 'error':True, 'message':'User is not authorized to manipulate course.'}
+    INVALID_COURSE_ID = {'error': True, 'message': 'There is no course for that course ID'}
     INVALID_COURSE_KEY = {'error': True, 'message': 'There is no course for that course key.'}
     INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
     INVALID_FRAME_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie frame.'}

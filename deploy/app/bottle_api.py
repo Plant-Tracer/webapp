@@ -165,7 +165,15 @@ def api_send_link():
 @api_bp.route('/bulk-register', methods=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
-    course_id =  int(request.values.get('course_id'))
+    logging.info("api_bulk_register() called")
+    logging.info(request.values.to_dict())
+
+    course_id =  0
+    try:
+        course_id = int(request.values.get('course_id'))
+    except ValueError:
+        return E.INVALID_COURSE_ID
+    
     user_id   = get_user_id()
     planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not db.check_course_admin(course_id = course_id, user_id=user_id):
@@ -174,6 +182,7 @@ def api_bulk_register():
     email_addresses = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     try:
         for email in email_addresses:
+            logging.info(email)
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
             db.register_email(email=email, course_id=course_id, name="")

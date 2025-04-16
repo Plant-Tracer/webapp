@@ -17,7 +17,8 @@ Below is a list of all users registered on this system for your course
 {% if admin %}
 <h2>Register</h2>
 
-<form class='pure-form pure-form-aligned'>
+<form class="pure-form pure-form-aligned" action="{{API_BASE}}/api/bulk-register" method="post">
+  <input id="br_course_id" type="hidden" name="course_id" value="{{user_primary_course_id}}"/>
 
   <p>You can register students for your class by entering their email
     addresses into the text box below.</p>
@@ -26,11 +27,15 @@ Below is a list of all users registered on this system for your course
 its own line, or separate the email addresses with spaces, commas or
 semicolons.</p>
 
-  <label for='register-emails'>Email Addresses:</label>
-  <textarea name='register-emails' rows=10 cols=50> </textarea>
+  <label for='email-addresses'>Email Addresses:</label>
+  <textarea name='email-addresses' rows=10 cols=50> </textarea>
 
   <div class='pure-controls'>
-    <input id='register-emails-button' type='button' value='REGISTER' class="pure-button pure-button-primary"/>
+    <input id='register-emails-button' 
+           type='submit' 
+           value='REGISTER' 
+           class="pure-button pure-button-primary"
+           />
   </div>
 </form>
 {% endif %}

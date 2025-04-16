@@ -124,7 +124,7 @@ def get_user_api_key():
 
 
 def get_user_dict():
-    """Returns the user_id of the currently logged in user, or throws a response"""
+    """Returns the userdict of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
