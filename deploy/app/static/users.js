@@ -1,38 +1,42 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global api_key */
+/* global api_key, user_primary_course_id */
+/* global API_BASE */
+/* global console,alert */
+/* global $ */
 
 ////////////////////////////////////////////////////////////////
-// page: /audit
-// This could fill in the table with search keys; right now we just search for everything
-// See https://stackoverflow.com/questions/33682122/datatables-generate-whole-table-from-json
+// page: /users
 
 function bulk_register_users() {
+    let br_email_addresses = $("#br_email_addresses")
+    let email_addresses = br_email_addresses.val();
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
-    fetch(`${API_BASE}api/get-logs`, { method:"POST", body:formData })
+    formData.append("planttracer_endpoint", window.origin + "");
+    formData.append("course_id", user_primary_course_id);
+    formData.append("email-addresses", email_addresses);
+    fetch(`${API_BASE}api/bulk-register`, { method: "POST", body: formData })
         .then((response) => response.json())
         .then((data) => {
-            if (data.error!=false){
-                $('#message').html('error: '+data.message);
+            if (data.error != false){
+                $('#message').html('error: '+ data.message);
                 return;
+            } else {
+                $('#message').html(data.message); 
             }
-            let logs = data.logs;
-            // get the columns
-            var columns = [];
-            for (const key in logs[0]) {
-                columns.push( { data: key, title: key } );
-            }
-            // make the data displayable
-            $('#audit').DataTable( {
-                columns: columns,
-                data: logs
-            });
-        });
+        }
+    );
+    window.location.reload();
 }
 
-$( document ).ready( function() {
-    bulk_register_users();
-});
+function bulk_register_setup(api_key) {
+    let register_emails_button = $("#register-emails-button")
+    register_emails_button.on('click', () => {bulk_register_users();});
+}
 
-module.exports = {bulk_register_users}
+//$( document ).ready( function() {
+//    bulk_register_users();
+//});
+
+export {bulk_register_setup, bulk_register_users}

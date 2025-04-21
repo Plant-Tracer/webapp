@@ -165,13 +165,14 @@ def api_send_link():
 @api_bp.route('/bulk-register', methods=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
-    logging.info("api_bulk_register() called")
-    logging.info(request.values.to_dict())
+    logging.debug("api_bulk_register() called")
+    logging.debug(request.values.to_dict())
 
     course_id =  0
     try:
         course_id = int(request.values.get('course_id'))
     except ValueError:
+        logging.error("invalid course id: %s", request.values.get('course_id'))
         return E.INVALID_COURSE_ID
     
     user_id   = get_user_id()
@@ -182,7 +183,8 @@ def api_bulk_register():
     email_addresses = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     try:
         for email in email_addresses:
-            logging.info(email)
+            email = email.strip()
+            logging.debug("bulkreg email: '%s'", email)
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
             db.register_email(email=email, course_id=course_id, name="")
