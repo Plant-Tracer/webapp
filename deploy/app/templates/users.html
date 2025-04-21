@@ -19,6 +19,7 @@ Below is a list of all users registered on this system for your course
 
 <form class="pure-form pure-form-aligned" action="{{API_BASE}}/api/bulk-register" method="post">
   <input id="br_course_id" type="hidden" name="course_id" value="{{user_primary_course_id}}"/>
+  <input id="br_planttracer_endpoint" type="hidden" name="planttracer_endpoint" value="{{API_BASE}}"/>
 
   <p>You can register students for your class by entering their email
     addresses into the text box below.</p>
