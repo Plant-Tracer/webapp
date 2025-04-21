@@ -45,10 +45,9 @@ Below is a list of all users registered on this system for your course
 
 <script type="module">
 import { bulk_register_setup } from "./static/users.js";
-  
+
 $( document ).ready( function() {
-  let params = new URLSearchParams(window.location.search);
-  bulk_register_setup(api_key);
+  bulk_register_setup(planttracer_endpoint);
   list_users();
 });
 </script>

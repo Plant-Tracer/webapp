@@ -13,6 +13,7 @@ function bulk_register_users() {
     let email_addresses = br_email_addresses.val();
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
+    // ToDo: planttracers_endpoint value should be a parameter or something so we can unit test this function
     formData.append("planttracer_endpoint", window.origin + "");
     formData.append("course_id", user_primary_course_id);
     formData.append("email-addresses", email_addresses);
@@ -30,13 +31,9 @@ function bulk_register_users() {
     window.location.reload();
 }
 
-function bulk_register_setup(api_key) {
+function bulk_register_setup() {
     let register_emails_button = $("#register-emails-button")
     register_emails_button.on('click', () => {bulk_register_users();});
 }
-
-//$( document ).ready( function() {
-//    bulk_register_users();
-//});
 
 export {bulk_register_setup, bulk_register_users}
