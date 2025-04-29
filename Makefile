@@ -202,6 +202,9 @@ jscoverage:
 	NODE_PATH=deploy/app/static npm run coverage
 	NODE_PATH=deploy/app/static npm test
 
+jstest-debug:
+	NODE_PATH=deploy/app/static npm run test-debug
+
 
 ################################################################
 # Installations are used by the CI pipeline and by developers
