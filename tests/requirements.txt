@@ -4,3 +4,4 @@ requests
 selenium
 pytest-mock
 pytest-env
+localmail

@@ -23,6 +23,7 @@ from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
 from app.constants import C,E,__version__,GET,POST,GET_POST
 
 from fixtures.app_client import client
+from fixtures.localmail_config import mailer_config
 import user_test
 from user_test import new_course, new_user, api_key
 
@@ -106,7 +107,7 @@ def test_bulk_register_invalid_email(client, api_key):
 # need: api/bulk-register: invalid mailer configuration
 # need: api/bulk-register: User is not authorized to manipulate course
 
-def test_upload_movie_data(client, api_key):
+def test_upload_movie_data(client, api_key, mailer_config):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user.
     This is redundant with movie_test.py::new_movie
     """

@@ -2,6 +2,7 @@ import pytest
 import configparser
 import logging
 import threading
+import localmail
 import time
 import sys
 import os
@@ -24,8 +25,8 @@ mutex = threading.Lock()
 def report(smtp, imap, http):
     """do stuff with ports"""
     logging.info("smtp=%s",smtp)
-    logging.info("imap=%s",smtp)
-    logging.info("http=%s",smtp)
+    logging.info("imap=%s",imap)
+    logging.info("http=%s",http)
     mutex.release()
     logging.info("*************** LOCALMAIL RUNNING; MUTEX RELEASED *************")
 
@@ -38,13 +39,11 @@ class Localmail():
     def __init__(self):
         localmail_config = configparser.ConfigParser()
         localmail_config.read( auth.credentials_file() )
-        if 'smtp' not in localmail_config:
-            logging.error('LOCALMAIL FNAME: %s',FNAME)
-            logging.error('LOCALMMAIL config: %s',localmail_config)
-            logging.error('LOCALMAIL file: %s',open(FNAME).read())
+        if 'localmail' not in localmail_config:
+            logging.warning('[localmail] not found in config.')
 
-        smtp_port = int(localmail_config['smtp']['smtp_port'])
-        imap_port = int(localmail_config['imap']['imap_port'])
+        smtp_port = int(localmail_config['localmail']['smtp_port'])
+        imap_port = int(localmail_config['localmail']['imap_port'])
         try:
             http_port = int(localmail_config['localmail']['http_port'])
         except KeyError:
@@ -53,8 +52,8 @@ class Localmail():
             mailbox = localmail_config['localmail']['mailbox']
         except KeyError:
             http_port = None
-        logging.info("smtp_port=%s imap_port=%s http_port=%s",
-                     smtp_port,imap_port,http_port)
+        logging.info("smtp_port=%s imap_port=%s http_port=%s mailbox=%s",
+                     smtp_port,imap_port,http_port,mailbox)
 
         mutex.acquire()
         thread = threading.Thread(
