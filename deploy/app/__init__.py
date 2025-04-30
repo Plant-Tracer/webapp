@@ -1,4 +1,3 @@
 """
-stuff
+a functionally empty file, marking deploy.app as a package
 """
-__version__='0.9.0'

@@ -23,10 +23,43 @@ Release History
      - 0.9.4
      - December ??, 2024
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3ADec2024>`_
+   * - Mar2024
+     - 0.9.5
+     - March 22, 2025
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AMar2025>`_
+   * - Apr2024
+     - 0.9.6
+     - April 30, 2025
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AApr2025>`_
 
 
 Release Notes
 -------------
+
+0.9.6 Summary
+*************
+    * Analyze: move some instructions to top of page for easier visibility
+    * Analyze: make it clearer in the UI that users don't have to add any new markers in order to track a movie
+    * Register: trim surrounding whitespace from Course Key input
+    * Movies: Course admins can now publish movies that they uploaded themselves
+    * Users: implement bulk registration of users
+    * dbutil: set course max_enrollment default to 50
+    * Webapp: add git information to web page footer
+    * Webapp: set the version (release) number in one place
+    * Infra: require cronie package on Amazon Linux 2 deployments
+
+0.9.5 Summary
+*************
+    * Analyze: support pixels to mm conversion
+    * Analyze: populate Marker Table's Location (mm) column
+    * Analyze: flip the sign of the y-position graph
+    * Documentation: create the User Tutorial
+    * Documentation: create (incomplete) developer setup instructions for Amazon Linux 2
+    * Movie Upload: set upload limit to 150MB
+    * Test: Create Jest unit tests for all planttracer.js functions
+    * Webapp: migrate from Bottle to Flask
+    * Infra: support deployment to Amazon Web Services (AWS) EC2 instance
+    * Infra: support deployment of multiple webapp server instances to project AWS account
 
 0.9.4 Summary
 *************
