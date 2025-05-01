@@ -32,49 +32,57 @@ def report(smtp, imap, http):
 
 @singleton
 class Localmail():
+
     """Create a localmail server and return an object that has the config.
        We can't shut it down because reactor is not restartable.
     Over time, we'll implement functionality to search the mailbox.
     """
     def __init__(self):
-        localmail_config = configparser.ConfigParser()
-        localmail_config.read( auth.credentials_file() )
-        if 'localmail' not in localmail_config:
-            logging.warning('[localmail] not found in config.')
+        #ToDo: make sure to use ports that are actually available and/or
+        #      figure out a way to have the [localmail] config section pre-generated
+        self.smtp_port = 8081
+        self.imap_port = 8082
+        self.http_port = 8083
+        self.mailbox = 'localmail.mbox'
 
-        smtp_port = int(localmail_config['localmail']['smtp_port'])
-        imap_port = int(localmail_config['localmail']['imap_port'])
-        try:
-            http_port = int(localmail_config['localmail']['http_port'])
-        except KeyError:
-            http_port = None
-        try:
-            mailbox = localmail_config['localmail']['mailbox']
-        except KeyError:
-            http_port = None
+        self.localmail_config = configparser.ConfigParser()
+        self.localmail_config.read( auth.credentials_file() )
+        if 'localmail' not in self.localmail_config:
+            logging.warning('[localmail] not found in config. Using default values.')
+        else:
+            smtp_port = int(self.localmail_config['localmail']['smtp_port'])
+            imap_port = int(self.localmail_config['localmail']['imap_port'])
+            try:
+                http_port = int(self.localmail_config['localmail']['http_port'])
+            except KeyError:
+                http_port = None
+            try:
+                mailbox = self.localmail_config['localmail']['mailbox']
+            except KeyError:
+                http_port = None
+
         logging.info("smtp_port=%s imap_port=%s http_port=%s mailbox=%s",
-                     smtp_port,imap_port,http_port,mailbox)
+                     self.smtp_port, self.imap_port, self.http_port, self.mailbox)
 
         mutex.acquire()
         thread = threading.Thread(
             target=localmail.run,
-            args=( smtp_port, imap_port, http_port, mailbox, report),
+            args=( self.smtp_port, self.imap_port, self.http_port, self.mailbox, report),
             daemon=True)
         thread.start()
         mutex.acquire(timeout=MAIL_TIMEOUT)
 
         logging.info("*************** LAUNCHED LOCALMAIL *************")
-        self.localmail_config = localmail_config
 
     def dump_mailbox(self):
         logging.info("== BEGIN MAIL TRANSCRIPT ==")
-        with open( self.localmail_config['localmail']['mailbox'],"r") as f:
+        with open( self.mailbox,"r") as f:
             for line in f:
                 logging.info(line.strip())
         logging.info("== END MAIL TRANSCRIPT ==")
 
     def clear_mailbox(self):
-        with open( self.localmail_config['localmail']['mailbox'],"w") as f:
+        with open( self.mailbox,"w") as f:
             print(f.truncate())
 
 @pytest.fixture
