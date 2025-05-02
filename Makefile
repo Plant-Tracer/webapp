@@ -147,7 +147,7 @@ test-schema-upgrade:
 	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1
 
-pytest-coverage: $(REQ)
+pytest-coverage: $(REQ) localmail-config
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
