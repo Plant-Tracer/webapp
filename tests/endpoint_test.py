@@ -98,7 +98,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     assert res['message'] == 'Registered 1 email addresses'
     db.delete_user(email=email_address,purge_movies=True)
 
-def test_bulk_register_invalid_email(client, new_course):
+def test_bulk_register_invalid_email(client, new_course, mailer_config):
     """This tests the bulk-register api when given an invalid email address
     """
     # TODO: test body
