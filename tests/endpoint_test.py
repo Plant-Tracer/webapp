@@ -101,12 +101,17 @@ def test_bulk_register_success(client, new_course, mailer_config):
 def test_bulk_register_invalid_email(client, new_course):
     """This tests the bulk-register api when given an invalid email address
     """
+    # TODO: test body
     assert True
 
-# need: api/bulk-register: invalid course id
-# need: api/bulk-register: no mailer configuration
-# need: api/bulk-register: invalid mailer configuration
-# need: api/bulk-register: User is not authorized to manipulate course
+# TODO: api/bulk-register: invalid course id
+# TODO: api/bulk-register: no mailer configuration
+# TODO: api/bulk-register: invalid mailer configuration
+# TODO: api/bulk-register: User is not authorized to manipulate course
+# TODO: api/bulk-register: empty email-addresses list
+# TODO: api/bulk-register: email-addresses list length > 1
+# TODO: api/bulk-register: first email address valid, second invalid
+# TODO: api/bulk-register: second email address valid, first invalid
 
 def test_upload_movie_data(client, api_key):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user.
