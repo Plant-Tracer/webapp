@@ -78,13 +78,14 @@ def test_api_get_logs(client, new_user):
 
 # /api/bulk-register tests
 
-def test_bulk_register_success(client, new_course):
+def test_bulk_register_success(client, new_course, mailer_config):
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
     email_address = 'testuser@example.com'
     course_id = new_course[user_test.COURSE_ID]
     admin_user = db.lookup_user(email=None, user_id=new_course[user_test.ADMIN_ID], get_admin=True, get_courses=None)
     api_key = db.make_new_api_key(email=new_course[user_test.ADMIN_EMAIL])
+   
     r = client.post('/api/bulk-register',
                     data={'api_key': api_key,
                           'course_id': str(course_id),
@@ -97,7 +98,7 @@ def test_bulk_register_success(client, new_course):
     assert res['message'] == 'Registered 1 email addresses'
     db.delete_user(email=email_address,purge_movies=True)
 
-def test_bulk_register_invalid_email(client, api_key):
+def test_bulk_register_invalid_email(client, new_course):
     """This tests the bulk-register api when given an invalid email address
     """
     assert True
@@ -107,7 +108,7 @@ def test_bulk_register_invalid_email(client, api_key):
 # need: api/bulk-register: invalid mailer configuration
 # need: api/bulk-register: User is not authorized to manipulate course
 
-def test_upload_movie_data(client, api_key, mailer_config):
+def test_upload_movie_data(client, api_key):
     """This tests creating a movie and uploading the entire thing using base64 encoding and the existing test user.
     This is redundant with movie_test.py::new_movie
     """

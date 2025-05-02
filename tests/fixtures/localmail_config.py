@@ -38,10 +38,10 @@ class Localmail():
     Over time, we'll implement functionality to search the mailbox.
     """
     def __init__(self):
-        #ToDo: make sure to use ports that are actually available and/or
-        #      figure out a way to have the [localmail] config section pre-generated
-        self.smtp_port = 8081
-        self.imap_port = 8082
+        #ToDo: make sure to use ports that are actually available
+
+        self.smtp_port = 2025
+        self.imap_port = 2143
         self.http_port = 8083
         self.mailbox = 'localmail.mbox'
 
@@ -50,16 +50,16 @@ class Localmail():
         if 'localmail' not in self.localmail_config:
             logging.warning('[localmail] not found in config. Using default values.')
         else:
-            smtp_port = int(self.localmail_config['localmail']['smtp_port'])
-            imap_port = int(self.localmail_config['localmail']['imap_port'])
+            self.smtp_port = int(self.localmail_config['localmail']['smtp_port'])
+            self.imap_port = int(self.localmail_config['localmail']['imap_port'])
             try:
-                http_port = int(self.localmail_config['localmail']['http_port'])
+                self.http_port = int(self.localmail_config['localmail']['http_port'])
             except KeyError:
-                http_port = None
+                self.http_port = None
             try:
-                mailbox = self.localmail_config['localmail']['mailbox']
+                self.mailbox = self.localmail_config['localmail']['mailbox']
             except KeyError:
-                http_port = None
+                self.http_port = None
 
         logging.info("smtp_port=%s imap_port=%s http_port=%s mailbox=%s",
                      self.smtp_port, self.imap_port, self.http_port, self.mailbox)
