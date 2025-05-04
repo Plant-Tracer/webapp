@@ -91,6 +91,10 @@ flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
+localmail-config:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
+
 ################################################################
 ##
 ## Dynamic Analysis
@@ -109,7 +113,7 @@ pytest1:
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
-pytest:  $(REQ)
+pytest:  $(REQ) localmail-config
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -119,7 +123,7 @@ pytest-selenium:
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
-pytest-debug:
+pytest-debug: localmail-config
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -130,7 +134,7 @@ pytest-app-framework:
 	@echo validate app framework
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
-pytest-quiet:
+pytest-quiet: localmail-config
 	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	@echo quietly make pytest and stop at the firt error
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
@@ -143,7 +147,7 @@ test-schema-upgrade:
 	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --upgradedb test_db1
 	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1
 
-pytest-coverage: $(REQ)
+pytest-coverage: $(REQ) localmail-config
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
 
@@ -201,6 +205,9 @@ eslint:
 jscoverage:
 	NODE_PATH=deploy/app/static npm run coverage
 	NODE_PATH=deploy/app/static npm test
+
+jstest-debug:
+	NODE_PATH=deploy/app/static npm run test-debug
 
 
 ################################################################
@@ -263,6 +270,7 @@ install-aws:
 	sudo dnf install -y python3.11
 	sudo dnf install -y nodejs npm
 	sudo dnf install -y make
+	sudo dnf install -y cronie
 	npm ci
 	make $(REQ)
 	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi

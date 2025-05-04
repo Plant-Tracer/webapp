@@ -39,6 +39,7 @@ ADMIN_ID = 'admin_id'
 API_KEY  = 'api_key'
 COURSE_KEY = 'course_key'
 COURSE_NAME = 'course_name'
+COURSE_ID = 'course_id'
 USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
@@ -67,9 +68,10 @@ def new_course():
                                      admin_name = 'Dr. Admin',
                                      course_name = course_name,
                                      demo_email = demo_email)
-
+    course_id = db.lookup_course_by_key(course_key=course_key)['id']
     yield {COURSE_KEY:course_key,
            COURSE_NAME:course_name,
+           COURSE_ID:course_id,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
            DEMO_EMAIL:demo_email,

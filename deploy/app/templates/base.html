@@ -19,7 +19,7 @@
 
     <script>
       // These variables will be substituted by the template engine
-      const version = '0.9.0';
+      const version = '{{version}}';
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
       {% if logged_in %}
@@ -139,7 +139,7 @@
             {% if user_demo %}
             <b>demo mode</b>
             {% endif %}
-            ver {{version}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
+            ver {{version}} {{git_branch}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
       </div>
     </div>
     <script>

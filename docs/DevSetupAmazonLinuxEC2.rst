@@ -65,10 +65,10 @@ Lab 3 Summary and Modifications
 
 * Create /etc/httpd/conf.d/your-userid.conf with contents::
 
-<VirtualHost *:80>
-    ServerName dev-youruserid.planttracer.com
-    DocumentRoot /home/ec2-user/www
-</VirtualHost>
+    <VirtualHost *:80>
+        ServerName dev-youruserid.planttracer.com
+        DocumentRoot /home/ec2-user/www
+    </VirtualHost>
 
 * Next::
 
@@ -83,18 +83,19 @@ Lab 3 Summary and Modifications
     sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
     sudo certbot --apache
 
-* Got this message::
+* ToDo -- Got this message::
 
     Certbot failed to authenticate some domains (authenticator: apache). The Certificate Authority reported these problems:
-  Domain: dev-seb.planttracer.com
-  Type:   dns
-  Detail: DNS problem: NXDOMAIN looking up A for dev-seb.planttracer.com - check that a DNS record exists for this domain; DNS problem: NXDOMAIN looking up AAAA for dev-seb.planttracer.com - check that a DNS record exists for this domain
+    Domain: dev-seb.planttracer.com
+    Type:   dns
+    Detail: DNS problem: NXDOMAIN looking up A for dev-seb.planttracer.com - check that a DNS record exists for this domain; DNS problem: NXDOMAIN looking up AAAA for dev-seb.planttracer.com - check that a DNS record exists for this domain
 
     Hint: The Certificate Authority failed to verify the temporary Apache configuration changes made by Certbot. Ensure that the listed domains point to this Apache server and that it is accessible from the internet.
 
     Some challenges have failed.
 
 * Ignoring, oh wait, the machine is not responding.
+* Setup instructions to be completed in a later release.
 
 Setup Steps Specifics
 ---------------------

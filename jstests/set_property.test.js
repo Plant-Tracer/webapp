@@ -75,6 +75,8 @@ describe('set_property function', () => {
     });
 
     it('should catch and log errors on fetch failure', async () => {
+      console.log("This test was supposed to display two FetchErrors during its execution.");
+      console.log("Please ignore them; they are not really errors.");
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       fetch.mockReject(() => Promise.reject("API Failure"));
 
