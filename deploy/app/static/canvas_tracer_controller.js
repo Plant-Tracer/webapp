@@ -487,8 +487,8 @@ function graph_data(cc, frames) {
         }
     });
 
-    const ctxX = document.getElementById('xChart').getContext('2d');
-    const ctxY = document.getElementById('yChart').getContext('2d');
+    const ctxX = document.getElementById('apex-xChart').getContext('2d');
+    const ctxY = document.getElementById('apex-yChart').getContext('2d');
 
     // Graph for Frame Number or Time vs X Position
     const xChart = new Chart(ctxX, {
