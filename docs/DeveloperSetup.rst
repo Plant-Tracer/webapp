@@ -85,7 +85,7 @@ Setup Steps
 
    .. code-block::
 
-      PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini make pytest-quiet make pytest-quiet
+      PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini make pytest-quiet
 
 #. Create your first course! If you want, give it a demo account too:
 
