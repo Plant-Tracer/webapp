@@ -610,6 +610,8 @@ function graph_data(cc, frames) {
         }
         return { scale: scale, pos_units: pos_units };
     }
+    document.getElementById('apex-xChart').style.visibility = 'visible';
+    document.getElementById('apex-yChart').style.visibility = 'visible';
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
