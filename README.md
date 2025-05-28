@@ -19,7 +19,7 @@ Data Storage
 ------------
 **Movies**, **individual movie frames**, and **zip files containing movie frames** are stored in Amazon S3.
 
-**Course data**, **account data**, and **movie frame annotations** are stored in Amazon Dynamo DB.
+**Course data**, **account data**, and **movie frame annotations** are stored in Amazon DynamoDB.
 
 **Authentication tokens** are stored in a client cookie called `api_key`.
 
