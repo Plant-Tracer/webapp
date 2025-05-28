@@ -171,7 +171,6 @@ cython_debug/
 *.mbox
 */*.mbox
 localmail.mbox
-*.bash
 *.mp4
 *.ini
 etc/github_actions_mysql_rootconfig.ini
@@ -188,3 +187,8 @@ layer
 .[#]*
 sam-installation
 *.slg
+DynamoDBLocal.jar
+DynamoDBLocal_lib/**
+dynamodb-local-metadata.json
+*.stderr
+*.stdout

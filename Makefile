@@ -36,7 +36,7 @@ $(REQ):
 
 
 ################################################################
-# SAM Commands
+# SAM Commands - for deploying on AWS Lambda
 
 sam-deploy:
 	sam validate
@@ -141,12 +141,6 @@ pytest-quiet: localmail-config
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
-test-schema-upgrade:
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --createdb test_db1 --schema $(ROOT_ETC)/schema_0.sql
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --upgradedb test_db1
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1
-
 pytest-coverage: $(REQ) localmail-config
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
@@ -211,27 +205,23 @@ jstest-debug:
 
 
 ################################################################
-# Installations are used by the CI pipeline and by developers
+# Installations are used by the CI pipeline and by local developers
 # $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
-PLANTTRACER_LOCALDB_NAME ?= actions_test
+# See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
-create_localdb:
-	test -n "$(PLANTTRACER_CREDENTIALS)" || (echo "PLANTTRACER_CREDENTIALS must be set"; exit 1)
-	test -n "$(MYSQL_ROOT_PASSWORD)" || (echo "MYSQL_ROOT_PASSWORD must be set"; exit 1)
-	@echo Creating local database, exercise the upgrade code and write credentials
-	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
-	pwd
-	mkdir -p $(ROOT_ETC)
-	ls -l $(ROOT_ETC)
-	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	ls -l $(ROOT_ETC)
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini  \
-                             --createdb $(PLANTTRACER_LOCALDB_NAME) \
-                             --schema $(DEPLOY_ETC)/schema_0.sql \
-                             --writeconfig $(PLANTTRACER_CREDENTIALS)
-	$(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+.PHONY: install_local_dynamodb
+DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
+install_local_dynamodb: $(REQ)
+	test -f dynamodb_local_latest.zip || curl $(DOWNLOAD_URL) -o dynamodb_local_latest.zip
+	test -f dynamodb_local_latest.zip || (echo could not download $(DOWNLOAD_URL); exit 1)
+	unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*'
+
+run_local_dynamodb:
+	bash local_dynamodb_control.bash start
+
+stop_local_dynamodb:
+	bash local_dynamodb_control.bash stop
+
 
 remove_localdb:
 	@echo Removing local database using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
@@ -289,8 +279,8 @@ install-macos:
 	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
 
 # Includes Windows dependencies
-# restart the shell after installs are done	
-# choco install as administrator	
+# restart the shell after installs are done
+# choco install as administrator
 install-windows: $(REQ)
 	choco install -y make
 	choco install -y ffmpeg

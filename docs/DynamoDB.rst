@@ -1,9 +1,28 @@
-MySQL Setup for Plant Tracer
+DynamoDB and Plant Tracer
 ============================
 
-Doing development on the Plant Tracer webapp currently requires a MySQL database. While we're not sure later versions of MySQL won't work, the webapp was developed against MySQL 8.0 and recommend using the latest 8.0.x available. Deployment is to and 8.0 server, so if you are making any changes to the database part of the application, it had better work with 8.0.
+The Plant Tracer webapp uses AWS DynamoDB to store:
 
-It's been worth having a local installation of MySQL for development so that developers don't smash into each other trying to share remote database instances that someone else has to administer. Plant Tracer's use of MySQL is fairy straightforward and there's not much admin work to do.
+* The user list
+* The course list
+* The movie list
+* The per-frame annotations.
+
+Originally this was stored in a MySQL database. We migrated to DynamoDB for cost---most uses of Plant Tracer can fit within the DynamoDB free tier, while the cost for running inside MySQL is upwards of $50/month on AWS. (Plant Tracer was originally developed using Dreamhost's free MySQL service, but that requires that you have a Dreamhost account.)
+
+Each DynamoDB database is identified by an Account and a database name. These are specified in environment variables when the Flask application is run. For local development you can use the (AWS DynamoDB local (downloadable version))[https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html]. We recommend using the version that is downloaded as a JAR file.
+
+Local Development and GitHub Actions
+-----------------
+For local development (and for running in GitHub Actions) the local DynamoDB database must be downloaded from AWS. This is a low-performance implementation of DynamoDB that is more than adequate for testing. Details of how to download it can be found (on the AWS website)[https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html]. It is downloaded and installed automatically with the `make install_local_dynamodb` target.
+
+To run the DynamoDB, you must have JDK operational on MacOS it is necessary to install OpenJDK with brew.
+
+The provided script `local_dynamodb_control.bash` manages starting and stopping DynamoDBLocal. It handles properly setting the `JAVA_HOME` and `PATH` environment variables under MacOS
+
+To use the local (or the remote) DynamoDB, it is necessary to set the `AWS_ACCESS_KEY_ID`, `AWS_ACCESS_SECRET_KEY` an `AWS_DEFAULT_REGION` variables to values that are valid but that will be ignored. environment variables. For the local DynamoDB, they are ignored, although they must be valid, in that they must contain only letters (A–Z, a–z) and numbers (0–9). We recommend `plant_tracer_access` and `plant_tracer_secret`, respectively.
+
+
 
 MacOS Development Environment
 -----------------------------
@@ -13,7 +32,7 @@ Homebrew: Three of us have tried to install MySQL on MacOS with HomeBrew and wer
 These instructions assume there is no existing MySQL installation on the machine. If there is, you are assumed to have facility with MySQL already, and on your own to make sure you've configured it properly or maybe having multiple versions of MySQL on your machine. That gets complicated and is beyond the scope of these instructions intended for those new to MySQL admin and development.
 
 Download the .dmg from dev.mysql.com:
-  
+
 - Navigate to the MySQL Developer download page at https://dev.mysql.com/downloads/mysql/
 
 - Select Version: 8.0.39 (or whatever the current 8.0.x release is)
@@ -21,7 +40,7 @@ Download the .dmg from dev.mysql.com:
 - Select Operating System: macOS
 
 - Select OS Version: whatever you have, presumably macOS 14 (ARM, 64 bit)
-  
+
 - Press the Download button to the right of *macOS 14 (ARM, 64-bit), DMG Archive*
 
 - If you want, sign Up for an Oracle Web account if you don't already have one, or Login if you do
@@ -34,33 +53,33 @@ Install the DMG:
   The following steps are the minimal happy path for a straight installation, assuming no customization is necessary and everything Just Works.
 
 - Double-click on the mysql-8.0.39-macos-arm64.dmg to open the dmg
-  
+
 - Double-click on mysql-8.0.39-macos-arm64.pkg to start the installation
-  
+
 - On the "The package will run a program to determine if the software can be installed. pop-up, press the Allow button
-  
+
 - Press Continue on the Introduction page
-  
+
 - Press Continue on the License page
-  
+
 - Press Agree on the To continue installing the software you must agree to the terms of the software license agreement page
-  
+
 - Press Continue to Install for all users on this computer (or choose a different option)
-  
+
 - Press Install on the Installation Type page
-  
+
 - Installation page: TODO
-  
+
 - Leave User Strong Password Encryption selected and then Press Next on the Configuration page
-  
+
 - Enter a root password, leave Start MySQL Server once the installation is complete checked, and press Finish. Make sure you have a way to not forget your root password, as it is very annoying to recover from losing it
-  
+
 - Press Close on the Summary page
 
 Verify the installation:
-  
+
 - On the MacOS System Settings app, search for MySQL
-  
+
 - Verify that the Active Instance and Installed Instances have green and not red dots to their left. Green means they are running; Red means they are stopped and if they are start them. But if they go red again, something is not good and troubleshooting is in order
 
 - Consider (strongly consider) making sure the Start MySQL when your computer starts up checkbox is checked
@@ -119,9 +138,9 @@ Follow the script prompts below to (perhaps) set up a new root user password, re
    * At the Enter password for user root prompt, enter the password for the root user account. Amazon Linux 2023 (and all RPM-based mysql 8.0 installations), generates a random temporary root password into the mysql error log file. This file is probably /var/log/mysqld.log and look for a line with the words "temporary password". Use that password. You will be prompted with::
 
       "The existing password for the user account root has expired. Please set a new password."
-   
+
    * Enter a new root password. Make it a strong password. You may have to go through the new password setting process more than once; no idea why::
-   
+
       New password: Enter a new strong password to assign the root database user.
 
    * We have seen this step skipped when the default installation uses the auth_socket authentication plugin (as it does on Ubuntu). If that happens, proceed here and the password will be set later in these instructions.
@@ -136,8 +155,8 @@ Follow the script prompts below to (perhaps) set up a new root user password, re
          * ToDo: Hopefully, this is refusal is temporary. In testing, once password validation is turned on, the server rejects even supposedly valid passwords. Not good.
          * This may or may not even be asked.
 
-   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.  
- 
+   * Remove anonymous users?: Enter Y to revoke MySQL console access to unknown database users.
+
    * Disallow root login remotely?: Enter Y to disable remote access to the MySQL root user account on your server.
 
    * Remove test database and access to it?: Enter Y to delete the MySQL test databases.
