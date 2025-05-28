@@ -45,9 +45,9 @@ Installation on a Developer's Machine
 For testing, this repo can be checked out and run anywhere, e.g. `$HOME/gits/webapp`.
 
 
-Linux and MacOS Prequisities
+Linux and macOS Prequisities
 ----------------------------
-This code should run out-of-the-box on most Linux and MacOS systems.
+This code should run out-of-the-box on most Linux and macOS systems.
 
 - Python 3.11 or above
 - pip (please run in a virtual environment)
