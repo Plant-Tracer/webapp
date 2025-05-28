@@ -23,7 +23,7 @@ Data Storage
 
 **Authentication tokens** are stored in a client cookie called `api_key`.
 
-The user's **current course** is currently stored in the database, but should be moved a cookie in the client.
+The user's **current course** is currently stored in the database, but should be moved to a cookie in the client.
 
 Data Flows
 ----------
