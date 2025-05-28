@@ -34,7 +34,7 @@ Uploads of movies and movie frames are from the JavaScript client directly to S3
 
 The remaining static and dynamic content is downloaded from the server to the client using HTTP GET commands.
 
-This design makes it easy to move from the server-based architecture to the AWS Lambda-based architecture, as Lamda limits HTTP GET and POST responses to 6MB and uploads to around 256KB. In a pure Lambda deployment, static content should probably be moved to a CDN.
+This design makes it easy to move from the server-based architecture to the AWS Lambda-based architecture, as Lambda limits HTTP GET and POST responses to 6MB and uploads to around 256KB. In a pure Lambda deployment, static content should probably be moved to a CDN.
 
 Installation on a Virtual Machine
 ---------------------------------
