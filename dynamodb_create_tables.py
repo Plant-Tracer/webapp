@@ -1,8 +1,12 @@
 import logging
-import argparse # Import argparse
+import argparse
 
 import boto3
 from botocore.exceptions import ClientError
+
+# Configure basic logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Global Constants ---
 DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
@@ -118,13 +122,15 @@ TABLE_CONFIGURATIONS = [
 
 # --- Function Definitions ---
 
-def drop_dynamodb_table(table_name: str, dynamodb_resource):
-    """
-    Drops a specified DynamoDB table from the local instance.
+def drop_dynamodb_table(table_name: str, dynamodb_resource: 'boto3.resources.base.ServiceResource'):
+    """Drops a specified DynamoDB table from the local instance.
 
-    Args:
-        table_name (str): The name of the table to drop.
-        dynamodb_resource: The boto3 DynamoDB resource object.
+    :param table_name: The name of the table to drop.
+    :type table_name: str
+    :param dynamodb_resource: The boto3 DynamoDB resource object.
+    :type dynamodb_resource: boto3.resources.base.ServiceResource
+    :raises ClientError: If a DynamoDB client-side error occurs (e.g., table not found).
+    :raises Exception: For any unexpected errors during deletion.
     """
     logger.info("Attempting to delete table: %s", table_name)
     try:
@@ -144,12 +150,15 @@ def drop_dynamodb_table(table_name: str, dynamodb_resource):
         logger.error("Unexpected error occurred while deleting table %s: %s", table_name, e)
 
 
-def create_dynamodb_tables(dynamodb_resource):
-    """
-    Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
+def create_dynamodb_tables(dynamodb_resource: 'boto3.resources.base.ServiceResource'):
+    """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
 
-    Args:
-        dynamodb_resource: The boto3 DynamoDB resource object.
+    Connects to the local DynamoDB instance using DEFAULT_DYNAMODB_ENDPOINT.
+
+    :param dynamodb_resource: The boto3 DynamoDB resource object.
+    :type dynamodb_resource: boto3.resources.base.ServiceResource
+    :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
+    :raises Exception: For any unexpected errors during creation.
     """
     for table_config in TABLE_CONFIGURATIONS:
         table_name = table_config['TableName']
@@ -184,8 +193,8 @@ if __name__ == "__main__":
     else:
         logging.getLogger().setLevel(logging.INFO) # Default to INFO if not debug
 
-    # Re-initialize logger after setting level, or ensure it uses the root level
-    logger = logging.getLogger(__name__) # Get logger instance after level is set
+    # Re-assign logger to ensure it uses the newly configured level from the root.
+    logger = logging.getLogger(__name__)
 
     # Initialize DynamoDB resource once (now that logging level is set)
     dynamodb_resource = boto3.resource(
