@@ -192,3 +192,4 @@ DynamoDBLocal_lib/**
 dynamodb-local-metadata.json
 *.stderr
 *.stdout
+db/*.db

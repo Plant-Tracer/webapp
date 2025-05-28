@@ -20,7 +20,21 @@ To run the DynamoDB, you must have JDK operational. On Linux it can be installed
 
 The provided script `local_dynamodb_control.bash` manages starting and stopping DynamoDBLocal. It handles properly setting the `JAVA_HOME` and `PATH` environment variables under MacOS
 
-To use the local (or the remote) DynamoDB, it is necessary to set the `AWS_ACCESS_KEY_ID`, `AWS_ACCESS_SECRET_KEY` an `AWS_DEFAULT_REGION` variables to values that are valid but that will be ignored. environment variables. For the local DynamoDB, they are ignored, although they must be valid, in that they must contain only letters (A–Z, a–z) and numbers (0–9). We recommend `plant_tracer_access` and `plant_tracer_secret`, respectively.
+To use the local (or the remote) DynamoDB, it is necessary to set the `AWS_ACCESS_KEY_ID`, `AWS_ACCESS_SECRET_KEY` an `AWS_DEFAULT_REGION` variables to values that are valid but that will be ignored. environment variables. For the local DynamoDB, they are ignored, although they must be valid, in that they must contain only letters (A–Z, a–z) and numbers (0–9). We recommend `plant_tracer_access` and `plant_tracer_secret`, respectively. It is also important to specify the endpoint url when accessing the server:
+
+```
+aws dynamodb list-tables --endpoint-url http://localhost:8010
+```
+
+Then you can:
+```
+% aws dynamodb list-tables --endpoint-url http://localhost:8010                                       (dev-dynamodb)webapp
+{
+    "TableNames": []
+}
+```
+
+Note that we use port 8010 and not the default port of 8000, as that would be linkly to cause conflicts.
 
 Amazon Linux 2023 Development Environment (EC2)
 -----------------------------------------------
