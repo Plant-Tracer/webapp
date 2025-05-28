@@ -38,7 +38,7 @@ This design makes it easy to move from the server-based architecture to the AWS 
 
 Installation on a Virtual Machine
 ---------------------------------
-This repo is designed to be check as `$HOME/webapp` in the service account of the user that is running the application. On a typical Amazon EC2 VM this will be `/home/ec2-user/webapp`.
+This repo is designed to be checked out to `$HOME/webapp` in the service account of the user that is running the application. On a typical Amazon EC2 VM this will be `/home/ec2-user/webapp`.
 
 Installation on a Developer's Machine
 -------------------------------------
