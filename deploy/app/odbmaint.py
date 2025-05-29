@@ -8,6 +8,22 @@ from botocore.exceptions import ClientError
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+KeySchema = 'KeySchema'
+KeyType = 'KeyType'
+TableName = 'TableName'
+AttributeName = 'AttributeName'
+AttributeType = 'AttributeType'
+GlobalSecondaryIndexes = 'GlobalSecondaryIndexes'
+BillingMode = 'BillingMode'
+PAY_PER_REQUEST = 'PAY_PER_REQUEST'
+HASH = 'HASH'
+RANGE = 'RANGE'
+S = 'S'                         # string
+N = 'N'                         # number
+
+billing = {BillingMode: PAY_PER_REQUEST} # alternative is provisioned throughput
+projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
+
 # --- Global Constants ---
 DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
 DEFAULT_PROVISIONED_THROUGHPUT = {
@@ -20,103 +36,92 @@ TABLE_CONFIGURATIONS = [
     {
         'TableName': 'users',
         'KeySchema': [
-            {'AttributeName': 'id', 'KeyType': 'HASH'}
+            {AttributeName: 'userId', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {'AttributeName': 'id', 'AttributeType': 'S'},
-            {'AttributeName': 'email', 'AttributeType': 'S'}
+            {AttributeName: 'userId', AttributeType: S},
+            {AttributeName: 'email', AttributeType: S}
         ],
         'GlobalSecondaryIndexes': [
             {
                 'IndexName': 'EmailIndex',
                 'KeySchema': [
-                    {'AttributeName': 'email', 'KeyType': 'HASH'}
+                    {AttributeName: 'email', KeyType: HASH}
                 ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+                **projection_all,
             }
         ],
-        'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+        **billing,
+    },
+    {
+        'TableName': 'api_keys',
+        'KeySchema': [
+            {AttributeName: 'api_key', KeyType: HASH}
+        ],
+        'AttributeDefinitions' : [
+            {AttributeName: 'api_key', AttributeType : S},
+            {AttributeName: 'userId', AttributeType : S}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'UserIdIndex',
+                'KeySchema': [
+                    {AttributeName: 'userId', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+        ],
+        **billing,
     },
     {
         'TableName': 'courses',
         'KeySchema': [
-            {'AttributeName': 'id', 'KeyType': 'HASH'}
+            {AttributeName: 'courseId', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {'AttributeName': 'id', 'AttributeType': 'S'}
+            {AttributeName: 'courseId', AttributeType: S}
         ],
-        'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+        **billing,
     },
     {
         'TableName': 'movies',
         'KeySchema': [
-            {'AttributeName': 'id', 'KeyType': 'HASH'}
+            {AttributeName: 'movieId', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {'AttributeName': 'id', 'AttributeType': 'S'},
-            {'AttributeName': 'courseId', 'AttributeType': 'S'},
-            {'AttributeName': 'userId', 'AttributeType': 'S'},
-            {'AttributeName': 'isPublished', 'AttributeType': 'N'}, # Stored as 0 (false) or 1 (true) for indexing
-            {'AttributeName': 'isDeleted', 'AttributeType': 'N'}    # Stored as 0 (false) or 1 (true) for indexing
+            {AttributeName: 'movieId', AttributeType: S},
+            {AttributeName: 'courseId', AttributeType: S},
+            {AttributeName: 'userId', AttributeType: S},
         ],
         'GlobalSecondaryIndexes': [
             {
                 'IndexName': 'CourseIdIndex',
                 'KeySchema': [
-                    {'AttributeName': 'courseId', 'KeyType': 'HASH'}
+                    {AttributeName: 'courseId', KeyType: HASH}
                 ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+                **projection_all,
             },
             {
                 'IndexName': 'UserIdIndex',
                 'KeySchema': [
-                    {'AttributeName': 'userId', 'KeyType': 'HASH'}
+                    {AttributeName: 'userId', KeyType: HASH}
                 ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+                **projection_all,
             },
-            {
-                'IndexName': 'PublishedIndex',
-                'KeySchema': [
-                    {'AttributeName': 'isPublished', 'KeyType': 'HASH'}
-                ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
-            },
-            {
-                'IndexName': 'DeletedIndex',
-                'KeySchema': [
-                    {'AttributeName': 'isDeleted', 'KeyType': 'HASH'}
-                ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
-            }
         ],
-        'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+        **billing,
     },
     {
         'TableName': 'frames',
         'KeySchema': [
-            {'AttributeName': 'movieId', 'KeyType': 'HASH'},
-            {'AttributeName': 'frameNumber', 'KeyType': 'RANGE'}
+            {AttributeName: 'movieId', KeyType: HASH},
+            {AttributeName: 'frameNumber', KeyType: RANGE}
         ],
         'AttributeDefinitions': [
-            {'AttributeName': 'movieId', 'AttributeType': 'S'},
-            {'AttributeName': 'frameNumber', 'AttributeType': 'N'}
+            {AttributeName: 'movieId', AttributeType: S},
+            {AttributeName: 'frameNumber', AttributeType: N}
         ],
-        'ProvisionedThroughput': DEFAULT_PROVISIONED_THROUGHPUT
+        **billing,
     }
 ]
 
@@ -188,10 +193,10 @@ if __name__ == "__main__":
 
     # --- Configure Logging Level ---
     if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG) # Set root logger level to DEBUG
+        logger.setLevel(logging.DEBUG) # Set root logger level to DEBUG
         logger.debug("Debug mode enabled.")
     else:
-        logging.getLogger().setLevel(logging.INFO) # Default to INFO if not debug
+        logger.setLevel(logging.INFO) # Default to INFO if not debug
 
     # Initialize DynamoDB resource once (now that logging level is set)
     dynamodb_resource = boto3.resource(

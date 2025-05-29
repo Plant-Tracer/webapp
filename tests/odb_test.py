@@ -1,70 +1,51 @@
 import uuid
 import boto3
+import os
 
-# Assuming dynamodb resource is already initialized (as in your script)
-dynamodb = boto3.resource(
-    'dynamodb',
-    region_name='us-east-1',
-    endpoint_url='http://localhost:8010'
-)
+import pytest
 
-# --- Example for 'users' table ---
-users_table = dynamodb.Table('users')
+from app.odb import ODB
 
-# Generate a unique ID for the new user
-new_user_id = str(uuid.uuid4()) # uuid.uuid4() generates a UUID object, convert to string
-
-user_data = {
-    'id': new_user_id,
+TEST_USER_ID = str(uuid.uuid4()) # uuid.uuid4() generates a UUID object, convert to string
+TEST_COURSE_ID = str(uuid.uuid4()) # Generate ID for course
+TEST_MOVIE_ID = str(uuid.uuid4()) # Generate ID for movie
+TEST_USER_DATA = {
+    'userId': TEST_USER_ID,
     'email': 'new.user@example.com',
     'username': 'newUser123',
     'firstName': 'New',
     'lastName': 'User',
-    'primaryCourseId': 'course-abc-123' # Example of other attributes
+    'primaryCourseId': TEST_COURSE_ID,
     # 'courseIds': ['course-abc-123', 'course-xyz-456'] # Example for multiple courses
 }
 
-try:
-    users_table.put_item(Item=user_data)
-    print(f"User '{user_data['username']}' with ID '{new_user_id}' added successfully.")
-except Exception as e:
-    print(f"Error adding user: {e}")
+TEST_COURSE_DATA = {
+    'courseId': TEST_COURSE_ID,
+    'name': 'Introduction to DynamoDB',
+    'instructorId': TEST_USER_ID # Example: User is also an instructor
+}
 
-
-# --- Example for 'movies' table ---
-movies_table = dynamodb.Table('movies')
-
-new_movie_id = str(uuid.uuid4()) # Generate ID for movie
-
-movie_data = {
-    'id': new_movie_id,
+TEST_MOVIE_DATA = {
+    'movieId': TEST_MOVIE_ID,
+    'courseId': TEST_COURSE_ID,
+    'userId': TEST_USER_ID,
     'title': 'My New Awesome Movie',
-    'courseId': 'course-abc-123', # Link to a course ID
-    'userId': new_user_id,        # Link to the user created above
     'isPublished': False,
     'isDeleted': False,
     'description': 'A fantastic new movie project.'
 }
 
-try:
-    movies_table.put_item(Item=movie_data)
-    print(f"Movie '{movie_data['title']}' with ID '{new_movie_id}' added successfully.")
-except Exception as e:
-    print(f"Error adding movie: {e}")
+def test_odb():
+    odb = ODB(region_name=os.getenv('AWS_DEFAULT_REGION'),
+             endpoint_url=os.getenv('DYNAMODB_ENDPOINT_URL'))
+    odb.put_user(TEST_USER_DATA)
+    u1 = odb.get_user(TEST_USER_ID)
+    assert u1 == TEST_USER_DATA
 
-# --- Example for 'courses' table ---
-courses_table = dynamodb.Table('courses')
+    odb.put_movie(TEST_MOVIE_DATA)
+    m1 = odb.get_movie(TEST_MOVIE_ID)
+    assert m1 == TEST_MOVIE_DATA
 
-new_course_id = str(uuid.uuid4()) # Generate ID for course
-
-course_data = {
-    'id': new_course_id,
-    'name': 'Introduction to DynamoDB',
-    'instructorId': new_user_id # Example: User is also an instructor
-}
-
-try:
-    courses_table.put_item(Item=course_data)
-    print(f"Course '{course_data['name']}' with ID '{new_course_id}' added successfully.")
-except Exception as e:
-    print(f"Error adding course: {e}")
+    odb.put_course(TEST_COURSE_DATA)
+    c1 = odb.get_course(TEST_COURSE_ID)
+    assert c1 == TEST_COURSE_DATA
