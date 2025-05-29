@@ -193,9 +193,6 @@ if __name__ == "__main__":
     else:
         logging.getLogger().setLevel(logging.INFO) # Default to INFO if not debug
 
-    # Re-assign logger to ensure it uses the newly configured level from the root.
-    logger = logging.getLogger(__name__)
-
     # Initialize DynamoDB resource once (now that logging level is set)
     dynamodb_resource = boto3.resource(
         'dynamodb',
