@@ -78,6 +78,6 @@ canvas {
     }
 }
 
-#analysis-results{
-    visibility: hidden;
+div#analysis-results {
+    display:none;
 }

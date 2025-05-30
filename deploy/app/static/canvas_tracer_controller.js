@@ -436,7 +436,7 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
                                   api_key,
-                                  show_graph=true) {
+                                  show_results=true) {
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
@@ -454,8 +454,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
         cc.track_button.val( RETRACK_MOVIE );
         cc.download_button.show();
     }
-    if (show_graph) {
-        // draw the graph using the information in movie_frames
+    if (show_results) {
+        let results_div = document.getElementById("analysis-results");
+        results_div.style.display = "block";
         graph_data(cc, movie_frames);
     }
 }
@@ -610,8 +611,6 @@ function graph_data(cc, frames) {
         }
         return { scale: scale, pos_units: pos_units };
     }
-    document.getElementById('apex-xChart').style.visibility = 'visible';
-    document.getElementById('apex-yChart').style.visibility = 'visible';
 }
 
 // Not sure what we have, so ask the server and then dispatch to one of the two methods above
