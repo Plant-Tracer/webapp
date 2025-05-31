@@ -36,10 +36,10 @@ TABLE_CONFIGURATIONS = [
     {
         'TableName': 'users',
         'KeySchema': [
-            {AttributeName: 'userId', KeyType: HASH}
+            {AttributeName: 'user_id', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {AttributeName: 'userId', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S},
             {AttributeName: 'email', AttributeType: S}
         ],
         'GlobalSecondaryIndexes': [
@@ -60,13 +60,13 @@ TABLE_CONFIGURATIONS = [
         ],
         'AttributeDefinitions' : [
             {AttributeName: 'api_key', AttributeType : S},
-            {AttributeName: 'userId', AttributeType : S}
+            {AttributeName: 'user_id', AttributeType : S}
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'UserIdIndex',
+                'IndexName': 'User_id_Index',
                 'KeySchema': [
-                    {AttributeName: 'userId', KeyType: HASH}
+                    {AttributeName: 'user_id', KeyType: HASH}
                 ],
                 **projection_all,
             },
@@ -76,35 +76,52 @@ TABLE_CONFIGURATIONS = [
     {
         'TableName': 'courses',
         'KeySchema': [
-            {AttributeName: 'courseId', KeyType: HASH}
+            {AttributeName: 'course_id', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {AttributeName: 'courseId', AttributeType: S}
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'courseKey', AttributeType: S}
+        ],
+        'GlobalSecondaryIndexes' : [
+            {
+                'IndexName': 'CourseKey_id_x',
+                'KeySchema': [
+                    {AttributeName: 'courseKey', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+            {
+                'IndexName': 'User_id_Index',
+                'KeySchema': [
+                    {AttributeName: 'course_id', KeyType: HASH}
+                ],
+                **projection_all,
+            },
         ],
         **billing,
     },
     {
         'TableName': 'movies',
         'KeySchema': [
-            {AttributeName: 'movieId', KeyType: HASH}
+            {AttributeName: 'movie_id', KeyType: HASH}
         ],
         'AttributeDefinitions': [
-            {AttributeName: 'movieId', AttributeType: S},
-            {AttributeName: 'courseId', AttributeType: S},
-            {AttributeName: 'userId', AttributeType: S},
+            {AttributeName: 'movie_id', AttributeType: S},
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S},
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'CourseIdIndex',
+                'IndexName': 'Course_id_Index',
                 'KeySchema': [
-                    {AttributeName: 'courseId', KeyType: HASH}
+                    {AttributeName: 'course_id', KeyType: HASH}
                 ],
                 **projection_all,
             },
             {
-                'IndexName': 'UserIdIndex',
+                'IndexName': 'User_id_Index',
                 'KeySchema': [
-                    {AttributeName: 'userId', KeyType: HASH}
+                    {AttributeName: 'user_id', KeyType: HASH}
                 ],
                 **projection_all,
             },
@@ -112,14 +129,19 @@ TABLE_CONFIGURATIONS = [
         **billing,
     },
     {
-        'TableName': 'frames',
+        'TableName': 'movie_frames',
         'KeySchema': [
-            {AttributeName: 'movieId', KeyType: HASH},
+            {AttributeName: 'movie_id', KeyType: HASH},
             {AttributeName: 'frameNumber', KeyType: RANGE}
         ],
         'AttributeDefinitions': [
-            {AttributeName: 'movieId', AttributeType: S},
-            {AttributeName: 'frameNumber', AttributeType: N}
+            {AttributeName: 'movie_id', AttributeType: S},
+            {AttributeName: 'frameNumber', AttributeType: N},
+            {AttributeName: 'url', AttributeType: S},
+            {AttributeName: 'uploaded', AttributeType: N},
+            {AttributeName: 'modified', AttributeType: N},
+            {AttributeName: 'frame_time', AttributeType: N},
+            {AttributeName: 'trackpoints', AttributeType: S}
         ],
         **billing,
     }
@@ -205,7 +227,7 @@ if __name__ == "__main__":
         endpoint_url=DEFAULT_DYNAMODB_ENDPOINT
     )
 
-    tables_to_drop = ['users', 'courses', 'movies', 'frames']
+    tables_to_drop = ['users', 'courses', 'movies', 'movie_frames']
     for table_name in tables_to_drop:
         drop_dynamodb_table(table_name, dynamodb_resource) # Pass the resource
     create_dynamodb_tables(dynamodb_resource) # Pass the resource
