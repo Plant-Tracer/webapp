@@ -1,28 +1,31 @@
 import uuid
 import boto3
 import os
+import time
 
 import pytest
 
 from app.odb import ODB
 
 TEST_USER_ID = str(uuid.uuid4()) # uuid.uuid4() generates a UUID object, convert to string
+TEST_USER_EMAIL = 'new.user@example.com'
 TEST_COURSE_ID = str(uuid.uuid4()) # Generate ID for course
 TEST_MOVIE_ID = str(uuid.uuid4()) # Generate ID for movie
 TEST_USER_DATA = {
     'userId': TEST_USER_ID,
-    'email': 'new.user@example.com',
-    'username': 'newUser123',
-    'firstName': 'New',
-    'lastName': 'User',
+    'email': TEST_USER_EMAIL,
+    'name': 'Firstname Lastname',
+    'created': int(time.time()),
+    'enabled': 1,
+    'demo': 0,
+    'admin': [],
+    'courses': [TEST_COURSE_ID],
     'primaryCourseId': TEST_COURSE_ID,
-    # 'courseIds': ['course-abc-123', 'course-xyz-456'] # Example for multiple courses
 }
 
 TEST_COURSE_DATA = {
     'courseId': TEST_COURSE_ID,
-    'name': 'Introduction to DynamoDB',
-    'instructorId': TEST_USER_ID # Example: User is also an instructor
+    'name': 'Introduction to DynamoDB'
 }
 
 TEST_MOVIE_DATA = {
@@ -30,8 +33,8 @@ TEST_MOVIE_DATA = {
     'courseId': TEST_COURSE_ID,
     'userId': TEST_USER_ID,
     'title': 'My New Awesome Movie',
-    'isPublished': False,
-    'isDeleted': False,
+    'isPublished': 0,
+    'isDeleted': 0,
     'description': 'A fantastic new movie project.'
 }
 
@@ -41,6 +44,10 @@ def test_odb():
     odb.put_user(TEST_USER_DATA)
     u1 = odb.get_user(TEST_USER_ID)
     assert u1 == TEST_USER_DATA
+
+    u2 = odb.get_user(None, email=TEST_USER_EMAIL)
+    assert u2 == TEST_USER_DATA
+
 
     odb.put_movie(TEST_MOVIE_DATA)
     m1 = odb.get_movie(TEST_MOVIE_ID)
