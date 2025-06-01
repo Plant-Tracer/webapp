@@ -18,14 +18,17 @@ from functools import lru_cache
 
 from flask import request
 import boto3
-from botocore.exceptions import ClientError,ParamValidationError
+
 from jinja2.nativetypes import NativeEnvironment
+
+from botocore.exceptions import ClientError,ParamValidationError
+from boto3.dynamodb.conditions import Key
+
 
 from . import auth
 from . import mailer
 from .paths import TEMPLATE_DIR
 from .constants import MIME,C
-
 
 API_KEYS = 'api_keys'
 USERS  = 'users'
@@ -77,7 +80,7 @@ class NoMovieData(DB_Errors):
 ################################################################
 
 @lru_cache(maxsize=None)
-class ODB:
+class DDBO:
     def __init__(self, *, region_name='us-east-1', endpoint_url=None):
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
@@ -85,8 +88,8 @@ class ODB:
 
         # Set up the tables
         self.api_keys  = self.dynamodb.Table( API_KEYS )
-        self.users  = self.dynamodb.Table( USERS )
-        self.movies = self.dynamodb.Table( MOVIES )
+        self.users     = self.dynamodb.Table( USERS )
+        self.movies  = self.dynamodb.Table( MOVIES )
         self.frames = self.dynamodb.Table( FRAMES )
         self.courses = self.dynamodb.Table( COURSES )
 
@@ -95,15 +98,20 @@ class ODB:
         return str(uuid.uuid4())
 
     def get_api_key_dict(self,api_key):
-        return self.api_keys.get_item(Key = {'api_key':api_key}).get('Item',None)
+        return self.api_keys.get_item(Key = {'api_key':api_key}, ConsistentRead=True).get('Item',None)
 
     def put_api_key_dict(self,api_key_dict):
         self.api_keys.put_item(Item = api_key_dict)
 
     def get_user(self,user_id, email=None):
         if email:
-            self.users.get_item(Key = {'email':user_id}).get('Item',None)
-        return self.users.get_item(Key = {'user_id':user_id}).get('Item',None)
+            response = self.users.query(
+                IndexName='EmailIndex',
+                KeyConditionExpression=Key('email').eq(email)
+            )
+            items = response.get('Items', [])
+            return items[0] if items else None
+        return self.users.get_item(Key = {'user_id':user_id},ConsistentRead=True).get('Item',None)
 
     def get_userid_for_email(self, email):
         return self.get_user(None, email)['user_id']
@@ -112,23 +120,53 @@ class ODB:
         self.users.put_item(Item = userdict)
 
     def get_course(self,course_id):
-        return self.courses.get_item(Key = {'course_id':course_id}).get('Item',None)
+        return self.courses.get_item(Key = {'course_id':course_id},ConsistentRead=True).get('Item',None)
 
     def put_course(self, coursedict):
         self.courses.put_item(Item=coursedict)
 
     def get_movie(self,movie_id):
-        return self.movies.get_item(Key = {'movie_id':movie_id}).get('Item',None)
+        return self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
 
     def put_movie(self, moviedict):
         print("moviedict:",moviedict)
         self.movies.put_item(Item=moviedict)
 
     def get_frame(self,movie_id,frameId):
-        return self.frames.get_item(Key = {'movie_id':user_id, 'frameId':frameId}).get('Item',None)
+        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId},ConsistentRead=True).get('Item',None)
 
     def put_frame(self,framedict):
         self.frames.put_item(Item=framedict)
+
+    def batch_delete_movie_ids(self, ids):
+        """Delete movie items from the table using batch_writer."""
+        with self.movies.batch_writer() as batch:
+            for theId in ids:
+                batch.delete_item(Key={ 'movie_id': theId})
+
+
+    def get_movies_for_user_id(self, user_id):
+        """Query UserIdIndex and return all movie_ids for the given user_id (with pagination)."""
+        movie_ids = []
+        last_evaluated_key = None
+    
+        while True:
+            query_kwargs = { 'IndexName': 'User_id_Index',
+                             'KeyConditionExpression': Key( 'user_id' ).eq( user_id ),
+                             'ProjectionExpression': 'movie_id' }
+    
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.movies.query(**query_kwargs)
+            movie_ids.extend(item[ 'movie_id' ] for item in response['Items'])
+    
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return movie_ids
+    
+    
+
 
 #############
 ## Logging ##
@@ -187,7 +225,7 @@ def validate_api_key(api_key):
     :param: api_key - the key provided by the cookie or the HTML form.
     :return: User dictionary if api_key and user are both enabled, otherwise return {}
     """
-    dd = ODB()
+    dd = DDBO()
     api_key_dict = dd.get_api_key_dict(api_key)
     if api_key_dict['enabled']:
         user = dd.get_user(api_key_dict['user_id'])
@@ -207,73 +245,53 @@ def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
     :param: get_courses - if True get information about the user's courses (ignored)
     :return: User dictionary augmented with additional information.
     """
-    dd = ODB()
+    dd = DDBO()
     if user_id:
-        return = dd.get_user(user_id)
+        return dd.get_user(user_id)
     elif email:
-        return = dd.get_user(None, email=email)
+        return dd.get_user(None, email=email)
     else:
         raise RuntimeError("user_id or email must be provided")
 
 @log
 def rename_user(*,user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
-    dd = ODB()
-    user = dd.get_user( user_id )
-    if user['email'] == email:
-        user['email'] = new_email
-        dd.put_user(user)
+    if email == new_email:
+        return
+    dd = DDBO()
+    user = dd.get_user(user_id)
+    if not user:
+        raise ValueError(f"No user with user_id: {user_id}")
+    if user['email'] != email:
+        raise ValueError(f"Provided old email does not match stored email for user_id: {user_id}")
 
-def get_all_x_for_y(table, x, y, yValue):
-    """Query UserIdIndex and return all movie_ids for the given user_id (with pagination)."""
-    xvalues = []
-    last_evaluated_key = None
+    try:
+        dd.dynamodb.transact_write_items(
+            TransactItems=[ {
+                'Delete': {
+                    'TableName': 'unique_emails',
+                    'Key': {'email': {'S': email}},
+                    'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
+                }
+            }, {
+                'Put': {
+                    'TableName': 'unique_emails',
+                    'Item': {'email': {'S': new_email}},
+                    'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
+                }
+            }, {
+                'Update': {
+                    'TableName': 'users',
+                    'Key': {'user_id': {'S': user_id}},
+                    'UpdateExpression': 'SET #E = :new_email',
+                    'ExpressionAttributeNames': { '#E': 'email' },
+                    'ExpressionAttributeValues': { ':new_email': {'S': new_email}                        }
+                }
+            } ] )
+        user['email'] = new_email  # Keep local copy updated if needed
+    except ClientError as e:
+        raise RuntimeError(f"Email update failed: {e}")
 
-    while True:
-        query_kwargs = { 'IndexName': 'User_id_Index',
-                         'KeyConditionExpression': Key( y ).eq( yValue ),
-                         'ProjectionExpression': whichId }
-
-        if last_evaluated_key:
-            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
-        response = table.query(**query_kwargs)
-        xvalues.extend(item[ x ] for item in response['Items'])
-
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            break
-    return movie_ids
-
-
-def get_all_ids_for_user_id(table, whichId, user_id):
-    """Query UserIdIndex and return all movie_ids for the given user_id (with pagination)."""
-    ids = []
-    last_evaluated_key = None
-
-    while True:
-        query_kwargs = {
-            'IndexName': 'User_id_Index',
-            'KeyConditionExpression': Key('user_id').eq(user_id),
-            'ProjectionExpression': whichId,
-        }
-
-        if last_evaluated_key:
-            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
-
-        response = table.query(**query_kwargs)
-
-        ids.extend(item[ whichId ] for item in response['Items'])
-
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            break
-    return ids
-
-def batch_delete_movie_ids(table, whichId, ids):
-    """Delete movie items from the table using batch_writer."""
-    with table.batch_writer() as batch:
-        for theId in ids:
-            batch.delete_item(Key={ whichId: movie_id})
 
 
 
@@ -290,7 +308,7 @@ def delete_user(*,email,purge_movies=False):
     Deletes all of the users
     Also deletes the user from any courses where they may be an admin.
     """
-    dd = ODB()
+    dd = DDBO()
     user_id = dd.get_userid_for_email( email )
     movie_ids = all_movie_ids( dd.movies, 'movie_id', user_id)
     if purge_movies:
@@ -319,7 +337,7 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
-    dd = ODB()
+    dd = DDBO()
 
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")
@@ -332,6 +350,9 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
         course_id = res[0][0]
 
     # See if the user already exists
+    # Note that there is synchornization error here. We should actually use a transact_write_items
+    # here and simultaneously write to a table of unique_emails and the users table. So two users
+    # may end up with the same email address.
     user = db.get_user(None, email=email)
     if not user:
         user = {'email': email}
@@ -941,7 +962,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
 
 def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
               course_key=None, movie_id=None, log_user_id=None,
-              ipaddr=None, count=LOG_MAX_RECORDS, offset=0, security=True):
+              ipaddr=None, count=C.LOG_MAX_RECORDS, offset=0, security=True):
     """get log entries (to which the user is entitled) - Implements /api/get-log
     :param: user_id    - the user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
@@ -955,7 +976,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
     :return: list of dictionaries of log records.
     """
 
-    count = max(count, LOG_MAX_RECORDS)
+    count = max(count, C.LOG_MAX_RECORDS)
 
     # First find all of the records requested by the searcher
     cmd = """SELECT * FROM logs WHERE (time_t >= %s """

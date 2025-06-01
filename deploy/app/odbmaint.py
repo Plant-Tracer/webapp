@@ -13,6 +13,7 @@ KeyType = 'KeyType'
 TableName = 'TableName'
 AttributeName = 'AttributeName'
 AttributeType = 'AttributeType'
+AttributeDefinitions = 'AttributeDefinitions'
 GlobalSecondaryIndexes = 'GlobalSecondaryIndexes'
 BillingMode = 'BillingMode'
 PAY_PER_REQUEST = 'PAY_PER_REQUEST'
@@ -38,7 +39,7 @@ TABLE_CONFIGURATIONS = [
         'KeySchema': [
             {AttributeName: 'user_id', KeyType: HASH}
         ],
-        'AttributeDefinitions': [
+        AttributeDefinitions: [
             {AttributeName: 'user_id', AttributeType: S},
             {AttributeName: 'email', AttributeType: S}
         ],
@@ -58,7 +59,7 @@ TABLE_CONFIGURATIONS = [
         'KeySchema': [
             {AttributeName: 'api_key', KeyType: HASH}
         ],
-        'AttributeDefinitions' : [
+        AttributeDefinitions : [
             {AttributeName: 'api_key', AttributeType : S},
             {AttributeName: 'user_id', AttributeType : S}
         ],
@@ -78,7 +79,7 @@ TABLE_CONFIGURATIONS = [
         'KeySchema': [
             {AttributeName: 'course_id', KeyType: HASH}
         ],
-        'AttributeDefinitions': [
+        AttributeDefinitions: [
             {AttributeName: 'course_id', AttributeType: S},
             {AttributeName: 'courseKey', AttributeType: S}
         ],
@@ -105,7 +106,7 @@ TABLE_CONFIGURATIONS = [
         'KeySchema': [
             {AttributeName: 'movie_id', KeyType: HASH}
         ],
-        'AttributeDefinitions': [
+        AttributeDefinitions: [
             {AttributeName: 'movie_id', AttributeType: S},
             {AttributeName: 'course_id', AttributeType: S},
             {AttributeName: 'user_id', AttributeType: S},
@@ -132,16 +133,32 @@ TABLE_CONFIGURATIONS = [
         'TableName': 'movie_frames',
         'KeySchema': [
             {AttributeName: 'movie_id', KeyType: HASH},
-            {AttributeName: 'frameNumber', KeyType: RANGE}
+            {AttributeName: 'frame_number', KeyType: RANGE}
         ],
-        'AttributeDefinitions': [
+        AttributeDefinitions: [
             {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'frameNumber', AttributeType: N},
-            {AttributeName: 'url', AttributeType: S},
-            {AttributeName: 'uploaded', AttributeType: N},
-            {AttributeName: 'modified', AttributeType: N},
-            {AttributeName: 'frame_time', AttributeType: N},
-            {AttributeName: 'trackpoints', AttributeType: S}
+            {AttributeName: 'frame_number', AttributeType: N},
+            {AttributeName: 'frame_time', AttributeType: N}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'Movie_Frame_time_Index',
+                'KeySchema': [
+                    {AttributeName: 'movie_id', KeyType: HASH},
+                    {AttributeName: 'frame_time', KeyType: RANGE}
+                ],
+                **projection_all,
+            },
+        ],
+        **billing,
+    },
+    {
+        TableName: 'unique_emails',
+        KeySchema: [
+            {AttributeName: 'email', KeyType: HASH}
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'email', AttributeType: S}
         ],
         **billing,
     }
@@ -203,6 +220,20 @@ def create_dynamodb_tables(dynamodb_resource: 'boto3.resources.base.ServiceResou
         except Exception as e:
             logger.error("An unexpected error occurred creating table %s: %s", table_name, e)
 
+def create_schema(*,region_name, endpoint_url):
+    # Initialize DynamoDB resource once (now that logging level is set)
+    dynamodb_resource = boto3.resource(
+        'dynamodb',
+        region_name='us-east-1',
+        endpoint_url=DEFAULT_DYNAMODB_ENDPOINT
+    )
+
+    tables_to_drop = [ config['TableName'] for config in TABLE_CONFIGURATIONS ]
+    for table_name in tables_to_drop:
+        drop_dynamodb_table(table_name, dynamodb_resource) # Pass the resource
+    create_dynamodb_tables(dynamodb_resource) # Pass the resource
+
+
 if __name__ == "__main__":
     # --- Argparse Setup ---
     parser = argparse.ArgumentParser(description="Manage DynamoDB Local tables (create/drop).")
@@ -219,15 +250,4 @@ if __name__ == "__main__":
         logger.debug("Debug mode enabled.")
     else:
         logger.setLevel(logging.INFO) # Default to INFO if not debug
-
-    # Initialize DynamoDB resource once (now that logging level is set)
-    dynamodb_resource = boto3.resource(
-        'dynamodb',
-        region_name='us-east-1',
-        endpoint_url=DEFAULT_DYNAMODB_ENDPOINT
-    )
-
-    tables_to_drop = ['users', 'courses', 'movies', 'movie_frames']
-    for table_name in tables_to_drop:
-        drop_dynamodb_table(table_name, dynamodb_resource) # Pass the resource
-    create_dynamodb_tables(dynamodb_resource) # Pass the resource
+    create_schema(region_name='us-east-1', endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)

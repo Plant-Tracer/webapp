@@ -18,7 +18,7 @@
                 "courses": { "type": "array", "description": "A list of the courseIds in which the user is enrolled", "items": { "type": "string" } },
                 "first_used_at": { "type": "integer", "description": "When it was first used" },
                 "last_used_at": { "type": "integer", "description": "When it was last used" },
-                "primaryCourseId": { "type": "string", "description": "The user's primary course" }
+                "primary_course_id": { "type": "string", "description": "The user's primary course" }
             }
         },
         "api_keys": {

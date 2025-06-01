@@ -23,6 +23,7 @@ class C:
     FFMPEG_PATH = 'FFMPEG_PATH'
 
     # Other
+    LOG_MAX_RECORDS = 1024
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
