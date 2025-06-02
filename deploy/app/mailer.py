@@ -93,7 +93,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     except KeyError as e:
         raise mailer.NoMailerConfiguration() from e
     try:
-        mailer.send_message(from_addr=PROJECT_EMAIL,
+        send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
                             smtp_config=smtp_config,
                             dry_run=DRY_RUN,
