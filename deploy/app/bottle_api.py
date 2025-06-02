@@ -596,7 +596,11 @@ def api_get_movie_trackpoints():
 ##
 @api_bp.route('/list-users', methods=POST)
 def api_list_users():
-    return {**{'error': False}, **db.list_users(user_id=get_user_id())}
+    return {**{'error': False}, **db.list_users_courses(user_id=get_user_id())}
+
+@api_bp.route('/list-users-courses', methods=POST)
+def api_list_users():
+    return {**{'error': False}, **db.list_users_courses(user_id=get_user_id())}
 
 
 @api_bp.route('/ver', methods=GET_POST)

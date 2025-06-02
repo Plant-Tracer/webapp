@@ -323,7 +323,7 @@ def delete_api_key(api_key):
     return dbfile.DBMySQL.csfr(get_dbwriter(), """DELETE FROM api_keys WHERE api_key=%s""", (api_key,))
 
 @log
-def list_users(*, user_id):
+def list_users_courses(*, user_id):
     """Returns a dictionary with keys:
     'users' - all the courses to which the user has access, and all of the people in them.
     'courses' - all of the courses
