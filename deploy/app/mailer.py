@@ -11,6 +11,12 @@ import os
 from email.parser import BytesParser
 from email import policy
 
+from jinja2.nativetypes import NativeEnvironment
+
+from . import auth
+from .paths import TEMPLATE_DIR
+from .constants import C
+
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'
@@ -63,6 +69,38 @@ def send_message(*,
         smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
         smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
 
+def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
+    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
+    PROJECT_EMAIL = 'admin@planttracer.com'
+
+    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
+
+    TO_ADDRS = [email]
+    with open(os.path.join(TEMPLATE_DIR, C.EMAIL_TEMPLATE_FNAME), "r") as f:
+        msg_env = NativeEnvironment().from_string(f.read())
+
+    logging.info("sending new link to %s",email)
+    msg = msg_env.render(to_addrs=",".join([email]),
+                         from_addr=PROJECT_EMAIL,
+                         planttracer_endpoint=planttracer_endpoint,
+                         api_key=new_api_key)
+
+    DRY_RUN = False
+    SMTP_DEBUG = 'YES' if debug else ''
+    try:
+        smtp_config = auth.smtp_config()
+        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+    except KeyError as e:
+        raise mailer.NoMailerConfiguration() from e
+    try:
+        send_message(from_addr=PROJECT_EMAIL,
+                            to_addrs=TO_ADDRS,
+                            smtp_config=smtp_config,
+                            dry_run=DRY_RUN,
+                            msg=msg)
+    except smtplib.SMTPAuthenticationError as e:
+        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
+    return new_api_key
 
 IMAP_HOST = 'IMAP_HOST'
 IMAP_PORT = 'IMAP_PORT'

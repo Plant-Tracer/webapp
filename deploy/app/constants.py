@@ -24,6 +24,7 @@ class C:
 
     # Other
     LOG_MAX_RECORDS = 1024
+    EMAIL_TEMPLATE_FNAME = 'email.txt'
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
