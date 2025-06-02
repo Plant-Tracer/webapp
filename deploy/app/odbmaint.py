@@ -45,7 +45,7 @@ TABLE_CONFIGURATIONS = [
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'EmailIndex',
+                'IndexName': 'email_idx',
                 'KeySchema': [
                     {AttributeName: 'email', KeyType: HASH}
                 ],
@@ -65,7 +65,7 @@ TABLE_CONFIGURATIONS = [
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'User_id_Index',
+                'IndexName': 'user_id_idx',
                 'KeySchema': [
                     {AttributeName: 'user_id', KeyType: HASH}
                 ],
@@ -81,18 +81,18 @@ TABLE_CONFIGURATIONS = [
         ],
         AttributeDefinitions: [
             {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'courseKey', AttributeType: S}
+            {AttributeName: 'course_key', AttributeType: S}
         ],
         'GlobalSecondaryIndexes' : [
             {
-                'IndexName': 'CourseKey_id_x',
+                'IndexName': 'course_key_idx',
                 'KeySchema': [
-                    {AttributeName: 'courseKey', KeyType: HASH}
+                    {AttributeName: 'course_key', KeyType: HASH}
                 ],
                 **projection_all,
             },
             {
-                'IndexName': 'User_id_Index',
+                'IndexName': 'course_id_idx',
                 'KeySchema': [
                     {AttributeName: 'course_id', KeyType: HASH}
                 ],
@@ -113,14 +113,14 @@ TABLE_CONFIGURATIONS = [
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'Course_id_Index',
+                'IndexName': 'course_id_idx',
                 'KeySchema': [
                     {AttributeName: 'course_id', KeyType: HASH}
                 ],
                 **projection_all,
             },
             {
-                'IndexName': 'User_id_Index',
+                'IndexName': 'user_id_idx',
                 'KeySchema': [
                     {AttributeName: 'user_id', KeyType: HASH}
                 ],
@@ -142,7 +142,7 @@ TABLE_CONFIGURATIONS = [
         ],
         'GlobalSecondaryIndexes': [
             {
-                'IndexName': 'Movie_Frame_time_Index',
+                'IndexName': 'movie_frame_time_idx',
                 'KeySchema': [
                     {AttributeName: 'movie_id', KeyType: HASH},
                     {AttributeName: 'frame_time', KeyType: RANGE}

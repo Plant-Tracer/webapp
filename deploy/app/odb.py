@@ -123,7 +123,7 @@ class DDBO:
     def get_user(self,user_id, email=None):
         if email:
             response = self.users.query(
-                IndexName='EmailIndex',
+                IndexName='email_idx',
                 KeyConditionExpression=Key('email').eq(email)
             )
             items = response.get('Items', [])
@@ -163,12 +163,12 @@ class DDBO:
 
 
     def get_movies_for_user_id(self, user_id):
-        """Query UserIdIndex and return all movie_ids for the given user_id (with pagination)."""
+        """Query user_id_idx and return all movie_ids for the given user_id (with pagination)."""
         movie_ids = []
         last_evaluated_key = None
     
         while True:
-            query_kwargs = { 'IndexName': 'User_id_Index',
+            query_kwargs = { 'IndexName': 'user_id_idx',
                              'KeyConditionExpression': Key( 'user_id' ).eq( user_id ),
                              'ProjectionExpression': 'movie_id' }
     
@@ -182,7 +182,18 @@ class DDBO:
                 break
         return movie_ids
     
-    
+ 
+    def get_course_by_id(self, course_id):
+        return self.courses.get_item(Key={'course_id': course_id}, ConsistentRead=True).get('Item', None)
+
+    def get_course_by_course_key(self, course_key):
+        response = self.courses.query(
+            IndexName='course_key_idx',
+            KeyConditionExpression=Key('course_key').eq(course_key)
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+   
 
 
 #############
@@ -310,8 +321,6 @@ def rename_user(*,user_id, email, new_email):
         raise RuntimeError(f"Email update failed: {e}")
 
 
-
-
 @log
 def delete_user(*, user_id, purge_movies=False):
     """Delete a user specified by user_id.
@@ -378,16 +387,16 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
 
     # Get the course_id if not provided
     if not course_id:
-        courses = get_all_x_for_y( dd.courses, 'course_id', 'course_key', course_key)
-        if len(res) != 1:
+        course = dd.get_course_by_course_key(course_key)
+        if not course:
             raise InvalidCourse_Key(course_key)
-        course_id = res[0][0]
+        course_id = course['course_id']
 
     # See if the user already exists
     # Note that there is synchornization error here. We should actually use a transact_write_items
     # here and simultaneously write to a table of unique_emails and the users table. So two users
     # may end up with the same email address.
-    user = db.get_user(None, email=email)
+    user = dd.get_user(None, email=email)
     if not user:
         user = {'email': email}
     user['name'] = name
@@ -532,6 +541,7 @@ def lookup_course_by_name(*, course_name):
                                    "SELECT * FROM courses WHERE course_name=%s", (course_name,), asDicts=True)[0]
     except IndexError:
         return {}
+
 @log
 def create_course(*, course_key, course_name, max_enrollment, course_section=None):
     """Create a new course
