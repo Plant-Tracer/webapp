@@ -23,6 +23,7 @@ class C:
     FFMPEG_PATH = 'FFMPEG_PATH'
 
     # Other
+    EMAIL_TEMPLATE_FNAME = 'email.txt'
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
