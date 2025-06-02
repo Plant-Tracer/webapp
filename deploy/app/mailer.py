@@ -10,7 +10,7 @@ import imaplib
 import os
 
 from .paths import TEMPLATE_DIR
-from constants import C
+from .constants import C
 from email.parser import BytesParser
 from email import policy
 
