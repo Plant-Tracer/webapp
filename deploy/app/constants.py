@@ -25,6 +25,7 @@ class C:
     # Other
     LOG_MAX_RECORDS = 1024
     EMAIL_TEMPLATE_FNAME = 'email.txt'
+    MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'

@@ -14,6 +14,7 @@ import copy
 import smtplib
 import functools
 import uuid
+import time
 from functools import lru_cache
 
 from flask import request
@@ -23,6 +24,8 @@ from jinja2.nativetypes import NativeEnvironment
 
 from botocore.exceptions import ClientError,ParamValidationError
 from boto3.dynamodb.conditions import Key
+from functools import wraps
+
 
 
 from . import auth
@@ -79,21 +82,77 @@ class NoMovieData(DB_Errors):
 ## DDBO - The Object Database Class
 ################################################################
 
-def new_userid():
+def new_user_id():
     return 'u'+str(uuid.uuid4())
 
-def new_courseid():
+def new_course_id():
     return 'c'+str(uuid.uuid4())
 
-def new_apikey():
-    return 'a'+str(uuid.uuid4())
+def new_api_key():
+    return 'a'+str(uuid.uuid4()).replace('-', '')
 
-def new_movieid():
+def new_movie_id():
     return 'm'+str(uuid.uuid4())
 
-def new_frameid():
+def new_frame_id():
     return 'f'+str(uuid.uuid4())
 
+def is_user_id(k):
+    return k[0]=='u'
+
+def is_course_id(k):
+    return k[0]=='c'
+
+def is_api_key(k):
+    return k[0]=='a' and len(k)==33
+
+def is_movie_id(k):
+    return k[0]=='m'
+
+def is_frame_id(k):
+    return k[0]=='f'
+
+# --- Decorator Definition ---
+def dynamodb_error_debugger(func):
+    """
+    A decorator to catch DynamoDB-related errors (ClientError) and
+    log specific debugging information about the failed operation.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (ClientError) as e:
+            # 'self' (the DDBO instance) is usually the first positional arg
+            # in instance methods, but we can't reliably get the exact
+            # operation name or params at this decorator level unless they're
+            # passed explicitly or inferred.
+            # However, the error message from botocore.exceptions.ClientError
+            # itself often contains valuable context like the operation name.
+
+            logging.error("-" * 60)
+            logging.error(f"DYNAMODB OPERATION FAILED in method: '{func.__name__}'")
+            logging.error(f"  Error Type: {type(e).__name__}")
+
+            error_message = e.response.get('Error', {}).get('Message', str(e))
+            logging.error(f"  Error Message from DynamoDB: {error_message}")
+
+            # The 'OperationName' is part of the error response for ClientError
+            operation_name_from_error = e.operation_name
+            if operation_name_from_error:
+                logging.error(f"  Failed AWS API Operation: {operation_name_from_error}")
+
+            # The 'Parameters' (api_params) are not directly accessible from the
+            # exception object in a generic way *outside* the original call scope.
+            # To get specific parameters, you'd need to log them where the
+            # boto3 call is made, or inspect 'e.response' carefully.
+            # Example:
+            if 'RequestParameters' in e.response.get('Error', {}):
+                 logging.error(f"  Request Parameters (if available): {e.response['Error']['RequestParameters']}")
+
+            logging.error("-" * 60)
+            raise # Re-raise the original exception so the test still fails
+    return wrapper
 
 
 @lru_cache(maxsize=None)
@@ -119,6 +178,23 @@ class DDBO:
 
     def put_api_key_dict(self,api_key_dict):
         self.api_keys.put_item(Item = api_key_dict)
+
+    def del_api_key(self, api_key):
+        self.api_keys.delete_item(Key = {'api_key':api_key})
+
+    def make_new_api_key(self, *, email):
+        """Create a new api_key for an email that is registered
+        :param: email - the email
+        :return: api_key - the api_key
+        """
+        user = self.get_user(None, email=email)
+        if user and user['enabled'] == 1:
+            api_key = new_api_key()
+            self.put_api_key_dict({'api_key':api_key,
+                                   'user_id':user['user_id'],
+                                   'created':int(time.time()) })
+            return api_key
+        return None
 
     def get_user(self,user_id, email=None):
         if email:
@@ -164,26 +240,28 @@ class DDBO:
 
     def get_movies_for_user_id(self, user_id):
         """Query user_id_idx and return all movie_ids for the given user_id (with pagination)."""
+        assert is_user_id(user_id)
         movie_ids = []
         last_evaluated_key = None
-    
+
         while True:
             query_kwargs = { 'IndexName': 'user_id_idx',
                              'KeyConditionExpression': Key( 'user_id' ).eq( user_id ),
                              'ProjectionExpression': 'movie_id' }
-    
+
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
             response = self.movies.query(**query_kwargs)
             movie_ids.extend(item[ 'movie_id' ] for item in response['Items'])
-    
+
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
         return movie_ids
-    
- 
+
+
     def get_course_by_id(self, course_id):
+        assert is_course_id(course_id)
         return self.courses.get_item(Key={'course_id': course_id}, ConsistentRead=True).get('Item', None)
 
     def get_course_by_course_key(self, course_key):
@@ -193,7 +271,6 @@ class DDBO:
         )
         items = response.get('Items', [])
         return items[0] if items else None
-   
 
 
 #############
@@ -216,7 +293,7 @@ def logit(*, func_name, func_args, func_return):
     func_args   = json.dumps(func_args, default=str)
     func_return = json.dumps(func_return, default=str)
 
-    if len(func_return) > MAX_FUNC_RETURN_LOG:
+    if len(func_return) > C.MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
     logger.debug("%s(%s) = %s ", func_name, func_args, func_return)
 
@@ -253,6 +330,7 @@ def validate_api_key(api_key):
     :param: api_key - the key provided by the cookie or the HTML form.
     :return: User dictionary if api_key and user are both enabled, otherwise return {}
     """
+    assert is_api_key(api_key)
     dd = DDBO()
     api_key_dict = dd.get_api_key_dict(api_key)
     if api_key_dict['enabled']:
@@ -273,10 +351,13 @@ def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
     :param: get_courses - if True get information about the user's courses (ignored)
     :return: User dictionary augmented with additional information.
     """
+    assert (user_id is None) or (is_user_id(user_id))
     dd = DDBO()
     if user_id:
         return dd.get_user(user_id)
     elif email:
+        logging.info("email=%s",email)
+        logging.info("u=%s",dd.get_user(None, email=email))
         return dd.get_user(None, email=email)
     else:
         raise RuntimeError("user_id or email must be provided")
@@ -284,6 +365,7 @@ def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
 @log
 def rename_user(*,user_id, email, new_email):
     """Changes a user's email. Requires a correct old_email"""
+    assert is_user_id(user_id)
     if email == new_email:
         return
     dd = DDBO()
@@ -334,6 +416,7 @@ def delete_user(*, user_id, purge_movies=False):
     Deletes all of the user's movies (if purge_movies is True)
     Also deletes the user from any courses where they may be an admin.
     """
+    assert is_user_id(user_id)
     dd = DDBO()
     movie_ids = dd.get_movies_for_user_id(user_id)
     if purge_movies:
@@ -380,6 +463,7 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     :return: dictionary of {'user_id':user_id} for user who is registered.
     """
 
+    assert course_id is None or is_course_id(course_id)
     dd = DDBO()
 
     if (course_key is None) and (course_id is None):
@@ -406,67 +490,15 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
 
 
 @log
-def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
-    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
-    PROJECT_EMAIL = 'admin@planttracer.com'
-
-    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
-    TO_ADDRS = [email]
-    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
-        msg_env = NativeEnvironment().from_string(f.read())
-
-    logging.info("sending new link to %s",email)
-    msg = msg_env.render(to_addrs=",".join([email]),
-                         from_addr=PROJECT_EMAIL,
-                         planttracer_endpoint=planttracer_endpoint,
-                         api_key=new_api_key)
-
-    DRY_RUN = False
-    SMTP_DEBUG = 'YES' if debug else ''
-    try:
-        smtp_config = auth.smtp_config()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-    except KeyError as e:
-        raise mailer.NoMailerConfiguration() from e
-    try:
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg)
-    except smtplib.SMTPAuthenticationError as e:
-        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
-    return new_api_key
-
-################ API KEY ################
-def make_new_api_key(*,email):
-    """Create a new api_key for an email that is registered
-    :param: email - the email
-    :return: api_key - the api_key
-    """
-    user = lookup_user(email=email)
-    if user and user['enabled'] == 1:
-        user_id = user['id']
-        api_key = str(uuid.uuid4()).replace('-', '')
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                                """INSERT INTO api_keys (user_id, api_key) VALUES (%s,%s)""",
-
-                                (user_id, api_key))
-        # Manually log so that the api_key is not logged
-        logit(func_name='make_new_api_key', func_args={'email': email}, func_return={'api_key':'*****'})
-        return api_key
-    return None
-
-@log
 def delete_api_key(api_key):
     """Deletes an api_key
     :param: api_key - the api_key
     :return: the number of keys deleted
     """
-    if len(api_key) < 10:
-        raise InvalidAPI_Key(api_key)
-    return dbfile.DBMySQL.csfr(get_dbwriter(), """DELETE FROM api_keys WHERE api_key=%s""", (api_key,))
+    dd = DDBO()
+    dd.del_api_key(api_key)
+
+## *1 here
 
 @log
 def list_users(*, user_id):

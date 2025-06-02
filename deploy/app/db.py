@@ -41,7 +41,6 @@ logging_policy.add(LOG_DB)
 never_log = True                # disabled for the moment
 
 LOG_MAX_RECORDS = 5000
-MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
 CHECK_MX = False            # True doesn't work
 
 ################################################################
@@ -102,7 +101,7 @@ def logit(*, func_name, func_args, func_return):
     func_args   = json.dumps(func_args, default=str)
     func_return = json.dumps(func_return, default=str)
 
-    if len(func_return) > MAX_FUNC_RETURN_LOG:
+    if len(func_return) > C.MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
 
     logging.debug("%s(%s) = %s ", func_name, func_args, func_return)
