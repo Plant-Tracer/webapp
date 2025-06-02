@@ -8,11 +8,13 @@ import smtplib
 import logging
 import imaplib
 import os
+from email.parser import BytesParser
+from email import policy
+
+from jinja2.nativetypes import NativeEnvironment
 
 from .paths import TEMPLATE_DIR
 from .constants import C
-from email.parser import BytesParser
-from email import policy
 
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
