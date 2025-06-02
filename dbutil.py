@@ -10,6 +10,7 @@ import uuid
 from deploy.app import clogging
 from deploy.app import dbmaint
 from deploy.app import db
+from deploy.app import mailer
 from deploy.app import dbfile
 from deploy.app import paths
 from deploy.app.constants import C
@@ -73,7 +74,7 @@ if __name__ == "__main__":
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
         new_api_key = db.make_new_api_key(email=args.sendlink)
-        db.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
+        mailer.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
                       new_api_key=new_api_key, debug=args.debug)
         sys.exit(0)
 
