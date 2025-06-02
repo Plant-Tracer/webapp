@@ -22,6 +22,10 @@ class C:
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
     FFMPEG_PATH = 'FFMPEG_PATH'
 
+    # Demo mode
+    DEMO_MODE_API_KEY = 'ademo' # special key
+    DEMO_MODE_USER_ID  = 'udemo' # special userid
+
     # Other
     LOG_MAX_RECORDS = 1024
     EMAIL_TEMPLATE_FNAME = 'email.txt'

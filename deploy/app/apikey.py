@@ -53,28 +53,10 @@ def git_branch():
         return subprocess.check_output("git rev-parse --abbrev-ref HEAD".split(),encoding='utf-8')
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
-    
+
 def fix_types(obj):
     """Process JSON so that it dumps without `default=str`"""
     return json.loads(json.dumps(obj,default=str))
-
-################################################################
-# Demo mode
-
-# Check to see if DEMO_MODE environment variable is set.
-# If so, then we use the DEMO user if the user is not logged in
-DEMO_MODE = os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
-
-def demo_mode_api_key():
-    """Return the api key of the first demo user"""
-    for demo_user in db.list_demo_users():
-        api_key = db.get_demo_user_api_key(user_id = demo_user['user_id'])
-        if api_key is None:
-            # Make an api key for the demo user if we do not have one
-            api_key = db.make_new_api_key(email=demo_user['email'])
-        return api_key
-    logging.error("demo_mode_api_key requested but there are no demo users")
-    return None
 
 ################################################################
 # Authentication API - for clients
@@ -95,7 +77,6 @@ def add_cookie(response):
         response.set_cookie(cookie_name(), api_key,
                             max_age = C.API_KEY_COOKIE_MAX_AGE)
 
-
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
     form, but does not validate it.  If we are running in an
@@ -109,17 +90,17 @@ def get_user_api_key():
        None if user is not logged in and no demo mode
     """
     # check the query string.
+    if DEMO_MODE:
+        return C.DEMO_MODE_API_KEY
+
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
     if api_key is not None:
         return api_key
 
     # Return the api_key if it is in a cookie.
-    # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
-    # return the api_key for the demo user.
+
     api_key = request.cookies.get(cookie_name(), None)
     logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
-    if (api_key is None) and (DEMO_MODE):
-        api_key = demo_mode_api_key()
     return api_key
 
 

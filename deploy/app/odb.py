@@ -504,47 +504,55 @@ def list_users_courses(*, user_id):
     'users' - all the courses to which the user has access, and all of the people in them.
     'courses' - all of the courses
     :param: user_id - the user doing the listing (determines what they can see)
-    """
-    ret = {}
-    cmd = """SELECT users.name AS name,users.email AS email,users.primary_course_id as primary_course_id, users.id AS user_id,
-                    k.first as first,k.last as last
-              FROM users LEFT JOIN
-                      (select user_id,min(first_used_at) as first,max(last_used_at) as last from api_keys group by user_id) k
-                         ON users.id=k.user_id
-              WHERE users.id=%s
-                OR users.primary_course_id IN (select primary_course_id from users where id=%s)
-                OR users.primary_course_id IN (select course_id from admins where user_id=%s)
-                OR %s IN (select user_id from admins where course_id=%s)
-              ORDER BY primary_course_id,name,email"""
-    args = (user_id, user_id,user_id,user_id,SUPER_ADMIN_COURSE_ID)
-    ret['users'] = dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
 
-    cmd = """SELECT id as course_id,course_name,course_section,max_enrollment from courses"""
-    args = []
-    ret['courses'] = dbfile.DBMySQL.csfr(get_dbreader(),cmd,args,asDicts=True)
+    NOTE: With MySQL users could only see the course list if they were admins.
+    With DynamoDB, users can see the full course list for all of their courses.
+    """
+    dd = DDBO()
+
+    user = dd.get_user(user_id)
+    ret['users'] = [user]
+    ret['courses'] = [dd.get_course(course_id) for course_id in user['courses'] ]
     return ret
 
 def list_admins():
     """Returns a list of all the admins"""
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select *,users.id as user_id FROM users left join admins on users.id=admins.user_id",
-                               asDicts=True)
+
+    dd = DDBO()
+    admin_users = []
+    last_evaluated_key = None
+
+    while True:
+        scan_kwargs = { 'FilterExpression': Attr('admin').eq(1) }
+
+        if last_evaluated_key:
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+        response = table.scan(**scan_kwargs)
+        admin_users.extend(response['Items'])
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+    return admin_users
 
 def list_demo_users():
     """Returns a list of all demo accounts."""
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select *,users.id as user_id from users where demo=1",
-                               asDicts=True)
+    dd = DDBO()
+    admin_users = []
+    last_evaluated_key = None
 
-def get_demo_user_api_key(*,user_id):
-    keys = dbfile.DBMySQL.csfr(get_dbreader(),
-                               "select api_key from api_keys where user_id=%s and user_id in (select id from users where demo=1)",
-                               (user_id,))
-    if keys:
-        return keys[0][0]
-    return None
+    while True:
+        scan_kwargs = { 'FilterExpression': Attr('demo').eq(1) }
 
+        if last_evaluated_key:
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
+        response = table.scan(**scan_kwargs)
+        admin_users.extend(response['Items'])
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+    return admin_users
 
 
 #########################

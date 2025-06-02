@@ -33,6 +33,9 @@ DEFAULT_PROVISIONED_THROUGHPUT = {
 }
 
 # Define all table configurations as a global constant
+# Note:
+# courses - each course needs to know all of its users. They are stored in user_ids[]
+
 TABLE_CONFIGURATIONS = [
     {
         'TableName': 'users',
