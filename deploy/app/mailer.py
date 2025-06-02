@@ -13,6 +13,7 @@ from email import policy
 
 from jinja2.nativetypes import NativeEnvironment
 
+from . import auth
 from .paths import TEMPLATE_DIR
 from .constants import C
 
