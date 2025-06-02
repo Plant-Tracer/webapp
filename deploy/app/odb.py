@@ -76,8 +76,25 @@ class NoMovieData(DB_Errors):
 
 
 ################################################################
-## ODB - The Object Database Class
+## DDBO - The Object Database Class
 ################################################################
+
+def new_userid():
+    return 'u'+str(uuid.uuid4())
+
+def new_courseid():
+    return 'c'+str(uuid.uuid4())
+
+def new_apikey():
+    return 'a'+str(uuid.uuid4())
+
+def new_movieid():
+    return 'm'+str(uuid.uuid4())
+
+def new_frameid():
+    return 'f'+str(uuid.uuid4())
+
+
 
 @lru_cache(maxsize=None)
 class DDBO:
@@ -296,33 +313,50 @@ def rename_user(*,user_id, email, new_email):
 
 
 @log
-def delete_user(*,email,purge_movies=False):
-    """Delete a user specified by email address.
-    :param: email - the email address
+def delete_user(*, user_id, purge_movies=False):
+    """Delete a user specified by user_id.
+    :param: user_id - the user ID
     - First deletes the user's API keys
     - Next deletes all of the user's admin bits
     - Finally deletes the user
 
     Note: this will fail if the user has any outstanding movies (referrential integrity). In that case, the user should simply be disabled.
     Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
-    Deletes all of the users
+    Deletes all of the user's movies (if purge_movies is True)
     Also deletes the user from any courses where they may be an admin.
     """
     dd = DDBO()
-    user_id = dd.get_userid_for_email( email )
-    movie_ids = all_movie_ids( dd.movies, 'movie_id', user_id)
+    movie_ids = dd.get_movies_for_user_id(user_id)
     if purge_movies:
-        batch_delete( dd.movies, 'movie_id', movie_ids )
+        dd.batch_delete_movie_ids(movie_ids)
     else:
         if movie_ids:
-            raise RuntimeError(f"user {email} has {len(movie_ids)} outstanding movies.")
+            raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
 
     # Now delete all of the API keys for this user
-    api_keys = all_movie_ids( dd.api_keys, 'api_key', user_id)
-    batch_delete( dd.api_keys, 'api_key', api_keys)
+    # Assuming there is a User_id_Index on api_keys table
+    api_keys = []
+    last_evaluated_key = None
+    while True:
+        query_kwargs = {
+            'IndexName': 'User_id_Index',
+            'KeyConditionExpression': Key('user_id').eq(user_id),
+            'ProjectionExpression': 'api_key'
+        }
+        if last_evaluated_key:
+            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+        response = dd.api_keys.query(**query_kwargs)
+        api_keys.extend(item['api_key'] for item in response['Items'])
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+    # Batch delete API keys
+    with dd.api_keys.batch_writer() as batch:
+        for api_key in api_keys:
+            batch.delete_item(Key={'api_key': api_key})
 
     # Finally delete the user
-    dd.users.delete_item(Key = user_id)
+    dd.users.delete_item(Key={'user_id': user_id})
 
 
 ################ REGISTRATION ################

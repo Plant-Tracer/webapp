@@ -14,6 +14,7 @@ import copy
 import hashlib
 from os.path import abspath, dirname
 
+from deploy.app import odbmaint
 from fixtures.app_client import client
 
 from app.auth import get_dbreader,get_dbwriter
@@ -28,9 +29,9 @@ from app.paths import TEST_DIR, TEST_DATA_DIR
 
 TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
 TEST_USER_NAME = 'Test User Name'
-TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 TEST_DEMO_EMAIL  = 'demo+admin@gmail.com'        # completely bogus
 TEST_ADMIN_NAME = 'Test User Name'
+TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
 
 # keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
@@ -63,10 +64,14 @@ def new_course():
     course_name = f"test-{course_key} course name"
 
     # Use dbmaint's create_course so that the demo movies will be created
-    admin_id = dbmaint.create_course(course_key = course_key,
+    admin_id = odbmaint.new_userid()
+    user_id = odbmaint.new_userid() # demo user id
+    odbmaint.create_course(course_key = course_key,
+                                     admin_id = admin_id,
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
                                      course_name = course_name,
+                                     demo_id = user_id, 
                                      demo_email = demo_email)
     course_id = db.lookup_course_by_key(course_key=course_key)['id']
     yield {COURSE_KEY:course_key,
@@ -79,8 +84,8 @@ def new_course():
            DBWRITER:get_dbwriter() }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
-    db.delete_user(email=admin_email, purge_movies=True)
-    db.delete_user(email=demo_email, purge_movies=True)
+    db.delete_user(user_id=user_id, purge_movies=True)
+    db.delete_user(user_id=admin_id, purge_movies=True)
     ct = db.delete_course(course_key=course_key)
     assert ct == 1                # returns number of courses deleted
 
@@ -107,7 +112,7 @@ def new_user(new_course):
     yield cfg
     ct = db.delete_api_key(api_key)
     assert ct == 1
-    db.delete_user(email=user_email)
+    db.delete_user(user_id=cfg[USER_ID])
 
 @pytest.fixture
 def api_key(new_user):
@@ -163,7 +168,7 @@ def test_add_remove_admin(new_course):
     assert db.check_course_admin(user_id=user_id, course_id=course_id)
     db.remove_course_admin(email = admin_email, course_id = course['id'])
     assert not db.check_course_admin(user_id=user_id, course_id=course_id)
-    db.delete_user(email=admin_email)
+    db.delete_user(user_id=user_id)
 
 def test_new_user(new_user):
     cfg = copy.copy(new_user)

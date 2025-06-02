@@ -98,6 +98,8 @@ def test_register_email(client, mailer_config,new_course):
                                    'name':FAKE_NAME})
     assert response.status_code == 200
 
+    user_id = response.json['user_id']
+
     # TODO: verify if registration mail appeared
     # Now delete the user
-    db.delete_user(email=FAKE_USER_EMAIL, purge_movies=True)
+    db.delete_user(user_id=user_id, purge_movies=True)

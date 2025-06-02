@@ -14,6 +14,7 @@ import time
 import json
 import base64
 from urllib3.util import Retry
+import uuid
 
 import pytest
 
@@ -78,7 +79,7 @@ def test_api_get_logs(client, new_user):
 
 # /api/bulk-register tests
 
-def test_bulk_register_success(client, new_course, mailer_config):
+def test_bulk_register_success(client, new_course, mailer_config):  
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
     email_address = 'testuser@example.com'
@@ -96,7 +97,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     res = r.json
     assert res['error'] is False
     assert res['message'] == 'Registered 1 email addresses'
-    db.delete_user(email=email_address,purge_movies=True)
+    db.delete_user(user_id=res['user_ids'][0]  , purge_movies=True)
 
 def test_bulk_register_invalid_email(client, new_course, mailer_config):
     """This tests the bulk-register api when given an invalid email address
