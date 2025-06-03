@@ -157,7 +157,7 @@ def dynamodb_error_debugger(func):
 
 @lru_cache(maxsize=None)
 class DDBO:
-    def __init__(self, *, region_name=None, endpoint_url=None):
+    def __init__(self, *, region_name=None, endpoint_url=None, table_prefix=None):
         # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
         # not at object creation time.
 
@@ -166,16 +166,20 @@ class DDBO:
         if endpoint_url is None:
             endpoint_url = os.environ.get(C.DYNAMODB_ENDPOINT_URL,None)
 
+        if table_prefix is None:
+            table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
+
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
                                         endpoint_url=endpoint_url)
 
         # Set up the tables
-        self.api_keys  = self.dynamodb.Table( API_KEYS )
-        self.users     = self.dynamodb.Table( USERS )
-        self.movies  = self.dynamodb.Table( MOVIES )
-        self.frames = self.dynamodb.Table( FRAMES )
-        self.courses = self.dynamodb.Table( COURSES )
+        self.table_prefix = table_prefix
+        self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
+        self.users     = self.dynamodb.Table( table_prefix + USERS )
+        self.movies  = self.dynamodb.Table( table_prefix + MOVIES )
+        self.frames = self.dynamodb.Table( table_prefix + FRAMES )
+        self.courses = self.dynamodb.Table( table_prefix + COURSES )
 
     def new_id(self):
         """Can be used for users, movies, or anything else"""
@@ -419,7 +423,8 @@ def delete_user(*, user_id, purge_movies=False):
     - Next deletes all of the user's admin bits
     - Finally deletes the user
 
-    Note: this will fail if the user has any outstanding movies (referrential integrity). In that case, the user should simply be disabled.
+    Note: This will fail if the user has any outstanding movies (referrential integrity).
+          In that case, the user should simply be disabled.
     Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
     Deletes all of the user's movies (if purge_movies is True)
     Also deletes the user from any courses where they may be an admin.
@@ -499,14 +504,6 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     user['demo'] = demo_user
     dd.put_user(user)
 
-@log
-def delete_api_key(api_key):
-    """Deletes an api_key
-    :param: api_key - the api_key
-    :return: the number of keys deleted
-    """
-    dd = DDBO()
-    dd.del_api_key(api_key)
 
 @log
 def list_users_courses(*, user_id):
@@ -527,7 +524,6 @@ def list_users_courses(*, user_id):
 
 def list_admins():
     """Returns a list of all the admins"""
-
     dd = DDBO()
     admin_users = []
     last_evaluated_key = None

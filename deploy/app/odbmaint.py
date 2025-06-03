@@ -1,8 +1,11 @@
 import logging
 import argparse
+import copy
 
 import boto3
 from botocore.exceptions import ClientError
+
+from .odb import DDBO
 
 # Configure basic logging
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -167,9 +170,9 @@ TABLE_CONFIGURATIONS = [
     }
 ]
 
-# --- Function Definitions ---
 
-def drop_dynamodb_table(table_name: str, dynamodb_resource: 'boto3.resources.base.ServiceResource'):
+
+def drop_dynamodb_table(ddbo, table_name: str):
     """Drops a specified DynamoDB table from the local instance.
 
     :param table_name: The name of the table to drop.
@@ -181,7 +184,7 @@ def drop_dynamodb_table(table_name: str, dynamodb_resource: 'boto3.resources.bas
     """
     logger.info("Attempting to delete table: %s", table_name)
     try:
-        table = dynamodb_resource.Table(table_name)
+        table = ddbo.dynamodb.Table(table_name)
         table.delete() # Initiates the deletion process
         table.wait_until_not_exists()
         logger.info("Table %s deleted successfully!", table_name)
@@ -197,7 +200,7 @@ def drop_dynamodb_table(table_name: str, dynamodb_resource: 'boto3.resources.bas
         logger.error("Unexpected error occurred while deleting table %s: %s", table_name, e)
 
 
-def create_dynamodb_tables(dynamodb_resource: 'boto3.resources.base.ServiceResource'):
+def create_dynamodb_tables(ddbo, ignore_table_exists = set()):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
 
     Connects to the local DynamoDB instance using DEFAULT_DYNAMODB_ENDPOINT.
@@ -208,34 +211,36 @@ def create_dynamodb_tables(dynamodb_resource: 'boto3.resources.base.ServiceResou
     :raises Exception: For any unexpected errors during creation.
     """
     for table_config in TABLE_CONFIGURATIONS:
-        table_name = table_config['TableName']
+        # prepend the prefix to the table name before creating it
+        tc = copy.deepcopy(table_config)
+        tc['TableName'] = table_name = ddbo.table_prefix + tc['TableName']
         logger.info("Attempting to create table: %s", table_name)
         try:
-            table = dynamodb_resource.create_table(**table_config)
+            table = ddbo.dynamodb.create_table(**tc)
             logger.info("Waiting for table %s to be active...", table_name)
             table.wait_until_exists()
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
             if e.response['Error']['Code'] == 'TableAlreadyExistsException':
-                logger.warning("Table %s already exists.", table_name)
+                if table_name not in ignore_table_exists:
+                    logger.warning("Table %s already exists.", table_name)
             else:
                 logger.error("Error creating table %s: %s", table_name, e)
         except Exception as e:
             logger.error("An unexpected error occurred creating table %s: %s", table_name, e)
 
-def create_schema(*,region_name, endpoint_url):
-    # Initialize DynamoDB resource once (now that logging level is set)
-    dynamodb_resource = boto3.resource(
-        'dynamodb',
-        region_name='us-east-1',
-        endpoint_url=DEFAULT_DYNAMODB_ENDPOINT
-    )
-
-    tables_to_drop = [ config['TableName'] for config in TABLE_CONFIGURATIONS ]
+def create_schema(ddbo):
+    tables_to_drop = [ ddbo.table_prefix + config['TableName'] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
-        drop_dynamodb_table(table_name, dynamodb_resource) # Pass the resource
-    create_dynamodb_tables(dynamodb_resource) # Pass the resource
+        drop_dynamodb_table(ddbo, table_name)
+    create_dynamodb_tables(ddbo)
 
+def puge_all_movies(ddbo):
+    """"Deleting an entire table is significantly more efficient than removing items one-by-one,
+    which essentially doubles the write throughput as you do as many delete operations as put operations.
+    """
+    ddbo.dynamodb.delete_table(TableName = ddbo.table_prefix + 'movies')
+    create_dynamodb_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
 
 if __name__ == "__main__":
     # --- Argparse Setup ---
@@ -253,4 +258,5 @@ if __name__ == "__main__":
         logger.debug("Debug mode enabled.")
     else:
         logger.setLevel(logging.INFO) # Default to INFO if not debug
-    create_schema(region_name='us-east-1', endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)
+    ddbo = DDBO(region_name='us-east-1', endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)
+    create_schema(ddbo)

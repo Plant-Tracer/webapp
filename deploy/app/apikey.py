@@ -98,14 +98,12 @@ def get_user_api_key():
         return api_key
 
     # Return the api_key if it is in a cookie.
-
     api_key = request.cookies.get(cookie_name(), None)
     logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
     return api_key
 
-
 def get_user_dict():
-    """Returns the userdict of the currently logged in user, or throws a response"""
+    """Returns the user dict of the currently logged in user, or throws a response"""
     ddbo = DDBO()
     api_key = get_user_api_key()
     if api_key is None:

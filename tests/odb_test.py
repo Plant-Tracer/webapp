@@ -54,16 +54,14 @@ def ddbo():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
     """
-    os.environ['AWS_DEFAULT_REGION']='local'
-    os.environ['DYNAMODB_ENDPOINT_URL']=ENDPOINT_URL
     subprocess.call( [os.path.join(ROOT_DIR,'local_dynamodb_control.bash'),'start'])
-    odbmaint.create_schema(region_name='local', endpoint_url=ENDPOINT_URL)
 
-    print("1:",os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION))
-    print("2:",os.environ.get(C.DYNAMODB_ENDPOINT_URL,None))
-
-
-    return DDBO()
+    os.environ['AWS_DEFAULT_REGION'] = 'local'
+    os.environ['DYNAMODB_ENDPOINT_URL'] = ENDPOINT_URL
+    os.environ['DYNAMODB_TABLE_PREFIX'] = str(uuid.uuid4())[0:4]
+    ddbo = DDBO()
+    odbmaint.create_schema(ddbo)
+    return ddbo
 
 def test_odb(ddbo):
     start_time = int(time.time())
