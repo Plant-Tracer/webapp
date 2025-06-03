@@ -22,6 +22,7 @@ import boto3
 
 from jinja2.nativetypes import NativeEnvironment
 
+from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError,ParamValidationError
 from boto3.dynamodb.conditions import Key
 from functools import wraps
@@ -33,13 +34,15 @@ from . import mailer
 from .paths import TEMPLATE_DIR
 from .constants import MIME,C
 
+# tables
 API_KEYS = 'api_keys'
 USERS  = 'users'
+UNIQUE_EMAILS = 'unique_emails'
 MOVIES = 'movies'
 FRAMES = 'frames'
 COURSES = 'courses'
 
-ODB_TABLES = {API_KEYS,USERS,MOVIES,FRAMES,COURSES}
+ODB_TABLES = {API_KEYS,USERS,UNIQUE_EMAILS,MOVIES,FRAMES,COURSES}
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
@@ -82,11 +85,10 @@ class NoMovieData(DB_Errors):
 ## DDBO - The Object Database Class
 ################################################################
 
+# Note: there is no new_course_id() - we actually use the real course ID (e.g. E-331)
+
 def new_user_id():
     return 'u'+str(uuid.uuid4())
-
-def new_course_id():
-    return 'c'+str(uuid.uuid4())
 
 def new_api_key():
     return 'a'+str(uuid.uuid4()).replace('-', '')
@@ -99,9 +101,6 @@ def new_frame_id():
 
 def is_user_id(k):
     return k[0]=='u'
-
-def is_course_id(k):
-    return k[0]=='c'
 
 def is_api_key(k):
     return k[0]=='a' and len(k)==33
@@ -177,6 +176,7 @@ class DDBO:
         self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
+        self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
         self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
         self.frames    = self.dynamodb.Table( table_prefix + FRAMES )
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
@@ -229,8 +229,9 @@ class DDBO:
                 return user
         return None
 
-    def get_user(self,user_id, email=None):
+    def get_user(self, user_id, email=None):
         if email:
+            assert user_id is None
             response = self.users.query(
                 IndexName='email_idx',
                 KeyConditionExpression=Key('email').eq(email)
@@ -242,8 +243,72 @@ class DDBO:
     def get_userid_for_email(self, email):
         return self.get_user(None, email)['user_id']
 
-    def put_user(self,userdict):
-        self.users.put_item(Item = userdict)
+    def put_user(self, userdict):
+        assert 'email' in userdict
+        assert 'user_id' in userdict
+
+        email = userdict['email']
+        serializer = TypeSerializer()
+        client = self.dynamodb.meta.client
+
+        try:
+            client.transact_write_items(
+                TransactItems=[
+                    {
+                        'Put': {
+                            'TableName': self.unique_emails.name,
+                            'Item': {'email': email},
+                            'ConditionExpression': 'attribute_not_exists(email)'
+                        }
+                    },
+                    {
+                        'Put': {
+                            'TableName': self.users.name,
+                            'Item': userdict,
+                        }
+                    }
+                ]
+            )
+        except ClientError as e:
+            raise RuntimeError(f"Failed to insert user: {e}")
+
+
+    def rename_user(self, *, user_id, new_email):
+        """Changes a user's email. Returns userdict. """
+        assert is_user_id(user_id)
+        userdict = self.get_user(user_id)
+        if not userdict:
+            raise ValueError(f"No user with user_id: {user_id}")
+        if userdict['email'] == new_email:
+            return userdict
+
+        try:
+            client = self.dynamodb.meta.client
+            client.transact_write_items(
+                TransactItems=[ {
+                    'Delete': {
+                        'TableName': self.unique_emails.name,
+                        'Key': {'email': userdict['email']},
+                        #'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
+                    }
+                }, {
+                    'Put': {
+                        'TableName': self.unique_emails.name,
+                        'Item': {'email': new_email},
+                        #'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
+                    }
+                }, {
+                    'Update': {
+                        'TableName': self.users.name,
+                        'Key': {'user_id': user_id},
+                        'UpdateExpression': 'SET email = :new_email',
+                        'ExpressionAttributeValues': { ':new_email': new_email}
+                    }
+                } ] )
+            userdict['email'] = new_email  # update the userd
+            return userdict                # return new userdict
+        except ClientError as e:
+            raise RuntimeError(f"Email update failed: {e}")
 
     def get_course(self,course_id):
         return self.courses.get_item(Key = {'course_id':course_id},ConsistentRead=True).get('Item',None)
@@ -255,7 +320,6 @@ class DDBO:
         return self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
 
     def put_movie(self, moviedict):
-        print("moviedict:",moviedict)
         self.movies.put_item(Item=moviedict)
 
     def get_frame(self,movie_id,frameId):
@@ -374,46 +438,6 @@ def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
         return dd.get_user(None, email=email)
     else:
         raise RuntimeError("user_id or email must be provided")
-
-@log
-def rename_user(*,user_id, email, new_email):
-    """Changes a user's email. Requires a correct old_email"""
-    assert is_user_id(user_id)
-    if email == new_email:
-        return
-    dd = DDBO()
-    user = dd.get_user(user_id)
-    if not user:
-        raise ValueError(f"No user with user_id: {user_id}")
-    if user['email'] != email:
-        raise ValueError(f"Provided old email does not match stored email for user_id: {user_id}")
-
-    try:
-        dd.dynamodb.transact_write_items(
-            TransactItems=[ {
-                'Delete': {
-                    'TableName': 'unique_emails',
-                    'Key': {'email': {'S': email}},
-                    'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
-                }
-            }, {
-                'Put': {
-                    'TableName': 'unique_emails',
-                    'Item': {'email': {'S': new_email}},
-                    'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
-                }
-            }, {
-                'Update': {
-                    'TableName': 'users',
-                    'Key': {'user_id': {'S': user_id}},
-                    'UpdateExpression': 'SET #E = :new_email',
-                    'ExpressionAttributeNames': { '#E': 'email' },
-                    'ExpressionAttributeValues': { ':new_email': {'S': new_email}                        }
-                }
-            } ] )
-        user['email'] = new_email  # Keep local copy updated if needed
-    except ClientError as e:
-        raise RuntimeError(f"Email update failed: {e}")
 
 
 @log

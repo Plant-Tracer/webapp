@@ -9,6 +9,7 @@ from boto3.dynamodb.conditions import Attr
 
 
 from .odb import DDBO
+from .constants import C
 
 # Configure basic logging
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -30,13 +31,6 @@ N = 'N'                         # number
 
 billing = {BillingMode: PAY_PER_REQUEST} # alternative is provisioned throughput
 projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
-
-# --- Global Constants ---
-DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
-DEFAULT_PROVISIONED_THROUGHPUT = {
-    'ReadCapacityUnits': 1,
-    'WriteCapacityUnits': 1
-}
 
 # Define all table configurations as a global constant
 # Note:
@@ -244,6 +238,63 @@ def puge_all_movies(ddbo):
     ddbo.dynamodb.delete_table(TableName = ddbo.table_prefix + 'movies')
     create_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
 
+#pylint: disable=too-many-arguments
+def create_course(ddbo, *, course_id, course_key, course_name, admin_email,
+                  admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
+                  demo_email = None):
+    course = ddbo.get_course(course_id)
+    if course:
+        raise KeyError(f"Course {course_id} already exists")
+
+    admin = ddbo.get_user(email=admin_email)
+    if demo_email:
+        demo = ddbo.get_user(email=demo_email)
+    else:
+        demo = False
+
+    ddbo.put_course({'course_id':course_id,
+                     'course_key':course_key,
+                     'course_name':course_name,
+                     'max_enrollment':max_enrollment })
+
+
+    odb.create_course(course_key = course_key,
+                      course_name = course_name,
+                      max_enrollment = max_enrollment)
+    admin_id = db.register_email(email=admin_email, course_key=course_key, name=admin_name)['user_id']
+    db.make_course_admin(email=admin_email, course_key=course_key)
+    logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
+
+    if demo_email:
+        user_dir = db.register_email(email=demo_email, course_key = course_key, name=DEMO_NAME, demo_user=1)
+        user_id = user_dir['user_id']
+        db.make_new_api_key(email=demo_email)
+        ct = 1
+        for fn in os.listdir(TEST_DATA_DIR):
+            ext = os.path.splitext(fn)[1]
+            if ext in ['.mp4','.mov']:
+                with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+                    movie_data = f.read()
+                    movie_id = db.create_new_movie(user_id=user_id,
+                                        title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                        description=DEMO_MOVIE_DESCRIPTION)
+                    db.set_movie_data(movie_id=movie_id, movie_data = movie_data)
+                ct += 1
+    return admin_id
+
+def add_admin_to_course(*, admin_email, course_id=None, course_key=None):
+    db.make_course_admin(email=admin_email, course_key=course_key, course_id=course_id)
+
+def remove_admin_from_course(*, admin_email, course_id=None, course_key=None, course_name=None):
+    db.remove_course_admin(
+                        email=admin_email,
+                        course_key=course_key,
+                        course_id=course_id,
+                        course_name=course_name
+                    )
+
+
+
 def count_table_items(table, **kwargs):
     total = 0
     response = table.scan(Select='COUNT', **kwargs)
@@ -265,7 +316,6 @@ def report(ddbo):
     print("Number of demo users:", count_table_items(ddbo.users,  **kwargs))
 
 
-
 if __name__ == "__main__":
     # --- Argparse Setup ---
     parser = argparse.ArgumentParser(description="Manage DynamoDB Local tables (create/drop).")
@@ -282,6 +332,6 @@ if __name__ == "__main__":
         logger.debug("Debug mode enabled.")
     else:
         logger.setLevel(logging.INFO) # Default to INFO if not debug
-    ddbo = DDBO(endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)
+    ddbo = DDBO(endpoint_url=C.DEFAULT_DYNAMODB_ENDPOINT)
     drop_tables(ddbo)
     create_tables(ddbo)

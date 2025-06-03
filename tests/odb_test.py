@@ -3,6 +3,7 @@ import boto3
 import os
 import time
 import subprocess
+import json
 
 import pytest
 
@@ -14,27 +15,46 @@ from app.constants import MIME,C
 MYDIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname( MYDIR )
 
-TEST_USER_ID = odb.new_user_id()
-TEST_USER_EMAIL = 'new.user@example.com'
-TEST_COURSE_ID = odb.new_course_id()
+TEST_ADMIN_ID = odb.new_user_id()
+TEST_ADMIN_EMAIL = 'new.user@example.com'
+TEST_COURSE_ID = 'test-course-' + str(uuid.uuid4())[0:4]
 TEST_COURSE_NAME = 'Introduction to Plant Tracer'
 TEST_MOVIE_ID = odb.new_movie_id()
+TEST_COURSE_KEY = 'k-' + str(uuid.uuid4())[0:4]
+
+TEST_COURSE_DATA = {
+    'course_id': TEST_COURSE_ID,
+    'course_name': TEST_COURSE_NAME,
+    'course_key': TEST_COURSE_KEY,
+    'course_admins': [TEST_ADMIN_ID]
+}
+
+TEST_USER_ID = odb.new_user_id()
+TEST_USER_EMAIL = 'new.user@example.com'
 TEST_USER_DATA = {
     'user_id': TEST_USER_ID,
     'email': TEST_USER_EMAIL,
-    'name': 'Firstname Lastname',
+    'full_name': 'Firstname Lastname',
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
     'admin': [],
-    'courses': [TEST_COURSE_ID],
+    'admin_for_courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
 }
 
-TEST_COURSE_DATA = {
-    'course_id': TEST_COURSE_ID,
-    'name': TEST_COURSE_NAME
+TEST_ADMIN_DATA = {
+    'user_id': TEST_USER_ID,
+    'email': TEST_USER_EMAIL,
+    'full_name': 'Admin Firstname Lastname',
+    'created': int(time.time()),
+    'enabled': 1,
+    'demo': 0,
+    'admin': [TEST_COURSE_ID],
+    'courses': [TEST_COURSE_ID],
+    'primary_course_id': TEST_COURSE_ID,
+    'primary_course_name': TEST_COURSE_NAME,
 }
 
 TEST_MOVIE_DATA = {
@@ -81,6 +101,8 @@ def test_odb(ddbo):
     ddbo.put_course(TEST_COURSE_DATA)
     assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
 
+    # test api_key management
+
     api_key = ddbo.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
     user = ddbo.validate_api_key(api_key)
@@ -94,3 +116,14 @@ def test_odb(ddbo):
 
     a3   = ddbo.get_api_key_dict(api_key)
     assert a3 == None
+
+
+    # test user management
+    new_email = TEST_USER_EMAIL+"-new"
+    ddbo.rename_user(user_id=TEST_USER_ID, new_email=new_email)
+    u1 = ddbo.get_user(TEST_USER_ID)
+    u2 = ddbo.get_user(None, email=new_email)
+    print("u1=",json.dumps(u1,indent=4,default=str))
+    print("u2=",json.dumps(u2,indent=4,default=str))
+    assert u1==u2
+    assert u1['email'] == TEST_USER_EMAIL+"-new"

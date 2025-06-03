@@ -25,12 +25,14 @@ class C:
     THE_DEFAULT_REGION = 'us-east-1'
     DYNAMODB_ENDPOINT_URL = 'DYNAMODB_ENDPOINT_URL'
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
+    DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
 
     # Demo mode
     DEMO_MODE_API_KEY = 'ademo' # special key
     DEMO_MODE_USER_ID  = 'udemo' # special userid
 
     # Other
+    DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
     EMAIL_TEMPLATE_FNAME = 'email.txt'
     MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
