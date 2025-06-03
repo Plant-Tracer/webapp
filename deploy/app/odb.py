@@ -191,9 +191,29 @@ class DDBO:
         if user and user['enabled'] == 1:
             api_key = new_api_key()
             self.put_api_key_dict({'api_key':api_key,
+                                   'enabled':1,
                                    'user_id':user['user_id'],
+                                   'use_count':0,
                                    'created':int(time.time()) })
             return api_key
+        return None
+
+    def validate_api_key(self, api_key):
+        """
+        Validate API key.
+        :param: api_key - the key provided by the cookie or the HTML form.
+        :return: User dictionary if api_key and user are both enabled, otherwise return None
+        """
+        assert is_api_key(api_key)
+        api_key_dict = self.get_api_key_dict(api_key)
+        if api_key_dict['enabled']:
+            user = self.get_user(api_key_dict['user_id'])
+            if user['enabled']:
+                api_key_dict['use_count']  += 1
+                api_key_dict['last_used_at']  = int(time.time())
+                api_key_dict['first_used_at'] = api_key_dict.get('first_used_at', api_key_dict['last_used_at'])
+                self.put_api_key_dict(api_key_dict)
+                return user
         return None
 
     def get_user(self,user_id, email=None):
@@ -322,26 +342,6 @@ def log_args(func):
 #####################
 ## USER MANAGEMENT ##
 #####################
-
-@log_args
-def validate_api_key(api_key):
-    """
-    Validate API key.
-    :param: api_key - the key provided by the cookie or the HTML form.
-    :return: User dictionary if api_key and user are both enabled, otherwise return {}
-    """
-    assert is_api_key(api_key)
-    dd = DDBO()
-    api_key_dict = dd.get_api_key_dict(api_key)
-    if api_key_dict['enabled']:
-        user = dd.get_user(api_key_dict['user_id'])
-        if user['enabled']:
-            logging.debug("validate_api_key(%s)=%s dbreader=%s",api_key,user)
-            api_key_dict['last_used_at']  = unix_timestamp()
-            api_key_dict['first_used_at'] = api_key_dict.get('first_used_at', api_key_dict['last_used_at'])
-            dd.put_api_key_dict(api_key_dict)
-            return user
-    return {}
 
 @log_args
 def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):

@@ -109,11 +109,12 @@ def get_user_dict():
     api_key = get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
-        # Check if we were running under an API
+        # Check if we were running under an API. All calls under /api must be authenticated.
         if request.full_path.startswith('/api/'):
             raise AuthError('invalid API key')
 
-    userdict = db.validate_api_key(api_key)
+    # We have a key. Now validate it
+    userdict = odb.validate_api_key(api_key)
     if not userdict:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)

@@ -59,6 +59,8 @@ def ddbo():
               endpoint_url=os.getenv('DYNAMODB_ENDPOINT_URL'))
 
 def test_odb(ddbo):
+    start_time = int(time.time())
+
     ddbo.put_user(TEST_USER_DATA)
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
@@ -72,4 +74,14 @@ def test_odb(ddbo):
 
     api_key = ddbo.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
+    user = ddbo.validate_api_key(api_key)
+    assert user == TEST_USER_DATA
+    a2   = ddbo.get_api_key_dict(api_key)
+    assert a2['enabled'] == 1
+    assert a2['use_count'] == 1
+    assert a2['created'] >= start_time
+    assert a2['last_used_at'] >= a2['first_used_at'] >= a2['created']
     ddbo.del_api_key(api_key)
+
+    a3   = ddbo.get_api_key_dict(api_key)
+    assert a3 == None
