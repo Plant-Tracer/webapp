@@ -38,7 +38,6 @@ TEST_USER_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
-    'admin': [],
     'admin_for_courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
@@ -90,7 +89,16 @@ def ddbo():
 def test_odb(ddbo):
     start_time = int(time.time())
 
-    ddbo.put_user(TEST_USER_DATA)
+    # Create the user. Make sure create flag functions properly
+    # This should fail because user we are putting does not exist.
+    with pytest.raises(RuntimeError):
+        ddbo.put_user(TEST_USER_DATA, create=False)
+    # now put the user
+    ddbo.put_user(TEST_USER_DATA, create=True)
+    # This should fail becuase the user we are putting does exist
+    with pytest.raises(RuntimeError):
+        ddbo.put_user(TEST_USER_DATA, create=True)
+
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
 

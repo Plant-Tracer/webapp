@@ -105,7 +105,7 @@ if __name__ == "__main__":
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
             sys.exit(1)
-        user = odb.lookup_user(email=args.admin_email)
+        user = ddbo.get_user(email=args.admin_email)
         if not user.get('user_id'):
             print(f"User {args.admin_email} does not exist")
             sys.exit(1)
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
             sys.exit(1)
-        user = db.lookup_user(email=args.admin_email)
+        user = ddbo.get_user(email=args.admin_email)
         if not user.get('id'):
             print(f"User {args.admin_email} does not exist")
             sys.exit(1)

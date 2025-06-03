@@ -71,7 +71,7 @@ def new_course():
                                      admin_email = admin_email,
                                      admin_name = 'Dr. Admin',
                                      course_name = course_name,
-                                     demo_id = user_id, 
+                                     demo_id = user_id,
                                      demo_email = demo_email)
     course_id = db.lookup_course_by_key(course_key=course_key)['id']
     yield {COURSE_KEY:course_key,
@@ -170,20 +170,16 @@ def test_add_remove_admin(new_course):
     assert not db.check_course_admin(user_id=user_id, course_id=course_id)
     db.delete_user(user_id=user_id)
 
-def test_new_user(new_user):
+def test_new_user(new_user,ddbo):
     cfg = copy.copy(new_user)
     user_email = cfg[USER_EMAIL]
     api_key = cfg[API_KEY]
     logging.info("user_email=%s api_key=%s", user_email, api_key)
 
     # Try looking up the user
-    ret1 = db.lookup_user(email=user_email)
-    ret2 = db.lookup_user(user_id=ret1['user_id'], get_admin=True)
-    ret3 = db.lookup_user(user_id=ret1['user_id'], get_courses=True)
+    ret = ddbo.get_user(email=user_email)
 
-    assert 'admin' in ret2
-    assert 'courses' in ret3
-    assert ret3['courses'][0]['course_key'] == cfg[COURSE_KEY]
+    assert ret['courses'][0]['course_key'] == cfg[COURSE_KEY]
 
 
 

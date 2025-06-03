@@ -63,17 +63,7 @@ TABLE_CONFIGURATIONS = [
             {AttributeName: 'email', KeyType: HASH}
         ],
         AttributeDefinitions: [
-            {AttributeName: 'email', AttributeType: S},
-            {AttributeName: 'user_id', AttributeType: S}
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                'IndexName': 'user_id_idx',
-                KeySchema: [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                **projection_all,
-            }
+            {AttributeName: 'email', AttributeType: S}
         ],
         **billing,
     },

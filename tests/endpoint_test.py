@@ -79,14 +79,14 @@ def test_api_get_logs(client, new_user):
 
 # /api/bulk-register tests
 
-def test_bulk_register_success(client, new_course, mailer_config):  
+def test_bulk_register_success(client, new_course, mailer_config, ddbo):
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
     email_address = 'testuser@example.com'
     course_id = new_course[user_test.COURSE_ID]
-    admin_user = db.lookup_user(email=None, user_id=new_course[user_test.ADMIN_ID], get_admin=True, get_courses=None)
-    api_key = db.make_new_api_key(email=new_course[user_test.ADMIN_EMAIL])
-   
+    admin_user = ddbo.lookup_user(email=None, user_id=new_course[user_test.ADMIN_ID], get_admin=True, get_courses=None)
+    api_key = ddbo.make_new_api_key(email=new_course[user_test.ADMIN_EMAIL])
+
     r = client.post('/api/bulk-register',
                     data={'api_key': api_key,
                           'course_id': str(course_id),

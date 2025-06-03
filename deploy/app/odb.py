@@ -22,7 +22,6 @@ import boto3
 
 from jinja2.nativetypes import NativeEnvironment
 
-from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError,ParamValidationError
 from boto3.dynamodb.conditions import Key
 from functools import wraps
@@ -182,9 +181,7 @@ class DDBO:
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
         self.tables    = [self.api_keys, self.users, self.movies, self.frames, self.courses]
 
-    def new_id(self):
-        """Can be used for users, movies, or anything else"""
-        return str(uuid.uuid4())
+    ### api_key management
 
     def get_api_key_dict(self,api_key):
         return self.api_keys.get_item(Key = {'api_key':api_key}, ConsistentRead=True).get('Item',None)
@@ -229,6 +226,8 @@ class DDBO:
                 return user
         return None
 
+    ### User management
+
     def get_user(self, user_id, email=None):
         if email:
             assert user_id is None
@@ -243,14 +242,18 @@ class DDBO:
     def get_userid_for_email(self, email):
         return self.get_user(None, email)['user_id']
 
-    def put_user(self, userdict):
+    def put_user(self, userdict, create=False):
         assert 'email' in userdict
         assert 'user_id' in userdict
 
         user_id = userdict['user_id']
         email = userdict['email']
-        serializer = TypeSerializer()
         client = self.dynamodb.meta.client
+
+        if create:
+            create_condition = 'attribute_not_exists(user_id)'
+        else:
+            create_condition = 'attribute_exists(user_id)'
 
         try:
             client.transact_write_items(
@@ -258,8 +261,7 @@ class DDBO:
                     {
                         'Put': {
                             'TableName': self.unique_emails.name,
-                            'Item': {'email': email,
-                                     'user_id': user_id},
+                            'Item': {'email': email},
                             'ConditionExpression': 'attribute_not_exists(email)'
                         }
                     },
@@ -267,6 +269,7 @@ class DDBO:
                         'Put': {
                             'TableName': self.users.name,
                             'Item': userdict,
+                            'ConditionExpression': create_condition
                         }
                     }
                 ]
@@ -296,8 +299,7 @@ class DDBO:
                 }, {
                     'Put': {
                         'TableName': self.unique_emails.name,
-                        'Item': {'email': new_email,
-                                 'user_id' : user_id },
+                        'Item': {'email': new_email},
                         'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
                     }
                 }, {
@@ -313,23 +315,29 @@ class DDBO:
         except ClientError as e:
             raise RuntimeError(f"Email update failed: {e}")
 
+    ### course management
+
     def get_course(self,course_id):
-        return self.courses.get_item(Key = {'course_id':course_id},ConsistentRead=True).get('Item',None)
+        return self.courses.get_item(Key = {'course_id':course_id}).get('Item',None)
 
     def put_course(self, coursedict):
         self.courses.put_item(Item=coursedict)
+
+    def get_course_by_course_key(self, course_key):
+        response = self.courses.query(
+            IndexName='course_key_idx',
+            KeyConditionExpression=Key('course_key').eq(course_key)
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+
+    ### movie management
 
     def get_movie(self,movie_id):
         return self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
 
     def put_movie(self, moviedict):
         self.movies.put_item(Item=moviedict)
-
-    def get_frame(self,movie_id,frameId):
-        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId}).get('Item',None)
-
-    def put_frame(self,framedict):
-        self.frames.put_item(Item=framedict)
 
     def batch_delete_movie_ids(self, ids):
         """Delete movie items from the table using batch_writer."""
@@ -359,17 +367,13 @@ class DDBO:
         return movie_ids
 
 
-    def get_course_by_id(self, course_id):
-        assert is_course_id(course_id)
-        return self.courses.get_item(Key={'course_id': course_id}).get('Item', None)
+    ### movie frame management
 
-    def get_course_by_course_key(self, course_key):
-        response = self.courses.query(
-            IndexName='course_key_idx',
-            KeyConditionExpression=Key('course_key').eq(course_key)
-        )
-        items = response.get('Items', [])
-        return items[0] if items else None
+    def get_frame(self,movie_id,frameId):
+        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId}).get('Item',None)
+
+    def put_frame(self,framedict):
+        self.frames.put_item(Item=framedict)
 
     def delete_user(self, user_id, purge_movies=False):
         """Delete a user specified by user_id.
@@ -416,9 +420,7 @@ class DDBO:
 
         # Get the email address. We should just get the userdict with some fancy projection...
         # Finally delete the user and the unique email
-        print("*** user_id=",user_id)
         email = self.users.get_item(Key={'user_id':user_id},ConsistentRead=True)['Item']['email']
-        print("*** email=",email)
         client = self.dynamodb.meta.client
         client.transact_write_items(
             TransactItems=[
@@ -437,6 +439,59 @@ class DDBO:
                     }
                 }
             ])
+
+
+    def register_email(self, email, name, course_key=None, course_id=None, demo_user=0):
+        """Register a new user as identified by their email address for a given course. Does not make an api_key or send the links with the api_key.
+        :param: email - user email
+        :param: course_key - the key
+        :param: course_id  - the course
+        :param: demo_user  - True if this is a demo user
+        :return: dictionary of {'user_id':user_id} for user who is registered.
+        """
+
+        if (course_key is None) and (course_id is None):
+            raise ValueError("Either the course_key or the course_id must be provided")
+        if course_id is not None:
+            assert is_course_id(course_id)
+
+        # Get the course name and (optionally) course_id
+
+        if course is not None:
+            course = self.get_course(course_id)
+        else:
+            course = self.get_course_by_course_key(course_key)
+        if course is None:
+            raise InvalidCourse_Key(course_key)
+
+        # Now we need to either be the first to create this user
+        # or else we need to get the user_id of the existing user.
+        while True:
+            user = self.get_user(None, email=email)
+            if user:
+                # The user exists! Change the primary course and add them to this course.
+                user['primary_course_id']   = course['course_id']
+                user['primary_course_name'] = course['course_name']
+                user['demo'] = demo_user
+                user['courses'] = list(set(user['courses'] + [course_id]))
+                self.put_user(user)
+                return user
+            # user does not exist. Try to create a new user
+            user = {'user_id':new_user_id(),
+                    'email':email,
+                    'created':int(time.time()),
+                    'enabled':1,
+                    'demo':demo_user,
+                    'admin': 0,
+                    'admin_for_courses':[],
+                    'primary_course_id': course['course_id'],
+                    'primary_course_name': course['course_name'] }
+
+            try:
+                self.put_user( user, create=True)
+            except RuntimeError as e:
+                logging.warning("Failed to insert user: %s %s: %e",user_id,email,e)
+            logging.warning("Looping on get_user or create_user")
 
 
 
@@ -486,71 +541,7 @@ def log_args(func):
     return wrapper
 
 
-#####################
-## USER MANAGEMENT ##
-#####################
-
-@log_args
-def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
-    """
-    :param: user_id - user ID to get information about.
-    :param: get_admin - if True get information user's admin roles   (ignored)
-    :param: get_courses - if True get information about the user's courses (ignored)
-    :return: User dictionary augmented with additional information.
-    """
-    assert (user_id is None) or (is_user_id(user_id))
-    dd = DDBO()
-    if user_id:
-        return dd.get_user(user_id)
-    elif email:
-        logging.info("email=%s",email)
-        logging.info("u=%s",dd.get_user(None, email=email))
-        return dd.get_user(None, email=email)
-    else:
-        raise RuntimeError("user_id or email must be provided")
-
-
-
-
 ################ REGISTRATION ################
-
-@log
-def register_email(*, email, name, course_key=None, course_id=None, demo_user=0):
-    """Register a new user as identified by their email address for a given course. Does not make an api_key or send the links with the api_key.
-    :param: email - user email
-    :param: course_key - the key
-    :param: course_id  - the course
-    :param: demo_user  - True if this is a demo user
-    :return: dictionary of {'user_id':user_id} for user who is registered.
-    """
-
-    assert course_id is None or is_course_id(course_id)
-    dd = DDBO()
-
-    if (course_key is None) and (course_id is None):
-        raise ValueError("Either the course_key or the course_id must be provided")
-
-    # Get the course name and (optionally) course_id
-
-    if not course_id:
-        course = dd.get_course_by_course_key(course_key)
-        if not course:
-            raise InvalidCourse_Key(course_key)
-    else:
-        course = dd.get_course(course_id)
-
-    # See if the user already exists
-    # Note that there is synchornization error here. We should actually use a transact_write_items
-    # here and simultaneously write to a table of unique_emails and the users table. So two users
-    # may end up with the same email address.
-    user = dd.get_user(None, email=email)
-    if not user:
-        user = {'email': email}
-    user['name'] = name
-    user['primary_course_id']   = course['course_id']
-    user['primary_course_name'] = course['course_name']
-    user['demo'] = demo_user
-    dd.put_user(user)
 
 
 @log
