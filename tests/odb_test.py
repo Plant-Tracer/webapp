@@ -127,3 +127,12 @@ def test_odb(ddbo):
     print("u2=",json.dumps(u2,indent=4,default=str))
     assert u1==u2
     assert u1['email'] == TEST_USER_EMAIL+"-new"
+
+    # Try to delete the user
+    with pytest.raises(RuntimeError,match=r'.* has 1 outstanding movie.*'):
+        ddbo.delete_user(TEST_USER_ID)
+
+    ddbo.delete_user(TEST_USER_ID, purge_movies=True)
+
+
+    assert ddbo.get_user(TEST_USER_ID) is None

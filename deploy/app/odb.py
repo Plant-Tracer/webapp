@@ -334,7 +334,6 @@ class DDBO:
             for theId in ids:
                 batch.delete_item(Key={ 'movie_id': theId})
 
-
     def get_movies_for_user_id(self, user_id):
         """Query user_id_idx and return all movie_ids for the given user_id (with pagination)."""
         assert is_user_id(user_id)
@@ -368,6 +367,53 @@ class DDBO:
         )
         items = response.get('Items', [])
         return items[0] if items else None
+
+
+    def delete_user(self, user_id, purge_movies=False):
+        """Delete a user specified by user_id.
+        :param: user_id - the user ID
+        - First deletes the user's API keys
+        - Next deletes all of the user's admin bits
+        - Finally deletes the user
+
+        Note: This will fail if the user has any outstanding movies (referrential integrity).
+              In that case, the user should simply be disabled.
+        Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
+        Deletes all of the user's movies (if purge_movies is True)
+        Also deletes the user from any courses where they may be an admin.
+        """
+        assert is_user_id(user_id)
+        movie_ids = self.get_movies_for_user_id(user_id)
+        if purge_movies:
+            self.batch_delete_movie_ids(movie_ids)
+        else:
+            if movie_ids:
+                raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
+
+        # Now delete all of the API keys for this user
+        # Assuming there is a User_id_Index on api_keys table
+        api_keys = []
+        last_evaluated_key = None
+        while True:
+            query_kwargs = {
+                'IndexName': 'user_id_idx',
+                'KeyConditionExpression': Key('user_id').eq(user_id),
+                'ProjectionExpression': 'api_key'
+            }
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**query_kwargs)
+            api_keys.extend(item['api_key'] for item in response['Items'])
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        # Batch delete API keys
+        with self.api_keys.batch_writer() as batch:
+            for api_key in api_keys:
+                batch.delete_item(Key={'api_key': api_key})
+
+        # Finally delete the user
+        self.users.delete_item(Key={'user_id': user_id})
 
 
 #############
@@ -440,53 +486,6 @@ def lookup_user(*, user_id=None, email=None, get_admin=None, get_courses=None):
         raise RuntimeError("user_id or email must be provided")
 
 
-@log
-def delete_user(*, user_id, purge_movies=False):
-    """Delete a user specified by user_id.
-    :param: user_id - the user ID
-    - First deletes the user's API keys
-    - Next deletes all of the user's admin bits
-    - Finally deletes the user
-
-    Note: This will fail if the user has any outstanding movies (referrential integrity).
-          In that case, the user should simply be disabled.
-    Note: A course cannot be deleted if it has any users. A user cannot be deleted if it has any movies.
-    Deletes all of the user's movies (if purge_movies is True)
-    Also deletes the user from any courses where they may be an admin.
-    """
-    assert is_user_id(user_id)
-    dd = DDBO()
-    movie_ids = dd.get_movies_for_user_id(user_id)
-    if purge_movies:
-        dd.batch_delete_movie_ids(movie_ids)
-    else:
-        if movie_ids:
-            raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
-
-    # Now delete all of the API keys for this user
-    # Assuming there is a User_id_Index on api_keys table
-    api_keys = []
-    last_evaluated_key = None
-    while True:
-        query_kwargs = {
-            'IndexName': 'User_id_Index',
-            'KeyConditionExpression': Key('user_id').eq(user_id),
-            'ProjectionExpression': 'api_key'
-        }
-        if last_evaluated_key:
-            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
-        response = dd.api_keys.query(**query_kwargs)
-        api_keys.extend(item['api_key'] for item in response['Items'])
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            break
-    # Batch delete API keys
-    with dd.api_keys.batch_writer() as batch:
-        for api_key in api_keys:
-            batch.delete_item(Key={'api_key': api_key})
-
-    # Finally delete the user
-    dd.users.delete_item(Key={'user_id': user_id})
 
 
 ################ REGISTRATION ################
