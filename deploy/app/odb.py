@@ -157,7 +157,15 @@ def dynamodb_error_debugger(func):
 
 @lru_cache(maxsize=None)
 class DDBO:
-    def __init__(self, *, region_name='us-east-1', endpoint_url=None):
+    def __init__(self, *, region_name=None, endpoint_url=None):
+        # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
+        # not at object creation time.
+
+        if region_name is None:
+            region_name = os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION)
+        if endpoint_url is None:
+            endpoint_url = os.environ.get(C.DYNAMODB_ENDPOINT_URL,None)
+
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
                                         endpoint_url=endpoint_url)
@@ -469,12 +477,14 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")
 
-    # Get the course_id if not provided
+    # Get the course name and (optionally) course_id
+
     if not course_id:
         course = dd.get_course_by_course_key(course_key)
         if not course:
             raise InvalidCourse_Key(course_key)
-        course_id = course['course_id']
+    else:
+        course = dd.get_course(course_id)
 
     # See if the user already exists
     # Note that there is synchornization error here. We should actually use a transact_write_items
@@ -484,10 +494,10 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
     if not user:
         user = {'email': email}
     user['name'] = name
-    user['primary_course_id'] = course_id
+    user['primary_course_id']   = course['course_id']
+    user['primary_course_name'] = course['course_name']
     user['demo'] = demo_user
     dd.put_user(user)
-
 
 @log
 def delete_api_key(api_key):

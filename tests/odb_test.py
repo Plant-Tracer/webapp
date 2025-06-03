@@ -9,6 +9,7 @@ import pytest
 from app import odb
 from app.odb import DDBO
 from app import odbmaint
+from app.constants import MIME,C
 
 MYDIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname( MYDIR )
@@ -16,6 +17,7 @@ ROOT_DIR = os.path.dirname( MYDIR )
 TEST_USER_ID = odb.new_user_id()
 TEST_USER_EMAIL = 'new.user@example.com'
 TEST_COURSE_ID = odb.new_course_id()
+TEST_COURSE_NAME = 'Introduction to Plant Tracer'
 TEST_MOVIE_ID = odb.new_movie_id()
 TEST_USER_DATA = {
     'user_id': TEST_USER_ID,
@@ -27,11 +29,12 @@ TEST_USER_DATA = {
     'admin': [],
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
+    'primary_course_name': TEST_COURSE_NAME,
 }
 
 TEST_COURSE_DATA = {
     'course_id': TEST_COURSE_ID,
-    'name': 'Introduction to DynamoDB'
+    'name': TEST_COURSE_NAME
 }
 
 TEST_MOVIE_DATA = {
@@ -55,8 +58,12 @@ def ddbo():
     os.environ['DYNAMODB_ENDPOINT_URL']=ENDPOINT_URL
     subprocess.call( [os.path.join(ROOT_DIR,'local_dynamodb_control.bash'),'start'])
     odbmaint.create_schema(region_name='local', endpoint_url=ENDPOINT_URL)
-    return DDBO(region_name=os.getenv('AWS_DEFAULT_REGION'),
-              endpoint_url=os.getenv('DYNAMODB_ENDPOINT_URL'))
+
+    print("1:",os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION))
+    print("2:",os.environ.get(C.DYNAMODB_ENDPOINT_URL,None))
+
+
+    return DDBO()
 
 def test_odb(ddbo):
     start_time = int(time.time())

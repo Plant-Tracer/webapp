@@ -106,6 +106,7 @@ def get_user_api_key():
 
 def get_user_dict():
     """Returns the userdict of the currently logged in user, or throws a response"""
+    ddbo = DDBO()
     api_key = get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
@@ -114,8 +115,8 @@ def get_user_dict():
             raise AuthError('invalid API key')
 
     # We have a key. Now validate it
-    userdict = odb.validate_api_key(api_key)
-    if not userdict:
+    userdict = ddbo.validate_api_key(api_key)
+    if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
         raise AuthError(f"api_key '{api_key}' is invalid")
@@ -131,7 +132,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: title - the title we should give the page
     :param: require_auth  - if true, the user must already be authenticated, or throws an error
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
-    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key in the URL or the cookie
+    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key
+                     in the URL or the cookie
     """
     logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     if lookup:
@@ -145,14 +147,14 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
 
     if (api_key is not None) and (logout is False):
         # Get the user_dict is from the database
-        user_dict = get_user_dict()
-        user_name = user_dict['name']
+        user_dict  = get_user_dict()
+        user_name  = user_dict['name']
         user_email = user_dict['email']
         user_demo  = user_dict['demo']
-        user_id = user_dict['id']
+        user_id    = user_dict['user_id']
         user_primary_course_id = user_dict['primary_course_id']
+        primary_course_name    = user_dict['primary_course_name']
         logged_in = 1
-        primary_course_name = db.lookup_course_by_id(course_id=user_primary_course_id)['course_name']
         admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
         # If this is a demo account, the user cannot be an admin (security)
         if user_demo:
