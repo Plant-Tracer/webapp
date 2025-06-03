@@ -177,9 +177,10 @@ class DDBO:
         self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
-        self.movies  = self.dynamodb.Table( table_prefix + MOVIES )
-        self.frames = self.dynamodb.Table( table_prefix + FRAMES )
-        self.courses = self.dynamodb.Table( table_prefix + COURSES )
+        self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
+        self.frames    = self.dynamodb.Table( table_prefix + FRAMES )
+        self.courses   = self.dynamodb.Table( table_prefix + COURSES )
+        self.tables    = [self.api_keys, self.users, self.movies, self.frames, self.courses]
 
     def new_id(self):
         """Can be used for users, movies, or anything else"""

@@ -3,7 +3,10 @@ import argparse
 import copy
 
 import boto3
+from tabulate import tabulate
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Attr
+
 
 from .odb import DDBO
 
@@ -200,7 +203,7 @@ def drop_dynamodb_table(ddbo, table_name: str):
         logger.error("Unexpected error occurred while deleting table %s: %s", table_name, e)
 
 
-def create_dynamodb_tables(ddbo, ignore_table_exists = set()):
+def create_tables(ddbo, ignore_table_exists = set()):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
 
     Connects to the local DynamoDB instance using DEFAULT_DYNAMODB_ENDPOINT.
@@ -229,18 +232,39 @@ def create_dynamodb_tables(ddbo, ignore_table_exists = set()):
         except Exception as e:
             logger.error("An unexpected error occurred creating table %s: %s", table_name, e)
 
-def create_schema(ddbo):
+def drop_tables(ddbo):
     tables_to_drop = [ ddbo.table_prefix + config['TableName'] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
         drop_dynamodb_table(ddbo, table_name)
-    create_dynamodb_tables(ddbo)
 
 def puge_all_movies(ddbo):
     """"Deleting an entire table is significantly more efficient than removing items one-by-one,
     which essentially doubles the write throughput as you do as many delete operations as put operations.
     """
     ddbo.dynamodb.delete_table(TableName = ddbo.table_prefix + 'movies')
-    create_dynamodb_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
+    create_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
+
+def count_table_items(table, **kwargs):
+    total = 0
+    response = table.scan(Select='COUNT', **kwargs)
+    total += response['Count']
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'], Select='COUNT', **kwargs)
+        total += response['Count']
+    return total
+
+def report(ddbo):
+    headers = ['table','.item_count','count_table_items()']
+    rows = []
+    for table in ddbo.tables:
+        rows.append([table.name,table.item_count, count_table_items(table)])
+    print(tabulate(rows,headers=headers))
+
+    print("")
+    kwargs =  { 'FilterExpression': Attr('demo').eq(1) }
+    print("Number of demo users:", count_table_items(ddbo.users,  **kwargs))
+
+
 
 if __name__ == "__main__":
     # --- Argparse Setup ---
@@ -258,5 +282,6 @@ if __name__ == "__main__":
         logger.debug("Debug mode enabled.")
     else:
         logger.setLevel(logging.INFO) # Default to INFO if not debug
-    ddbo = DDBO(region_name='us-east-1', endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)
-    create_schema(ddbo)
+    ddbo = DDBO(endpoint_url=DEFAULT_DYNAMODB_ENDPOINT)
+    drop_tables(ddbo)
+    create_tables(ddbo)
