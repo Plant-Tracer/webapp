@@ -247,6 +247,7 @@ class DDBO:
         assert 'email' in userdict
         assert 'user_id' in userdict
 
+        user_id = userdict['user_id']
         email = userdict['email']
         serializer = TypeSerializer()
         client = self.dynamodb.meta.client
@@ -257,7 +258,8 @@ class DDBO:
                     {
                         'Put': {
                             'TableName': self.unique_emails.name,
-                            'Item': {'email': email},
+                            'Item': {'email': email,
+                                     'user_id': user_id},
                             'ConditionExpression': 'attribute_not_exists(email)'
                         }
                     },
@@ -289,13 +291,14 @@ class DDBO:
                     'Delete': {
                         'TableName': self.unique_emails.name,
                         'Key': {'email': userdict['email']},
-                        #'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
+                        'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
                     }
                 }, {
                     'Put': {
                         'TableName': self.unique_emails.name,
-                        'Item': {'email': new_email},
-                        #'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
+                        'Item': {'email': new_email,
+                                 'user_id' : user_id },
+                        'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
                     }
                 }, {
                     'Update': {
@@ -323,7 +326,7 @@ class DDBO:
         self.movies.put_item(Item=moviedict)
 
     def get_frame(self,movie_id,frameId):
-        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId},ConsistentRead=True).get('Item',None)
+        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId}).get('Item',None)
 
     def put_frame(self,framedict):
         self.frames.put_item(Item=framedict)
@@ -358,7 +361,7 @@ class DDBO:
 
     def get_course_by_id(self, course_id):
         assert is_course_id(course_id)
-        return self.courses.get_item(Key={'course_id': course_id}, ConsistentRead=True).get('Item', None)
+        return self.courses.get_item(Key={'course_id': course_id}).get('Item', None)
 
     def get_course_by_course_key(self, course_key):
         response = self.courses.query(
@@ -367,7 +370,6 @@ class DDBO:
         )
         items = response.get('Items', [])
         return items[0] if items else None
-
 
     def delete_user(self, user_id, purge_movies=False):
         """Delete a user specified by user_id.
@@ -391,7 +393,7 @@ class DDBO:
                 raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
 
         # Now delete all of the API keys for this user
-        # Assuming there is a User_id_Index on api_keys table
+        # First get the API keys
         api_keys = []
         last_evaluated_key = None
         while True:
@@ -407,13 +409,35 @@ class DDBO:
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
-        # Batch delete API keys
+        # Now batch delete the API keys
         with self.api_keys.batch_writer() as batch:
             for api_key in api_keys:
                 batch.delete_item(Key={'api_key': api_key})
 
-        # Finally delete the user
-        self.users.delete_item(Key={'user_id': user_id})
+        # Get the email address. We should just get the userdict with some fancy projection...
+        # Finally delete the user and the unique email
+        print("*** user_id=",user_id)
+        email = self.users.get_item(Key={'user_id':user_id},ConsistentRead=True)['Item']['email']
+        print("*** email=",email)
+        client = self.dynamodb.meta.client
+        client.transact_write_items(
+            TransactItems=[
+                {
+                    'Delete': {
+                        'TableName': self.users.name,
+                        'Key': {'user_id': user_id},
+                        'ConditionExpression': 'attribute_exists(user_id)'  # Ensure user_id exists
+                    },
+                },
+                {
+                    'Delete': {
+                        'TableName': self.unique_emails.name,
+                        'Key': {'email': email},
+                        #'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
+                    }
+                }
+            ])
+
 
 
 #############

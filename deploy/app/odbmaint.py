@@ -38,120 +38,22 @@ projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
 
 TABLE_CONFIGURATIONS = [
     {
-        'TableName': 'users',
-        'KeySchema': [
+        TableName: 'users',
+        KeySchema: [
             {AttributeName: 'user_id', KeyType: HASH}
         ],
         AttributeDefinitions: [
             {AttributeName: 'user_id', AttributeType: S},
             {AttributeName: 'email', AttributeType: S}
         ],
-        'GlobalSecondaryIndexes': [
+        GlobalSecondaryIndexes: [
             {
                 'IndexName': 'email_idx',
-                'KeySchema': [
+                KeySchema: [
                     {AttributeName: 'email', KeyType: HASH}
                 ],
                 **projection_all,
             }
-        ],
-        **billing,
-    },
-    {
-        'TableName': 'api_keys',
-        'KeySchema': [
-            {AttributeName: 'api_key', KeyType: HASH}
-        ],
-        AttributeDefinitions : [
-            {AttributeName: 'api_key', AttributeType : S},
-            {AttributeName: 'user_id', AttributeType : S}
-        ],
-        'GlobalSecondaryIndexes': [
-            {
-                'IndexName': 'user_id_idx',
-                'KeySchema': [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        'TableName': 'courses',
-        'KeySchema': [
-            {AttributeName: 'course_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'course_key', AttributeType: S}
-        ],
-        'GlobalSecondaryIndexes' : [
-            {
-                'IndexName': 'course_key_idx',
-                'KeySchema': [
-                    {AttributeName: 'course_key', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-            {
-                'IndexName': 'course_id_idx',
-                'KeySchema': [
-                    {AttributeName: 'course_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        'TableName': 'movies',
-        'KeySchema': [
-            {AttributeName: 'movie_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'user_id', AttributeType: S},
-        ],
-        'GlobalSecondaryIndexes': [
-            {
-                'IndexName': 'course_id_idx',
-                'KeySchema': [
-                    {AttributeName: 'course_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-            {
-                'IndexName': 'user_id_idx',
-                'KeySchema': [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        'TableName': 'movie_frames',
-        'KeySchema': [
-            {AttributeName: 'movie_id', KeyType: HASH},
-            {AttributeName: 'frame_number', KeyType: RANGE}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'frame_number', AttributeType: N},
-            {AttributeName: 'frame_time', AttributeType: N}
-        ],
-        'GlobalSecondaryIndexes': [
-            {
-                'IndexName': 'movie_frame_time_idx',
-                'KeySchema': [
-                    {AttributeName: 'movie_id', KeyType: HASH},
-                    {AttributeName: 'frame_time', KeyType: RANGE}
-                ],
-                **projection_all,
-            },
         ],
         **billing,
     },
@@ -161,7 +63,115 @@ TABLE_CONFIGURATIONS = [
             {AttributeName: 'email', KeyType: HASH}
         ],
         AttributeDefinitions: [
-            {AttributeName: 'email', AttributeType: S}
+            {AttributeName: 'email', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S}
+        ],
+        GlobalSecondaryIndexes: [
+            {
+                'IndexName': 'user_id_idx',
+                KeySchema: [
+                    {AttributeName: 'user_id', KeyType: HASH}
+                ],
+                **projection_all,
+            }
+        ],
+        **billing,
+    },
+    {
+        TableName: 'api_keys',
+        KeySchema: [
+            {AttributeName: 'api_key', KeyType: HASH}
+        ],
+        AttributeDefinitions : [
+            {AttributeName: 'api_key', AttributeType : S},
+            {AttributeName: 'user_id', AttributeType : S}
+        ],
+        GlobalSecondaryIndexes: [
+            {
+                'IndexName': 'user_id_idx',
+                KeySchema: [
+                    {AttributeName: 'user_id', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+        ],
+        **billing,
+    },
+    {
+        TableName: 'courses',
+        KeySchema: [
+            {AttributeName: 'course_id', KeyType: HASH}
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'course_key', AttributeType: S}
+        ],
+        GlobalSecondaryIndexes : [
+            {
+                'IndexName': 'course_key_idx',
+                KeySchema: [
+                    {AttributeName: 'course_key', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+            {
+                'IndexName': 'course_id_idx',
+                KeySchema: [
+                    {AttributeName: 'course_id', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+        ],
+        **billing,
+    },
+    {
+        TableName: 'movies',
+        KeySchema: [
+            {AttributeName: 'movie_id', KeyType: HASH}
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'movie_id', AttributeType: S},
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S},
+        ],
+        GlobalSecondaryIndexes: [
+            {
+                'IndexName': 'course_id_idx',
+                KeySchema: [
+                    {AttributeName: 'course_id', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+            {
+                'IndexName': 'user_id_idx',
+                KeySchema: [
+                    {AttributeName: 'user_id', KeyType: HASH}
+                ],
+                **projection_all,
+            },
+        ],
+        **billing,
+    },
+    {
+        TableName: 'movie_frames',
+        KeySchema: [
+            {AttributeName: 'movie_id', KeyType: HASH},
+            {AttributeName: 'frame_number', KeyType: RANGE}
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'movie_id', AttributeType: S},
+            {AttributeName: 'frame_number', AttributeType: N},
+            {AttributeName: 'frame_time', AttributeType: N}
+        ],
+        GlobalSecondaryIndexes: [
+            {
+                'IndexName': 'movie_frame_time_idx',
+                KeySchema: [
+                    {AttributeName: 'movie_id', KeyType: HASH},
+                    {AttributeName: 'frame_time', KeyType: RANGE}
+                ],
+                **projection_all,
+            },
         ],
         **billing,
     }
@@ -210,7 +220,7 @@ def create_tables(ddbo, ignore_table_exists = set()):
     for table_config in TABLE_CONFIGURATIONS:
         # prepend the prefix to the table name before creating it
         tc = copy.deepcopy(table_config)
-        tc['TableName'] = table_name = ddbo.table_prefix + tc['TableName']
+        tc[TableName] = table_name = ddbo.table_prefix + tc[TableName]
         logger.info("Attempting to create table: %s", table_name)
         try:
             table = ddbo.dynamodb.create_table(**tc)
@@ -227,7 +237,7 @@ def create_tables(ddbo, ignore_table_exists = set()):
             logger.error("An unexpected error occurred creating table %s: %s", table_name, e)
 
 def drop_tables(ddbo):
-    tables_to_drop = [ ddbo.table_prefix + config['TableName'] for config in TABLE_CONFIGURATIONS ]
+    tables_to_drop = [ ddbo.table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
         drop_dynamodb_table(ddbo, table_name)
 
