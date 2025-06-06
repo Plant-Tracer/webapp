@@ -2,6 +2,8 @@ import logging
 import argparse
 import copy
 
+import tabulate
+
 import boto3
 from tabulate import tabulate
 from botocore.exceptions import ClientError
@@ -160,7 +162,7 @@ TABLE_CONFIGURATIONS = [
             {AttributeName: 'log_id', KeyType: HASH}
         ],
         AttributeDefinitions: [
-            {AttributeName: 'log_id', KeyType: HASH},
+            {AttributeName: 'log_id', AttributeType: S},
             {AttributeName: 'ipaddr', AttributeType: S},
             {AttributeName: 'user_id', AttributeType: S},
             {AttributeName: 'course_id', AttributeType: S},

@@ -6,6 +6,7 @@ import subprocess
 import json
 from decimal import Decimal
 
+from botocore.exceptions import ClientError,ParamValidationError
 
 import pytest
 
@@ -13,6 +14,8 @@ from app import odb
 from app.odb import DDBO
 from app import odbmaint
 from app.constants import MIME,C
+
+
 
 MYDIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname( MYDIR )
@@ -107,15 +110,11 @@ def ddbo():
 def test_odb(ddbo):
     start_time = int(time.time())
 
-    # Create the user. Make sure create flag functions properly
-    # This should fail because user we are putting does not exist.
-    with pytest.raises(RuntimeError):
-        ddbo.put_user(TEST_USER_DATA, create=False)
-    # now put the user
-    ddbo.put_user(TEST_USER_DATA, create=True)
-    # This should fail becuase the user we are putting does exist
-    with pytest.raises(RuntimeError):
-        ddbo.put_user(TEST_USER_DATA, create=True)
+    # Create the user.
+    ddbo.add_user(TEST_USER_DATA)
+    # This should fail becuase the user we are putting exist
+    with pytest.raises(ClientError):
+        ddbo.add_user(TEST_USER_DATA)
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
