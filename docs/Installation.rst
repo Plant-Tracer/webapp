@@ -3,14 +3,6 @@ Installation
 
 Requirements and Preparation
 ----------------------------
-* A home directory on Dreamhost (or another web hosting provider) that provides passengers, or some other wsgi-based approach for running a Python Bottle app (e.g. `mod_wsgi` on Apache).
-
-* A MySQL database with three users defined in a mysql credentials file:
-
-    * ``[client]`` which can modify the schema
-    * ``[dbreader]`` which can read the database
-    * ``[dbwriter]`` which can write the database
-
 * Ensure that python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
 
   - Python is installed automatically using brew on MacOS if not present, using the steps in this document.
