@@ -17,7 +17,6 @@ from os.path import abspath, dirname
 from deploy.app import odbmaint
 from fixtures.app_client import client
 
-from app.auth import get_dbreader,get_dbwriter
 import app.db as db
 import app.dbmaint as dbmaint
 import app.bottle_api as bottle_api
@@ -45,8 +44,6 @@ USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
-DBREADER = 'dbreader'
-DBWRITER = 'dbwriter'
 TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
 TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
 TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
@@ -79,9 +76,7 @@ def new_course():
            COURSE_ID:course_id,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
-           DEMO_EMAIL:demo_email,
-           DBREADER:get_dbreader(),
-           DBWRITER:get_dbwriter() }
+           DEMO_EMAIL:demo_email }
 
     db.remove_course_admin(email=admin_email, course_key=course_key)
     db.delete_user(user_id=user_id, purge_movies=True)
@@ -179,7 +174,6 @@ def test_new_user(new_user,ddbo):
 
 def test_get_logs(client, new_user):
     """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
-    dbreader = get_dbreader()
     for security in [False,True]:
         logging.info("security=%s",security)
         db.get_logs( user_id=0 , security=security)
@@ -239,7 +233,6 @@ def test_log_search_user(new_user):
     api_key    = cfg[API_KEY]
 
     user_id  = db.validate_api_key(api_key)['user_id']
-    dbreader = get_dbreader()
 
     ret = db.get_logs( user_id=user_id )
     logging.info("search for user_email=%s user_id=%s returns %s logs",user_email,user_id, len(ret))

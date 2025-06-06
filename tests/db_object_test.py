@@ -13,7 +13,6 @@ import uuid
 import xml.etree.ElementTree
 import hashlib
 
-from app.auth import get_dbreader,get_dbwriter
 from app.paths import STATIC_DIR,TEST_DATA_DIR
 from app.constants import C
 import app.dbfile as dbfile
@@ -54,16 +53,6 @@ def test_write_read_delete_object(SaveS3Bucket):
     name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
     urn  = db_object.make_urn(object_name=name, scheme=None)
     db_object.write_object(urn=urn, object_data=DATA)
-
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * from object_store where sha256=%s", (DATA_SHA256,), asDicts=True, debug=True)
-    assert len(res)==1
-    assert res[0]['sha256']==DATA_SHA256
-    assert res[0]['data']==DATA
-
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * from objects where sha256=%s", (DATA_SHA256,), asDicts=True, debug=True)
-    assert len(res)==1
-    assert res[0]['sha256']==DATA_SHA256
-    assert res[0]['urn']==urn
 
     obj_data = db_object.read_object(urn=urn)
     assert obj_data == DATA

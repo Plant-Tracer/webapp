@@ -32,7 +32,6 @@ import app.tracker as tracker
 
 from app.paths import TEST_DATA_DIR
 from app.constants import C,MIME
-from app.auth import get_dbreader,get_dbwriter
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
