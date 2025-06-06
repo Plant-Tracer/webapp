@@ -4,6 +4,8 @@ import os
 import time
 import subprocess
 import json
+from decimal import Decimal
+
 
 import pytest
 
@@ -74,12 +76,12 @@ TEST_MOVIE_DATA = {
     'total_bytes':100
 }
 
-TEST_FRAME_DATA = {
+TEST_MOVIE_FRAME_DATA = {
     'movie_id': TEST_MOVIE_ID,
     'frame_number': 0,
     'frame_urn':'s3://bogus/movie-frame.jpg',
-    'trackpoints':[{'x':10,'y':20,'label':'name1'},
-                   {'x':45,'y':55,'label':'name2'}]
+    'trackpoints':[{'x':Decimal(10),'y':Decimal(20),'label':'name1'},
+                   {'x':Decimal(45),'y':Decimal(55),'label':'name2'}]
 }
 
 ENDPOINT_URL = 'http://localhost:8010'
@@ -118,14 +120,27 @@ def test_odb(ddbo):
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
 
-    ddbo.put_movie(TEST_MOVIE_DATA)
-    assert ddbo.get_movie(TEST_MOVIE_ID) == TEST_MOVIE_DATA
-    assert ddbo.get_movies_for_user_id(TEST_USER_ID) == [TEST_MOVIE_ID]
-
     ddbo.put_course(TEST_COURSE_DATA)
     assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
 
-    # test api_key management
+    ddbo.put_movie(TEST_MOVIE_DATA)
+    assert ddbo.get_movie(TEST_MOVIE_ID) == TEST_MOVIE_DATA
+    assert ddbo.get_movies_for_user_id(TEST_USER_ID) == [TEST_MOVIE_DATA]
+
+    ddbo.put_movie_frame(TEST_MOVIE_FRAME_DATA)
+    assert len(ddbo.get_frames(TEST_MOVIE_ID)) == 1
+    assert (odb.get_movie_trackpoints(movie_id= TEST_MOVIE_ID)
+            == [{'frame_number': Decimal(0), 'x':Decimal(10), 'y':Decimal(20), 'label':'name1'},
+                {'frame_number': Decimal(0), 'x':Decimal(45), 'y':Decimal(55), 'label':'name2'}])
+    assert odb.last_tracked_movie_frame(movie_id=TEST_MOVIE_ID)==0
+    ddbo.put_movie_frame({"movie_id":TEST_MOVIE_ID,
+                         "frame_number":1,
+                         "frame_urn":"s3://bogus/frame1"})
+    odb.put_frame_trackpoints(movie_id=TEST_MOVIE_ID, frame_number=1,
+                              trackpoints=[{'x':20, 'y':30, 'label':'name3'},
+                                           {'x':65, 'y':85, 'label':'name4'}])
+    assert odb.last_tracked_movie_frame(movie_id=TEST_MOVIE_ID)==1
+
 
     api_key = ddbo.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
@@ -157,6 +172,4 @@ def test_odb(ddbo):
         ddbo.delete_user(TEST_USER_ID)
 
     ddbo.delete_user(TEST_USER_ID, purge_movies=True)
-
-
     assert ddbo.get_user(TEST_USER_ID) is None

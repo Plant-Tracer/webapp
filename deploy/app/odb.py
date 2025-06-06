@@ -16,6 +16,7 @@ import functools
 import uuid
 import time
 from functools import lru_cache
+from decimal import Decimal
 
 from flask import request
 import boto3
@@ -23,7 +24,7 @@ import boto3
 from jinja2.nativetypes import NativeEnvironment
 
 from botocore.exceptions import ClientError,ParamValidationError
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key,Attr
 from functools import wraps
 
 
@@ -38,7 +39,7 @@ API_KEYS = 'api_keys'
 USERS  = 'users'
 UNIQUE_EMAILS = 'unique_emails'
 MOVIES = 'movies'
-FRAMES = 'frames'
+FRAMES = 'movie_frames'
 COURSES = 'courses'
 
 ODB_TABLES = {API_KEYS,USERS,UNIQUE_EMAILS,MOVIES,FRAMES,COURSES}
@@ -56,29 +57,31 @@ logger = logging.getLogger(__name__)
 ## Errors
 ################################################################
 
-class DB_Errors(RuntimeError):
+class ODB_Errors(RuntimeError):
     """Base class for DB Errors"""
 
-class InvalidAPI_Key(DB_Errors):
+class InvalidAPI_Key(ODB_Errors):
     """ API Key is invalid """
 
-class InvalidCourse_Key(DB_Errors):
+class InvalidCourse_Key(ODB_Errors):
     """ Course Key is invalid """
 
-class InvalidMovie_Id(DB_Errors):
+class InvalidMovie_Id(ODB_Errors):
     """ MovieID is invalid """
     def __init__(self, v):
         super().__init__(str(v))
 
-class InvalidFrameAccess(DB_Errors):
+class InvalidFrameAccess(ODB_Errors):
     """ FrameID is invalid """
 
-class UnauthorizedUser(DB_Errors):
+class UnauthorizedUser(ODB_Errors):
     """ User is not authorized for movie"""
 
-class NoMovieData(DB_Errors):
+class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
 
+class NotImplemented(ODB_Errors):
+    """Not implemented"""
 
 ################################################################
 ## DDBO - The Object Database Class
@@ -96,13 +99,13 @@ def new_movie_id():
     return 'm'+str(uuid.uuid4())
 
 def is_user_id(k):
-    return k[0]=='u'
+    return isinstance(k,str) and k[0]=='u'
 
 def is_api_key(k):
-    return k[0]=='a' and len(k)==33
+    return isinstance(k,str) and k[0]=='a' and len(k)==33
 
 def is_movie_id(k):
-    return k[0]=='m'
+    return isinstance(k,str) and k[0]=='m'
 
 # --- Decorator Definition ---
 def dynamodb_error_debugger(func):
@@ -171,9 +174,9 @@ class DDBO:
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
         self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
-        self.frames    = self.dynamodb.Table( table_prefix + FRAMES )
+        self.movie_frames    = self.dynamodb.Table( table_prefix + FRAMES )
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
-        self.tables    = [self.api_keys, self.users, self.movies, self.frames, self.courses]
+        self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses]
 
     ### api_key management
 
@@ -271,7 +274,6 @@ class DDBO:
         except ClientError as e:
             raise RuntimeError(f"Failed to insert user: {e}")
 
-
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email. Returns userdict. """
         assert is_user_id(user_id)
@@ -327,8 +329,8 @@ class DDBO:
         if purge_movies:
             self.batch_delete_movie_ids( [movie['movie_id'] for movie in movies] )
         else:
-            if movie_ids:
-                raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
+            if movies:
+                raise RuntimeError(f"user {user_id} has {len(movies)} outstanding movies.")
 
         # Now delete all of the API keys for this user
         # First get the API keys
@@ -376,7 +378,8 @@ class DDBO:
 
 
     def register_email(self, email, name, course_key=None, course_id=None, demo_user=0):
-        """Register a new user as identified by their email address for a given course. Does not make an api_key or send the links with the api_key.
+        """Register a new user as identified by their email address for a given course.
+        Does not make an api_key or send the links with the api_key.
         :param: email - user email
         :param: course_key - the key
         :param: course_id  - the course
@@ -458,12 +461,11 @@ class DDBO:
                 courses = user['courses']
                 if course_id in courses:
                     courses.remove(course_id)
-                    table.update_item( self.Key={'user_id': user['user_id']},
+                    table.update_item( Key={'user_id': user['user_id']},
                                        UpdateExpression='SET courses = :c',
                                        ExpressionAttributeValues={':c': courses} )
             last_evaluated_key = response.get('LastEvaluatedKey')
         # done!
-
 
 
     def get_course_by_course_key(self, course_key):
@@ -505,7 +507,6 @@ class DDBO:
                 break
         return movies
 
-
     def get_movies_for_course_id(self, user_id):
         """Query movies.course_id_idx and return all movie_ids for the given user_id (with pagination)."""
         assert is_user_id(user_id)
@@ -526,22 +527,22 @@ class DDBO:
                 break
         return movies
 
-    ### movie frame management
+    ### movie_frame management
 
-    def get_frame(self,movie_id, frame_number):
-        return self.frames.get_item(Key = {'movie_id':movie_id, 'frame_number':frameId}).get('Item',None)
+    def get_movie_frame(self,movie_id, frame_number):
+        return self.movie_frames.get_item(Key = {'movie_id':movie_id, 'frame_number':frameId}).get('Item',None)
 
-    def put_frame(self,framedict):
-        self.frames.put_item(Item=framedict)
+    def put_movie_frame(self,framedict):
+        self.movie_frames.put_item(Item=framedict)
 
-    def get_frames(self,movie_id):
+    def get_frames(self, movie_id):
+        """Gets all the movie frames"""
         assert is_movie_id(movie_id)
         frames = []
         last_evaluated_key = None
 
         while True:
-            query_kwargs = { 'IndexName': 'movie_id_idx',
-                             'KeyConditionExpression': Key( 'movie_id' ).eq( movie_id ) }
+            query_kwargs = { 'KeyConditionExpression': Key( 'movie_id' ).eq( movie_id ) }
 
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
@@ -558,7 +559,6 @@ class DDBO:
             for movie_frame in movie_frames:
                 batch.delete_item(Key={'movie_id': movie_frame['movie_id'],
                                        'frame_number': movie_frame['frame_number']})
-
 
 
 #############
@@ -905,9 +905,9 @@ def set_movie_metadata(*, movie_id, movie_metadata):
     assert 'id' not in movie_metadata
     exp = 'SET ' + ",".join( f'{k} = :{k}' for k in d.keys())
     vals = { ':'+k : v  for (k,v) in d.items()}
-    DDBO().movies.update_item( Key={'movie_id':movie_id,
-                                    UpdateExpression = exp,
-                                    ExpressionAttributeValues = vals})
+    DDBO().movies.update_item( Key={'movie_id':movie_id},
+                               UpdateExpression = exp,
+                               ExpressionAttributeValues = vals)
 
 
 def set_movie_data(*,movie_id, movie_data):
@@ -1003,7 +1003,7 @@ def movie_zipfile_urn_for_movie_id(movie_id):
 
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
-def create_new_frame(*, movie_id, frame_number, frame_data=None):
+def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
     """Get the frame id specified by movie_id and frame_number.
     if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_urn.
     if trackpoints are provided, replace current trackpoints with those. This is used sometimes
@@ -1011,7 +1011,7 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
 
     returns frame_urn
     """
-    logger.debug("create_new_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
+    logger.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
     course_id = course_id_for_movie_id(movie_id)
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
@@ -1022,9 +1022,9 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
         frame_urn = db_object.make_urn( object_name = object_name)
     else:
         frame_urn = None
-    DDBO().put_frame({"movie_id":movie_id,
-                      "frame_number":frame_number,
-                      "frame_urn":frame_urn})
+    DDBO().put_movie_frame({"movie_id":movie_id,
+                            "frame_number":frame_number,
+                            "frame_urn":frame_urn})
     return frame_urn
 
 @log
@@ -1035,7 +1035,7 @@ def get_frame_urn(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
     """
-    return DDBO().get_frame(movie_id, frame_number)['frame_urn']
+    return DDBO().get_movie_frame(movie_id, frame_number)['frame_urn']
 
 
 def get_frame_data(*, movie_id, frame_number):
@@ -1045,7 +1045,7 @@ def get_frame_data(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns the frame data or None
     """
-    frame_urn = DDBO().get_frame(movie_id, frame_number)['frame_urn']
+    frame_urn = DDBO().get_movie_frame(movie_id, frame_number)['frame_urn']
     return db_object.read_object(row['frame_urn'])
 
 
@@ -1057,14 +1057,13 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
     last_evaluated_key = None
 
     while True:
-        query_kwargs = {
-            'KeyConditionExpression': Key('movie_id').eq(movie_id) & Key('frame_number').between(f1, f2)
-        }
+        query_kwargs = { }
 
         if last_evaluated_key:
             query_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = table.query(**query_kwargs)
+        response = table.query(KeyConditionExpression = Key('movie_id').eq(movie_id) & Key('frame_number').between(Decimal(f1), Decimal(f2)),
+                               **query_kwargs)
 
         for item in response['Items']:
             yield item
@@ -1084,7 +1083,7 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
         frame_count = 1e10
 
     ret = []
-    for frame in iter_movie_frames_in_range( OODB().movie_frames, movie_id, frame_start, frame_start+frame_count ):
+    for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ):
         for tp in frame['trackpoints']:
             ret.append({'frame_number':frame['frame_number'],
                         'x':tp['x'],
@@ -1096,6 +1095,7 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_number, frame_urn
     :param: frame_start, frame_count -
     """
+    assert is_movie_id(movie_id)
     return [{'movie_id':frame['movie_id'],
              'frame_number':frame['frame_number'],
              'frame_urn':frame['frame_run']}
@@ -1103,15 +1103,16 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
             iter_movie_frames_in_range( OODB().movie_frames, movie_id, frame_start, frame_start+frame_count ) ]
 
 
-def last_tracked_frame(*, movie_id):
+def last_tracked_movie_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
 
+    assert is_movie_id(movie_id)
     movie_frames=DDBO().movie_frames
-
+    last_evaluated_key=None
     while True:
         query_kwargs = {
             'KeyConditionExpression': Key('movie_id').eq(movie_id),
-            'FilterExpression': Attr('movie_frame_trackpoints').exists(),
+            'FilterExpression': Attr('trackpoints').exists(),
             'ScanIndexForward': False,
             'Limit': 1
         }
@@ -1134,6 +1135,7 @@ def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[di
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
+    assert is_movie_id(movie_id)
     DDBO().movie_frames.update_item( Key={'movie_id':movie_id,
                                           'frame_number':frame_number},
                                      UpdateExpression='SET trackpoints=:val',
@@ -1150,10 +1152,12 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     :param: movie_id - if provided, only use this movie
     :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
     """
+    if is_movie_id:
+        assert is_movie_id(movie_id)
     ddbo = DDBO()
     user = ddbo.users.get_item(Key={'user_id':user_id})
     if orig_movie is not None:
-        raise RuntimeError("orig_movie not implemented")
+        raise NotImplemented("orig_movie not implemented")
     movies = []
     if movie_id is not None:
         movie = ddbo.get_movie(movie_id)
@@ -1203,7 +1207,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
         elif end_time:
             key_condition &= Key('time_t').lte(end_time)
     else:
-        raise ValueError("No index provided.")
+        raise InvalidFrameAccess("No index provided.")
 
     # Prepare query
     kwargs = {
@@ -1290,7 +1294,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         acl  = SET_MOVIE_METADATA[prop]
         if not ((is_owner and '@is_owner' in acl) or (is_admin and '@is_admin') in acl):
             # permission not granted
-            raise RuntimeError("permission denied")
+            raise UnauthorizedUser("permission denied")
 
         ddbo.movie.update_item( Key={'movie_id':movie_id},
                                 UpdateExpression=f'Set {prop} = :val',
@@ -1302,7 +1306,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
         if is_owner or is_admin:
             if prop not in ['name', 'email']:
-                raise ValueError('currently users can only set name and email')
+                raise UnauthorizedUser('currently users can only set name and email')
             ddbo.users.update_item( Key={'user_id':set_user_id},
                                     UpdateExpression=f'Set {prop} = :val',
                                     ExpressionAttributeValues={';val':value})

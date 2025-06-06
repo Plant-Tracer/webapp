@@ -160,6 +160,7 @@ TABLE_CONFIGURATIONS = [
             {AttributeName: 'log_id', KeyType: HASH}
         ],
         AttributeDefinitions: [
+            {AttributeName: 'log_id', KeyType: HASH},
             {AttributeName: 'ipaddr', AttributeType: S},
             {AttributeName: 'user_id', AttributeType: S},
             {AttributeName: 'course_id', AttributeType: S},
@@ -223,9 +224,9 @@ def drop_dynamodb_table(ddbo, table_name: str):
 
     except ClientError as e:
         if e.response['Error']['Code'] == 'ResourceNotFoundException':
-            logger.warning("Table %s does not exist.", table_name)
+            logger.info("Table %s does not exist when dropping table.", table_name)
         elif e.response['Error']['Code'] == 'ValidationException' and "table is being deleted" in str(e):
-            logger.warning("Table %s is already in the process of being deleted.", table_name)
+            logger.info("Table %s is already in the process of being deleted.", table_name)
         else:
             logger.error("Error deleting table %s: %s", table_name, e)
     except Exception as e:
