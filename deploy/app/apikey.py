@@ -103,7 +103,7 @@ def get_user_api_key():
     return api_key
 
 def get_user_dict():
-    """Returns the user dict of the currently logged in user, or throws a response"""
+    """Returns the user dict from the database of the currently logged in user, or throws a response"""
     ddbo = DDBO()
     api_key = get_user_api_key()
     if api_key is None:

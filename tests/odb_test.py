@@ -21,12 +21,13 @@ TEST_COURSE_ID = 'test-course-' + str(uuid.uuid4())[0:4]
 TEST_COURSE_NAME = 'Introduction to Plant Tracer'
 TEST_MOVIE_ID = odb.new_movie_id()
 TEST_COURSE_KEY = 'k-' + str(uuid.uuid4())[0:4]
-
+TEST_COURSE_MAX_ENROLLMENT = 30
 TEST_COURSE_DATA = {
     'course_id': TEST_COURSE_ID,
     'course_name': TEST_COURSE_NAME,
     'course_key': TEST_COURSE_KEY,
-    'course_admins': [TEST_ADMIN_ID]
+    'course_admins': [TEST_ADMIN_ID],
+    'max_enrollment': TEST_COURSE_MAX_ENROLLMENT
 }
 
 TEST_USER_ID = odb.new_user_id()
@@ -38,7 +39,7 @@ TEST_USER_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
-    'admin_for_courses': [TEST_COURSE_ID],
+    'admin': 0,
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
 }
@@ -50,7 +51,7 @@ TEST_ADMIN_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
-    'admin': [TEST_COURSE_ID],
+    'admin': 1,
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
@@ -61,9 +62,24 @@ TEST_MOVIE_DATA = {
     'course_id': TEST_COURSE_ID,
     'user_id': TEST_USER_ID,
     'title': 'My New Awesome Movie',
-    'isPublished': 0,
-    'isDeleted': 0,
-    'description': 'A fantastic new movie project.'
+    'published': 0,
+    'deleted': 0,
+    'description': 'A fantastic new movie project.',
+    'movie_zipfile_urn':'s3://bogus/movie-data.zip',
+    'movie_data_urn':'s3://bogus/movie-data.mp4',
+    'last_frame_tracked':0,
+    'created_at':int(time.time()),
+    'date_uploaded':int(time.time()),
+    'total_frames':10,
+    'total_bytes':100
+}
+
+TEST_FRAME_DATA = {
+    'movie_id': TEST_MOVIE_ID,
+    'frame_number': 0,
+    'frame_urn':'s3://bogus/movie-frame.jpg',
+    'trackpoints':[{'x':10,'y':20,'label':'name1'},
+                   {'x':45,'y':55,'label':'name2'}]
 }
 
 ENDPOINT_URL = 'http://localhost:8010'

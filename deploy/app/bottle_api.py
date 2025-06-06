@@ -1,5 +1,9 @@
 """
 API
+
+TODO - all get_user_id() should be replaced with get_user_dict() and then the userdict should be passed around so that we don't need another query.
+
+
 """
 import json
 import logging
@@ -311,32 +315,27 @@ def api_get_movie_data():
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
     logging.debug("api_get_movie_data")
-    try:
-        movie_id = get_int('movie_id')
-        movie = db.Movie(movie_id, user_id=get_user_id())
-    except db.UnauthorizedUser as e:
-        logging.debug("user authentication error=%s",e)
-        return make_response(f'user={get_user_id()} movie_id={movie_id}', 403)
+    movie_id = get_int('movie_id')
+    if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
+        raise RuntimeError("access denied")
 
-    if get('format')=='zip':
-        url = movie.zipfile_url
-    else:
-        url = movie.url
-
-    if url is None:
-        logging.debug("no movie data for movie_id %s",movie_id)
-        return make_response(f'user={get_user_id()} movie_id={movie_id}', 404)
+    data_urn = odb.get_movie_data(movie_id=movie_id,
+                                  zipfile = get('format')=='zip',
+                                  get_urn = True)
 
     # This is used for testing redirect response in the test program
     if get_bool('redirect_inline'):
-        return "#REDIRECT " + url
-    logging.info("Redirecting movie_id=%s to %s",movie.movie_id, movie.url)
-    return redirect(url)
+        return "#REDIRECT " + data_urn
+
+    # Otherwise, return the signed url
+    return db_object.make_signed_url(urn=data_urn)
+
 
 def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
     """Update the movie metadata."""
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
+            logger.warning("Setting %s in %s; it would be better to do all sets at once",prop, set_movie_id)
             db.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
 
 
@@ -443,15 +442,14 @@ def api_edit_movie():
     if action=='rotate90cw':
         with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_input:
             with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_output:
-                movie = db.Movie(movie_id, user_id=get_user_id())
-                movie_input.write( movie.data )
+                movie_input.write( odb.get_movie_data( movie_id = movie_id))
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
                 movie_output.seek(0)
-                movie.data = movie_data = movie_output.read()
-                movie.version += 1
+                odb.set_movie_data(movie_id=movie_id, movie_data=movie_output.read())
                 movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+                movie_metadata['version'] = movie_metadata.get('version',0)
+                odb.set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
                 set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
-
                 return {'error': False}
     else:
         return E.INVALID_EDIT_ACTION
@@ -592,7 +590,7 @@ def api_get_movie_trackpoints():
 ## User management
 
 ##
-## All of the users that this person can see
+## All of the users and the courses that this person can see
 ##
 @api_bp.route('/list-users', methods=POST)
 def api_list_users():

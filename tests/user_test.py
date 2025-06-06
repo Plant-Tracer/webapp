@@ -143,10 +143,10 @@ def test_new_course(new_course):
     assert db.remaining_course_registrations(course_key=course_key) == dbmaint.DEFAULT_MAX_ENROLLMENT - 2
 
     # Check course lookup functions
-    assert db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_key'] == cfg[COURSE_KEY]
-    course = db.lookup_course_by_name(course_name = cfg[COURSE_NAME])
-    assert course['course_name'] == cfg[COURSE_NAME]
-    assert db.lookup_course_by_id(course_id = course['id'])['id'] == course['id']
+    c1 = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])
+    c2 = db.lookup_course_by_name(course_name = cfg[COURSE_NAME])
+    assert c1 == c2
+    assert c1['course_key'] == cfg[COURSE_KEY]
 
 def test_add_remove_admin(new_course):
     cfg = copy.copy(new_course)
@@ -157,18 +157,12 @@ def test_add_remove_admin(new_course):
                                 course_key=cfg[COURSE_KEY],
                                 name='Dr. Admin')['user_id']
     logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
-    course_id = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['id']
-    db.make_course_admin(email = admin_email, course_key = course_key)
+    course_id = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
+    odb.make_course_admin(email = admin_email, course_id = course_id)
     assert db.check_course_admin(user_id=user_id, course_id=course_id)
-    db.remove_course_admin(email= admin_email, course_name= cfg[COURSE_NAME])
+    odb.remove_course_admin(email = admin_email, course_id = course_id)
     assert not db.check_course_admin(user_id=user_id, course_id=course_id)
-    course = db.lookup_course_by_name(course_name=cfg[COURSE_NAME])
-    assert course['course_name'] == cfg[COURSE_NAME]
-    db.make_course_admin(email = admin_email, course_id = course['id'])
-    assert db.check_course_admin(user_id=user_id, course_id=course_id)
-    db.remove_course_admin(email = admin_email, course_id = course['id'])
-    assert not db.check_course_admin(user_id=user_id, course_id=course_id)
-    db.delete_user(user_id=user_id)
+    odb.delete_user(user_id=user_id)
 
 def test_new_user(new_user,ddbo):
     cfg = copy.copy(new_user)

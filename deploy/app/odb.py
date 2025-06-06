@@ -95,9 +95,6 @@ def new_api_key():
 def new_movie_id():
     return 'm'+str(uuid.uuid4())
 
-def new_frame_id():
-    return 'f'+str(uuid.uuid4())
-
 def is_user_id(k):
     return k[0]=='u'
 
@@ -106,9 +103,6 @@ def is_api_key(k):
 
 def is_movie_id(k):
     return k[0]=='m'
-
-def is_frame_id(k):
-    return k[0]=='f'
 
 # --- Decorator Definition ---
 def dynamodb_error_debugger(func):
@@ -315,66 +309,6 @@ class DDBO:
         except ClientError as e:
             raise RuntimeError(f"Email update failed: {e}")
 
-    ### course management
-
-    def get_course(self,course_id):
-        return self.courses.get_item(Key = {'course_id':course_id}).get('Item',None)
-
-    def put_course(self, coursedict):
-        self.courses.put_item(Item=coursedict)
-
-    def get_course_by_course_key(self, course_key):
-        response = self.courses.query(
-            IndexName='course_key_idx',
-            KeyConditionExpression=Key('course_key').eq(course_key)
-        )
-        items = response.get('Items', [])
-        return items[0] if items else None
-
-    ### movie management
-
-    def get_movie(self,movie_id):
-        return self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
-
-    def put_movie(self, moviedict):
-        self.movies.put_item(Item=moviedict)
-
-    def batch_delete_movie_ids(self, ids):
-        """Delete movie items from the table using batch_writer."""
-        with self.movies.batch_writer() as batch:
-            for theId in ids:
-                batch.delete_item(Key={ 'movie_id': theId})
-
-    def get_movies_for_user_id(self, user_id):
-        """Query user_id_idx and return all movie_ids for the given user_id (with pagination)."""
-        assert is_user_id(user_id)
-        movie_ids = []
-        last_evaluated_key = None
-
-        while True:
-            query_kwargs = { 'IndexName': 'user_id_idx',
-                             'KeyConditionExpression': Key( 'user_id' ).eq( user_id ),
-                             'ProjectionExpression': 'movie_id' }
-
-            if last_evaluated_key:
-                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
-            response = self.movies.query(**query_kwargs)
-            movie_ids.extend(item[ 'movie_id' ] for item in response['Items'])
-
-            last_evaluated_key = response.get('LastEvaluatedKey')
-            if not last_evaluated_key:
-                break
-        return movie_ids
-
-
-    ### movie frame management
-
-    def get_frame(self,movie_id,frameId):
-        return self.frames.get_item(Key = {'movie_id':movie_id, 'frameId':frameId}).get('Item',None)
-
-    def put_frame(self,framedict):
-        self.frames.put_item(Item=framedict)
-
     def delete_user(self, user_id, purge_movies=False):
         """Delete a user specified by user_id.
         :param: user_id - the user ID
@@ -389,9 +323,9 @@ class DDBO:
         Also deletes the user from any courses where they may be an admin.
         """
         assert is_user_id(user_id)
-        movie_ids = self.get_movies_for_user_id(user_id)
+        movies = self.get_movies_for_user_id(user_id)
         if purge_movies:
-            self.batch_delete_movie_ids(movie_ids)
+            self.batch_delete_movie_ids( [movie['movie_id'] for movie in movies] )
         else:
             if movie_ids:
                 raise RuntimeError(f"user {user_id} has {len(movie_ids)} outstanding movies.")
@@ -483,7 +417,6 @@ class DDBO:
                     'enabled':1,
                     'demo':demo_user,
                     'admin': 0,
-                    'admin_for_courses':[],
                     'primary_course_id': course['course_id'],
                     'primary_course_name': course['course_name'] }
 
@@ -492,6 +425,139 @@ class DDBO:
             except RuntimeError as e:
                 logging.warning("Failed to insert user: %s %s: %e",user_id,email,e)
             logging.warning("Looping on get_user or create_user")
+
+    ### course management
+
+    def get_course(self,course_id):
+        return self.courses.get_item(Key = {'course_id':course_id}).get('Item',None)
+
+    def put_course(self, coursedict):
+        self.courses.put_item(Item=coursedict)
+
+    def del_course(self, course_id):
+        """Deletes course from courses and deletes every mention of the course in every user.
+        Does not run if the course has any movies.
+        """
+        r = self.movies.query( IndexName='course_id_idx',
+                                              KeyConditionExpression=Key('course_id').eq(course_id))
+        items = r.get('Items',[])
+        if len(items):
+            raise RuntimeError(f"course {course_id} has {len(items)} movies.")
+
+        # delete the course
+        self.courses.delete_item(Key = {'course_id':course_id})
+
+        # scan the users
+        last_evaluated_key = None
+        while True:
+            scan_kwargs = {}
+            if last_evaluated_key:
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.users.scan(**scan_kwargs)
+            for user in response.get('Items'):
+                courses = user['courses']
+                if course_id in courses:
+                    courses.remove(course_id)
+                    table.update_item( self.Key={'user_id': user['user_id']},
+                                       UpdateExpression='SET courses = :c',
+                                       ExpressionAttributeValues={':c': courses} )
+            last_evaluated_key = response.get('LastEvaluatedKey')
+        # done!
+
+
+
+    def get_course_by_course_key(self, course_key):
+        response = self.courses.query( IndexName='course_key_idx',
+                                       KeyConditionExpression=Key('course_key').eq(course_key) )
+        items = response.get('Items', [])
+        return items[0] if items else None
+
+    ### movie management
+
+    def get_movie(self,movie_id):
+        return self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
+
+    def put_movie(self, moviedict):
+        self.movies.put_item(Item=moviedict)
+
+    def batch_delete_movie_ids(self, ids):
+        """Delete movie items from the table using batch_writer."""
+        with self.movies.batch_writer() as batch:
+            for theId in ids:
+                batch.delete_item(Key={ 'movie_id': theId})
+
+    def get_movies_for_user_id(self, user_id):
+        """Query movies.user_id_idx and return all movie records for the given user_id (with pagination)."""
+        assert is_user_id(user_id)
+        movies = []
+        last_evaluated_key = None
+
+        while True:
+            query_kwargs = { 'IndexName': 'user_id_idx',
+                             'KeyConditionExpression': Key( 'user_id' ).eq( user_id ) }
+
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.movies.query(**query_kwargs)
+            movies.extend( response['Items'] )
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return movies
+
+
+    def get_movies_for_course_id(self, user_id):
+        """Query movies.course_id_idx and return all movie_ids for the given user_id (with pagination)."""
+        assert is_user_id(user_id)
+        movies = []
+        last_evaluated_key = None
+
+        while True:
+            query_kwargs = { 'IndexName': 'course_id_idx',
+                             'KeyConditionExpression': Key( 'course_id' ).eq( user_id )}
+
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.movies.query(**query_kwargs)
+            movies.extend( response['Items'] )
+
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return movies
+
+    ### movie frame management
+
+    def get_frame(self,movie_id, frame_number):
+        return self.frames.get_item(Key = {'movie_id':movie_id, 'frame_number':frameId}).get('Item',None)
+
+    def put_frame(self,framedict):
+        self.frames.put_item(Item=framedict)
+
+    def get_frames(self,movie_id):
+        assert is_movie_id(movie_id)
+        frames = []
+        last_evaluated_key = None
+
+        while True:
+            query_kwargs = { 'IndexName': 'movie_id_idx',
+                             'KeyConditionExpression': Key( 'movie_id' ).eq( movie_id ) }
+
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.movie_frames.query(**query_kwargs)
+            frames.extend( response['Items'] )
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return frames
+
+    def delete_movie_frames(self, movie_frames):
+        """Delete movie items from the table using batch_writer."""
+        with self.movie_frames.batch_writer() as batch:
+            for movie_frame in movie_frames:
+                batch.delete_item(Key={'movie_id': movie_frame['movie_id'],
+                                       'frame_number': movie_frame['frame_number']})
 
 
 
@@ -544,7 +610,6 @@ def log_args(func):
 ################ REGISTRATION ################
 
 
-@log
 def list_users_courses(*, user_id):
     """Returns a dictionary with keys:
     'users' - all the courses to which the user has access, and all of the people in them.
@@ -573,7 +638,7 @@ def list_admins():
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = table.scan(**scan_kwargs)
+        response = dd.users.scan(**scan_kwargs)
         admin_users.extend(response['Items'])
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -592,7 +657,7 @@ def list_demo_users():
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = table.scan(**scan_kwargs)
+        response = dd.users.scan(**scan_kwargs)
         admin_users.extend(response['Items'])
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -604,113 +669,131 @@ def list_demo_users():
 ### Course Management ###
 #########################
 
+@log
 def lookup_course_by_id(*, course_id):
-    try:
-        return dbfile.DBMySQL.csfr(get_dbreader(),
-                                   "SELECT * FROM courses WHERE id=%s", (course_id,), asDicts=True)[0]
-    except IndexError:
-        return {}
-
-def lookup_course_by_key(*, course_key):
-    try:
-        return dbfile.DBMySQL.csfr(get_dbreader(),
-                                   "SELECT * FROM courses WHERE course_key=%s", (course_key,), asDicts=True)[0]
-    except IndexError:
-        return {}
-
-def lookup_course_by_name(*, course_name):
-    try:
-        return dbfile.DBMySQL.csfr(get_dbreader(),
-                                   "SELECT * FROM courses WHERE course_name=%s", (course_name,), asDicts=True)[0]
-    except IndexError:
-        return {}
+    return DDBO().get_course(course_id)
 
 @log
-def create_course(*, course_key, course_name, max_enrollment, course_section=None):
+def lookup_course_by_key(*, course_key):
+    return DDBO().get_course_by_course_key(course_key)
+
+@log
+def create_course(*, course_id, course_name, course_key, max_enrollment):
     """Create a new course
     :return: course_id of the new course
     """
-    ret = dbfile.DBMySQL.csfr(get_dbwriter(),
-                              "INSERT into courses (course_key, course_name, max_enrollment, course_section) values (%s,%s,%s,%s)",
-                              (course_key, course_name, max_enrollment, course_section))
-    return {'course_id':ret}
-
+    return DDBO().put_course({'course_id':course_id,
+                              'course_name':course_name,
+                              'course_key':course_key,
+                              'course_admins':[],
+                              'max_enrollment':max_enrollment})
 
 @log
 def delete_course(*,course_key):
     """Delete a course.
     :return: number of courses deleted.
     """
-    return dbfile.DBMySQL.csfr(get_dbwriter(), "DELETE from courses where course_key=%s", (course_key,))
-
+    return DDBO().del_course(course_key)
 
 @log
-def make_course_admin(*, email, course_key=None, course_id=None):
-    """make a course administrator.
+def make_course_admin(*, email, course_id=None):
+    """Promotes the user to be an administrator and makes them an administrator of a specific course.
     :param email: email address of the administrator
-    :param course_key: - if specified, use this course_key
     :param course_id: - if specified, use this course_id
-    Note - either course_key or course_id must be None, but both may not be none
     """
-    user_id = lookup_user(email=email)['user_id']
-    logging.info("make_course_admin. email=%s user_id=%s",email,user_id)
+    ddbo = DDBO()
+    user = ddbo.get_user(None, email=email)
+    user_id = user['user_id']
+    new_courses = list(set(user['courses'] + [course_id]))
+    course = ddbo.get_course(course_id)
+    course_id = couse['course_id']
+    new_course_admins = list(set(course['course_admins'] + [user_id]))
 
-    assert ((course_key is None) and (course_id is not None)) or ((course_key is not None) and (course_id is None))
-    if course_key and course_id is None:
-        course_id = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT id from courses WHERE course_key=%s",(course_key,))[0][0]
-        logging.info("course_id=%s",course_id)
+    ddbo.users.update_item( Key={'user_id': user_id},
+                            UpdateExpression = 'SET admin=:a, courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
+                            ExpressionAttributeValues = { ':a':1,
+                                                          ':c':new_courses,
+                                                          ':pcid': course_id,
+                                                          ':pcn' : course['name']} )
 
-    dbfile.DBMySQL.csfr(get_dbwriter(), "INSERT into admins (course_id, user_id) values (%s, %s)",
-                        (course_id, user_id))
+    ddbo.courses.update_item( Key={'course_id':course_id},
+                              UpdateExpression = 'SET course_admins=:nca',
+                              ExpressionAttributeValues = { ':nca':new_course_admins })
     return {'user_id':user_id,'course_id':course_id}
 
 
 @log
-def remove_course_admin(*, email, course_key=None, course_id=None, course_name=None):
-    if course_id:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "DELETE FROM admins WHERE course_id=%s and user_id in (select id from users where email=%s)",
-                            (course_id, email))
-    if course_key:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_key=%s) "
-                            "AND user_id IN (SELECT id FROM users WHERE email=%s)",
-                            (course_key, email))
-    if course_name:
-        dbfile.DBMySQL.csfr(get_dbwriter(),
-                            "DELETE FROM admins where course_id in (SELECT id FROM courses WHERE course_name=%s) "
-                            "AND user_id IN (SELECT id FROM users WHERE email=%s)",
-                            (course_name, email))
+def remove_course_admin(*, email, course_id=None):
+    """Removes email from the course admin list, but doesn't make them not an admin."""
+    ddbo = DDBO()
+    user = ddbo.get_user(None, email=email)
+    user_id = user['user_id']
+    new_courses = user['courses']
 
+    course = ddbo.get_course(course_id)
+    course_id = couse['course_id']
+    new_course_admins = course['course_admins']
 
+    try:
+        new_courses.remove('course_id')
+        ddbo.users.update_item( Key={'user_id': user_id},
+                                UpdateExpression = 'SET courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
+                                ExpressionAttributeValues = { ':a':1,
+                                                              ':c':new_courses,
+                                                              ':pcid': None,
+                                                              ':pcn' : None} )
+    except KeyError:
+        logger.warning("course not remove course %s from user %s %s",course_id,user_id,email)
+        pass
+
+    try:
+        new_course_admins.remove(user_id)
+        ddbo.courses.update_item( Key={'course_id':course_id},
+                                  UpdateExpression = 'SET course_admins=:nca',
+                                  ExpressionAttributeValues = { ':nca':new_course_admins })
+    except KeyError:
+        logger.warning("course not remove admin %s %s from course %s",user_id,email,course_id)
+        pass
 
 @log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
-    res = dbfile.DBMySQL.csfr(get_dbreader(), "SELECT * FROM admins WHERE user_id=%s AND course_id=%s LIMIT 1",
-                              (user_id, course_id))
-    return len(res) == 1
-
+    logger.warning("HIGH DB DRAIN")
+    user = DDBO().get_user(user_id)
+    return (course_id in user['courses'] ) and user['admin']
 
 @log
 def validate_course_key(*, course_key):
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT course_key FROM courses WHERE course_key=%s LIMIT 1""", (course_key,))
-    return len(res) == 1 and res[0][0] == course_key
-
+    logger.warning("HIGH DB DRAIN")
+    if DDBO().get_course_by_course_key(course_key):
+        return True
+    return False
 
 @log
 def remaining_course_registrations(*,course_key):
-    res = dbfile.DBMySQL.csfr(get_dbreader(),
-                              """SELECT max_enrollment
-                              - (SELECT COUNT(*) FROM users
-                              WHERE primary_course_id=(SELECT id FROM courses WHERE course_key=%s))
-                              FROM courses WHERE course_key=%s""",
-                              (course_key, course_key))
-    try:
-        return int(res[0][0])
-    except (IndexError, ValueError):
+    logger.warning("HIGH DB DRAIN and SCAN")
+    ddbo = DDBO()
+    course = ddbo.get_course_by_course_key(course_key)
+    if not course:
         return 0
+    course_id = course['course_id']
+
+    registrants = 0
+    last_evaluated_key = None
+    while True:
+        scan_kwargs = {}
+
+        if last_evaluated_key:
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+        response = ddbo.users.scan(**scan_kwargs)
+        for user in response['Items']:
+            if course_id == user['primary_course_id'] or course_id in user['courses']:
+                registrants += 1
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+    return course['max_enrollment'] - registrants
 
 
 
@@ -719,17 +802,19 @@ def remaining_course_registrations(*,course_key):
 ########################
 
 @log
-def get_movie_data(*, movie_id:int, zipfile=False):
+def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
     """Returns the movie contents for a movie_id.
-    Should not be used to provide data to the user.
+    If urn==True, just return the urn
     """
     what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
-    row = dbfile.DBMySQL.csfr(get_dbreader(), f"""SELECT {what} from movies where id=%s""", (movie_id,))
+    movie = DDBO().movie.get_item(Key={'movie_id':movie_id})
     try:
-        urn = row[0][0]
-    except IndexError as e:
+        urn   = movie[what]
+    except TypeError as e:
         raise InvalidMovie_Id(movie_id) from e
-    logging.info("movie_id=%s zipfile=%s what=%s urn=%s",movie_id,zipfile,what,urn)
+
+    if get_urn:
+        return urn
 
     if urn:
         return db_object.read_object(urn)
@@ -737,56 +822,41 @@ def get_movie_data(*, movie_id:int, zipfile=False):
 
 
 @log
-def get_movie_metadata(*,user_id, movie_id, get_last_frame_tracked=False):
+def get_movie_metadata(*, user_id, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
-    This is used for the movie list.
     """
-
-    cmd = """SELECT A.id AS movie_id, A.title AS title, A.description AS description,
-                    A.created_at AS created_at, A.user_id AS user_id,
-                    A.course_id AS course_id, A.published AS published, A.deleted AS deleted,
-                    A.date_uploaded AS date_uploaded, A.mtime AS mtime, A.version AS version,
-                    A.fps as fps, A.width as width, A.height as height,
-                    A.total_frames AS total_frames, A.total_bytes as total_bytes, A.status AS status,
-                    A.movie_data_urn as movie_data_urn,
-                    A.movie_zipfile_urn as movie_zipfile_urn,
-                    B.id AS tracked_movie_id
-             FROM movies A
-             LEFT JOIN movies B on A.id=B.orig_movie
-             WHERE
-                ((A.user_id=%s) OR
-                (%s=0) OR
-                (A.course_id=(select primary_course_id from users where id=%s)) OR
-                (A.course_id in (select course_id from admins where A.user_id=%s)))
-    """
-    assert isinstance(user_id,int)
-    assert isinstance(movie_id,(int,type(None)))
-    params = [user_id, user_id, user_id, user_id]
+    logger.warning("UNNEDED USERID QUERY")
+    logger.warning("TK: replace get_movie_metadata with list_movies")
+    logger.warning("ignored: get_last_frame_tracked=%s",get_last_frame_tracked)
+    ddbo = DDBO()
+    user = ddbo.users.get_item(Key={'user_id':user_id})
+    movies = []
     if movie_id is not None:
-        cmd += " AND A.id=%s"
-        params.append(movie_id)
-
-    ret = dbfile.DBMySQL.csfr(get_dbreader(), cmd, params, asDicts=True)
-    if get_last_frame_tracked:
-        ret = [ {**r,**{'last_frame_tracked':last_tracked_frame(movie_id=r['movie_id'])}} for r in ret]
-    return ret
+        movie = ddbo.get_movie(movie_id)
+        if movie:
+            movies.extend([movie])
+    else:
+        # build a query for all movies for which the user is in the course
+        for course_id in user['courses']:
+            movies.extend( ddbo.get_movies_for_course_id(course_id) )
+    return movies
 
 
 @log
 def can_access_movie(*, user_id, movie_id):
     """Return if the user is allowed to access the movie."""
-    res = dbfile.DBMySQL.csfr(
-        get_dbreader(),
-        """select count(*) from movies WHERE id=%s AND
-        (user_id=%s OR
-        course_id=(select primary_course_id from users where id=%s) OR
-        course_id in (select course_id from admins where user_id=%s))""",
-        (movie_id, user_id, user_id, user_id))
-    return res[0][0] > 0
+    logger.warning("UNNEDED USERID QUERY")
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    if movie['user_id'] == user_id:
+        return True
+    user = ddbo.users.get_item(Key={'user_id':user_id})
+    if movie['course_id'] in user['courses']:
+        return True
+    return False
 
 ################################################################
 ## Movie frames
-
 
 @log
 def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
@@ -800,11 +870,21 @@ def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
     :param: orig_movie - if presented, the movie_id of the movie on which this is based
     """
     # Create a new movie record
-    movie_id = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   """INSERT INTO movies (title,description,user_id,course_id,orig_movie)
-                                   VALUES (%s,%s,%s,(select primary_course_id from users where id=%s),%s)
-                                    """,
-                                   (title, description, user_id, user_id,orig_movie))
+    ddbo = DDBO()
+    movie_id = new_movie_id()
+    ddbo.put_movie({'movie_id':movie_id,
+                    'title':title,
+                    'description':description,
+                    'orig_movie':orig_movie,
+                    'published': 0,
+                    'deleted': 0,
+                    'movie_zipfile_urn':None,
+                    'movie_data_urn':None,
+                    'last_frame_tracked':None,
+                    'created_at':int(time.time()),
+                    'date_uploaded':None,
+                    'total_frames':0,
+                    'total_bytes':0})
     return movie_id
 
 
@@ -820,10 +900,14 @@ def set_movie_data_urn(*, movie_id, movie_data_urn):
 
 def set_movie_metadata(*, movie_id, movie_metadata):
     """Set the movie_metadata from a dictionary."""
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        "UPDATE movies SET " + ",".join(f"{key}=%s" for key in movie_metadata.keys()) + " " +
-                        "WHERE id = %s",
-                        list(movie_metadata.values()) + [movie_id])
+
+    assert 'movie_id' not in movie_metadata
+    assert 'id' not in movie_metadata
+    exp = 'SET ' + ",".join( f'{k} = :{k}' for k in d.keys())
+    vals = { ':'+k : v  for (k,v) in d.items()}
+    DDBO().movies.update_item( Key={'movie_id':movie_id,
+                                    UpdateExpression = exp,
+                                    ExpressionAttributeValues = vals})
 
 
 def set_movie_data(*,movie_id, movie_data):
@@ -842,30 +926,14 @@ def set_movie_data(*,movie_id, movie_data):
 ################################################################
 ## Deleting
 
-# pylint: disable=unused-argument
-def null_callback(*args,**kwargs):
-    return
-
 @log
-def purge_movie_frames(*,movie_id,callback=null_callback):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frame_trackpoints where  movie_id=%s", (movie_id,))
-    for row in dbfile.DBMySQL.csfr(get_dbwriter(),
-                                   "SELECT frame_urn from movie_frames where movie_id=%s and frame_urn is not NULL",(movie_id,)):
-        if callback:
-            callback(row)
-        db_object.delete_object(row[0])
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movie_frames where movie_id=%s", (movie_id,))
-
-@log
-def purge_movie_data(*,movie_id,callback=null_callback):
-    """Delete the frames associated with a movie."""
+def purge_movie_data(*,movie_id,callback=None):
+    """Delete the movie data associated with a movie"""
     logging.debug("purge_movie_data movie_id=%s",movie_id)
     for row in dbfile.DBMySQL.csfr( get_dbwriter(),
                                     "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL",
                                     (movie_id,), asDicts=True):
-        if callback:
+        if callback is not None:
             callback(row)
             try:
                 db_object.delete_object(row['movie_data_urn'])
@@ -874,34 +942,43 @@ def purge_movie_data(*,movie_id,callback=null_callback):
     dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
 
 @log
-def purge_movie_zipfile(*,movie_id,callback=null_callback):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    for row in dbfile.DBMySQL.csfr( get_dbwriter(),
-                                    "SELECT movie_zipfile_urn from movies where id=%s and movie_zipfile_urn is not NULL", (movie_id,), asDicts=True):
-        try:
-            callback(row)
-            db_object.delete_object(row['movie_zipfile_urn'])
-        except (ClientError,ParamValidationError):
-            logging.warning("invalid URN: %s",row['movie_zipfile_urn'])
-    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_zipfile_urn=NULL where id=%s",(movie_id,))
+def purge_movie_frames(*,movie_id):
+    """Delete the frames and zipfile associated with a movie."""
+    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    ddbo = DDBO()
+    frames = ddbo.get_frames( movie_id )
+
+    for frame in frames:
+        db_object.delete_object(frame['frame_urn'])
+    ddbo.delete_movie_frames( frames )
+
 
 @log
-def purge_movie(*,movie_id, callback=null_callback):
+def purge_movie_zipfile(*,movie_id):
+    """Delete the frames associated with a movie."""
+    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    db_object.delete_object(movie['movie_zipfile_urn'])
+    DDBO().movies.update_item( Key={'movie_id': movie_id},
+                               UpdateExpression='SET movie_zipfile_urn = :val',
+                               ExpressionAttributeValues={':val': None})
+
+@log
+def purge_movie(*,movie_id, callback=None):
     """Actually delete a movie and all its frames"""
-    purge_movie_frames(movie_id=movie_id, callback=callback)
-    purge_movie_data(movie_id=movie_id, callback=callback)
-    dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE from movies where id=%s", (movie_id,))
+    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames( movie_id=movie_id )
+    purge_movie_zipfile( movie_id=movie_id )
 
 
 @log
 def delete_movie(*,movie_id, delete=1):
     """Set a movie's deleted bit to be true"""
-    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies SET deleted=%s where id=%s", (delete, movie_id,))
-
-
-################################################################
-
+    purge_movie_data(movie_id=movie_id)
+    purge_movie_frames( movie_id=movie_id )
+    purge_movie_zipfile( movie_id=movie_id )
+    DDBO().movies.delete_item( Key={'movie_id': movie_id})
 
 
 ################################################################
@@ -910,15 +987,19 @@ def delete_movie(*,movie_id, delete=1):
 
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
-    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['course_id']
+    logger.warning("INEFFICIENT CALL")
+    return DDBO().get_movie(movie_id)['course_id']
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
+    logger.warning("INEFFICIENT CALL")
+    return DDBO().get_movie(movie_id)['movie_data_urn']
+
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    return get_movie_metadata(user_id=0, movie_id=movie_id)[0]['movie_data_urn']
+    logger.warning("INEFFICIENT CALL. Perhaps make it just get the item requested")
+    return DDBO().get_movie(movie_id)['movie_zipfile_urn']
 
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
@@ -930,31 +1011,20 @@ def create_new_frame(*, movie_id, frame_number, frame_data=None):
 
     returns frame_urn
     """
-    logging.debug("create_new_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
-    args = (movie_id, frame_number )
-    a1 = a2 = a3 = ""
-    frame_urn = None
+    logger.debug("create_new_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
+    course_id = course_id_for_movie_id(movie_id)
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
-        object_name = db_object.object_name(course_id=course_id_for_movie_id(movie_id),
+        object_name = db_object.object_name(course_id=course_id,
                                             movie_id=movie_id,
                                             frame_number = frame_number,
                                             ext=C.JPEG_EXTENSION)
         frame_urn = db_object.make_urn( object_name = object_name)
-        db_object.write_object(frame_urn, frame_data)
-
-        a1 = ", frame_urn"
-        a2 = ",%s"
-        a3 = ",frame_urn=%s"
-        args = (movie_id, frame_number, frame_urn, frame_urn)
-
-    # Update the database
-    logging.debug("a1=%s a2=%s a3=%s args=%s",a1,a2,a3,args)
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        f"""INSERT INTO movie_frames (movie_id, frame_number{a1})
-                        VALUES (%s,%s{a2})
-                        ON DUPLICATE KEY UPDATE movie_id=movie_id{a3}""",
-                        args)
+    else:
+        frame_urn = None
+    DDBO().put_frame({"movie_id":movie_id,
+                      "frame_number":frame_number,
+                      "frame_urn":frame_urn})
     return frame_urn
 
 @log
@@ -965,11 +1035,7 @@ def get_frame_urn(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
     """
-    for row in dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
-                               (movie_id, frame_number), asDicts=True):
-        return row['frame_urn']
-    return None
+    return DDBO().get_frame(movie_id, frame_number)['frame_urn']
 
 
 def get_frame_data(*, movie_id, frame_number):
@@ -979,71 +1045,99 @@ def get_frame_data(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns the frame data or None
     """
-    for row in dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT frame_urn FROM movie_frames WHERE movie_id=%s AND frame_number=%s LIMIT 1""",
-                               (movie_id, frame_number), asDicts=True):
-        return db_object.read_object(row['frame_urn'])
-    return None
+    frame_urn = DDBO().get_frame(movie_id, frame_number)['frame_urn']
+    return db_object.read_object(row['frame_urn'])
 
 
 ################################################################
 ## Trackpoints
 
+def iter_movie_frames_in_range(table, movie_id, f1, f2):
+    """Yield movie_frame records for movie_id where frame_number is between f1 and f2."""
+    last_evaluated_key = None
+
+    while True:
+        query_kwargs = {
+            'KeyConditionExpression': Key('movie_id').eq(movie_id) & Key('frame_number').between(f1, f2)
+        }
+
+        if last_evaluated_key:
+            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+        response = table.query(**query_kwargs)
+
+        for item in response['Items']:
+            yield item
+
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+
 def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
     :param: frame_start, frame_count - optional
     """
-    assert (frame_start is None and frame_count is None) or (frame_start is not None and frame_count is not None)
 
     if frame_start is None:
-        args = [movie_id]
-        extra = ''
-    else:
-        args = [movie_id, frame_start, frame_start+frame_count]
-        extra = ' and frame_number >= %s and frame_number < %s '
+        frame_start = 0
+    if frame_count is None:
+        frame_count = 1e10
 
-    return  dbfile.DBMySQL.csfr(get_dbreader(),
-                               f"""
-                               SELECT frame_number,x,y,label FROM movie_frame_trackpoints WHERE movie_id=%s {extra}
-                               """,
-                               args, asDicts=True)
+    ret = []
+    for frame in iter_movie_frames_in_range( OODB().movie_frames, movie_id, frame_start, frame_start+frame_count ):
+        for tp in frame['trackpoints']:
+            ret.append({'frame_number':frame['frame_number'],
+                        'x':tp['x'],
+                        'y':tp['y'],
+                        'label':tp['label']})
+    return ret
 
 def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_number, frame_urn
     :param: frame_start, frame_count -
     """
-    return  dbfile.DBMySQL.csfr(get_dbreader(),
-                                """
-                                SELECT movie_id, frame_number, created_at, mtime, frame_urn
-                                FROM movie_frames
-                                WHERE movie_id=%s and frame_number >= %s and frame_number < %s
-                                """,
-                                (movie_id, frame_start, frame_start+frame_count), asDicts=True)
+    return [{'movie_id':frame['movie_id'],
+             'frame_number':frame['frame_number'],
+             'frame_urn':frame['frame_run']}
+            for frame in
+            iter_movie_frames_in_range( OODB().movie_frames, movie_id, frame_start, frame_start+frame_count ) ]
+
 
 def last_tracked_frame(*, movie_id):
     """Return the last tracked frame_number of the movie"""
-    return dbfile.DBMySQL.csfr(get_dbreader(),
-                               """SELECT max(frame_number) FROM movie_frame_trackpoints WHERE movie_id=%s
-                               """,
-                               (movie_id,))[0][0]
+
+    movie_frames=DDBO().movie_frames
+
+    while True:
+        query_kwargs = {
+            'KeyConditionExpression': Key('movie_id').eq(movie_id),
+            'FilterExpression': Attr('movie_frame_trackpoints').exists(),
+            'ScanIndexForward': False,
+            'Limit': 1
+        }
+
+        if last_evaluated_key:
+            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+        response = movie_frames.query(**query_kwargs)
+        items = response.get('Items', [])
+        if items:
+            return items[0]['frame_number']
+
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+    return None
 
 def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[dict]):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        """DELETE FROM movie_frame_trackpoints WHERE movie_id=%s and frame_number=%s""",(movie_id,frame_number,))
-    vals = []
-    for tp in trackpoints:
-        if ('x' not in tp) or ('y' not in tp) or ('label') not in tp:
-            raise KeyError(f'trackpoints element {tp} missing x, y or label')
-        vals.extend([movie_id,frame_number,tp['x'],tp['y'],tp['label']])
-    if vals:
-        args = ",".join(["(%s,%s,%s,%s,%s)"]*len(trackpoints))
-        cmd = f"INSERT INTO movie_frame_trackpoints (movie_id,frame_number,x,y,label) VALUES {args}"
-        logging.debug("cmd=%s vals=%s",cmd,vals)
-        dbfile.DBMySQL.csfr(get_dbwriter(),cmd,vals)
+    DDBO().movie_frames.update_item( Key={'movie_id':movie_id,
+                                          'frame_number':frame_number},
+                                     UpdateExpression='SET trackpoints=:val',
+                                     ExpressionAttributeValues={':val':trackpoints})
 
 
 ################################################################
@@ -1056,122 +1150,85 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     :param: movie_id - if provided, only use this movie
     :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
     """
-    cmd = """SELECT users.name as name,users.email as email,users.primary_course_id as primary_course_id,
-          movies.id as movie_id,title,description,movies.created_at as created_at,
-          user_id,course_id,published,deleted,date_uploaded,orig_movie,
-          fps,width,height,total_frames,total_bytes
-          FROM movies LEFT JOIN users ON movies.user_id = users.id
-          WHERE
-          ((user_id=%s)
-            OR (course_id = (SELECT primary_course_id FROM users WHERE id=%s) AND published>0 AND deleted=0)
-            OR (course_id in (SELECT course_id FROM admins WHERE user_id=%s))
-            OR (%s=0)
-          )
-          """
-    args = [user_id, user_id, user_id, user_id]
-
-    if movie_id:
-        cmd += " AND movies.id=%s "
-        args.append(movie_id)
-
-    if orig_movie:
-        cmd += " AND movies.orig_movie=%s "
-        args.append(orig_movie)
-
-    cmd += " ORDER BY movies.id "
-
-    res = dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
-    return res
+    ddbo = DDBO()
+    user = ddbo.users.get_item(Key={'user_id':user_id})
+    if orig_movie is not None:
+        raise RuntimeError("orig_movie not implemented")
+    movies = []
+    if movie_id is not None:
+        movie = ddbo.get_movie(movie_id)
+        if movie:
+            movies.extend([movie])
+    else:
+        # build a query for all movies for which the user is in the course
+        for course_id in user['courses']:
+            movies.extend( ddbo.get_movies_for_course_id(course_id) )
+    return movies
 
 ################################################################
 ## Logs
 ################################################################
 
 def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
-              course_key=None, movie_id=None, log_user_id=None,
-              ipaddr=None, count=C.LOG_MAX_RECORDS, offset=0, security=True):
+              course_key=None, log_user_id=None,
+              ipaddr=None, security=True):
     """get log entries (to which the user is entitled) - Implements /api/get-log
-    :param: user_id    - the user who is initiating the query
+    :param: user_id    - The user who is initiating the query
     :param: start_time - The earliest log entry to provide (time_t)
     :param: end_time   - the last log entry to provide (time_t)
     :param: course_id  - if provided, only provide log entries for this course
-    :param: movie_id   - if provided, only provide log entries for this movie
     :param: log_user_id - if provided, only provide log entries for this person
-    :param: count      - maximum number of log entries to provide (for paging)
-    :param: offset     - Offset into SQL SELECT (for paging)
     :param: security   - False to disable security checks
     :return: list of dictionaries of log records.
     """
+    ddbo = DDBO()
+    # Use epoch max if end_time not given
+    if end_time is None:
+        end_time = int(time.time())
 
-    count = max(count, C.LOG_MAX_RECORDS)
-
-    # First find all of the records requested by the searcher
-    cmd = """SELECT * FROM logs WHERE (time_t >= %s """
-    args = [start_time]
-
-    if end_time:
-        cmd += "AND (time_t <= %s) "
-        args.append(end_time)
-
-    if course_id:
-        cmd += "AND ((func_args->'$.course_id'=%s) OR (func_return->'$.course_id'=%s)) "
-        args += [course_id, course_id]
-
-    if course_key:
-        cmd += """AND (func_args->'$.course_key'=%s
-                       OR (func_args->'$.course_id' IN (select id from courses where course_key=%s))
-                       OR (func_return->'$.course_id' IN (select id from courses where course_key=%s)) )
-        """
-        args += [course_key, course_key, course_key]
-
-    if movie_id:
-        cmd += "AND (func_args->'$.movie_id'=%s) "
-        args.append(movie_id)
-
-    if ipaddr:
-        cmd += "AND (ipaddr=%s) "
-        args.append(ipaddr)
-
+    # Select GSI based on parameters
     if log_user_id:
-        cmd += "AND ((user_id=%s OR func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s))"
-        args += [log_user_id, log_user_id, log_user_id]
+        index_name = 'user_id_idx'
+        key_condition = Key('user_id').eq(log_user_id)
+    elif ipaddr:
+        index_name = 'ipaddr_idx'
+        key_condition = Key('ipaddr').eq(ipaddr)
+    elif course_id:
+        index_name = 'course_time_t_idx'
+        key_condition = Key('course_id').eq(course_id)
+        if start_time and end_time:
+            key_condition &= Key('time_t').between(start_time, end_time)
+        elif start_time:
+            key_condition &= Key('time_t').gte(start_time)
+        elif end_time:
+            key_condition &= Key('time_t').lte(end_time)
+    else:
+        raise ValueError("No index provided.")
 
-    cmd += ") "
+    # Prepare query
+    kwargs = {
+        'IndexName': index_name,
+        'KeyConditionExpression': key_condition
+    }
 
-    # now put in the security controls
+    # Perform paginated query
+    items = []
+    while True:
+        response = table.query(**kwargs)
+        items.extend(response.get('Items', []))
+        if 'LastEvaluatedKey' not in response:
+            break
+        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
 
-    if security:
-        cmd += " AND ("
+    # Optional filtering in Python
+    if course_id and index_name != 'course_time_t_idx':
+        items = [item for item in items if item.get('course_id') == course_id]
+    if start_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
+    if end_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
 
-        # If the user owns the record, or if the record is about the user:
-        cmd += "(user_id=%s OR func_args->'$.user_id'=%s OR func_return->'$.user_id'=%s) "
-        args += [user_id, user_id, user_id]
-
-        cmd += " OR "
-
-        # If the log record is about a course, and the user is an admin in the course
-        cmd += " (func_args->'$.course_id' IN (SELECT course_id FROM admins WHERE user_id=%s ))"
-        args += [user_id]
-
-        cmd += " OR "
-
-        cmd += "  (func_return->'$.course_id' IN (SELECT course_id FROM admins WHERE user_id=%s ))"
-        args += [user_id]
-
-        # If the user is the super admin:
-
-        cmd += " OR (%s IN (SELECT user_id FROM admins WHERE course_id=%s)) "
-        args += [user_id, SUPER_ADMIN_COURSE_ID]
-
-        cmd += ")"
-
-    # finally limit the output for pagination
-
-    cmd += "LIMIT %s OFFSET %s"
-    args.append(count)
-    args.append(offset)
-
-    return dbfile.DBMySQL.csfr(get_dbreader(), cmd, args, asDicts=True)
+    return items
 
 
 
@@ -1182,6 +1239,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
+# We kept this, even thoguh we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
     'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
@@ -1221,117 +1279,32 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     assert isinstance(prop, str)
     assert value is not None
 
-    MAPPER = {0: 'FALSE', 1: 'TRUE'}
+    ddbo = DDBO()
+    user = ddbo.get_user(user_id)
 
-    if set_movie_id:
-        # We are changing metadata for a movie; make sure that this user is allowed to do so.
-        # root is always allowed to do so
-        if user_id==0:
-            is_owner = "TRUE"
-            is_admin = "TRUE"
-        else:
-            res = dbfile.DBMySQL.csfr(
-                get_dbreader(),
-                """SELECT %s in (select user_id from movies where id=%s)""", (user_id, set_movie_id))
-            # Find out if the user is the owner of the movie
-            is_owner = MAPPER[res[0][0]]
+    if set_movie_id is not None:
+        movie = ddbo.get_movie(movie_id)
+        is_owner = movie['user_id'] == user_id
+        is_admin = user_id['admin'] and (movie['course_id'] in user_id['courses'])
 
-            # Find out if the user is an admin of the movie's course
-            res = dbfile.DBMySQL.csfr(get_dbreader(),
-                                      """
-                                      SELECT %s IN (select user_id from admins
-                                                    WHERE course_id=(select course_id
-                                                    FROM movies WHERE id=%s))
-                                      """,
-                                      (user_id, set_movie_id))
-            is_admin = MAPPER[res[0][0]]
-        # Create the command that updates the movie metadata if the user is the owner of the movie or admin
-        try:
-            cmd   = SET_MOVIE_METADATA[prop].replace( '@is_owner', is_owner).replace('@is_admin', is_admin)
-        except KeyError as e:
-            logging.error("Cannot set property %s from %s",prop,e)
-            raise ValueError('Cannot set property '+prop) from e
-        args  = [value, set_movie_id]
-        ret   = dbfile.DBMySQL.csfr(get_dbwriter(), cmd, args)
-        return ret
+        acl  = SET_MOVIE_METADATA[prop]
+        if not ((is_owner and '@is_owner' in acl) or (is_admin and '@is_admin') in acl):
+            # permission not granted
+            raise RuntimeError("permission denied")
 
-    # Currently, users can only set their own data
-    if set_user_id:
-        if user_id == set_user_id:
-            prop = prop.lower()
-            if prop in ['name', 'email']:
-                ret = dbfile.DBMySQL.csfr(get_dbwriter(),
-                                          f"UPDATE users set {prop}=%s where id=%s",
-                                          (value, user_id))
-                return ret
-    return None
+        ddbo.movie.update_item( Key={'movie_id':movie_id},
+                                UpdateExpression=f'Set {prop} = :val',
+                                ExpressionAttributeValues={';val':value})
+    elif set_user_id is not None:
+        set_user = ddbo.get_user(set_user_id)
+        is_owner = user_id == set_user_id
+        is_admin = user_id['admin'] and (set_user['primary_course_id'] in user_id['courses'])
 
-
-################################################################
-## Movie Class (in transition)
-## A higher-level interface to movies.
-################################################################
-
-class Movie():
-    """Simple representation of movies that may be stored in SQL database or on S3.
-    Not used for creating movies, but can be used for updating them
-    More intelligence will move into this class over time.
-    """
-    __slots__ = ['movie_id', 'sha256', 'mime_type']
-    def __init__(self, movie_id, *, user_id=None):
-        """
-        :param movie_id: - the id of the movie
-        :param user_id: - the user_id requesting access. If provided, the user must have access.
-        """
-        assert isinstance(movie_id,int)
-        assert isinstance(user_id,(int,type(None)))
-        self.movie_id  = movie_id
-        self.mime_type = MIME.MP4
-        self.sha256 = None
-        if (user_id is not None) and not can_access_movie(user_id=user_id, movie_id=movie_id):
-            raise UnauthorizedUser(f"user_id={user_id} movie_id={movie_id}")
-
-    def __repr__(self):
-        return f"<Movie {self.movie_id} urn={self.movie_data_urn} sha256={self.sha256}>"
-
-    @property
-    def data(self):
-        """Return the object data"""
-        return get_movie_data(movie_id=self.movie_id)
-
-    @property
-    def movie_data_urn(self):
-        return movie_data_urn_for_movie_id(self.movie_id)
-
-    @property
-    def movie_zipfile_urn(self):
-        return movie_zipfile_urn_for_movie_id(self.movie_id)
-
-    @data.setter
-    def data(self, movie_data):
-        set_movie_data(movie_id=self.movie_id, movie_data=movie_data)
-
-    @property
-    def url(self):
-        """Return a URL for accessing the data. This is a self-signed URL"""
-        return db_object.make_signed_url(urn=self.movie_data_urn)
-
-    @property
-    def zipfile_url(self):
-        """Return a URL for accessing the zipfile. This is a self-signed URL"""
-        return db_object.make_signed_url(urn=self.movie_zipfile_urn)
-
-    @property
-    def metadata(self):
-        """Returns a dictionary of the movie metadata"""
-        res = get_movie_metadata(user_id=0, movie_id = self.movie_id)
-        logging.debug("metadata=%s",res[0])
-        return res[0]
-
-    @property
-    def version(self):
-        return self.metadata['version']
-
-    @version.setter
-    def version(self, value):
-        set_metadata(user_id = 0, set_movie_id=self.movie_id, prop='version', value=value)
+        if is_owner or is_admin:
+            if prop not in ['name', 'email']:
+                raise ValueError('currently users can only set name and email')
+            ddbo.users.update_item( Key={'user_id':set_user_id},
+                                    UpdateExpression=f'Set {prop} = :val',
+                                    ExpressionAttributeValues={';val':value})
+    else:
+        raise ValueError("set set_user_id or set_movie_id must be provided")

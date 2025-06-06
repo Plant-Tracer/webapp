@@ -150,22 +150,57 @@ TABLE_CONFIGURATIONS = [
         ],
         AttributeDefinitions: [
             {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'frame_number', AttributeType: N},
-            {AttributeName: 'frame_time', AttributeType: N}
+            {AttributeName: 'frame_number', AttributeType: N}
+        ],
+        **billing,
+    },
+    {
+        TableName: 'logs',
+        KeySchema: [
+            {AttributeName: 'log_id', KeyType: HASH}
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'ipaddr', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S},
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'time_t', AttributeType: N},
+
         ],
         GlobalSecondaryIndexes: [
             {
-                'IndexName': 'movie_frame_time_idx',
+                'IndexName': 'ipaddr_idx',
                 KeySchema: [
-                    {AttributeName: 'movie_id', KeyType: HASH},
-                    {AttributeName: 'frame_time', KeyType: RANGE}
+                    {AttributeName: 'ipaddr', KeyType: HASH}
                 ],
-                **projection_all,
+                'Projection': {
+                    'ProjectionType' : 'INCLUDE',
+                    'NonKeyAttributes' : ['log_id']
+                }
+            },
+            {
+                'IndexName': 'user_id_idx',
+                KeySchema: [
+                    {AttributeName: 'user_id', KeyType: HASH}
+                ],
+                'Projection': {
+                    'ProjectionType' : 'INCLUDE',
+                    'NonKeyAttributes' : ['log_id']
+                }
+            },
+            {
+                'IndexName': 'course_time_t_idx',
+                KeySchema: [
+                    {AttributeName: 'course_id', KeyType: HASH},
+                    {AttributeName: 'time_t', KeyType: RANGE}
+                ],
+                'Projection': {
+                    'ProjectionType' : 'INCLUDE',
+                    'NonKeyAttributes' : ['log_id']
+                }
             },
         ],
         **billing,
-    }
-]
+    }]
 
 
 

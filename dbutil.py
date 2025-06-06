@@ -47,11 +47,9 @@ if __name__ == "__main__":
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--schema", help="Specify schema file to use", default=paths.SCHEMA_FILE)
     parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
-    parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id, --course_name, or --course_name", action='store_true')
-    parser.add_argument("--course_id", help="integer course id", type=int)
-    parser.add_argument("--course_key", help="integer course id")
-    parser.add_argument("--course_name", help="integer course id")
-    parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id, --course_name, or --course_name", action='store_true')
+    parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id", action='store_true')
+    parser.add_argument("--course_id", help="course id")
+    parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id", action='store_true')
     parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
@@ -109,8 +107,8 @@ if __name__ == "__main__":
         if not user.get('user_id'):
             print(f"User {args.admin_email} does not exist")
             sys.exit(1)
-        if not args.course_key and not args.course_id and not args.course_name:
-            print("Must provide one of --course_key, --course_id, or --course_name",file=sys.stderr)
+        if not args.course_id:
+            print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
         if args.course_id:
             course = odb.lookup_course_by_id(course_id=args.course_id)
@@ -119,22 +117,6 @@ if __name__ == "__main__":
                 sys.exit(0)
             else:
                 print(f"Course with id {args.course_id} does not exist.",file=sys.stderr)
-                sys.exit(1)
-        elif args.course_key:
-            course = odb.lookup_course_by_key(course_key=args.course_key)
-            if course.get('course_key'):
-                dbmaint.add_admin_to_course(admin_email = args.admin_email, course_key = course['course_key'])
-                sys.exit(0)
-            else:
-                print(f"Course with key {args.course_key} does not exist.",file=sys.stderr)
-                sys.exit(1)
-        elif args.course_name:
-            course = odb.lookup_course_by_name(course_name = args.course_name)
-            if course.get('course_id'):
-                dbmaint.add_admin_to_course(admin_email=args.admin_email, course_id=course['id'])
-                sys.exit(0)
-            else:
-                print(f'Course with name {args.course_name} does not exist.',file=sys.stderr)
                 sys.exit(1)
 
     if args.remove_admin:
@@ -146,15 +128,10 @@ if __name__ == "__main__":
         if not user.get('id'):
             print(f"User {args.admin_email} does not exist")
             sys.exit(1)
-        if not args.course_key and not args.course_id and not args.course_name:
-            print("Must provide one of --course_key, --course_id, or --course_name",file=sys.stderr)
+        if not args.course_id:
+            print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
-        odbmaint.remove_admin_from_course(
-            admin_email = args.admin_email,
-            course_id = args.course_id,
-            course_key = args.course_key,
-            course_name = args.course_name
-        )
+        odbmaint.remove_admin_from_course( admin_email = args.admin_email, course_id = args.course_id)
         sys.exit(0)
 
     ################################################################
