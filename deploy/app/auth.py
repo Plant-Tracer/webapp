@@ -47,28 +47,6 @@ def smtp_config():
         assert key in ret
     return ret
 
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbreader] section of the credentials file
-    """
-    if C.DBREADER_ARN in os.environ:
-        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBREADER_ARN] )
-    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbreader')
-
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbwriter] section of the credentials file
-    """
-    if C.DBWRITER_ARN in os.environ:
-        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBWRITER_ARN] )
-    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
-
-
 class AuthError(Exception):
     """Integrated error handling,"""
     status_code = 403

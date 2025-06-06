@@ -44,10 +44,6 @@ Resources:
       Environment:
         Variables:
           AWS_LAMBDA: "YES"
-          DBREADER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
-          DBREADER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
-          DBWRITER: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
-          DBWRITER_ARN: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
           DEBUG_DUMP_FILES: "NO"
           DEMO_MODE: "YES"
           ENCODE_BINARY_CONTENT: "YES"
@@ -59,10 +55,6 @@ Resources:
           POWERTOOLS_METRICS_NAMESPACE: Powertools
           POWERTOOLS_SERVICE_NAME: FastAPI
       Policies:
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbreader_dev-5LtJsU"
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_dbwriter_dev-g7zJin"
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
       Events:

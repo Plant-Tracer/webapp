@@ -17,7 +17,6 @@ import boto3
 from botocore.exceptions import ClientError
 
 from .constants import C
-from .auth import get_dbreader,get_dbwriter,AuthError
 
 # Configure basic logging
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(module)% %(message)s', level=logging.INFO)

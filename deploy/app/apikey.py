@@ -19,7 +19,6 @@ from flask import request
 
 from . import db
 from .paths import ETC_DIR
-from .auth import get_dbreader,AuthError
 from .constants import C,__version__
 
 # Specify the base for the API and for the static files by Environment variables.
@@ -67,7 +66,7 @@ def cookie_name():
     """We append the database name to the cookie name to make development easier.
     This way, the localhost: cookies can be for the prod, demo, or dev databases.
     """
-    return C.API_KEY_COOKIE_BASE + "-" + get_dbreader().database
+    return C.API_KEY_COOKIE_BASE
 
 
 def add_cookie(response):
@@ -191,7 +190,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'movie_id':movie_id,
         'demo_mode':DEMO_MODE,
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-        'dbreader_host':get_dbreader().host,
         'version':__version__,
         'git_head_time':git_head_time(),
         'git_last_commit':git_last_commit(),
