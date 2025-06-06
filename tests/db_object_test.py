@@ -19,16 +19,23 @@ from app.constants import C
 import app.dbfile as dbfile
 import app.db_object as db_object
 
+ENDPOINT_URL = 'http://localhost:9001'
+
+
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
     assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
 @pytest.fixture
 def SaveS3Bucket():
-    save = db_object.S3_BUCKET
-    db_object.S3_BUCKET = None
+    save = os.getenv(C.AWS_S3_BUCKET)
+    os.environ[C.AWS_S3_BUCKET] = C.DEFAULT_S3_BUCKET
     yield save
-    db_object.S3_BUCKET = save
+    if save:
+        sys.environ[C.AWS_S3_BUCKET] = save
+    else:
+        del sys.environ
+
 
 def test_make_urn(SaveS3Bucket):
     logging.info("Saved S3 bucket=%s",SaveS3Bucket)

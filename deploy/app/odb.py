@@ -49,7 +49,7 @@ SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admin
 CHECK_MX = False            # True doesn't work
 
 # Configure basic logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(module)% %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ################################################################

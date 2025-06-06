@@ -15,7 +15,7 @@ from app.odb import DDBO
 from app import odbmaint
 from app.constants import MIME,C
 
-
+ENDPOINT_URL = 'http://localhost:8010'
 
 MYDIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname( MYDIR )
@@ -87,7 +87,6 @@ TEST_MOVIE_FRAME_DATA = {
                    {'x':Decimal(45),'y':Decimal(55),'label':'name2'}]
 }
 
-ENDPOINT_URL = 'http://localhost:8010'
 
 @pytest.fixture
 def ddbo():

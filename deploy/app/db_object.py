@@ -1,14 +1,9 @@
 """Support for the object-store. Currently we have support for:
 
 S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be authenticated to the bucket
-DB - db://object_store/name - Local stored in the mysql database
 
 movie_name = {course_id}/{movie_id}.mov
 frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
-
-Note that we previously stored everything by SHA256. We aren't doing
-that anymore, and the SHA256 stuff should probably come out.
-
 """
 
 import os
@@ -21,9 +16,12 @@ import requests
 import boto3
 from botocore.exceptions import ClientError
 
-from . import dbfile
 from .constants import C
 from .auth import get_dbreader,get_dbwriter,AuthError
+
+# Configure basic logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(module)% %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 """
 Note tht to allow for local access the bucket must have this CORSRule:
@@ -44,13 +42,21 @@ We use this:
 </CORSRule>
 """
 
-ALLOWED_SCHEMES = [ C.SCHEME_S3, C.SCHEME_DB ]
+ALLOWED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
-DB_TABLE = 'object_store'
-STORE_LOCAL=False               # even if S3 is set, store local
-S3_BUCKET = None                # define to use it
 
-cors_configuration = {
+def s3_client(region_name=None, endpoint_url=None):
+    # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
+    # not at object creation time.
+    if region_name is None:
+        region_name = os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION)
+    if endpoint_url is None:
+        endpoint_url = os.environ.get(C.S3_ENDPOINT_URL,None)
+    return boto3.client('s3',
+                        region_name = region_name,
+                        endpoint_url=endpoint_url)
+
+CORS_CONFIGURATION = {
     'CORSRules': [{
         'AllowedHeaders': ['*'],
         'AllowedMethods': ['PUT', 'POST', 'DELETE', 'GET'],
@@ -79,35 +85,17 @@ def object_name(*,course_id,movie_id,frame_number=None,ext):
     nonce = str(uuid.uuid4())[0:4]
     return f"{course_id}/{movie_id}{fm}-{nonce}{ext}"
 
-def s3_client():
-    return boto3.session.Session().client( S3 )
-
 
 def make_urn(*, object_name, scheme = None ):
     """
     If environment variable is not set, default to the database schema
     We grab this every time through so that the bucket can be changed during unit tests
     """
-    if STORE_LOCAL:
-        scheme = C.SCHEME_DB
-    if scheme is None:
-        scheme = C.SCHEME_S3 if (S3_BUCKET is not None) else C.SCHEME_DB
-    if scheme == C.SCHEME_S3 and S3_BUCKET is None:
-        scheme = C.SCHEME_DB
-    if scheme == C.SCHEME_S3:
-        assert len(S3_BUCKET)>0
-        netloc = S3_BUCKET
-    elif scheme == C.SCHEME_DB:
-        netloc = DB_TABLE
-    else:
-        raise ValueError(f"Scheme {scheme} not in ALLOWED_SCHEMES {ALLOWED_SCHEMES}")
+    scheme = C.SCHEME_S3        # the only one we currently support
+    netloc = os.getenv(C.AWS_S3_BUCKET,C.DEFAULT_S3_BUCKET)
     ret = f"{scheme}://{netloc}/{object_name}"
     logging.debug("make_urn urn=%s",ret)
     return ret
-
-API_SECRET=os.environ.get("API_SECRET","test-secret")
-def sig_for_urn(urn):
-    return sha256( (urn + API_SECRET).encode('utf-8'))
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     assert isinstance(urn,str)
@@ -120,19 +108,8 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             Params={'Bucket': o.netloc,
                     'Key': o.path[1:]},
             ExpiresIn=expires)
-    elif o.scheme==C.SCHEME_DB:
-        params = urllib.parse.urlencode({'urn': urn, 'sig': sig_for_urn(urn) })
-        return f"/api/get-object?{params}"
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
-
-def read_signed_url(*,urn,sig):
-    computed_sig = sig_for_urn(urn)
-    if sig==computed_sig:
-        logging.info("URL signature matches. urn=%s",urn)
-        return read_object(urn)
-    logging.error("URL signature does not match. urn=%s sig=%s computed_sig=%s",urn,sig,computed_sig)
-    raise AuthError("signature does not verify")
 
 def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
@@ -147,17 +124,10 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
             ],
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
-    elif o.scheme==C.SCHEME_DB:
-        return {'url':'/api/upload-movie',
-                'fields':{ 'mime_type':mime_type,
-                           'key': o.path[1:],
-                           'scheme':C.SCHEME_DB,
-                           'sha256':sha256 }}
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
 def read_object(urn):
-    logging.info("read_object(%s)",urn)
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
@@ -170,16 +140,6 @@ def read_object(urn):
     elif o.scheme in ['http','https']:
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
         return r.content
-    elif o.scheme == C.SCHEME_DB:
-        #key = os.path.splitext(o.path[1:])[0]
-        res = dbfile.DBMySQL.csfr(
-            get_dbreader(),
-            "SELECT object_store.data from objects left join object_store on objects.sha256 = object_store.sha256 where urn=%s LIMIT 1",
-            (urn,))
-        if len(res)==1:
-            return res[0][0]
-        # Perhaps look for the SHA256 in the path and see if we can just find the data in the object_store?
-        return None
     else:
         raise ValueError("Unknown schema: "+urn)
 
@@ -189,36 +149,13 @@ def write_object(urn, object_data):
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
         return
-    elif o.scheme== C.SCHEME_DB and len(object_data) < C.SCHEME_DB_MAX_OBJECT_LEN:
-        object_sha256 = sha256(object_data)
-        assert o.netloc == DB_TABLE
-        dbfile.DBMySQL.csfr(
-            get_dbwriter(),
-            "INSERT INTO objects (urn,sha256) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (urn, object_sha256))
-        dbfile.DBMySQL.csfr(
-            get_dbwriter(),
-            "INSERT INTO object_store (sha256,data) VALUES (%s,%s) ON DUPLICATE KEY UPDATE id=id",
-            (object_sha256, object_data))
-        return
     raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
-    logging.info("delete_object(%s)",urn)
+    logging.debug("delete_object(%s)",urn)
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
     if o.scheme== C.SCHEME_S3:
         s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
-    elif o.scheme== C.SCHEME_DB:
-        assert o.netloc == DB_TABLE
-        res = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT sha256 from objects where urn=%s", (urn,))
-        if not res:
-            return
-        sha256_val = res[0][0]
-        count  = dbfile.DBMySQL.csfr( get_dbwriter(), "SELECT count(*) from objects where sha256=%s", (sha256_val,))[0][0]
-        dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM objects where urn=%s", (urn,))
-        if count==1:
-            dbfile.DBMySQL.csfr( get_dbwriter(), "DELETE FROM object_store where sha256=%s", (sha256_val,))
     else:
         raise ValueError(f"Cannot delete object urn={urn}")
 
@@ -231,4 +168,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print("Updating CORS policy for ",args.s3_bucket)
     s3 = boto3.client( S3 )
-    s3.put_bucket_cors(Bucket=args.s3_bucket, CORSConfiguration=cors_configuration)
+    s3.put_bucket_cors(Bucket=args.s3_bucket, CORSConfiguration=CORS_CONFIGURATION)
