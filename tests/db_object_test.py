@@ -1,8 +1,6 @@
 """
 Tests the DB object storage layer
 """
-
-
 import pytest
 import sys
 import os
@@ -19,35 +17,18 @@ from app.paths import STATIC_DIR,TEST_DATA_DIR
 from app.constants import C
 import app.db_object as db_object
 
-s3client = boto3.client('s3')
+from fixtures.local_aws import local_s3
 
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
     assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
-@pytest.fixture
-def s3test():
-    save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
-    save_endpoint = os.getenv(C.S3_ENDPOINT_URL)
-    os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_S3_BUCKET
-    os.environ[C.S3_ENDPOINT_URL] = C.TEST_S3_ENDPOINT_URL
-    os.environ[C.AWS_PROFILE ] = 'minio'
-    yield save_bucket
-    if save_bucket:
-        os.environ[C.PLANTTRACER_S3_BUCKET] = save_bucket
-    else:
-        del os.environ[C.PLANTTRACER_S3_BUCKET]
-    if save_endpoint:
-        os.environ[C.S3_ENDPOINT_URL] = save_endpoint
-    else:
-        del os.environ[C.S3_ENDPOINT_URL]
-
-def test_make_urn(s3test):
+def test_make_urn(local_s3):
     name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
     a = db_object.make_urn(object_name=name, scheme=None)
     assert a.endswith(".txt")
 
-def test_write_read_delete_object(s3test):
+def test_write_read_delete_object(local_s3):
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()
     hasher.update(DATA)

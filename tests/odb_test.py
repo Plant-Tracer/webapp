@@ -2,7 +2,6 @@ import uuid
 import boto3
 import os
 import time
-import subprocess
 import json
 from decimal import Decimal
 
@@ -12,12 +11,11 @@ import pytest
 
 from app import odb
 from app.odb import DDBO
-from app import odbmaint
 from app.constants import MIME,C
 
+from fixtures.local_aws import local_ddb
 
 MYDIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.dirname( MYDIR )
 
 TEST_ADMIN_ID = odb.new_user_id()
 TEST_ADMIN_EMAIL = 'new.user@example.com'
@@ -87,25 +85,8 @@ TEST_MOVIE_FRAME_DATA = {
 }
 
 
-@pytest.fixture
-def ddbo():
-    """Create an empty DynamoDB locally.
-    Starts the database if it is not running.
-    """
-    subprocess.call( [os.path.join(ROOT_DIR,'local_dynamodb_control.bash'),'start'])
-
-    # Make a random prefix for this run.
-    # Make sure that the tables don't exist, then create them
-
-    os.environ['AWS_DEFAULT_REGION']    = 'local'
-    os.environ['DYNAMODB_ENDPOINT_URL'] = C.DYNAMODB_TEST_ENDPOINT_URL
-    os.environ['DYNAMODB_TABLE_PREFIX'] = 'test-'+str(uuid.uuid4())[0:4]
-    ddbo = DDBO()
-    odbmaint.drop_tables(ddbo)
-    odbmaint.create_tables(ddbo)
-    return ddbo
-
-def test_odb(ddbo):
+def test_odb(local_ddb):
+    ddbo = local_ddb
     start_time = int(time.time())
 
     # Create the course

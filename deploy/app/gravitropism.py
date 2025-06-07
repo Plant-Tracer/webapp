@@ -1,6 +1,8 @@
 """ Implement the gravitropism algorithm """
 
 import math
+import logging
+
 from .constants import E,C
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)

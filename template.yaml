@@ -48,7 +48,6 @@ Resources:
           DEMO_MODE: "YES"
           ENCODE_BINARY_CONTENT: "YES"
           LOG_LEVEL: INFO
-          PLANTTRACER_CREDENTIALS: "app/etc/credentials-aws-dev.ini"
           PLANTTRACER_LOG_LEVEL: "WARNING"
           PLANTTRACER_S3_BUCKET: "planttracer-dev"
           PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
