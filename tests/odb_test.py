@@ -118,13 +118,16 @@ def test_odb(ddbo):
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
 
+    # Create a course
     ddbo.put_course(TEST_COURSE_DATA)
     assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
 
+    # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)
     assert ddbo.get_movie(TEST_MOVIE_ID) == TEST_MOVIE_DATA
     assert ddbo.get_movies_for_user_id(TEST_USER_ID) == [TEST_MOVIE_DATA]
 
+    # Create a movie frame
     ddbo.put_movie_frame(TEST_MOVIE_FRAME_DATA)
     assert len(ddbo.get_frames(TEST_MOVIE_ID)) == 1
     assert (odb.get_movie_trackpoints(movie_id= TEST_MOVIE_ID)
@@ -134,12 +137,15 @@ def test_odb(ddbo):
     ddbo.put_movie_frame({"movie_id":TEST_MOVIE_ID,
                          "frame_number":1,
                          "frame_urn":"s3://bogus/frame1"})
+
+    # Give it some trackpoints
     odb.put_frame_trackpoints(movie_id=TEST_MOVIE_ID, frame_number=1,
                               trackpoints=[{'x':20, 'y':30, 'label':'name3'},
                                            {'x':65, 'y':85, 'label':'name4'}])
     assert odb.last_tracked_movie_frame(movie_id=TEST_MOVIE_ID)==1
 
 
+    # Make an API key
     api_key = ddbo.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
     user = ddbo.validate_api_key(api_key)
@@ -155,7 +161,7 @@ def test_odb(ddbo):
     assert a3 == None
 
 
-    # test user management
+    # rename the user
     new_email = TEST_USER_EMAIL+"-new"
     ddbo.rename_user(user_id=TEST_USER_ID, new_email=new_email)
     u1 = ddbo.get_user(TEST_USER_ID)
@@ -165,9 +171,13 @@ def test_odb(ddbo):
     assert u1==u2
     assert u1['email'] == TEST_USER_EMAIL+"-new"
 
-    # Try to delete the user
+    # Try to delete the user without deleting the user's movies
     with pytest.raises(RuntimeError,match=r'.* has 1 outstanding movie.*'):
         ddbo.delete_user(TEST_USER_ID)
 
+    # Now delete the user and their movies
     ddbo.delete_user(TEST_USER_ID, purge_movies=True)
     assert ddbo.get_user(TEST_USER_ID) is None
+
+    # Delete the user's course
+    odb.delete_course(course_id=TEST_COURSE_ID)

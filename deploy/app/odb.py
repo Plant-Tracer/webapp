@@ -510,7 +510,7 @@ class DDBO:
         Does not run if the course has any movies.
         """
         r = self.movies.query( IndexName='course_id_idx',
-                                              KeyConditionExpression=Key( COURSE_ID ).eq(course_id))
+                               KeyConditionExpression=Key( COURSE_ID ).eq(course_id))
         items = r.get('Items',[])
         if len(items):
             raise RuntimeError(f"course {course_id} has {len(items)} movies.")
@@ -533,6 +533,8 @@ class DDBO:
                                        UpdateExpression='SET courses = :c',
                                        ExpressionAttributeValues={':c': courses} )
             last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
         # done!
 
 
@@ -760,11 +762,11 @@ def create_course(*, course_id, course_name, course_key, max_enrollment):
                               'max_enrollment':max_enrollment})
 
 @log
-def delete_course(*,course_key):
+def delete_course(*,course_id=None):
     """Delete a course.
     :return: number of courses deleted.
     """
-    return DDBO().del_course(course_key)
+    return DDBO().del_course(course_id)
 
 @log
 def make_course_admin(*, email, course_id=None):
