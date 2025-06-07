@@ -17,6 +17,9 @@ from . import auth
 from .paths import TEMPLATE_DIR
 from .constants import C
 
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'

@@ -9,6 +9,9 @@ import logging
 
 from .constants import C
 
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
 HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''

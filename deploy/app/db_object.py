@@ -19,7 +19,7 @@ from botocore.exceptions import ClientError
 from .constants import C
 
 # Configure basic logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(module)% %(message)s', level=logging.INFO)
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
 """

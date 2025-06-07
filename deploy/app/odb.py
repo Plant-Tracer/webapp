@@ -25,13 +25,13 @@ import boto3
 from botocore.exceptions import ClientError,ParamValidationError
 from boto3.dynamodb.conditions import Key,Attr
 
-
-
-
 from . import auth
 from . import mailer
 from .paths import TEMPLATE_DIR
 from .constants import MIME,C
+
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
 
 # tables
 API_KEYS = 'api_keys'
@@ -41,16 +41,28 @@ MOVIES = 'movies'
 FRAMES = 'movie_frames'
 COURSES = 'courses'
 
+# attributes
+ADMIN = 'admin'
+
+COURSE_ID = 'course_id'
+
+EMAIL = 'email'
+
+MOVIE_ID = 'movie_id'
+MOVIE_DATA_URN = 'movie_data_urn'
+MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+
+NAME = 'name'
+
+USER_ID = 'user_id'
+
+PRIMARY_COURSE_ID = 'primary_course_id'
+
 ODB_TABLES = {API_KEYS,USERS,UNIQUE_EMAILS,MOVIES,FRAMES,COURSES}
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
-SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
-
+SUPER_ADMIN_COURSE_ID = -1  # this is the super course. People who are admins in this course see everything.
 CHECK_MX = False            # True doesn't work
-
-# Configure basic logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(module)% %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 ################################################################
 ## Errors
@@ -124,17 +136,17 @@ def dynamodb_error_debugger(func):
             # However, the error message from botocore.exceptions.ClientError
             # itself often contains valuable context like the operation name.
 
-            logging.error("-" * 60)
-            logging.error(f"DYNAMODB OPERATION FAILED in method: '{func.__name__}'")
-            logging.error(f"  Error Type: {type(e).__name__}")
+            logger.error("-" * 60)
+            logger.error(f"DYNAMODB OPERATION FAILED in method: '{func.__name__}'")
+            logger.error(f"  Error Type: {type(e).__name__}")
 
             error_message = e.response.get('Error', {}).get('Message', str(e))
-            logging.error(f"  Error Message from DynamoDB: {error_message}")
+            logger.error(f"  Error Message from DynamoDB: {error_message}")
 
             # The 'OperationName' is part of the error response for ClientError
             operation_name_from_error = e.operation_name
             if operation_name_from_error:
-                logging.error(f"  Failed AWS API Operation: {operation_name_from_error}")
+                logger.error(f"  Failed AWS API Operation: {operation_name_from_error}")
 
             # The 'Parameters' (api_params) are not directly accessible from the
             # exception object in a generic way *outside* the original call scope.
@@ -142,9 +154,9 @@ def dynamodb_error_debugger(func):
             # boto3 call is made, or inspect 'e.response' carefully.
             # Example:
             if 'RequestParameters' in e.response.get('Error', {}):
-                 logging.error(f"  Request Parameters (if available): {e.response['Error']['RequestParameters']}")
+                 logger.error(f"  Request Parameters (if available): {e.response['Error']['RequestParameters']}")
 
-            logging.error("-" * 60)
+            logger.error("-" * 60)
             raise # Re-raise the original exception so the test still fails
     return wrapper
 
@@ -178,6 +190,64 @@ class DDBO:
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
         self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses]
 
+    # Generic stuff
+    @staticmethod
+    def _get_partition_key_name(key_schema):
+        "Extract the partition (HASH) key name from a Table.key_schema list."
+        return next(item['AttributeName']
+                    for item in key_schema
+                    if item['KeyType'] == 'HASH')
+
+    def update_table(self, table, key_value, updates: dict):
+        """
+        Generic updater for any DynamoDB Table resource.
+
+        :param table:       a boto3 Table resource (e.g. self.movies)
+        :param key_value:   the value of the partition key
+        :param updates:     dict mapping attribute names → new values;
+                            if value is None, that attribute will be removed.
+        """
+        # 1) figure out the PK name & build the Key dict
+        pk = self._get_partition_key_name(table.key_schema)
+        key = { pk: key_value }
+
+        # 2) separate SET vs REMOVE
+        set_exprs = []
+        remove_exprs = []
+        expr_values = {}
+        expr_names = {}
+
+        for attr, val in updates.items():
+            name_ph = f"#{attr}"
+            expr_names[name_ph] = attr
+
+            if val is None:
+                remove_exprs.append(name_ph)
+            else:
+                val_ph = f":{attr}"
+                set_exprs.append(f"{name_ph} = {val_ph}")
+                expr_values[val_ph] = val
+
+        # 3) build the combined UpdateExpression
+        parts = []
+        if set_exprs:
+            parts.append("SET " + ", ".join(set_exprs))
+        if remove_exprs:
+            parts.append("REMOVE " + ", ".join(remove_exprs))
+        update_expr = " ".join(parts)
+
+        # 4) assemble parameters
+        params = {
+            "Key": key,
+            "UpdateExpression": update_expr,
+            "ExpressionAttributeNames": expr_names
+        }
+        if expr_values:
+            params["ExpressionAttributeValues"] = expr_values
+
+        # 5) run the update
+        return table.update_item(**params)
+
     ### api_key management
 
     def get_api_key_dict(self,api_key):
@@ -199,7 +269,7 @@ class DDBO:
             api_key = new_api_key()
             self.put_api_key_dict({'api_key':api_key,
                                    'enabled':1,
-                                   'user_id':user['user_id'],
+                                   USER_ID :user[ USER_ID ],
                                    'use_count':0,
                                    'created':int(time.time()) })
             return api_key
@@ -214,7 +284,7 @@ class DDBO:
         assert is_api_key(api_key)
         api_key_dict = self.get_api_key_dict(api_key)
         if api_key_dict['enabled']:
-            user = self.get_user(api_key_dict['user_id'])
+            user = self.get_user(api_key_dict[ USER_ID ])
             if user['enabled']:
                 api_key_dict['use_count']  += 1
                 api_key_dict['last_used_at']  = int(time.time())
@@ -230,19 +300,19 @@ class DDBO:
             assert user_id is None
             response = self.users.query(
                 IndexName='email_idx',
-                KeyConditionExpression=Key('email').eq(email)
+                KeyConditionExpression=Key( EMAIL ).eq(email)
             )
             items = response.get('Items', [])
             return items[0] if items else None
-        return self.users.get_item(Key = {'user_id':user_id},ConsistentRead=True).get('Item',None)
+        return self.users.get_item(Key = { USER_ID :user_id},ConsistentRead=True).get('Item',None)
 
     def get_userid_for_email(self, email):
-        return self.get_user(None, email)['user_id']
+        return self.get_user(None, email)[ USER_ID ]
 
     def add_user(self, user):
-        email = user['email']
-        user_id = user['user_id']
-        primary_course_id = user['primary_course_id']
+        email = user[ EMAIL ]
+        user_id = user[ USER_ID ]
+        primary_course_id = user[ PRIMARY_COURSE_ID ]
         assert is_user_id(user_id)
 
         try:
@@ -252,7 +322,7 @@ class DDBO:
                     {
                         'Put': {
                             'TableName': self.unique_emails.name,
-                            'Item': {'email': email},
+                            'Item': { EMAIL : email},
                             'ConditionExpression': 'attribute_not_exists(email)',
                         }
                     },
@@ -277,7 +347,7 @@ class DDBO:
         userdict = self.get_user(user_id)
         if not userdict:
             raise ValueError(f"No user with user_id: {user_id}")
-        if userdict['email'] == new_email:
+        if userdict[ EMAIL ] == new_email:
             return userdict
 
         try:
@@ -286,24 +356,24 @@ class DDBO:
                 TransactItems=[ {
                     'Delete': {
                         'TableName': self.unique_emails.name,
-                        'Key': {'email': userdict['email']},
+                        'Key': { EMAIL : userdict[ EMAIL ]},
                         'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
                     }
                 }, {
                     'Put': {
                         'TableName': self.unique_emails.name,
-                        'Item': {'email': new_email},
+                        'Item': { EMAIL : new_email},
                         'ConditionExpression': 'attribute_not_exists(email)'  # Ensure new email doesn't exist
                     }
                 }, {
                     'Update': {
                         'TableName': self.users.name,
-                        'Key': {'user_id': user_id},
+                        'Key': { USER_ID : user_id},
                         'UpdateExpression': 'SET email = :new_email',
                         'ExpressionAttributeValues': { ':new_email': new_email}
                     }
                 } ] )
-            userdict['email'] = new_email  # update the userd
+            userdict[ EMAIL ] = new_email  # update the userd
             return userdict                # return new userdict
         except ClientError as e:
             raise RuntimeError(f"Email update failed: {e}")
@@ -324,7 +394,7 @@ class DDBO:
         assert is_user_id(user_id)
         movies = self.get_movies_for_user_id(user_id)
         if purge_movies:
-            self.batch_delete_movie_ids( [movie['movie_id'] for movie in movies] )
+            self.batch_delete_movie_ids( [movie[MOVIE_ID] for movie in movies] )
         else:
             if movies:
                 raise RuntimeError(f"user {user_id} has {len(movies)} outstanding movies.")
@@ -336,7 +406,7 @@ class DDBO:
         while True:
             query_kwargs = {
                 'IndexName': 'user_id_idx',
-                'KeyConditionExpression': Key('user_id').eq(user_id),
+                'KeyConditionExpression': Key( USER_ID ).eq(user_id),
                 'ProjectionExpression': 'api_key'
             }
             if last_evaluated_key:
@@ -353,21 +423,21 @@ class DDBO:
 
         # Get the email address. We should just get the userdict with some fancy projection...
         # Finally delete the user and the unique email
-        email = self.users.get_item(Key={'user_id':user_id},ConsistentRead=True)['Item']['email']
+        email = self.users.get_item(Key={ USER_ID :user_id},ConsistentRead=True)['Item'][ EMAIL ]
         client = self.dynamodb.meta.client
         client.transact_write_items(
             TransactItems=[
                 {
                     'Delete': {
                         'TableName': self.users.name,
-                        'Key': {'user_id': user_id},
+                        'Key': { USER_ID : user_id},
                         'ConditionExpression': 'attribute_exists(user_id)'  # Ensure user_id exists
                     },
                 },
                 {
                     'Delete': {
                         'TableName': self.unique_emails.name,
-                        'Key': {'email': email},
+                        'Key': { EMAIL : email},
                         #'ConditionExpression': 'attribute_exists(email)'  # Ensure old email exists
                     }
                 }
@@ -381,7 +451,7 @@ class DDBO:
         :param: course_key - the key
         :param: course_id  - the course
         :param: demo_user  - True if this is a demo user
-        :return: dictionary of {'user_id':user_id} for user who is registered.
+        :return: dictionary of { USER_ID :user_id} for user who is registered.
         """
 
         if (course_key is None) and (course_id is None):
@@ -404,33 +474,33 @@ class DDBO:
             user = self.get_user(None, email=email)
             if user:
                 # The user exists! Change the primary course and add them to this course.
-                self.users.update_items( Key={'user_id':user['user_id']},
+                self.users.update_items( Key={ USER_ID :user[ USER_ID ]},
                                          UpdateExpression='SET primary_course_id=:pci, primary_course_name=:pcn, demo=:demo, courses=:courses',
-                                         ExpressionAttributeValues={':pci':course['course_id'],
+                                         ExpressionAttributeValues={':pci':course[ COURSE_ID ],
                                                                     ':pcn':course['course_name'],
                                                                     ':demo':demo_user,
-                                                                    ':courses':list(set(user['courses'] + [course_id]))})
+                                                                    ':courses':list(set(user[ COURSES ] + [course_id]))})
                 return user
             # user does not exist. Try to create a new user
-            user = {'user_id':new_user_id(),
-                    'email':email,
+            user = {USER_ID:new_user_id(),
+                     EMAIL :email,
                     'created':int(time.time()),
                     'enabled':1,
                     'demo':demo_user,
-                    'admin': 0,
-                    'primary_course_id': course['course_id'],
+                     ADMIN : 0,
+                     PRIMARY_COURSE_ID : course[ COURSE_ID ],
                     'primary_course_name': course['course_name'] }
 
             try:
                 self.add_user( user, create=True)
             except RuntimeError as e:
-                logging.warning("Failed to insert user: %s %s: %e",user_id,email,e)
-            logging.warning("Looping on get_user or create_user")
+                logger.warning("Failed to insert user: %s %s: %e",user_id,email,e)
+            logger.warning("Looping on get_user or create_user")
 
     ### course management
 
     def get_course(self,course_id):
-        return self.courses.get_item(Key = {'course_id':course_id}).get('Item',None)
+        return self.courses.get_item(Key = { COURSE_ID :course_id}).get('Item',None)
 
     def put_course(self, coursedict):
         self.courses.put_item(Item=coursedict)
@@ -440,13 +510,13 @@ class DDBO:
         Does not run if the course has any movies.
         """
         r = self.movies.query( IndexName='course_id_idx',
-                                              KeyConditionExpression=Key('course_id').eq(course_id))
+                                              KeyConditionExpression=Key( COURSE_ID ).eq(course_id))
         items = r.get('Items',[])
         if len(items):
             raise RuntimeError(f"course {course_id} has {len(items)} movies.")
 
         # delete the course
-        self.courses.delete_item(Key = {'course_id':course_id})
+        self.courses.delete_item(Key = { COURSE_ID :course_id})
 
         # scan the users
         last_evaluated_key = None
@@ -456,10 +526,10 @@ class DDBO:
                 scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
             response = self.users.scan(**scan_kwargs)
             for user in response.get('Items'):
-                courses = user['courses']
+                courses = user[ COURSES ]
                 if course_id in courses:
                     courses.remove(course_id)
-                    table.update_item( Key={'user_id': user['user_id']},
+                    table.update_item( Key={ USER_ID : user[ USER_ID ]},
                                        UpdateExpression='SET courses = :c',
                                        ExpressionAttributeValues={':c': courses} )
             last_evaluated_key = response.get('LastEvaluatedKey')
@@ -475,7 +545,7 @@ class DDBO:
     ### movie management
 
     def get_movie(self, movie_id):
-        ret = self.movies.get_item(Key = {'movie_id':movie_id},ConsistentRead=True).get('Item',None)
+        ret = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item',None)
         if not ret:
             raise InvalidMovie_ID()
         return ret
@@ -487,7 +557,7 @@ class DDBO:
         """Delete movie items from the table using batch_writer."""
         with self.movies.batch_writer() as batch:
             for theId in ids:
-                batch.delete_item(Key={ 'movie_id': theId})
+                batch.delete_item(Key={ MOVIE_ID: theId})
 
     def get_movies_for_user_id(self, user_id):
         """Query movies.user_id_idx and return all movie records for the given user_id (with pagination)."""
@@ -497,7 +567,7 @@ class DDBO:
 
         while True:
             query_kwargs = { 'IndexName': 'user_id_idx',
-                             'KeyConditionExpression': Key( 'user_id' ).eq( user_id ) }
+                             'KeyConditionExpression': Key( USER_ID ).eq( user_id ) }
 
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
@@ -516,7 +586,7 @@ class DDBO:
 
         while True:
             query_kwargs = { 'IndexName': 'course_id_idx',
-                             'KeyConditionExpression': Key( 'course_id' ).eq( course_id )}
+                             'KeyConditionExpression': Key(  COURSE_ID  ).eq( course_id )}
 
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
@@ -531,7 +601,7 @@ class DDBO:
     ### movie_frame management
 
     def get_movie_frame(self,movie_id, frame_number):
-        return self.movie_frames.get_item(Key = {'movie_id':movie_id, 'frame_number':frameId}).get('Item',None)
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frameId}).get('Item',None)
 
     def put_movie_frame(self,framedict):
         self.movie_frames.put_item(Item=framedict)
@@ -543,7 +613,7 @@ class DDBO:
         last_evaluated_key = None
 
         while True:
-            query_kwargs = { 'KeyConditionExpression': Key( 'movie_id' ).eq( movie_id ) }
+            query_kwargs = { 'KeyConditionExpression': Key( MOVIE_ID ).eq( movie_id ) }
 
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
@@ -558,7 +628,7 @@ class DDBO:
         """Delete movie items from the table using batch_writer."""
         with self.movie_frames.batch_writer() as batch:
             for movie_frame in movie_frames:
-                batch.delete_item(Key={'movie_id': movie_frame['movie_id'],
+                batch.delete_item(Key={MOVIE_ID: movie_frame[MOVIE_ID],
                                        'frame_number': movie_frame['frame_number']})
 
 
@@ -624,7 +694,7 @@ def list_users_courses(*, user_id):
 
     user = dd.get_user(user_id)
     ret['users'] = [user]
-    ret['courses'] = [dd.get_course(course_id) for course_id in user['courses'] ]
+    ret[ COURSES ] = [dd.get_course(course_id) for course_id in user[ COURSES ] ]
     return ret
 
 def list_admins():
@@ -634,7 +704,7 @@ def list_admins():
     last_evaluated_key = None
 
     while True:
-        scan_kwargs = { 'FilterExpression': Attr('admin').eq(1) }
+        scan_kwargs = { 'FilterExpression': Attr( ADMIN ).eq(1) }
 
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
@@ -683,7 +753,7 @@ def create_course(*, course_id, course_name, course_key, max_enrollment):
     """Create a new course
     :return: course_id of the new course
     """
-    return DDBO().put_course({'course_id':course_id,
+    return DDBO().put_course({ COURSE_ID :course_id,
                               'course_name':course_name,
                               'course_key':course_key,
                               'course_admins':[],
@@ -704,23 +774,23 @@ def make_course_admin(*, email, course_id=None):
     """
     ddbo = DDBO()
     user = ddbo.get_user(None, email=email)
-    user_id = user['user_id']
-    new_courses = list(set(user['courses'] + [course_id]))
+    user_id = user[ USER_ID ]
+    new_courses = list(set(user[ COURSES ] + [course_id]))
     course = ddbo.get_course(course_id)
-    course_id = couse['course_id']
+    course_id = couse[ COURSE_ID ]
     new_course_admins = list(set(course['course_admins'] + [user_id]))
 
-    ddbo.users.update_item( Key={'user_id': user_id},
+    ddbo.users.update_item( Key={ USER_ID : user_id},
                             UpdateExpression = 'SET admin=:a, courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
                             ExpressionAttributeValues = { ':a':1,
                                                           ':c':new_courses,
                                                           ':pcid': course_id,
-                                                          ':pcn' : course['name']} )
+                                                          ':pcn' : course[ NAME ]} )
 
-    ddbo.courses.update_item( Key={'course_id':course_id},
+    ddbo.courses.update_item( Key={ COURSE_ID :course_id},
                               UpdateExpression = 'SET course_admins=:nca',
                               ExpressionAttributeValues = { ':nca':new_course_admins })
-    return {'user_id':user_id,'course_id':course_id}
+    return { USER_ID :user_id, COURSE_ID :course_id}
 
 
 @log
@@ -728,16 +798,16 @@ def remove_course_admin(*, email, course_id=None):
     """Removes email from the course admin list, but doesn't make them not an admin."""
     ddbo = DDBO()
     user = ddbo.get_user(None, email=email)
-    user_id = user['user_id']
-    new_courses = user['courses']
+    user_id = user[ USER_ID ]
+    new_courses = user[ COURSES ]
 
     course = ddbo.get_course(course_id)
-    course_id = couse['course_id']
+    course_id = couse[ COURSE_ID ]
     new_course_admins = course['course_admins']
 
     try:
-        new_courses.remove('course_id')
-        ddbo.users.update_item( Key={'user_id': user_id},
+        new_courses.remove( COURSE_ID )
+        ddbo.users.update_item( Key={ USER_ID : user_id},
                                 UpdateExpression = 'SET courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
                                 ExpressionAttributeValues = { ':a':1,
                                                               ':c':new_courses,
@@ -749,7 +819,7 @@ def remove_course_admin(*, email, course_id=None):
 
     try:
         new_course_admins.remove(user_id)
-        ddbo.courses.update_item( Key={'course_id':course_id},
+        ddbo.courses.update_item( Key={ COURSE_ID :course_id},
                                   UpdateExpression = 'SET course_admins=:nca',
                                   ExpressionAttributeValues = { ':nca':new_course_admins })
     except KeyError:
@@ -761,7 +831,7 @@ def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
     logger.warning("HIGH DB DRAIN")
     user = DDBO().get_user(user_id)
-    return (course_id in user['courses'] ) and user['admin']
+    return (course_id in user[ COURSES ] ) and user[ ADMIN ]
 
 @log
 def validate_course_key(*, course_key):
@@ -777,7 +847,7 @@ def remaining_course_registrations(*,course_key):
     course = ddbo.get_course_by_course_key(course_key)
     if not course:
         return 0
-    course_id = course['course_id']
+    course_id = course[ COURSE_ID ]
 
     registrants = 0
     last_evaluated_key = None
@@ -789,7 +859,7 @@ def remaining_course_registrations(*,course_key):
 
         response = ddbo.users.scan(**scan_kwargs)
         for user in response['Items']:
-            if course_id == user['primary_course_id'] or course_id in user['courses']:
+            if course_id == user[ PRIMARY_COURSE_ID ] or course_id in user[ COURSES ]:
                 registrants += 1
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -808,7 +878,7 @@ def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
     If urn==True, just return the urn
     """
     what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
-    movie = DDBO().movie.get_item(Key={'movie_id':movie_id})
+    movie = DDBO().movie.get_item(Key={MOVIE_ID:movie_id})
     try:
         urn   = movie[what]
     except TypeError as e:
@@ -830,13 +900,13 @@ def get_movie_metadata(*, user_id, movie_id, get_last_frame_tracked=False):
     logger.warning("TK: replace get_movie_metadata with list_movies")
     logger.warning("ignored: get_last_frame_tracked=%s",get_last_frame_tracked)
     ddbo = DDBO()
-    user = ddbo.users.get_item(Key={'user_id':user_id})
+    user = ddbo.users.get_item(Key={ USER_ID :user_id})
     movies = []
     if movie_id is not None:
         return [ddbo.get_movie(movie_id)]
 
     # build a query for all movies for which the user is in the course
-    for course_id in user['courses']:
+    for course_id in user[ COURSES ]:
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
     return movies
 
@@ -847,10 +917,10 @@ def can_access_movie(*, user_id, movie_id):
     logger.warning("UNNEDED USERID QUERY")
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
-    if movie['user_id'] == user_id:
+    if movie[ USER_ID ] == user_id:
         return True
-    user = ddbo.users.get_item(Key={'user_id':user_id})
-    if movie['course_id'] in user['courses']:
+    user = ddbo.users.get_item(Key={ USER_ID :user_id})
+    if movie[ COURSE_ID ] in user[ COURSES ]:
         return True
     return False
 
@@ -871,14 +941,14 @@ def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
     # Create a new movie record
     ddbo = DDBO()
     movie_id = new_movie_id()
-    ddbo.put_movie({'movie_id':movie_id,
+    ddbo.put_movie({MOVIE_ID:movie_id,
                     'title':title,
                     'description':description,
                     'orig_movie':orig_movie,
                     'published': 0,
                     'deleted': 0,
                     'movie_zipfile_urn':None,
-                    'movie_data_urn':None,
+                    MOVIE_DATA_URN:None,
                     'last_frame_tracked':None,
                     'created_at':int(time.time()),
                     'date_uploaded':None,
@@ -887,30 +957,20 @@ def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
     return movie_id
 
 
-def set_movie_data_urn(*, movie_id, movie_data_urn):
-    """
-    Sets the movie data for a movie. Either movie_data or movie_data_urn must be provided, but not both.
-    :param: movie_data_urn - if presented, the URL at which the data can or will be found.
-    """
-    dbfile.DBMySQL.csfr(get_dbwriter(),
-                        "UPDATE movies set movie_data_urn=%s where id=%s",
-                        (movie_data_urn, movie_id))
-
 
 def set_movie_metadata(*, movie_id, movie_metadata):
     """Set the movie_metadata from a dictionary."""
 
-    assert 'movie_id' not in movie_metadata
+    assert is_movie_id(movie_id)
+    assert MOVIE_ID not in movie_metadata
     assert 'id' not in movie_metadata
-    exp = 'SET ' + ",".join( f'{k} = :{k}' for k in movie_metadata.keys())
-    vals = { ':'+k : v  for (k,v) in movie_metadata.items()}
-    DDBO().movies.update_item( Key={'movie_id':movie_id},
-                               UpdateExpression = exp,
-                               ExpressionAttributeValues = vals)
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 
 def set_movie_data(*,movie_id, movie_data):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
+    assert is_movie_id(movie_id)
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
@@ -918,32 +978,27 @@ def set_movie_data(*,movie_id, movie_data):
                                         movie_id = movie_id,
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
-    set_movie_data_urn(movie_id = movie_id, movie_data_urn=movie_data_urn)
     db_object.write_object(movie_data_urn, movie_data)
+    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
 
 
 ################################################################
 ## Deleting
 
 @log
-def purge_movie_data(*,movie_id,callback=None):
+def purge_movie_data(*,movie_id):
     """Delete the movie data associated with a movie"""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    for row in dbfile.DBMySQL.csfr( get_dbwriter(),
-                                    "SELECT movie_data_urn from movies where id=%s and movie_data_urn is not NULL",
-                                    (movie_id,), asDicts=True):
-        if callback is not None:
-            callback(row)
-            try:
-                db_object.delete_object(row['movie_data_urn'])
-            except (ClientError,ParamValidationError):
-                logging.warning("invalid URN: %s",row['movie_data_urn'])
-    dbfile.DBMySQL.csfr( get_dbwriter(), "UPDATE movies set movie_data_urn=NULL where id=%s",(movie_id,))
+    logger.debug("purge_movie_data movie_id=%s",movie_id)
+    ddbo = DDBO()
+    urn = ddbo.get_movie(movie_id).get(MOVIE_DATA_URN,None)
+    if urn:
+        db_object.delete_object( urn )
+        ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
 
 @log
 def purge_movie_frames(*,movie_id):
     """Delete the frames and zipfile associated with a movie."""
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    logger.debug("purge_movie_frames movie_id=%s",movie_id)
     ddbo = DDBO()
     frames = ddbo.get_frames( movie_id )
 
@@ -955,11 +1010,11 @@ def purge_movie_frames(*,movie_id):
 @log
 def purge_movie_zipfile(*,movie_id):
     """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    logger.debug("purge_movie_data movie_id=%s",movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     db_object.delete_object(movie['movie_zipfile_urn'])
-    DDBO().movies.update_item( Key={'movie_id': movie_id},
+    DDBO().movies.update_item( Key={MOVIE_ID: movie_id},
                                UpdateExpression='SET movie_zipfile_urn = :val',
                                ExpressionAttributeValues={':val': None})
 
@@ -977,7 +1032,7 @@ def delete_movie(*,movie_id, delete=1):
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
-    DDBO().movies.delete_item( Key={'movie_id': movie_id})
+    DDBO().movies.delete_item( Key={MOVIE_ID: movie_id})
 
 
 ################################################################
@@ -987,12 +1042,12 @@ def delete_movie(*,movie_id, delete=1):
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
     logger.warning("INEFFICIENT CALL")
-    return DDBO().get_movie(movie_id)['course_id']
+    return DDBO().get_movie(movie_id)[ COURSE_ID ]
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
     logger.warning("INEFFICIENT CALL")
-    return DDBO().get_movie(movie_id)['movie_data_urn']
+    return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
 
 
 @functools.lru_cache(maxsize=128)
@@ -1061,7 +1116,7 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
         if last_evaluated_key:
             query_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = table.query(KeyConditionExpression = Key('movie_id').eq(movie_id) & Key('frame_number').between(Decimal(f1), Decimal(f2)),
+        response = table.query(KeyConditionExpression = Key(MOVIE_ID).eq(movie_id) & Key('frame_number').between(Decimal(f1), Decimal(f2)),
                                **query_kwargs)
 
         for item in response['Items']:
@@ -1095,7 +1150,7 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     :param: frame_start, frame_count -
     """
     assert is_movie_id(movie_id)
-    return [{'movie_id':frame['movie_id'],
+    return [{MOVIE_ID:frame[MOVIE_ID],
              'frame_number':frame['frame_number'],
              'frame_urn':frame['frame_run']}
             for frame in
@@ -1110,7 +1165,7 @@ def last_tracked_movie_frame(*, movie_id):
     last_evaluated_key=None
     while True:
         query_kwargs = {
-            'KeyConditionExpression': Key('movie_id').eq(movie_id),
+            'KeyConditionExpression': Key(MOVIE_ID).eq(movie_id),
             'FilterExpression': Attr('trackpoints').exists(),
             'ScanIndexForward': False,
             'Limit': 1
@@ -1135,7 +1190,7 @@ def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[di
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
     assert is_movie_id(movie_id)
-    DDBO().movie_frames.update_item( Key={'movie_id':movie_id,
+    DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
                                           'frame_number':frame_number},
                                      UpdateExpression='SET trackpoints=:val',
                                      ExpressionAttributeValues={':val':trackpoints})
@@ -1154,7 +1209,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     if is_movie_id:
         assert is_movie_id(movie_id)
     ddbo = DDBO()
-    user = ddbo.users.get_item(Key={'user_id':user_id})
+    user = ddbo.users.get_item(Key={ USER_ID :user_id})
     if orig_movie is not None:
         raise NotImplemented("orig_movie not implemented")
     movies = []
@@ -1162,7 +1217,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
         return [ddbo.get_movie(movie_id)]
 
     # build a query for all movies for which the user is in the course
-    for course_id in user['courses']:
+    for course_id in user[ COURSES ]:
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
     return movies
 
@@ -1190,13 +1245,13 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
     # Select GSI based on parameters
     if log_user_id:
         index_name = 'user_id_idx'
-        key_condition = Key('user_id').eq(log_user_id)
+        key_condition = Key( USER_ID ).eq(log_user_id)
     elif ipaddr:
         index_name = 'ipaddr_idx'
         key_condition = Key('ipaddr').eq(ipaddr)
     elif course_id:
         index_name = 'course_time_t_idx'
-        key_condition = Key('course_id').eq(course_id)
+        key_condition = Key( COURSE_ID ).eq(course_id)
         if start_time and end_time:
             key_condition &= Key('time_t').between(start_time, end_time)
         elif start_time:
@@ -1223,14 +1278,13 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 
     # Optional filtering in Python
     if course_id and index_name != 'course_time_t_idx':
-        items = [item for item in items if item.get('course_id') == course_id]
+        items = [item for item in items if item.get( COURSE_ID ) == course_id]
     if start_time and index_name != 'course_time_t_idx':
         items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
     if end_time and index_name != 'course_time_t_idx':
         items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
 
     return items
-
 
 
 ################################################################
@@ -1273,7 +1327,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
     """
     # First compute @is_owner
-    logging.debug("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
+    logger.debug("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
     assert isinstance(user_id, int)
     assert isinstance(set_movie_id, int) or (set_movie_id is None)
     assert isinstance(set_user_id, int) or (set_user_id is None)
@@ -1285,26 +1339,26 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
     if set_movie_id is not None:
         movie = ddbo.get_movie(movie_id)
-        is_owner = movie['user_id'] == user_id
-        is_admin = user_id['admin'] and (movie['course_id'] in user_id['courses'])
+        is_owner = movie[ USER_ID ] == user_id
+        is_admin = user_id[ ADMIN ] and (movie[ COURSE_ID ] in user_id[ COURSES ])
 
         acl  = SET_MOVIE_METADATA[prop]
         if not ((is_owner and '@is_owner' in acl) or (is_admin and '@is_admin') in acl):
             # permission not granted
             raise UnauthorizedUser("permission denied")
 
-        ddbo.movie.update_item( Key={'movie_id':movie_id},
+        ddbo.movie.update_item( Key={ MOVIE_ID : movie_id},
                                 UpdateExpression=f'SET {prop} = :val',
                                 ExpressionAttributeValues={':val':value})
     elif set_user_id is not None:
         set_user = ddbo.get_user(set_user_id)
         is_owner = user_id == set_user_id
-        is_admin = user_id['admin'] and (set_user['primary_course_id'] in user_id['courses'])
+        is_admin = user_id[ ADMIN ] and (set_user[ PRIMARY_COURSE_ID ] in user_id[ COURSES ])
 
         if is_owner or is_admin:
-            if prop not in ['name', 'email']:
+            if prop not in [  NAME ,  EMAIL ]:
                 raise UnauthorizedUser('currently users can only set name and email')
-            ddbo.users.update_item( Key={'user_id':set_user_id},
+            ddbo.users.update_item( Key={ USER_ID :set_user_id},
                                     UpdateExpression=f'SET {prop} = :val',
                                     ExpressionAttributeValues={':val':value})
     else:

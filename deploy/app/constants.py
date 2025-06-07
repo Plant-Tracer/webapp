@@ -31,6 +31,10 @@ class C:
     DEFAULTS3_ENDPOINT = 'http://localhost:9001'
     DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
 
+    # Logging
+    LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module) - %(message)s'
+    LOGGING_LEVEL=logging.WARNING
+
     # Demo mode
     DEMO_MODE_API_KEY = 'ademo' # special key
     DEMO_MODE_USER_ID  = 'udemo' # special userid

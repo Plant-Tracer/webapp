@@ -11,9 +11,11 @@ import configparser
 import logging
 import functools
 
-from . import dbfile
 from .constants import C
 from .paths import DEFAULT_CREDENTIALS_FILE
+
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
 
 SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 

@@ -21,6 +21,10 @@ from . import db
 from .paths import ETC_DIR
 from .constants import C,__version__
 
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
+
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
 # If they are not set, they default to '' which is the same site that serves the HTML pages.

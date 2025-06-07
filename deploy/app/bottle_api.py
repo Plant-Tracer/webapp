@@ -30,6 +30,9 @@ from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,GET,POST,GET_POST,__version__
 
 
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
 api_bp = Blueprint('api', __name__)
 
 

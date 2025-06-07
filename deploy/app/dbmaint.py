@@ -1,51 +1,3 @@
-#!/usr/bin/env python3
-"""
-Database Management Support
-"""
-
-import sys
-import os
-import configparser
-import subprocess
-import socket
-import logging
-import json
-import re
-import glob
-
-import uuid
-
-from tabulate import tabulate
-from botocore.exceptions import ClientError,ParamValidationError
-
-from . import db
-from . import tracker
-from . import auth
-from . import dbfile
-from .paths import TEMPLATE_DIR, TEST_DATA_DIR, SCHEMA_TEMPLATE
-from .dbfile import MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE,DBMySQL
-
-assert os.path.exists(TEMPLATE_DIR)
-
-SCHEMA_VERSION = 'schema_version'
-LOCALHOST = 'localhost'
-dbreader = 'dbreader'
-dbwriter = 'dbwriter'
-csfr = DBMySQL.csfr
-
-DEFAULT_MAX_ENROLLMENT = 10
-DEMO_NAME  = 'Plant Tracer Demo Account'
-DEMO_MOVIE_TITLE = 'Demo Movie #{ct}'
-DEMO_MOVIE_DESCRIPTION = 'Track this movie!'
-
-__version__ = '0.0.1'
-
-debug = False
-
-def hostnames():
-    hostname = socket.gethostname()
-    return socket.gethostbyname_ex(hostname)[2] + [LOCALHOST,hostname]
-
 def purge_test_data():
     """Remove all test data from the database"""
     sizes = {}
@@ -277,17 +229,6 @@ def create_course(*, course_key, course_name, admin_email,
                 ct += 1
     return admin_id
 
-def add_admin_to_course(*, admin_email, course_id=None, course_key=None):
-    db.make_course_admin(email=admin_email, course_key=course_key, course_id=course_id)
-
-def remove_admin_from_course(*, admin_email, course_id=None, course_key=None, course_name=None):
-    db.remove_course_admin(
-                        email=admin_email,
-                        course_key=course_key,
-                        course_id=course_id,
-                        course_name=course_name
-                    )
-
 ################################################################
 ## database schema management
 ################################################################
@@ -314,7 +255,6 @@ def current_source_schema():
 def schema_upgrade( ath ):
     """Upgrade the schema to the current version.
     NOTE: uses ath to create a new database connection. ath must have ability to modify database schema.
-
     """
     dbname = ath.database
     logging.info("schema_upgrade(%s)",ath)
