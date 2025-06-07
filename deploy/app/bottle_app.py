@@ -16,7 +16,7 @@ from flask import Flask, request, render_template, jsonify, make_response
 # pylint: disable=no-member
 from . import auth
 from . import db_object
-from . import dbmaint
+from . import odbmaint
 from . import clogging
 from . import apikey
 
@@ -44,22 +44,9 @@ def fix_boto_log_level():
             logging.getLogger(name).setLevel(logging.INFO)
 
 def lambda_startup():
-    dbmaint.schema_upgrade(auth.get_dbwriter())
-    clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
+    logging.basicConfig(format=C.LOGGING_CONFIG, level=os.environ.get('PLANTTRACER_LOG_LEVEL',C.LOGGING_LEVEL))
     fix_boto_log_level()
-
-    logging.info("p1")
-    if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
-        db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
-        logging.info("p2a %s",db_object.S3_BUCKET)
-    else:
-        config = auth.config()
-        try:
-            db_object.S3_BUCKET = config['s3']['s3_bucket']
-            logging.info("p2b %s",db_object.S3_BUCKET)
-        except KeyError as e:
-            logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
-    logging.info("p3 %s",db_object.S3_BUCKET)
+    logger.info("lambda_startup")
 
 ################################################################
 ## API SUPPORT

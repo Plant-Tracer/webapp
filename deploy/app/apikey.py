@@ -17,7 +17,7 @@ from os.path import join
 
 from flask import request
 
-from . import db
+from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
 

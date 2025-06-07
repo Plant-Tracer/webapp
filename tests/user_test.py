@@ -14,11 +14,10 @@ import copy
 import hashlib
 from os.path import abspath, dirname
 
-from deploy.app import odbmaint
 from fixtures.app_client import client
 
 import app.db as db
-import app.dbmaint as dbmaint
+import app.odbmaint as odbmaint
 import app.bottle_api as bottle_api
 import app.bottle_app as bottle_app
 import app.dbfile as dbfile
@@ -135,7 +134,7 @@ def test_new_course(new_course):
     assert len([r for r in res if r['email']==demo_email])>0
 
     # Check to make sure that the correct number of course enrollment remains
-    assert db.remaining_course_registrations(course_key=course_key) == dbmaint.DEFAULT_MAX_ENROLLMENT - 2
+    assert db.remaining_course_registrations(course_key=course_key) == C.DEFAULT_MAX_ENROLLMENT - 2
 
     # Check course lookup functions
     c1 = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])
