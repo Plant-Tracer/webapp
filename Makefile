@@ -201,11 +201,12 @@ jstest-debug:
 # $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
 # See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
+## DynamoDB Local (Provided by AWS)
 .PHONY: install_local_dynamodb
-DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
+DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
 install_local_dynamodb: $(REQ)
-	test -f dynamodb_local_latest.zip || curl $(DOWNLOAD_URL) -o dynamodb_local_latest.zip
-	test -f dynamodb_local_latest.zip || (echo could not download $(DOWNLOAD_URL); exit 1)
+	test -f dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o dynamodb_local_latest.zip
+	test -f dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
 	unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*'
 
 run_local_dynamodb:
@@ -214,11 +215,27 @@ run_local_dynamodb:
 stop_local_dynamodb:
 	bash local_dynamodb_control.bash stop
 
-
 remove_localdb:
 	@echo Removing local database using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
 	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
 
+list_tables:
+	aws dynamodb list-tables --endpoint-url http://localhost:8010
+
+## S3 Local (Minio)
+install-profile:
+	echo "[minio]" >> $HOME/.aws/credentials
+	echo "aws_access_key_id = admin" >> $HOME/.aws/credentials
+	echo "aws_secret_access_key = password" >> $HOME/.aws/credentials
+
+list-local-buckets:
+	aws s3 --profile=minio --endpoint-url http://localhost:9000 ls
+
+make-local-bucket:
+	aws s3 --profile=minio --endpoint-url http://localhost:9000 mb s3://planttracer-local/
+
+
+################################################################
 
 install-chromium-browser-ubuntu: $(REQ)
 	sudo apt-get install -y chromium-browser

@@ -48,12 +48,12 @@ def s3_client(region_name=None, endpoint_url=None):
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
     if region_name is None:
-        region_name = os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION)
+        region_name = os.environ.get(C.AWS_DEFAULT_REGION, C.THE_DEFAULT_REGION)
     if endpoint_url is None:
         endpoint_url = os.environ.get(C.S3_ENDPOINT_URL,None)
-    return boto3.client('s3',
-                        region_name = region_name,
-                        endpoint_url=endpoint_url)
+
+    return boto3.Session(profile_name = os.getenv(C.AWS_PROFILE)).client(
+        's3', region_name = region_name, endpoint_url=endpoint_url)
 
 CORS_CONFIGURATION = {
     'CORSRules': [{

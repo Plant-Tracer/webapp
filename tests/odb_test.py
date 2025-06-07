@@ -15,7 +15,6 @@ from app.odb import DDBO
 from app import odbmaint
 from app.constants import MIME,C
 
-ENDPOINT_URL = 'http://localhost:8010'
 
 MYDIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname( MYDIR )
@@ -99,7 +98,7 @@ def ddbo():
     # Make sure that the tables don't exist, then create them
 
     os.environ['AWS_DEFAULT_REGION']    = 'local'
-    os.environ['DYNAMODB_ENDPOINT_URL'] = ENDPOINT_URL
+    os.environ['DYNAMODB_ENDPOINT_URL'] = C.DYNAMODB_TEST_ENDPOINT_URL
     os.environ['DYNAMODB_TABLE_PREFIX'] = 'test-'+str(uuid.uuid4())[0:4]
     ddbo = DDBO()
     odbmaint.drop_tables(ddbo)
@@ -109,6 +108,10 @@ def ddbo():
 def test_odb(ddbo):
     start_time = int(time.time())
 
+    # Create the course
+    ddbo.put_course(TEST_COURSE_DATA)
+    assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
+
     # Create the user.
     ddbo.add_user(TEST_USER_DATA)
     # This should fail becuase the user we are putting exist
@@ -117,10 +120,6 @@ def test_odb(ddbo):
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
-
-    # Create a course
-    ddbo.put_course(TEST_COURSE_DATA)
-    assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
 
     # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)
@@ -155,11 +154,11 @@ def test_odb(ddbo):
     assert a2['use_count'] == 1
     assert a2['created'] >= start_time
     assert a2['last_used_at'] >= a2['first_used_at'] >= a2['created']
-    ddbo.del_api_key(api_key)
 
+    # Delete the API key
+    ddbo.del_api_key(api_key)
     a3   = ddbo.get_api_key_dict(api_key)
     assert a3 == None
-
 
     # rename the user
     new_email = TEST_USER_EMAIL+"-new"
