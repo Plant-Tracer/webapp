@@ -18,8 +18,6 @@ DEPLOY_ETC=deploy/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
-# Note: PLANTTRACER_CREDENTIALS must be set
-
 venv:
 	@echo install venv for the development environment
 	python3 -m venv venv
@@ -108,34 +106,28 @@ localmail-config:
 TEST1MODULE=tests/movie_tracker_test.py
 TEST1FUNCTION="-k test_movie_tracking"
 pytest1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest:  $(REQ) localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
 pytest-selenium:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
 	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-app-framework:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	@echo validate app framework
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
 pytest-quiet: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	@echo quietly make pytest and stop at the firt error
 	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
 	@echo dbreader_test is successful
@@ -162,25 +154,25 @@ debug:
 
 debug-local:
 	@echo run bottle locally in debug mode, storing new data in database
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG) --storelocal
+	$(DEBUG) --storelocal
 
 debug-single:
 	@echo run bottle locally in debug mode single-threaded
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)
+	$(DEBUG)
 
 debug-multi:
 	@echo run bottle locally in debug mode multi-threaded
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)   --multi
+	$(DEBUG) --multi
 
 debug-dev:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
 	@echo for debugging Python and Javascript with remote database
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini $(DEBUG)
+	$(DEBUG)
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
 tracker-debug:
 	/bin/rm -f outfile.mp4

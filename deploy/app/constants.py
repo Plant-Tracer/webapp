@@ -4,6 +4,8 @@ Constants are created in classes so we can import the class and don't have to im
 
 #pylint: disable=too-few-public-methods
 
+import logging
+
 __version__ = '0.9.6'
 
 GET=['GET']
@@ -12,24 +14,24 @@ GET_POST = ['GET','POST']
 
 class C:
     """Constants"""
-    # Environment variables:
-    DBREADER_ARN = 'DBREADER_ARN'
-    DBWRITER_ARN = 'DBWRITER_ARN'
-    DEMO_MODE = 'DEMO_MODE'
-    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
-    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS'
+    # Environment variables for AWS Configuration
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
+    DEMO_MODE = 'DEMO_MODE'
     FFMPEG_PATH = 'FFMPEG_PATH'
     AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
-    THE_DEFAULT_REGION = 'us-east-1'
     DYNAMODB_ENDPOINT_URL = 'DYNAMODB_ENDPOINT_URL'
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
-    AWS_S3_BUCKET = 'AWS_S3_BUCKET'
+
+    # defaults:
+    THE_DEFAULT_REGION = 'us-east-1'
     DEFAULT_S3_BUCKET = 'planttracer-local'
     S3_ENDPOINT_URL = 'S3_ENDPOINT_URL'
     DEFAULTS3_ENDPOINT = 'http://localhost:9001'
     DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
+    DEFAULT_MAX_ENROLLMENT = 100
+    LOG_MAX_RECORDS = 1024
 
     # Logging
     LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module) - %(message)s'
@@ -40,8 +42,6 @@ class C:
     DEMO_MODE_USER_ID  = 'udemo' # special userid
 
     # Other
-    DEFAULT_MAX_ENROLLMENT = 100
-    LOG_MAX_RECORDS = 1024
     EMAIL_TEMPLATE_FNAME = 'email.txt'
     MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'

@@ -11,14 +11,13 @@ from deploy.app import clogging
 from deploy.app import odbmaint
 from deploy.app import db
 from deploy.app import mailer
-from deploy.app import dbfile
 from deploy.app import paths
 from deploy.app.constants import C
 from deploy.app.odb import DDBO
 
 
 DESCRIPTION="""
-DynamoDB Database Maintenance Program. The database to act upon is specified in the ini file specified by the PLANTTRACER_CREDENTIALS environment variable, in the sections for [dbreader] and [dbwriter]
+DynamoDB Database Maintenance Program.
 """
 
 if __name__ == "__main__":
@@ -31,7 +30,6 @@ if __name__ == "__main__":
     parser.add_argument('--table_prefix', help='Prefix for DynamoDB tables', default='')
     parser.add_argument("--createdb", help='Create a new set of DynamoDB tables.')
     parser.add_argument("--dropdb",  help='Drop an existing database.')
-    parser.add_argument("--readconfig",   help="Specify the config.ini file to read")
     parser.add_argument("--writeconfig",  help="Specify the config.ini file to write.")
     parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
     parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database', action='store_true')
@@ -59,9 +57,6 @@ if __name__ == "__main__":
     ddbo = DDBO(table_prefix=args.table_prefix)
 
     config = configparser.ConfigParser()
-
-    if args.readconfig:
-        paths.CREDENTIALS_FILE = paths.AWS_CREDENTIALS_FILE = args.readconfig
 
     if args.sendlink:
         if not args.planttracer_endpoint:

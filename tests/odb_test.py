@@ -100,7 +100,7 @@ def ddbo():
 
     os.environ['AWS_DEFAULT_REGION']    = 'local'
     os.environ['DYNAMODB_ENDPOINT_URL'] = ENDPOINT_URL
-    os.environ['DYNAMODB_TABLE_PREFIX'] = 'test'-str(uuid.uuid4())[0:4]
+    os.environ['DYNAMODB_TABLE_PREFIX'] = 'test-'+str(uuid.uuid4())[0:4]
     ddbo = DDBO()
     odbmaint.drop_tables(ddbo)
     odbmaint.create_tables(ddbo)

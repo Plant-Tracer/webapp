@@ -33,13 +33,6 @@ def purge_test_data():
     c.execute( "delete from courses where course_name like 'test-test-%'")
     c.execute( "delete from engines where name like 'engine %'")
 
-def purge_all_movies():
-    """Remove all test data from the database"""
-    d = dbfile.DBMySQL(auth.get_dbwriter())
-    c = d.cursor()
-    for table in ['object_store','objects','movie_frame_trackpoints','movie_frames','movies']:
-        print("wiping",table)
-        c.execute( f"delete from {table}")
 
 
 # pylint: disable=too-many-statements

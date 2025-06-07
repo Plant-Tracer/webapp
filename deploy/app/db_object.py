@@ -91,7 +91,7 @@ def make_urn(*, object_name, scheme = None ):
     We grab this every time through so that the bucket can be changed during unit tests
     """
     scheme = C.SCHEME_S3        # the only one we currently support
-    netloc = os.getenv(C.AWS_S3_BUCKET,C.DEFAULT_S3_BUCKET)
+    netloc = os.getenv(C.PLANTTRACER_S3_BUCKET,C.DEFAULT_S3_BUCKET)
     ret = f"{scheme}://{netloc}/{object_name}"
     logging.debug("make_urn urn=%s",ret)
     return ret

@@ -79,9 +79,8 @@ lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
 app.logger.info("new Flask(__name__=%s)",__name__)
-app.logger.info("PLANTTRACER_CREDENTIALS=%s",os.environ.get(C.PLANTTRACER_CREDENTIALS,None))
-app.logger.info("db_object.S3_BUCKET=%s",db_object.S3_BUCKET)
-logging.info("regular logging works too")
+app.logger.info("make_urn('')=%s",db_object.make_urn(''))
+
 
 
 ################################################################
