@@ -14,10 +14,10 @@ from flask import Flask, request, render_template, jsonify, make_response
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-from . import auth
+#from . import auth
 from . import db_object
-from . import odbmaint
-from . import clogging
+#from . import odbmaint
+#from . import clogging
 from . import apikey
 
 from .bottle_api import api_bp
@@ -66,7 +66,7 @@ lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
 app.logger.info("new Flask(__name__=%s)",__name__)
-app.logger.info("make_urn('')=%s",db_object.make_urn(''))
+app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
 
 
 

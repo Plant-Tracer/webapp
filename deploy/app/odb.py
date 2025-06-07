@@ -5,6 +5,7 @@ Currently dependent upon DynamoDB.
 (C) 2025 Simson L. Garfinkel
 """
 
+#pylint: disable=too-many-lines
 import os
 import logging
 import json
@@ -27,6 +28,7 @@ from boto3.dynamodb.conditions import Key,Attr
 
 from . import auth
 from . import mailer
+from . import db_object
 from .paths import TEMPLATE_DIR
 from .constants import MIME,C
 
@@ -77,6 +79,9 @@ class InvalidAPI_Key(ODB_Errors):
 class InvalidCourse_Key(ODB_Errors):
     """ Course Key is invalid """
 
+class InvalidUser(ODB_Errors):
+    """User_id or User email is invalid"""
+
 class InvalidMovie_Id(ODB_Errors):
     """ MovieID is invalid """
     def __init__(self, v):
@@ -90,9 +95,6 @@ class UnauthorizedUser(ODB_Errors):
 
 class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
-
-class NotImplemented(ODB_Errors):
-    """Not implemented"""
 
 ################################################################
 ## DDBO - The Object Database Class
@@ -137,16 +139,16 @@ def dynamodb_error_debugger(func):
             # itself often contains valuable context like the operation name.
 
             logger.error("-" * 60)
-            logger.error(f"DYNAMODB OPERATION FAILED in method: '{func.__name__}'")
-            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error("DYNAMODB OPERATION FAILED in method: %s",func.__name__)
+            logger.error("  Error Type: %s",type(e).__name__)
 
             error_message = e.response.get('Error', {}).get('Message', str(e))
-            logger.error(f"  Error Message from DynamoDB: {error_message}")
+            logger.error("  Error Message from DynamoDB: %s",error_message)
 
             # The 'OperationName' is part of the error response for ClientError
             operation_name_from_error = e.operation_name
             if operation_name_from_error:
-                logger.error(f"  Failed AWS API Operation: {operation_name_from_error}")
+                logger.error("  Failed AWS API Operation: %s",operation_name_from_error)
 
             # The 'Parameters' (api_params) are not directly accessible from the
             # exception object in a generic way *outside* the original call scope.
@@ -154,15 +156,17 @@ def dynamodb_error_debugger(func):
             # boto3 call is made, or inspect 'e.response' carefully.
             # Example:
             if 'RequestParameters' in e.response.get('Error', {}):
-                 logger.error(f"  Request Parameters (if available): {e.response['Error']['RequestParameters']}")
+                logger.error("  Request Parameters (if available): %s",e.response['Error']['RequestParameters'])
 
             logger.error("-" * 60)
             raise # Re-raise the original exception so the test still fails
     return wrapper
 
 
+#pylint disable=too-many-public-methods
 @lru_cache(maxsize=None)
 class DDBO:
+    """Singleton for accessing dynamodb database"""
     def __init__(self, *, region_name=None, endpoint_url=None, table_prefix=None):
         # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
         # not at object creation time.
@@ -259,40 +263,6 @@ class DDBO:
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = {'api_key':api_key})
 
-    def make_new_api_key(self, *, email):
-        """Create a new api_key for an email that is registered
-        :param: email - the email
-        :return: api_key - the api_key
-        """
-        user = self.get_user(None, email=email)
-        if user and user['enabled'] == 1:
-            api_key = new_api_key()
-            self.put_api_key_dict({'api_key':api_key,
-                                   'enabled':1,
-                                   USER_ID :user[ USER_ID ],
-                                   'use_count':0,
-                                   'created':int(time.time()) })
-            return api_key
-        return None
-
-    def validate_api_key(self, api_key):
-        """
-        Validate API key.
-        :param: api_key - the key provided by the cookie or the HTML form.
-        :return: User dictionary if api_key and user are both enabled, otherwise return None
-        """
-        assert is_api_key(api_key)
-        api_key_dict = self.get_api_key_dict(api_key)
-        if api_key_dict['enabled']:
-            user = self.get_user(api_key_dict[ USER_ID ])
-            if user['enabled']:
-                api_key_dict['use_count']  += 1
-                api_key_dict['last_used_at']  = int(time.time())
-                api_key_dict['first_used_at'] = api_key_dict.get('first_used_at', api_key_dict['last_used_at'])
-                self.put_api_key_dict(api_key_dict)
-                return user
-        return None
-
     ### User management
 
     def get_user(self, user_id, email=None):
@@ -303,16 +273,23 @@ class DDBO:
                 KeyConditionExpression=Key( EMAIL ).eq(email)
             )
             items = response.get('Items', [])
-            return items[0] if items else None
-        return self.users.get_item(Key = { USER_ID :user_id},ConsistentRead=True).get('Item',None)
+            if items:
+                return items[0]
+            raise InvalidUser(email)
+        item = self.users.get_item(Key = { USER_ID :user_id},ConsistentRead=True).get('Item',None)
+        if item:
+            return item
+        raise InvalidUser(user_id)
 
     def get_userid_for_email(self, email):
-        return self.get_user(None, email)[ USER_ID ]
+        ret = self.get_user(None, email)[ USER_ID ]
+        if ret:
+            return ret
+        raise InvalidUser(email)
 
     def add_user(self, user):
         email = user[ EMAIL ]
         user_id = user[ USER_ID ]
-        primary_course_id = user[ PRIMARY_COURSE_ID ]
         assert is_user_id(user_id)
 
         try:
@@ -346,7 +323,7 @@ class DDBO:
         assert is_user_id(user_id)
         userdict = self.get_user(user_id)
         if not userdict:
-            raise ValueError(f"No user with user_id: {user_id}")
+            raise InvalidUser(user_id)
         if userdict[ EMAIL ] == new_email:
             return userdict
 
@@ -376,7 +353,7 @@ class DDBO:
             userdict[ EMAIL ] = new_email  # update the userd
             return userdict                # return new userdict
         except ClientError as e:
-            raise RuntimeError(f"Email update failed: {e}")
+            raise RuntimeError(f"Email update failed: {e}") from e
 
     def delete_user(self, user_id, purge_movies=False):
         """Delete a user specified by user_id.
@@ -444,59 +421,6 @@ class DDBO:
             ])
 
 
-    def register_email(self, email, name, course_key=None, course_id=None, demo_user=0):
-        """Register a new user as identified by their email address for a given course.
-        Does not make an api_key or send the links with the api_key.
-        :param: email - user email
-        :param: course_key - the key
-        :param: course_id  - the course
-        :param: demo_user  - True if this is a demo user
-        :return: dictionary of { USER_ID :user_id} for user who is registered.
-        """
-
-        if (course_key is None) and (course_id is None):
-            raise ValueError("Either the course_key or the course_id must be provided")
-        if course_id is not None:
-            assert is_course_id(course_id)
-
-        # Get the course name and (optionally) course_id
-
-        if course is not None:
-            course = self.get_course(course_id)
-        else:
-            course = self.get_course_by_course_key(course_key)
-        if course is None:
-            raise InvalidCourse_Key(course_key)
-
-        # Now we need to either be the first to create this user
-        # or else we need to get the user_id of the existing user.
-        while True:
-            user = self.get_user(None, email=email)
-            if user:
-                # The user exists! Change the primary course and add them to this course.
-                self.users.update_items( Key={ USER_ID :user[ USER_ID ]},
-                                         UpdateExpression='SET primary_course_id=:pci, primary_course_name=:pcn, demo=:demo, courses=:courses',
-                                         ExpressionAttributeValues={':pci':course[ COURSE_ID ],
-                                                                    ':pcn':course['course_name'],
-                                                                    ':demo':demo_user,
-                                                                    ':courses':list(set(user[ COURSES ] + [course_id]))})
-                return user
-            # user does not exist. Try to create a new user
-            user = {USER_ID:new_user_id(),
-                     EMAIL :email,
-                    'created':int(time.time()),
-                    'enabled':1,
-                    'demo':demo_user,
-                     ADMIN : 0,
-                     PRIMARY_COURSE_ID : course[ COURSE_ID ],
-                    'primary_course_name': course['course_name'] }
-
-            try:
-                self.add_user( user, create=True)
-            except RuntimeError as e:
-                logger.warning("Failed to insert user: %s %s: %e",user_id,email,e)
-            logger.warning("Looping on get_user or create_user")
-
     ### course management
 
     def get_course(self,course_id):
@@ -529,7 +453,7 @@ class DDBO:
                 courses = user[ COURSES ]
                 if course_id in courses:
                     courses.remove(course_id)
-                    table.update_item( Key={ USER_ID : user[ USER_ID ]},
+                    self.users.update_item( Key={ USER_ID : user[ USER_ID ]},
                                        UpdateExpression='SET courses = :c',
                                        ExpressionAttributeValues={':c': courses} )
             last_evaluated_key = response.get('LastEvaluatedKey')
@@ -549,7 +473,7 @@ class DDBO:
     def get_movie(self, movie_id):
         ret = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item',None)
         if not ret:
-            raise InvalidMovie_ID()
+            raise InvalidMovie_Id()
         return ret
 
     def put_movie(self, moviedict):
@@ -582,7 +506,6 @@ class DDBO:
 
     def get_movies_for_course_id(self, course_id):
         """Query movies.course_id_idx and return all movie_ids for the given user_id (with pagination)."""
-        assert is_course_id(course_id)
         movies = []
         last_evaluated_key = None
 
@@ -603,7 +526,7 @@ class DDBO:
     ### movie_frame management
 
     def get_movie_frame(self,movie_id, frame_number):
-        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frameId}).get('Item',None)
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frame_number}).get('Item',None)
 
     def put_movie_frame(self,framedict):
         self.movie_frames.put_item(Item=framedict)
@@ -641,7 +564,6 @@ class DDBO:
 
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
-    user_api_key = 0 # FIXME; was get_user_api_key()
     try:
         user_ipaddr  = request.remote_addr
     except RuntimeError:
@@ -656,7 +578,7 @@ def logit(*, func_name, func_args, func_return):
 
     if len(func_return) > C.MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
-    logger.debug("%s(%s) = %s ", func_name, func_args, func_return)
+    logger.debug("%s %s(%s) = %s ", user_ipaddr, func_name, func_args, func_return)
 
 def log(func):
     """Logging decorator --- log both the arguments and what was returned.
@@ -692,12 +614,12 @@ def list_users_courses(*, user_id):
     NOTE: With MySQL users could only see the course list if they were admins.
     With DynamoDB, users can see the full course list for all of their courses.
     """
-    dd = DDBO()
+    ddbo = DDBO()
 
-    user = dd.get_user(user_id)
-    ret['users'] = [user]
-    ret[ COURSES ] = [dd.get_course(course_id) for course_id in user[ COURSES ] ]
-    return ret
+    user = ddbo.get_user(user_id)
+    return {'users': [user],
+            COURSES :  [dd.get_course(course_id) for course_id in user[ COURSES ] ] }
+
 
 def list_admins():
     """Returns a list of all the admins"""
@@ -720,7 +642,7 @@ def list_admins():
 
 def list_demo_users():
     """Returns a list of all demo accounts."""
-    dd = DDBO()
+    ddbo = DDBO()
     admin_users = []
     last_evaluated_key = None
 
@@ -730,12 +652,110 @@ def list_demo_users():
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = dd.users.scan(**scan_kwargs)
+        response = ddbo.users.scan(**scan_kwargs)
         admin_users.extend(response['Items'])
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
             break
     return admin_users
+
+def register_email(email, name, course_key=None, course_id=None, demo_user=0):
+    """Register a new user as identified by their email address for a given course.
+    Does not make an api_key or send the links with the api_key.
+    :param: email - user email
+    :param: course_key - the key
+    :param: course_id  - the course
+    :param: demo_user  - True if this is a demo user
+    :return: dictionary of { USER_ID :user_id} for user who is registered.
+    """
+
+    if (course_key is None) and (course_id is None):
+        raise ValueError("Either the course_key or the course_id must be provided")
+
+    # Get the course name and (optionally) course_id
+
+    ddbo = DDBO()
+    if course is not None:
+        course = ddbo.get_course(course_id)
+    else:
+        course = ddbo.get_course_by_course_key(course_key)
+    if course is None:
+        raise InvalidCourse_Key(course_key)
+
+    # Now we need to either be the first to create this user
+    # or else we need to get the user_id of the existing user.
+    while True:
+        try:
+            user = ddbo.get_user(None, email=email)
+            # The user exists! Change the primary course and add them to this course.
+            ddbo.users.update_items( Key={ USER_ID :user[ USER_ID ]},
+                                     UpdateExpression=
+                                     'SET primary_course_id=:pci, '
+                                     'primary_course_name=:pcn, demo=:demo, courses=:courses',
+                                     ExpressionAttributeValues={':pci':course[ COURSE_ID ],
+                                                                ':pcn':course['course_name'],
+                                                                ':demo':demo_user,
+                                                                ':courses':list(set(user[ COURSES ] + [course_id]))})
+            return user
+        except InvalidUser:
+            pass
+        # user does not exist. Try to create a new user
+        user = {USER_ID : new_user_id(),
+                EMAIL  : email,
+                'full_name' : name,
+                'created' : int(time.time()),
+                'enabled' : 1,
+                'demo' : demo_user,
+                ADMIN  :  0,
+                PRIMARY_COURSE_ID : course[ COURSE_ID ],
+                'primary_course_name' : course['course_name'] }
+
+        try:
+            ddbo.add_user( user )
+        except RuntimeError as e:
+            logger.warning("Failed to insert user: %s: %e",email,e)
+        logger.warning("Looping on get_user or create_user")
+
+
+
+################################################################
+## API KEY
+################################################################
+def validate_api_key(api_key):
+    """
+    Validate API key.
+    :param: api_key - the key provided by the cookie or the HTML form.
+    :return: User dictionary if api_key and user are both enabled, otherwise return None
+    """
+    ddbo = DDBO()
+    assert is_api_key(api_key)
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict['enabled']:
+        user = ddbo.get_user(api_key_dict[ USER_ID ])
+        if user['enabled']:
+            api_key_dict['use_count']  += 1
+            api_key_dict['last_used_at']  = int(time.time())
+            api_key_dict['first_used_at'] = api_key_dict.get('first_used_at', api_key_dict['last_used_at'])
+            ddbo.put_api_key_dict(api_key_dict)
+            return user
+    raise InvalidAPI_Key()
+
+def make_new_api_key(*, email):
+    """Create a new api_key for an email that is registered
+    :param: email - the email
+    :return: api_key - the api_key
+    """
+    ddbo = DDBO()
+    user = ddbo.get_user(None, email=email)
+    if user['enabled'] == 1:
+        api_key = new_api_key()
+        ddbo.put_api_key_dict({'api_key':api_key,
+                               'enabled':1,
+                               USER_ID :user[ USER_ID ],
+                               'use_count':0,
+                               'created':int(time.time()) })
+        return api_key
+    raise InvalidUser(f"{email} is not enabled")
 
 
 #########################
@@ -779,7 +799,7 @@ def make_course_admin(*, email, course_id=None):
     user_id = user[ USER_ID ]
     new_courses = list(set(user[ COURSES ] + [course_id]))
     course = ddbo.get_course(course_id)
-    course_id = couse[ COURSE_ID ]
+    course_id = course[ COURSE_ID ]
     new_course_admins = list(set(course['course_admins'] + [user_id]))
 
     ddbo.users.update_item( Key={ USER_ID : user_id},
@@ -804,7 +824,7 @@ def remove_course_admin(*, email, course_id=None):
     new_courses = user[ COURSES ]
 
     course = ddbo.get_course(course_id)
-    course_id = couse[ COURSE_ID ]
+    course_id = course[ COURSE_ID ]
     new_course_admins = course['course_admins']
 
     try:
@@ -816,8 +836,7 @@ def remove_course_admin(*, email, course_id=None):
                                                               ':pcid': None,
                                                               ':pcn' : None} )
     except KeyError:
-        logger.warning("course not remove course %s from user %s %s",course_id,user_id,email)
-        pass
+        logger.warning("course remove fail: %s from user %s %s",course_id,user_id,email)
 
     try:
         new_course_admins.remove(user_id)
@@ -825,8 +844,8 @@ def remove_course_admin(*, email, course_id=None):
                                   UpdateExpression = 'SET course_admins=:nca',
                                   ExpressionAttributeValues = { ':nca':new_course_admins })
     except KeyError:
-        logger.warning("course not remove admin %s %s from course %s",user_id,email,course_id)
-        pass
+        logger.warning("course admin remove fail: admin %s %s from course %s",user_id,email,course_id)
+
 
 @log
 def check_course_admin(*, user_id, course_id):
@@ -880,7 +899,7 @@ def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
     If urn==True, just return the urn
     """
     what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
-    movie = DDBO().movie.get_item(Key={MOVIE_ID:movie_id})
+    movie = DDBO().movies.get_item(Key={MOVIE_ID:movie_id})
     try:
         urn   = movie[what]
     except TypeError as e:
@@ -891,7 +910,7 @@ def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
 
     if urn:
         return db_object.read_object(urn)
-    raise InvalidMovie_ID()
+    raise InvalidMovie_Id()
 
 
 @log
@@ -930,7 +949,7 @@ def can_access_movie(*, user_id, movie_id):
 ## Movie frames
 
 @log
-def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
+def create_new_movie(*, user_id, course_id, title=None, description=None, orig_movie=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -944,6 +963,8 @@ def create_new_movie(*, user_id, title=None, description=None, orig_movie=None):
     ddbo = DDBO()
     movie_id = new_movie_id()
     ddbo.put_movie({MOVIE_ID:movie_id,
+                    COURSE_ID: course_id,
+                    USER_ID: user_id,
                     'title':title,
                     'description':description,
                     'orig_movie':orig_movie,
@@ -973,6 +994,7 @@ def set_movie_metadata(*, movie_id, movie_metadata):
 def set_movie_data(*,movie_id, movie_data):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
     assert is_movie_id(movie_id)
+    ddbo = DDBO()
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
@@ -981,6 +1003,12 @@ def set_movie_data(*,movie_id, movie_data):
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
     db_object.write_object(movie_data_urn, movie_data)
+    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
+
+def set_movie_data_urn(*,movie_id, movie_data_urn):
+    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
 
 

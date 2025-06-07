@@ -25,11 +25,8 @@ ROOT_DIR        = dirname(DEPLOY_DIR)
 ETC_DIR         = join(DEPLOY_DIR, 'etc')
 STATIC_DIR      = join(APP_DIR, 'static')
 TEMPLATE_DIR    = join(APP_DIR, 'templates')
-SCHEMA_FILE     = join(ETC_DIR, 'schema.sql')
-SCHEMA_TEMPLATE = join(ETC_DIR, 'schema_{schema}.sql')
+SMTP_CONFIG_FILE= join(ETC_DIR, 'smtp_config.ini')
 
-SCHEMA0_FILE     = SCHEMA_TEMPLATE.format(schema=0)
-SCHEMA1_FILE     = SCHEMA_TEMPLATE.format(schema=1)
 
 TEST_DIR        = join(ROOT_DIR, 'tests')
 TEST_DATA_DIR   = join(ROOT_DIR, 'tests', 'data')

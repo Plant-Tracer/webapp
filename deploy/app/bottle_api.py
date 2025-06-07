@@ -27,7 +27,8 @@ from . import mailer
 from . import tracker
 from .apikey import get_user_api_key,get_user_dict,fix_types
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C,E,GET,POST,GET_POST,__version__
+from .constants import C,E,POST,GET_POST,__version__
+from .odb import InvalidAPI_Key
 
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -87,10 +88,10 @@ def get_user_id(allow_demo=True):
 def api_check_api_key():
     """API to check the user key and, if valid, return usedict or returns an error."""
 
-    userdict = odb.validate_api_key(get_user_api_key())
-    if userdict:
-        return {'error': False, 'userinfo': fix_types(userdict)}
-    return E.INVALID_API_KEY
+    try:
+        return {'error': False, 'userinfo' : fix_types(odb.validate_api_key(get_user_api_key())) }
+    except InvalidAPI_Key:
+        return E.INVALID_API_KEY
 
 
 @api_bp.route('/get-logs', methods=POST)
@@ -169,6 +170,7 @@ def api_send_link():
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
+#pylint: disable=too-many-return-statements
 @api_bp.route('/bulk-register', methods=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
@@ -214,16 +216,6 @@ MIME_MAP = {'.jpg':'image/jpeg',
             }
 
 
-@api_bp.route('/get-object', methods=GET)
-def api_get_object():
-    """Implement signed URLs. Doesn't need APIkey!"""
-    # my object store doesn't implement mime types, so fake them.
-    urn = get('urn')
-    ext = os.path.splitext( urn )[1]
-    response = make_response( db_object.read_signed_url(urn=get('urn'), sig=get('sig')) )
-    response.headers['Content-Type'] = MIME_MAP[ext]
-    return response
-
 
 ################################################################
 ##
@@ -247,6 +239,7 @@ def api_new_movie():
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
+    user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
 
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
@@ -256,8 +249,9 @@ def api_new_movie():
 
     # This is where the movie_id is assigned
     ret['movie_id'] = odb.create_new_movie(user_id=user_id,
-                                          title=request.values.get('title'),
-                                          description=request.values.get('description') )
+                                           course=user['primary_course_id'],
+                                           title=request.values.get('title'),
+                                           description=request.values.get('description') )
 
     # Get the object name and create the upload URL
     object_name= db_object.object_name( course_id = odb.course_id_for_movie_id( ret['movie_id']),
@@ -370,9 +364,9 @@ def api_get_frame_urn(*,frame_number,movie_id):
         return urn
     # Get the frame data so we can get it a URN
     frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id)
-    frame_urn = odb.create_new_frame(movie_id=movie_id,
-                                    frame_number=frame_number,
-                                    frame_data=frame_data)
+    frame_urn = odb.create_new_movie_frame(movie_id=movie_id,
+                                           frame_number=frame_number,
+                                           frame_data=frame_data)
     assert frame_urn is not None
     return frame_urn
 
@@ -415,7 +409,7 @@ def api_get_frame():
         # the frame is not in the database, so we need to make it.
         logging.debug('getframe 5')
         frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
-        urn = odb.create_new_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
+        urn = odb.create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
     logging.debug('getframe 4')
     logging.debug("api_get_frame urn=%s",urn)
@@ -448,7 +442,8 @@ def api_edit_movie():
                 movie_input.write( odb.get_movie_data( movie_id = movie_id))
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
                 movie_output.seek(0)
-                odb.set_movie_data(movie_id=movie_id, movie_data=movie_output.read())
+                movie_data = movie_output.read()
+                odb.set_movie_data(movie_id=movie_id, movie_data=movie_data)
                 movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
                 movie_metadata['version'] = movie_metadata.get('version',0)
                 odb.set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
@@ -477,7 +472,7 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
-    return {'error': False, 'movies': fix_types(db.list_movies(user_id=get_user_id()))}
+    return {'error': False, 'movies': fix_types(odb.list_movies(user_id=get_user_id()))}
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
@@ -600,8 +595,8 @@ def api_list_users():
     return {**{'error': False}, **odb.list_users_courses(user_id=get_user_id())}
 
 @api_bp.route('/list-users-courses', methods=POST)
-def api_list_users():
-    return {**{'error': False}, **db.list_users_courses(user_id=get_user_id())}
+def api_list_users_courses():
+    return {**{'error': False}, **odb.list_users_courses(user_id=get_user_id())}
 
 
 @api_bp.route('/ver', methods=GET_POST)
@@ -723,7 +718,7 @@ def api_track_movie(*,user_id, movie_id, frame_start):
                             callback = mtc.notify)
     mtc.close() # close the zipfile
     # Note: this puts the entire object in memory. That may be an issue at some point
-    object_name = db_object.object_name(course_id=db.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
+    object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
     urn = db_object.make_urn(object_name=object_name)
     db_object.write_object(urn=urn, object_data=mtc.zipfile_data)
     odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)
@@ -782,9 +777,9 @@ def api_new_frame():
         frame_data = base64.b64decode( request.values.get('frame_base64_data'))
     except TypeError:
         frame_data = None
-    frame_urn = odb.create_new_frame( movie_id = get_int('movie_id'),
-                               frame_number = get_int('frame_number'),
-                               frame_data = frame_data)
+    frame_urn = odb.create_new_movie_frame( movie_id = get_int('movie_id'),
+                                            frame_number = get_int('frame_number'),
+                                            frame_data = frame_data)
     return {'error': False, 'frame_urn': frame_urn}
 
 

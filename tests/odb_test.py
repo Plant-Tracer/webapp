@@ -126,11 +126,11 @@ def test_odb(local_ddb):
 
 
     # Make an API key
-    api_key = ddbo.make_new_api_key( email = TEST_USER_EMAIL)
+    api_key = odb.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
-    user = ddbo.validate_api_key(api_key)
+    user = odb.validate_api_key(api_key)
     assert user == TEST_USER_DATA
-    a2   = ddbo.get_api_key_dict(api_key)
+    a2   = odb.get_api_key_dict(api_key)
     assert a2['enabled'] == 1
     assert a2['use_count'] == 1
     assert a2['created'] >= start_time

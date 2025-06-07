@@ -9,7 +9,10 @@ import os
 import os.path
 import configparser
 import logging
-import functools
+import json
+
+import boto3
+from botocore.exceptions import ClientError
 
 from .constants import C
 
@@ -55,7 +58,7 @@ class SecretsManagerError(Exception):
 def get_aws_secret_for_arn(secret_name):
     region_name = secret_name.split(':')[3]
     logging.debug("secret_name=%s region_name=%s",secret_name, region_name)
-    session = boto3.session.Session()
+    session = boto3.Session()
     client = session.client( service_name=SECRETSMANAGER,
                              region_name=region_name)
     try:
@@ -78,11 +81,6 @@ def get_aws_secret_for_section(section):
 ##
 
 
-def config():
-    cp = configparser.ConfigParser()
-    cp.read( credentials_file() )
-    return cp
-
 def smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.
     If the file specifies a AWS secret, get that.
@@ -90,7 +88,9 @@ def smtp_config():
     if C.SMTPCONFIG_ARN in os.environ:
         return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
 
-    cp = config()
+    cp = configparser.ConfigParser()
+    with open(SMTP_CONFIG_FILE,"r") as f:
+        cp.read(f)
     ret = cp['smtp']
     for key in SMTP_ATTRIBS:
         assert key in ret
