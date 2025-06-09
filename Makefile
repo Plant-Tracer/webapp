@@ -63,8 +63,8 @@ check:
 
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy
-	$(PYTHON) -m pylint $(PYLINT_OPTS) *.py
+	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy tests *.py
+
 
 pylint-tests: $(REQ)
 	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests

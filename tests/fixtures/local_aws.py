@@ -13,7 +13,7 @@ from os.path import join,dirname,abspath
 import boto3
 
 from app.constants import C
-from app.paths import ROOT_DIR
+from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app import odb
 from app.odb import DDBO
 from app import odbmaint

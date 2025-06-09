@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError,ParamValidationError
 import pytest
 
 from app import odb
-from app.odb import DDBO,UserExists,InvalidUser
+from app.odb import DDBO,UserExists,InvalidUser_Id
 from app.constants import MIME,C
 
 from fixtures.local_aws import local_ddb
@@ -145,7 +145,7 @@ def test_odb(local_ddb):
     new_email = TEST_USER_EMAIL+"-new"
     ddbo.rename_user(user_id=TEST_USER_ID, new_email=new_email)
     u1 = ddbo.get_user(TEST_USER_ID)
-    u2 = ddbo.get_use_emailr(new_email)
+    u2 = ddbo.get_user_email(new_email)
     print("u1=",json.dumps(u1,indent=4,default=str))
     print("u2=",json.dumps(u2,indent=4,default=str))
     assert u1==u2
@@ -157,7 +157,7 @@ def test_odb(local_ddb):
 
     # Now delete the user and their movies
     ddbo.delete_user(TEST_USER_ID, purge_movies=True)
-    with pytest.raises(InvalidUser):
+    with pytest.raises(InvalidUser_Id):
         ddbo.get_user(TEST_USER_ID)
 
     # Delete the user's course

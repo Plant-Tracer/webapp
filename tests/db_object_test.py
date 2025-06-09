@@ -1,7 +1,6 @@
 """
 Tests the DB object storage layer
 """
-import pytest
 import sys
 import os
 import logging
@@ -11,13 +10,14 @@ import uuid
 import xml.etree.ElementTree
 import hashlib
 
-import boto3
+import pytest
+#import boto3
 
-from app.paths import STATIC_DIR,TEST_DATA_DIR
-from app.constants import C
-import app.db_object as db_object
+#from app.paths import STATIC_DIR,TEST_DATA_DIR
+#from app.constants import C
+#import app.db_object as db_object
 
-from fixtures.local_aws import local_s3
+#from fixtures.local_aws import local_s3
 
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
@@ -28,11 +28,12 @@ def test_make_urn(local_s3):
     a = db_object.make_urn(object_name=name, scheme=None)
     assert a.endswith(".txt")
 
+# pylint: disable=unused-argument
 def test_write_read_delete_object(local_s3):
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()
     hasher.update(DATA)
-    DATA_SHA256 = hasher.hexdigest()
+    # DATA_SHA256 = hasher.hexdigest()
 
     name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
     urn  = db_object.make_urn(object_name=name, scheme=None)
