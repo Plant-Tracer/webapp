@@ -20,10 +20,14 @@ from flask import request
 from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
+from .odb import DDBO
+from .auth import AuthError
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
+def is_demo_mode():
+    return os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
@@ -93,7 +97,7 @@ def get_user_api_key():
        None if user is not logged in and no demo mode
     """
     # check the query string.
-    if DEMO_MODE:
+    if is_demo_mode():
         return C.DEMO_MODE_API_KEY
 
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
@@ -116,7 +120,7 @@ def get_user_dict():
             raise AuthError('invalid API key')
 
     # We have a key. Now validate it
-    userdict = ddbo.validate_api_key(api_key)
+    userdict = odb.validate_api_key(api_key)
     if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
@@ -156,7 +160,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         user_primary_course_id = user_dict['primary_course_id']
         primary_course_name    = user_dict['primary_course_name']
         logged_in = 1
-        admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
+        admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
         # If this is a demo account, the user cannot be an admin (security)
         if user_demo:
             assert not admin

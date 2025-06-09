@@ -3,7 +3,6 @@ Maintain the DynamoDB Database.
 """
 
 import logging
-import argparse
 import copy
 import os
 import os.path
@@ -17,7 +16,8 @@ from boto3.dynamodb.conditions import Attr
 
 
 from . import odb
-from .odb import DDBO
+from .db_object import s3_client
+from .odb import USER_ID
 from .constants import C
 from .paths import TEST_DATA_DIR
 
@@ -303,8 +303,10 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                       max_enrollment = max_enrollment)
 
     # set up the admin
-    admin = odb.register_email(email=admin_email, course_key=course_key, name=admin_name)
-    odb.make_course_admin(email=admin_email, course_key=course_key)
+    odb.register_email(email=admin_email, course_key=course_key, full_name=admin_name)
+    admin = odb.get_user_email(admin_email)
+    admin_id = admin[USER_ID]
+    odb.add_course_admin(admin_id=admin_id, course_id=course_id)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
     # see if we should populate with demo
@@ -312,8 +314,9 @@ def create_course(*, course_id, course_key, course_name, admin_email,
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
     if demo_email:
-        demo = odb.register_email(email=demo_email, course_key = course_key, name=course_name, demo_user=1)
+        odb.register_email(email=demo_email, full_name='Demo User', course_key = course_key, demo_user=1)
         odb.make_new_api_key(email=demo_email)
+        demo = odb.get_user_email(demo_email)
 
         for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie(fn)],1):
             with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
@@ -322,13 +325,7 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                                                 title=DEMO_MOVIE_TITLE.format(ct=ct),
                                                 description=DEMO_MOVIE_DESCRIPTION)
                 odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
-    return admin_id
 
-def add_course_admin(*, admin_id, course_id):
-    odb.add_course_admin(admin_id=adminid, course_id=course_id)
-
-def remove_course_admin(*, admin_kd, course_id):
-    odb.remove_course_admin( admin_id=admin_id, course_id=course_id )
 
 def count_table_items(table, **kwargs):
     logger.warning("scan table %s",table)
@@ -356,6 +353,7 @@ def _flush_delete_batch(bucket: str, objects: list) -> None:
     """
     Helper to delete up to 1000 objects at once.
     """
+    s3 = s3_client()
     try:
         resp = s3.delete_objects(Bucket=bucket, Delete={'Objects': objects})
         deleted = resp.get('Deleted', [])
@@ -374,6 +372,7 @@ def purge_test_obects(bucket: str):
     prefix = "test-"
     logger.info("deleting objects in bucket %s with prefix %s", bucket, prefix)
 
+    s3 = s3_client()
     paginator = s3.get_paginator('list_objects_v2')
     to_delete = []
 

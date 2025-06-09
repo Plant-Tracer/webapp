@@ -12,7 +12,6 @@ import argparse
 import logging
 
 from deploy.app import clogging
-from deploy.app.constants import C
 from deploy.app import db_object
 
 if __name__ == "__main__":

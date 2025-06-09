@@ -15,6 +15,7 @@ import hashlib
 from os.path import abspath, dirname
 
 from fixtures.app_client import client
+from fixtures.local_aws import local_s3, new_course
 
 import app.db as db
 import app.odbmaint as odbmaint
@@ -23,118 +24,15 @@ import app.bottle_app as bottle_app
 import app.dbfile as dbfile
 from app.paths import TEST_DIR, TEST_DATA_DIR
 
-
-
-TEST_USER_EMAIL = 'simsong@gmail.com'           # from configure
-TEST_USER_NAME = 'Test User Name'
-TEST_DEMO_EMAIL  = 'demo+admin@gmail.com'        # completely bogus
-TEST_ADMIN_NAME = 'Test User Name'
-TEST_ADMIN_EMAIL = 'simsong+admin@gmail.com'     # configuration
-
-# keys for scaffolding dictionary
-ADMIN_EMAIL = 'admin_email'
-DEMO_EMAIL = 'demo_mail'
-ADMIN_ID = 'admin_id'
-API_KEY  = 'api_key'
-COURSE_KEY = 'course_key'
-COURSE_NAME = 'course_name'
-COURSE_ID = 'course_id'
-USER_EMAIL = 'user_email'
-USER_ID    = 'user_id'
-MOVIE_ID = 'movie_id'
-MOVIE_TITLE = 'movie_title'
-TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
-TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
-TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
-
-################################################################
-
-@pytest.fixture
-def new_course():
-    """Fixture to create a new course and then delete it.
-    New course creates a new course admin and a new user for it"""
-
-    course_key = 'test-'+str(uuid.uuid4())[0:32]
-    admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
-    demo_email  = TEST_DEMO_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
-    course_name = f"test-{course_key} course name"
-
-    # Use dbmaint's create_course so that the demo movies will be created
-    admin_id = odbmaint.new_userid()
-    user_id = odbmaint.new_userid() # demo user id
-    odbmaint.create_course(course_key = course_key,
-                                     admin_id = admin_id,
-                                     admin_email = admin_email,
-                                     admin_name = 'Dr. Admin',
-                                     course_name = course_name,
-                                     demo_id = user_id,
-                                     demo_email = demo_email)
-    course_id = db.lookup_course_by_key(course_key=course_key)['id']
-    yield {COURSE_KEY:course_key,
-           COURSE_NAME:course_name,
-           COURSE_ID:course_id,
-           ADMIN_EMAIL:admin_email,
-           ADMIN_ID:admin_id,
-           DEMO_EMAIL:demo_email }
-
-    db.remove_course_admin(email=admin_email, course_key=course_key)
-    db.delete_user(user_id=user_id, purge_movies=True)
-    db.delete_user(user_id=admin_id, purge_movies=True)
-    ct = db.delete_course(course_key=course_key)
-    assert ct == 1                # returns number of courses deleted
-
-@pytest.fixture
-def new_user(new_course):
-    """Creates a new course and a new user and yields (USER_EMAIL, api_key)
-    Then deletes them. The course gets deleted by the new_course fixture.
-    """
-    cfg = copy.copy(new_course)
-
-    user_email = TEST_USER_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:6]+'@')
-    user_id = db.register_email(email=user_email,
-                                course_key=cfg[COURSE_KEY],
-                                name=TEST_USER_NAME)['user_id']
-    logging.info("generated user_email=%s user_id=%s",user_email, user_id)
-
-    api_key = db.make_new_api_key(email=user_email)
-    assert len(api_key) > 8
-
-    cfg[API_KEY] = api_key
-    cfg[USER_EMAIL] = user_email
-    cfg[USER_ID] = user_id
-
-    yield cfg
-    ct = db.delete_api_key(api_key)
-    assert ct == 1
-    db.delete_user(user_id=cfg[USER_ID])
-
-@pytest.fixture
-def api_key(new_user):
-    """Simple fixture that just returns a valid api_key"""
-    yield new_user[API_KEY]
-
-
 ################################################################
 ## fixture tests
 ################################################################
 
-def test_new_course(new_course):
+def test_new_course(new_course_user):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
-    demo_email  = cfg[DEMO_EMAIL]
     logging.info("Created course %s", course_key)
-
-    # Check the demo user got created
-    res = db.list_demo_users()
-    logging.debug("len(res)=%s",len(res))
-    for (ct,r) in enumerate(res):
-        logging.debug("%s: %s",ct,r)
-    assert len(res)>=1
-    assert len([r for r in res if r['email']==demo_email])>0
-
-    # Check to make sure that the correct number of course enrollment remains
-    assert db.remaining_course_registrations(course_key=course_key) == C.DEFAULT_MAX_ENROLLMENT - 2
 
     # Check course lookup functions
     c1 = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])
@@ -142,37 +40,43 @@ def test_new_course(new_course):
     assert c1 == c2
     assert c1['course_key'] == cfg[COURSE_KEY]
 
-def test_add_remove_admin(new_course):
+def test_demo_user(new_course):
+    cfg = copy.copy(new_course)
+    demo_email  = cfg[USER_EMAIL].replace("@","+demo@")
+
+    odb.register_email(demo_email, "Demo User", course_id=cfg[COURSE_ID], demo_user=1, admin=0)
+    res = odb.list_demo_users()
+    assert len(res)==1
+    assert res['email']==demo_email
+    assert odb.remaining_course_registrations(course_key=cfg[COURSE_KEY]) == C.DEFAULT_MAX_ENROLLMENT - 2
+
+
+def test_add_remove_user_and_admin(new_course):
+    """Tests creating a new user and adding them to the course as an admin"""
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
-    logging.info("Created course %s", course_key)
-    admin_email = TEST_ADMIN_EMAIL.replace('@', '+test-'+str(uuid.uuid4())[0:4]+'@')
-    user_id = db.register_email(email=admin_email,
-                                course_key=cfg[COURSE_KEY],
-                                name='Dr. Admin')['user_id']
-    logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
-    course_id = db.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
-    odb.make_course_admin(email = admin_email, course_id = course_id)
-    assert db.check_course_admin(user_id=user_id, course_id=course_id)
-    odb.remove_course_admin(email = admin_email, course_id = course_id)
-    assert not db.check_course_admin(user_id=user_id, course_id=course_id)
-    odb.delete_user(user_id=user_id)
 
-def test_new_user(new_user,ddbo):
-    cfg = copy.copy(new_user)
-    user_email = cfg[USER_EMAIL]
-    api_key = cfg[API_KEY]
-    logging.info("user_email=%s api_key=%s", user_email, api_key)
+    for admin in range(0,2):
+        new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com")
+        user = odb.register_email(email=admin_email,
+                                  course_key=cfg[COURSE_KEY],
+                                  name='User Name',
+                                  admin = admin)
+        user_id = user['user_id']
 
-    # Try looking up the user
-    ret = ddbo.get_user(email=user_email)
+        logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
+        course_id = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
 
-    assert ret['courses'][0]['course_key'] == cfg[COURSE_KEY]
+        if admin:
+            odb.make_course_admin(email = admin_email, course_id = course_id)
+            assert odb.check_course_admin(user_id=user_id, course_id=course_id)
+            odb.remove_course_admin(email = admin_email, course_id = course_id)
+            assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
+        odb.delete_user(user_id=user_id)
 
 
-
-def test_get_logs(client, new_user):
-    """Incrementally test each part of the get_logs functions. We don't really care what the returns are"""
+def test_get_logs(new_course):
+    """Incrementally test each part of the get_logs functions. Pretend we are root. We don't really care what the returns are"""
     for security in [False,True]:
         logging.info("security=%s",security)
         db.get_logs( user_id=0 , security=security)
@@ -183,31 +87,31 @@ def test_get_logs(client, new_user):
         db.get_logs( user_id=0, log_user_id = 0, security=security)
         db.get_logs( user_id=0, ipaddr = "", security=security)
 
-    api_key = new_user[API_KEY]
-    user_id   = new_user['user_id']
+    api_key  = new_course[API_KEY]
+    user_id  = new_course['user_id']
     response = client.post('/api/get-logs',
                            data = {'api_key': api_key, 'user_id':user_id})
 
     # Turns out that there are no logs with this user, since the scaffolding calls register_email
     # for the new_user with a NULL user_id....
 
-def test_course_list(client, new_user):
-    cfg        = copy.copy(new_user)
+def test_course_list(client, new_course):
+    cfg        = copy.copy(new_course)
     user_email = cfg[USER_EMAIL]
     api_key    = cfg[API_KEY]
 
-    user_dict = db.validate_api_key(api_key)
+    user_dict = odb.validate_api_key(api_key)
     user_id   = user_dict['user_id']
     primary_course_id = user_dict['primary_course_id']
 
-    recs1 = db.list_users(user_id=user_id)
+    recs1 = odb.list_users(user_id=user_id)
     users1 = recs1['users']
 
     matches = [user for user in users1 if user['user_id']==user_id]
     assert(len(matches)>0)
 
     # Make sure that there is an admin in the course who is not the user
-    recs2 = db.list_admins()
+    recs2 = odb.list_admins()
     matches = [rec for rec in recs2 if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
     assert len(matches)==1
 

@@ -3,17 +3,16 @@ dbutil.py - CLI for dbmaint module.
 """
 
 import sys
-import os
 import configparser
 import uuid
 
 from deploy.app import clogging
+from deploy.app import odb
 from deploy.app import odbmaint
-from deploy.app import db
 from deploy.app import mailer
 from deploy.app import paths
-from deploy.app.constants import C
-from deploy.app.odb import DDBO
+#from deploy.app.constants import C
+from deploy.app.odb import DDBO,InvalidCourse_Id
 
 
 DESCRIPTION="""
@@ -43,7 +42,6 @@ if __name__ == "__main__":
     parser.add_argument("--report",help="Print a report of the database",action='store_true')
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
-    parser.add_argument("--schema", help="Specify schema file to use", default=paths.SCHEMA_FILE)
     parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id", action='store_true')
     parser.add_argument("--course_id", help="course id")
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     if args.sendlink:
         if not args.planttracer_endpoint:
             raise RuntimeError("Please specify --planttracer_endpoint")
-        new_api_key = db.make_new_api_key(email=args.sendlink)
+        new_api_key = odb.make_new_api_key(email=args.sendlink)
         mailer.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
                       new_api_key=new_api_key, debug=args.debug)
         sys.exit(0)
@@ -70,7 +68,7 @@ if __name__ == "__main__":
     ## Startup stuff
 
     if args.createdb:
-        odbmaint.create_schema(ddbo)
+        odbmaint.create_tables(ddbo)
 
     if args.dropdb:
         odbmaint.drop_tables(ddbo)
@@ -84,7 +82,8 @@ if __name__ == "__main__":
         if not args.admin_email or not args.admin_name:
             sys.exit(1)
         course_key = str(uuid.uuid4())[9:18]
-        odbmaint.create_course(course_key = course_key,
+        odbmaint.create_course(course_id = args.course_id,
+                               course_key = course_key,
                                course_name = args.create_course,
                                admin_email = args.admin_email,
                                admin_name = args.admin_name,
@@ -98,7 +97,7 @@ if __name__ == "__main__":
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
             sys.exit(1)
-        user = ddbo.get_user(email=args.admin_email)
+        user = ddbo.get_user_email(args.admin_email)
         if not user.get('user_id'):
             print(f"User {args.admin_email} does not exist")
             sys.exit(1)
@@ -108,7 +107,7 @@ if __name__ == "__main__":
         if args.course_id:
             try:
                 course = odb.lookup_course_by_id(course_id=args.course_id)
-                dbmaint.add_course_admin(admin_email = args.admin_email, course_id = args.course_id)
+                odb.add_course_admin(admin_email = args.admin_email, course_id = args.course_id)
                 sys.exit(0)
             except InvalidCourse_Id:
                 print(f"Course with id {args.course_id} does not exist.",file=sys.stderr)
@@ -123,20 +122,20 @@ if __name__ == "__main__":
             print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
         admin_id = odb.lookup_user(args.admin_email)['user_id']
-        odbmaint.remove_admin_from_course( admin_id = adin_id, course_id = args.course_id)
+        odb.remove_admin_from_course( admin_id = adin_id, course_id = args.course_id)
         sys.exit(0)
 
     ################################################################
     ## Cleanup
 
-    if args.purge_test_data:
-        odbmaint.purge_test_data()
+    #if args.purge_test_data:
+    #    odbmaint.purge_test_data()
 
-    if args.purge_all_movies:
-        odbmaint.purge_all_movies()
+    #if args.purge_all_movies:
+    #    odbmaint.purge_all_movies()
 
-    if args.purge_movie:
-        odb.purge_movie(movie_id=args.purge_movie)
+    #if args.purge_movie:
+    #    odb.purge_movie(movie_id=args.purge_movie)
 
     ################################################################
     ## Maintenance
@@ -145,13 +144,13 @@ if __name__ == "__main__":
         odbmaint.report(ddbo)
         sys.exit(0)
 
-    if args.freshen:
-        odbmaint.freshen(False)
-        sys.exit(0)
+    #if args.freshen:
+    #    odbmaint.freshen(False)
+    #    sys.exit(0)
 
-    if args.clean:
-        odbmaint.freshen(True)
-        sys.exit(0)
+    #if args.clean:
+    #    odbmaint.freshen(True)
+    #    sys.exit(0)
 
     if args.dump:
         odbmaint.dump(config,args.dump)

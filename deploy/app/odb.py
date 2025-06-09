@@ -40,10 +40,14 @@ LOGS = 'logs'
 # attributes
 ADMIN = 'admin'
 
+COURSE_ADMINS = 'course_admins'
 COURSE_ID = 'course_id'
 COURSE_NAME = 'course_name'
 
 EMAIL = 'email'
+FULL_NAME = 'full_name'
+
+DEMO = 'demo'
 
 MOVIE_ID = 'movie_id'
 MOVIE_DATA_URN = 'movie_data_urn'
@@ -56,6 +60,7 @@ NAME = 'name'
 USER_ID = 'user_id'
 
 PRIMARY_COURSE_ID = 'primary_course_id'
+PRIMARY_COURSE_NAME = 'primary_course_name'
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1  # this is the super course. People who are admins in this course see everything.
@@ -267,20 +272,22 @@ class DDBO:
 
     ### User management
 
-    def get_user(self, user_id, email=None):
-        """gets the user dictionary. If email is provided, look up user by email."""
-        if email:
-            assert user_id is None
-            response = self.users.query( IndexName='email_idx',
-                                         KeyConditionExpression=Key( EMAIL ).eq(email) )
-            items = response.get('Items', [])
-            if items:
-                return items[0]
-            raise InvalidUser(email)
+    def get_user(self, user_id):
+        """gets the user dictionary given the user_id. Raise InvalidUser_id if it does not exist """
         item = self.users.get_item(Key = { USER_ID :user_id}).get('Item',None)
         if item:
             return item
-        raise InvalidUser(user_id)
+        raise InvalidUser_id(user_id)
+
+    def get_user_email(self, email):
+        """gets the user dictionary given an email address. If email is provided, look up user by email."""
+        assert user_id is None
+        response = self.users.query( IndexName='email_idx',
+                                     KeyConditionExpression=Key( EMAIL ).eq(email) )
+        items = response.get('Items', [])
+        if items:
+            return items[0]
+        raise InvalidUser(email)
 
     def put_user(self, user):
         """Creates the user from the user dict.
@@ -321,7 +328,7 @@ class DDBO:
         assert is_user_id(user_id)
         userdict = self.get_user(user_id)
         if userdict[ EMAIL ] == new_email:
-            return userdict     # no change?
+            return
 
         try:
             client = self.dynamodb.meta.client
@@ -432,7 +439,7 @@ class DDBO:
         try:
             self.courses.put_item(Item=coursedict,
                                   ConditionExpression= 'attribute_not_exists(course_id)')
-        except ClientError:
+        except ClientError as e:
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 raise InvalidCourse_Id("Course already exists") from e
             raise
@@ -665,7 +672,8 @@ def list_demo_users():
             break
     return admin_users
 
-def register_email(email, full_name, course_key=None, course_id=None, demo_user=0, admin=0):
+# pylint: disable=too-many-arguments
+def register_email(email, full_name, *, course_key=None, course_id=None, demo_user=0, admin=0):
     """Register a user as identified by their email address for a given course.
     If the user exists, just change their primary course Id and add them to the course.
     If the user does not exist, create them.
@@ -695,7 +703,7 @@ def register_email(email, full_name, course_key=None, course_id=None, demo_user=
 
     # Be sure that the user exists.
     try:
-        user = ddbo.create_user({USER_ID:new_user_id(),
+        ddbo.put_user({USER_ID:new_user_id(),
                                  EMAIL:email,
                                  FULL_NAME:full_name,
                                  'created' : int(time.time()),
@@ -707,6 +715,7 @@ def register_email(email, full_name, course_key=None, course_id=None, demo_user=
                                  })
     except UserExists:
         # The user exists! Change the primary course and add them to this course.
+        user = ddbo.get_user_email(email)
         ddbo.users.update_items( Key={ USER_ID :user[ USER_ID ]},
                                  UpdateExpression=
                                  'SET primary_course_id=:pci, '
@@ -715,8 +724,11 @@ def register_email(email, full_name, course_key=None, course_id=None, demo_user=
                                                             ':pcn':course['course_name'],
                                                             ':demo':demo_user,
                                                             ':courses':list(set(user[ COURSES ] + [course_id]))})
-        return user
 
+
+@log
+def delete_user(*, user_id, purge_movies=False):
+    DDBO().delete_user(user_id=user_id, purge_movies=purge_movies)
 
 
 ################################################################
@@ -749,7 +761,7 @@ def make_new_api_key(*, email):
     :return: api_key - the api_key
     """
     ddbo = DDBO()
-    user = ddbo.get_user(None, email=email)
+    user = ddbo.get_user_email(email)
     if user['enabled'] == 1:
         api_key = new_api_key()
         ddbo.put_api_key_dict({'api_key':api_key,
@@ -762,8 +774,11 @@ def make_new_api_key(*, email):
 
 
 @log
-def get_user(*, user_id):
+def get_user(user_id):
     return DDBO().get_user(user_id)
+
+def get_user_email(email):
+    return DDBO().get_user_email(email)
 
 #########################
 ### Course Management ###
@@ -780,20 +795,18 @@ def lookup_course_by_key(*, course_key):
 @log
 def create_course(*, course_id, course_name, course_key, max_enrollment):
     """Create a new course
-    :return: course_id of the new course
     """
-    return DDBO().put_course({ COURSE_ID :course_id,
-                              'course_name':course_name,
-                              'course_key':course_key,
-                              'course_admins':[],
-                              'max_enrollment':max_enrollment})
+    DDBO().put_course({ COURSE_ID :course_id,
+                        'course_name':course_name,
+                        'course_key':course_key,
+                        'course_admins':[],
+                        'max_enrollment':max_enrollment})
 
 @log
 def delete_course(*,course_id):
     """Delete a course.
-    :return: number of courses deleted.
     """
-    return DDBO().del_course(course_id)
+    DDBO().del_course(course_id)
 
 @log
 def add_course_admin(*, admin_id, course_id):
@@ -803,50 +816,48 @@ def add_course_admin(*, admin_id, course_id):
     :returns {'user_id':admin_id, 'admin_id':admin_id, 'course_id':course_id }
     """
     ddbo = DDBO()
-    new_courses = list(set(user[ COURSES ] + [course_id]))
+    admin = ddbo.get_user(admin_id)
+    new_courses = list(set(admin[ COURSES ] + [course_id]))
     course = ddbo.get_course(course_id)
     new_course_admins = list(set(course['course_admins'] + [admin_id]))
 
     ddbo.update_table(ddbo.users,
                             admin_id,
-                            {'primary_course_id':course_id,
-                             'primary_course_name':course[COURSE_NAME]})
+                            {PRIMARY_COURSE_ID:course_id,
+                             PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                             COURSES: new_courses })
 
     ddbo.update_table(ddbo.courses, course_id,
                       {'course_admins':new_course_admins})
-    return { USER_ID :user_id, 'admin_id':user_id, COURSE_ID :course_id}
+    return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
 @log
-def remove_course_admin(*, admin_id, course_id):
+def remove_course_admin(*, course_id, admin_id):
     """Removes email from the course admin list, but doesn't make them not an admin."""
     ddbo = DDBO()
-    user = ddbo.get_user(None, email=email)
-    user_id = user[ USER_ID ]
-    new_courses = user[ COURSES ]
 
-    course = ddbo.get_course(course_id)
-    course_id = course[ COURSE_ID ]
-    new_course_admins = course['course_admins']
+    admin  = ddbo.get_user( admin_id )
+    course = ddbo.get_course( course_id )
 
     try:
-        new_courses.remove( COURSE_ID )
-        ddbo.users.update_item( Key={ USER_ID : user_id},
+        new_courses = admin[ COURSES ].remove(course_id)
+        ddbo.users.update_item( Key={ USER_ID : admin_id},
                                 UpdateExpression = 'SET courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
                                 ExpressionAttributeValues = { ':a':1,
                                                               ':c':new_courses,
                                                               ':pcid': None,
                                                               ':pcn' : None} )
     except KeyError:
-        logger.warning("course remove fail: %s from user %s %s",course_id,user_id,email)
+        logger.warning("course remove fail: %s from user %s",course_id,admin_id)
 
     try:
-        new_course_admins.remove(user_id)
+        new_course_admins = course[COURSE_ADMINS].remove(admin_id)
         ddbo.courses.update_item( Key={ COURSE_ID :course_id},
                                   UpdateExpression = 'SET course_admins=:nca',
                                   ExpressionAttributeValues = { ':nca':new_course_admins })
     except KeyError:
-        logger.warning("course admin remove fail: admin %s %s from course %s",user_id,email,course_id)
+        logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 
 @log

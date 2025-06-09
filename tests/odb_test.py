@@ -100,7 +100,7 @@ def test_odb(local_ddb):
         ddbo.put_user(TEST_USER_DATA)
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
-    assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
+    assert ddbo.get_user_email(TEST_USER_EMAIL) == TEST_USER_DATA
 
     # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)
@@ -145,7 +145,7 @@ def test_odb(local_ddb):
     new_email = TEST_USER_EMAIL+"-new"
     ddbo.rename_user(user_id=TEST_USER_ID, new_email=new_email)
     u1 = ddbo.get_user(TEST_USER_ID)
-    u2 = ddbo.get_user(None, email=new_email)
+    u2 = ddbo.get_use_emailr(new_email)
     print("u1=",json.dumps(u1,indent=4,default=str))
     print("u2=",json.dumps(u2,indent=4,default=str))
     assert u1==u2

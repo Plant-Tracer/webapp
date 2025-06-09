@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__)
 
-
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
@@ -120,8 +119,8 @@ def api_register():
         return E.INVALID_COURSE_KEY
     if odb.remaining_course_registrations(course_key=course_key) < 1:
         return E.NO_REMAINING_REGISTRATIONS
-    name = request.values.get('name')
-    odb.register_email(email=email, course_key=course_key, name=name)
+    full_name = request.values.get('name')
+    odb.register_email(email=email, course_key=course_key, full_name=full_name)
     new_api_key = odb.make_new_api_key(email=email)
     if not new_api_key:
         logging.info("email not in database: %s",email)
@@ -193,7 +192,7 @@ def api_bulk_register():
             email = email.strip()
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
-            odb.register_email(email=email, course_id=course_id, name="")
+            odb.register_email(email=email, course_id=course_id, full_name="")
             send_link(email=email, planttracer_endpoint=planttracer_endpoint)
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
@@ -239,7 +238,7 @@ def api_new_movie():
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
-    user       = odb.get_user(user_id=user_id)
+    user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
 
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
