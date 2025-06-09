@@ -10,9 +10,8 @@ from deploy.app import clogging
 from deploy.app import odb
 from deploy.app import odbmaint
 from deploy.app import mailer
-from deploy.app import paths
 #from deploy.app.constants import C
-from deploy.app.odb import DDBO,InvalidCourse_Id
+from deploy.app.odb import DDBO,InvalidCourse_Id,USER_ID
 
 
 DESCRIPTION="""
@@ -107,7 +106,8 @@ if __name__ == "__main__":
         if args.course_id:
             try:
                 course = odb.lookup_course_by_id(course_id=args.course_id)
-                odb.add_course_admin(admin_email = args.admin_email, course_id = args.course_id)
+                admin_id = odb.get_user_email(args.admin_email)[ USER_ID ]
+                odb.add_course_admin(admin_id = admin_id, course_id = args.course_id)
                 sys.exit(0)
             except InvalidCourse_Id:
                 print(f"Course with id {args.course_id} does not exist.",file=sys.stderr)
@@ -121,8 +121,8 @@ if __name__ == "__main__":
         if not args.course_id:
             print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
-        admin_id = odb.lookup_user(args.admin_email)['user_id']
-        odb.remove_admin_from_course( admin_id = adin_id, course_id = args.course_id)
+        admin_id = odb.get_user_email(args.admin_email)['user_id']
+        odb.remove_course_admin( admin_id = admin_id, course_id = args.course_id)
         sys.exit(0)
 
     ################################################################
@@ -152,6 +152,6 @@ if __name__ == "__main__":
     #    odbmaint.freshen(True)
     #    sys.exit(0)
 
-    if args.dump:
-        odbmaint.dump(config,args.dump)
-        sys.exit()
+    #if args.dump:
+    #    odbmaint.dump(config,args.dump)
+    #    sys.exit()

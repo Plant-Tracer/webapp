@@ -20,7 +20,6 @@ from flask import request
 from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
-from .odb import DDBO
 from .auth import AuthError
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -111,7 +110,6 @@ def get_user_api_key():
 
 def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
-    ddbo = DDBO()
     api_key = get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
@@ -196,7 +194,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'title':'Plant Tracer '+title,
         'hostname':request.host,
         'movie_id':movie_id,
-        'demo_mode':DEMO_MODE,
+        'demo_mode':is_demo_mode(),
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
         'version':__version__,
         'git_head_time':git_head_time(),

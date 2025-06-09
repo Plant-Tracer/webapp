@@ -82,8 +82,11 @@ class InvalidCourse_Key(ODB_Errors):
 class InvalidCourse_Id(ODB_Errors):
     """ Course Key is invalid """
 
-class InvalidUser(ODB_Errors):
-    """User_id or User email is invalid"""
+class InvalidUser_Email(ODB_Errors):
+    """User email is invalid"""
+
+class InvalidUser_Id(ODB_Errors):
+    """User_id is invalid"""
 
 class UserExists(ODB_Errors):
     """User email exists"""
@@ -277,17 +280,16 @@ class DDBO:
         item = self.users.get_item(Key = { USER_ID :user_id}).get('Item',None)
         if item:
             return item
-        raise InvalidUser_id(user_id)
+        raise InvalidUser_Id(user_id)
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
-        assert user_id is None
         response = self.users.query( IndexName='email_idx',
                                      KeyConditionExpression=Key( EMAIL ).eq(email) )
         items = response.get('Items', [])
         if items:
             return items[0]
-        raise InvalidUser(email)
+        raise InvalidUser_Email(email)
 
     def put_user(self, user):
         """Creates the user from the user dict.
@@ -770,7 +772,7 @@ def make_new_api_key(*, email):
                                'use_count':0,
                                'created':int(time.time()) })
         return api_key
-    raise InvalidUser(f"{email} is not enabled")
+    raise InvalidUser_Email(email)
 
 
 @log
