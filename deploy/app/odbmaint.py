@@ -1,6 +1,12 @@
+"""
+Maintain the DynamoDB Database.
+"""
+
 import logging
 import argparse
 import copy
+import os
+import os.path
 
 import tabulate
 
@@ -10,8 +16,10 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr
 
 
+from . import odb
 from .odb import DDBO
 from .constants import C
+from .paths import TEST_DATA_DIR
 
 # Configure basic logging
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -28,8 +36,11 @@ BillingMode = 'BillingMode'
 PAY_PER_REQUEST = 'PAY_PER_REQUEST'
 HASH = 'HASH'
 RANGE = 'RANGE'
-S = 'S'                         # string
-N = 'N'                         # number
+S = 'S' # string
+N = 'N' # number
+
+DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
+DEMO_MOVIE_DESCRIPTION = 'A demo movie.'
 
 billing = {BillingMode: PAY_PER_REQUEST} # alternative is provisioned throughput
 projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
@@ -231,16 +242,15 @@ def drop_dynamodb_table(ddbo, table_name: str):
             logger.info("Table %s is already in the process of being deleted.", table_name)
         else:
             logger.error("Error deleting table %s: %s", table_name, e)
-    except Exception as e:
-        logger.error("Unexpected error occurred while deleting table %s: %s", table_name, e)
 
 
-def create_tables(ddbo, ignore_table_exists = set()):
+def create_tables(ddbo, ignore_table_exists = None):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
 
     Connects to the local DynamoDB instance using DEFAULT_DYNAMODB_ENDPOINT.
 
     :param dynamodb_resource: The boto3 DynamoDB resource object.
+    :param ignore_table_exists: Tables to ignore if they already exist
     :type dynamodb_resource: boto3.resources.base.ServiceResource
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
     :raises Exception: For any unexpected errors during creation.
@@ -257,12 +267,10 @@ def create_tables(ddbo, ignore_table_exists = set()):
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
             if e.response['Error']['Code'] == 'TableAlreadyExistsException':
-                if table_name not in ignore_table_exists:
+                if (ignore_table_exists is not None) and (table_name not in ignore_table_exists):
                     logger.warning("Table %s already exists.", table_name)
             else:
                 logger.error("Error creating table %s: %s", table_name, e)
-        except Exception as e:
-            logger.error("An unexpected error occurred creating table %s: %s", table_name, e)
 
 def drop_tables(ddbo):
     tables_to_drop = [ ddbo.table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
@@ -277,63 +285,53 @@ def puge_all_movies(ddbo):
     create_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
 
 #pylint: disable=too-many-arguments
-def create_course(ddbo, *, course_id, course_key, course_name, admin_email,
+def create_course(*, course_id, course_key, course_name, admin_email,
                   admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
                   demo_email = None):
-    course = ddbo.get_course(course_id)
-    if course:
-        raise KeyError(f"Course {course_id} already exists")
-
-    admin = ddbo.get_user(email=admin_email)
-    if demo_email:
-        demo = ddbo.get_user(email=demo_email)
-    else:
-        demo = False
-
-    ddbo.put_course({'course_id':course_id,
-                     'course_key':course_key,
-                     'course_name':course_name,
-                     'max_enrollment':max_enrollment })
-
-
-    odb.create_course(course_key = course_key,
+    """
+    :param course_id: course to be created
+    :param course_key: course key for student registrations
+    :param course_name: course name
+    :param admin_email: Email address for the first course admin. User is automatically created if necessary.
+    :param admin_name: Admin's name
+    :param max_enrollment: Maximum enrollment
+    :param demo_email: If provided, make this a demo course with the test data and with the demo user as the owner.
+    """
+    odb.create_course(course_id = course_id,
+                      course_key = course_key,
                       course_name = course_name,
                       max_enrollment = max_enrollment)
-    admin_id = db.register_email(email=admin_email, course_key=course_key, name=admin_name)['user_id']
-    db.make_course_admin(email=admin_email, course_key=course_key)
+
+    # set up the admin
+    admin = odb.register_email(email=admin_email, course_key=course_key, name=admin_name)
+    odb.make_course_admin(email=admin_email, course_key=course_key)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
+    # see if we should populate with demo
+    def is_movie(fn):
+        return os.path.splitext(fn)[1] in ['.mp4','.mov']
+
     if demo_email:
-        user_dir = db.register_email(email=demo_email, course_key = course_key, name=DEMO_NAME, demo_user=1)
-        user_id = user_dir['user_id']
-        db.make_new_api_key(email=demo_email)
-        ct = 1
-        for fn in os.listdir(TEST_DATA_DIR):
-            ext = os.path.splitext(fn)[1]
-            if ext in ['.mp4','.mov']:
-                with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
-                    movie_data = f.read()
-                    movie_id = db.create_new_movie(user_id=user_id,
-                                        title=DEMO_MOVIE_TITLE.format(ct=ct),
-                                        description=DEMO_MOVIE_DESCRIPTION)
-                    db.set_movie_data(movie_id=movie_id, movie_data = movie_data)
-                ct += 1
+        demo = odb.register_email(email=demo_email, course_key = course_key, name=course_name, demo_user=1)
+        odb.make_new_api_key(email=demo_email)
+
+        for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie(fn)],1):
+            with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+                movie_id = odb.create_new_movie(user_id=demo[USER_ID],
+                                                course_id = course_id,
+                                                title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                                description=DEMO_MOVIE_DESCRIPTION)
+                odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
     return admin_id
 
-def add_admin_to_course(*, admin_email, course_id=None, course_key=None):
-    db.make_course_admin(email=admin_email, course_key=course_key, course_id=course_id)
+def add_course_admin(*, admin_id, course_id):
+    odb.add_course_admin(admin_id=adminid, course_id=course_id)
 
-def remove_admin_from_course(*, admin_email, course_id=None, course_key=None, course_name=None):
-    db.remove_course_admin(
-                        email=admin_email,
-                        course_key=course_key,
-                        course_id=course_id,
-                        course_name=course_name
-                    )
-
-
+def remove_course_admin(*, admin_kd, course_id):
+    odb.remove_course_admin( admin_id=admin_id, course_id=course_id )
 
 def count_table_items(table, **kwargs):
+    logger.warning("scan table %s",table)
     total = 0
     response = table.scan(Select='COUNT', **kwargs)
     total += response['Count']
@@ -352,18 +350,6 @@ def report(ddbo):
     print("")
     kwargs =  { 'FilterExpression': Attr('demo').eq(1) }
     print("Number of demo users:", count_table_items(ddbo.users,  **kwargs))
-
-
-def add_admin_to_course(*, admin_email, course_id=None, course_key=None):
-    db.make_course_admin(email=admin_email, course_key=course_key, course_id=course_id)
-
-def remove_admin_from_course(*, admin_email, course_id=None, course_key=None, course_name=None):
-    db.remove_course_admin(
-                        email=admin_email,
-                        course_key=course_key,
-                        course_id=course_id,
-                        course_name=course_name
-                    )
 
 
 def _flush_delete_batch(bucket: str, objects: list) -> None:
@@ -400,8 +386,6 @@ def purge_test_obects(bucket: str):
 
     if to_delete:
         _flush_delete_batch(bucket, to_delete)
-
-
 
 
 def purge_test_tables(region_name=None, profile=None):
@@ -442,42 +426,3 @@ def purge_test_tables(region_name=None, profile=None):
         except ClientError as e:
             logger.error("Error deleting %s: %s",name,e.response['Error']['Message'])
             raise
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Delete all DynamoDB tables whose names start with 'test-'."
-    )
-    parser.add_argument(
-        "--region", "-r", help="AWS region name (default from environment or AWS config)"
-    )
-    parser.add_argument(
-        "--profile", "-p", help="AWS CLI profile to use (default from environment)"
-    )
-    args = parser.parse_args()
-
-    delete_test_tables(region_name=args.region, profile=args.profile)
-
-
-
-if __name__ == "__main__":
-    # --- Argparse Setup ---
-    parser = argparse.ArgumentParser(description="Manage DynamoDB Local tables (create/drop).")
-    parser.add_argument(
-        "--debug",
-        action="store_true", # This flag will be True if --debug is present, False otherwise
-        help="Set logging level to DEBUG for more verbose output."
-    )
-    args = parser.parse_args()
-
-    # --- Configure Logging Level ---
-    if args.debug:
-        logger.setLevel(logging.DEBUG) # Set root logger level to DEBUG
-        logger.debug("Debug mode enabled.")
-    else:
-        logger.setLevel(logging.INFO) # Default to INFO if not debug
-    ddbo = DDBO(endpoint_url=C.DEFAULT_DYNAMODB_ENDPOINT)
-    drop_tables(ddbo)
-    create_tables(ddbo)

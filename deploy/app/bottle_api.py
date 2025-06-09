@@ -239,7 +239,7 @@ def api_new_movie():
     # pylint: disable=unsupported-membership-test
     logging.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
-    user       = odb.get_user(user_id)
+    user       = odb.get_user(user_id=user_id)
     movie_data_sha256 = get('movie_data_sha256')
 
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
@@ -249,7 +249,7 @@ def api_new_movie():
 
     # This is where the movie_id is assigned
     ret['movie_id'] = odb.create_new_movie(user_id=user_id,
-                                           course=user['primary_course_id'],
+                                           course_id=user['primary_course_id'],
                                            title=request.values.get('title'),
                                            description=request.values.get('description') )
 

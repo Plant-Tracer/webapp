@@ -106,11 +106,11 @@ if __name__ == "__main__":
             print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
         if args.course_id:
-            course = odb.lookup_course_by_id(course_id=args.course_id)
-            if course.get('course_id'):
-                dbmaint.add_admin_to_course(admin_email = args.admin_email, course_id = args.course_id)
+            try:
+                course = odb.lookup_course_by_id(course_id=args.course_id)
+                dbmaint.add_course_admin(admin_email = args.admin_email, course_id = args.course_id)
                 sys.exit(0)
-            else:
+            except InvalidCourse_Id:
                 print(f"Course with id {args.course_id} does not exist.",file=sys.stderr)
                 sys.exit(1)
 
@@ -119,14 +119,11 @@ if __name__ == "__main__":
         if not args.admin_email:
             print("Must provide --admin_email",file=sys.stderr)
             sys.exit(1)
-        user = ddbo.get_user(email=args.admin_email)
-        if not user.get('id'):
-            print(f"User {args.admin_email} does not exist")
-            sys.exit(1)
         if not args.course_id:
             print("Must provide --course_id",file=sys.stderr)
             sys.exit(1)
-        odbmaint.remove_admin_from_course( admin_email = args.admin_email, course_id = args.course_id)
+        admin_id = odb.lookup_user(args.admin_email)['user_id']
+        odbmaint.remove_admin_from_course( admin_id = adin_id, course_id = args.course_id)
         sys.exit(0)
 
     ################################################################

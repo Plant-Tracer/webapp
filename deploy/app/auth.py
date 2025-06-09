@@ -15,6 +15,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from .constants import C
+from .paths import SMTP_CONFIG_FILE
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)

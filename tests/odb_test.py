@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError,ParamValidationError
 import pytest
 
 from app import odb
-from app.odb import DDBO
+from app.odb import DDBO,UserExists,InvalidUser
 from app.constants import MIME,C
 
 from fixtures.local_aws import local_ddb
@@ -94,10 +94,10 @@ def test_odb(local_ddb):
     assert ddbo.get_course(TEST_COURSE_ID) == TEST_COURSE_DATA
 
     # Create the user.
-    ddbo.add_user(TEST_USER_DATA)
+    ddbo.put_user(TEST_USER_DATA)
     # This should fail becuase the user we are putting exist
-    with pytest.raises(ClientError):
-        ddbo.add_user(TEST_USER_DATA)
+    with pytest.raises(UserExists):
+        ddbo.put_user(TEST_USER_DATA)
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user(None, email=TEST_USER_EMAIL) == TEST_USER_DATA
@@ -130,7 +130,7 @@ def test_odb(local_ddb):
     assert odb.is_api_key(api_key)
     user = odb.validate_api_key(api_key)
     assert user == TEST_USER_DATA
-    a2   = odb.get_api_key_dict(api_key)
+    a2   = ddbo.get_api_key_dict(api_key)
     assert a2['enabled'] == 1
     assert a2['use_count'] == 1
     assert a2['created'] >= start_time
@@ -157,7 +157,8 @@ def test_odb(local_ddb):
 
     # Now delete the user and their movies
     ddbo.delete_user(TEST_USER_ID, purge_movies=True)
-    assert ddbo.get_user(TEST_USER_ID) is None
+    with pytest.raises(InvalidUser):
+        ddbo.get_user(TEST_USER_ID)
 
     # Delete the user's course
     odb.delete_course(course_id=TEST_COURSE_ID)

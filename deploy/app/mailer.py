@@ -94,7 +94,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
         smtp_config = auth.smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
     except KeyError as e:
-        raise mailer.NoMailerConfiguration() from e
+        raise NoMailerConfiguration() from e
     try:
         send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
@@ -102,7 +102,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
                             dry_run=DRY_RUN,
                             msg=msg)
     except smtplib.SMTPAuthenticationError as e:
-        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
+        raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
     return new_api_key
 
 IMAP_HOST = 'IMAP_HOST'

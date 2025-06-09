@@ -112,6 +112,7 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
 
 def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
     """Returns a dictionary with 'url' and 'fields'"""
+    logger.debug("make_presigned_post sha256=%s (not used for S3, was used for storing objects in DB)")
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         return s3_client().generate_presigned_post(
