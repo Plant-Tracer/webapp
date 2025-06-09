@@ -31,8 +31,7 @@ from app.constants import C,MIME
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH
-from db_object_test import SaveS3Bucket
+from fixtures.local_aws import new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,TEST_PLANTMOVIE_PATH,local_s3
 
 POST_TIMEOUT = 2
 GET_TIMEOUT = 2
@@ -56,103 +55,6 @@ def get_movie(the_client, api_key, movie_id):
         if movie['movie_id']==movie_id:
             return movie
     raise RuntimeError(f"No movie has movie_id {movie_id}")
-
-
-# pylint: disable=too-many-statements
-@pytest.fixture
-def new_movie(client, new_user):
-    """Create a new movie_id and return it.
-    This uses the movie API where the movie is uploaded with the
-    When we are finished with the movie, purge it and all of its child data.
-    """
-    cfg = copy.copy(new_user)
-    api_key = cfg[API_KEY]
-    api_key_invalid = api_key+"invalid"
-    movie_title = f'test-movie title {str(uuid.uuid4())}'
-
-    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
-    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
-        movie_data   = f.read()
-        movie_data_sha256 = db_object.sha256(movie_data)
-    assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
-    assert len(movie_data) > 0
-
-    # Check for invalid API key handling
-    resp = client.post('/api/new-movie',
-                           data = {'api_key': api_key_invalid,
-                                   "title": movie_title,
-                                   "description": "test movie description",
-                                   "movie_data_sha256": movie_data_sha256})
-    logging.debug("invalid api_key resp=%s",resp)
-    logging.debug("invalid api_key resp.text=%s",resp.text)
-    logging.debug("invalid api_key resp.json=%s",resp.json)
-    assert 'error' in resp.get_json()
-    assert resp.get_json()['error'] is True
-
-    # Check for invalid SHA256 handling
-    resp = client.post('/api/new-movie',
-                           data = {'api_key': api_key,
-                                   "title": movie_title,
-                                   "description": "test movie description",
-                                   "movie_data_sha256": movie_data_sha256+"-invalid"})
-    assert resp.get_json()['error'] is True
-
-    # Get the upload information
-    resp = client.post('/api/new-movie',
-                           data = {'api_key': api_key,
-                    "title": movie_title,
-                    "description": "test movie description",
-                    "movie_data_sha256": movie_data_sha256})
-    res = resp.get_json()
-    assert res['error'] is False
-    movie_id = res['movie_id']
-    assert movie_id > 0
-
-    logging.debug("new_movie fixture: movie_id=%s",movie_id)
-    cfg[MOVIE_ID] = movie_id
-    cfg[MOVIE_TITLE] = movie_title
-
-    url    = res['presigned_post']['url']
-    fields = res['presigned_post']['fields']
-
-    logging.debug("new_movie fixture: url=%s fields=%s",url,fields)
-
-    # Now send the data
-    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
-        if url.startswith('https://'):
-            # Do a real post! (probably going to S3)
-            logging.debug("calling requests.post(%s,data=%s)",url,fields)
-            r = requests.post(url, files={'file':f}, data=fields, timeout=POST_TIMEOUT)
-            logging.info("uploaded to %s r=%s",url, r)
-            assert r.ok
-        else:
-            # Use the upload-movie api to store in the SQL Database
-            fields['file'] = (f,TEST_PLANTMOVIE_PATH)
-            resp = client.post('/api/upload-movie',
-                                   content_type='multipart/form-data',
-                                   data = fields)
-            assert resp.status_code == 200
-            res = resp.get_json()
-            assert res['error'] is False
-
-    # Make sure data got there
-    logging.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
-    assert len(movie_data) == len(retrieved_movie_data)
-    assert movie_data == retrieved_movie_data
-    logging.debug("new_movie fixture: yield %s",cfg)
-    yield cfg
-
-    logging.debug("new_movie fixture: Delete the movie we uploaded")
-    resp = client.post('/api/delete-movie',
-                           data={'api_key': api_key,
-                                 'movie_id': movie_id})
-    res = resp.get_json()
-    assert res['error'] is False
-
-    logging.debug("new_movie fixture: Purge the movie that we have deleted")
-    db.purge_movie(movie_id=movie_id)
-    logging.debug("new_movie fixture: done")
 
 
 def data_from_redirect(url, the_client):
@@ -227,9 +129,9 @@ def test_new_movie(client, new_movie):
 
 
 
-def test_movie_upload_presigned_post(client, new_user,SaveS3Bucket):
+def test_movie_upload_presigned_post(client, new_course, local_s3):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
-    cfg = copy.copy(new_user)
+    cfg = copy.copy(new_course)
     api_key = cfg[API_KEY]
     movie_title = f'test-movie title {str(uuid.uuid4())}'
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
@@ -409,3 +311,98 @@ def test_log_search_movie(new_movie):
     logging.info("log entries for movie:")
     for r in res:
         logging.info("%s",r)
+
+
+def test_new_movie_api(client, new_course):
+    """Create a new movie_id and return it.
+    This uses the movie API where the movie is uploaded with the
+    When we are finished with the movie, purge it and all of its child data.
+    """
+    cfg = copy.copy(new_course)
+    api_key = cfg[API_KEY]
+    api_key_invalid = api_key+"invalid"
+    movie_title = f'test-movie title {str(uuid.uuid4())}'
+
+    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data   = f.read()
+        movie_data_sha256 = db_object.sha256(movie_data)
+    assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
+    assert len(movie_data) > 0
+
+    # Check for invalid API key handling
+    resp = client.post('/api/new-movie',
+                           data = {'api_key': api_key_invalid,
+                                   "title": movie_title,
+                                   "description": "test movie description",
+                                   "movie_data_sha256": movie_data_sha256})
+    logging.debug("invalid api_key resp=%s",resp)
+    logging.debug("invalid api_key resp.text=%s",resp.text)
+    logging.debug("invalid api_key resp.json=%s",resp.json)
+    assert 'error' in resp.get_json()
+    assert resp.get_json()['error'] is True
+
+    # Check for invalid SHA256 handling
+    resp = client.post('/api/new-movie',
+                           data = {'api_key': api_key,
+                                   "title": movie_title,
+                                   "description": "test movie description",
+                                   "movie_data_sha256": movie_data_sha256+"-invalid"})
+    assert resp.get_json()['error'] is True
+
+    # Get the upload information
+    resp = client.post('/api/new-movie',
+                           data = {'api_key': api_key,
+                    "title": movie_title,
+                    "description": "test movie description",
+                    "movie_data_sha256": movie_data_sha256})
+    res = resp.get_json()
+    assert res['error'] is False
+    movie_id = res['movie_id']
+    assert movie_id > 0
+
+    logging.debug("new_movie fixture: movie_id=%s",movie_id)
+    cfg[MOVIE_ID] = movie_id
+    cfg[MOVIE_TITLE] = movie_title
+
+    url    = res['presigned_post']['url']
+    fields = res['presigned_post']['fields']
+
+    logging.debug("new_movie fixture: url=%s fields=%s",url,fields)
+
+    # Now send the data
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        if url.startswith('https://'):
+            # Do a real post! (probably going to S3)
+            logging.debug("calling requests.post(%s,data=%s)",url,fields)
+            r = requests.post(url, files={'file':f}, data=fields, timeout=POST_TIMEOUT)
+            logging.info("uploaded to %s r=%s",url, r)
+            assert r.ok
+        else:
+            # Use the upload-movie api to store in the SQL Database
+            fields['file'] = (f,TEST_PLANTMOVIE_PATH)
+            resp = client.post('/api/upload-movie',
+                                   content_type='multipart/form-data',
+                                   data = fields)
+            assert resp.status_code == 200
+            res = resp.get_json()
+            assert res['error'] is False
+
+    # Make sure data got there
+    logging.debug("new_movie fixture: movie uploaded")
+    retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
+    assert len(movie_data) == len(retrieved_movie_data)
+    assert movie_data == retrieved_movie_data
+    logging.debug("new_movie fixture: yield %s",cfg)
+    yield cfg
+
+    logging.debug("new_movie fixture: Delete the movie we uploaded")
+    resp = client.post('/api/delete-movie',
+                           data={'api_key': api_key,
+                                 'movie_id': movie_id})
+    res = resp.get_json()
+    assert res['error'] is False
+
+    logging.debug("new_movie fixture: Purge the movie that we have deleted")
+    db.purge_movie(movie_id=movie_id)
+    logging.debug("new_movie fixture: done")

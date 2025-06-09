@@ -17,11 +17,10 @@ from os.path import abspath, dirname
 from fixtures.app_client import client
 from fixtures.local_aws import local_s3, new_course
 
-import app.db as db
-import app.odbmaint as odbmaint
-import app.bottle_api as bottle_api
-import app.bottle_app as bottle_app
-import app.dbfile as dbfile
+from app import odb
+from app import odbmaint
+from app import bottle_api
+from app import bottle_app
 from app.paths import TEST_DIR, TEST_DATA_DIR
 
 ################################################################
@@ -57,7 +56,7 @@ def test_add_remove_user_and_admin(new_course):
     course_key = cfg[COURSE_KEY]
 
     for admin in range(0,2):
-        new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com")
+        new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com"
         user = odb.register_email(email=admin_email,
                                   course_key=cfg[COURSE_KEY],
                                   name='User Name',

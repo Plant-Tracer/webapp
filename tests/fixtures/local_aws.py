@@ -124,3 +124,32 @@ def new_course(local_ddb,local_s3):
 def api_key(new_course):
     """Simple fixture that just returns a valid api_key"""
     yield new_course_user[API_KEY]
+
+@pytest.fixture
+def new_movie(new_course):
+    """Fixture that creates a new course, new user, and a new movie, returning a dictionary holding them all.
+    Unlike movie_test.test_new_movie_api, this version goes directly to the database, rather than going through the API"""
+
+    cfg = copy.copy(new_user)
+    movie_title = f'test-movie title {str(uuid.uuid4())}'
+    movie_id = odb.create_new_movie(user_id = cfg[ADMIN_ID],
+                                        course_id = cfg[COURSE_ID],
+                                        title = movie_title,
+                                        description = 'Description')
+
+    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data   = f.read()
+        movie_data_sha256 = db_object.sha256(movie_data)
+    assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
+    assert len(movie_data) > 0
+
+    odb.set_movie_data(movie_id = movie_id, movie_data = movie_data)
+
+    cfg[MOVIE_ID] = movie_id
+    cfg[MOVIE_TITLE] = movie_title
+
+    yield cfg
+
+    odb.purge_movie(movie_id = movie_id)
+    odb.delete_movie(movie_id = movie_id)
