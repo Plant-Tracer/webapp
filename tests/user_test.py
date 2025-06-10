@@ -90,3 +90,36 @@ def test_add_remove_user_and_admin(new_course):
             odb.remove_course_admin(admin_id = user_id, course_id = course_id)
             assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
         odb.delete_user(user_id=user_id)
+
+
+def test_course_list(client, new_course):
+    cfg        = copy.copy(new_course)
+    user_email = cfg[USER_EMAIL]
+    api_key    = cfg[API_KEY]
+
+    user_dict = odb.validate_api_key(api_key)
+    user_id   = user_dict['user_id']
+    primary_course_id = user_dict['primary_course_id']
+
+    recs1 = odb.list_users(user_id=user_id)
+    users1 = recs1['users']
+
+    matches = [user for user in users1 if user['user_id']==user_id]
+    assert len(matches)>0
+
+    # Make sure that there is an admin in the course who is not the user
+    recs2 = odb.list_admins()
+    matches = [rec for rec in recs2 if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
+    assert len(matches)==1
+
+    # Make sure that the endpoint works
+    response = client.post('/api/list-users',
+                           data = {'api_key': api_key})
+
+    res = response.get_json()
+    assert res['error'] is False
+    users2 = res['users']
+    # There is the user and the admin; there may also be a demo user
+    assert len(users2) in [2,3]
+    assert users1[0]['name'] == users2[0]['name']
+    assert users1[0]['email'] == users2[0]['email']
