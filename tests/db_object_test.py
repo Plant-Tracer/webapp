@@ -1,28 +1,31 @@
 """
 Tests the DB object storage layer
 """
-import sys
-import os
+#import sys
+#import os
 import logging
-import json
-import subprocess
+#import json
+#import subprocess
 import uuid
-import xml.etree.ElementTree
+#import xml.etree.ElementTree
 import hashlib
 
-import pytest
-#import boto3
+#import pytest
+import boto3
 
 #from app.paths import STATIC_DIR,TEST_DATA_DIR
 #from app.constants import C
-#import app.db_object as db_object
+from app import db_object
 
-#from fixtures.local_aws import local_s3
+from fixtures.local_aws import local_s3
+
+s3client = boto3.client('s3')
 
 def test_object_name():
     assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
     assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
+# pylint: disable=unused-argument
 def test_make_urn(local_s3):
     name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
     a = db_object.make_urn(object_name=name, scheme=None)

@@ -44,8 +44,12 @@ COURSE_ADMINS = 'course_admins'
 COURSE_ID = 'course_id'
 COURSE_NAME = 'course_name'
 
+API_KEY = 'api_key'
+
 EMAIL = 'email'
 FULL_NAME = 'full_name'
+ENABLED = 'enabled'
+USE_COUNT = 'use_count'
 
 DEMO = 'demo'
 
@@ -54,6 +58,8 @@ MOVIE_DATA_URN = 'movie_data_urn'
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
 DELETED = 'deleted'
 PUBLISHED = 'published'
+CREATED = 'created'
+EMAIL = 'email'
 
 NAME = 'name'
 
@@ -263,14 +269,14 @@ class DDBO:
     ### api_key management
 
     def get_api_key_dict(self,api_key):
-        return self.api_keys.get_item(Key = {'api_key':api_key}).get('Item',None)
+        return self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
 
     def put_api_key_dict(self,api_key_dict):
         self.api_keys.put_item(Item = api_key_dict,
                                ConditionExpression = 'attribute_not_exists(api_key)' )
 
     def del_api_key(self, api_key):
-        self.api_keys.delete_item(Key = {'api_key':api_key},
+        self.api_keys.delete_item(Key = { API_KEY :api_key},
                                   ConditionExpression = 'attribute_exists(api_key)' )
 
     ### User management
@@ -296,8 +302,10 @@ class DDBO:
         Raises UserExists if the user already exists. Doesn't properly handle other errors.
         """
         email = user[ EMAIL ]
+        assert email is not None
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
+        logging.debug("put_user email=%s user_id=%s",email,user_id)
         logging.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
 
         try:
@@ -373,6 +381,8 @@ class DDBO:
         Deletes all of the user's movies (if purge_movies is True)
         Also deletes the user from any courses where they may be an admin.
         """
+        logger.debug("+++ user_id=%s",user_id)
+        logger.debug("delete_user user_id = %s purge_movies=%s",user_id,purge_movies)
         assert is_user_id(user_id)
         movies = self.get_movies_for_user_id(user_id)
         if purge_movies:
@@ -389,19 +399,19 @@ class DDBO:
             query_kwargs = {
                 'IndexName': 'user_id_idx',
                 'KeyConditionExpression': Key( USER_ID ).eq(user_id),
-                'ProjectionExpression': 'api_key'
+                'ProjectionExpression':  API_KEY
             }
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key
             response = self.api_keys.query(**query_kwargs)
-            api_keys.extend(item['api_key'] for item in response['Items'])
+            api_keys.extend(item[ API_KEY ] for item in response['Items'])
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
         # Now batch delete the API keys
         with self.api_keys.batch_writer() as batch:
             for api_key in api_keys:
-                batch.delete_item(Key={'api_key': api_key})
+                batch.delete_item(Key={ API_KEY : api_key})
 
         # Get the email address. We should just get the userdict with some fancy projection...
         # Finally delete the user and the unique email
@@ -688,6 +698,9 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
     :return: dictionary of { USER_ID :user_id} for user who is registered.
     """
 
+    assert isinstance(email,str)
+    assert '@' in email
+
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")
 
@@ -705,16 +718,19 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
 
     # Be sure that the user exists.
     try:
-        ddbo.put_user({USER_ID:new_user_id(),
+        user_id = new_user_id()
+        ddbo.put_user({USER_ID:user_id,
                                  EMAIL:email,
                                  FULL_NAME:full_name,
                                  'created' : int(time.time()),
                                  DEMO:demo_user,
+                                 ENABLED:1,
                                  ADMIN:admin,
                                  PRIMARY_COURSE_ID:course_id,
                                  PRIMARY_COURSE_NAME:course[COURSE_NAME],
                                  COURSES:[course_id]
                                  })
+        return {USER_ID:user_id}
     except UserExists:
         # The user exists! Change the primary course and add them to this course.
         user = ddbo.get_user_email(email)
@@ -726,10 +742,12 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
                                                             ':pcn':course['course_name'],
                                                             ':demo':demo_user,
                                                             ':courses':list(set(user[ COURSES ] + [course_id]))})
+        return {USER_ID:user[ USER_ID ]}
 
 
 @log
 def delete_user(*, user_id, purge_movies=False):
+    logging.debug("***user_id=%s",user_id)
     DDBO().delete_user(user_id=user_id, purge_movies=purge_movies)
 
 
@@ -746,12 +764,12 @@ def validate_api_key(api_key):
     assert is_api_key(api_key)
     api_key_dict = ddbo.get_api_key_dict(api_key)
     print("api_key_dict:",api_key_dict)
-    if api_key_dict['enabled']:
+    if api_key_dict[ ENABLED ]:
         user = ddbo.get_user(api_key_dict[ USER_ID ])
-        if user['enabled']:
+        if user[ ENABLED ]:
             first_used_at = api_key_dict.get('first_used_at',int(time.time()))
             ddbo.update_table(ddbo.api_keys,api_key,
-                              {'use_count':api_key_dict['use_count']+1,
+                              { USE_COUNT :api_key_dict[ USE_COUNT ]+1,
                                'last_used_at':int(time.time()),
                                'first_used_at':first_used_at})
             return user
@@ -764,13 +782,13 @@ def make_new_api_key(*, email):
     """
     ddbo = DDBO()
     user = ddbo.get_user_email(email)
-    if user['enabled'] == 1:
+    if user[ ENABLED ] == 1:
         api_key = new_api_key()
-        ddbo.put_api_key_dict({'api_key':api_key,
-                               'enabled':1,
+        ddbo.put_api_key_dict({API_KEY:api_key,
+                               ENABLED:1,
                                USER_ID :user[ USER_ID ],
-                               'use_count':0,
-                               'created':int(time.time()) })
+                               USE_COUNT:0,
+                               CREATED:int(time.time()) })
         return api_key
     raise InvalidUser_Email(email)
 
@@ -795,7 +813,7 @@ def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
 
 @log
-def create_course(*, course_id, course_name, course_key, max_enrollment):
+def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT):
     """Create a new course
     """
     DDBO().put_course({ COURSE_ID :course_id,
@@ -846,11 +864,10 @@ def remove_course_admin(*, course_id, admin_id):
         new_courses = admin[ COURSES ].remove(course_id)
         ddbo.users.update_item( Key={ USER_ID : admin_id},
                                 UpdateExpression = 'SET courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
-                                ExpressionAttributeValues = { ':a':1,
-                                                              ':c':new_courses,
+                                ExpressionAttributeValues = { ':c':new_courses,
                                                               ':pcid': None,
                                                               ':pcn' : None} )
-    except KeyError:
+    except ValueError:
         logger.warning("course remove fail: %s from user %s",course_id,admin_id)
 
     try:
@@ -858,7 +875,7 @@ def remove_course_admin(*, course_id, admin_id):
         ddbo.courses.update_item( Key={ COURSE_ID :course_id},
                                   UpdateExpression = 'SET course_admins=:nca',
                                   ExpressionAttributeValues = { ':nca':new_course_admins })
-    except KeyError:
+    except ValueError:
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 

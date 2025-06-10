@@ -8,6 +8,7 @@ import uuid
 import pytest
 import os
 import subprocess
+import random
 from os.path import join,dirname,abspath
 
 import boto3
@@ -38,6 +39,7 @@ COURSE_ID = 'course_id'
 COURSE_NAME = 'course_name'
 USER_EMAIL = 'user_email'
 USER_ID    = 'user_id'
+EMAIL = 'email'
 MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
 TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
@@ -45,8 +47,7 @@ TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovi
 TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 
 def new_email(info):
-    TEST_ADMIN_EMAIL.replace('@', '-' + info + '-'+str(uuid.uuid4())[0:4]+'@')
-
+    return TEST_USER_EMAIL.replace('@', '-' + info + '-'+str(uuid.uuid4())[0:4]+'@')
 
 @pytest.fixture
 def local_ddb():
@@ -87,7 +88,7 @@ def local_s3():
 
 
 @pytest.fixture
-def new_course(local_ddb,local_s3):
+def new_course(local_ddb, local_s3):
     """Fixture to create a new course with an admin and a user and yields a dictionary with all and then """
 
     course_id   = 'PlantTracer ' + str(random.randint(100,999))
@@ -98,27 +99,29 @@ def new_course(local_ddb,local_s3):
                            course_name = course_name,
                            course_key = course_key)
 
-    admin = odb.register_email(email=new_email('admin'), full_name='Course Admin', course_key=course_key, admin=1)
-    admin_id = admin[USER_ID]
-    user  = odb.register_email(email=new_email('user'), full_name='Course User', course_id = course_id, admin=0)
-    user_id = user[USER_ID]
+    user_email = new_email('user')
+    user_id  = odb.register_email(email=user_email, full_name='Course User', course_id = course_id, admin=0)[USER_ID]
+    api_key = odb.make_new_api_key(email=user_email)
 
-    api_key = odb.make_new_api_key(user['email'])
+    admin_email = new_email('admin')
+    admin_id = odb.register_email(email=admin_email, full_name='Course Admin', course_key=course_key, admin=1)[USER_ID]
+
 
     yield {'ddbo':local_ddb,
            COURSE_KEY:course_key,
            COURSE_NAME:course_name,
            COURSE_ID:course_id,
-           ADMIN_EMAIL:admin[EMAIL],
+           ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
            USER_ID:user_id,
-           USER_EMAIL:user[EMAIL],
-           PI_KEY:api_key }
+           USER_EMAIL:user_email,
+           API_KEY:api_key
+           }
 
     odb.remove_course_admin(course_id = course_id, admin_id = admin_id)
     odb.delete_user(user_id=user_id, purge_movies=True)
     odb.delete_user(user_id=admin_id, purge_movies=True)
-    odb.delete_course(course_key=course_key)
+    odb.delete_course(course_id=course_id)
 
 @pytest.fixture
 def api_key(new_course):
