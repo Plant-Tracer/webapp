@@ -60,3 +60,26 @@ def test_demo_user(new_course):
     assert len(res)==1
     assert res[0]['email']==demo_email
     assert odb.remaining_course_registrations(course_key=cfg[COURSE_KEY]) == C.DEFAULT_MAX_ENROLLMENT - 3
+
+def test_add_remove_user_and_admin(new_course):
+    """Tests creating a new user and adding them to the course as an admin"""
+    cfg = copy.copy(new_course)
+    course_key = cfg[COURSE_KEY]
+
+    for admin in range(0,2):
+        new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com"
+        user = odb.register_email(email=admin_email,
+                                  course_key=cfg[COURSE_KEY],
+                                  name='User Name',
+                                  admin = admin)
+        user_id = user['user_id']
+
+        logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
+        course_id = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
+
+        if admin:
+            odb.make_course_admin(email = admin_email, course_id = course_id)
+            assert odb.check_course_admin(user_id=user_id, course_id=course_id)
+            odb.remove_course_admin(email = admin_email, course_id = course_id)
+            assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
+        odb.delete_user(user_id=user_id)
