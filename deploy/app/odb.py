@@ -225,6 +225,8 @@ class DDBO:
         :param updates:     dict mapping attribute names → new values;
                             if value is None, that attribute will be removed.
         """
+        logging.debug("UPDATES=%s",updates)
+
         # 1) figure out the PK name & build the Key dict
         pk = self._get_partition_key_name(table.key_schema)
         key = { pk: key_value }
@@ -241,6 +243,7 @@ class DDBO:
 
             if val is None:
                 remove_exprs.append(name_ph)
+                logging.debug("REMOVE %s val=%s",name_ph,val)
             else:
                 val_ph = f":{attr}"
                 set_exprs.append(f"{name_ph} = {val_ph}")
@@ -305,7 +308,7 @@ class DDBO:
         assert email is not None
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
-        logging.debug("put_user email=%s user_id=%s",email,user_id)
+        logging.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
         logging.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
 
         try:
@@ -819,7 +822,7 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
     DDBO().put_course({ COURSE_ID :course_id,
                         'course_name':course_name,
                         'course_key':course_key,
-                        'course_admins':[],
+                        COURSE_ADMINS:[],
                         'max_enrollment':max_enrollment})
 
 @log
@@ -841,14 +844,22 @@ def add_course_admin(*, admin_id, course_id):
     course = ddbo.get_course(course_id)
     new_course_admins = list(set(course['course_admins'] + [admin_id]))
 
+    logging.debug("add_course_admin new_courses=%s new_course_admins=%s",new_courses,new_course_admins)
+
+    logging.debug("before add_course_admin get_user(%s)=%s",admin_id,json.dumps(ddbo.get_user(admin_id),default=str,indent=4))
+
     ddbo.update_table(ddbo.users,
-                            admin_id,
-                            {PRIMARY_COURSE_ID:course_id,
-                             PRIMARY_COURSE_NAME:course[COURSE_NAME],
-                             COURSES: new_courses })
+                      admin_id,
+                      {PRIMARY_COURSE_ID:course_id,
+                       PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                       COURSES: new_courses,
+                       ADMIN: 1 })
 
     ddbo.update_table(ddbo.courses, course_id,
-                      {'course_admins':new_course_admins})
+                      { COURSE_ADMINS:new_course_admins})
+
+    logging.debug("after add_course_admin get_user(%s)=%s",admin_id,json.dumps(ddbo.get_user(admin_id),default=str,indent=4))
+
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
@@ -856,25 +867,28 @@ def add_course_admin(*, admin_id, course_id):
 def remove_course_admin(*, course_id, admin_id):
     """Removes email from the course admin list, but doesn't make them not an admin."""
     ddbo = DDBO()
-
     admin  = ddbo.get_user( admin_id )
     course = ddbo.get_course( course_id )
+    assert course is not None
+    assert course[COURSE_ADMINS] is not None
 
     try:
-        new_courses = admin[ COURSES ].remove(course_id)
-        ddbo.users.update_item( Key={ USER_ID : admin_id},
-                                UpdateExpression = 'SET courses=:c, primary_course_id=:pcid, primary_course_name=:pcn',
-                                ExpressionAttributeValues = { ':c':new_courses,
-                                                              ':pcid': None,
-                                                              ':pcn' : None} )
+        new_courses = admin[ COURSES ]
+        new_courses.remove(course_id)
+        ddbo.update_table(ddbo.users, admin_id,
+                           { COURSES:new_courses,
+                            PRIMARY_COURSE_ID:None,
+                            PRIMARY_COURSE_NAME:None})
+
     except ValueError:
         logger.warning("course remove fail: %s from user %s",course_id,admin_id)
 
     try:
-        new_course_admins = course[COURSE_ADMINS].remove(admin_id)
-        ddbo.courses.update_item( Key={ COURSE_ID :course_id},
-                                  UpdateExpression = 'SET course_admins=:nca',
-                                  ExpressionAttributeValues = { ':nca':new_course_admins })
+        new_course_admins = course[COURSE_ADMINS]
+        new_course_admins.remove(admin_id)
+        ddbo.update_table(ddbo.courses, course_id,{COURSE_ADMINS:new_course_admins})
+
+
     except ValueError:
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
@@ -882,8 +896,12 @@ def remove_course_admin(*, course_id, admin_id):
 @log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
+    assert is_user_id(user_id)
+    assert isinstance(course_id,str)
     logger.warning("HIGH DB DRAIN")
     user = DDBO().get_user(user_id)
+    logging.debug("user=%s",json.dumps(user,indent=4,default=str))
+    assert isinstance(user[COURSES],list)
     return (course_id in user[ COURSES ] ) and user[ ADMIN ]
 
 @log

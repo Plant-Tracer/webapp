@@ -40,7 +40,7 @@ class C:
     LOG_MAX_RECORDS = 1024
 
     # Logging
-    LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module) - %(message)s'
+    LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module)s - %(message)s'
     LOGGING_LEVEL=logging.WARNING
 
     # Demo mode

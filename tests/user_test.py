@@ -68,18 +68,25 @@ def test_add_remove_user_and_admin(new_course):
 
     for admin in range(0,2):
         new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com"
-        user = odb.register_email(email=admin_email,
+        user_id = odb.register_email(email=new_email,
                                   course_key=cfg[COURSE_KEY],
-                                  name='User Name',
-                                  admin = admin)
-        user_id = user['user_id']
+                                  full_name='User Name',
+                                  admin = admin)['user_id']
 
-        logging.info("generated admin_email=%s user_id=%s",admin_email, user_id)
+        logging.info("generated admin_email=%s user_id=%s",new_email, user_id)
         course_id = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
 
-        if admin:
-            odb.make_course_admin(email = admin_email, course_id = course_id)
+        if not admin:
+            assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
+            odb.add_course_admin(admin_id = user_id, course_id = course_id)
             assert odb.check_course_admin(user_id=user_id, course_id=course_id)
-            odb.remove_course_admin(email = admin_email, course_id = course_id)
+            odb.remove_course_admin(admin_id = user_id, course_id = course_id)
+            assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
+
+        if admin:
+            assert odb.check_course_admin(user_id=user_id, course_id=course_id)
+            odb.add_course_admin(admin_id = user_id, course_id = course_id)
+            assert odb.check_course_admin(user_id=user_id, course_id=course_id)
+            odb.remove_course_admin(admin_id = user_id, course_id = course_id)
             assert not odb.check_course_admin(user_id=user_id, course_id=course_id)
         odb.delete_user(user_id=user_id)
