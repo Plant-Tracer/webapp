@@ -28,7 +28,7 @@ TEST_COURSE_DATA = {
     'course_id': TEST_COURSE_ID,
     'course_name': TEST_COURSE_NAME,
     'course_key': TEST_COURSE_KEY,
-    'course_admins': [TEST_ADMIN_ID],
+    'admins_for_course': [TEST_ADMIN_ID],
     'max_enrollment': TEST_COURSE_MAX_ENROLLMENT
 }
 
@@ -41,7 +41,7 @@ TEST_USER_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
-    'admin': 0,
+    'admin_for_courses': [],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
 }
@@ -53,7 +53,7 @@ TEST_ADMIN_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
-    'admin': 1,
+    'admin_for_courses': [TEST_COURSE_ID],
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,

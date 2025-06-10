@@ -76,7 +76,7 @@ def get_user_id(allow_demo=True):
     if userdict['demo'] and not allow_demo:
         logging.info("demo account blocks requested action")
         raise AuthError('demo accounts not allowed to execute requested action')
-    return userdict['id']
+    return userdict['user_id']
 
 
 ################################################################

@@ -13,6 +13,7 @@ import copy
 import functools
 import uuid
 import time
+from collections import defaultdict
 from functools import lru_cache,wraps
 from decimal import Decimal
 
@@ -38,17 +39,19 @@ COURSES = 'courses'
 LOGS = 'logs'
 
 # attributes
-ADMIN = 'admin'
-
-COURSE_ADMINS = 'course_admins'
-COURSE_ID = 'course_id'
+ADMINS_FOR_COURSE = 'admins_for_course'
+ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses
+COURSE_ID   = 'course_id'
 COURSE_NAME = 'course_name'
+COURSE_KEY  = 'course_key'
+MAX_ENROLLMENT = 'max_enrollment'
+SUPER_ADMIN = 'super_admin'     # user.super_admin==1 makes the user admin for everything
 
 API_KEY = 'api_key'
 
-EMAIL = 'email'
+EMAIL     = 'email'
 FULL_NAME = 'full_name'
-ENABLED = 'enabled'
+ENABLED   = 'enabled'
 USE_COUNT = 'use_count'
 
 DEMO = 'demo'
@@ -69,7 +72,6 @@ PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
 EMAIL_TEMPLATE_FNAME = 'email.txt'
-SUPER_ADMIN_COURSE_ID = -1  # this is the super course. People who are admins in this course see everything.
 CHECK_MX = False            # True doesn't work
 
 ################################################################
@@ -285,8 +287,10 @@ class DDBO:
     ### User management
 
     def get_user(self, user_id):
-        """gets the user dictionary given the user_id. Raise InvalidUser_id if it does not exist """
-        item = self.users.get_item(Key = { USER_ID :user_id}).get('Item',None)
+        """gets the user dictionary given the user_id. Raise InvalidUser_id if it does not exist.
+        This is critical, so we always do a consistent read.
+        """
+        item = self.users.get_item(Key = { USER_ID :user_id},ConsistentRead=True).get('Item',None)
         if item:
             return item
         raise InvalidUser_Id(user_id)
@@ -384,7 +388,6 @@ class DDBO:
         Deletes all of the user's movies (if purge_movies is True)
         Also deletes the user from any courses where they may be an admin.
         """
-        logger.debug("+++ user_id=%s",user_id)
         logger.debug("delete_user user_id = %s purge_movies=%s",user_id,purge_movies)
         assert is_user_id(user_id)
         movies = self.get_movies_for_user_id(user_id)
@@ -415,6 +418,17 @@ class DDBO:
         with self.api_keys.batch_writer() as batch:
             for api_key in api_keys:
                 batch.delete_item(Key={ API_KEY : api_key})
+
+        # Remove them from every course in which they are an admin
+        user = self.get_user(user_id)
+        for course_id in user[ADMIN_FOR_COURSES]:
+            course = self.get_course(course_id)
+            admins_for_course = course[ADMINS_FOR_COURSE]
+            try:
+                admins_for_course.remove(user_id)
+                self.update_table(self.courses,course_id,{ADMINS_FOR_COURSE:admins_for_course})
+            except ValueError:
+                pass            # looks like this user wasn't in the list
 
         # Get the email address. We should just get the userdict with some fancy projection...
         # Finally delete the user and the unique email
@@ -451,6 +465,7 @@ class DDBO:
 
     def put_course(self, coursedict):
         """Puts the course into the database. Raises an error if the course already exists"""
+        logging.warning("put_course should validate that course_key %s is unique",coursedict[COURSE_KEY])
         try:
             self.courses.put_item(Item=coursedict,
                                   ConditionExpression= 'attribute_not_exists(course_id)')
@@ -635,34 +650,37 @@ def log_args(func):
 
 def list_users_courses(*, user_id):
     """Returns a dictionary with keys:
-    'users' - all the courses to which the user has access, and all of the people in them.
-    'courses' - all of the courses
+    'users' - all the users to which the user has access, and all of the people in them.
+    'courses' - all of the courses to which the user has access, and all the people in them.
     :param: user_id - the user doing the listing (determines what they can see)
 
     NOTE: With MySQL users could only see the course list if they were admins.
     With DynamoDB, users can see the full course list for all of their courses.
     """
     ddbo = DDBO()
-
     user = ddbo.get_user(user_id)
-    return {'users': [user],
+    return {USERS: [user],
             COURSES :  [ddbo.get_course(course_id) for course_id in user[ COURSES ] ] }
 
 
 def list_admins():
-    """Returns a list of all the admins"""
+    """Returns dict of all the admins and the courses in which they are admins."""
     dd = DDBO()
-    admin_users = []
+    admin_users = defaultdict(list)
     last_evaluated_key = None
 
     while True:
-        scan_kwargs = { 'FilterExpression': Attr( ADMIN ).eq(1) }
-
+        scan_kwargs = {}
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
-        response = dd.users.scan(**scan_kwargs)
-        admin_users.extend(response['Items'])
+        response = dd.courses.scan(**scan_kwargs)
+        print("response=",response)
+        for course in response['Items']:
+            print("course=",course)
+            for user_id in course[ADMINS_FOR_COURSE]:
+                print("user_id=",user_id)
+                admin_users[user_id].append(course[COURSE_ID])
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
             break
@@ -670,8 +688,9 @@ def list_admins():
 
 def list_demo_users():
     """Returns a list of all demo accounts."""
+    logging.warning("Scanning users for demo accounts")
     ddbo = DDBO()
-    admin_users = []
+    demo_users = []
     last_evaluated_key = None
 
     while True:
@@ -681,23 +700,26 @@ def list_demo_users():
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
         response = ddbo.users.scan(**scan_kwargs)
-        admin_users.extend(response['Items'])
+        demo_users.extend(response['Items'])
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
             break
-    return admin_users
+    return demo_users
 
 # pylint: disable=too-many-arguments
-def register_email(email, full_name, *, course_key=None, course_id=None, demo_user=0, admin=0):
+def register_email(email, full_name, *, course_key=None, course_id=None, demo_user=0, admin=False):
     """Register a user as identified by their email address for a given course.
     If the user exists, just change their primary course Id and add them to the course.
     If the user does not exist, create them.
+    - Add the user to the specified course.
+    - If the user is admin, add them to the list of course admins
+
     Does not make an api_key or send the links with the api_key.
     :param email: - user email
     :param course_key: - the key. We might only have this, if the user went to the we page
     :param course_id:  - the course
     :param demo_user:  - 1 if this is a demo user
-    :param admin:      - 1 if this is the course admin
+    :param admin:      - True if this is a course admin
     :return: dictionary of { USER_ID :user_id} for user who is registered.
     """
 
@@ -708,7 +730,6 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
         raise ValueError("Either the course_key or the course_id must be provided")
 
     # Get the course name and (optionally) course_id
-
     ddbo = DDBO()
     if course_id is not None:
         course = ddbo.get_course(course_id)
@@ -719,7 +740,11 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
         except (IndexError,TypeError) as e:
             raise InvalidCourse_Key(course_key) from e
 
-    # Be sure that the user exists.
+    # We don't know if the user exists or not. So do a put assuming that they don't.
+    # If they do, we will then do an update.
+    admin_for_courses = []
+    if admin:
+        admin_for_courses = [course_id]
     try:
         user_id = new_user_id()
         ddbo.put_user({USER_ID:user_id,
@@ -728,29 +753,36 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
                                  'created' : int(time.time()),
                                  DEMO:demo_user,
                                  ENABLED:1,
-                                 ADMIN:admin,
+                                 ADMIN_FOR_COURSES:admin_for_courses,
                                  PRIMARY_COURSE_ID:course_id,
                                  PRIMARY_COURSE_NAME:course[COURSE_NAME],
                                  COURSES:[course_id]
                                  })
-        return {USER_ID:user_id}
     except UserExists:
         # The user exists! Change the primary course and add them to this course.
         user = ddbo.get_user_email(email)
-        ddbo.users.update_items( Key={ USER_ID :user[ USER_ID ]},
-                                 UpdateExpression=
-                                 'SET primary_course_id=:pci, '
-                                 'primary_course_name=:pcn, demo=:demo, courses=:courses',
-                                 ExpressionAttributeValues={':pci':course[ COURSE_ID ],
-                                                            ':pcn':course['course_name'],
-                                                            ':demo':demo_user,
-                                                            ':courses':list(set(user[ COURSES ] + [course_id]))})
-        return {USER_ID:user[ USER_ID ]}
+        admin_for_courses = user[ADMIN_FOR_COURSES]
+        if admin:
+            admin_for_courses = list(set(admin_for_courses).union([course_id]))
+        ddbo.update_table(ddbo.users, user_id,
+                          {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
+                           PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
+                           DEMO:demo_user,
+                           COURSES: list(set(user[ COURSES ] + [course_id])),
+                           ADMIN_FOR_COURSES: admin_for_courses})
+
+        user_id = user[ USER_ID ]
+
+    # Add the user to the course admins if the user is an admin
+    if admin:
+        course = ddbo.get_course(course_id)
+        ddbo.update_table(ddbo.courses, course_id,
+                          {ADMINS_FOR_COURSE: list(set(course[ADMINS_FOR_COURSE] + [user_id]))})
+    return {USER_ID:user_id}
 
 
 @log
 def delete_user(*, user_id, purge_movies=False):
-    logging.debug("***user_id=%s",user_id)
     DDBO().delete_user(user_id=user_id, purge_movies=purge_movies)
 
 
@@ -820,10 +852,10 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
     """Create a new course
     """
     DDBO().put_course({ COURSE_ID :course_id,
-                        'course_name':course_name,
-                        'course_key':course_key,
-                        COURSE_ADMINS:[],
-                        'max_enrollment':max_enrollment})
+                        COURSE_NAME:course_name,
+                        COURSE_KEY:course_key,
+                        ADMINS_FOR_COURSE:[],
+                        MAX_ENROLLMENT:max_enrollment})
 
 @log
 def delete_course(*,course_id):
@@ -840,54 +872,64 @@ def add_course_admin(*, admin_id, course_id):
     """
     ddbo = DDBO()
     admin = ddbo.get_user(admin_id)
-    new_courses = list(set(admin[ COURSES ] + [course_id]))
     course = ddbo.get_course(course_id)
-    new_course_admins = list(set(course['course_admins'] + [admin_id]))
-
-    logging.debug("add_course_admin new_courses=%s new_course_admins=%s",new_courses,new_course_admins)
-
-    logging.debug("before add_course_admin get_user(%s)=%s",admin_id,json.dumps(ddbo.get_user(admin_id),default=str,indent=4))
+    courses           = list(set(admin[ COURSES ] + [course_id]))
+    admin_for_courses = list(set(admin[ ADMIN_FOR_COURSES ] + [course_id]))
 
     ddbo.update_table(ddbo.users,
                       admin_id,
                       {PRIMARY_COURSE_ID:course_id,
                        PRIMARY_COURSE_NAME:course[COURSE_NAME],
-                       COURSES: new_courses,
-                       ADMIN: 1 })
+                       COURSES: courses,
+                       ADMIN_FOR_COURSES: admin_for_courses})
+
 
     ddbo.update_table(ddbo.courses, course_id,
-                      { COURSE_ADMINS:new_course_admins})
-
-    logging.debug("after add_course_admin get_user(%s)=%s",admin_id,json.dumps(ddbo.get_user(admin_id),default=str,indent=4))
+                      { ADMINS_FOR_COURSE:list(set(course[ ADMINS_FOR_COURSE ] + [admin_id]))})
 
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
 @log
 def remove_course_admin(*, course_id, admin_id):
-    """Removes email from the course admin list, but doesn't make them not an admin."""
+    """Removes email from the course admin list and takes them out of the course."""
     ddbo = DDBO()
+
+    ## Update admin in users.
+
     admin  = ddbo.get_user( admin_id )
-    course = ddbo.get_course( course_id )
-    assert course is not None
-    assert course[COURSE_ADMINS] is not None
 
     try:
-        new_courses = admin[ COURSES ]
-        new_courses.remove(course_id)
+        courses = admin[ COURSES ]
+        courses.remove(course_id)
         ddbo.update_table(ddbo.users, admin_id,
-                           { COURSES:new_courses,
+                           { COURSES:courses,
                             PRIMARY_COURSE_ID:None,
                             PRIMARY_COURSE_NAME:None})
 
     except ValueError:
-        logger.warning("course remove fail: %s from user %s",course_id,admin_id)
+        logger.warning("removing courses from %s from user %s",course_id,admin_id)
 
     try:
-        new_course_admins = course[COURSE_ADMINS]
-        new_course_admins.remove(admin_id)
-        ddbo.update_table(ddbo.courses, course_id,{COURSE_ADMINS:new_course_admins})
+        admin_for_courses = admin[ ADMIN_FOR_COURSES ]
+        admin_for_courses.remove(course_id)
+        ddbo.update_table(ddbo.users, admin_id,
+                           { ADMIN_FOR_COURSES:admin_for_courses,
+                            PRIMARY_COURSE_ID:None,
+                            PRIMARY_COURSE_NAME:None})
 
+    except ValueError:
+        logger.warning("remove admin_for_courses fail: %s from user %s",course_id,admin_id)
+
+    ## Update admin in courses
+
+    course = ddbo.get_course( course_id )
+    assert course is not None
+    assert course[ADMINS_FOR_COURSE] is not None
+    try:
+        admins_for_course = course[ADMINS_FOR_COURSE]
+        admins_for_course.remove(admin_id)
+        ddbo.update_table(ddbo.courses, course_id,{ADMINS_FOR_COURSE:admins_for_course})
 
     except ValueError:
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
@@ -896,17 +938,15 @@ def remove_course_admin(*, course_id, admin_id):
 @log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
+    logging.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
     assert is_user_id(user_id)
     assert isinstance(course_id,str)
-    logger.warning("HIGH DB DRAIN")
     user = DDBO().get_user(user_id)
-    logging.debug("user=%s",json.dumps(user,indent=4,default=str))
-    assert isinstance(user[COURSES],list)
-    return (course_id in user[ COURSES ] ) and user[ ADMIN ]
+    logging.debug("user=%s",user)
+    return (course_id in user[ ADMIN_FOR_COURSES ] )
 
 @log
 def validate_course_key(*, course_key):
-    logger.warning("HIGH DB DRAIN")
     if DDBO().get_course_by_course_key(course_key):
         return True
     return False
@@ -1428,7 +1468,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     if set_movie_id is not None:
         movie = ddbo.get_movie(set_movie_id)
         is_owner = movie[ USER_ID ] == user_id
-        is_admin = user[ ADMIN ] and (movie[ COURSE_ID ] in user[ COURSES ])
+        is_admin = movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ]
 
         acl  = SET_MOVIE_METADATA[prop]
         if not ((is_owner and '@is_owner' in acl) or (is_admin and '@is_admin') in acl):

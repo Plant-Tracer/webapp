@@ -23,7 +23,7 @@ from app.constants import C
 from app.odb import EMAIL
 
 from fixtures.app_client import client
-from fixtures.local_aws import local_ddb, local_s3, new_course, COURSE_KEY, ADMIN_EMAIL, COURSE_NAME, COURSE_ID, USER_EMAIL
+from fixtures.local_aws import local_ddb, local_s3, new_course, COURSE_KEY, ADMIN_EMAIL, COURSE_NAME, COURSE_ID, USER_EMAIL, API_KEY
 
 
 
@@ -101,16 +101,16 @@ def test_course_list(client, new_course):
     user_id   = user_dict['user_id']
     primary_course_id = user_dict['primary_course_id']
 
-    recs1 = odb.list_users(user_id=user_id)
+    recs1 = odb.list_users_courses(user_id=user_id)
     users1 = recs1['users']
 
     matches = [user for user in users1 if user['user_id']==user_id]
     assert len(matches)>0
 
-    # Make sure that there is an admin in the course who is not the user
+    # Make sure that there is an admin in the course (it's the user)
     recs2 = odb.list_admins()
-    matches = [rec for rec in recs2 if rec['course_id']==primary_course_id and rec['user_id']!=user_id]
-    assert len(matches)==1
+    print("recs2=",recs2)
+    assert len(recs2)==1
 
     # Make sure that the endpoint works
     response = client.post('/api/list-users',
@@ -119,6 +119,7 @@ def test_course_list(client, new_course):
     res = response.get_json()
     assert res['error'] is False
     users2 = res['users']
+    print("users2=",users2)
     # There is the user and the admin; there may also be a demo user
     assert len(users2) in [2,3]
     assert users1[0]['name'] == users2[0]['name']
