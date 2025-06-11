@@ -248,6 +248,7 @@ install-chromium-browser-macos: $(REQ)
 # Includes ubuntu dependencies
 install-ubuntu: $(REQ)
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
+	sudo apt-get update
 	which ffmpeg || sudo apt install ffmpeg
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
