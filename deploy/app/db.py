@@ -17,7 +17,6 @@ import functools
 from flask import request
 
 from botocore.exceptions import ClientError,ParamValidationError
-from jinja2.nativetypes import NativeEnvironment
 
 # from validate_email_address import validate_email
 
@@ -26,14 +25,12 @@ from . import auth
 from . import db_object
 from . import dbfile
 from . import mailer
-from .paths import TEMPLATE_DIR
 from .constants import MIME,C
 from .auth import get_dbreader, get_dbwriter
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
 
-EMAIL_TEMPLATE_FNAME = 'email.txt'
 SUPER_ADMIN_COURSE_ID = -1      # this is the super course. People who are admins in this course see everything.
 
 LOG_DB = 'LOG_DB'
@@ -296,40 +293,6 @@ def register_email(*, email, name, course_key=None, course_id=None, demo_user=0)
                                (email,),
                                asDicts=True)[0]
 
-
-@log
-def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
-    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
-    PROJECT_EMAIL = 'admin@planttracer.com'
-
-    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
-    TO_ADDRS = [email]
-    with open(os.path.join(TEMPLATE_DIR, EMAIL_TEMPLATE_FNAME), "r") as f:
-        msg_env = NativeEnvironment().from_string(f.read())
-
-    logging.info("sending new link to %s",email)
-    msg = msg_env.render(to_addrs=",".join([email]),
-                         from_addr=PROJECT_EMAIL,
-                         planttracer_endpoint=planttracer_endpoint,
-                         api_key=new_api_key)
-
-    DRY_RUN = False
-    SMTP_DEBUG = 'YES' if debug else ''
-    try:
-        smtp_config = auth.smtp_config()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
-    except KeyError as e:
-        raise mailer.NoMailerConfiguration() from e
-    try:
-        mailer.send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
-                            smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
-                            msg=msg)
-    except smtplib.SMTPAuthenticationError as e:
-        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
-    return new_api_key
 
 ################ API KEY ################
 def make_new_api_key(*,email):

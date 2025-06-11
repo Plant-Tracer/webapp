@@ -120,7 +120,7 @@ def api_register():
         return E.INVALID_EMAIL
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
-        db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+        mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
         ret = {'error': False, 'message': 'Registration key sent to '+email+link_html}
     except mailer.InvalidMailerConfiguration:
         logging.error("Mailer reports Mailer not properly configured.")
@@ -138,7 +138,7 @@ def send_link(*, email, planttracer_endpoint):
     if not new_api_key:
         logging.info("email not in database: %s",email)
         raise EmailNotInDatabase(email)
-    db.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+    mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
 
 
 @api_bp.route('/resend-link', methods=GET_POST)
@@ -172,7 +172,7 @@ def api_bulk_register():
     except ValueError:
         logging.error("invalid course id: %s", request.values.get('course_id'))
         return E.INVALID_COURSE_ID
-    
+
     user_id   = get_user_id()
     planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not db.check_course_admin(course_id = course_id, user_id=user_id):
