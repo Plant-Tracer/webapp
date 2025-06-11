@@ -36,15 +36,16 @@ UNIQUE_EMAILS = 'unique_emails'
 MOVIES = 'movies'
 FRAMES = 'movie_frames'
 COURSES = 'courses'
+COURSE_USERS = 'course_users'
 LOGS = 'logs'
 
 # attributes
-ADMINS_FOR_COURSE = 'admins_for_course'
-ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses
-COURSE_ID   = 'course_id'
-COURSE_NAME = 'course_name'
-COURSE_KEY  = 'course_key'
-MAX_ENROLLMENT = 'max_enrollment'
+ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
+ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
+COURSE_ID   = 'course_id'               # course.course_id
+COURSE_NAME = 'course_name'             # course.course_name
+COURSE_KEY  = 'course_key'              # course.course_key
+MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 SUPER_ADMIN = 'super_admin'     # user.super_admin==1 makes the user admin for everything
 
 API_KEY = 'api_key'
@@ -207,8 +208,9 @@ class DDBO:
         self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
         self.movie_frames    = self.dynamodb.Table( table_prefix + FRAMES )
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
+        self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
-        self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.logs]
+        self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.course_users, self.logs]
 
     # Generic stuff
     @staticmethod
@@ -764,6 +766,7 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
         admin_for_courses = user[ADMIN_FOR_COURSES]
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
+        logger.debug("user=%s",user)
         ddbo.update_table(ddbo.users, user_id,
                           {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
                            PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
@@ -772,6 +775,9 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
                            ADMIN_FOR_COURSES: admin_for_courses})
 
         user_id = user[ USER_ID ]
+
+    # Add the user to the course registration.
+    ddbo.course_users.put_item(Item={COURSE_ID:course_id, USER_ID:user_id})
 
     # Add the user to the course admins if the user is an admin
     if admin:
@@ -782,8 +788,26 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
 
 
 @log
+def unregister_from_course(*, course_id, user_id):
+    """Remove user_id from course_id, but do not make other changes."""
+    ddbo = DDBO()
+    user = ddbo.get_user(user_id)
+    try:
+        user[COURSES].remove(course_id)
+        ddbo.update_table(ddbo.users, user_id, {COURSES:user[COURSES]})
+    except ValueError:
+        pass
+    ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:user_id})
+
+@log
 def delete_user(*, user_id, purge_movies=False):
-    DDBO().delete_user(user_id=user_id, purge_movies=purge_movies)
+    ddbo = DDBO()
+    user = ddbo.get_user(user_id)
+    # Remove the student from every course
+    for course_id in user[COURSES]:
+        odb.unregister_from_course(course_id=course_id, user_id = user_id)
+
+    ddbo.delete_user(user_id=user_id, purge_movies=purge_movies)
 
 
 ################################################################
@@ -953,29 +977,33 @@ def validate_course_key(*, course_key):
 
 @log
 def remaining_course_registrations(*,course_key):
-    logger.warning("HIGH DB DRAIN and SCAN")
     ddbo = DDBO()
     course = ddbo.get_course_by_course_key(course_key)
     if not course:
         return 0
     course_id = course[ COURSE_ID ]
+    enrolled = course_enrollments(course_id)
+    return course['max_enrollment'] - len(enrolled)
 
-    registrants = 0
+@log
+def course_enrollments(course_id):
+    """Return a list of all those enrolled in the course (including staff)"""
+    """Gets all the movie frames"""
+    ddbo = DDBO()
+    user_ids = []
     last_evaluated_key = None
+
     while True:
-        scan_kwargs = {}
+        query_kwargs = { 'KeyConditionExpression': Key( COURSE_ID ).eq( course_id ) }
 
         if last_evaluated_key:
-            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-
-        response = ddbo.users.scan(**scan_kwargs)
-        for user in response['Items']:
-            if course_id == user[ PRIMARY_COURSE_ID ] or course_id in user[ COURSES ]:
-                registrants += 1
+            query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+        response = ddbo.course_users.query(**query_kwargs)
+        user_ids.extend( (item[USER_ID] for item in response['Items']) )
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
             break
-    return course['max_enrollment'] - registrants
+    return user_ids
 
 
 

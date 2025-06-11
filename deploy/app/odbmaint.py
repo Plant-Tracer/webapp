@@ -36,6 +36,7 @@ BillingMode = 'BillingMode'
 PAY_PER_REQUEST = 'PAY_PER_REQUEST'
 HASH = 'HASH'
 RANGE = 'RANGE'
+COMMENT = 'Comment'
 S = 'S' # string
 N = 'N' # number
 
@@ -47,11 +48,12 @@ projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
 
 # Define all table configurations as a global constant
 # Note:
-# courses - each course needs to know all of its users. They are stored in user_ids[]
+# courses - each course knows its admins, but not its users.
 
 TABLE_CONFIGURATIONS = [
     {
         TableName: 'users',
+        COMMENT: "Primary table for tracking users",
         KeySchema: [
             {AttributeName: 'user_id', KeyType: HASH}
         ],
@@ -124,6 +126,19 @@ TABLE_CONFIGURATIONS = [
                 ],
                 **projection_all,
             },
+        ],
+        **billing,
+    },
+    {
+        TableName: 'course_users',
+        COMMENT: "Tracks users registered in course",
+        KeySchema: [
+            {AttributeName: 'course_id', KeyType: HASH},
+            {AttributeName: 'user_id', KeyType: RANGE},
+        ],
+        AttributeDefinitions: [
+            {AttributeName: 'course_id', AttributeType: S},
+            {AttributeName: 'user_id', AttributeType: S},
         ],
         **billing,
     },
@@ -258,6 +273,10 @@ def create_tables(ddbo, ignore_table_exists = None):
     for table_config in TABLE_CONFIGURATIONS:
         # prepend the prefix to the table name before creating it
         tc = copy.deepcopy(table_config)
+        try:
+            del tc[COMMENT]     # remove comment if present
+        except KeyError:
+            pass
         tc[TableName] = table_name = ddbo.table_prefix + tc[TableName]
         logger.info("Attempting to create table: %s", table_name)
         try:

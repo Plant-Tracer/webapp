@@ -29,19 +29,22 @@ TEST_COURSE_DATA = {
     'course_name': TEST_COURSE_NAME,
     'course_key': TEST_COURSE_KEY,
     'admins_for_course': [TEST_ADMIN_ID],
+    'courses' : [],
     'max_enrollment': TEST_COURSE_MAX_ENROLLMENT
 }
 
 TEST_USER_ID = odb.new_user_id()
 TEST_USER_EMAIL = 'new.user@example.com'
+TEST_USER_FULL_NAME = 'Firstname Lastname'
 TEST_USER_DATA = {
     'user_id': TEST_USER_ID,
     'email': TEST_USER_EMAIL,
-    'full_name': 'Firstname Lastname',
+    'full_name': TEST_USER_FULL_NAME,
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
     'admin_for_courses': [],
+    'courses': [],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
 }
@@ -53,6 +56,7 @@ TEST_ADMIN_DATA = {
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
+    'courses' : [],
     'admin_for_courses': [TEST_COURSE_ID],
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
@@ -95,9 +99,12 @@ def test_odb(local_ddb):
 
     # Create the user.
     ddbo.put_user(TEST_USER_DATA)
-    # This should fail becuase the user we are putting exist
+    # This should fail because the user we are putting exist
     with pytest.raises(UserExists):
         ddbo.put_user(TEST_USER_DATA)
+
+    # Register the user into the course
+    odb.register_email(TEST_USER_EMAIL, TEST_USER_FULL_NAME, course_id=TEST_COURSE_ID)
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user_email(TEST_USER_EMAIL) == TEST_USER_DATA
@@ -150,6 +157,16 @@ def test_odb(local_ddb):
     print("u2=",json.dumps(u2,indent=4,default=str))
     assert u1==u2
     assert u1['email'] == TEST_USER_EMAIL+"-new"
+
+    user_ids_before = odb.course_enrollments(course_id=TEST_COURSE_ID)
+
+    # Remove the student from the course
+    odb.unregister_from_course(user_id=TEST_USER_ID, course_id=TEST_COURSE_ID)
+
+    # Verify student no longer present
+    user_ids_after = odb.course_enrollments(course_id=TEST_COURSE_ID)
+
+    assert len(user_ids_before) == len(user_ids_after)+1
 
     # Try to delete the user without deleting the user's movies
     with pytest.raises(RuntimeError,match=r'.* has 1 outstanding movie.*'):
