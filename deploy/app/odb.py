@@ -46,6 +46,7 @@ COURSE_KEY  = 'course_key'              # course.course_key
 MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 SUPER_ADMIN = 'super_admin'     # user.super_admin==1 makes the user admin for everything
 
+
 API_KEY = 'api_key'
 
 EMAIL     = 'email'
@@ -58,6 +59,9 @@ DEMO = 'demo'
 MOVIE_ID = 'movie_id'
 MOVIE_DATA_URN = 'movie_data_urn'
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+TOTAL_BYTES='total_bytes'
+TOTAL_FRAMES='total_frames'
+DATE_UPLOADED='date_uploaded'
 VERSION = 'version'
 DELETED = 'deleted'
 PUBLISHED = 'published'
@@ -1100,9 +1104,10 @@ def create_new_movie(*, user_id, course_id, title=None, description=None, orig_m
                     'last_frame_tracked':None,
                     'created_at':int(time.time()),
                     'date_uploaded':None,
-                    'total_frames':0,
-                    VERSION:0,  # will be set to 1 with set_movie_data
-                    'total_bytes':0})
+                    TOTAL_FRAMES:None, # will be set later
+                    TOTAL_BYTES:None,  # will be set later
+                    VERSION:0  # will be set to 1 with set_movie_data
+                    })
     return movie_id
 
 def get_movie(*, movie_id):
@@ -1140,6 +1145,9 @@ def set_movie_data(*,movie_id, movie_data):
     movie_data_urn        = db_object.make_urn( object_name = object_name)
     db_object.write_object(movie_data_urn, movie_data)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn,
+                                              DATE_UPLOADED:int(time.time()),
+                                              TOTAL_BYTES:len(movie_data),
+                                              TOTAL_FRAMES:None,
                                               VERSION:movie[VERSION]+1 })
 
 def set_movie_data_urn(*,movie_id, movie_data_urn):
@@ -1510,6 +1518,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     assert value is not None
 
     if isinstance(value, float):
+        logging.debug("Converted %s %s -> %s",prop,value,str(value))
         value = str(value)
 
     ddbo = DDBO()

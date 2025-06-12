@@ -11,6 +11,7 @@ import os
 import functools
 import subprocess
 import json
+import decimal
 from functools import lru_cache
 import base64
 from os.path import join
@@ -60,9 +61,18 @@ def git_branch():
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
 
+def json_fixer(s):
+    """converts s to an int, a float, or a str"""
+    if isinstance(s,decimal.Decimal):
+        return float(s)
+    if isinstance(s,(int,float)):
+        return s
+    return str(s)
+
+
 def fix_types(obj):
     """Process JSON so that it dumps without `default=str`"""
-    return json.loads(json.dumps(obj,default=str))
+    return json.loads(json.dumps(obj,default=json_fixer))
 
 ################################################################
 # Authentication API - for clients

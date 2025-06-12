@@ -30,11 +30,17 @@ from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
 
-
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__)
+
+################################################################
+### Handle invalid apikey exceptions
+@api_bp.errorhandler(InvalidAPI_Key)
+def invalid_api_key(e):
+    return E.INVALID_API_KEY, 403
+
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
@@ -96,12 +102,10 @@ def get_user_id(allow_demo=True):
 
 @api_bp.route('/check-api_key', methods=GET_POST)
 def api_check_api_key():
-    """API to check the user key and, if valid, return usedict or returns an error."""
-
-    try:
-        return {'error': False, 'userinfo' : fix_types(odb.validate_api_key(get_user_api_key())) }
-    except InvalidAPI_Key:
-        return E.INVALID_API_KEY
+    """API to check the user key and, if valid, return usedict or returns an error.
+    validate_api_key() will raise InvalidAPI_Key() for an invalid API key that will be handled above.
+    """
+    return {'error': False, 'userinfo' : fix_types(odb.validate_api_key(get_user_api_key())) }
 
 
 @api_bp.route('/get-logs', methods=POST)
@@ -270,42 +274,6 @@ def api_new_movie():
                                                           mime_type='video/mp4',
                                                           sha256=movie_data_sha256)
     return ret
-
-@api_bp.route('/upload-movie', methods=POST)
-def api_upload_movie():
-    """
-    Upload a movie that has already been created. This is our receiver for 'presigned posts.'
-    We verify that the SHA256 provided matches the SHA256 in the database, then we verify that the uploaded
-    file actually has that SHA256.
-    :param: mime_type - mime type
-    :param: scheme - should be db
-    :param: sha256 - should be a hex encoding of the sha256
-    :param: key    - where the file gets uploaded -from api_new_movie()
-    :param: request.files['file'] - the file!
-    """
-    logging.info("info")
-    logging.error("error")
-    scheme = get('scheme')
-    key = get('key')
-    movie_data_sha256 = get('sha256') # claimed SHA256
-    logging.debug("api_upload_movie: request=%s request.files=%s ", request,request.files)
-    if 'file' not in request.files: # pylint: disable=unsupported-membership-test
-        logging.debug("request.files=%s",request.files)
-        return E.NO_FILE_PARAMETER
-    with io.BytesIO() as f:
-        request.files['file'].save(f)
-        movie_data = f.getvalue()
-        logging.debug("len(movie_data)=%s",len(movie_data))
-        if len(movie_data) > C.MAX_FILE_UPLOAD:
-            return {'error': True, 'message': f'Upload larger than larger than {C.MAX_FILE_UPLOAD} bytes.'}
-    # make sure claimed SHA256 matches computed SHA256
-    if db_object.sha256(movie_data) != movie_data_sha256:
-        logging.error("sha256(movie_data)=%s but movie_data_sha256=%s",db_object.sha256(movie_data),movie_data_sha256)
-        return {'error': True, 'message':
-                f'movie_data_sha256={movie_data_sha256} but post.sha256={db_object.sha256(movie_data)}'}
-    urn = db_object.make_urn(object_name=key, scheme=scheme)
-    db_object.write_object(urn, movie_data)
-    return {'error':False,'message':'Upload ok.'}
 
 @api_bp.route('/get-movie-data', methods=GET_POST)
 def api_get_movie_data():
@@ -506,7 +474,7 @@ def api_get_movie_metadata():
 
     movie_metadata =  odb.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
     # If we do not have the movie width and height, get them...
-    if (not movie_metadata['width']) or (not movie_metadata['height']):
+    if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
         movie_data     = odb.get_movie_data(movie_id = movie_id)
 
         if movie_data is None:

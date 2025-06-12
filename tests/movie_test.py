@@ -18,6 +18,7 @@ import urllib
 from urllib.parse import quote
 from os.path import abspath, dirname
 
+
 import filetype
 
 from app import odb
@@ -26,12 +27,14 @@ from app import bottle_app
 from app import db_object
 from app import tracker
 
+from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.paths import TEST_DATA_DIR
 from app.constants import C,MIME
+from app.db_object import s3_client
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
-from fixtures.local_aws import new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,TEST_PLANTMOVIE_PATH,local_s3
+from fixtures.local_aws import local_ddb, new_course,new_movie, local_s3, TEST_PLANTMOVIE_PATH, MOVIE_TITLE
 
 POST_TIMEOUT = 2
 GET_TIMEOUT = 2
@@ -46,6 +49,7 @@ def movie_list(the_client, api_key):
     resp = the_client.post('/api/list-movies',
                            data = {'api_key': api_key})
     res = resp.get_json()
+    logging.debug("movie_list res=%s",res)
     assert res['error'] is False
     return res['movies']
 
@@ -60,6 +64,7 @@ def get_movie(the_client, api_key, movie_id):
 def data_from_redirect(url, the_client):
     logging.info("REDIRECT: url=%s ",url)
     url = url.replace("#REDIRECT ","")
+    o = urllib.parse.urlparse(url)
     if url.startswith('/api/get-object?'):
         # Decode the /get-object parameters and run the /api/get-object
         m = re.search("urn=(.*)&sig=(.*)",url)
@@ -68,12 +73,13 @@ def data_from_redirect(url, the_client):
         resp = the_client.get(f'/api/get-object?urn={quote(urn)}&sig={quote(sig)}')
         logging.debug("returning resp.data len=%s",len(resp.data))
         return resp.data
-    else:
+    if url.startswith('http'):
         # Request it using http:, which is probably a call to S3
         r = requests.get(url,timeout=GET_TIMEOUT)
         return r.content # note that Flask uses r.data but requests uses r.content
-
-
+    if url.startswith('s3:'):
+        return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])['Body'].read()
+    raise ValueError(f"cannot decode {url}")
 
 # Test for edge cases
 def test_edge_case():
@@ -95,6 +101,11 @@ def test_new_movie(client, new_movie):
         if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
             count += 1
             logging.debug("found movie: %s",movie)
+        else:
+            logging.debug("skip deleted=%s published=%s title=%s ",
+                          movie['deleted']==0,
+                          movie['published']==0,
+                          movie['title']==movie_title)
     assert count==1
 
     # Make sure that we cannot delete the movie with a bad key
