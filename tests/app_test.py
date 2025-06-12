@@ -14,14 +14,14 @@ import uuid
 import xml.etree.ElementTree
 
 from app.paths import STATIC_DIR,TEST_DATA_DIR
-import app.db as db
-import app.bottle_api as bottle_api
-import app.bottle_app as bottle_app
-import app.auth as auth
-import app.apikey as apikey
+from app import odb
+from app import bottle_api
+from app import bottle_app
+from app import auth
+from app import apikey
 
-from user_test import new_course,new_user,API_KEY,MOVIE_ID
-from movie_test import new_movie
+from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
+from fixtures.local_aws import local_ddb, local_s3, new_course, new_movie, api_key
 from fixtures.app_client import client
 
 def test_version(client):  # Use the app fixture
@@ -76,8 +76,8 @@ def test_null_api_key(mocker):
 ################################################################
 # Validate HTML produced by templates below.
 # https://stackoverflow.com/questions/35538/validate-xhtml-in-python
-def test_templates(client,new_user):
-    api_key = new_user[API_KEY]
+def test_templates(client,new_course):
+    api_key = new_course[API_KEY]
 
     def dump_lines(text):
         for (ct, line) in enumerate(text.split("\n"), 1):
@@ -134,20 +134,35 @@ def test_templates(client,new_user):
 def test_api_edit_movie(new_movie,client):
     # Verifies that editing the movie version has updated
     api_key = new_movie[API_KEY]
+    user_id  = new_movie[USER_ID]
     movie_id = new_movie[MOVIE_ID]
-    movie = db.Movie(movie_id = movie_id)
-    movie_metadata = movie.metadata
+
+    movie = odb.get_movie(movie_id = movie_id)
+    assert movie[VERSION] == 1  # because it had data assigned to it
+
+    movie_metadata = odb.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+    logging.debug("first version=%s", movie_metadata[VERSION])
     resp = client.post('/api/edit-movie',
                        data={'api_key': api_key,
-                             'movie_id': movie.movie_id,
+                             'movie_id': movie_id,
                              'action' : 'bad-action'})
     assert resp.json['error']==True
+    movie = odb.get_movie(movie_id = movie_id)
+    assert movie[VERSION] == 1  # because it was not updated
 
     resp = client.post('/api/edit-movie',
                        data={'api_key': api_key,
-                             'movie_id': movie.movie_id,
+                             'movie_id': movie_id,
                              'action' : 'rotate90cw'})
     assert resp.json['error']==False
-    movie_metadata2 = movie.metadata
+
+    movie = odb.get_movie(movie_id = movie_id)
+    assert movie[VERSION] == 2  # because it was edited
+
+
+    # Now test the user access
+    movie_metadata2 = odb.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+    logging.debug("second version=%s", movie_metadata2[VERSION])
     # Make sure that the version number incremented
+    logging.debug("movie_metadata=%s movie_metadata2=%s",movie_metadata,movie_metadata2)
     assert movie_metadata['version'] +1 == movie_metadata2['version']

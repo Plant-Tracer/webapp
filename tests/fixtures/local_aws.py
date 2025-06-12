@@ -3,7 +3,8 @@ These fixtures set environment variables for running DynamoDB Local and minio
 
 """
 
-
+import logging
+import copy
 import uuid
 import pytest
 import os
@@ -14,10 +15,12 @@ from os.path import join,dirname,abspath
 import boto3
 
 from app.constants import C
-from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app import odb
-from app.odb import DDBO
 from app import odbmaint
+from app import db_object
+
+from app.paths import ROOT_DIR,TEST_DATA_DIR
+from app.odb import DDBO,VERSION
 
 DELETE_TEST_TABLES = True
 
@@ -134,12 +137,12 @@ def new_movie(new_course):
     """Fixture that creates a new course, new user, and a new movie, returning a dictionary holding them all.
     Unlike movie_test.test_new_movie_api, this version goes directly to the database, rather than going through the API"""
 
-    cfg = copy.copy(new_user)
+    cfg = copy.copy(new_course)
     movie_title = f'test-movie title {str(uuid.uuid4())}'
     movie_id = odb.create_new_movie(user_id = cfg[ADMIN_ID],
-                                        course_id = cfg[COURSE_ID],
-                                        title = movie_title,
-                                        description = 'Description')
+                                    course_id = cfg[COURSE_ID],
+                                    title = movie_title,
+                                    description = 'Description')
 
     logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
@@ -149,6 +152,8 @@ def new_movie(new_course):
     assert len(movie_data) > 0
 
     odb.set_movie_data(movie_id = movie_id, movie_data = movie_data)
+    movie = odb.get_movie(movie_id = movie_id)
+    assert movie[VERSION] == 1
 
     cfg[MOVIE_ID] = movie_id
     cfg[MOVIE_TITLE] = movie_title
