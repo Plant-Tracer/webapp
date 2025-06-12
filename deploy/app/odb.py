@@ -726,7 +726,8 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
     """
 
     assert isinstance(email,str)
-    assert '@' in email
+    if '@' not in email:
+        raise InvalidUser_Email()
 
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")
@@ -805,7 +806,7 @@ def delete_user(*, user_id, purge_movies=False):
     user = ddbo.get_user(user_id)
     # Remove the student from every course
     for course_id in user[COURSES]:
-        odb.unregister_from_course(course_id=course_id, user_id = user_id)
+        unregister_from_course(course_id=course_id, user_id = user_id)
 
     ddbo.delete_user(user_id=user_id, purge_movies=purge_movies)
 

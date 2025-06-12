@@ -109,7 +109,6 @@ def test_course_list(client, new_course):
 
     # Make sure that there is an admin in the course (it's the user)
     recs2 = odb.list_admins()
-    print("recs2=",recs2)
     assert len(recs2)==1
 
     # Make sure that the endpoint works
@@ -119,8 +118,7 @@ def test_course_list(client, new_course):
     res = response.get_json()
     assert res['error'] is False
     users2 = res['users']
-    print("users2=",users2)
-    # There is the user and the admin; there may also be a demo user
-    assert len(users2) in [2,3]
-    assert users1[0]['name'] == users2[0]['name']
-    assert users1[0]['email'] == users2[0]['email']
+
+    # There is only an admin in the course. Make sure it is the same
+    assert len(users2) in [1]
+    assert users1[0]['full_name'] == users2[0]['full_name']

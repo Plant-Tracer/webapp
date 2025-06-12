@@ -3,6 +3,7 @@
 # - Manages deployemnt to AWS Linux
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
+# Note: PLANTTRACER_CREDENTIALS must be set
 
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
@@ -106,21 +107,19 @@ localmail-config:
 TEST1MODULE=tests/movie_tracker_test.py
 TEST1FUNCTION="-k test_movie_tracking"
 pytest1:
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 pytest:  $(REQ) localmail-config
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO .
 
 pytest-selenium:
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 pytest-debug: localmail-config
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
 
 pytest-app-framework:
@@ -128,9 +127,7 @@ pytest-app-framework:
 	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
 
 pytest-quiet: localmail-config
-	@echo quietly make pytest and stop at the firt error
-	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
-	@echo dbreader_test is successful
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest --log-cli-level=ERROR
 
 pytest-coverage: $(REQ) localmail-config

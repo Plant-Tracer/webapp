@@ -8,6 +8,8 @@ import smtplib
 import logging
 import imaplib
 import os
+import json
+import configparser
 from email.parser import BytesParser
 from email import policy
 
@@ -41,6 +43,32 @@ class InvalidMailerConfiguration(Exception):
 
 class NoMailerConfiguration(Exception):
     """ No mailer configured"""
+
+def get_smtp_config():
+    """Get the smtp config from the [smtp] section of a credentials file.
+    If the file specifies a AWS secret, get that.
+    """
+    if C.SMTPCONFIG_ARN in os.environ:
+        return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
+
+    logging.error("BBB")
+    if C.SMTPCONFIG_JSON in os.environ:
+        cp = configparser.ConfigParser()
+        cp.add_section('smtp')
+        for (k,v) in json.loads(os.environ[C.SMTPCONFIG_JSON]).items():
+            cp.set('smtp',k,v)
+        return cp['smtp']
+
+    cp = configparser.ConfigParser()
+    if C.PLANTTRACER_CREDENTIALS not in os.environ:
+        raise ValueError(f"{C.PLANTTRACER_CREDENTIALS} not set")
+    with open(os.environ[C.PLANTTRACER_CREDENTIALS],"r") as f:
+        cp.read(f)
+    ret = cp['smtp']
+    for key in SMTP_ATTRIBS:
+        assert key in ret
+    return ret
+
 
 def send_message(*,
                  from_addr: str,
@@ -91,7 +119,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     DRY_RUN = False
     SMTP_DEBUG = 'YES' if debug else ''
     try:
-        smtp_config = auth.smtp_config()
+        smtp_config = get_smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
     except KeyError as e:
         raise NoMailerConfiguration() from e

@@ -28,7 +28,7 @@ from . import tracker
 from .apikey import get_user_api_key,get_user_dict,fix_types
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key
+from .odb import InvalidAPI_Key,USER_ID
 
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -120,7 +120,8 @@ def api_register():
     if odb.remaining_course_registrations(course_key=course_key) < 1:
         return E.NO_REMAINING_REGISTRATIONS
     full_name = request.values.get('name')
-    odb.register_email(email=email, course_key=course_key, full_name=full_name)
+    user = odb.register_email(email=email, course_key=course_key, full_name=full_name)
+    user_id = user[USER_ID]
     new_api_key = odb.make_new_api_key(email=email)
     if not new_api_key:
         logging.info("email not in database: %s",email)
@@ -128,7 +129,7 @@ def api_register():
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
         mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
-        ret = {'error': False, 'message': 'Registration key sent to '+email+link_html}
+        ret = {'error': False, 'message': 'Registration key sent to '+email+link_html, 'user_id':user_id}
     except mailer.InvalidMailerConfiguration:
         logging.error("Mailer reports Mailer not properly configured.")
         ret =  {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}

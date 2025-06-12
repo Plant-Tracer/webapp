@@ -15,7 +15,6 @@ import boto3
 from botocore.exceptions import ClientError
 
 from .constants import C
-from .paths import SMTP_CONFIG_FILE
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -80,19 +79,3 @@ def get_aws_secret_for_section(section):
 ################################################################
 # Authentication configuration - for server
 ##
-
-
-def smtp_config():
-    """Get the smtp config from the [smtp] section of a credentials file.
-    If the file specifies a AWS secret, get that.
-    """
-    if C.SMTPCONFIG_ARN in os.environ:
-        return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
-
-    cp = configparser.ConfigParser()
-    with open(SMTP_CONFIG_FILE,"r") as f:
-        cp.read(f)
-    ret = cp['smtp']
-    for key in SMTP_ATTRIBS:
-        assert key in ret
-    return ret

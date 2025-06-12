@@ -26,6 +26,9 @@ class C:
     FFMPEG_PATH = 'FFMPEG_PATH'
     DYNAMODB_ENDPOINT_URL = 'DYNAMODB_ENDPOINT_URL'
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
+    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS' # where the .ini file is with [smtp] and [imap] config
+    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
+    SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
 
     # defaults:
     THE_DEFAULT_REGION = 'us-east-1'
@@ -72,7 +75,6 @@ class C:
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'
     API_KEY_COOKIE_MAX_AGE = 60*60*24*180
-    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'
 
 class MIME:
     """MIME Types"""

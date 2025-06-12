@@ -3,3 +3,4 @@ uvicorn
 gunicorn
 tabulate
 pytest
+localmail

@@ -21,11 +21,10 @@ from os.path import abspath, dirname, join
 
 from fixtures.localmail_config import mailer_config
 from fixtures.app_client import client
+from fixtures.local_aws import local_ddb,local_s3,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
 
-from user_test import new_user,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
-
-import app.db as db
-import app.mailer as mailer
+from app import odb
+from app import mailer
 
 
 MSG = """to: {{ to_addrs }}
@@ -39,7 +38,7 @@ FAKE_USER_EMAIL = f'fake-user@{str(uuid.uuid4())}.planttracer.com'
 FAKE_NAME       = f'fake-name-{str(uuid.uuid4())}'
 FAKE_SENDER     = f'do-not-reply@{str(uuid.uuid4())}.planttracer.com'
 
-@pytest.mark.skip(reason="changing authentication")
+#@pytest.mark.skip(reason="changing authentication")
 def test_send_message(mailer_config):
     nonce = str(uuid.uuid4())
 
@@ -75,20 +74,20 @@ def test_send_message(mailer_config):
         raise RuntimeError(f"Could not find and delete test message using smtp_config={smtp_config} imap_config={imap_config}")
 
 
-@pytest.mark.skip(reason="changing authentication")
+#@pytest.mark.skip(reason="changing authentication")
 def test_register_email(client, mailer_config,new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
 
     """Some tests of the email registration software in db"""
-    with pytest.raises(mailer.InvalidEmail):
-        db.register_email(email='invalid-email', name='valid-name')
+    with pytest.raises(odb.InvalidUser_Email):
+        odb.register_email(email='invalid-email', full_name='valid-name', course_key=course_key)
 
     with pytest.raises(ValueError):
-        db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key=None, course_id=None)
+        odb.register_email(email=FAKE_USER_EMAIL, full_name='valid-name', course_key=None, course_id=None)
 
-    with pytest.raises(db.InvalidCourse_Key):
-        db.register_email(email=FAKE_USER_EMAIL, name='valid-name', course_key='invalid-course-key', course_id=None)
+    with pytest.raises(odb.InvalidCourse_Key):
+        odb.register_email(email=FAKE_USER_EMAIL, full_name='valid-name', course_key='invalid-course-key', course_id=None)
 
 
     # try register api
@@ -98,8 +97,11 @@ def test_register_email(client, mailer_config,new_course):
                                    'name':FAKE_NAME})
     assert response.status_code == 200
 
-    user_id = response.json['user_id']
+    try:
+        user_id = response.json['user_id']
+    except KeyError as e:
+        raise ValueError(f"/api/register response {response.json} is invalid")
 
     # TODO: verify if registration mail appeared
     # Now delete the user
-    db.delete_user(user_id=user_id, purge_movies=True)
+    odb.delete_user(user_id=user_id, purge_movies=True)

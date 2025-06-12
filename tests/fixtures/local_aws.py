@@ -126,7 +126,8 @@ def new_course(local_ddb, local_s3):
 @pytest.fixture
 def api_key(new_course):
     """Simple fixture that just returns a valid api_key"""
-    yield new_course_user[API_KEY]
+    assert odb.is_api_key(new_course[API_KEY])
+    yield new_course[API_KEY]
 
 @pytest.fixture
 def new_movie(new_course):
