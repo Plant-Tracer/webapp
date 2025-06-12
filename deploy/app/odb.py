@@ -823,7 +823,8 @@ def validate_api_key(api_key):
     :return: User dictionary if api_key and user are both enabled, otherwise return None
     """
     ddbo = DDBO()
-    assert is_api_key(api_key)
+    if not is_api_key(api_key):
+        raise InvalidAPI_Key()
     api_key_dict = ddbo.get_api_key_dict(api_key)
     print("api_key_dict:",api_key_dict)
     if api_key_dict[ ENABLED ]:

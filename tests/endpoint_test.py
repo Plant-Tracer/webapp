@@ -20,10 +20,12 @@ import pytest
 
 from app import odb
 from app import db_object
+from app.odb import DDBO,is_api_key
 from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
 from app.constants import C,E,__version__,GET,POST,GET_POST
 
 from fixtures import local_aws
+from fixtures.local_aws import ADMIN_ID, ADMIN_EMAIL
 from fixtures.app_client import client
 from fixtures.localmail_config import mailer_config
 from fixtures.local_aws import local_ddb, local_s3, new_course, api_key
@@ -55,6 +57,7 @@ def test_add(client):
 
 def test_api_key(client, new_course):
     api_key = new_course[local_aws.API_KEY]
+    logging.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
     assert r.json['error'] == False
@@ -80,13 +83,15 @@ def test_api_get_logs(client, new_course):
 
 # /api/bulk-register tests
 
-def test_bulk_register_success(client, new_course, mailer_config, ddbo):
+def test_bulk_register_success(client, new_course, mailer_config):
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
+    ddbo = DDBO()
     email_address = 'testuser@example.com'
     course_id = new_course[local_aws.COURSE_ID]
-    admin_user = ddbo.lookup_user(email=None, user_id=new_course[new_course.ADMIN_ID], get_admin=True, get_courses=None)
-    api_key = ddbo.make_new_api_key(email=new_course[new_course.ADMIN_EMAIL])
+    admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])
+    api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    assert is_api_key(api_key)
 
     r = client.post('/api/bulk-register',
                     data={'api_key': api_key,

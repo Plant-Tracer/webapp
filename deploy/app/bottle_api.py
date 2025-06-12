@@ -28,7 +28,7 @@ from . import tracker
 from .apikey import get_user_api_key,get_user_dict,fix_types
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
 
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -47,6 +47,10 @@ def get_movie_id():
     if not odb.is_movie_id( ret ):
         raise Invalid_MovieId( ret )
     return ret
+
+def get_course_id():
+    """Note that course_id's are no longer integers. They can even have spaces in them!"""
+    return get(COURSE_ID)
 
 def get_json(key):
     try:
@@ -182,26 +186,22 @@ def api_send_link():
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
 
-    course_id =  0
-    try:
-        course_id = int(request.values.get('course_id'))
-    except ValueError:
-        logging.error("invalid course id: %s", request.values.get('course_id'))
-        return E.INVALID_COURSE_ID
-
+    course_id = get_course_id()
     user_id   = get_user_id()
-    planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not odb.check_course_admin(course_id = course_id, user_id=user_id):
         return E.INVALID_COURSE_ACCESS
 
-    email_addresses = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
+    planttracer_endpoint = request.values.get('planttracer_endpoint') # for emails
+    email_addresses      = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
+    user_ids             = []
     try:
         for email in email_addresses:
             email = email.strip()
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
-            odb.register_email(email=email, course_id=course_id, full_name="")
+            user = odb.register_email(email=email, course_id=course_id, full_name="")
             send_link(email=email, planttracer_endpoint=planttracer_endpoint)
+            user_ids.append(user[USER_ID])
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
     except mailer.NoMailerConfiguration:
@@ -210,7 +210,7 @@ def api_bulk_register():
     except mailer.InvalidMailerConfiguration as e:
         logging.error("invalid mailer configuration: %s",e)
         return E.INVALID_MAILER_CONFIGURATION
-    return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses'}
+    return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses', 'user_ids':user_ids}
 
 ################################################################
 ##
