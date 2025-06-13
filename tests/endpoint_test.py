@@ -64,7 +64,7 @@ def test_api_key(client, new_course):
     assert r.json['userinfo']['full_name'] == 'Course User'
 
     r = client.post('/api/check-api_key', data={'api_key': 'invalid'})
-    assert r.status_code == 200
+    assert r.status_code == 403
     assert r.json['error'] == True
 
 def test_api_get_logs(client, new_course):
