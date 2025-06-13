@@ -16,6 +16,7 @@ import boto3
 #from app.paths import STATIC_DIR,TEST_DATA_DIR
 #from app.constants import C
 from app import db_object
+from app import odb
 
 from fixtures.local_aws import local_s3
 
@@ -28,7 +29,7 @@ def test_object_name():
 # pylint: disable=unused-argument
 def test_make_urn(local_s3):
     name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
-    a = db_object.make_urn(object_name=name, scheme=None)
+    a = db_object.make_urn(object_name=name)
     assert a.endswith(".txt")
 
 # pylint: disable=unused-argument
@@ -38,8 +39,10 @@ def test_write_read_delete_object(local_s3):
     hasher.update(DATA)
     # DATA_SHA256 = hasher.hexdigest()
 
-    name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
-    urn  = db_object.make_urn(object_name=name, scheme=None)
+    course_id = 'bogus'
+    movie_id = odb.new_movie_id()
+    name = db_object.object_name(course_id=course_id, movie_id=movie_id, ext='.txt')
+    urn  = db_object.make_urn(object_name=name)
     try:
         db_object.write_object(urn=urn, object_data=DATA)
     except s3client.exceptions.NoSuchBucket as e:
