@@ -23,7 +23,7 @@ from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
 from .auth import AuthError
-from .odb import InvalidAPI_Key
+from .odb import InvalidAPI_Key,fix_types
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -62,22 +62,6 @@ def git_branch():
         return subprocess.check_output("git rev-parse --abbrev-ref HEAD".split(),encoding='utf-8')
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
-
-def json_fixer(s):
-    """converts s to an int, a float, or a str"""
-    if isinstance(s,decimal.Decimal):
-        f = float(s)
-        if math.floor(f)==math.ceil(f):
-            return int(f)
-        return f
-    if isinstance(s,(int,float)):
-        return s
-    return str(s)
-
-
-def fix_types(obj):
-    """Process JSON so that it dumps without `default=str`"""
-    return json.loads(json.dumps(obj,default=json_fixer))
 
 ################################################################
 # Authentication API - for clients

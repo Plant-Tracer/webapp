@@ -29,14 +29,14 @@ from app import odb
 from app import db_object
 from app import tracker
 from app.constants import MIME,E
-from app.odb import API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID
+from app.odb import API_KEY,MOVIE_ID,TITLE,USER_ID
 
 
 # get the first MOV
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
-from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
+from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH,MOVIE_TITLE,local_s3
 from movie_test import new_movie
 
 # Bogus labels for generic test
@@ -55,7 +55,7 @@ def test_track_point_annotations(client, new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_urn = odb.create_new_frame(movie_id=movie_id, frame_number=0)
+    frame_urn = odb.create_new_movie_frame(movie_id=movie_id, frame_number=0)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back

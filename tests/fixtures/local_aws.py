@@ -20,7 +20,7 @@ from app import odbmaint
 from app import db_object
 
 from app.paths import ROOT_DIR,TEST_DATA_DIR
-from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID
+from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
 
 DELETE_TEST_TABLES = True
 
@@ -147,6 +147,8 @@ def new_movie(new_course):
 
     odb.set_movie_data(movie_id = movie_id, movie_data = movie_data)
     movie = odb.get_movie(movie_id = movie_id)
+    assert movie[DELETED] == 0
+    assert movie[PUBLISHED] == 0
     assert movie[VERSION] == 1
 
     cfg[MOVIE_ID] = movie_id

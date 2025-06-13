@@ -76,6 +76,7 @@ TEST_MOVIE_DATA = {
     'last_frame_tracked':0,
     'created_at':int(time.time()),
     'date_uploaded':int(time.time()),
+    'fps':29.92,
     'total_frames':10,
     'total_bytes':100
 }

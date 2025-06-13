@@ -25,15 +25,17 @@ from . import odb
 from . import db_object
 from . import mailer
 from . import tracker
-from .apikey import get_user_api_key,get_user_dict,fix_types
+from .apikey import get_user_api_key,get_user_dict
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,fix_types
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__)
+
+
 
 ################################################################
 ### Handle invalid apikey exceptions
@@ -445,6 +447,9 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
+    logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
+    logging.debug("fix_types(odb.list_movies)=%s",fix_types(odb.list_movies(user_id=get_user_id())))
+
     return {'error': False, 'movies': fix_types(odb.list_movies(user_id=get_user_id()))}
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)

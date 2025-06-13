@@ -10,6 +10,7 @@ import os
 import logging
 import json
 import copy
+import math
 import functools
 import re
 import uuid
@@ -17,12 +18,15 @@ import time
 from collections import defaultdict
 from functools import lru_cache,wraps
 from decimal import Decimal
+from typing import Literal,Optional,Any
 
 from flask import request
 
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
+
+from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model
 
 from . import db_object
 from .constants import C
@@ -75,8 +79,52 @@ DELETED = 'deleted'
 PUBLISHED = 'published'
 CREATED = 'created'
 EMAIL = 'email'
-
 NAME = 'name'
+
+class Movie(BaseModel):
+    movie_id: str
+    title: str
+    description: str
+    created_at: conint(gt=0)
+    user_id: str
+    course_id: str
+
+    published: conint(ge=0, le=1)
+    deleted: conint(ge=0, le=1)
+    date_uploaded: Optional[conint(gt=0)]
+    orig_movie: Optional[str]
+    fps:  Optional[condecimal(max_digits=4, decimal_places=2)]
+    width: Optional[conint(ge=0, le=10000)]
+    height: Optional[conint(ge=0, le=10000)]
+
+    total_frames: Optional[conint(ge=0)]
+    total_bytes: Optional[conint(ge=0)]
+
+    movie_data_urn: Optional[AnyUrl]
+    movie_zipfile_urn: Optional[AnyUrl]
+
+    last_frame_tracked: Optional[conint(ge=0)]
+
+    version: Optional[conint(ge=0)]
+
+# Function to validate a single prop and value using the Movie schema
+def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:
+    if prop not in Movie.model_fields:
+        raise AttributeError(f"{prop} is not a valid field of Movie")
+
+    field_type = Movie.model_fields[prop].annotation
+    is_required = Movie.model_fields[prop].is_required
+
+    # Dynamically create a Pydantic model with just this field
+    TempModel = create_model("TempModel", **{prop: (field_type, ... if is_required else None)})
+
+    try:
+        validated = TempModel(**{prop: value})
+        return getattr(validated, prop)
+    except ValidationError as e:
+        raise ValueError(f"Validation error for '{prop}': {e}")
+
+
 
 USER_ID = 'user_id'
 
@@ -122,6 +170,23 @@ class UnauthorizedUser(ODB_Errors):
 
 class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
+
+################################################################
+## Type conversion
+################################################################
+
+def _fixer(obj):
+    if isinstance(obj,Decimal):
+        if obj.to_integral_value() == obj:
+            return int(obj)
+        return float(obj)
+    return str(obj)
+
+def fix_types(obj):
+    """Process JSON so that it dumps without `default=str`"""
+    return json.loads(json.dumps(obj,default=_fixer))
+
+
 
 ################################################################
 ## DDBO - The Object Database Class
@@ -1186,7 +1251,9 @@ def purge_movie_frames(*,movie_id):
     frames = ddbo.get_frames( movie_id )
 
     for frame in frames:
-        db_object.delete_object(frame['frame_urn'])
+        frame_urn = frame.get('frame_urn',None)
+        if frame_urn is not None:
+            db_object.delete_object(frame_urn)
     ddbo.delete_movie_frames( frames )
 
 
@@ -1306,6 +1373,10 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
                                & Key('frame_number').between(Decimal(f1), Decimal(f2)),
                                **query_kwargs)
 
+        for i in response['Items']:
+            logging.debug("a frame response=%s",i)
+            assert i['trackpoints'] != 'd'
+
         yield from response['Items']
 
         last_evaluated_key = response.get('LastEvaluatedKey')
@@ -1324,7 +1395,10 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
 
     ret = []
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ):
+        logging.debug("frame=%s",frame)
         for tp in frame['trackpoints']:
+            assert tp!='d'
+            logging.debug("tp=%s",tp)
             ret.append({'frame_number':frame['frame_number'],
                         'x':tp['x'],
                         'y':tp['y'],
@@ -1370,12 +1444,13 @@ def last_tracked_movie_frame(*, movie_id):
             break
     return None
 
-def put_frame_trackpoints(*, movie_id:int, frame_number:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict]):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
-    assert is_movie_id(movie_id)
+    # DDBO.update_table doesn't handle compound keys...
+    logging.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
     DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
                                           'frame_number':frame_number},
                                      UpdateExpression='SET trackpoints=:val',
@@ -1553,6 +1628,8 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     ddbo = DDBO()
 
     if set_movie_id is not None:
+        # Fix the data type
+        value = validate_movie_field(prop, value)
         movie = ddbo.get_movie(set_movie_id)
         if user_id != ROOT_USER_ID:
             # Check permissions

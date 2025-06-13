@@ -4,3 +4,4 @@ gunicorn
 tabulate
 pytest
 localmail
+pydantic
