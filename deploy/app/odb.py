@@ -133,13 +133,13 @@ def new_movie_id():
     return 'm'+str(uuid.uuid4())
 
 def is_user_id(k):
-    return isinstance(k,str) and k[0]=='u'
+    return isinstance(k,str) and k[0:1]=='u'
 
 def is_api_key(k):
-    return isinstance(k,str) and k[0]=='a' and len(k)==33
+    return isinstance(k,str) and len(k)==33 and k[0]=='a'
 
 def is_movie_id(k):
-    return isinstance(k,str) and k[0]=='m'
+    return isinstance(k,str) and k[0:1]=='m'
 
 # --- Decorator Definition ---
 def dynamodb_error_debugger(func):
@@ -1020,16 +1020,16 @@ def course_enrollments(course_id):
 ########################
 
 @log
-def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
+def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
     """Returns the movie contents for a movie_id.
     If urn==True, just return the urn
     """
-    what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
-    print("foo")
     movie = DDBO().get_movie(movie_id)
-    print("bar")
     try:
-        urn   = movie[what]
+        if zipfile:
+            urn = movie['movie_zipfile_urn']
+        else:
+            urn = movie['movie_data_urn']
     except TypeError as e:
         raise InvalidMovie_Id(movie_id) from e
 
@@ -1537,7 +1537,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         value = str(value)
     if will_it_float(value):
         logging.debug("2. Converting %s",value)
-        value = decimal.Decimal(value)
+        value = Decimal(value)
     if will_it_int(value):
         logging.debug("3. Converting %s",value)
         value = int(value)

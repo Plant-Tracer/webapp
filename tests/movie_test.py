@@ -85,12 +85,12 @@ def data_from_redirect(url, the_client):
 ################################################################
 
 # Test for edge cases
-@pytest.mark.skip()
-def test_edge_case():
+def test_edge_case(new_movie):
     with pytest.raises(odb.InvalidMovie_Id):
-        odb.get_movie_data(movie_id = -1)
+        odb.get_movie_data(movie_id = 3)
     with pytest.raises(ValueError):
         db_object.make_urn(object_name="xxx",scheme='xxx')
+    return
 
 def test_new_movie(client, new_movie):
     cfg = copy.copy(new_movie)
