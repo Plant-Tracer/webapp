@@ -23,19 +23,20 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import app.dbfile as dbfile
-import app.bottle_api as bottle_api
-import app.bottle_app as bottle_app
-import app.db as db
-import app.db_object as db_object
-import app.tracker as tracker
+from app import bottle_api
+from app import bottle_app
+from app import odb
+from app import db_object
+from app import tracker
 from app.constants import MIME,E
+from app.odb import API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID
+
 
 # get the first MOV
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
+from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 from movie_test import new_movie
 
 # Bogus labels for generic test
@@ -54,11 +55,11 @@ def test_track_point_annotations(client, new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_urn = db.create_new_frame(movie_id=movie_id, frame_number=0)
-    db.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
+    frame_urn = odb.create_new_frame(movie_id=movie_id, frame_number=0)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
-    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
+    tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
     assert len(tps)==2
     logging.debug("tps[0]=%s",tps[0])
     logging.debug("tp0=%s",tp0)
@@ -81,7 +82,7 @@ def test_track_point_annotations(client, new_movie):
     assert response.status_code == 200
 
     # Validate that the trackpoints were written into the database
-    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
+    tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
@@ -142,7 +143,7 @@ def test_movie_tracking(client, new_movie):
     lines = response.text.splitlines()
 
     # Verify a ZIP file with the individual frames was created
-    zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
+    zipfile_data = odb.get_movie_data(movie_id=movie_id, zipfile=True)
     with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
         tf.write(zipfile_data)
         tf.flush()

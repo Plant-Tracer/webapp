@@ -20,7 +20,7 @@ from app import odbmaint
 from app import db_object
 
 from app.paths import ROOT_DIR,TEST_DATA_DIR
-from app.odb import DDBO,VERSION
+from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID
 
 DELETE_TEST_TABLES = True
 
@@ -32,19 +32,13 @@ TEST_DEMO_EMAIL  = 'test_demo@company.com'        # completely bogus
 TEST_ADMIN_EMAIL = 'test_admin@company.com'     # configuration
 TEST_ADMIN_NAME  = 'Test Admin Name'
 
-# keys for scaffolding dictionary
+# additional keys for scaffolding dictionary
 ADMIN_EMAIL = 'admin_email'
 DEMO_EMAIL = 'demo_mail'
 ADMIN_ID = 'admin_id'
-API_KEY  = 'api_key'
-COURSE_KEY = 'course_key'
-COURSE_ID = 'course_id'
-COURSE_NAME = 'course_name'
 USER_EMAIL = 'user_email'
-USER_ID    = 'user_id'
-EMAIL = 'email'
-MOVIE_ID = 'movie_id'
 MOVIE_TITLE = 'movie_title'
+
 TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
 TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
 TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')

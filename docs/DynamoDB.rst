@@ -18,3 +18,11 @@ Thankfully, when you are running on AWS, you can use DynamoDB and S3. However:
 
 - You need to create a DynamoDB database for use with Plant Tracer.
 - You need to create an S3 bucket for use with Plant Tracer.
+
+
+Schema and Naming Changes
+-------------------------
+Some naming changes were done for clarity and others due to name conflicts with DynamoDB's query language.
+
+user table:
+`name`  ;-> `user_name`

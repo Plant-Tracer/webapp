@@ -21,9 +21,10 @@ from . import db_object
 from . import apikey
 
 from .bottle_api import api_bp
-from .constants import __version__,GET,GET_POST,C
+from .constants import __version__,GET,GET_POST,C,E
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
+from .odb import InvalidAPI_Key
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
 
 
 ################################################################
-### Error Handling
+### Error Handling. An exception automatically generates this response.
 ################################################################
 
 @app.errorhandler(AuthError)
@@ -82,6 +83,12 @@ def handle_auth_error(ex):
     """
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
+    return response
+
+@app.errorhandler(InvalidAPI_Key)
+def handle_apikey_error(ex):
+    response = jsonify(E.INVALID_API_KEY)
+    response.status_code = 403
     return response
 
 ################################################################

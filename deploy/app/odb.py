@@ -40,27 +40,33 @@ LOGS = 'logs'
 ROOT_USER_ID = 'u0'                # the root user
 
 # attributes
-ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
-ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
-COURSE_ID   = 'course_id'               # course.course_id
-COURSE_NAME = 'course_name'             # course.course_name
-COURSE_KEY  = 'course_key'              # course.course_key
-MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 #SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
+DEMO = 'demo'
 
+# apikeys table
 API_KEY = 'api_key'
 
+# users table
 EMAIL     = 'email'
 FULL_NAME = 'full_name'
 ENABLED   = 'enabled'
 USE_COUNT = 'use_count'
+ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
 
-DEMO = 'demo'
+# courses table
+ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
+COURSE_ID   = 'course_id'               # course.course_id
+COURSE_NAME = 'course_name'             # course.course_name
+COURSE_KEY  = 'course_key'              # course.course_key
+MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
+
+# movies table
 
 MOVIE_ID = 'movie_id'
 MOVIE_DATA_URN = 'movie_data_urn'
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+TITLE = 'title'
 TOTAL_BYTES='total_bytes'
 TOTAL_FRAMES='total_frames'
 DATE_UPLOADED='date_uploaded'
@@ -1096,7 +1102,7 @@ def create_new_movie(*, user_id, course_id, title=None, description=None, orig_m
     ddbo.put_movie({MOVIE_ID:movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
-                    'title':title,
+                    TITLE:title,
                     'description':description,
                     'orig_movie':orig_movie,
                     PUBLISHED: 0,
