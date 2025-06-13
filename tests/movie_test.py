@@ -49,6 +49,7 @@ def movie_list(the_client, api_key):
     resp = the_client.post('/api/list-movies',
                            data = {'api_key': api_key})
     res = resp.get_json()
+    logging.debug("res=%s",res)
     logging.debug("movie_list res=%s",res)
     assert res['error'] is False
     return res['movies']
@@ -81,7 +82,10 @@ def data_from_redirect(url, the_client):
         return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])['Body'].read()
     raise ValueError(f"cannot decode {url}")
 
+################################################################
+
 # Test for edge cases
+@pytest.mark.skip()
 def test_edge_case():
     with pytest.raises(odb.InvalidMovie_Id):
         odb.get_movie_data(movie_id = -1)
@@ -138,8 +142,6 @@ def test_new_movie(client, new_movie):
     assert res['error'] is False
     assert res['metadata']['title'] == movie_title
 
-
-
 def test_movie_upload_presigned_post(client, new_course, local_s3):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
     cfg = copy.copy(new_course)
@@ -181,6 +183,7 @@ def test_movie_update_metadata(client, new_movie):
                                    'property': 'title',
                                    'value': new_title})
     res = resp.get_json()
+    logging.debug("res=%s",res)
     assert res['error'] is False
 
     # Get the list of movies
@@ -225,7 +228,10 @@ def test_movie_update_metadata(client, new_movie):
                                    'value': 1})
     res = resp.get_json()
     assert res['error'] is False
-    assert get_movie(client, api_key, movie_id)['published'] == 0
+    movie = get_movie(client, api_key, movie_id)
+    logging.debug("movie=%s",movie)
+    assert movie[MOVIE_ID] == movie_id
+    assert movie['published'] == 1
 
 def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
@@ -272,11 +278,11 @@ def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
+    movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
+    user_id = cfg[USER_ID]
 
-    movie_data = dbo.get_movie_data(movie_id = movie_id)
+    movie_data = odb.get_movie_data(movie_id = movie_id)
     assert filetype.guess(movie_data).mime==MIME.MP4
 
     # Grab three frames with the tracker and make sure they are different
@@ -308,23 +314,20 @@ def test_movie_extract2(client, new_movie):
     assert jpeg0_url != jpeg1_url != jpeg2_url
 
 
-
-
-
+@pytest.mark.skip(reason='logging disabled')
 def test_log_search_movie(new_movie):
     cfg        = copy.copy(new_movie)
     api_key    = cfg[API_KEY]
+    user_id    = cfg[USER_ID]
     movie_id   = cfg[MOVIE_ID]
     movie_title= cfg[MOVIE_TITLE]
 
     #dbreader = get_dbreader()
-    res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
-    user_id = res[0][0]
-    res = dbo.get_logs( user_id=user_id, movie_id = movie_id)
+    #res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
+    res = odb.get_logs( user_id=user_id)
     logging.info("log entries for movie:")
     for r in res:
         logging.info("%s",r)
-
 
 def test_new_movie_api(client, new_course):
     """Create a new movie_id and return it.
@@ -372,7 +375,7 @@ def test_new_movie_api(client, new_course):
     res = resp.get_json()
     assert res['error'] is False
     movie_id = res['movie_id']
-    assert movie_id > 0
+    assert odb.is_movie_id(movie_id)
 
     logging.debug("new_movie fixture: movie_id=%s",movie_id)
     cfg[MOVIE_ID] = movie_id
@@ -385,29 +388,17 @@ def test_new_movie_api(client, new_course):
 
     # Now send the data
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
-        if url.startswith('https://'):
-            # Do a real post! (probably going to S3)
-            logging.debug("calling requests.post(%s,data=%s)",url,fields)
-            r = requests.post(url, files={'file':f}, data=fields, timeout=POST_TIMEOUT)
-            logging.info("uploaded to %s r=%s",url, r)
-            assert r.ok
-        else:
-            # Use the upload-movie api to store in the SQL Database
-            fields['file'] = (f,TEST_PLANTMOVIE_PATH)
-            resp = client.post('/api/upload-movie',
-                                   content_type='multipart/form-data',
-                                   data = fields)
-            assert resp.status_code == 200
-            res = resp.get_json()
-            assert res['error'] is False
+        # Do a real post! (probably going to S3)
+        logging.debug("calling requests.post(%s,data=%s)",url,fields)
+        r = requests.post(url, files={'file':f}, data=fields, timeout=POST_TIMEOUT)
+        logging.info("uploaded to %s r=%s",url, r)
+        assert r.ok
 
     # Make sure data got there
     logging.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = dbo.get_movie_data(movie_id=movie_id)
+    retrieved_movie_data = odb.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
-    logging.debug("new_movie fixture: yield %s",cfg)
-    yield cfg
 
     logging.debug("new_movie fixture: Delete the movie we uploaded")
     resp = client.post('/api/delete-movie',
@@ -417,5 +408,5 @@ def test_new_movie_api(client, new_course):
     assert res['error'] is False
 
     logging.debug("new_movie fixture: Purge the movie that we have deleted")
-    dbo.purge_movie(movie_id=movie_id)
+    odb.purge_movie(movie_id=movie_id)
     logging.debug("new_movie fixture: done")

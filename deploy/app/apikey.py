@@ -12,6 +12,7 @@ import functools
 import subprocess
 import json
 import decimal
+import math
 from functools import lru_cache
 import base64
 from os.path import join
@@ -65,7 +66,10 @@ def git_branch():
 def json_fixer(s):
     """converts s to an int, a float, or a str"""
     if isinstance(s,decimal.Decimal):
-        return float(s)
+        f = float(s)
+        if math.floor(f)==math.ceil(f):
+            return int(f)
+        return f
     if isinstance(s,(int,float)):
         return s
     return str(s)

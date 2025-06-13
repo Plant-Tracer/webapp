@@ -807,16 +807,17 @@ def api_set_metadata():
     :param prop: which piece of metadata to set
     :param value: what to set it to
     """
-    set_movie_id = get_int('set_movie_id')
-    set_user_id  = get_int('set_user_id')
+    set_movie_id = get('set_movie_id')
+    set_user_id  = get('set_user_id')
 
     if (set_movie_id is None) and (set_user_id is None):
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
 
+    value = get('value')
     result = odb.set_metadata(user_id=get_user_id(allow_demo=False),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
                              prop=get('property'),
-                             value=get('value'))
+                             value=value)
 
     return {'error': False, 'result': result}

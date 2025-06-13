@@ -11,6 +11,7 @@ import logging
 import json
 import copy
 import functools
+import re
 import uuid
 import time
 from collections import defaultdict
@@ -1503,6 +1504,15 @@ SET_MOVIE_METADATA = {
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 }
 
+def will_it_float(s):
+    if not isinstance(s, str):
+        return False
+    return re.match(r'^-?\d+(?:\.\d+)$', s) is not None
+
+def will_it_int(s):
+    if not isinstance(s, str):
+        return False
+    return re.match(r'^-?\d+$', s) is not None
 
 @log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
@@ -1523,8 +1533,16 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     assert value is not None
 
     if isinstance(value, float):
-        logging.debug("Converted %s %s -> %s",prop,value,str(value))
+        logging.debug("1. Converted %s %s -> %s",prop,value,str(value))
         value = str(value)
+    if will_it_float(value):
+        logging.debug("2. Converting %s",value)
+        value = decimal.Decimal(value)
+    if will_it_int(value):
+        logging.debug("3. Converting %s",value)
+        value = int(value)
+
+    logging.debug("prop=%s value=%s type=%s",prop,value,type(value))
 
     ddbo = DDBO()
 
