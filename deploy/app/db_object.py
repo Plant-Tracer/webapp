@@ -41,7 +41,7 @@ We use this:
 </CORSRule>
 """
 
-ALLOWED_SCHEMES = [ C.SCHEME_S3 ]
+SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
 
 def s3_client(region_name=None, endpoint_url=None):
@@ -85,12 +85,13 @@ def object_name(*,course_id,movie_id,frame_number=None,ext):
     return f"{course_id}/{movie_id}{fm}-{nonce}{ext}"
 
 
-def make_urn(*, object_name, scheme = None ):
+def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
     """
     If environment variable is not set, default to the database schema
     We grab this every time through so that the bucket can be changed during unit tests
     """
-    scheme = C.SCHEME_S3        # the only one we currently support
+    if scheme not in SUPPORTED_SCHEMES:
+        raise ValueError(f"Invalid scheme {scheme}")
     netloc = os.getenv(C.PLANTTRACER_S3_BUCKET,C.DEFAULT_S3_BUCKET)
     ret = f"{scheme}://{netloc}/{object_name}"
     logging.debug("make_urn urn=%s",ret)

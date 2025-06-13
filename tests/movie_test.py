@@ -29,7 +29,7 @@ from app import tracker
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.paths import TEST_DATA_DIR
-from app.constants import C,MIME
+from app.constants import C,E,MIME
 from app.db_object import s3_client
 
 # Get the fixtures from user_test
@@ -83,8 +83,8 @@ def data_from_redirect(url, the_client):
 
 # Test for edge cases
 def test_edge_case():
-    with pytest.raises(db.InvalidMovie_Id):
-        db.get_movie_data(movie_id = -1)
+    with pytest.raises(odb.InvalidMovie_Id):
+        odb.get_movie_data(movie_id = -1)
     with pytest.raises(ValueError):
         db_object.make_urn(object_name="xxx",scheme='xxx')
 
@@ -160,8 +160,8 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
     # Now try the upload post
     assert 'presigned_post' in res
 
-    db.purge_movie(movie_id = res['movie_id'])
-    logging.info("PURGE MOVIE %d",res['movie_id'])
+    odb.purge_movie(movie_id = res['movie_id'])
+    logging.info("PURGE MOVIE %s",res['movie_id'])
 
 
 def test_movie_update_metadata(client, new_movie):
@@ -231,17 +231,17 @@ def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
+    movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
+    user_id = cfg[USER_ID]
 
     # Check for insufficient arguments
     # Should produce http403
     resp = client.post('/api/get-frame')
     assert resp.status_code == 403
-
     r = resp.get_json()
-    assert len(r) > 0
+    assert r == E.INVALID_API_KEY
+    logging.debug("point 1 r=%s",r)
 
     # Check for invalid frame_number
     logging.debug("test_movie_extract1: point1")
@@ -251,7 +251,8 @@ def test_movie_extract1(client, new_movie):
                                    'frame_number': '-1'})
     assert resp.status_code == 403
     r = resp.get_json()
-    assert len(r) > 0
+    assert r['error']==True
+    assert 'invalid frame number' in r['message']
 
     # Check for getting by frame_number
     # should produce a redirect
@@ -262,9 +263,10 @@ def test_movie_extract1(client, new_movie):
                                    'frame_number': '0' })
     assert resp.status_code == 302
 
+
     # Since we got a frame, we should now be able to get a frame URN
-    # urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
-    # assert urn.startswith('s3:/') or urn.startswith('db:/')
+    urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
+    assert urn.startswith('s3:/') or urn.startswith('db:/')
 
 def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
@@ -274,7 +276,7 @@ def test_movie_extract2(client, new_movie):
     api_key = cfg[API_KEY]
     #user_id = cfg[USER_ID]
 
-    movie_data = db.get_movie_data(movie_id = movie_id)
+    movie_data = dbo.get_movie_data(movie_id = movie_id)
     assert filetype.guess(movie_data).mime==MIME.MP4
 
     # Grab three frames with the tracker and make sure they are different
@@ -318,7 +320,7 @@ def test_log_search_movie(new_movie):
     #dbreader = get_dbreader()
     res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
     user_id = res[0][0]
-    res = db.get_logs( user_id=user_id, movie_id = movie_id)
+    res = dbo.get_logs( user_id=user_id, movie_id = movie_id)
     logging.info("log entries for movie:")
     for r in res:
         logging.info("%s",r)
@@ -401,7 +403,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logging.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = db.get_movie_data(movie_id=movie_id)
+    retrieved_movie_data = dbo.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
     logging.debug("new_movie fixture: yield %s",cfg)
@@ -415,5 +417,5 @@ def test_new_movie_api(client, new_course):
     assert res['error'] is False
 
     logging.debug("new_movie fixture: Purge the movie that we have deleted")
-    db.purge_movie(movie_id=movie_id)
+    dbo.purge_movie(movie_id=movie_id)
     logging.debug("new_movie fixture: done")

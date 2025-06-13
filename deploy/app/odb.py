@@ -36,6 +36,7 @@ FRAMES = 'movie_frames'
 COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
+ROOT_USER_ID = 'u0'                # the root user
 
 # attributes
 ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
@@ -44,7 +45,7 @@ COURSE_ID   = 'course_id'               # course.course_id
 COURSE_NAME = 'course_name'             # course.course_name
 COURSE_KEY  = 'course_key'              # course.course_key
 MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
-SUPER_ADMIN = 'super_admin'     # user.super_admin==1 makes the user admin for everything
+#SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
 
 API_KEY = 'api_key'
@@ -519,11 +520,9 @@ class DDBO:
     ### movie management
 
     def get_movie(self, movie_id):
-        assert is_movie_id(movie_id)
-        ret = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item',None)
-        if not ret:
+        if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        return ret
+        return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
@@ -577,7 +576,7 @@ class DDBO:
     ### movie_frame management
 
     def get_movie_frame(self,movie_id, frame_number):
-        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frame_number}).get('Item',None)
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frame_number}).get('Item')
 
     def put_movie_frame(self,framedict):
         self.movie_frames.put_item(Item=framedict)
@@ -1025,7 +1024,9 @@ def get_movie_data(*, movie_id:int, zipfile=False, get_urn=False):
     If urn==True, just return the urn
     """
     what = "movie_zipfile_urn" if zipfile else "movie_data_urn"
+    print("foo")
     movie = DDBO().get_movie(movie_id)
+    print("bar")
     try:
         urn   = movie[what]
     except TypeError as e:
@@ -1114,18 +1115,18 @@ def get_movie(*, movie_id):
     """Returns the movie's data"""
     return DDBO().get_movie(movie_id)
 
-def set_movie_metadata(*, movie_id, movie_metadata):
-    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
-
-    logging.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
-    assert is_movie_id(movie_id)
-    assert MOVIE_ID not in movie_metadata
-    assert 'id' not in movie_metadata
-    if 'fps' in movie_metadata:
-        movie_metadata = copy.copy(movie_metadata)
-        movie_metadata['fps'] = str(movie_metadata['fps'])
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
+#def set_movie_metadata(*, movie_id, movie_metadata):
+#    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
+#
+#    logging.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
+#    assert is_movie_id(movie_id)
+#    assert MOVIE_ID not in movie_metadata
+#    assert 'id' not in movie_metadata
+#    if 'fps' in movie_metadata:
+#        movie_metadata = copy.copy(movie_metadata)
+#        movie_metadata['fps'] = str(movie_metadata['fps'])
+#    ddbo = DDBO()
+#    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 
 def set_movie_data(*,movie_id, movie_data):
@@ -1262,7 +1263,11 @@ def get_frame_urn(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
     """
-    return DDBO().get_movie_frame(movie_id, frame_number)['frame_urn']
+    logging.debug("movie_id=%s frame_number=%s",movie_id,frame_number)
+    frame = DDBO().get_movie_frame(movie_id, frame_number)
+    if frame is None:
+        return None
+    return frame.get('frame_urn',None)
 
 
 def get_frame_data(*, movie_id, frame_number):
@@ -1522,29 +1527,33 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         value = str(value)
 
     ddbo = DDBO()
-    user = ddbo.get_user(user_id)
 
     if set_movie_id is not None:
         movie = ddbo.get_movie(set_movie_id)
-        is_owner = movie[ USER_ID ] == user_id
-        is_admin = movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ]
+        if user_id != ROOT_USER_ID:
+            # Check permissions
+            user = ddbo.get_user(user_id)
+            is_owner = (movie[ USER_ID ] == user_id)
+            is_admin = (movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ])
 
-        acl  = SET_MOVIE_METADATA[prop]
-        logging.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
+            acl  = SET_MOVIE_METADATA[prop]
+            logging.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
 
-        if not ((is_owner is not None and '@is_owner' in acl) or (is_admin is not None and '@is_admin' in acl)):
-            # permission not granted
-            raise UnauthorizedUser("permission denied")
+            if not ((is_owner is not None and '@is_owner' in acl) or (is_admin is not None and '@is_admin' in acl)):
+                # permission not granted
+                raise UnauthorizedUser("permission denied")
 
         ddbo.update_table(ddbo.movies, set_movie_id, {prop:value})
     elif set_user_id is not None:
-        set_user = ddbo.get_user(set_user_id)
-        is_owner = user_id == set_user_id
-        is_admin = user[ ADMIN ] and (set_user[ PRIMARY_COURSE_ID ] in user[ COURSES ])
+        if user_id != ROOT_USER_ID:
+            # Check Permissions
+            set_user = ddbo.get_user(set_user_id)
+            is_owner = user_id == set_user_id
+            is_admin = user[ ADMIN ] and (set_user[ PRIMARY_COURSE_ID ] in user[ COURSES ])
 
-        if is_owner or is_admin:
-            if prop not in [  NAME ,  EMAIL ]:
-                raise UnauthorizedUser('currently users can only set name and email')
-            ddbo.update_table(ddbo.users, set_user_id, {prop:value})
+            if is_owner or is_admin:
+                if prop not in [  NAME ,  EMAIL ]:
+                    raise UnauthorizedUser('currently users can only set name and email')
+        ddbo.update_table(ddbo.users, set_user_id, {prop:value})
     else:
         raise ValueError("set set_user_id or set_movie_id must be provided")

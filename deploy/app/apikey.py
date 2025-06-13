@@ -22,6 +22,7 @@ from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
 from .auth import AuthError
+from .odb import InvalidAPI_Key
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -125,14 +126,14 @@ def get_user_dict():
         logging.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
         if request.full_path.startswith('/api/'):
-            raise AuthError('invalid API key')
+            raise InvalidAPI_Key()
 
     # We have a key. Now validate it
     userdict = odb.validate_api_key(api_key)
     if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
-        raise AuthError(f"api_key '{api_key}' is invalid")
+        raise InvalidAPI_Key()
     return userdict
 
 @lru_cache(maxsize=1)
@@ -154,7 +155,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         logging.debug("get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
-            raise AuthError("api_key is None and require_auth is True")
+            raise InvalidAPI_Key()
     else:
         api_key = None
 

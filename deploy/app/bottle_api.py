@@ -303,7 +303,7 @@ def api_get_movie_data():
     return db_object.make_signed_url(urn=data_urn)
 
 
-def set_movie_metadata(*,user_id=0, set_movie_id,movie_metadata):
+def set_movie_metadata(*,user_id=odb.ROOT_USER_ID, set_movie_id,movie_metadata):
     """Update the movie metadata."""
     for prop in ['fps','width','height','total_frames','total_bytes']:
         if prop in movie_metadata:
