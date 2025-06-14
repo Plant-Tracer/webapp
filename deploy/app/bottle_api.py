@@ -477,7 +477,9 @@ def api_get_movie_metadata():
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
         return E.INVALID_MOVIE_ACCESS
 
-    movie_metadata =  odb.get_movie_metadata(user_id=user_id, movie_id=movie_id, get_last_frame_tracked=True)[0]
+    movie_metadata =  odb.get_movie_metadata(user_id=user_id,
+                                             movie_id=movie_id,
+                                             get_last_frame_tracked=True)[0]
     # If we do not have the movie width and height, get them...
     if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
         movie_data     = odb.get_movie_data(movie_id = movie_id)
@@ -493,8 +495,7 @@ def api_get_movie_metadata():
         movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
     ret = {'error':False,
-           'metadata':movie_metadata
-        }
+           'metadata':movie_metadata }
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -510,13 +511,17 @@ def api_get_movie_metadata():
         #
         # Get the trackpoints and then group by frame_number for the response
         ret['frames'] = defaultdict(dict)
-        tpts = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=frame_start, frame_count=frame_count)
+        tpts = odb.get_movie_trackpoints(movie_id=movie_id,
+                                         frame_start=frame_start,
+                                         frame_count=frame_count)
         for tpt in tpts:
             frame = ret['frames'][tpt['frame_number']]
             if 'markers' not in frame:
                 frame['markers'] = []
             frame['markers'].append(tpt)
 
+    logging.debug("ret=%s",ret)
+    logging.debug("fix_types(ret)=%s",fix_types(ret))
     return fix_types(ret)
 
 

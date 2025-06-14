@@ -17,7 +17,7 @@ import uuid
 import time
 from collections import defaultdict
 from functools import lru_cache,wraps
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal,Optional,Any
 
 from flask import request
@@ -26,7 +26,7 @@ import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 
-from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model
+from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model,field_validator,ValidationError
 
 from . import db_object
 from .constants import C
@@ -81,6 +81,7 @@ CREATED = 'created'
 EMAIL = 'email'
 NAME = 'name'
 
+
 class Movie(BaseModel):
     movie_id: str
     title: str
@@ -88,24 +89,40 @@ class Movie(BaseModel):
     created_at: conint(gt=0)
     user_id: str
     course_id: str
+    status: str
 
     published: conint(ge=0, le=1)
     deleted: conint(ge=0, le=1)
-    date_uploaded: Optional[conint(gt=0)]
-    orig_movie: Optional[str]
-    fps:  Optional[condecimal(max_digits=4, decimal_places=2)]
-    width: Optional[conint(ge=0, le=10000)]
-    height: Optional[conint(ge=0, le=10000)]
+    date_uploaded: Optional[conint(gt=0)] = None
+    orig_movie: Optional[str] = None
+    fps:  Optional[condecimal(max_digits=4, decimal_places=2)] = None
+    width: Optional[conint(ge=0, le=10000)] = None
+    height: Optional[conint(ge=0, le=10000)] = None
 
-    total_frames: Optional[conint(ge=0)]
-    total_bytes: Optional[conint(ge=0)]
+    total_frames: Optional[conint(ge=0)] = None
+    total_bytes: Optional[conint(ge=0)] = None
 
-    movie_data_urn: Optional[AnyUrl]
-    movie_zipfile_urn: Optional[AnyUrl]
+    movie_data_urn: Optional[str] = None
+    movie_zipfile_urn: Optional[str] = None
 
-    last_frame_tracked: Optional[conint(ge=0)]
+    last_frame_tracked: Optional[conint(ge=0)] = None
 
-    version: Optional[conint(ge=0)]
+    version: Optional[conint(ge=0)] = None
+
+class Trackpoint(BaseModel):
+    x: Decimal
+    y: Decimal
+    label: str
+    frame_number: Optional[int] = None
+    status: Optional[int] = None
+    err: Optional[Decimal] = None
+
+    @field_validator("x", "y", "err", mode="before")
+    def round_to_one_decimal(cls, v):
+        if v is None:
+            return v
+        d = Decimal(str(v))  # string conversion avoids float issues
+        return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 # Function to validate a single prop and value using the Movie schema
 def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:
@@ -1394,14 +1411,12 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
         frame_count = 1e10
 
     ret = []
-    for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ):
-        logging.debug("frame=%s",frame)
+    for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
+                                             frame_start, frame_start+frame_count ):
         for tp in frame['trackpoints']:
-            assert tp!='d'
-            logging.debug("tp=%s",tp)
-            ret.append({'frame_number':frame['frame_number'],
-                        'x':tp['x'],
-                        'y':tp['y'],
+            ret.append({'frame_number':int(frame['frame_number']),
+                        'x':int(tp['x']),
+                        'y':int(tp['y']),
                         'label':tp['label']})
     return ret
 
@@ -1449,8 +1464,10 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
     """
-    # DDBO.update_table doesn't handle compound keys...
+    # Remove numpy from trackpoints
+    trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
     logging.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
+
     DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
                                           'frame_number':frame_number},
                                      UpdateExpression='SET trackpoints=:val',
