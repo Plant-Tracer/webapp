@@ -4,9 +4,10 @@
 # Assumes DynamoDB installed in the root directory
 
 MYDIR=$(dirname $(readlink -f -- "${BASH_SOURCE[0]}"))
-LOGDIR="$MYDIR/../logs"
-DBDIR="$MYDIR/../var"
-OPTIONS="-sharedDb -dbPath $DBDIR -port 8010"
+LOGDIR="$(dirname $MYDIR)/logs"
+DBDIR="$(dirname $MYDIR)/var"
+FLAGS="-sharedDb -dbPath $DBDIR -port 8010"
+PIDFILE="$DBDIR/dynamodb_local.pid"
 
 # Function to start DynamoDB Local
 start_dynamodb_local() {
@@ -25,16 +26,15 @@ start_dynamodb_local() {
 
     # Run DynamoDB Local in the background, redirecting output
     echo "Starting DynamoDB Local..."
-    java -Djava.library.path=$MYDIR/DynamoDBLocal_lib -jar $MYDIR/DynamoDBLocal.jar $OPTIONS > $LOGDIR/dynamodb_local.stdout 2> $LOGDIR/dynamodb_local.stderr &
-    echo $! > dynamodb_local.pid # Store the PID in a file
-
+    java -Djava.library.path=$MYDIR/DynamoDBLocal_lib -jar $MYDIR/DynamoDBLocal.jar $FLAGS > $LOGDIR/dynamodb_local.stdout 2> $LOGDIR/dynamodb_local.stderr &
+    echo $! > $PIDFILE
     echo "DynamoDB Local started in the background (PID: $!)."
 }
 
 # Function to stop DynamoDB Local
 stop_dynamodb_local() {
-    if [ -f dynamodb_local.pid ]; then
-        PID=$(cat dynamodb_local.pid)
+    if [ -f $PIDFILE ]; then
+        PID=$(cat $PIDFILE)
         if ps -p $PID > /dev/null; then
             echo "Stopping DynamoDB Local (PID: $PID)..."
             kill $PID
@@ -44,14 +44,14 @@ stop_dynamodb_local() {
                 echo "DynamoDB Local (PID: $PID) did not shut down gracefully. Forcing kill."
                 kill -9 $PID # Force kill if it's still running
             fi
-            rm dynamodb_local.pid
+            rm -f $PIDFILE
             echo "DynamoDB Local stopped."
         else
             echo "PID file exists but DynamoDB Local (PID: $PID) is not running. Removing stale PID file."
-            rm dynamodb_local.pid
+            rm -f $PIDFILE
         fi
     else
-        echo "No dynamodb_local.pid file found. Checking for running process with pgrep."
+        echo "No $PIDFILE file found. Checking for running process with pgrep."
         PID=$(pgrep -f "DynamoDBLocal.jar")
         if [ -n "$PID" ]; then
             echo "Found running DynamoDB Local (PID: $PID) using pgrep. Stopping..."

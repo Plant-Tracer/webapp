@@ -6,10 +6,11 @@
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=password
 MYDIR=$(dirname $(readlink -f -- "${BASH_SOURCE[0]}"))
-LOGDIR="$MYDIR/../logs"
-DBDIR="$MYDIR/var"
-FLAGS="$DB --console-address :9001"
-MINIO=./minio
+LOGDIR="$(dirname $MYDIR)/logs"
+DBDIR="$(dirname $MYDIR)/var"
+FLAGS="--address 127.0.0.1:9000 --console-address 127.0.0.1:9001 "
+MINIO=$MYDIR/minio
+PIDFILE="$DBDIR/minio.pid"
 
 # Function to start Minio
 start_minio() {
@@ -21,13 +22,13 @@ start_minio() {
     fi
 
     # Run Minio Local in the background, redirecting output
-    if [ ! -d $DB ]; then
-      echo creating $DB
-      mkdir -p $DB
+    if [ ! -d $DBIR ]; then
+        echo creating $DBIR
+        mkdir -p $DBIR
     fi
     echo "Starting Minio ..."
-    $MINIO server $FLAGS > minio.stdout 2> minio.stderr &
-    echo $! > minio.pid # Store the PID in a file
+    $MINIO server $FLAGS $DBDIR > $LOGDIR/minio.stdout 2> $LOGDIR/minio.stderr &
+    echo $! > $PIDFILE # Store the PID in a file
 
     echo "Minio Local started in the background (PID: $!)."
     echo "Check minio.stdout and minio.stderr for output."
@@ -35,8 +36,8 @@ start_minio() {
 
 # Function to stop Minio Local
 stop_minio() {
-    if [ -f minio.pid ]; then
-        PID=$(cat minio.pid)
+    if [ -f $PIDFILE ]; then
+        PID=$(cat $PIDFILE)
         if ps -p $PID > /dev/null; then
             echo "Stopping Minio Local (PID: $PID)..."
             kill $PID
@@ -46,14 +47,14 @@ stop_minio() {
                 echo "Minio Local (PID: $PID) did not shut down gracefully. Forcing kill."
                 kill -9 $PID  # Force kill if it's still running
             fi
-            rm minio.pid
+            rm -f $PIDFILE
             echo "Minio Local stopped."
         else
             echo "PID file exists but Minio Local (PID: $PID) is not running. Removing stale PID file."
-            rm minio.pid
+            rm -f $PIDFILE
         fi
     else
-        echo "No minio.pid file found. Checking for running process with pgrep."
+        echo "No $PIDFILE file found. Checking for running process with pgrep."
         PID=$(pgrep -f "minio")
         if [ -n "$PID" ]; then
             echo "Found running Minio Local (PID: $PID) using pgrep. Stopping..."
@@ -89,6 +90,12 @@ case "$1" in
         else
             echo "Minio is not running."
         fi
+        ;;
+    debug)
+        echo MYDIR=$MYDIR
+        echo LOGDIR=$LOGDIR
+        echo DBDIR=$DBDIR
+        echo FLAGS=$FLAGS
         ;;
     *)
         echo "Usage: $0 {start|stop|restart|status}"

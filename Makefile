@@ -14,21 +14,19 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
-
-REQ = venv/pyvenv.cfg DynamoDBLocal.jar
-
+# See below for the rules
+REQ = venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
 PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
-ROOT_ETC=etc
 DEPLOY_ETC=deploy/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
-venv:
+venv/pyvenv.cfg:
 	@echo install venv for the development environment
 	python3 -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
@@ -36,11 +34,6 @@ venv:
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
 	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
-
-$(REQ):
-	make venv
-
-.PHONY: venv
 
 
 
@@ -185,66 +178,120 @@ jstest-debug:
 
 ################################################################
 # Installations are used by the CI pipeline and by local developers
-# $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
 # See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
+## DynamoDBLocal
+
 DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
-dynamodb_local_latest.zip:
-	test -f dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o dynamodb_local_latest.zip
-	test -f dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
+bin/dynamodb_local_latest.zip:
+	test -f bin/dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o bin/dynamodb_local_latest.zip
+	test -f bin/dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
 
-DynamoDBLocal.jar: dynamodb_local_latest.zip
-	unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*'
+bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
+	(cd bin; unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*')
 
-run_local_dynamodb:
-	bash local_dynamodb_control.bash start
+start_local_dynamodb:
+	bash bin/local_dynamodb_control.bash start
 
 stop_local_dynamodb:
-	bash local_dynamodb_control.bash stop
-
-remove_localdb:
-	@echo Removing local database using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
+	bash bin/local_dynamodb_control.bash stop
 
 list_tables:
 	aws dynamodb list-tables --endpoint-url http://localhost:8010
 
-## S3 Local (Minio)
-install-profile:
-	echo "[minio]" >> $HOME/.aws/credentials
-	echo "aws_access_key_id = admin" >> $HOME/.aws/credentials
-	echo "aws_secret_access_key = password" >> $HOME/.aws/credentials
+## S3 Local (Minio)  (see: https://min.io/)
+MINIO_LINUX_URL=https://dl.min.io/server/minio/release/linux-amd64/minio
+MINIO_MACOS_URL= https://dl.min.io/server/minio/release/darwin-amd64/minio
+bin/minio:
+	@echo downloading and installing minio
+	if [ $$(uname -s) == Linux ] ; then curl $(MINIO_LINUX_URL) -o bin/minio ; fi
+	if [ $$(uname -s) == Darwin ] ; then curl $(MINIO_MACOS_URL) -o bin/minio ; fi
+	chmod +x bin/minio
+	@echo setting up minio profile
+	if ! grep minio $$HOME/.aws/credentials >/dev/null ; then \
+		echo installing "[minio]" profile; \
+		mkdir -p $$HOME/.aws; \
+		touch $$HOME/.aws/credentials; \
+		echo "[minio]" >> $$HOME/.aws/credentials; \
+		echo "aws_access_key_id = admin" >> $$HOME/.aws/credentials; \
+		echo "aws_secret_access_key = password" >> $$HOME/.aws/credentials; \
+	fi
 
 list-local-buckets:
 	aws s3 --profile=minio --endpoint-url http://localhost:9000 ls
 
 make-local-bucket:
-	aws s3 --profile=minio --endpoint-url http://localhost:9000 mb s3://planttracer-local/
-
+	if aws s3 --profile=minio --endpoint-url http://localhost:9000 ls s3://planttracer-local/ >/dev/null ; then \
+	 	echo s3://planttracer-local/ exists ; \
+	else \
+		echo creating s3://planttracer-local/ ; \
+		aws s3 --profile=minio --endpoint-url http://localhost:9000 mb s3://planttracer-local/ ; \
+	fi
 
 ################################################################
-
-install-chromium-browser-ubuntu: $(REQ)
-	sudo apt-get install -y chromium-browser
-	chromium --version
-
-install-chromium-browser-macos: $(REQ)
-	brew install chromium --no-quarantine
-
 # Includes ubuntu dependencies
-install-ubuntu: $(REQ)
+install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	which ffmpeg || sudo apt install ffmpeg
 	which node || sudo apt-get install nodejs
 	which npm || sudo apt-get install npm
+	which chromium || sudo apt-get install -y chromium-browser
 	npm ci
+	make $(REQ)
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
+
+# Includes MacOS dependencies managed through Brew
+install-macos:
+	brew update
+	brew upgrade
+	which python3 || brew install python3
+	which ffmpeg || brew install ffmpeg
+	which node || brew install node
+	which npm || brew install npm
+	which chromium || brew install chromium --no-quarantine
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
+	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
+
+# Includes Windows dependencies
+# restart the shell after installs are done
+# choco install as administrator
+# Note: development on windows is not currently supported
+install-windows:
+	choco install -y make
+	choco install -y ffmpeg
+	choco install -y nodejs
+	choco install -y chromium
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
+	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
+
+# This is no longer needed for testing
+#localmail-config:
+#	@echo localmail-config
+#	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+#	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
+
+
+################################################################
+### Cleanup
+
+clean:
+	find . -name '*~' -exec rm {} \;
+	/bin/rm -rf __pycache__ */__pycache__
+
+## What follows is under development
+
+################################################################
+# SAM Commands - for deploying on AWS Lambda. This is all under development
 
 # Install for AWS Linux for running SAM
 # Start with:
 # sudo dfn install git && git clone --recursive https://github.com/Plant-Tracer/webapp && (cd webapp; make aws-install)
-install-aws:
+install-aws-sam-tools:
 	echo install for AWS Linux, for making the lambda.
 	echo note does not install ffmpeg currently
 	(cd $HOME; \
@@ -261,52 +308,6 @@ install-aws:
 	npm ci
 	make $(REQ)
 	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
-
-# Includes MacOS dependencies managed through Brew
-install-macos:
-	brew update
-	brew upgrade
-	brew install python3
-	brew install ffmpeg
-	brew install node
-	brew install npm
-	npm ci
-	npm install -g typescript webpack webpack-cli
-	make $(REQ)
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
-
-# Includes Windows dependencies
-# restart the shell after installs are done
-# choco install as administrator
-install-windows: $(REQ)
-	choco install -y make
-	choco install -y ffmpeg
-	choco install -y nodejs
-	npm ci
-	npm install -g typescript webpack webpack-cli
-	make $(REQ)
-	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
-
-localmail-config:
-	@echo localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
-
-
-
-
-
-################################################################
-### Cleanup
-
-clean:
-	find . -name '*~' -exec rm {} \;
-	/bin/rm -rf __pycache__ */__pycache__
-
-## What follows is under development
-
-################################################################
-# SAM Commands - for deploying on AWS Lambda
 
 sam-deploy:
 	sam validate
