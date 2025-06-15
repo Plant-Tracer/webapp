@@ -25,14 +25,14 @@ class Movie(BaseModel):
     movie_id: str
     title: str
     description: str
-    created_at: conint(gt=0)
+    created_at: int
     user_id: str
     course_id: str
-    status: str
+    status: Optional[str] = None
 
     published: conint(ge=0, le=1)
     deleted: conint(ge=0, le=1)
-    date_uploaded: Optional[conint(gt=0)] = None
+    date_uploaded: Optional[int] = None
     orig_movie: Optional[str] = None
     fps:  Optional[condecimal(max_digits=4, decimal_places=2)] = None
     width: Optional[conint(ge=0, le=10000)] = None

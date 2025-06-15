@@ -23,6 +23,8 @@ from flask import request
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
+from pydantic import ValidationError
+import pydantic_core
 
 from . import db_object
 from .schema import User, Movie, Trackpoint, validate_movie_field
@@ -338,7 +340,11 @@ class DDBO:
         """Creates the user from the user dict.
         Raises UserExists if the user already exists. Doesn't properly handle other errors.
         """
-        user = User(**user).model_dump() # validate User
+        try:
+            _user = User(**user).model_dump() # validate User
+        except ValidationError:
+            logging.error("user=%s",user)
+            raise
         email = user[ EMAIL ]
         assert email is not None
         user_id = user[ USER_ID ]
@@ -550,8 +556,12 @@ class DDBO:
         return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
 
     def put_movie(self, moviedict):
-        moviedict = Movie(**moviedict).model_dump() # validate moviedict
         assert is_movie_id(moviedict[MOVIE_ID])
+        try:
+            _moviedict = Movie(**moviedict).model_dump() # validate moviedict
+        except pydantic_core._pydantic_core.ValidationError:
+            logging.error("moviedict=%s",moviedict)
+            raise
         self.movies.put_item(Item=moviedict)
 
     def batch_delete_movie_ids(self, ids):
