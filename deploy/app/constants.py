@@ -35,8 +35,8 @@ class C:
     DEFAULT_S3_BUCKET = 'planttracer-local'
     S3_ENDPOINT_URL = 'S3_ENDPOINT_URL'
     TEST_S3_BUCKET = 'planttracer-local'
-    TEST_S3_ENDPOINT_URL = 'http://localhost:9000'
-    DEFAULT_S3_ENDPOINT = 'http://localhost:9000'
+    TEST_S3_ENDPOINT_URL = 'http://localhost:9100'
+    DEFAULT_S3_ENDPOINT = 'http://localhost:9100'
     DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
     DYNAMODB_TEST_ENDPOINT_URL = 'http://localhost:8010'
     DEFAULT_MAX_ENROLLMENT = 100

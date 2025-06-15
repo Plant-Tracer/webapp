@@ -10,7 +10,7 @@ export MINIO_API_CORS_ALLOW_ORIGIN="*"
 MYDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LOGDIR="$(dirname $MYDIR)/logs"
 DBDIR="$(dirname $MYDIR)/var"
-FLAGS="--address 127.0.0.1:9000 --console-address 127.0.0.1:9001 "
+FLAGS="--address 127.0.0.1:9100 --console-address 127.0.0.1:9101 "
 MINIO=$MYDIR/minio
 PIDFILE="$DBDIR/minio.pid"
 
@@ -20,9 +20,9 @@ command -v pgrep > /dev/null || {
 }
 
 wait_minio() {
-    # Wait for port 9000 to be accepting connections
+    # Wait for port 9100 to be accepting connections
     for i in {1..30}; do
-        if curl -s http://localhost:9000/ > /dev/null; then
+        if curl -s http://localhost:9100/ > /dev/null; then
             echo "Minio is ready."
             break
         fi

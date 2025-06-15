@@ -226,14 +226,14 @@ bin/minio:
 	fi
 
 list-local-buckets:
-	aws s3 --profile=minio --endpoint-url http://localhost:9000 ls
+	aws s3 --profile=minio --endpoint-url http://localhost:9100 ls
 
 make-local-bucket:
-	if aws s3 --profile=minio --endpoint-url http://localhost:9000 ls s3://planttracer-local/ >/dev/null ; then \
+	if aws s3 --profile=minio --endpoint-url http://localhost:9100 ls s3://planttracer-local/ >/dev/null ; then \
 	 	echo s3://planttracer-local/ exists ; \
 	else \
 		echo creating s3://planttracer-local/ ; \
-		aws s3 --profile=minio --endpoint-url http://localhost:9000 mb s3://planttracer-local/ ; \
+		aws s3 --profile=minio --endpoint-url http://localhost:9100 mb s3://planttracer-local/ ; \
 	fi
 
 ################################################################
