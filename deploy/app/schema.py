@@ -2,6 +2,7 @@
 schema.py - the types we store in DynamoDB
 """
 
+from decimal import Decimal, ROUND_HALF_UP
 
 from typing import Literal,Optional,Any
 from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model,field_validator,ValidationError
