@@ -7,7 +7,6 @@ This provides for all authentication in the planttracer system:
 """
 import os
 import os.path
-import configparser
 import logging
 import json
 

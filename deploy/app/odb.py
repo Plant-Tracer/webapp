@@ -10,14 +10,13 @@ import os
 import logging
 import json
 import copy
-import math
 import functools
 import re
 import uuid
 import time
 from collections import defaultdict
 from functools import lru_cache,wraps
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from flask import request
 
@@ -339,6 +338,7 @@ class DDBO:
         """Creates the user from the user dict.
         Raises UserExists if the user already exists. Doesn't properly handle other errors.
         """
+        user = User(**user).model_dump() # validate User
         email = user[ EMAIL ]
         assert email is not None
         user_id = user[ USER_ID ]
@@ -781,16 +781,16 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
     try:
         user_id = new_user_id()
         ddbo.put_user({USER_ID:user_id,
-                                 EMAIL:email,
-                                 FULL_NAME:full_name,
-                                 'created' : int(time.time()),
-                                 DEMO:demo_user,
-                                 ENABLED:1,
-                                 ADMIN_FOR_COURSES:admin_for_courses,
-                                 PRIMARY_COURSE_ID:course_id,
-                                 PRIMARY_COURSE_NAME:course[COURSE_NAME],
-                                 COURSES:[course_id]
-                                 })
+                       EMAIL:email,
+                       FULL_NAME:full_name,
+                       'created' : int(time.time()),
+                       DEMO:demo_user,
+                       ENABLED:1,
+                       ADMIN_FOR_COURSES:admin_for_courses,
+                       PRIMARY_COURSE_ID:course_id,
+                       PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                       COURSES:[course_id]
+                       })
     except UserExists:
         # The user exists! Change the primary course and add them to this course.
         user = ddbo.get_user_email(email)
@@ -999,7 +999,7 @@ def check_course_admin(*, user_id, course_id):
     assert isinstance(course_id,str)
     user = DDBO().get_user(user_id)
     logging.debug("user=%s",user)
-    return (course_id in user[ ADMIN_FOR_COURSES ] )
+    return course_id in user[ ADMIN_FOR_COURSES ]
 
 @log
 def validate_course_key(*, course_key):
@@ -1587,8 +1587,8 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
         if user_id != ROOT_USER_ID:
             # Check permissions
             user = ddbo.get_user(user_id)
-            is_owner = (movie[ USER_ID ] == user_id)
-            is_admin = (movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ])
+            is_owner = movie[ USER_ID ] == user_id
+            is_admin = movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ]
 
             acl  = SET_MOVIE_METADATA[prop]
             logging.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
@@ -1603,7 +1603,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
             # Check Permissions
             set_user = ddbo.get_user(set_user_id)
             is_owner = user_id == set_user_id
-            is_admin = user[ ADMIN ] and (set_user[ PRIMARY_COURSE_ID ] in user[ COURSES ])
+            is_admin = any([ [course_id in set_user[ ADMIN_FOR_COURSES ]]  for course_id in set_user[ COURSES ]])
 
             if is_owner or is_admin:
                 if prop not in [  NAME ,  EMAIL ]:

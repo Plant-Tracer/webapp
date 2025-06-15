@@ -136,7 +136,7 @@ def read_object(urn):
         try:
             return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
         except ClientError as ex:
-            logging.error("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logging.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
             return None
     elif o.scheme in ['http','https']:
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)

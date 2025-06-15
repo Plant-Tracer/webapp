@@ -8,15 +8,16 @@ from typing import Literal,Optional,Any,List
 from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model,field_validator,ValidationError
 
 class User(BaseModel):
-    course_id: str
+    user_id: str
     email: str
     full_name: str
-    created: conint(ge=0,le=1)
+    created: int
     enabled: conint(ge=0,le=1)
     demo: conint(ge=0,le=1)
     admin_for_courses: List[str]
     primary_course_id: str
     primary_course_name: str
+    courses: List[str]
 
 class Movie(BaseModel):
     movie_id: str

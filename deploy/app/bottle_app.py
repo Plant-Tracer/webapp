@@ -81,12 +81,14 @@ def handle_auth_error(ex):
     {'message':message, 'error':True}
     as defined in auth.AuthError
     """
+    logging.info("handle_auth_error(%s)",ex)
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
     return response
 
 @app.errorhandler(InvalidAPI_Key)
 def handle_apikey_error(ex):
+    logging.info("handle_apikey_error(%s)",ex)
     response = jsonify(E.INVALID_API_KEY)
     response.status_code = 403
     return response

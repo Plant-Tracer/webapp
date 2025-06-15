@@ -40,7 +40,8 @@ api_bp = Blueprint('api', __name__)
 ################################################################
 ### Handle invalid apikey exceptions
 @api_bp.errorhandler(InvalidAPI_Key)
-def invalid_api_key(e):
+def invalid_api_key(ex):
+    logging.info("invalid_api_key(%s)",ex)
     return E.INVALID_API_KEY, 403
 
 
@@ -53,7 +54,7 @@ def get_movie_id():
     """Note that movie_id's are no longer integers..."""
     ret = get(MOVIE_ID)
     if not odb.is_movie_id( ret ):
-        raise Invalid_MovieId( ret )
+        raise Invalid_Movie_Id( ret )
     return ret
 
 def get_course_id():
