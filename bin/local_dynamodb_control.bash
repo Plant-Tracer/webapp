@@ -16,7 +16,7 @@ mkdir -p "$LOGDIR" "$DBDIR"
 
 wait_dynamodb_local() {
     # Wait for port 8010 to be accepting connections
-    for i in {1..15}; do
+    for i in {1..30}; do
         if curl -s http://localhost:8010/ > /dev/null; then
             echo "DynamoDB Local is ready."
             break

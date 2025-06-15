@@ -21,7 +21,7 @@ command -v pgrep > /dev/null || {
 
 wait_minio() {
     # Wait for port 9000 to be accepting connections
-    for i in {1..15}; do
+    for i in {1..30}; do
         if curl -s http://localhost:9000/ > /dev/null; then
             echo "Minio is ready."
             break
