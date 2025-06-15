@@ -1,6 +1,6 @@
 # See https://docs.github.com/en/actions/guides/building-and-testing-python
 # 2025-06-15 - slg - Complete rewrite to avoid MySQL and use DynamoDB and S3 local variants.
-# There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of RANDOM_PASSWORD
+#                    These are automatically configured with install-ubuntu or install-macos
 name: CI (pip)
 on: [push, pull_request]
 
@@ -17,6 +17,12 @@ jobs:
         with:
           submodules: true
 
+      - name: configure cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -27,17 +33,17 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: "Configure ubuntu"
-        if: startsWith(matrix.os, 'ubuntu')
+        if: runner.os == 'Linux'
         run: |
           make install-ubuntu
 
-      - name: "Configure MacOS"
-        if: startsWith(matrix.os, 'macos')
+      - name: "Configure macOS"
+        if: runner.os == 'macOS'
         run: |
           make install-macos
 
       - name: "Configure Windows"
-        if: startsWith(matrix.os, 'windows')
+        if: runner.os == 'Windows'
         run: |
           make install-windows
 
@@ -57,29 +63,26 @@ jobs:
         run: |
           aws --endpoint=http://localhost:9000/ --profile=minio s3 ls
 
-      - name: Run pytest with coverage
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          make pytest-coverage
-
-      - name: Run pytest without coverage
-        if: !startsWith(matrix.os, 'ubuntu')
+      - name: Normal pytest
+        if: runner.os != 'Linux'
         run: |
           make pytest
 
+      - name: Run pytest with coverage
+        if: runner.os == 'Linux'
+        run: |
+          make pytest-coverage
+
       - name: Run JavaScript tests and coverage
-        if: startsWith(matrix.os, 'ubuntu')
+        if: runner.os == 'Linux'
         run: |
           make jscoverage
 
       - name: Upload coverage test to codecov.io
-        if: startsWith(matrix.os, 'ubuntu')
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v4
         with:
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           files: ./coverage.xml,./coverage/coverage-final.json
-
-      - name: Show files in directory
-        run: |
-          ls -l
