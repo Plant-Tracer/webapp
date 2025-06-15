@@ -241,10 +241,11 @@ make-local-bucket:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
-	which ffmpeg || sudo apt install ffmpeg
-	which node || sudo apt install nodejs
-	which npm || sudo apt install npm
+	which ffmpeg || sudo apt install -y ffmpeg
+	which node || sudo apt install -y nodejs
+	which npm || sudo apt install -y npm
 	which chromium || sudo apt-get install -y chromium-browser
+	which lsof || sudo apt-get install -y lsof
 	npm ci
 	make $(REQ)
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
@@ -257,6 +258,7 @@ install-macos:
 	which ffmpeg || brew install ffmpeg
 	which node || brew install node
 	which npm || brew install npm
+	which lsof || brew install lsof
 	which chromium || brew install chromium --no-quarantine
 	npm ci
 	npm install -g typescript webpack webpack-cli

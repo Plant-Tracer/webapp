@@ -60,12 +60,9 @@ jobs:
       - name: Validate local minio/S3 endpoint
         run: |
           ps auxww
-          bin/local_minio_control.bash stop
-          bin/local_minio_control.bash status
           bin/local_minio_control.bash start
           ps auxww
           netstat -a
-          sudo apt install lsof
           sudo lsof -i :9100
           aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
 
