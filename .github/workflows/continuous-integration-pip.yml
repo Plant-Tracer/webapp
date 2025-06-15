@@ -59,6 +59,7 @@ jobs:
 
       - name: Validate local minio/S3 endpoint
         run: |
+          ps auxww
           bin/local_minio_control.bash stop
           bin/local_minio_control.bash status
           bin/local_minio_control.bash start
