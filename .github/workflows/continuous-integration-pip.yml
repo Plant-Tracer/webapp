@@ -60,7 +60,8 @@ jobs:
       - name: Validate local minio/S3 endpoint
         run: |
           bin/local_minio_control.bash start
-          aws --endpoint=http://localhost:9000/ --profile=minio s3 ls
+          ps auxww
+          aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
 
       - name: Lint with pylint
         run: |
