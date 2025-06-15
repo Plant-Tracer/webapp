@@ -201,12 +201,12 @@ list_tables:
 
 ## S3 Local (Minio)  (see: https://min.io/)
 MINIO_LINUX_URL=https://dl.min.io/server/minio/release/linux-amd64/minio
-MINIO_MACOS_URL= https://dl.min.io/server/minio/release/darwin-amd64/minio
+MINIO_MACOS_URL=https://dl.min.io/server/minio/release/darwin-amd64/minio
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
-	if [ "$$(uname -s)" == "Linux" ] ; then curl $(MINIO_LINUX_URL) -o bin/minio ; fi
-	if [ "$$(uname -s)" == "Darwin" ] ; then curl $(MINIO_MACOS_URL) -o bin/minio ; fi
+	if [ "$$(uname -s)" = "Linux" ] ; then curl $(MINIO_LINUX_URL) -o bin/minio ; fi
+	if [ "$$(uname -s)" = "Darwin" ] ; then curl $(MINIO_MACOS_URL) -o bin/minio ; fi
 	chmod +x bin/minio
 	@echo setting up minio profile
 	if ! grep minio $$HOME/.aws/credentials >/dev/null ; then \
