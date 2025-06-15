@@ -39,7 +39,16 @@ start_minio() {
     echo $! > $PIDFILE # Store the PID in a file
 
     echo "Minio Local started in the background (PID: $!)."
-    echo "Check minio.stdout and minio.stderr for output."
+
+    # Wait for port 9000 to be accepting connections
+    for i in {1..15}; do
+        if curl -s http://localhost:9000/ > /dev/null; then
+            echo "Minio is ready."
+            break
+        fi
+        echo "  Waiting for Minio to be ready ($i)..."
+        sleep 1
+    done
 }
 
 # Function to stop Minio Local

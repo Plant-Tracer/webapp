@@ -34,6 +34,17 @@ start_dynamodb_local() {
     java -Djava.library.path="$MYDIR/DynamoDBLocal_lib" -jar "$MYDIR/DynamoDBLocal.jar" \
          $FLAGS > "$LOGDIR/dynamodb_local.stdout" 2> "$LOGDIR/dynamodb_local.stderr" &
     echo $! > $PIDFILE
+
+    # Wait for port 8010 to be accepting connections
+    for i in {1..15}; do
+        if curl -s http://localhost:8010/ > /dev/null; then
+            echo "DynamoDB Local is ready."
+            break
+        fi
+        echo "  Waiting for DynamoDBLocal to be ready ($i)..."
+        sleep 1
+    done
+
     echo "DynamoDB Local started in the background (PID: $!)."
     echo "DynamoDB Local endpoint: http://localhost:8010"
 }
