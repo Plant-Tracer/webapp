@@ -34,12 +34,14 @@ wait_minio() {
 # Function to start Minio
 start_minio() {
     # Check if MinioLocal is already running
-    if pgrep -f "minio" > /dev/null
-    then
-        wait_minio
-        echo "minio is already running."
-        exit 0
-    fi
+    echo pgrep -f minio:
+    pgrep -f minio
+    #if pgrep -f "minio" > /dev/null
+    #then
+    #    wait_minio
+    #    echo "minio is already running."
+    #    exit 0
+    #fi
 
     # Run Minio Local in the background, redirecting output
     if [ ! -d $DBDIR ]; then
