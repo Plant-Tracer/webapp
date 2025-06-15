@@ -19,12 +19,24 @@ command -v pgrep > /dev/null || {
     exit 1
 }
 
+wait_minio() {
+    # Wait for port 9000 to be accepting connections
+    for i in {1..15}; do
+        if curl -s http://localhost:9000/ > /dev/null; then
+            echo "Minio is ready."
+            break
+        fi
+        echo "  Waiting for Minio to be ready ($i)..."
+        sleep 1
+    done
+}
 
 # Function to start Minio
 start_minio() {
     # Check if MinioLocal is already running
     if pgrep -f "minio" > /dev/null
     then
+        wait_minio
         echo "minio is already running."
         exit 0
     fi
@@ -39,16 +51,8 @@ start_minio() {
     echo $! > $PIDFILE # Store the PID in a file
 
     echo "Minio Local started in the background (PID: $!)."
+    wait_minio
 
-    # Wait for port 9000 to be accepting connections
-    for i in {1..15}; do
-        if curl -s http://localhost:9000/ > /dev/null; then
-            echo "Minio is ready."
-            break
-        fi
-        echo "  Waiting for Minio to be ready ($i)..."
-        sleep 1
-    done
 }
 
 # Function to stop Minio Local

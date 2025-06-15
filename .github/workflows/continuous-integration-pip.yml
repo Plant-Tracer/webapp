@@ -47,14 +47,6 @@ jobs:
         run: |
           make install-windows
 
-      - name: Lint with pylint
-        run: |
-          make pylint
-
-      - name: JavaScript and HTML eslint
-        run: |
-          make eslint
-
       - name: Create default AWS credentials and Validate local DynamoDB endpoint
         run: |
           mkdir -p $HOME/.aws
@@ -69,6 +61,14 @@ jobs:
         run: |
           bin/local_minio_control.bash start
           aws --endpoint=http://localhost:9000/ --profile=minio s3 ls
+
+      - name: Lint with pylint
+        run: |
+          make pylint
+
+      - name: JavaScript and HTML eslint
+        run: |
+          make eslint
 
       - name: Normal pytest
         if: runner.os != 'Linux'

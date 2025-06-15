@@ -225,8 +225,6 @@ bin/minio:
 		echo "aws_secret_access_key = minioadmin" >> $$HOME/.aws/credentials; \
 	fi
 
-
-
 list-local-buckets:
 	aws s3 --profile=minio --endpoint-url http://localhost:9000 ls
 

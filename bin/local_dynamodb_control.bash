@@ -14,11 +14,24 @@ command -v java > /dev/null || { echo "Java not found in PATH. Aborting."; exit 
 
 mkdir -p "$LOGDIR" "$DBDIR"
 
+wait_dynamodb_local() {
+    # Wait for port 8010 to be accepting connections
+    for i in {1..15}; do
+        if curl -s http://localhost:8010/ > /dev/null; then
+            echo "DynamoDB Local is ready."
+            break
+        fi
+        echo "  Waiting for DynamoDBLocal to be ready ($i)..."
+        sleep 1
+    done
+}
+
 # Function to start DynamoDB Local
 start_dynamodb_local() {
     # Check if DynamoDBLocal is already running
     if pgrep -f "DynamoDBLocal.jar" > /dev/null
     then
+        wait_dynamodb_local
         echo "DynamoDB Local is already running."
         exit 0
     fi
@@ -35,16 +48,7 @@ start_dynamodb_local() {
          $FLAGS > "$LOGDIR/dynamodb_local.stdout" 2> "$LOGDIR/dynamodb_local.stderr" &
     echo $! > $PIDFILE
 
-    # Wait for port 8010 to be accepting connections
-    for i in {1..15}; do
-        if curl -s http://localhost:8010/ > /dev/null; then
-            echo "DynamoDB Local is ready."
-            break
-        fi
-        echo "  Waiting for DynamoDBLocal to be ready ($i)..."
-        sleep 1
-    done
-
+    wait_dynamodb_local
     echo "DynamoDB Local started in the background (PID: $!)."
     echo "DynamoDB Local endpoint: http://localhost:8010"
 }
