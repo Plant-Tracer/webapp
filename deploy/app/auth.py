@@ -18,8 +18,6 @@ from .constants import C
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
-SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
-
 AWS_SECRET_NAME = 'AWS_SECRET_NAME'
 AWS_REGION_NAME = 'AWS_REGION_NAME'
 SECRETSMANAGER = 'secretsmanager'
@@ -52,7 +50,6 @@ class EmailNotInDatabase(Exception):
 
 class SecretsManagerError(Exception):
     """ SecretsManagerError """
-
 
 def get_aws_secret_for_arn(secret_name):
     region_name = secret_name.split(':')[3]

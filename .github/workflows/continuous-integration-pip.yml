@@ -49,20 +49,30 @@ jobs:
         run: |
           make eslint
 
-      - name: Run coverage test
-        if: startsWith(matrix.os, 'ubuntu')
-        env:
-          SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
+      - name: Validate local DynamoDB endpoint
         run: |
-          #CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make pytest-coverage
+          aws --endpoint=http://localhost:8010/ --region=local dynamodb list-tables
+
+      - name: Validate local minio/S3 endpoint
+        run: |
+          aws --endpoint=http://localhost:9000/ --profile=minio s3 ls
+
+      - name: Run pytest with coverage
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
           make pytest-coverage
+
+      - name: Run pytest without coverage
+        if: !startsWith(matrix.os, 'ubuntu')
+        run: |
+          make pytest
 
       - name: Run JavaScript tests and coverage
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           make jscoverage
 
-      - name: Upload to codecov.io
+      - name: Upload coverage test to codecov.io
         if: startsWith(matrix.os, 'ubuntu')
         uses: codecov/codecov-action@v4
         with:

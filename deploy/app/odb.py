@@ -550,6 +550,7 @@ class DDBO:
         return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
 
     def put_movie(self, moviedict):
+        moviedict = Movie(**moviedict).model_dump() # validate moviedict
         assert is_movie_id(moviedict[MOVIE_ID])
         self.movies.put_item(Item=moviedict)
 
@@ -1603,7 +1604,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
             # Check Permissions
             set_user = ddbo.get_user(set_user_id)
             is_owner = user_id == set_user_id
-            is_admin = any([ [course_id in set_user[ ADMIN_FOR_COURSES ]]  for course_id in set_user[ COURSES ]])
+            is_admin = any( ( (course_id in set_user[ ADMIN_FOR_COURSES ])  for course_id in set_user[ COURSES ] ) )
 
             if is_owner or is_admin:
                 if prop not in [  NAME ,  EMAIL ]:

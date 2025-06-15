@@ -4,10 +4,11 @@ schema.py - the types we store in DynamoDB
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from typing import Literal,Optional,Any,List
-from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model,field_validator,ValidationError
+from typing import Optional,Any,List
+from pydantic import BaseModel,conint,condecimal,create_model,field_validator,ValidationError
 
 class User(BaseModel):
+    """DynamoDB users table"""
     user_id: str
     email: str
     full_name: str
@@ -20,6 +21,7 @@ class User(BaseModel):
     courses: List[str]
 
 class Movie(BaseModel):
+    """DynamoDB movies table"""
     movie_id: str
     title: str
     description: str
@@ -47,6 +49,7 @@ class Movie(BaseModel):
     version: Optional[conint(ge=0)] = None
 
 class Trackpoint(BaseModel):
+    """DynamoDB trackpoints table"""
     x: Decimal
     y: Decimal
     label: str
@@ -55,7 +58,7 @@ class Trackpoint(BaseModel):
     err: Optional[Decimal] = None
 
     @field_validator("x", "y", "err", mode="before")
-    def round_to_one_decimal(cls, v):
+    def round_to_one_decimal(self, v):
         if v is None:
             return v
         d = Decimal(str(v))  # string conversion avoids float issues
@@ -76,4 +79,4 @@ def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:
         validated = TempModel(**{prop: value})
         return getattr(validated, prop)
     except ValidationError as e:
-        raise ValueError(f"Validation error for '{prop}': {e}")
+        raise ValueError(f"Validation error for '{prop}': {e}") from e

@@ -10,9 +10,6 @@ import logging
 import os
 import functools
 import subprocess
-import json
-import decimal
-import math
 from functools import lru_cache
 import base64
 from os.path import join
@@ -22,7 +19,6 @@ from flask import request
 from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
-from .auth import AuthError
 from .odb import InvalidAPI_Key,fix_types
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)

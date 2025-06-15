@@ -54,7 +54,7 @@ def get_movie_id():
     """Note that movie_id's are no longer integers..."""
     ret = get(MOVIE_ID)
     if not odb.is_movie_id( ret ):
-        raise Invalid_Movie_Id( ret )
+        raise InvalidMovie_Id( ret )
     return ret
 
 def get_course_id():
