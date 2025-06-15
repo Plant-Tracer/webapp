@@ -58,17 +58,11 @@ jobs:
           bin/local_dynamodb_control.bash start
           aws --endpoint=http://localhost:8010/ --region=local dynamodb list-tables
 
-      - name: Validate local minio/S3 endpoint
+      - name: Validate local minio/S3 endpoint and make sure we have buckets
         run: |
-          ps auxww
           bin/local_minio_control.bash start
-          ps auxww
-          sleep 10
-          ls -l logs
-          cat logs/minio.stderr
-          netstat -a
-          lsof -i :9100
           aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
+          make make-local-bucket
 
       - name: Lint with pylint
         run: |
