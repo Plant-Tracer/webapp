@@ -51,7 +51,7 @@ def local_ddb():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
     """
-    subprocess.call( [os.path.join(ROOT_DIR,'local_dynamodb_control.bash'),'start'])
+    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_dynamodb_control.bash'),'start'])
 
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
@@ -68,6 +68,11 @@ def local_ddb():
 
 @pytest.fixture
 def local_s3():
+    """Create an empty S3 locally.
+    Starts the database if it is not running.
+    """
+    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
+
     save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
     save_endpoint = os.getenv(C.S3_ENDPOINT_URL)
     os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_S3_BUCKET

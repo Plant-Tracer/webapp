@@ -4,8 +4,19 @@ schema.py - the types we store in DynamoDB
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from typing import Literal,Optional,Any
+from typing import Literal,Optional,Any,List
 from pydantic import BaseModel,conint,AnyUrl,condecimal,create_model,field_validator,ValidationError
+
+class User(BaseModel):
+    course_id: str
+    email: str
+    full_name: str
+    created: conint(ge=0,le=1)
+    enabled: conint(ge=0,le=1)
+    demo: conint(ge=0,le=1)
+    admin_for_courses: List[str]
+    primary_course_id: str
+    primary_course_name: str
 
 class Movie(BaseModel):
     movie_id: str
