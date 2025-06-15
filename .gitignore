@@ -1,3 +1,13 @@
+# PlantTracer specific things
+bin/minio
+bin/minio.gz
+bin/DynamoDBLocal.jar
+bin/DynamoDBLocal_lib/**
+var/**
+dynamodb-local-metadata.json
+*.stderr
+*.stdout
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -187,9 +197,3 @@ layer
 .[#]*
 sam-installation
 *.slg
-DynamoDBLocal.jar
-DynamoDBLocal_lib/**
-dynamodb-local-metadata.json
-*.stderr
-*.stdout
-db/*.db

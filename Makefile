@@ -1,17 +1,26 @@
 # Makefile for Planttracer web application
+# - Local development
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
-# Note: PLANTTRACER_CREDENTIALS must be set
+#
+# Environment variables:
+# PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
+#
 
 PYLINT_THRESHOLD=9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
+# all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
+
+REQ = venv/pyvenv.cfg DynamoDBLocal.jar
+
+
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
-REQ = venv/pyvenv.cfg
+
 PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
 ROOT_ETC=etc
@@ -34,15 +43,6 @@ $(REQ):
 .PHONY: venv
 
 
-################################################################
-# SAM Commands - for deploying on AWS Lambda
-
-sam-deploy:
-	sam validate
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
-	sam deploy --no-confirm-changeset
-	sam logs --tail
-
 
 ################################################################
 #
@@ -58,21 +58,23 @@ check:
 	make pytest
 
 ################################################################
-## Program testing
+## Program development: static analysis tools
 ##
-## Static Analysis
 
+## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy tests *.py
+	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy *.py
 
-
+## Use this to also test the tests...
 pylint-tests: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
+	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
+## Mypy static analysis
 mypy:
-	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict deploy tests
 
+## black static analysis
 black:
 	black --line-length 127 .
 
@@ -80,62 +82,50 @@ black-check:
 	black --line-length 127 . --check
 	@echo "If this fails, simply run: make black"
 
+## isort
 isort:
 	isort . --profile=black
 
 isort-check:
 	isort --check . --profile=black
 
+## flake
 flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
-localmail-config:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
-
 ################################################################
+## Program development: dynamic analysis
 ##
-## Dynamic Analysis
-## If you are testing just one thing, put it here!
-#
-# In the tests below, we always test the database connectivity first
-# It makes no sense to run the tests otherwise
 
+## These tests now use fixtures that automatically create in-memory configurations and DynamoDB databases.
+## No environment variables need to be set.
+
+pytest:  $(REQ)
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests
+
+pytest-debug: $(REQ)
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/movie_tracker_test.py
 TEST1FUNCTION="-k test_movie_tracking"
 pytest1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
-pytest:  $(REQ) localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest -v --log-cli-level=INFO .
+pytest-coverage: $(REQ)
+	$(PIP_INSTALL) codecov pytest pytest_cov
+	$(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
+	@echo covreage report in htmlcov/
 
+# This doesn't work yet...
 pytest-selenium:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
-pytest-debug: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
-
-pytest-app-framework:
-	@echo validate app framework
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
-
-pytest-quiet: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=ERROR
-
-pytest-coverage: $(REQ) localmail-config
-	$(PIP_INSTALL) codecov pytest pytest_cov
-	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
-
 ################################################################
-### Debug targets run running locally
+### Debug targets to run locally.
+
+make-local-demo:**1
 
 run-local:
 	@echo run bottle locally, storing new data in database
@@ -198,12 +188,12 @@ jstest-debug:
 # $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
 # See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
-## DynamoDB Local (Provided by AWS)
-.PHONY: install_local_dynamodb
 DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
-install_local_dynamodb: $(REQ)
+dynamodb_local_latest.zip:
 	test -f dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o dynamodb_local_latest.zip
 	test -f dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
+
+DynamoDBLocal.jar: dynamodb_local_latest.zip
 	unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*'
 
 run_local_dynamodb:
@@ -297,12 +287,35 @@ install-windows: $(REQ)
 	make $(REQ)
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
+localmail-config:
+	@echo localmail-config
+	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
+	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
+
+
+
+
+
 ################################################################
 ### Cleanup
 
 clean:
 	find . -name '*~' -exec rm {} \;
 	/bin/rm -rf __pycache__ */__pycache__
+
+## What follows is under development
+
+################################################################
+# SAM Commands - for deploying on AWS Lambda
+
+sam-deploy:
+	sam validate
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
+	sam deploy --no-confirm-changeset
+	sam logs --tail
+
+
+
 
 ################################################################
 ### Compile JavaScript to TypeScript

@@ -5,7 +5,9 @@
 
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=password
-DB="$HOME/s3"
+MYDIR=$(dirname $(readlink -f -- "${BASH_SOURCE[0]}"))
+LOGDIR="$MYDIR/../logs"
+DBDIR="$MYDIR/var"
 FLAGS="$DB --console-address :9001"
 MINIO=./minio
 
