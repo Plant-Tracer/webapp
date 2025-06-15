@@ -1,13 +1,18 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 #
 # Run or Stop DynamoDBLocal on both Linux and MacOS
 # Assumes DynamoDB installed in the root directory
 
-MYDIR=$(dirname $(readlink -f -- "${BASH_SOURCE[0]}"))
+MYDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LOGDIR="$(dirname $MYDIR)/logs"
 DBDIR="$(dirname $MYDIR)/var"
 FLAGS="-sharedDb -dbPath $DBDIR -port 8010"
 PIDFILE="$DBDIR/dynamodb_local.pid"
+
+command -v java > /dev/null || { echo "Java not found in PATH. Aborting."; exit 1; }
+
+mkdir -p "$LOGDIR" "$DBDIR"
 
 # Function to start DynamoDB Local
 start_dynamodb_local() {
@@ -26,9 +31,11 @@ start_dynamodb_local() {
 
     # Run DynamoDB Local in the background, redirecting output
     echo "Starting DynamoDB Local..."
-    java -Djava.library.path=$MYDIR/DynamoDBLocal_lib -jar $MYDIR/DynamoDBLocal.jar $FLAGS > $LOGDIR/dynamodb_local.stdout 2> $LOGDIR/dynamodb_local.stderr &
+    java -Djava.library.path="$MYDIR/DynamoDBLocal_lib" -jar "$MYDIR/DynamoDBLocal.jar" \
+         $FLAGS > "$LOGDIR/dynamodb_local.stdout" 2> "$LOGDIR/dynamodb_local.stderr" &
     echo $! > $PIDFILE
     echo "DynamoDB Local started in the background (PID: $!)."
+    echo "DynamoDB Local endpoint: http://localhost:8010"
 }
 
 # Function to stop DynamoDB Local

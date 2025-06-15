@@ -1,16 +1,24 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 #
 # Run or Stop DynamoDBLocal on both Linux and MacOS
 # Assumes DynamoDB installed in the root directory
 
-export MINIO_ROOT_USER=admin
-export MINIO_ROOT_PASSWORD=password
-MYDIR=$(dirname $(readlink -f -- "${BASH_SOURCE[0]}"))
+export MINIO_ROOT_USER=minioadmin
+export MINIO_ROOT_PASSWORD=minioadmin
+export MINIO_API_CORS_ALLOW_ORIGIN="*"
+MYDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LOGDIR="$(dirname $MYDIR)/logs"
 DBDIR="$(dirname $MYDIR)/var"
 FLAGS="--address 127.0.0.1:9000 --console-address 127.0.0.1:9001 "
 MINIO=$MYDIR/minio
 PIDFILE="$DBDIR/minio.pid"
+
+command -v pgrep > /dev/null || {
+    echo "Error: pgrep is required but not found."
+    exit 1
+}
+
 
 # Function to start Minio
 start_minio() {
@@ -22,12 +30,12 @@ start_minio() {
     fi
 
     # Run Minio Local in the background, redirecting output
-    if [ ! -d $DBIR ]; then
-        echo creating $DBIR
-        mkdir -p $DBIR
+    if [ ! -d $DBDIR ]; then
+        echo creating $DBDIR
+        mkdir -p $DBDIR
     fi
     echo "Starting Minio ..."
-    $MINIO server $FLAGS $DBDIR > $LOGDIR/minio.stdout 2> $LOGDIR/minio.stderr &
+    $MINIO server $FLAGS $DBDIR > "$LOGDIR/minio.stdout" 2> "$LOGDIR/minio.stderr" &
     echo $! > $PIDFILE # Store the PID in a file
 
     echo "Minio Local started in the background (PID: $!)."
@@ -73,6 +81,9 @@ stop_minio() {
 
 # Main script logic
 case "$1" in
+    "") set -- status
+        ;;
+
     start)
         start_minio
         ;;

@@ -189,6 +189,7 @@ bin/dynamodb_local_latest.zip:
 
 bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 	(cd bin; unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*')
+	touch bin/DynamoDBLocal.jar
 
 start_local_dynamodb:
 	bash bin/local_dynamodb_control.bash start
@@ -200,23 +201,31 @@ list_tables:
 	aws dynamodb list-tables --endpoint-url http://localhost:8010
 
 ## S3 Local (Minio)  (see: https://min.io/)
-MINIO_LINUX_URL=https://dl.min.io/server/minio/release/linux-amd64/minio
-MINIO_MACOS_URL=https://dl.min.io/server/minio/release/darwin-amd64/minio
+LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64/
+MACOS_BASE=https://dl.min.io/client/mc/release/darwin-amd64/
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
-	if [ "$$(uname -s)" = "Linux" ] ; then curl $(MINIO_LINUX_URL) -o bin/minio ; fi
-	if [ "$$(uname -s)" = "Darwin" ] ; then curl $(MINIO_MACOS_URL) -o bin/minio ; fi
-	chmod +x bin/minio
+	if [ "$$(uname -s)" = "Linux" ] ; then \
+		curl $(LINUX_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_BASE)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Darwin" ] ; then \
+		curl $(MACOS_BASE)/minio -o bin/minio ; \
+		curl $(MACOS_BASE)/mc -o bin/mc ; \
+	fi
+	chmod +x bin/minio bin/mc
 	@echo setting up minio profile
 	if ! grep minio $$HOME/.aws/credentials >/dev/null ; then \
 		echo installing "[minio]" profile; \
 		mkdir -p $$HOME/.aws; \
 		touch $$HOME/.aws/credentials; \
 		echo "[minio]" >> $$HOME/.aws/credentials; \
-		echo "aws_access_key_id = admin" >> $$HOME/.aws/credentials; \
-		echo "aws_secret_access_key = password" >> $$HOME/.aws/credentials; \
+		echo "aws_access_key_id = minioadmin" >> $$HOME/.aws/credentials; \
+		echo "aws_secret_access_key = minioadmin" >> $$HOME/.aws/credentials; \
 	fi
+
+
 
 list-local-buckets:
 	aws s3 --profile=minio --endpoint-url http://localhost:9000 ls
