@@ -203,7 +203,7 @@ list_tables:
 
 ## S3 Local (Minio)  (see: https://min.io/)
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
-MACOS_BASE=https://dl.min.io/client/mc/release/darwin-amd64
+MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
