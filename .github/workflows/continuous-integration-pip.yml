@@ -55,8 +55,13 @@ jobs:
         run: |
           make eslint
 
-      - name: Validate local DynamoDB endpoint
+      - name: Create default AWS credentials and Validate local DynamoDB endpoint
         run: |
+          mkdir -p $HOME/.aws
+          touch $HOME/.aws/credentials
+          echo '[default]' >> $HOME/.aws/credentials
+          echo 'aws_access_key_id = IgnoreThisKey'  >> $HOME/.aws/credentials
+          echo 'aws_secret_access_key = IgnoreThisAccessKey' >> $HOME/.aws/credentials
           aws --endpoint=http://localhost:8010/ --region=local dynamodb list-tables
 
       - name: Validate local minio/S3 endpoint
