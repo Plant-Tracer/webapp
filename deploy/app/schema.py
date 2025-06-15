@@ -58,7 +58,8 @@ class Trackpoint(BaseModel):
     err: Optional[Decimal] = None
 
     @field_validator("x", "y", "err", mode="before")
-    def round_to_one_decimal(self, v):
+    @classmethod
+    def round_to_one_decimal(cls, v):
         if v is None:
             return v
         d = Decimal(str(v))  # string conversion avoids float issues
