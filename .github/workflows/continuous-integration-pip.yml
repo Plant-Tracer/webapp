@@ -62,8 +62,11 @@ jobs:
           ps auxww
           bin/local_minio_control.bash start
           ps auxww
+          sleep 10
+          ls -l logs
+          cat logs/minio.stderr
           netstat -a
-          sudo lsof -i :9100
+          lsof -i :9100
           aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
 
       - name: Lint with pylint
