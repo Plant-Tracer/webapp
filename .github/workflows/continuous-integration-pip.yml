@@ -8,8 +8,7 @@ jobs:
   build:
     strategy:
       matrix:
-        #os: ['macos-latest', 'ubuntu-latest']   #
-        os: ['ubuntu-latest']   #
+        os: ['macos-latest', 'ubuntu-latest']   #
         python-version: [3.11]   # installed version on Dreamhost
     runs-on: ${{ matrix.os }}
     steps:
