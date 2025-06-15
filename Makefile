@@ -186,6 +186,7 @@ DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_lat
 bin/dynamodb_local_latest.zip:
 	test -f bin/dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o bin/dynamodb_local_latest.zip
 	test -f bin/dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
+	find bin -ls
 
 bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 	(cd bin; unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*')
@@ -201,8 +202,8 @@ list_tables:
 	aws dynamodb list-tables --endpoint-url http://localhost:8010
 
 ## S3 Local (Minio)  (see: https://min.io/)
-LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64/
-MACOS_BASE=https://dl.min.io/client/mc/release/darwin-amd64/
+LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
+MACOS_BASE=https://dl.min.io/client/mc/release/darwin-amd64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
@@ -215,6 +216,7 @@ bin/minio:
 		curl $(MACOS_BASE)/mc -o bin/mc ; \
 	fi
 	chmod +x bin/minio bin/mc
+	ls -l bin/minio bin/mc
 	@echo setting up minio profile
 	if ! grep minio $$HOME/.aws/credentials >/dev/null ; then \
 		echo installing "[minio]" profile; \
