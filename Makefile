@@ -242,8 +242,8 @@ install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	which ffmpeg || sudo apt install ffmpeg
-	which node || sudo apt-get install nodejs
-	which npm || sudo apt-get install npm
+	which node || sudo apt install nodejs
+	which npm || sudo apt install npm
 	which chromium || sudo apt-get install -y chromium-browser
 	npm ci
 	make $(REQ)
