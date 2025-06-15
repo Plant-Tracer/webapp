@@ -59,6 +59,7 @@ jobs:
 
       - name: Validate local minio/S3 endpoint
         run: |
+          bin/local_minio_control.bash status
           bin/local_minio_control.bash start
           ps auxww
           aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
