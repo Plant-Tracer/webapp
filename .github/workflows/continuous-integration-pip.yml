@@ -3,8 +3,6 @@
 # There is no way to generate a random password that can be used in the services section, so that will need to be moved to a repository secret of RANDOM_PASSWORD
 name: CI (pip)
 on: [push, pull_request]
-env:
-  # No environment variables at the moment
 
 jobs:
   build:
