@@ -14,16 +14,20 @@ from flask import Flask, request, render_template, jsonify, make_response
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-from . import auth
+#from . import auth
 from . import db_object
-from . import dbmaint
-from . import clogging
+#from . import odbmaint
+#from . import clogging
 from . import apikey
 
 from .bottle_api import api_bp
-from .constants import __version__,GET,GET_POST,C
+from .constants import __version__,GET,GET_POST,C,E
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
+from .odb import InvalidAPI_Key
+
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -41,22 +45,9 @@ def fix_boto_log_level():
             logging.getLogger(name).setLevel(logging.INFO)
 
 def lambda_startup():
-    dbmaint.schema_upgrade(auth.get_dbwriter())
-    clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
+    logging.basicConfig(format=C.LOGGING_CONFIG, level=os.environ.get('PLANTTRACER_LOG_LEVEL',C.LOGGING_LEVEL))
     fix_boto_log_level()
-
-    logging.info("p1")
-    if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
-        db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
-        logging.info("p2a %s",db_object.S3_BUCKET)
-    else:
-        config = auth.config()
-        try:
-            db_object.S3_BUCKET = config['s3']['s3_bucket']
-            logging.info("p2b %s",db_object.S3_BUCKET)
-        except KeyError as e:
-            logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
-    logging.info("p3 %s",db_object.S3_BUCKET)
+    logger.info("lambda_startup")
 
 ################################################################
 ## API SUPPORT
@@ -76,13 +67,12 @@ lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
 app.logger.info("new Flask(__name__=%s)",__name__)
-app.logger.info("PLANTTRACER_CREDENTIALS=%s",os.environ.get(C.PLANTTRACER_CREDENTIALS,None))
-app.logger.info("db_object.S3_BUCKET=%s",db_object.S3_BUCKET)
-logging.info("regular logging works too")
+app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
+
 
 
 ################################################################
-### Error Handling
+### Error Handling. An exception automatically generates this response.
 ################################################################
 
 @app.errorhandler(AuthError)
@@ -91,8 +81,16 @@ def handle_auth_error(ex):
     {'message':message, 'error':True}
     as defined in auth.AuthError
     """
+    logging.info("handle_auth_error(%s)",ex)
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
+    return response
+
+@app.errorhandler(InvalidAPI_Key)
+def handle_apikey_error(ex):
+    logging.info("handle_apikey_error(%s)",ex)
+    response = jsonify(E.INVALID_API_KEY)
+    response.status_code = 403
     return response
 
 ################################################################

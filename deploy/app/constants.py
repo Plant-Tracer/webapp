@@ -4,6 +4,8 @@ Constants are created in classes so we can import the class and don't have to im
 
 #pylint: disable=too-few-public-methods
 
+import logging
+
 __version__ = '0.9.6'
 
 GET=['GET']
@@ -12,18 +14,45 @@ GET_POST = ['GET','POST']
 
 class C:
     """Constants"""
-    # Environment variables:
-    DBREADER_ARN = 'DBREADER_ARN'
-    DBWRITER_ARN = 'DBWRITER_ARN'
-    DEMO_MODE = 'DEMO_MODE'
-    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
-    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS'
+    # AWS variables (used by boto3)
+    AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
+    AWS_PROFILE = 'AWS_PROFILE'
+
+    # Environment variables for AWS Configuration
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
+    DEMO_MODE = 'DEMO_MODE'
     FFMPEG_PATH = 'FFMPEG_PATH'
+    DYNAMODB_ENDPOINT_URL = 'DYNAMODB_ENDPOINT_URL'
+    DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
+    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS' # where the .ini file is with [smtp] and [imap] config
+    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
+    SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
+
+    # defaults:
+    THE_DEFAULT_REGION = 'us-east-1'
+    DEFAULT_S3_BUCKET = 'planttracer-local'
+    S3_ENDPOINT_URL = 'S3_ENDPOINT_URL'
+    TEST_S3_BUCKET = 'planttracer-local'
+    TEST_S3_ENDPOINT_URL = 'http://localhost:9100'
+    DEFAULT_S3_ENDPOINT = 'http://localhost:9100'
+    DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
+    DYNAMODB_TEST_ENDPOINT_URL = 'http://localhost:8010'
+    DEFAULT_MAX_ENROLLMENT = 100
+    LOG_MAX_RECORDS = 1024
+
+    # Logging
+    LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module)s - %(message)s'
+    LOGGING_LEVEL=logging.WARNING
+
+    # Demo mode
+    DEMO_MODE_API_KEY = 'ademo' # special key
+    DEMO_MODE_USER_ID  = 'udemo' # special userid
 
     # Other
     EMAIL_TEMPLATE_FNAME = 'email.txt'
+    MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
@@ -46,7 +75,6 @@ class C:
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'
     API_KEY_COOKIE_MAX_AGE = 60*60*24*180
-    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'
 
 class MIME:
     """MIME Types"""

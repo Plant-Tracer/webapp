@@ -10,17 +10,22 @@ import logging
 import os
 import functools
 import subprocess
-import json
 from functools import lru_cache
 import base64
 from os.path import join
 
 from flask import request
 
-from . import db
+from . import odb
 from .paths import ETC_DIR
-from .auth import get_dbreader,AuthError
 from .constants import C,__version__
+from .odb import InvalidAPI_Key,fix_types
+
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
+def is_demo_mode():
+    return os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
@@ -53,28 +58,6 @@ def git_branch():
         return subprocess.check_output("git rev-parse --abbrev-ref HEAD".split(),encoding='utf-8')
     except (subprocess.SubprocessError,FileNotFoundError):
         return ""
-    
-def fix_types(obj):
-    """Process JSON so that it dumps without `default=str`"""
-    return json.loads(json.dumps(obj,default=str))
-
-################################################################
-# Demo mode
-
-# Check to see if DEMO_MODE environment variable is set.
-# If so, then we use the DEMO user if the user is not logged in
-DEMO_MODE = os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
-
-def demo_mode_api_key():
-    """Return the api key of the first demo user"""
-    for demo_user in db.list_demo_users():
-        api_key = db.get_demo_user_api_key(user_id = demo_user['user_id'])
-        if api_key is None:
-            # Make an api key for the demo user if we do not have one
-            api_key = db.make_new_api_key(email=demo_user['email'])
-        return api_key
-    logging.error("demo_mode_api_key requested but there are no demo users")
-    return None
 
 ################################################################
 # Authentication API - for clients
@@ -85,7 +68,7 @@ def cookie_name():
     """We append the database name to the cookie name to make development easier.
     This way, the localhost: cookies can be for the prod, demo, or dev databases.
     """
-    return C.API_KEY_COOKIE_BASE + "-" + get_dbreader().database
+    return C.API_KEY_COOKIE_BASE
 
 
 def add_cookie(response):
@@ -94,7 +77,6 @@ def add_cookie(response):
     if api_key:
         response.set_cookie(cookie_name(), api_key,
                             max_age = C.API_KEY_COOKIE_MAX_AGE)
-
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
@@ -109,34 +91,33 @@ def get_user_api_key():
        None if user is not logged in and no demo mode
     """
     # check the query string.
+    if is_demo_mode():
+        return C.DEMO_MODE_API_KEY
+
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
     if api_key is not None:
         return api_key
 
     # Return the api_key if it is in a cookie.
-    # Otherwise return None (not user is logged in) unless we are in Demo Mode, in which case we
-    # return the api_key for the demo user.
     api_key = request.cookies.get(cookie_name(), None)
     logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
-    if (api_key is None) and (DEMO_MODE):
-        api_key = demo_mode_api_key()
     return api_key
 
-
 def get_user_dict():
-    """Returns the userdict of the currently logged in user, or throws a response"""
+    """Returns the user dict from the database of the currently logged in user, or throws a response"""
     api_key = get_user_api_key()
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
-        # Check if we were running under an API
+        # Check if we were running under an API. All calls under /api must be authenticated.
         if request.full_path.startswith('/api/'):
-            raise AuthError('invalid API key')
+            raise InvalidAPI_Key()
 
-    userdict = db.validate_api_key(api_key)
-    if not userdict:
+    # We have a key. Now validate it
+    userdict = odb.validate_api_key(api_key)
+    if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
-        raise AuthError(f"api_key '{api_key}' is invalid")
+        raise InvalidAPI_Key()
     return userdict
 
 @lru_cache(maxsize=1)
@@ -149,7 +130,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: title - the title we should give the page
     :param: require_auth  - if true, the user must already be authenticated, or throws an error
     :param: logout - if true, force the user to log out by issuing a clear-cookie command
-    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key in the URL or the cookie
+    :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key
+                     in the URL or the cookie
     """
     logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     if lookup:
@@ -157,21 +139,21 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         logging.debug("get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
-            raise AuthError("api_key is None and require_auth is True")
+            raise InvalidAPI_Key()
     else:
         api_key = None
 
     if (api_key is not None) and (logout is False):
         # Get the user_dict is from the database
-        user_dict = get_user_dict()
-        user_name = user_dict['name']
+        user_dict  = get_user_dict()
+        user_name  = user_dict['full_name']
         user_email = user_dict['email']
         user_demo  = user_dict['demo']
-        user_id = user_dict['id']
+        user_id    = user_dict['user_id']
         user_primary_course_id = user_dict['primary_course_id']
+        primary_course_name    = user_dict['primary_course_name']
         logged_in = 1
-        primary_course_name = db.lookup_course_by_id(course_id=user_primary_course_id)['course_name']
-        admin = 1 if db.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
+        admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
         # If this is a demo account, the user cannot be an admin (security)
         if user_demo:
             assert not admin
@@ -207,9 +189,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'title':'Plant Tracer '+title,
         'hostname':request.host,
         'movie_id':movie_id,
-        'demo_mode':DEMO_MODE,
+        'demo_mode':is_demo_mode(),
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
-        'dbreader_host':get_dbreader().host,
         'version':__version__,
         'git_head_time':git_head_time(),
         'git_last_commit':git_last_commit(),
