@@ -25,7 +25,6 @@ jobs:
       - name: Update GITHUB_PATH and install Python dependencies for local development
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          make venv
 
       - name: "Configure ubuntu"
         if: startsWith(matrix.os, 'ubuntu')
