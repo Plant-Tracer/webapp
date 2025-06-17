@@ -67,7 +67,7 @@ stop_minio() {
         fi
     else
         echo "No $PIDFILE file found. Checking for running process with pgrep."
-        PID=$(pgrep -f "minio")
+        PID=$(pgrep -f "minio" || exit 0)
         if [ -n "$PID" ]; then
             echo "Found running Minio Local (PID: $PID) using pgrep. Stopping..."
             kill $PID

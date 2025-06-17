@@ -31,7 +31,6 @@ class C:
     SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
 
     # defaults:
-    THE_DEFAULT_REGION = 'us-east-1'
     DEFAULT_S3_BUCKET = 'planttracer-local'
     S3_ENDPOINT_URL = 'S3_ENDPOINT_URL'
     TEST_S3_BUCKET = 'planttracer-local'
@@ -43,7 +42,7 @@ class C:
     LOG_MAX_RECORDS = 1024
 
     # Logging
-    LOGGING_CONFIG='%(asctime)s %(levelname)s - %(module)s - %(message)s'
+    LOGGING_CONFIG='%(asctime)s  %(filename)s:%(lineno)d %(levelname)s: %(message)s'
     LOGGING_LEVEL=logging.WARNING
 
     # Demo mode

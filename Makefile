@@ -17,6 +17,8 @@ JS_FILES := $(TS_FILES:.ts=.js)
 # See below for the rules
 REQ = venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 
+LOCAL_BUCKET:=s3://planttracer-local
+
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
@@ -116,13 +118,29 @@ pytest-selenium:
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 ################################################################
-### Debug targets to run locally.
+### Debug targets to develop and run locally.
 
-make-local-demo:**1
+wipe-local:
+	@echo wiping all local artifacts
+	bin/local_minio_control.bash stop
+	bin/local_dynamodb_control.bash stop
+	/bin/rm -rf var
+	mkdir var
+	bin/local_minio_control.bash start
+	bin/local_dynamodb_control.bash start
+	make make-local-bucket
+
+make-local-demo:
+	@echo creating a local course
+	bin/local_minio_control.bash start
+	bin/local_dynamodb_control.bash start
+	make make-local-bucket
+	DYNAMODB_TABLE_PREFIX=demo DYNAMODB_ENDPOINT_URL=http://localhost:8010/ S3_ENDPOINT_URL=http://localhost:9100/ AWS_PROFILE=minio $(PYTHON) dbutil.py --table_prefix=demo --createdb
+	DYNAMODB_TABLE_PREFIX=demo DYNAMODB_ENDPOINT_URL=http://localhost:8010/ S3_ENDPOINT_URL=http://localhost:9100/ AWS_PROFILE=minio $(PYTHON) dbutil.py --table_prefix=demo --create_course --course_id demo-course --course_name "Demo course 1"  --admin_email admin@company.com --admin_name "Dr. Admin" --demo_email demo@company.com
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	$(PYTHON) standalone.py --storelocal
+	$(PYTHON) standalone.py
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
@@ -231,13 +249,14 @@ list-local-buckets:
 	aws s3 --profile=minio --endpoint-url http://localhost:9100 ls
 
 make-local-bucket:
-	if aws s3 --profile=minio --endpoint-url http://localhost:9100 ls s3://planttracer-local/ >/dev/null ; then \
-	 	echo s3://planttracer-local/ exists ; \
+	if aws s3 --profile=minio --endpoint-url http://localhost:9100 ls $(LOCAL_BUCKET) >/dev/null 2>&1; then \
+	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
-		echo creating s3://planttracer-local/ ; \
-		aws s3 --profile=minio --endpoint-url http://localhost:9100 mb s3://planttracer-local/ ; \
+		echo creating $(LOCAL_BUCKET) ; \
+		aws s3 --profile=minio --endpoint-url http://localhost:9100 mb $(LOCAL_BUCKET) ; \
 	fi
-
+	@echo local buckets:
+	@aws s3 --profile=minio --endpoint-url http://localhost:9100 ls
 ################################################################
 # Includes ubuntu dependencies
 install-ubuntu:

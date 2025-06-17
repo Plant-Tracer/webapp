@@ -20,6 +20,26 @@ class User(BaseModel):
     primary_course_name: str
     courses: List[str]
 
+class UniqueEmail(BaseModel):
+    """unique_emails table"""
+    email: str
+
+class ApiKey(BaseModel):
+    api_key: str
+    user_id: str
+
+class Course(BaseModel):
+    """DynamoDB courses table"""
+    course_id: str
+    course_name: str
+    course_key: str
+    admins_for_course: List[str]
+    max_enrollment: int
+
+class CourseUser(BaseModel):
+    user_id: str
+    user_id: str
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
     movie_id: str
@@ -64,6 +84,18 @@ class Trackpoint(BaseModel):
             return v
         d = Decimal(str(v))  # string conversion avoids float issues
         return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+class MovieFrame(BaseModel):
+    movie_id: str
+    frame_number: conint(ge=0)
+    trackpoints: List[Trackpoint]
+
+class LogEntry(BaseModel):
+    log_id: str
+    ipaddr: str
+    user_id: str
+    course_id: str
+    time_t: conint(ge=0)
 
 # Function to validate a single prop and value using the Movie schema
 def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:

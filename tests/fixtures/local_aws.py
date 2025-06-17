@@ -56,9 +56,9 @@ def local_ddb():
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
 
-    os.environ['AWS_DEFAULT_REGION']    = 'local'
-    os.environ['DYNAMODB_ENDPOINT_URL'] = C.DYNAMODB_TEST_ENDPOINT_URL
-    os.environ['DYNAMODB_TABLE_PREFIX'] = 'test-'+str(uuid.uuid4())[0:4]
+    os.environ[C.AWS_DEFAULT_REGION]    = 'local'
+    os.environ[C.DYNAMODB_ENDPOINT_URL] = C.DYNAMODB_TEST_ENDPOINT_URL
+    os.environ[C.DYNAMODB_TABLE_PREFIX] = 'test-'+str(uuid.uuid4())[0:4]
     ddbo = DDBO()
     odbmaint.drop_tables(ddbo)
     odbmaint.create_tables(ddbo)

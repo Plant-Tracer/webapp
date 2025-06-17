@@ -17,9 +17,10 @@ from boto3.dynamodb.conditions import Attr
 
 from . import odb
 from .db_object import s3_client
-from .odb import USER_ID
+from .odb import USER_ID,is_ddbo
 from .constants import C
 from .paths import TEST_DATA_DIR
+
 
 # Configure basic logging
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -243,6 +244,7 @@ def drop_dynamodb_table(ddbo, table_name: str):
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table not found).
     :raises Exception: For any unexpected errors during deletion.
     """
+    assert is_ddbo(ddbo)
     logger.info("Attempting to delete table: %s", table_name)
     try:
         table = ddbo.dynamodb.Table(table_name)
@@ -270,6 +272,7 @@ def create_tables(ddbo, ignore_table_exists = None):
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
     :raises Exception: For any unexpected errors during creation.
     """
+    assert is_ddbo(ddbo)
     for table_config in TABLE_CONFIGURATIONS:
         # prepend the prefix to the table name before creating it
         tc = copy.deepcopy(table_config)
@@ -285,22 +288,24 @@ def create_tables(ddbo, ignore_table_exists = None):
             table.wait_until_exists()
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
-            if e.response['Error']['Code'] == 'TableAlreadyExistsException':
+            if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
                 if (ignore_table_exists is not None) and (table_name not in ignore_table_exists):
                     logger.warning("Table %s already exists.", table_name)
             else:
-                logger.error("Error creating table %s: %s", table_name, e)
+                logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, ddbo.dynamodb.meta.client.meta.endpoint_url)
 
 def drop_tables(ddbo):
+    assert is_ddbo(ddbo)
     tables_to_drop = [ ddbo.table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
         drop_dynamodb_table(ddbo, table_name)
 
-def puge_all_movies(ddbo):
+def purge_all_movies(ddbo):
     """"Deleting an entire table is significantly more efficient than removing items one-by-one,
     which essentially doubles the write throughput as you do as many delete operations as put operations.
+    This does not delete the movie files.
     """
-    ddbo.dynamodb.delete_table(TableName = ddbo.table_prefix + 'movies')
+    ddbo.dynamodb.meta.client.delete_table(TableName = ddbo.table_prefix + 'movies')
     create_tables(ddbo, ignore_table_exists={ddbo.table_prefix + 'movies'})
 
 #pylint: disable=too-many-arguments
@@ -346,6 +351,14 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                 odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
 
 
+def delete_course(*, course_id):
+    """Delete the course"""
+    course = odb.lookup_course_by_id(course_id=course_id)
+    print("course=",course)
+    if not course:
+        raise ValueError(f"course {course_id} does not exist")
+    odb.delete_course(course_id=course_id)
+
 def count_table_items(table, **kwargs):
     logger.warning("scan table %s",table)
     total = 0
@@ -388,14 +401,14 @@ def purge_test_obects(bucket: str):
     Delete all objects in `bucket` whose keys start with 'test-'.
     This covers prefixes like 'test-1/', 'test-foo/', etc.
     """
-    prefix = "test-"
-    logger.info("deleting objects in bucket %s with prefix %s", bucket, prefix)
+    s3_prefix = "test-"
+    logger.info("deleting objects in bucket %s with S3 prefix %s", bucket, s3_prefix)
 
     s3 = s3_client()
     paginator = s3.get_paginator('list_objects_v2')
     to_delete = []
 
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+    for page in paginator.paginate(Bucket=bucket, Prefix=s3_prefix):
         for obj in page.get('Contents', []):
             to_delete.append({'Key': obj['Key']})
             if len(to_delete) == 1000:

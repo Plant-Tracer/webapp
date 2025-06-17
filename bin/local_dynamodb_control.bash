@@ -74,7 +74,7 @@ stop_dynamodb_local() {
         fi
     else
         echo "No $PIDFILE file found. Checking for running process with pgrep."
-        PID=$(pgrep -f "DynamoDBLocal.jar")
+        PID=$(pgrep -f "DynamoDBLocal.jar" || exit 0)
         if [ -n "$PID" ]; then
             echo "Found running DynamoDB Local (PID: $PID) using pgrep. Stopping..."
             kill $PID

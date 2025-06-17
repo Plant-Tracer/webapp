@@ -49,33 +49,29 @@ Required in the database
 Implementation
 --------------
 
-- Only checks for demo mode if ``DEMO_MODE`` environment variable is set to 1
+Demo Mode uses the following environment variables:
 
-- If ``DEMO_MODE`` is set and there is no user logged in, then we are in DEMO_MODE
+- `DEMO_COURSE` - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
+- `DEMO_PREFIX` - The table prefix. (Created as `demo` by the dbmaint.py script)
 
-- If the logged-in user's demo attribute is true (1), then demo mode is available
+If we are in demo mode:
 
-- If we are in DEMO_MODE
+- We are always logged in, and always in Demo Mode.
 
-  - auth.get_user_api_key()
-
-    - If there is a user logged in, we get that user
-
-    - If there is no user logged in, we get the demo user
-
-    - Once we get the demo user, the web browser's API_KEY cookie will be set to the demo user. So logging out will remove it and the immediately set back it
-
-    - (To get out of demo mode, you'll need to click on a link that has a different API key)
+- auth.get_user_api_key() always returns an API Key for demo mode.
 
 - ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
 
 - ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
 
-- More straightforward than conditional page rendering is using css classes to control the
-  displaying of HTML elements for demo mode
+Rendering control:
 
-  - Class ``demo`` elements display only if in demo mode
-  - Class ``nodemo`` elements display only if not in demo mode
+  - CSS Class ``demo`` elements display only if in demo mode
+  - CSS Class ``nodemo`` elements display only if not in demo mode
+
+To make changes to the demo course:
+
+- Create another user who is enrolled in `DEMO_COURSE` and another login with the same `DEMO_PREFIX`
 
 Troubleshooting/Development Note
 --------------------------------

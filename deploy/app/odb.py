@@ -27,7 +27,7 @@ from pydantic import ValidationError
 import pydantic_core
 
 from . import db_object
-from .schema import User, Movie, Trackpoint, validate_movie_field
+from .schema import User, Movie, Trackpoint, validate_movie_field, Course
 from .constants import C
 
 # tables
@@ -166,6 +166,9 @@ def is_api_key(k):
 def is_movie_id(k):
     return isinstance(k,str) and k[0:1]=='m'
 
+def is_ddbo(ddbo):
+    return isinstance(ddbo,DDBO)
+
 # --- Decorator Definition ---
 def dynamodb_error_debugger(func):
     """
@@ -210,27 +213,30 @@ def dynamodb_error_debugger(func):
 
 
 # pylint: disable=too-many-public-methods, too-many-instance-attributes
-@lru_cache(maxsize=None)
 class DDBO:
     """Singleton for accessing dynamodb database"""
-    def __init__(self, *, region_name=None, endpoint_url=None, table_prefix=None):
-        # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
-        # not at object creation time.
+    _instance = None
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
-        if region_name is None:
-            region_name = os.environ.get(C.AWS_DEFAULT_REGION,C.THE_DEFAULT_REGION)
-        if endpoint_url is None:
-            endpoint_url = os.environ.get(C.DYNAMODB_ENDPOINT_URL,None)
+    def __init__(self):
+        if self._initialized:
+            return  # Skip re-initialization
 
-        if table_prefix is None:
-            table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
+        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
+        endpoint_url = os.environ.get(C.DYNAMODB_ENDPOINT_URL,None)
+        table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
 
+        print("*** new dynamodb")
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
                                         endpoint_url=endpoint_url)
 
         # Set up the tables
-        logging.info("Using table prefix '%s'",table_prefix)
+        logging.info("region_name=%s endpoint_url=%s table_prefix=%s",region_name,endpoint_url,table_prefix)
         self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
@@ -241,6 +247,7 @@ class DDBO:
         self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
         self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.course_users, self.logs]
+        self._initialized = True
 
     # Generic stuff
     @staticmethod
@@ -341,7 +348,7 @@ class DDBO:
         Raises UserExists if the user already exists. Doesn't properly handle other errors.
         """
         try:
-            _user = User(**user).model_dump() # validate User
+            user = User(**user).model_dump() # validate User
         except ValidationError:
             logging.error("user=%s",user)
             raise
@@ -502,11 +509,32 @@ class DDBO:
 
     def put_course(self, coursedict):
         """Puts the course into the database. Raises an error if the course already exists"""
-        logging.warning("put_course should validate that course_key %s is unique",coursedict[COURSE_KEY])
+        try:
+            coursedict = Course(**coursedict).model_dump() # validate coursedict
+        except pydantic_core._pydantic_core.ValidationError:
+            logging.error("coursedict=%s",coursedict)
+            raise
+
+        ################ see if a course_key already exists
+        try:
+            resp = self.courses.query( IndexName='course_key_idx',
+                                       KeyConditionExpression=Key('course_key').eq(coursedict['course_key']) )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                logging.error("Resource not found: %s. Perhaps table prefix is incorrect?",self.courses)
+                raise ValueError(self.courses) from e
+            logging.error("courses=%s",self.courses)
+            raise
+        if resp['Count'] > 0:
+            raise InvalidCourse_Key(f"Course key {coursedict[COURSE_KEY]} already exists")
+        logging.warning("Potential race condition if course_key=%s already exists",coursedict[COURSE_KEY])
+        ################
+
         try:
             self.courses.put_item(Item=coursedict,
                                   ConditionExpression= 'attribute_not_exists(course_id)')
         except ClientError as e:
+            logging.error("courses=%s coursedict=%s",self.courses,coursedict)
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 raise InvalidCourse_Id("Course already exists") from e
             raise

@@ -29,7 +29,6 @@ TEST_COURSE_DATA = {
     'course_name': TEST_COURSE_NAME,
     'course_key': TEST_COURSE_KEY,
     'admins_for_course': [TEST_ADMIN_ID],
-    'courses' : [],
     'max_enrollment': TEST_COURSE_MAX_ENROLLMENT
 }
 
