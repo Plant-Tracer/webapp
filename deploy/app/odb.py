@@ -27,7 +27,7 @@ from pydantic import ValidationError
 import pydantic_core
 
 from . import db_object
-from .schema import User, Movie, Trackpoint, validate_movie_field, Course
+from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies
 from .constants import C
 
 # tables
@@ -1104,12 +1104,12 @@ def get_movie_metadata(*, user_id, movie_id, get_last_frame_tracked=False):
     user = ddbo.get_user(user_id)
     movies = []
     if movie_id is not None:
-        return [ddbo.get_movie(movie_id)]
+        return fix_movies([ddbo.get_movie(movie_id)])
 
     # build a query for all movies for which the user is in the course
     for course_id in user[ COURSES ]:
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
-    return movies
+    return fix_movies(movies)
 
 
 @log
@@ -1461,12 +1461,12 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
         raise NotImplementedError("orig_movie not implemented")
     movies = []
     if movie_id is not None:
-        return [ddbo.get_movie(movie_id)]
+        return fix_movies([ddbo.get_movie(movie_id)])
 
     # build a query for all movies for which the user is in the course
     for course_id in user[ COURSES ]:
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
-    return movies
+    return fix_movies(movies)
 
 ################################################################
 ## Logs

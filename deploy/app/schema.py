@@ -71,6 +71,15 @@ class Movie(BaseModel):
 
     version: Optional[conint(ge=0)] = None
 
+def fix_movie(movie):
+    for tag in ['published','deleted','version']:
+        if tag in movie:
+            movie[tag] = int( movie[tag] )
+    return movie
+
+def fix_movies(movies):
+    return [fix_movie(movie) for movie in movies]
+
 class Trackpoint(BaseModel):
     """DynamoDB trackpoints table"""
     x: Decimal

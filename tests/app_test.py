@@ -97,6 +97,7 @@ def test_templates(client,new_course):
                     raise RuntimeError(f"'{exclude_text}' in text {new_user}")
             return
         except xml.etree.ElementTree.ParseError as e:
+            logging.error("*****************************************************")
             logging.error("url=%s error=%s",url,e)
             dump_lines(html)
             invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'

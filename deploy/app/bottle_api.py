@@ -449,8 +449,6 @@ def api_delete_movie():
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
     logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
-    logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
-
     return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)

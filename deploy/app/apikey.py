@@ -173,7 +173,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
-    ret= jsonify({
+    ret= {
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
         'favicon_base64':favicon_base64(),
@@ -195,7 +195,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'git_head_time':git_head_time(),
         'git_last_commit':git_last_commit(),
         'git_branch': git_branch()
-    })
+    }
     for (k,v) in ret.items():
         if v is None:
             ret[k] = "null"
