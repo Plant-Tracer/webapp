@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import uuid
 
 import pymysql
 
