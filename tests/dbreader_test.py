@@ -3,6 +3,7 @@ import os
 import logging
 import uuid
 
+import pytest
 import pymysql
 
 import app.dbmaint as dbmaint
