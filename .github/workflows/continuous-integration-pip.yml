@@ -106,7 +106,7 @@ jobs:
       - name: Run coverage test
         if: startsWith(matrix.os, 'ubuntu')
         env:
-          SKIP_ENDPOINT_TEST:   ${{ vars.SKIP_ENDPOINT_TEST }}
+          SKIP_ENDPOINT_TEST: ${{ vars.SKIP_ENDPOINT_TEST }}
         run: |
           CHROME_PATH=${{ steps.setup-chrome.outputs.chrome-path }} make pytest-coverage
 
@@ -124,5 +124,4 @@ jobs:
 
       - name: Show files in directory
         run: |
-          make coverage
           ls -l
