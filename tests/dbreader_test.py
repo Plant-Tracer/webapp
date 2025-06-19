@@ -4,10 +4,11 @@ import logging
 
 import pymysql
 
+import app.dbmaint as dbmaint
 import app.paths as paths
 import app.dbfile as dbfile
 import app.db as db
-from app.auth import credentials_file,get_dbreader,get_dbwriter,smtp_config
+from app.auth import credentials_file,config,get_dbreader,get_dbwriter,smtp_config
 
 if sys.version < '3.11':
     raise RuntimeError("Requires python 3.11 or above.")
@@ -41,3 +42,9 @@ def test_db_connection():
         raise
     logging.info("MySQL Version %s",v[0][0])
     logging.info("dbwriter: %s",dbwriter)
+
+
+    # Test the dumping
+    dumpdir = '/tmp/dump' + str(uuid.uuid4())
+    dbmaint.dump(config, dumpdir)
+    dbmaint.sqlbackup(config, dumpdir + "/sqlbackup.sql")
