@@ -8,9 +8,13 @@ Main Flask application for planttracer.
 import sys
 import os
 import logging
+import traceback
 from logging.config import dictConfig
 
 from flask import Flask, request, render_template, jsonify, make_response
+from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import HTTPException
+
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
@@ -75,6 +79,21 @@ app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
 ### Error Handling. An exception automatically generates this response.
 ################################################################
 
+@app.errorhandler(404)
+def not_found(e):
+    return "<h1>404 Not Found (404)</h1>", 404
+
+@app.errorhandler(NotFound)
+def not_found(e):
+    return "<h1>404 Not Found (NotFound)</h1>", 404
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return e         # Let Flask handle it or route it to its specific handler
+    logging.exception("Unhandled exception")
+    return jsonify({"error": True, "message": "Internal Server Error"}), 500
+
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
     """Raise AuthError('message') will result in a JSON response:
@@ -133,6 +152,10 @@ def func_logout():
     resp = make_response(render_template('logout.html', **page_dict('Logout',logout=True)))
     resp.set_cookie(cookie_name(), '', expires=0)
     return resp
+
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "ok", "message": "pong"})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():

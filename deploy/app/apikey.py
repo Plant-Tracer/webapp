@@ -14,18 +14,18 @@ from functools import lru_cache
 import base64
 from os.path import join
 
-from flask import request
+from flask import request,jsonify
 
 from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
-from .odb import InvalidAPI_Key,fix_types
+from .odb import InvalidAPI_Key
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
 def is_demo_mode():
-    return C.DEMO_COURSE in os.environ
+    return C.DEMO_COURSE_ID in os.environ
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
@@ -173,7 +173,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
-    ret= fix_types({
+    ret= jsonify({
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
         'favicon_base64':favicon_base64(),

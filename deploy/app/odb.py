@@ -128,22 +128,6 @@ class UnauthorizedUser(ODB_Errors):
 class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
 
-################################################################
-## Type conversion
-################################################################
-
-def _fixer(obj):
-    if isinstance(obj,Decimal):
-        if obj.to_integral_value() == obj:
-            return int(obj)
-        return float(obj)
-    return str(obj)
-
-def fix_types(obj):
-    """Process JSON so that it dumps without `default=str`"""
-    return json.loads(json.dumps(obj,default=_fixer))
-
-
 
 ################################################################
 ## DDBO - The Object Database Class

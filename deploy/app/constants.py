@@ -24,6 +24,9 @@ class C:
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
     DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # run in demo mode with this course_id
     FFMPEG_PATH = 'FFMPEG_PATH'
+    AWS_ACCESS_KEY_ID = 'AWS_ACCESS_KEY_ID'
+    AWS_SECRET_ACCESS_KEY = 'AWS_SECRET_ACCESS_KEY'
+    AWS_ENDPOINT_URL = 'AWS_ENDPOINT_URL'
     AWS_ENDPOINT_URL_DYNAMODB = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
     AWS_ENDPOINT_URL_S3 = 'AWS_ENDPOINT_URL_S3' # official name
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
@@ -31,12 +34,13 @@ class C:
     SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
     SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
 
-    # defaults:
-    TEST_S3_BUCKET = 'planttracer-local'
-    DEFAULT_ENDPOINT_URL_S3 = 'http://localhost:9100'
-
+    # test values
+    TEST_ACCESS_KEY_ID = 'minioadmin'
+    TEST_SECRET_ACCESS_KEY = 'minioadmin'
+    TEST_PLANTTRACER_S3_BUCKET = 'planttracer-local'
+    TEST_ENDPOINT_URL_S3 = 'http://localhost:9100'
     TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
-    DEFAULT_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
+
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
 

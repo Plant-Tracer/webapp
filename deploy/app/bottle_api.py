@@ -18,7 +18,7 @@ import zipfile
 from collections import defaultdict
 from zipfile import ZipFile
 
-from flask import Blueprint, request, make_response, redirect, current_app
+from flask import Blueprint, request, make_response, redirect, current_app, jsonify
 from validate_email_address import validate_email
 
 from . import odb
@@ -28,7 +28,7 @@ from . import tracker
 from .apikey import get_user_api_key,get_user_dict
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,fix_types
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ def api_check_api_key():
     """API to check the user key and, if valid, return usedict or returns an error.
     validate_api_key() will raise InvalidAPI_Key() for an invalid API key that will be handled above.
     """
-    return {'error': False, 'userinfo' : fix_types(odb.validate_api_key(get_user_api_key())) }
+    return jsonify({'error': False, 'userinfo' : odb.validate_api_key(get_user_api_key())})
 
 
 @api_bp.route('/get-logs', methods=POST)
@@ -449,9 +449,9 @@ def api_delete_movie():
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
     logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
-    logging.debug("fix_types(odb.list_movies)=%s",fix_types(odb.list_movies(user_id=get_user_id())))
+    logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
 
-    return {'error': False, 'movies': fix_types(odb.list_movies(user_id=get_user_id()))}
+    return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
@@ -522,8 +522,7 @@ def api_get_movie_metadata():
             frame['markers'].append(tpt)
 
     logging.debug("ret=%s",ret)
-    logging.debug("fix_types(ret)=%s",fix_types(ret))
-    return fix_types(ret)
+    return jsonify(ret)
 
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
@@ -543,8 +542,7 @@ def api_get_movie_trackpoints():
         frame_dicts    = defaultdict(dict)
 
         if get('format')=='json':
-            return fix_types({'error':'False',
-                              'trackpoint_dicts':trackpoint_dicts})
+            return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
 
         for tp in trackpoint_dicts:
             frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
@@ -808,7 +806,6 @@ def api_get_log():
 ################################################################
 ## Metdata Management (movies and users, it's a common API!)
 
-
 @api_bp.route('/set-metadata', methods=POST)
 def api_set_metadata():
     """ set some aspect of the metadata
@@ -817,6 +814,7 @@ def api_set_metadata():
     :param user_id:  user ID  - if present, we are setting user metadata. (May not be the user_id from the api key)
     :param prop: which piece of metadata to set
     :param value: what to set it to
+    :return  error=false
     """
     set_movie_id = get('set_movie_id')
     set_user_id  = get('set_user_id')
@@ -825,10 +823,10 @@ def api_set_metadata():
         return {'error': True, 'result': 'Either set_movie_id or set_user_id is required'}
 
     value = get('value')
-    result = odb.set_metadata(user_id=get_user_id(allow_demo=False),
+    odb.set_metadata(user_id=get_user_id(allow_demo=False),
                              set_movie_id=set_movie_id,
                              set_user_id=set_user_id,
                              prop=get('property'),
                              value=value)
 
-    return {'error': False, 'result': result}
+    return {'error': False}

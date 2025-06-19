@@ -18,6 +18,7 @@ JS_FILES := $(TS_FILES:.ts=.js)
 
 REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 LOCAL_BUCKET := planttracer-local
+LOCAL_HTTP_PORT := 8080
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT := http://localhost:9100/
 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
@@ -145,8 +146,8 @@ make-local-demo:
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
-	DYNAMODB_TABLE_PREFIX=demo $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo --createdb
-	DYNAMODB_TABLE_PREFIX=demo $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo \
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo --createdb
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo \
 		--create_course \
 		--course_id demo-course \
 		--course_name "Demo course 1"  \
@@ -157,11 +158,12 @@ make-local-demo:
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	$(LOCAL_VARS) $(PYTHON) standalone.py
+	$(LOCAL_VARS) $(PYTHON) standalone.py --port $(LOCAL_HTTP_PORT)
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	DEMO_COURSE=demo-course $(PYTHON) standalone.py --storelocal
+	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
+	DEMO_COURSE=demo-course $(PYTHON) standalone.py --port $(LOCAL_HTTP_PORT)
 
 debug:
 	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG

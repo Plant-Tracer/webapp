@@ -50,11 +50,10 @@ def s3_client():
 
     region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
     endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
-    profile_name = os.getenv(C.AWS_PROFILE)
 
-    logging.info("s3_client region=%s endpoint_url=%s profile_name=%s",region_name,endpoint_url,profile_name)
+    logging.info("s3_client region=%s endpoint_url=%s ",region_name,endpoint_url)
 
-    return boto3.Session(profile_name = profile_name).client( 's3', region_name = region_name, endpoint_url=endpoint_url)
+    return boto3.Session().client( 's3', region_name = region_name, endpoint_url=endpoint_url)
 
 CORS_CONFIGURATION = {
     'CORSRules': [{

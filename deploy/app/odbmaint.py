@@ -421,14 +421,12 @@ def purge_test_obects(bucket: str):
         _flush_delete_batch(bucket, to_delete)
 
 
-def purge_test_tables(region_name=None, profile=None):
+def purge_test_tables(region_name=None):
     """
     Delete all S3 objects that start with test-*/
     Delete all DynamoDB tables whose names start with 'test-'.
     """
     session_kwargs = {}
-    if profile:
-        session_kwargs['profile_name'] = profile
     session = boto3.Session(**session_kwargs)
     client = session.client('dynamodb', region_name=region_name)
 

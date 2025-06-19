@@ -92,6 +92,9 @@ def mailer_config():
     lm = Localmail()
     os.environ[C.SMTPCONFIG_JSON] =  json.dumps(dict(lm.localmail_config['smtp']),default=str)
     yield lm.localmail_config
-    del os.environ[C.SMTPCONFIG_JSON]
+    try:
+        del os.environ[C.SMTPCONFIG_JSON]
+    except KeyError:
+        pass                    # this shouldn't happen, but it did in testing...
     lm.dump_mailbox()
     lm.clear_mailbox()

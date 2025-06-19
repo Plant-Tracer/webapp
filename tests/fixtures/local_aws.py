@@ -57,8 +57,10 @@ def local_ddb():
     # Make sure that the tables don't exist, then create them
 
     os.environ[ C.AWS_DEFAULT_REGION ]    = 'local'
-    os.environ[ C.AWS_ENDPOINT_URL ] = C.TEST_DYNAMODB_ENDPOINT_URL
+    os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
     os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
+    os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
+    os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
     ddbo = DDBO()
     odbmaint.drop_tables(ddbo)
     odbmaint.create_tables(ddbo)
@@ -75,9 +77,8 @@ def local_s3():
 
     save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
     save_endpoint = os.getenv(C.AWS_ENDPOINT_URL_S3)
-    os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_S3_BUCKET
+    os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_PLANTTRACER_S3_BUCKET
     os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
-    os.environ[C.AWS_PROFILE ] = 'minio'
     yield save_bucket
     if save_bucket:
         os.environ[C.PLANTTRACER_S3_BUCKET] = save_bucket

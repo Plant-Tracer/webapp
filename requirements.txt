@@ -1,5 +1,5 @@
 pylint
-uvicorn
+waitress
 gunicorn
 tabulate
 pytest

@@ -206,8 +206,11 @@ def test_movie_update_metadata(client, new_movie):
                                    'property': 'deleted',
                                    'value': 1})
     res = resp.get_json()
+    logging.debug("after set deleted=1 res=%s",res)
     assert res['error'] is False
-    assert get_movie(client, api_key, movie_id)['deleted'] == 1
+    movie = get_movie(client, api_key, movie_id)
+    logging.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
+    assert int(movie['deleted']) == 1
 
     # Undelete the movie
     resp = client.post('/api/set-metadata',
@@ -217,10 +220,14 @@ def test_movie_update_metadata(client, new_movie):
                                    'value': 0})
     res = resp.get_json()
     assert res['error'] is False
-    assert get_movie(client, api_key, movie_id)['deleted'] == 0
+
+    # Get the movie's to make sure that it is now deleted
+    movie = get_movie(client, api_key, movie_id)
+    logging.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
+    assert int(movie['deleted']) == 0
 
     # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(client, api_key, movie_id)['published'] == 0
+    assert int(get_movie(client, api_key, movie_id)['published']) == 0
     resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
@@ -231,7 +238,7 @@ def test_movie_update_metadata(client, new_movie):
     movie = get_movie(client, api_key, movie_id)
     logging.debug("movie=%s",movie)
     assert movie[MOVIE_ID] == movie_id
-    assert movie['published'] == 1
+    assert int(movie['published']) == 1
 
 def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
