@@ -47,5 +47,5 @@ def test_db_connection():
 
     # Test the dumping
     dumpdir = '/tmp/dump' + str(uuid.uuid4())
-    dbmaint.dump(config, dumpdir)
-    dbmaint.sqlbackup(config, dumpdir + "/sqlbackup.sql")
+    dbmaint.dump(config(), dumpdir)
+    dbmaint.sqlbackup(config(), dumpdir + "/sqlbackup.sql")
