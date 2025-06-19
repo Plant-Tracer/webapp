@@ -6,6 +6,7 @@ import sys
 import configparser
 import uuid
 import os
+import json
 
 from deploy.app import clogging
 from deploy.app import odb
@@ -46,7 +47,6 @@ if __name__ == "__main__":
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id", action='store_true')
     parser.add_argument("--course_id", help="course id")
     parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id", action='store_true')
-    parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
@@ -86,12 +86,14 @@ if __name__ == "__main__":
                                    course_name = args.course_name,
                                    admin_email = args.admin_email,
                                    admin_name = args.admin_name,
-                                   max_enrollment = args.max_enrollment,
-                                   demo_email = args.demo_email )
-            print(f"created {course_id}")
+                                   max_enrollment = args.max_enrollment)
+            print(f"created {args.course_id}")
         except ExistingCourse_Id:
-            printf(f" course {course_id} already exists")
-        print(json.dumps(odb.lookup_course_by_id(args.course_id), indent=4))
+            print(f" course {args.course_id} already exists")
+        print(json.dumps(odb.lookup_course_by_id(course_id=args.course_id), indent=4, default=str))
+
+        odbmaint.populate_demo_course(course_id = args.course_id,
+                                      demo_email = args.demo_email )
         sys.exit(0)
 
     if args.delete_course:

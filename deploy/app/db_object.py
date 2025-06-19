@@ -47,9 +47,11 @@ S3 = 's3'
 def s3_client():
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
+
     region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
     endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
     profile_name = os.getenv(C.AWS_PROFILE)
+
     logging.info("s3_client region=%s endpoint_url=%s profile_name=%s",region_name,endpoint_url,profile_name)
 
     return boto3.Session(profile_name = profile_name).client( 's3', region_name = region_name, endpoint_url=endpoint_url)
@@ -91,9 +93,9 @@ def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
     """
     if scheme not in SUPPORTED_SCHEMES:
         raise ValueError(f"Invalid scheme {scheme}")
-    netloc = os.getenv(C.PLANTTRACER_S3_BUCKET,C.DEFAULT_S3_BUCKET)
+    netloc = os.getenv(C.PLANTTRACER_S3_BUCKET)
     ret = f"{scheme}://{netloc}/{object_name}"
-    logging.debug("make_urn urn=%s",ret)
+    logger.debug("make_urn urn=%s",ret)
     return ret
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
@@ -145,6 +147,7 @@ def read_object(urn):
 
 def write_object(urn, object_data):
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
+    logger.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
         s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)

@@ -25,14 +25,13 @@ class C:
     DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # run in demo mode with this course_id
     FFMPEG_PATH = 'FFMPEG_PATH'
     AWS_ENDPOINT_URL_DYNAMODB = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
-    AWS_ENDPOINT_URL_S3 = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
+    AWS_ENDPOINT_URL_S3 = 'AWS_ENDPOINT_URL_S3' # official name
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
     PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS' # where the .ini file is with [smtp] and [imap] config
     SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
     SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
 
     # defaults:
-    DEFAULT_S3_BUCKET = 'planttracer-local'
     TEST_S3_BUCKET = 'planttracer-local'
     DEFAULT_ENDPOINT_URL_S3 = 'http://localhost:9100'
 

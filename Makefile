@@ -17,7 +17,7 @@ JS_FILES := $(TS_FILES:.ts=.js)
 # See below for the rules
 
 REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
-LOCAL_BUCKET := s3://planttracer-local
+LOCAL_BUCKET := planttracer-local
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT := http://localhost:9100/
 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
@@ -26,8 +26,8 @@ AWS_ACCESS_KEY_ID := minioadmin
 AWS_SECRET_ACCESS_KEY := minioadmin
 AWS_DEFAULT_REGION=us-east-1
 MINIO_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
-DYNAMODB_VARS := AWS_ENDPOINT_URL_S3=$(DYNAMODB_LOCAL_ENDPOINT) AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION)
-LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS)
+DYNAMODB_VARS := AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION)
+LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
@@ -153,6 +153,7 @@ make-local-demo:
 		--admin_email admin@planttracer.com \
 		--admin_name "Dr. Admin" \
 		--demo_email demo@planttracer.com
+	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local:
 	@echo run bottle locally, storing new data in database
@@ -250,11 +251,11 @@ list-local-buckets:
 	$(MINIO_VARS) aws s3 --endpoint-url $(MINIO_ENDPOINT) ls
 
 make-local-bucket:
-	if $(MINIO_VARS) aws s3 ls $(LOCAL_BUCKET) >/dev/null 2>&1; then \
+	if $(MINIO_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
 	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
-		echo creating $(LOCAL_BUCKET) ; \
-		$(MINIO_VARS) aws s3 mb $(LOCAL_BUCKET) ; \
+		echo creating s3://$(LOCAL_BUCKET)/ ; \
+		$(MINIO_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
 	fi
 	@echo local buckets:
 	$(MINIO_VARS) aws s3 ls

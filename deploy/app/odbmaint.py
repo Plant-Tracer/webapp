@@ -310,8 +310,7 @@ def purge_all_movies(ddbo):
 
 #pylint: disable=too-many-arguments
 def create_course(*, course_id, course_key, course_name, admin_email,
-                  admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
-                  demo_email = None):
+                  admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT):
     """
     :param course_id: course to be created
     :param course_key: course key for student registrations
@@ -334,21 +333,24 @@ def create_course(*, course_id, course_key, course_name, admin_email,
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
     # see if we should populate with demo
-    def is_movie(fn):
-        return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
-    if demo_email:
-        odb.register_email(email=demo_email, full_name='Demo User', course_key = course_key, demo_user=1)
-        odb.make_new_api_key(email=demo_email)
-        demo = odb.get_user_email(demo_email)
+def is_movie_fn(fn):
+    return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
-        for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie(fn)],1):
-            with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
-                movie_id = odb.create_new_movie(user_id=demo[USER_ID],
-                                                course_id = course_id,
-                                                title=DEMO_MOVIE_TITLE.format(ct=ct),
-                                                description=DEMO_MOVIE_DESCRIPTION)
-                odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
+def populate_demo_course(*, course_id, demo_email):
+    """
+    """
+    odb.register_email(email=demo_email, full_name='Demo User', course_id = course_id, demo_user=1)
+    odb.make_new_api_key(email=demo_email)
+    demo = odb.get_user_email(demo_email)
+
+    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie_fn(fn)],1):
+        with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+            movie_id = odb.create_new_movie(user_id=demo[USER_ID],
+                                            course_id = course_id,
+                                            title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                            description=DEMO_MOVIE_DESCRIPTION)
+            odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
 
 
 def delete_course(*, course_id):

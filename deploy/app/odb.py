@@ -235,7 +235,6 @@ class DDBO:
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
         table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
 
-        print("*** new dynamodb")
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
                                         endpoint_url=endpoint_url)
@@ -1205,6 +1204,7 @@ def set_movie_data(*,movie_id, movie_data):
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
+
     logging.debug("got movie=%s version=%s",movie,movie[VERSION])
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
@@ -1213,6 +1213,7 @@ def set_movie_data(*,movie_id, movie_data):
                                         movie_id = movie_id,
                                         ext=C.MOVIE_EXTENSION)
     movie_data_urn        = db_object.make_urn( object_name = object_name)
+
     db_object.write_object(movie_data_urn, movie_data)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn,
                                               DATE_UPLOADED:int(time.time()),
