@@ -48,4 +48,7 @@ def test_db_connection():
     # Test the dumping
     dumpdir = '/tmp/dump' + str(uuid.uuid4())
     dbmaint.dump(config(), dumpdir)
-    dbmaint.sqlbackup(config(), dumpdir + "/sqlbackup.sql")
+    dbmaint.sqlbackup(config(), dumpdir + "/sqlbackup.sql", all_databases=True)
+
+    with pytest.raises(FileExistsError):
+        dbmaint.dump(config(), dumpdir)
