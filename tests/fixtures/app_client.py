@@ -1,7 +1,7 @@
 import pytest
 import app.bottle_app as bottle_app
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def client():
     app = bottle_app.app
     app.config['TESTING'] = True

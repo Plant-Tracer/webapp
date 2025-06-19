@@ -264,7 +264,7 @@ def drop_dynamodb_table(ddbo, table_name: str):
 def create_tables(ddbo, ignore_table_exists = None):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
 
-    Connects to the local DynamoDB instance using DEFAULT_DYNAMODB_ENDPOINT.
+    Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
     :param dynamodb_resource: The boto3 DynamoDB resource object.
     :param ignore_table_exists: Tables to ignore if they already exist

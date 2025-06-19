@@ -22,9 +22,10 @@ class C:
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
-    DEMO_MODE = 'DEMO_MODE'
+    DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # run in demo mode with this course_id
     FFMPEG_PATH = 'FFMPEG_PATH'
-    DYNAMODB_ENDPOINT_URL = 'DYNAMODB_ENDPOINT_URL'
+    AWS_ENDPOINT_URL_DYNAMODB = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
+    AWS_ENDPOINT_URL_S3 = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
     DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
     PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS' # where the .ini file is with [smtp] and [imap] config
     SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
@@ -32,12 +33,11 @@ class C:
 
     # defaults:
     DEFAULT_S3_BUCKET = 'planttracer-local'
-    S3_ENDPOINT_URL = 'S3_ENDPOINT_URL'
     TEST_S3_BUCKET = 'planttracer-local'
-    TEST_S3_ENDPOINT_URL = 'http://localhost:9100'
-    DEFAULT_S3_ENDPOINT = 'http://localhost:9100'
-    DEFAULT_DYNAMODB_ENDPOINT = 'http://localhost:8010'
-    DYNAMODB_TEST_ENDPOINT_URL = 'http://localhost:8010'
+    DEFAULT_ENDPOINT_URL_S3 = 'http://localhost:9100'
+
+    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
+    DEFAULT_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
 

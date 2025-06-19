@@ -32,8 +32,6 @@ from fixtures.local_aws import local_ddb, local_s3, new_course, api_key
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-ENDPOINT_URL = 'ENDPOINT_URL'
-SKIP_ENDPOINT_TEST = 'SKIP_ENDPOINT_TEST'
 
 def test_ver1(client):
     r = client.get('/ver')

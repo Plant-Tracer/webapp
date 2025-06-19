@@ -25,7 +25,7 @@ logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
 def is_demo_mode():
-    return os.environ.get(C.DEMO_MODE,' ')[0:1] in 'yYtT1'
+    return C.DEMO_COURSE in os.environ
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.

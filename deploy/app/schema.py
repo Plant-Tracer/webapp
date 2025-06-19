@@ -5,7 +5,7 @@ schema.py - the types we store in DynamoDB
 from decimal import Decimal, ROUND_HALF_UP
 
 from typing import Optional,Any,List
-from pydantic import BaseModel,conint,condecimal,create_model,field_validator,ValidationError
+from pydantic import BaseModel,conint,condecimal,create_model,field_validator,ValidationError,FieldInfo
 
 class User(BaseModel):
     """DynamoDB users table"""
@@ -25,6 +25,7 @@ class UniqueEmail(BaseModel):
     email: str
 
 class ApiKey(BaseModel):
+    """api_key model"""
     api_key: str
     user_id: str
 
@@ -37,8 +38,9 @@ class Course(BaseModel):
     max_enrollment: int
 
 class CourseUser(BaseModel):
+    """CourseUser tracks if a user is registered in the course"""
     user_id: str
-    user_id: str
+    course_id: str
 
 class Movie(BaseModel):
     """DynamoDB movies table"""
@@ -86,11 +88,13 @@ class Trackpoint(BaseModel):
         return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 class MovieFrame(BaseModel):
+    """Each frame of each movie has a record"""
     movie_id: str
     frame_number: conint(ge=0)
     trackpoints: List[Trackpoint]
 
 class LogEntry(BaseModel):
+    """Logs"""
     log_id: str
     ipaddr: str
     user_id: str
@@ -99,11 +103,12 @@ class LogEntry(BaseModel):
 
 # Function to validate a single prop and value using the Movie schema
 def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:
-    if prop not in Movie.model_fields:
+    field = Movie.model_fields.get(prop)
+    if field is None:
         raise AttributeError(f"{prop} is not a valid field of Movie")
 
-    field_type = Movie.model_fields[prop].annotation
-    is_required = Movie.model_fields[prop].is_required
+    field_type = field.annotation
+    is_required = field.is_required
 
     # Dynamically create a Pydantic model with just this field
     TempModel = create_model("TempModel", **{prop: (field_type, ... if is_required else None)})

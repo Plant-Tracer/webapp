@@ -9,15 +9,25 @@
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 
-PYLINT_THRESHOLD=9.5
+PYLINT_THRESHOLD := 9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
-REQ = venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 
-LOCAL_BUCKET:=s3://planttracer-local
+REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
+LOCAL_BUCKET := s3://planttracer-local
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
+MINIO_ENDPOINT := http://localhost:9100/
+AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
+AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
+AWS_ACCESS_KEY_ID := minioadmin
+AWS_SECRET_ACCESS_KEY := minioadmin
+AWS_DEFAULT_REGION=us-east-1
+MINIO_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
+DYNAMODB_VARS := AWS_ENDPOINT_URL_S3=$(DYNAMODB_LOCAL_ENDPOINT) AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION)
+LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS)
 
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
@@ -38,7 +48,6 @@ venv/pyvenv.cfg:
 	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
 
 
-
 ################################################################
 #
 # By default, PYLINT generates an error if your code does not rank 10.0.
@@ -47,6 +56,7 @@ venv/pyvenv.cfg:
 all:
 	@echo verify syntax and then restart
 	make pylint
+	make run-local
 
 check:
 	make pylint
@@ -102,12 +112,6 @@ pytest:  $(REQ)
 pytest-debug: $(REQ)
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
 
-# Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/movie_tracker_test.py
-TEST1FUNCTION="-k test_movie_tracking"
-pytest1:
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
-
 pytest-coverage: $(REQ)
 	$(PIP_INSTALL) codecov pytest pytest_cov
 	$(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
@@ -117,15 +121,21 @@ pytest-coverage: $(REQ)
 pytest-selenium:
 	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
+# Set these during development to speed testing of the one function you care about:
+TEST1MODULE=tests/movie_tracker_test.py
+TEST1FUNCTION="-k test_movie_tracking"
+pytest1:
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+
 ################################################################
 ### Debug targets to develop and run locally.
 
 wipe-local:
-	@echo wiping all local artifacts
+	@echo wiping all local artifacts and remaking the local bucket
 	bin/local_minio_control.bash stop
 	bin/local_dynamodb_control.bash stop
 	/bin/rm -rf var
-	mkdir var
+	mkdir -p var
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
@@ -135,44 +145,38 @@ make-local-demo:
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
-	DYNAMODB_TABLE_PREFIX=demo DYNAMODB_ENDPOINT_URL=http://localhost:8010/ S3_ENDPOINT_URL=http://localhost:9100/ AWS_PROFILE=minio $(PYTHON) dbutil.py --table_prefix=demo --createdb
-	DYNAMODB_TABLE_PREFIX=demo DYNAMODB_ENDPOINT_URL=http://localhost:8010/ S3_ENDPOINT_URL=http://localhost:9100/ AWS_PROFILE=minio $(PYTHON) dbutil.py --table_prefix=demo --create_course --course_id demo-course --course_name "Demo course 1"  --admin_email admin@company.com --admin_name "Dr. Admin" --demo_email demo@company.com
+	DYNAMODB_TABLE_PREFIX=demo $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo --createdb
+	DYNAMODB_TABLE_PREFIX=demo $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo \
+		--create_course \
+		--course_id demo-course \
+		--course_name "Demo course 1"  \
+		--admin_email admin@planttracer.com \
+		--admin_name "Dr. Admin" \
+		--demo_email demo@planttracer.com
 
 run-local:
 	@echo run bottle locally, storing new data in database
-	$(PYTHON) standalone.py
+	$(LOCAL_VARS) $(PYTHON) standalone.py
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
-	DEMO_MODE=1 $(PYTHON) standalone.py --storelocal
+	DEMO_COURSE=demo-course $(PYTHON) standalone.py --storelocal
 
-DEBUG:=$(PYTHON) standalone.py --loglevel DEBUG
 debug:
-	make debug-local
-
-debug-local:
-	@echo run bottle locally in debug mode, storing new data in database
-	$(DEBUG) --storelocal
-
-debug-single:
-	@echo run bottle locally in debug mode single-threaded
-	$(DEBUG)
+	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG
 
 debug-multi:
 	@echo run bottle locally in debug mode multi-threaded
-	$(DEBUG) --multi
-
-debug-dev:
-	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
-	@echo for debugging Python and Javascript with remote database
-	$(DEBUG)
+	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG --multi
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
+	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
 
 tracker-debug:
+	@echo just test the tracker...
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
@@ -195,11 +199,11 @@ jstest-debug:
 
 
 ################################################################
+# DynamoDBLocal
 # Installations are used by the CI pipeline and by local developers
 # See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
-## DynamoDBLocal
-
+# installation:
 DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
 bin/dynamodb_local_latest.zip:
 	test -f bin/dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o bin/dynamodb_local_latest.zip
@@ -210,16 +214,21 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 	(cd bin; unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*')
 	touch bin/DynamoDBLocal.jar
 
+# operation:
 start_local_dynamodb:
 	bash bin/local_dynamodb_control.bash start
 
 stop_local_dynamodb:
 	bash bin/local_dynamodb_control.bash stop
 
-list_tables:
+list-tables:
 	aws dynamodb list-tables --endpoint-url http://localhost:8010
 
-## S3 Local (Minio)  (see: https://min.io/)
+################################################################
+# Minio (S3 clone -- see: https://min.io/)
+# Installations are used by the CI pipeline and by local developers
+
+# installation:
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
 MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
@@ -235,28 +244,23 @@ bin/minio:
 	fi
 	chmod +x bin/minio bin/mc
 	ls -l bin/minio bin/mc
-	@echo setting up minio profile
-	if ! grep minio $$HOME/.aws/credentials >/dev/null ; then \
-		echo installing "[minio]" profile; \
-		mkdir -p $$HOME/.aws; \
-		touch $$HOME/.aws/credentials; \
-		echo "[minio]" >> $$HOME/.aws/credentials; \
-		echo "aws_access_key_id = minioadmin" >> $$HOME/.aws/credentials; \
-		echo "aws_secret_access_key = minioadmin" >> $$HOME/.aws/credentials; \
-	fi
 
+# operation
 list-local-buckets:
-	aws s3 --profile=minio --endpoint-url http://localhost:9100 ls
+	$(MINIO_VARS) aws s3 --endpoint-url $(MINIO_ENDPOINT) ls
 
 make-local-bucket:
-	if aws s3 --profile=minio --endpoint-url http://localhost:9100 ls $(LOCAL_BUCKET) >/dev/null 2>&1; then \
+	if $(MINIO_VARS) aws s3 ls $(LOCAL_BUCKET) >/dev/null 2>&1; then \
 	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
 		echo creating $(LOCAL_BUCKET) ; \
-		aws s3 --profile=minio --endpoint-url http://localhost:9100 mb $(LOCAL_BUCKET) ; \
+		$(MINIO_VARS) aws s3 mb $(LOCAL_BUCKET) ; \
 	fi
 	@echo local buckets:
-	@aws s3 --profile=minio --endpoint-url http://localhost:9100 ls
+	$(MINIO_VARS) aws s3 ls
+
+
+
 ################################################################
 # Includes ubuntu dependencies
 install-ubuntu:
@@ -300,12 +304,6 @@ install-windows:
 	make $(REQ)
 	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
-# This is no longer needed for testing
-#localmail-config:
-#	@echo localmail-config
-#	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-#	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
-
 
 ################################################################
 ### Cleanup
@@ -345,9 +343,6 @@ sam-deploy:
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
 	sam logs --tail
-
-
-
 
 ################################################################
 ### Compile JavaScript to TypeScript

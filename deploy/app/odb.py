@@ -15,7 +15,7 @@ import re
 import uuid
 import time
 from collections import defaultdict
-from functools import lru_cache,wraps
+from functools import wraps
 from decimal import Decimal
 
 from flask import request
@@ -102,7 +102,10 @@ class InvalidCourse_Key(ODB_Errors):
     """ Course Key is invalid """
 
 class InvalidCourse_Id(ODB_Errors):
-    """ Course Key is invalid """
+    """ Course Id is invalid """
+
+class ExistingCourse_Id(ODB_Errors):
+    """ Course Id exists """
 
 class InvalidUser_Email(ODB_Errors):
     """User email is invalid"""
@@ -223,11 +226,13 @@ class DDBO:
         return cls._instance
 
     def __init__(self):
+        if not hasattr(self, "_initialized"):
+            self._initialized = False
         if self._initialized:
             return  # Skip re-initialization
 
         region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
-        endpoint_url = os.environ.get(C.DYNAMODB_ENDPOINT_URL,None)
+        endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
         table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
 
         print("*** new dynamodb")
@@ -511,7 +516,7 @@ class DDBO:
         """Puts the course into the database. Raises an error if the course already exists"""
         try:
             coursedict = Course(**coursedict).model_dump() # validate coursedict
-        except pydantic_core._pydantic_core.ValidationError:
+        except ValidationError:
             logging.error("coursedict=%s",coursedict)
             raise
 
@@ -526,7 +531,7 @@ class DDBO:
             logging.error("courses=%s",self.courses)
             raise
         if resp['Count'] > 0:
-            raise InvalidCourse_Key(f"Course key {coursedict[COURSE_KEY]} already exists")
+            raise ExistingCourse_Id(f"Course key {coursedict[COURSE_KEY]} already exists")
         logging.warning("Potential race condition if course_key=%s already exists",coursedict[COURSE_KEY])
         ################
 
@@ -536,7 +541,7 @@ class DDBO:
         except ClientError as e:
             logging.error("courses=%s coursedict=%s",self.courses,coursedict)
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-                raise InvalidCourse_Id("Course already exists") from e
+                raise ExistingCourse_Id("Course already exists") from e
             raise
 
 
@@ -587,7 +592,7 @@ class DDBO:
         assert is_movie_id(moviedict[MOVIE_ID])
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
-        except pydantic_core._pydantic_core.ValidationError:
+        except ValidationError:
             logging.error("moviedict=%s",moviedict)
             raise
         self.movies.put_item(Item=moviedict)

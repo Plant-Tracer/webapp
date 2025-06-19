@@ -46,7 +46,7 @@ TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation
 def new_email(info):
     return TEST_USER_EMAIL.replace('@', '-' + info + '-'+str(uuid.uuid4())[0:4]+'@')
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def local_ddb():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
@@ -56,9 +56,9 @@ def local_ddb():
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
 
-    os.environ[C.AWS_DEFAULT_REGION]    = 'local'
-    os.environ[C.DYNAMODB_ENDPOINT_URL] = C.DYNAMODB_TEST_ENDPOINT_URL
-    os.environ[C.DYNAMODB_TABLE_PREFIX] = 'test-'+str(uuid.uuid4())[0:4]
+    os.environ[ C.AWS_DEFAULT_REGION ]    = 'local'
+    os.environ[ C.AWS_ENDPOINT_URL ] = C.TEST_DYNAMODB_ENDPOINT_URL
+    os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
     ddbo = DDBO()
     odbmaint.drop_tables(ddbo)
     odbmaint.create_tables(ddbo)
@@ -66,7 +66,7 @@ def local_ddb():
     if DELETE_TEST_TABLES:
         odbmaint.drop_tables(ddbo)
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def local_s3():
     """Create an empty S3 locally.
     Starts the database if it is not running.
@@ -74,9 +74,9 @@ def local_s3():
     subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
 
     save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
-    save_endpoint = os.getenv(C.S3_ENDPOINT_URL)
+    save_endpoint = os.getenv(C.AWS_ENDPOINT_URL_S3)
     os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_S3_BUCKET
-    os.environ[C.S3_ENDPOINT_URL] = C.TEST_S3_ENDPOINT_URL
+    os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
     os.environ[C.AWS_PROFILE ] = 'minio'
     yield save_bucket
     if save_bucket:
@@ -84,9 +84,9 @@ def local_s3():
     else:
         del os.environ[C.PLANTTRACER_S3_BUCKET]
     if save_endpoint:
-        os.environ[C.S3_ENDPOINT_URL] = save_endpoint
+        os.environ[C.AWS_ENDPOINT_URL_S3] = save_endpoint
     else:
-        del os.environ[C.S3_ENDPOINT_URL]
+        del os.environ[C.AWS_ENDPOINT_URL_S3]
 
 
 @pytest.fixture

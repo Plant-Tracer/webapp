@@ -87,7 +87,7 @@ class Localmail():
         with open( self.mailbox,"w") as f:
             print(f.truncate())
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mailer_config():
     lm = Localmail()
     os.environ[C.SMTPCONFIG_JSON] =  json.dumps(dict(lm.localmail_config['smtp']),default=str)

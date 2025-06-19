@@ -5,13 +5,14 @@ dbutil.py - CLI for dbmaint module.
 import sys
 import configparser
 import uuid
+import os
 
 from deploy.app import clogging
 from deploy.app import odb
 from deploy.app import odbmaint
 from deploy.app import mailer
-#from deploy.app.constants import C
-from deploy.app.odb import DDBO,InvalidCourse_Id,USER_ID
+from deploy.app.constants import C
+from deploy.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
 
 
 DESCRIPTION="""
@@ -79,14 +80,18 @@ if __name__ == "__main__":
             parser.error(f"--create_course requires --course_name, --course_id, --admin_email and --admin_name. Missing: {', '.join('--' + m for m in missing)}")
         print("creating course...")
         course_key = str(uuid.uuid4())[9:18]
-        odbmaint.create_course(course_id = args.course_id,
-                               course_key = course_key,
-                               course_name = args.course_name,
-                               admin_email = args.admin_email,
-                               admin_name = args.admin_name,
-                               max_enrollment = args.max_enrollment,
-                               demo_email = args.demo_email )
-        print(f"course_key: {course_key}")
+        try:
+            odbmaint.create_course(course_id = args.course_id,
+                                   course_key = course_key,
+                                   course_name = args.course_name,
+                                   admin_email = args.admin_email,
+                                   admin_name = args.admin_name,
+                                   max_enrollment = args.max_enrollment,
+                                   demo_email = args.demo_email )
+            print(f"created {course_id}")
+        except ExistingCourse_Id:
+            printf(f" course {course_id} already exists")
+        print(json.dumps(odb.lookup_course_by_id(args.course_id), indent=4))
         sys.exit(0)
 
     if args.delete_course:

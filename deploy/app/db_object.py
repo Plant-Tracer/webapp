@@ -48,7 +48,7 @@ def s3_client():
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
     region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
-    endpoint_url = os.environ.get(C.S3_ENDPOINT_URL, None)
+    endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
     profile_name = os.getenv(C.AWS_PROFILE)
     logging.info("s3_client region=%s endpoint_url=%s profile_name=%s",region_name,endpoint_url,profile_name)
 

@@ -51,8 +51,9 @@ Implementation
 
 Demo Mode uses the following environment variables:
 
-- `DEMO_COURSE` - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
-- `DEMO_PREFIX` - The table prefix. (Created as `demo` by the dbmaint.py script)
+- `DEMO_COURSE_ID`       - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
+- `DEMO_DYNAMODB_PREFIX` - The table prefix. (Created as `demo` by the dbmaint.py script)
+- `DEMO_USER_EMAIL`        - Identifies the demo user. (Created as `demo@planttracer.com` by the dbmaint.py script)
 
 If we are in demo mode:
 
