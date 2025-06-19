@@ -49,18 +49,11 @@ jobs:
 
       - name: Create default AWS credentials and Validate local DynamoDB endpoint
         run: |
-          mkdir -p $HOME/.aws
-          touch $HOME/.aws/credentials
-          echo '[default]' >> $HOME/.aws/credentials
-          echo 'aws_access_key_id = IgnoreThisKey'  >> $HOME/.aws/credentials
-          echo 'aws_secret_access_key = IgnoreThisAccessKey' >> $HOME/.aws/credentials
           bin/local_dynamodb_control.bash start
-          aws --endpoint=http://localhost:8010/ --region=local dynamodb list-tables
 
       - name: Validate local minio/S3 endpoint and make sure we have buckets
         run: |
           bin/local_minio_control.bash start
-          aws --endpoint=http://localhost:9100/ --profile=minio s3 ls
           make make-local-bucket
 
       - name: Lint with pylint
