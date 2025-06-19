@@ -228,7 +228,7 @@ def test_movie_update_metadata(client, new_movie):
     assert movie['deleted'] == 0
 
     # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(client, api_key, movie_id['published']) == 0
+    assert get_movie(client, api_key, movie_id)['published'] == 0
     resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
