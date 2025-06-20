@@ -18,7 +18,7 @@ from deploy.app.constants import C
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Database Maintenance Program. The database to act upon is specified in the ini file specified by the PLANTTRACER_CREDENTIALS environment variable, in the sections for [dbreader] and [dbwriter]",
+    parser = argparse.ArgumentParser(description="Database Maintenance Program. The database to act upon is specified in the ini file with the --readconfig or --rootconfig",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
     required.add_argument(
@@ -49,7 +49,8 @@ if __name__ == "__main__":
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--schema", help="Specify schema file to use", default=paths.SCHEMA_FILE)
-    parser.add_argument("--dump", help="Backup all objects as JSON files and movie files to new directory called DUMP.  ")
+    parser.add_argument("--dump", help="Dump all objects as JSON files and movie files to new directory called DUMP.")
+    parser.add_argument("--sqlbackup", help="Backup the MySQL database to a single SQL file")
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id, --course_name, or --course_name", action='store_true')
     parser.add_argument("--course_id", help="integer course id", type=int)
     parser.add_argument("--course_key", help="integer course id")
@@ -237,6 +238,17 @@ if __name__ == "__main__":
         dbmaint.freshen(True)
         sys.exit(0)
 
+    # These need a database config
+    if ('dbreader' not in config) and (args.dump or args.sqlbackup):
+        print("Please use --rootconfig to specify which configuration file to use")
+        exit(1)
+
     if args.dump:
         dbmaint.dump(config,args.dump)
         sys.exit()
+
+    if args.sqlbackup:
+        dbmaint.sqlbackup(config,args.sqlbackup,all_databases=True)
+        sys.exit()
+
+        
