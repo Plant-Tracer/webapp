@@ -312,7 +312,7 @@ function analyze_clicked( e ) {
 // This sends the data to the server and then redraws the screen
 function set_property(user_id, movie_id, property, value)
 {
-    console.log(`set_property(${user_id}, ${movie_id}, ${property}, ${value})`);
+    console.log(`set_property('${user_id}', ${movie_id}, ${property}, ${value})`);
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
     if (user_id) formData.append("set_user_id", user_id);
@@ -416,7 +416,7 @@ function action_button_clicked( e ) {
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 
 //                           #1          #2               #3               #4              #5                 #6                #7
-const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
+const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
@@ -511,7 +511,7 @@ function list_movies_data( movies ) {
             const you_class = (m.user_id == user_id) ? "you" : "";
 
             let rows = `<tr class='${you_class}'>` +
-                `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+                `<td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
                 make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
                 `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
                 `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
