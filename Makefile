@@ -158,12 +158,13 @@ make-local-demo:
 
 run-local:
 	@echo run bottle locally, storing new data in database
+	if [ -z "$${DYNAMODB_TABLE_PREFIX}" ]; then echo DYNAMODB_TABLE_PREFIX is not set; exit 1; fi
 	$(LOCAL_VARS) $(PYTHON) standalone.py --port $(LOCAL_HTTP_PORT)
 
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	DEMO_COURSE=demo-course $(PYTHON) standalone.py --port $(LOCAL_HTTP_PORT)
+	$(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run
 
 debug:
 	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG

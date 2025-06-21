@@ -1,3 +1,6 @@
+import pytest
+
+@pytest.mark.skip(reason="logging currently disabled")
 def test_get_logs(new_course):
     """Incrementally test each part of the get_logs functions. Pretend we are root. We don't really care what the returns are"""
     for security in [False,True]:

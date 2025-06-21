@@ -24,7 +24,6 @@ import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
-import pydantic_core
 
 from . import db_object
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies
@@ -150,6 +149,8 @@ def is_user_id(k):
 def is_api_key(k):
     return isinstance(k,str) and len(k)==33 and k[0]=='a'
 
+assert is_api_key(C.DEMO_MODE_API_KEY)
+
 def is_movie_id(k):
     return isinstance(k,str) and k[0:1]=='m'
 
@@ -217,7 +218,12 @@ class DDBO:
 
         region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
-        table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, '')
+        table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, None)
+        if table_prefix is None:
+            if 'FLASK_ENV' in os.environ:
+                raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
+            else:
+                table_prefix = ''
 
         self.dynamodb = boto3.resource( 'dynamodb',
                                         region_name=region_name,
@@ -301,7 +307,12 @@ class DDBO:
     ### api_key management
 
     def get_api_key_dict(self,api_key):
-        return self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
+        try:
+            return self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
+        except Exception as e:
+            logging.error("table=%s error=%s",self.api_keys.name, e)
+            raise ValueError(self.api_keys.name) from e
+
 
     def put_api_key_dict(self,api_key_dict):
         self.api_keys.put_item(Item = api_key_dict,
@@ -659,6 +670,16 @@ class DDBO:
                                        'frame_number': movie_frame['frame_number']})
 
 
+################
+## verify table health
+################
+def verify_table_health():
+    ddbo = DDBO()
+    for table in ddbo.tables:
+        response = table.scan(limit=1)
+        logging.info("table=%s response=%s",table,response)
+
+
 #############
 ## Logging ##
 #############
@@ -875,13 +896,17 @@ def validate_api_key(api_key):
     """
     Validate API key.
     :param: api_key - the key provided by the cookie or the HTML form.
-    :return: User dictionary if api_key and user are both enabled, otherwise return None
+    :return: User dictionary if api_key and user are both enabled, return the
+             entry in the users table for key = user_id (from the api_key table),
+             otherwise return None
     """
     ddbo = DDBO()
     if not is_api_key(api_key):
+        print("pointa",api_key,is_api_key(api_key))
         raise InvalidAPI_Key()
+    print("pointb")
     api_key_dict = ddbo.get_api_key_dict(api_key)
-    print("api_key_dict:",api_key_dict)
+    print("pointc")
     if api_key_dict[ ENABLED ]:
         user = ddbo.get_user(api_key_dict[ USER_ID ])
         if user[ ENABLED ]:
@@ -893,7 +918,7 @@ def validate_api_key(api_key):
             return user
     raise InvalidAPI_Key()
 
-def make_new_api_key(*, email):
+def make_new_api_key(*, email, demo_user=False):
     """Create a new api_key for an email that is registered
     :param: email - the email
     :return: api_key - the api_key
@@ -901,7 +926,10 @@ def make_new_api_key(*, email):
     ddbo = DDBO()
     user = ddbo.get_user_email(email)
     if user[ ENABLED ] == 1:
-        api_key = new_api_key()
+        if demo_user:
+            api_key = C.DEMO_MODE_API_KEY
+        else:
+            api_key = new_api_key()
         ddbo.put_api_key_dict({API_KEY:api_key,
                                ENABLED:1,
                                USER_ID :user[ USER_ID ],

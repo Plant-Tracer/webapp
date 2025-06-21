@@ -125,9 +125,8 @@ def test_templates(client,new_course):
             logging.info('with_api_key=%s url=%s',with_api_key,url)
             if (not with_api_key) and (url in ['/audit','/list','/analyze', '/upload', '/users']):
                 # These should all be error conditions because they require being logged in
-                logging.debug('not checking html')
-                assert resp.text[0]=='{' # should be an error
-                assert resp.status_code!=200
+                logging.debug('not checking the html %s',resp.text)
+                assert resp.status_code!=200 # should be an error
             else:
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
 

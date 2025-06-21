@@ -49,7 +49,8 @@ class C:
     LOGGING_LEVEL=logging.WARNING
 
     # Demo mode
-    DEMO_MODE_API_KEY = 'ademo' # special key
+    # special key (must begin with k and be 33 characters)
+    DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
     DEMO_MODE_USER_ID  = 'udemo' # special userid
 
     # Other

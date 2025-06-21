@@ -22,25 +22,6 @@ from .constants import C
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
-"""
-Note tht to allow for local access the bucket must have this CORSRule:
-<CORSRule>
-    <AllowedOrigin>http://localhost:8080</AllowedOrigin>
-    <AllowedMethod>PUT</AllowedMethod>
-    <AllowedMethod>GET</AllowedMethod>
-    <AllowedHeader>*</AllowedHeader>
-</CORSRule>
-We use this:
-<CORSRule>
-    <AllowedOrigin>*</AllowedOrigin>
-    <AllowedMethod>DELETE</AllowedMethod>
-    <AllowedMethod>GET</AllowedMethod>
-    <AllowedMethod>POST</AllowedMethod>
-    <AllowedMethod>PUT</AllowedMethod>
-    <AllowedHeader>*</AllowedHeader>
-</CORSRule>
-"""
-
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
 

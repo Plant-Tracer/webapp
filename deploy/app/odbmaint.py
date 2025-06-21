@@ -6,6 +6,7 @@ import logging
 import copy
 import os
 import os.path
+import json
 
 import tabulate
 
@@ -318,7 +319,6 @@ def create_course(*, course_id, course_key, course_name, admin_email,
     :param admin_email: Email address for the first course admin. User is automatically created if necessary.
     :param admin_name: Admin's name
     :param max_enrollment: Maximum enrollment
-    :param demo_email: If provided, make this a demo course with the test data and with the demo user as the owner.
     """
     odb.create_course(course_id = course_id,
                       course_key = course_key,
@@ -339,10 +339,14 @@ def is_movie_fn(fn):
 
 def populate_demo_course(*, course_id, demo_email):
     """
+    Creates demo info for the demo course
     """
     odb.register_email(email=demo_email, full_name='Demo User', course_id = course_id, demo_user=1)
-    odb.make_new_api_key(email=demo_email)
+    odb.make_new_api_key(email=demo_email, demo_user=True)
     demo = odb.get_user_email(demo_email)
+    print("Demo User:")
+    print(json.dumps(demo,indent=4,default=str))
+
 
     for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie_fn(fn)],1):
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:

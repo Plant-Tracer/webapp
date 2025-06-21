@@ -14,17 +14,14 @@ from functools import lru_cache
 import base64
 from os.path import join
 
-from flask import request,jsonify
+from flask import request
 
 from . import odb
 from .paths import ETC_DIR
 from .constants import C,__version__
 from .odb import InvalidAPI_Key
 
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
-
-def is_demo_mode():
+def in_demo_mode():
     return C.DEMO_COURSE_ID in os.environ
 
 # Specify the base for the API and for the static files by Environment variables.
@@ -90,8 +87,8 @@ def get_user_api_key():
        a string of the demo mode's API key if no user is logged in and demo mode is available.
        None if user is not logged in and no demo mode
     """
-    # check the query string.
-    if is_demo_mode():
+    # If we are in demo mode, get the demo mode api_key
+    if in_demo_mode():
         return C.DEMO_MODE_API_KEY
 
     api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
@@ -100,24 +97,33 @@ def get_user_api_key():
 
     # Return the api_key if it is in a cookie.
     api_key = request.cookies.get(cookie_name(), None)
-    logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
-    return api_key
+    if api_key:
+        logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
+        return api_key
+
+    # No API key
+    return None
 
 def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
+    print("BAR")
+    logging.debug("get_user_dict")
     api_key = get_user_api_key()
+    print("api_key=",api_key)
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
         if request.full_path.startswith('/api/'):
-            raise InvalidAPI_Key()
+            raise InvalidAPI_Key("get_user_dict 1")
 
-    # We have a key. Now validate it
+    # We have a key. Now validate it.
+    # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
     userdict = odb.validate_api_key(api_key)
+    print("userdict=",userdict)
     if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
-        raise InvalidAPI_Key()
+        raise InvalidAPI_Key("get_user_dict 2")
     return userdict
 
 @lru_cache(maxsize=1)
@@ -133,13 +139,14 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key
                      in the URL or the cookie
     """
+    print("FOO")
     logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     if lookup:
         api_key = get_user_api_key()
         logging.debug("get_user_api_key=%s",api_key)
         if api_key is None and require_auth is True:
             logging.debug("api_key is None and require_auth is True")
-            raise InvalidAPI_Key()
+            raise InvalidAPI_Key("page_dict")
     else:
         api_key = None
 
@@ -189,7 +196,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'title':'Plant Tracer '+title,
         'hostname':request.host,
         'movie_id':movie_id,
-        'demo_mode':is_demo_mode(),
+        'demo_mode':in_demo_mode(),
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
         'version':__version__,
         'git_head_time':git_head_time(),

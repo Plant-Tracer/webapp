@@ -25,13 +25,14 @@ from . import db_object
 from . import apikey
 
 from .bottle_api import api_bp
-from .constants import __version__,GET,GET_POST,C,E
+from .constants import __version__,GET,GET_POST,C
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import InvalidAPI_Key
 
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
+#logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+#logging.getLogger(__name__).info("bottle_app.py logger initialized")
+#logger = logging.getLogger(__name__)
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -51,7 +52,7 @@ def fix_boto_log_level():
 def lambda_startup():
     logging.basicConfig(format=C.LOGGING_CONFIG, level=os.environ.get('PLANTTRACER_LOG_LEVEL',C.LOGGING_LEVEL))
     fix_boto_log_level()
-    logger.info("lambda_startup")
+    logging.info("lambda_startup")
 
 ################################################################
 ## API SUPPORT
@@ -66,12 +67,14 @@ dictConfig({
     }
 })
 
+
 fix_boto_log_level()
 lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
 app.logger.info("new Flask(__name__=%s)",__name__)
 app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
+logger = app.logger
 
 
 
@@ -80,19 +83,12 @@ app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
 ################################################################
 
 @app.errorhandler(404)
-def not_found(e):
-    return "<h1>404 Not Found (404)</h1>", 404
+def not_found_404(e):
+    return f"<h1>404 Not Found (404) </h1><pre>\n{e}\n</pre>", 404
 
 @app.errorhandler(NotFound)
-def not_found(e):
-    return "<h1>404 Not Found (NotFound)</h1>", 404
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    if isinstance(e, HTTPException):
-        return e         # Let Flask handle it or route it to its specific handler
-    logging.exception("Unhandled exception")
-    return jsonify({"error": True, "message": "Internal Server Error"}), 500
+def not_found_NotFound(e):
+    return f"<h1>404 Not Found (NotFound)</h1><pre>\n{e}\n</pre>", 404
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
@@ -107,10 +103,15 @@ def handle_auth_error(ex):
 
 @app.errorhandler(InvalidAPI_Key)
 def handle_apikey_error(ex):
-    logging.info("handle_apikey_error(%s)",ex)
-    response = jsonify(E.INVALID_API_KEY)
-    response.status_code = 403
-    return response
+    app.logger.error("InvalidAPI_Key: %s %s",ex,type(ex))
+    return "<h1>403 Invalid api_key</h1>", 403
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return e         # Let Flask handle it or route it to its specific handler
+    logging.exception("Unhandled exception")
+    return jsonify({"error": True, "message": "Internal Server Error"}), 500
 
 ################################################################
 # HTML Pages served with template system
@@ -122,7 +123,11 @@ def handle_apikey_error(ex):
 @app.route('/', methods=GET)
 def func_root():
     """/ - serve the home page"""
-    return render_template('index.html', **page_dict())
+    try:
+        return render_template('index.html', **page_dict())
+    except Exception as ex:     # pylint: disable=broad-exception-caught
+        return f"<h1>500 Exception:</h1><pre>\n{ex}\n{traceback.print_exception(ex)}</pre>", 500
+
 
 @app.route('/about', methods=GET)
 def func_about():
@@ -236,9 +241,12 @@ def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
-    logging.info("/ver")
+    app.logger.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
                                              sys_version= sys.version))
     response.headers['Content-Type'] = 'text/plain'
     return response
+
+################################################################
+## Finally, if we are running under flask, run this.

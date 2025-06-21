@@ -7,7 +7,6 @@ CLI for running standalone webserver.
 ##
 
 import sys
-import os
 import argparse
 import logging
 
@@ -15,18 +14,17 @@ from gunicorn.app.wsgiapp import run
 
 
 from deploy.app import clogging
-from deploy.app import db_object
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
+    parser.add_argument("--loginfo", help='print the loggers', action='store_true')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--workers', type=int, default=2)
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    if args.info:
+    if args.loginfo:
         for name in logging.root.manager.loggerDict: # pylint: disable=no-member
             print("Logger: ",name)
         sys.exit(0)
