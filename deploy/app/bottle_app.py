@@ -30,10 +30,6 @@ from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import InvalidAPI_Key
 
-#logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-#logging.getLogger(__name__).info("bottle_app.py logger initialized")
-#logger = logging.getLogger(__name__)
-
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
 MIN_SEND_INTERVAL = 60
@@ -72,9 +68,13 @@ fix_boto_log_level()
 lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
+
+log_level = os.getenv("LOG_LEVEL","INFO").upper()
+logger = app.logger
+logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
+app.logger.setLevel(log_level)
 app.logger.info("new Flask(__name__=%s)",__name__)
 app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
-logger = app.logger
 
 
 

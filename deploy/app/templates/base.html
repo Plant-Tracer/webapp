@@ -19,7 +19,7 @@
 
     <script>
       // These variables will be substituted by the template engine
-      console.log("hello1");
+      "use strict";
       const version = '{{version}}';
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
@@ -42,8 +42,6 @@
       {% else %}
       const admin = false;
       {% endif %}
-
-      console.log("hello2");
     </script>
 
     <style>
@@ -144,11 +142,10 @@
       </div>
     </div>
     <script>
-
+      "use strict";
       // demo mode: show the 'demo' CSS class and hide the 'nodemo'
       // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
       // if we are in demo mode.
-      console.log("hello3");
       $( document ).ready( function() {
         if (user_demo) {
           $('.demo').show();

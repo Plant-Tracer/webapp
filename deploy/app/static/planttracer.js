@@ -269,10 +269,10 @@ function upload_ready_function() {
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked
-function play_clicked( e, movie_id ) {
+function play_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
     console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
-    //const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
     $(`#tr-${rowid}`).show();
     const td = $(`#td-${rowid}`);
@@ -497,11 +497,11 @@ function list_movies_data( movies ) {
 
             // Get the metadata for the movie
             const movieDate = new Date(m.date_uploaded * 1000);
-            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this,${movie_id})'>`;
+            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
             let playt = '';
             let analyze_label = 'analyze';
             if (m.tracked_movie_id){
-                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this,${m.tracked_movie_id})'>`;
+                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this)'>`;
                 analyze_label = 're-analyze';
             }
             const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;

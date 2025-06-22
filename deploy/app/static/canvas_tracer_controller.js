@@ -423,7 +423,7 @@ var cc;
 function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
-        $('#firsth2').html(`Movie #${movie_id}: ready for initial tracing.`);
+        $('#firsth2').html(`Movie ${movie_id}: ready for initial tracing.`);
     };
 
     var frames = [{'frame_url': frame0_url,

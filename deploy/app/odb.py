@@ -315,8 +315,8 @@ class DDBO:
 
 
     def put_api_key_dict(self,api_key_dict):
-        self.api_keys.put_item(Item = api_key_dict,
-                               ConditionExpression = 'attribute_not_exists(api_key)' )
+        # no ConditionExpression - it's okay if the key already exists
+        self.api_keys.put_item(Item = api_key_dict)
 
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
@@ -902,11 +902,8 @@ def validate_api_key(api_key):
     """
     ddbo = DDBO()
     if not is_api_key(api_key):
-        print("pointa",api_key,is_api_key(api_key))
         raise InvalidAPI_Key()
-    print("pointb")
     api_key_dict = ddbo.get_api_key_dict(api_key)
-    print("pointc")
     if api_key_dict[ ENABLED ]:
         user = ddbo.get_user(api_key_dict[ USER_ID ])
         if user[ ENABLED ]:
@@ -1172,7 +1169,6 @@ def create_new_movie(*, user_id, course_id, title=None, description=None, orig_m
     # Create a new movie record
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
-
     movie_id = new_movie_id()
     ddbo.put_movie({MOVIE_ID:movie_id,
                     COURSE_ID: course_id,
@@ -1302,18 +1298,18 @@ def delete_movie(*,movie_id, delete=1):
 
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL")
+    logging.warning("INEFFICIENT CALL. Just return movie_id.course_id")
     return DDBO().get_movie(movie_id)[ COURSE_ID ]
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL")
+    logging.warning("INEFFICIENT CALL. Just return movie_id.movie_data_urn")
     return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
 
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL. Perhaps make it just get the item requested")
+    logging.warning("INEFFICIENT CALL. Just return movie_id.movie_zipfile_urn")
     return DDBO().get_movie(movie_id)['movie_zipfile_urn']
 
 # New implementation that writes to s3

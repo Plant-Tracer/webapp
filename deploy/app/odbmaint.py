@@ -348,7 +348,7 @@ def populate_demo_course(*, course_id, demo_email):
     print(json.dumps(demo,indent=4,default=str))
 
 
-    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if is_movie_fn(fn)],1):
+    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
             movie_id = odb.create_new_movie(user_id=demo[USER_ID],
                                             course_id = course_id,

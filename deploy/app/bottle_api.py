@@ -289,7 +289,7 @@ def api_get_movie_data():
     :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
-    logging.debug("api_get_movie_data")
+    print("************ api_get_movie_data")
     movie_id = get_movie_id()
     if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
         raise RuntimeError("access denied")
@@ -302,8 +302,8 @@ def api_get_movie_data():
     if get_bool('redirect_inline'):
         return "#REDIRECT " + data_urn
 
-    # Otherwise, return the signed url
-    return db_object.make_signed_url(urn=data_urn)
+    # Otherwise, redirect to the signed url
+    return redirect(db_object.make_signed_url(urn=data_urn))
 
 
 def set_movie_metadata(*,user_id=odb.ROOT_USER_ID, set_movie_id,movie_metadata):
@@ -448,9 +448,6 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
-    logging.error("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
-    logging.info("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
-    logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
     return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)

@@ -106,10 +106,8 @@ def get_user_api_key():
 
 def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
-    print("BAR")
     logging.debug("get_user_dict")
     api_key = get_user_api_key()
-    print("api_key=",api_key)
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
@@ -119,7 +117,6 @@ def get_user_dict():
     # We have a key. Now validate it.
     # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
     userdict = odb.validate_api_key(api_key)
-    print("userdict=",userdict)
     if userdict is None:
         logging.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)
@@ -139,7 +136,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key
                      in the URL or the cookie
     """
-    print("FOO")
     logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
     if lookup:
         api_key = get_user_api_key()
