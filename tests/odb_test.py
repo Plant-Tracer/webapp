@@ -66,6 +66,7 @@ TEST_MOVIE_DATA = {
     'movie_id': TEST_MOVIE_ID,
     'course_id': TEST_COURSE_ID,
     'user_id': TEST_USER_ID,
+    'user_name': TEST_USER_NAME,
     'title': 'My New Awesome Movie',
     'published': 0,
     'deleted': 0,

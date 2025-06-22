@@ -1171,10 +1171,13 @@ def create_new_movie(*, user_id, course_id, title=None, description=None, orig_m
     """
     # Create a new movie record
     ddbo = DDBO()
+    user = ddbo.get_user(user_id)
+
     movie_id = new_movie_id()
     ddbo.put_movie({MOVIE_ID:movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
+                    USER_NAME: user[USER_NAME],
                     TITLE:title,
                     'description':description,
                     'orig_movie':orig_movie,

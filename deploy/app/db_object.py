@@ -18,7 +18,6 @@ from botocore.exceptions import ClientError
 
 from .constants import C
 
-# Configure basic logging
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 

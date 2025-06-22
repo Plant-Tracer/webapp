@@ -63,6 +63,9 @@ check:
 	make pylint
 	make pytest
 
+tags:
+	etags deploy/app/*.py tests/*.py tests/fixtures/*.py deploy/app/static/*.js
+
 ################################################################
 ## Program development: static analysis tools
 ##
