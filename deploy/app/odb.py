@@ -50,7 +50,7 @@ API_KEY = 'api_key'
 
 # users table
 EMAIL     = 'email'
-FULL_NAME = 'full_name'
+USER_NAME = 'user_name'
 ENABLED   = 'enabled'
 USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
@@ -787,7 +787,7 @@ def list_demo_users():
     return demo_users
 
 # pylint: disable=too-many-arguments
-def register_email(email, full_name, *, course_key=None, course_id=None, demo_user=0, admin=False):
+def register_email(email, user_name, *, course_key=None, course_id=None, demo_user=0, admin=False):
     """Register a user as identified by their email address for a given course.
     If the user exists, just change their primary course Id and add them to the course.
     If the user does not exist, create them.
@@ -830,7 +830,7 @@ def register_email(email, full_name, *, course_key=None, course_id=None, demo_us
         user_id = new_user_id()
         ddbo.put_user({USER_ID:user_id,
                        EMAIL:email,
-                       FULL_NAME:full_name,
+                       USER_NAME:user_name,
                        'created' : int(time.time()),
                        DEMO:demo_user,
                        ENABLED:1,

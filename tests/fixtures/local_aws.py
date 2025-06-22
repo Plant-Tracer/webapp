@@ -103,11 +103,11 @@ def new_course(local_ddb, local_s3):
                            course_key = course_key)
 
     user_email = new_email('user')
-    user_id  = odb.register_email(email=user_email, full_name='Course User', course_id = course_id, admin=0)[USER_ID]
+    user_id  = odb.register_email(email=user_email, user_name='Course User', course_id = course_id, admin=0)[USER_ID]
     api_key = odb.make_new_api_key(email=user_email)
 
     admin_email = new_email('admin')
-    admin_id = odb.register_email(email=admin_email, full_name='Course Admin', course_key=course_key, admin=1)[USER_ID]
+    admin_id = odb.register_email(email=admin_email, user_name='Course Admin', course_key=course_key, admin=1)[USER_ID]
 
 
     yield {'ddbo':local_ddb,

@@ -326,7 +326,7 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                       max_enrollment = max_enrollment)
 
     # set up the admin
-    odb.register_email(email=admin_email, course_key=course_key, full_name=admin_name)
+    odb.register_email(email=admin_email, course_key=course_key, user_name=admin_name)
     admin = odb.get_user_email(admin_email)
     admin_id = admin[USER_ID]
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)
@@ -341,7 +341,7 @@ def populate_demo_course(*, course_id, demo_email):
     """
     Creates demo info for the demo course
     """
-    odb.register_email(email=demo_email, full_name='Demo User', course_id = course_id, demo_user=1)
+    odb.register_email(email=demo_email, user_name='Demo User', course_id = course_id, demo_user=1)
     odb.make_new_api_key(email=demo_email, demo_user=True)
     demo = odb.get_user_email(demo_email)
     print("Demo User:")

@@ -146,8 +146,8 @@ make-local-demo:
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo --createdb
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo \
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo- --createdb
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo- \
 		--create_course \
 		--course_id demo-course \
 		--course_name "Demo course 1"  \
@@ -226,7 +226,15 @@ stop_local_dynamodb:
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
-	aws dynamodb list-tables --endpoint-url http://localhost:8010
+	$(DYNAMODB_VARS) aws dynamodb list-tables
+
+dump-demo-tables:
+	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
+		echo $$tn:; \
+		$(DYNAMODB_VARS) aws dynamodb describe-table --table-name $$tn ; \
+		$(DYNAMODB_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		done
+
 
 ################################################################
 # Minio (S3 clone -- see: https://min.io/)

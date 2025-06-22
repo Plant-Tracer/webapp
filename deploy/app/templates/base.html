@@ -19,14 +19,15 @@
 
     <script>
       // These variables will be substituted by the template engine
+      console.log("hello1");
       const version = '{{version}}';
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
       {% if logged_in %}
       const api_key = "{{api_key}}";
-      const user_id = {{user_id}};
+      const user_id = "{{user_id}}";
       const user_demo = {{user_demo}}; // set true if we are in demo mode
-      const user_primary_course_id   = {{user_primary_course_id}};
+      const user_primary_course_id   = "{{user_primary_course_id}}";
       const primary_course_name = "{{primary_course_name}}";
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
       {% else %}
@@ -36,13 +37,13 @@
       const user_primary_course_id = null;
       const primary_course_name = null;
       {% endif %}
-
       {% if admin %}
       const admin = true;
       {% else %}
       const admin = false;
       {% endif %}
 
+      console.log("hello2");
     </script>
 
     <style>
@@ -147,6 +148,7 @@
       // demo mode: show the 'demo' CSS class and hide the 'nodemo'
       // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
       // if we are in demo mode.
+      console.log("hello3");
       $( document ).ready( function() {
         if (user_demo) {
           $('.demo').show();

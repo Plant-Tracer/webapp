@@ -34,11 +34,11 @@ TEST_COURSE_DATA = {
 
 TEST_USER_ID = odb.new_user_id()
 TEST_USER_EMAIL = 'new.user@example.com'
-TEST_USER_FULL_NAME = 'Firstname Lastname'
+TEST_USER_NAME = 'Firstname Lastname'
 TEST_USER_DATA = {
     'user_id': TEST_USER_ID,
     'email': TEST_USER_EMAIL,
-    'full_name': TEST_USER_FULL_NAME,
+    'user_name': TEST_USER_NAME,
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
@@ -51,7 +51,7 @@ TEST_USER_DATA = {
 TEST_ADMIN_DATA = {
     'user_id': TEST_USER_ID,
     'email': TEST_USER_EMAIL,
-    'full_name': 'Admin Firstname Lastname',
+    'user_name': 'Admin Firstname Lastname',
     'created': int(time.time()),
     'enabled': 1,
     'demo': 0,
@@ -104,7 +104,7 @@ def test_odb(local_ddb):
         ddbo.put_user(TEST_USER_DATA)
 
     # Register the user into the course
-    odb.register_email(TEST_USER_EMAIL, TEST_USER_FULL_NAME, course_id=TEST_COURSE_ID)
+    odb.register_email(TEST_USER_EMAIL, TEST_USER_NAME, course_id=TEST_COURSE_ID)
 
     assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
     assert ddbo.get_user_email(TEST_USER_EMAIL) == TEST_USER_DATA

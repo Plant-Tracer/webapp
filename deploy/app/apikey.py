@@ -153,7 +153,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     if (api_key is not None) and (logout is False):
         # Get the user_dict is from the database
         user_dict  = get_user_dict()
-        user_name  = user_dict['full_name']
+        user_name  = user_dict['user_name']
         user_email = user_dict['email']
         user_demo  = user_dict['demo']
         user_id    = user_dict['user_id']

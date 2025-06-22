@@ -137,8 +137,8 @@ def api_register():
         return E.INVALID_COURSE_KEY
     if odb.remaining_course_registrations(course_key=course_key) < 1:
         return E.NO_REMAINING_REGISTRATIONS
-    full_name = request.values.get('name')
-    user = odb.register_email(email=email, course_key=course_key, full_name=full_name)
+    user_name = request.values.get('name')
+    user = odb.register_email(email=email, course_key=course_key, user_name=user_name)
     user_id = user[USER_ID]
     new_api_key = odb.make_new_api_key(email=email)
     if not new_api_key:
@@ -206,7 +206,7 @@ def api_bulk_register():
             email = email.strip()
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
-            user = odb.register_email(email=email, course_id=course_id, full_name="")
+            user = odb.register_email(email=email, course_id=course_id, user_name="")
             send_link(email=email, planttracer_endpoint=planttracer_endpoint)
             user_ids.append(user[USER_ID])
     except EmailNotInDatabase:
@@ -448,6 +448,8 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
+    logging.error("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
+    logging.info("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
     logging.debug("odb.list_movies=%s",odb.list_movies(user_id=get_user_id()))
     return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
 

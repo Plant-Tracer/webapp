@@ -11,7 +11,7 @@ class User(BaseModel):
     """DynamoDB users table"""
     user_id: str
     email: str
-    full_name: str
+    user_name: str
     created: int
     enabled: conint(ge=0,le=1)
     demo: conint(ge=0,le=1)
@@ -49,6 +49,7 @@ class Movie(BaseModel):
     description: str
     created_at: int
     user_id: str
+    user_name: str
     course_id: str
     status: Optional[str] = None
 

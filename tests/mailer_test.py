@@ -81,13 +81,13 @@ def test_register_email(client, mailer_config,new_course):
 
     """Some tests of the email registration software in db"""
     with pytest.raises(odb.InvalidUser_Email):
-        odb.register_email(email='invalid-email', full_name='valid-name', course_key=course_key)
+        odb.register_email(email='invalid-email', user_name='valid-name', course_key=course_key)
 
     with pytest.raises(ValueError):
-        odb.register_email(email=FAKE_USER_EMAIL, full_name='valid-name', course_key=None, course_id=None)
+        odb.register_email(email=FAKE_USER_EMAIL, user_name='valid-name', course_key=None, course_id=None)
 
     with pytest.raises(odb.InvalidCourse_Key):
-        odb.register_email(email=FAKE_USER_EMAIL, full_name='valid-name', course_key='invalid-course-key', course_id=None)
+        odb.register_email(email=FAKE_USER_EMAIL, user_name='valid-name', course_key='invalid-course-key', course_id=None)
 
 
     # try register api

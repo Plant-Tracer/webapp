@@ -70,7 +70,7 @@ def test_add_remove_user_and_admin(new_course):
         new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com"
         user_id = odb.register_email(email=new_email,
                                   course_key=cfg[COURSE_KEY],
-                                  full_name='User Name',
+                                  user_name='User Name',
                                   admin = admin)['user_id']
 
         logging.info("generated admin_email=%s user_id=%s",new_email, user_id)
@@ -121,4 +121,4 @@ def test_course_list(client, new_course):
 
     # There is only an admin in the course. Make sure it is the same
     assert len(users2) in [1]
-    assert users1[0]['full_name'] == users2[0]['full_name']
+    assert users1[0]['user_name'] == users2[0]['user_name']
