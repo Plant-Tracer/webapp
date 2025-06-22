@@ -20,6 +20,25 @@ class User(BaseModel):
     primary_course_name: str
     courses: List[str]
 
+# Function to validate a single prop and value using the User schema
+def validate_user_field(prop: str, value: Any) -> tuple[str, Any]:
+    field = User.model_fields.get(prop)
+    if field is None:
+        raise AttributeError(f"{prop} is not a valid field of User")
+
+    field_type = field.annotation
+    is_required = field.is_required
+
+    # Dynamically create a Pydantic model with just this field
+    TempModel = create_model("TempModel", **{prop: (field_type, ... if is_required else None)})
+
+    try:
+        validated = TempModel(**{prop: value})
+        return getattr(validated, prop)
+    except ValidationError as e:
+        raise ValueError(f"Validation error for '{prop}': {e}") from e
+
+
 class UniqueEmail(BaseModel):
     """unique_emails table"""
     email: str
@@ -57,7 +76,7 @@ class Movie(BaseModel):
     deleted: conint(ge=0, le=1)
     date_uploaded: Optional[int] = None
     orig_movie: Optional[str] = None
-    fps:  Optional[condecimal(max_digits=4, decimal_places=2)] = None
+    fps:  Optional[str] = None  # otherwise we get roundoff errors
     width: Optional[conint(ge=0, le=10000)] = None
     height: Optional[conint(ge=0, le=10000)] = None
 
@@ -71,11 +90,15 @@ class Movie(BaseModel):
 
     version: Optional[conint(ge=0)] = None
 
+def fix_movie_prop_value(prop, value):
+    if prop in ['published','deleted','version']:
+        return int(value)
+    if prop in ['fps']:
+        return str(value)
+    return value
+
 def fix_movie(movie):
-    for tag in ['published','deleted','version']:
-        if tag in movie:
-            movie[tag] = int( movie[tag] )
-    return movie
+    return {prop:fix_movie_prop_value(prop,value) for (prop,value) in movie.items()}
 
 def fix_movies(movies):
     return [fix_movie(movie) for movie in movies]
@@ -113,15 +136,18 @@ class LogEntry(BaseModel):
 
 # Function to validate a single prop and value using the Movie schema
 def validate_movie_field(prop: str, value: Any) -> tuple[str, Any]:
-    field = Movie.model_fields.get(prop)
+    field = Movie.model_fields.get(prop,None)
     if field is None:
         raise AttributeError(f"{prop} is not a valid field of Movie")
 
     field_type = field.annotation
     is_required = field.is_required
 
-    # Dynamically create a Pydantic model with just this field
-    TempModel = create_model("TempModel", **{prop: (field_type, ... if is_required else None)})
+    # Dynamically create a Pydantic model with just this field, allowing coercion
+    TempModel = create_model(
+        "TempModel",
+        **{prop: (field_type, ... if is_required else None)}
+    )
 
     try:
         validated = TempModel(**{prop: value})

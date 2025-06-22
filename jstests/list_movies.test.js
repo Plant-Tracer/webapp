@@ -49,7 +49,7 @@ describe('list_movies_data', () => {
         width: 1280,
         height: 720,
         total_bytes: 2000000,
-        fps: 30,
+        fps: '30',
         total_frames: 3600,
         date_uploaded: 1627689600,
         deleted: 0,

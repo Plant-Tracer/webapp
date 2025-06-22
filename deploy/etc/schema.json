@@ -61,7 +61,7 @@
                 "date_uploaded": { "type": "integer", "description": "Timestamp when the movie was uploaded" },
                 "mtime": { "type": "integer", "description": "Last modification time" },
                 "version": { "type": "integer", "description": "Version number" },
-                "fps": { "type": "number", "description": "Frames per second" },
+                "fps": { "type": "string", "description": "Frames per second" },
                 "width": { "type": "integer", "description": "Width of the movie" },
                 "height": { "type": "integer", "description": "Height of the movie" },
                 "total_frames": { "type": "integer", "description": "Total number of frames" },

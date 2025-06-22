@@ -26,7 +26,7 @@ from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
 from . import db_object
-from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies
+from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies, fix_movie_prop_value
 from .constants import C
 
 # tables
@@ -1594,16 +1594,6 @@ SET_MOVIE_METADATA = {
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 }
 
-def will_it_float(s):
-    if not isinstance(s, str):
-        return False
-    return re.match(r'^-?\d+(?:\.\d+)$', s) is not None
-
-def will_it_int(s):
-    if not isinstance(s, str):
-        return False
-    return re.match(r'^-?\d+$', s) is not None
-
 @log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """We tried doing this in a single statement and it failed
@@ -1622,22 +1612,13 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     assert isinstance(prop, str)
     assert value is not None
 
-    if isinstance(value, float):
-        logging.debug("1. Converted %s %s -> %s",prop,value,str(value))
-        value = str(value)
-    if will_it_float(value):
-        logging.debug("2. Converting %s",value)
-        value = Decimal(value)
-    if will_it_int(value):
-        logging.debug("3. Converting %s",value)
-        value = int(value)
-
     logging.debug("prop=%s value=%s type=%s",prop,value,type(value))
 
     ddbo = DDBO()
 
     if set_movie_id is not None:
         # Fix the data type
+        value  = fix_movie_prop_value(prop, value)
         value = validate_movie_field(prop, value)
         movie = ddbo.get_movie(set_movie_id)
         if user_id != ROOT_USER_ID:
@@ -1655,6 +1636,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
         ddbo.update_table(ddbo.movies, set_movie_id, {prop:value})
     elif set_user_id is not None:
+        value = validate_user_field(prop, value)
         if user_id != ROOT_USER_ID:
             # Check Permissions
             set_user = ddbo.get_user(set_user_id)
