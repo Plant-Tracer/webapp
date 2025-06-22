@@ -511,7 +511,7 @@ function list_movies_data( movies ) {
             const you_class = (m.user_id == user_id) ? "you" : "";
 
             let rows = `<tr class='${you_class}'>` +
-                `<td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+                `<td class='${you_class}'> ${m.user_name} </td> <td> ${up_down} </td>` + // #1, #2, #3
                 make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
                 `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
                 `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
@@ -641,7 +641,7 @@ function list_users_data( users, course_array ) {
             ret += '<tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>\n';
             current_course = user.primary_course_id;
         }
-        ret +=  `<tr><td>${user.name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
+        ret +=  `<tr><td>${user.user_name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
         return ret;
     }
     users.forEach( user => ( h+= user_html(user) ));
