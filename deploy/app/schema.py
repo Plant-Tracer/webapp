@@ -5,7 +5,7 @@ schema.py - the types we store in DynamoDB
 from decimal import Decimal, ROUND_HALF_UP
 
 from typing import Optional,Any,List
-from pydantic import BaseModel,conint,condecimal,create_model,field_validator,ValidationError
+from pydantic import BaseModel,conint,create_model,field_validator,ValidationError
 
 class User(BaseModel):
     """DynamoDB users table"""

@@ -13,11 +13,6 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
-from .constants import C
-
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
-
 AWS_SECRET_NAME = 'AWS_SECRET_NAME'
 AWS_REGION_NAME = 'AWS_REGION_NAME'
 SECRETSMANAGER = 'secretsmanager'

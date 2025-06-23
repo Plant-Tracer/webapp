@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__)
 
+### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
+### exists in S3 before the URN is returned.
+
+VALIDATE_FRAMES=True
+
+class InvalidFrameNumber(Exception):
+    """Invalid Frame Number Exception"""
 
 
 ################################################################
@@ -48,6 +55,7 @@ def invalid_api_key(ex):
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
+    logging.debug("request.values=%s",request.values)
     return request.values.get(key, default)
 
 def get_movie_id():
@@ -68,6 +76,7 @@ def get_json(key):
         return None
 
 def get_int(key, default=None):
+    logging.debug("get_int key=%s get(key)=%s",key,get(key))
     try:
         return int(get(key))
     except (TypeError,ValueError):
@@ -292,7 +301,7 @@ def api_get_movie_data():
     print("************ api_get_movie_data")
     movie_id = get_movie_id()
     if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-        raise RuntimeError("access denied")
+        return make_response(E.INVALID_MOVIE_ACCESS, 404)
 
     data_urn = odb.get_movie_data(movie_id=movie_id,
                                   zipfile = get('format')=='zip',
@@ -327,13 +336,11 @@ def api_get_frame_jpeg(*,movie_id, frame_number):
     movie_data = odb.get_movie_data(movie_id = movie_id)
     if movie_data is None:
         raise odb.InvalidFrameAccess()
-    try:
-        ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
-        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-        set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
-        return ret
-    except ValueError as e:
-        return make_response(f"frame number {frame_number} out of range: "+e.args[0], 500)
+
+    ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
+    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+    set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
+    return ret
 
 def api_get_frame_urn(*,frame_number,movie_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
@@ -366,29 +373,37 @@ def api_get_frame():
       error - 404 - movie or frame does not exist
       no error - redirect to the signed URL
     """
-    logging.debug('getframe 0')
     user_id      = get_user_id(allow_demo=True)
     frame_number = get_int('frame_number',0)
     movie_id     = get_movie_id()
 
-    logging.debug('getframe 1')
+    logging.debug('logging.debug /get-frame. user_id=%s frame_number=%s movie_id=%s',user_id,frame_number,movie_id)
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
         logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        raise AuthError(f'Error 404: User {user_id} cannot access movie {movie_id}')
+        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 403)
 
-    logging.debug('getframe 2')
     if frame_number<0:
-        raise AuthError(f'Error 404: invalid frame number {frame_number}')
+        logging.error("invalid frame number %s",frame_number)
+        return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
 
-    logging.debug('getframe 3')
     # See if there is a urn
     urn = odb.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
+    logging.debug("urn=%s",urn)
+    if not db_object.object_exists(urn):
+        logging.warning("%s does not exist",urn)
+        odb.purge_movie_frames(movie_id=movie_id, frames=[frame_number])
+        urn = None
+
     if urn is None:
         # the frame is not in the database, so we need to make it.
         logging.debug('getframe 5')
-        frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+        try:
+            frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+        except ValueError:
+            return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
         urn = odb.create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
+
     logging.debug('getframe 4')
     logging.debug("api_get_frame urn=%s",urn)
     url = db_object.make_signed_url(urn=urn)

@@ -10,7 +10,6 @@ import os
 import logging
 import urllib.parse
 import hashlib
-import uuid
 
 import requests
 import boto3
@@ -56,13 +55,10 @@ def sha256(data):
 
 def object_name(*,course_id,movie_id,frame_number=None,ext):
     """object_name is a URN that is generated according to a scheme
-    that uses course_id, movie_id, and frame_number, but there is also
-    a 16-bit nonce This means that you can't generate it on the fly;
-    it has to be stored in a database.
+    that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
     fm = f"/{frame_number:06d}" if frame_number is not None else ""
-    nonce = str(uuid.uuid4())[0:4]
-    return f"{course_id}/{movie_id}{fm}-{nonce}{ext}"
+    return f"{course_id}/{movie_id}{fm}{ext}"
 
 
 def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
@@ -105,6 +101,20 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
             ],
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
+    else:
+        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+
+def object_exists(urn):
+    o = urllib.parse.urlparse(urn)
+    logging.debug("urn=%s o=%s",urn,o)
+    if o.scheme==C.SCHEME_S3:
+        try:
+            s3_client().head_object(Bucket=o.netloc, Key=o.path[1:])
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] == "404":
+                return False
+            raise
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 

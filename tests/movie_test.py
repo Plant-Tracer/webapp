@@ -43,6 +43,20 @@ GET_TIMEOUT = 2
 ## support functions
 ################################################################
 
+def is_jpeg(buf):
+    try:
+        return filetype.guess(buf).mime==MIME.JPEG
+    except AttributeError:
+        logging.error("buf=%s",buf)
+        raise
+
+def is_mp4(buf):
+    try:
+        return filetype.guess(buf).mime==MIME.MP4
+    except AttributeError:
+        logging.error("buf=%s",buf)
+        raise
+
 
 def movie_list(the_client, api_key):
     """Return a list of the movies"""
@@ -133,7 +147,7 @@ def test_new_movie(client, new_movie):
     # movie_data is now a movie. We should validate it.
     logging.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
     assert len(movie_data)>0
-    assert filetype.guess(movie_data).mime==MIME.MP4
+    assert is_mp4(movie_data)
 
     # Make sure that we can get the metadata
     resp = client.post('/api/get-movie-metadata',
@@ -255,7 +269,6 @@ def test_movie_extract1(client, new_movie):
     assert resp.status_code == 403
     r = resp.get_json()
     assert r == E.INVALID_API_KEY
-    logging.debug("point 1 r=%s",r)
 
     # Check for invalid frame_number
     logging.debug("test_movie_extract1: point1")
@@ -263,24 +276,34 @@ def test_movie_extract1(client, new_movie):
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
                                    'frame_number': '-1'})
-    assert resp.status_code == 403
+    assert resp.status_code == 400
     r = resp.get_json()
-    assert r['error']==True
-    assert 'invalid frame number' in r['message']
+    assert r==E.INVALID_FRAME_NUMBER
 
     # Check for getting by frame_number
-    # should produce a redirect
+    # should produce a redirect.
+    # Getting data from the redirect should produce a JPEG...
     logging.debug("test_movie_extract1: point2")
     resp = client.post('/api/get-frame',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
                                    'frame_number': '0' })
+
     assert resp.status_code == 302
+    # Follow the redirect manually
+    redirect_url = resp.headers['Location']
+    redirect_resp = requests.get(redirect_url)
 
+    # Get the data
+    data = redirect_resp.content
+    if data is None:
+        logging.error("resp=%s redirect_resp=%s",resp,redirect_resp)
+        assert data is not None
+    assert is_jpeg(data)
 
-    # Since we got a frame, we should now be able to get a frame URN
+    # Make sure that the URN was properly created
     urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
-    assert urn.startswith('s3:/') or urn.startswith('db:/')
+    assert urn.startswith('s3:/')
 
 def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
@@ -291,13 +314,13 @@ def test_movie_extract2(client, new_movie):
     user_id = cfg[USER_ID]
 
     movie_data = odb.get_movie_data(movie_id = movie_id)
-    assert filetype.guess(movie_data).mime==MIME.MP4
+    assert is_mp4(movie_data)
 
     # Grab three frames with the tracker and make sure they are different
     def get_movie_data_jpeg(frame_number):
         data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
         logging.debug("len(data)=%s",len(data))
-        assert filetype.guess(data).mime==MIME.JPEG
+        assert is_jpeg(data)
         return data
 
     frame0 = get_movie_data_jpeg(0)
@@ -320,6 +343,11 @@ def test_movie_extract2(client, new_movie):
     jpeg1_url = get_jpeg_frame_redirect(1)
     jpeg2_url = get_jpeg_frame_redirect(2)
     assert jpeg0_url != jpeg1_url != jpeg2_url
+
+    # Now grab the data from each make sure that they are JPEGs.
+    for url in [jpeg0_url,jpeg1_url,jpeg2_url]:
+        r = requests.get(url)
+        assert is_jpeg(r.content)
 
 
 @pytest.mark.skip(reason='logging disabled')

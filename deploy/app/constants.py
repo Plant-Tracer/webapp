@@ -95,6 +95,7 @@ class E:
     INVALID_COURSE_ID = {'error': True, 'message': 'There is no course for that course ID'}
     INVALID_COURSE_KEY = {'error': True, 'message': 'There is no course for that course key.'}
     INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
+    INVALID_FRAME_NUMBER = { 'error': True, 'message': 'Invalid frame number'}
     INVALID_FRAME_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie frame.'}
     INVALID_FRAME_FORMAT = { 'error': True, 'message': 'Format must be "json" or "jpeg".'}
     INVALID_MOVIE_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie.'}

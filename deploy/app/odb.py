@@ -11,7 +11,6 @@ import logging
 import json
 import copy
 import functools
-import re
 import uuid
 import time
 from collections import defaultdict
@@ -26,7 +25,7 @@ from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
 from . import db_object
-from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies, fix_movie_prop_value
+from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C
 
 # tables
@@ -78,6 +77,9 @@ CREATED = 'created'
 EMAIL = 'email'
 NAME = 'name'
 
+# movie_frames table
+FRAME_NUMBER = 'frame_number'
+FRAME_URN = 'frame_urn'
 
 USER_ID = 'user_id'
 
@@ -526,7 +528,6 @@ class DDBO:
             raise
         if resp['Count'] > 0:
             raise ExistingCourse_Id(f"Course key {coursedict[COURSE_KEY]} already exists")
-        logging.warning("Potential race condition if course_key=%s already exists",coursedict[COURSE_KEY])
         ################
 
         try:
@@ -639,7 +640,7 @@ class DDBO:
     ### movie_frame management
 
     def get_movie_frame(self,movie_id, frame_number):
-        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, 'frame_number':frame_number}).get('Item')
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}).get('Item')
 
     def put_movie_frame(self,framedict):
         self.movie_frames.put_item(Item=framedict)
@@ -667,7 +668,7 @@ class DDBO:
         with self.movie_frames.batch_writer() as batch:
             for movie_frame in movie_frames:
                 batch.delete_item(Key={MOVIE_ID: movie_frame[MOVIE_ID],
-                                       'frame_number': movie_frame['frame_number']})
+                                       FRAME_NUMBER: movie_frame[FRAME_NUMBER]})
 
 
 ################
@@ -1253,14 +1254,18 @@ def purge_movie_data(*,movie_id):
         ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
 
 @log
-def purge_movie_frames(*,movie_id):
-    """Delete the frames and zipfile associated with a movie."""
+def purge_movie_frames(*,movie_id, frames=None):
+    """Delete the frames and zipfile associated with a movie.
+    :param frames: If None, delete them all
+    """
+
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     ddbo = DDBO()
-    frames = ddbo.get_frames( movie_id )
+    if frames is None:
+        frames = ddbo.get_frames( movie_id )
 
     for frame in frames:
-        frame_urn = frame.get('frame_urn',None)
+        frame_urn = frame.get(FRAME_URN,None)
         if frame_urn is not None:
             db_object.delete_object(frame_urn)
     ddbo.delete_movie_frames( frames )
@@ -1338,10 +1343,10 @@ def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
                             "frame_urn":frame_urn})
     return frame_urn
 
+
 @log
 def get_frame_urn(*, movie_id, frame_number):
-    """Get a frame by movie_id and frame number.
-    Don't log this to prevent blowing up.
+    """Get a frame_urn by movie_id and frame number.
     :param: movie_id - the movie_id wanted
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
@@ -1350,7 +1355,7 @@ def get_frame_urn(*, movie_id, frame_number):
     frame = DDBO().get_movie_frame(movie_id, frame_number)
     if frame is None:
         return None
-    return frame.get('frame_urn',None)
+    return frame.get(FRAME_URN,None)
 
 
 def get_frame_data(*, movie_id, frame_number):
@@ -1361,7 +1366,7 @@ def get_frame_data(*, movie_id, frame_number):
     :return: returns the frame data or None
     """
     logging.warning("We should only get the value that we need")
-    frame_urn = DDBO().get_movie_frame(movie_id, frame_number)['frame_urn']
+    frame_urn = DDBO().get_movie_frame(movie_id, frame_number)[FRAME_URN]
     return db_object.read_object(frame_urn)
 
 
@@ -1370,8 +1375,8 @@ def get_frame_data(*, movie_id, frame_number):
 
 def iter_movie_frames_in_range(table, movie_id, f1, f2):
     """Yield movie_frame records for movie_id where frame_number is between f1 and f2."""
+    logging.debug("iter_movie_frames_in_range table=%s movie_id=%s f1=%s f2=%s",table,movie_id,f1,f2)
     last_evaluated_key = None
-
     while True:
         query_kwargs = { }
 
@@ -1379,12 +1384,11 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
             query_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
         response = table.query(KeyConditionExpression = Key(MOVIE_ID).eq(movie_id)
-                               & Key('frame_number').between(Decimal(f1), Decimal(f2)),
+                               & Key(FRAME_NUMBER).between(Decimal(f1), Decimal(f2)),
                                **query_kwargs)
 
         for i in response['Items']:
             logging.debug("a frame response=%s",i)
-            assert i['trackpoints'] != 'd'
 
         yield from response['Items']
 
@@ -1405,8 +1409,8 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
     ret = []
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_start+frame_count ):
-        for tp in frame['trackpoints']:
-            ret.append({'frame_number':int(frame['frame_number']),
+        for tp in frame.get('trackpoints',[]):
+            ret.append({FRAME_NUMBER:int(frame[FRAME_NUMBER]),
                         'x':int(tp['x']),
                         'y':int(tp['y']),
                         'label':tp['label']})
@@ -1418,8 +1422,8 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     """
     assert is_movie_id(movie_id)
     return [{MOVIE_ID:frame[MOVIE_ID],
-             'frame_number':frame['frame_number'],
-             'frame_urn':frame['frame_run']}
+             FRAME_NUMBER:frame[FRAME_NUMBER],
+             FRAME_URN:frame[FRAME_URN]}
             for frame in
             iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ) ]
 
@@ -1444,7 +1448,7 @@ def last_tracked_movie_frame(*, movie_id):
         response = movie_frames.query(**query_kwargs)
         items = response.get('Items', [])
         if items:
-            return items[0]['frame_number']
+            return items[0][FRAME_NUMBER]
 
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -1461,7 +1465,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
     logging.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
-                                          'frame_number':frame_number},
+                                          FRAME_NUMBER:frame_number},
                                      UpdateExpression='SET trackpoints=:val',
                                      ExpressionAttributeValues={':val':trackpoints})
 
