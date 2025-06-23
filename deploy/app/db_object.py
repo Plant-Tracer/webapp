@@ -105,6 +105,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
 def object_exists(urn):
+    assert len(urn) > 0
     o = urllib.parse.urlparse(urn)
     logging.debug("urn=%s o=%s",urn,o)
     if o.scheme==C.SCHEME_S3:

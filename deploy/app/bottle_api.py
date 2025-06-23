@@ -389,7 +389,7 @@ def api_get_frame():
     # See if there is a urn
     urn = odb.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
     logging.debug("urn=%s",urn)
-    if not db_object.object_exists(urn):
+    if urn is not None and not db_object.object_exists(urn):
         logging.warning("%s does not exist",urn)
         odb.purge_movie_frames(movie_id=movie_id, frames=[frame_number])
         urn = None
@@ -399,6 +399,7 @@ def api_get_frame():
         logging.debug('getframe 5')
         try:
             frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+            assert frame_data is not None
         except ValueError:
             return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
         urn = odb.create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)

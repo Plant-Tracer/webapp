@@ -1320,11 +1320,9 @@ def movie_zipfile_urn_for_movie_id(movie_id):
 # New implementation that writes to s3
 # Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
 def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
-    """Get the frame id specified by movie_id and frame_number.
-    if frame_data is provided, save it as an object in s3e. Otherwise just return the frame_urn.
-    if trackpoints are provided, replace current trackpoints with those. This is used sometimes
-    just to update the frame_data
-
+    """Determine the URN for a movie_id/frame_number.
+    if frame_data is provided, save it as an object in s3 (Otherwise just return the frame_urn)
+    Store frame info in the movie_frames table.
     returns frame_urn
     """
     logging.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
@@ -1336,8 +1334,10 @@ def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
                                             frame_number = frame_number,
                                             ext=C.JPEG_EXTENSION)
         frame_urn = db_object.make_urn( object_name = object_name)
+        db_object.write_object(frame_urn, frame_data)
     else:
         frame_urn = None
+
     DDBO().put_movie_frame({"movie_id":movie_id,
                             "frame_number":frame_number,
                             "frame_urn":frame_urn})
