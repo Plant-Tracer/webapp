@@ -251,7 +251,7 @@ class DDBO:
                 self.dynamodb.meta.client.describe_table(TableName=table.name)
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                    raise RuntimeError(f"DynamoDB table {self.table} does not exist on {endpoint_url}")
+                    raise RuntimeError(f"DynamoDB table {table.name} does not exist on {endpoint_url}")
                 else:
                     raise
 
