@@ -25,7 +25,7 @@ from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
 from . import db_object
-from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movies, fix_movie_prop_value, validate_user_field
+from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C
 
 # tables
@@ -80,6 +80,7 @@ NAME = 'name'
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
+LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
 USER_ID = 'user_id'
 
@@ -243,6 +244,17 @@ class DDBO:
         self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
         self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.course_users, self.logs]
+
+        # Make sure tables exist
+        for table in self.tables:
+            try:
+                self.dynamodb.meta.client.describe_table(TableName=table.name)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                    raise RuntimeError(f"DynamoDB table {self.table} does not exist on {endpoint_url}")
+                else:
+                    raise
+
         self._initialized = True
 
     # Generic stuff
@@ -342,6 +354,7 @@ class DDBO:
         items = response.get('Items', [])
         if items:
             return items[0]
+        logging.debug("email %s not in table %s",email,self.users)
         raise InvalidUser_Email(email)
 
     def put_user(self, user):
@@ -1119,23 +1132,18 @@ def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
 
 
 @log
-def get_movie_metadata(*, user_id, movie_id, get_last_frame_tracked=False):
-    """Gets the metadata for all movies accessible by user_id or enumerated by movie_id.
-    :return: list of movies
+def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
+    """Gets the metadata for a single movie.
+    :param movie_id: the movie for which we need data.
+    :param get_last_frame_tracked: If true, set moviedict.last_frame_tracked = frame number of last frame tracked (expensive)
+    :return: a dictionary with metdata for the movie
     """
-    logging.warning("UNNEDED USERID QUERY")
-    logging.warning("TK: replace get_movie_metadata with list_movies")
-    logging.warning("ignored: get_last_frame_tracked=%s",get_last_frame_tracked)
+    logging.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
-    user = ddbo.get_user(user_id)
-    movies = []
-    if movie_id is not None:
-        return fix_movies([ddbo.get_movie(movie_id)])
-
-    # build a query for all movies for which the user is in the course
-    for course_id in user[ COURSES ]:
-        movies.extend( ddbo.get_movies_for_course_id(course_id) )
-    return fix_movies(movies)
+    movie = fix_movie(ddbo.get_movie(movie_id))
+    if get_last_frame_tracked:
+        movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
+    return movie
 
 
 @log
@@ -1182,7 +1190,7 @@ def create_new_movie(*, user_id, course_id, title=None, description=None, orig_m
                     DELETED: 0,
                     'movie_zipfile_urn':None,
                     MOVIE_DATA_URN:None,
-                    'last_frame_tracked':None,
+                    LAST_FRAME_TRACKED:None,
                     'created_at':int(time.time()),
                     'date_uploaded':None,
                     TOTAL_FRAMES:None, # will be set later
@@ -1254,15 +1262,17 @@ def purge_movie_data(*,movie_id):
         ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
 
 @log
-def purge_movie_frames(*,movie_id, frames=None):
+def purge_movie_frames(*,movie_id, frame_numbers=None):
     """Delete the frames and zipfile associated with a movie.
     :param frames: If None, delete them all
     """
 
     logging.debug("purge_movie_frames movie_id=%s",movie_id)
     ddbo = DDBO()
-    if frames is None:
+    if frame_numbers is None:
         frames = ddbo.get_frames( movie_id )
+    else:
+        frames = [ddbo.get_movie_frame(movie_id, frame_number) for frame_number in frame_numbers]
 
     for frame in frames:
         frame_urn = frame.get(FRAME_URN,None)
@@ -1475,11 +1485,11 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 ################################################################
 
 def list_movies(*,user_id, movie_id=None, orig_movie=None):
-    """Return a list of movies that the user is allowed to access.
-    This should be updated so that we can request only a specific movie
-    :param: user_id - only list movies visible to user_id (0 for all movies)
-    :param: movie_id - if provided, only use this movie
-    :param: orig_movie - if provided, only list movies for which the original movie is orig_movie_id
+    """
+    :param user_id:  only list movies visible to user_id (0 for all movies)
+    :param movie_id:  if provided, only use this movie
+    :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
+    :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
     """
     if movie_id is not None:
         assert is_movie_id(movie_id)

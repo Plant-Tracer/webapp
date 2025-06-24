@@ -140,7 +140,7 @@ def test_api_edit_movie(new_movie,client):
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[VERSION] == 1  # because it had data assigned to it
 
-    movie_metadata = odb.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+    movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
     logging.debug("first version=%s", movie_metadata[VERSION])
     resp = client.post('/api/edit-movie',
                        data={'api_key': api_key,
@@ -161,7 +161,7 @@ def test_api_edit_movie(new_movie,client):
 
 
     # Now test the user access
-    movie_metadata2 = odb.get_movie_metadata(user_id=user_id, movie_id=movie_id)[0]
+    movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
     logging.debug("second version=%s", movie_metadata2[VERSION])
     # Make sure that the version number incremented
     logging.debug("movie_metadata=%s movie_metadata2=%s",movie_metadata,movie_metadata2)

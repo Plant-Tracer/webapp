@@ -22,6 +22,7 @@ from .constants import C,__version__
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
+    logging.debug("in_demo_mode: %s",os.environ.get(C.DEMO_COURSE_ID,None))
     return C.DEMO_COURSE_ID in os.environ
 
 # Specify the base for the API and for the static files by Environment variables.
@@ -136,7 +137,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     :param: lookup - if true, we weren't being called in an error condition, so we can lookup the api_key
                      in the URL or the cookie
     """
-    logging.debug("1. page_dict require_auth=%s logout=%s lookup=%s",require_auth,logout,lookup)
+    logging.debug("page_dict(title=%s,require_auth=%s,logout=%s,lookup=%s)",title,require_auth,logout,lookup)
     if lookup:
         api_key = get_user_api_key()
         logging.debug("get_user_api_key=%s",api_key)
@@ -151,20 +152,16 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         user_dict  = get_user_dict()
         user_name  = user_dict['user_name']
         user_email = user_dict['email']
-        user_demo  = user_dict['demo']
         user_id    = user_dict['user_id']
         user_primary_course_id = user_dict['primary_course_id']
         primary_course_name    = user_dict['primary_course_name']
         logged_in = 1
-        admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) else 0
-        # If this is a demo account, the user cannot be an admin (security)
-        if user_demo:
-            assert not admin
+        admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) and not in_demo_mode() else 0
+
 
     else:
         user_name  = None
         user_email = None
-        user_demo  = 0
         user_id    = None
         user_primary_course_id = None
         primary_course_name = None
@@ -184,15 +181,14 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
         'user_id': user_id,     # the user_id that is active
         'user_name': user_name, # the user's name
         'user_email': user_email, # the user's email
-        'user_demo':  user_demo,  # true if this is a demo user
         'logged_in': logged_in,
+        'demo_mode':in_demo_mode(),
         'admin':admin,
         'user_primary_course_id': user_primary_course_id,
         'primary_course_name': primary_course_name,
         'title':'Plant Tracer '+title,
         'hostname':request.host,
         'movie_id':movie_id,
-        'demo_mode':in_demo_mode(),
         'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
         'version':__version__,
         'git_head_time':git_head_time(),
@@ -202,6 +198,5 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False,debug=F
     for (k,v) in ret.items():
         if v is None:
             ret[k] = "null"
-    if debug:
-        logging.debug("fixed page_dict=%s",ret)
+    logging.debug("page_dict=%s",ret)
     return ret

@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError,ParamValidationError
 import pytest
 
 from app import odb
-from app.odb import DDBO,UserExists,InvalidUser_Id
+from app.odb import DDBO,UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
 from app.constants import MIME,C
 
 from fixtures.local_aws import local_ddb
@@ -25,7 +25,7 @@ TEST_MOVIE_ID = odb.new_movie_id()
 TEST_COURSE_KEY = 'k-' + str(uuid.uuid4())[0:4]
 TEST_COURSE_MAX_ENROLLMENT = 30
 TEST_COURSE_DATA = {
-    'course_id': TEST_COURSE_ID,
+    COURSE_ID: TEST_COURSE_ID,
     'course_name': TEST_COURSE_NAME,
     'course_key': TEST_COURSE_KEY,
     'admins_for_course': [TEST_ADMIN_ID],
@@ -36,7 +36,7 @@ TEST_USER_ID = odb.new_user_id()
 TEST_USER_EMAIL = 'new.user@example.com'
 TEST_USER_NAME = 'Firstname Lastname'
 TEST_USER_DATA = {
-    'user_id': TEST_USER_ID,
+    USER_ID: TEST_USER_ID,
     'email': TEST_USER_EMAIL,
     'user_name': TEST_USER_NAME,
     'created': int(time.time()),
@@ -49,7 +49,7 @@ TEST_USER_DATA = {
 }
 
 TEST_ADMIN_DATA = {
-    'user_id': TEST_USER_ID,
+    USER_ID: TEST_USER_ID,
     'email': TEST_USER_EMAIL,
     'user_name': 'Admin Firstname Lastname',
     'created': int(time.time()),
@@ -63,9 +63,9 @@ TEST_ADMIN_DATA = {
 }
 
 TEST_MOVIE_DATA = {
-    'movie_id': TEST_MOVIE_ID,
-    'course_id': TEST_COURSE_ID,
-    'user_id': TEST_USER_ID,
+    MOVIE_ID: TEST_MOVIE_ID,
+    COURSE_ID: TEST_COURSE_ID,
+    USER_ID: TEST_USER_ID,
     'user_name': TEST_USER_NAME,
     'title': 'My New Awesome Movie',
     'published': 0,
@@ -73,7 +73,7 @@ TEST_MOVIE_DATA = {
     'description': 'A fantastic new movie project.',
     'movie_zipfile_urn':'s3://bogus/movie-data.zip',
     'movie_data_urn':'s3://bogus/movie-data.mp4',
-    'last_frame_tracked':0,
+    LAST_FRAME_TRACKED:0,
     'created_at':int(time.time()),
     'date_uploaded':int(time.time()),
     'fps':"29.92",
@@ -82,7 +82,7 @@ TEST_MOVIE_DATA = {
 }
 
 TEST_MOVIE_FRAME_DATA = {
-    'movie_id': TEST_MOVIE_ID,
+    MOVIE_ID: TEST_MOVIE_ID,
     'frame_number': 0,
     'frame_urn':'s3://bogus/movie-frame.jpg',
     'trackpoints':[{'x':Decimal(10),'y':Decimal(20),'label':'name1'},

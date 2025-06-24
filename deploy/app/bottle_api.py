@@ -30,10 +30,15 @@ from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
 
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__)
+
+class _LoggerProxy:
+    def __getattr__(self, name):
+        return getattr(current_app.logger, name)
+
+logger = _LoggerProxy()
+
 
 ### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
 ### exists in S3 before the URN is returned.
@@ -298,7 +303,6 @@ def api_get_movie_data():
     :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
-    print("************ api_get_movie_data")
     movie_id = get_movie_id()
     if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
         return make_response(E.INVALID_MOVIE_ACCESS, 404)
@@ -391,7 +395,7 @@ def api_get_frame():
     logging.debug("urn=%s",urn)
     if urn is not None and not db_object.object_exists(urn):
         logging.warning("%s does not exist",urn)
-        odb.purge_movie_frames(movie_id=movie_id, frames=[frame_number])
+        odb.purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
         urn = None
 
     if urn is None:
@@ -489,27 +493,26 @@ def api_get_movie_metadata():
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
 
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+        return make_response(E.INVALID_MOVIE_ACCESS,404)
 
-    movie_metadata =  odb.get_movie_metadata(user_id=user_id,
-                                             movie_id=movie_id,
-                                             get_last_frame_tracked=True)[0]
-    # If we do not have the movie width and height, get them...
+    movie_metadata =  odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
+
+    # If we do not have the movie width and height, get them and write them back to the database
     if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
         movie_data     = odb.get_movie_data(movie_id = movie_id)
 
         if movie_data is None:
-            return E.NO_MOVIE_DATA
+            return make_response(E.NO_MOVIE_DATA, 400)
 
-        # Add in the movie_metadata we just got
+        # Write them back
         movie_metadata = {**movie_metadata, **tracker.extract_movie_metadata(movie_data=movie_data)}
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
-    # If we have a movie_zipfile_urn, create a signed url
+
+    # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
     if movie_metadata.get('movie_zipfile_urn',None):
         movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
-    ret = {'error':False,
-           'metadata':movie_metadata }
+    ret = {'error':False, 'metadata':movie_metadata }
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -519,9 +522,9 @@ def api_get_movie_metadata():
         frame_count = C.MAX_FRAMES
     if frame_start is not None:
         if frame_count is None:
-            return E.FRAME_START_NO_FRAME_COUNT
+            return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
-            return E.FRAME_COUNT_GT_0
+            return make_response(E.FRAME_COUNT_GT_0, 400)
         #
         # Get the trackpoints and then group by frame_number for the response
         ret['frames'] = defaultdict(dict)
@@ -534,7 +537,7 @@ def api_get_movie_metadata():
                 frame['markers'] = []
             frame['markers'].append(tpt)
 
-    logging.debug("ret=%s",ret)
+    logger.debug("get_movie_metadata returns: %s",ret)
     return jsonify(ret)
 
 
@@ -707,7 +710,7 @@ def api_track_movie(*,user_id, movie_id, frame_start):
         # Each time the callback is called it will update the trackpoints for that frame
         # and write the frame to the frame store.
         #
-        mtc.movie_metadata = odb.get_movie_metadata(movie_id=movie_id, user_id=user_id)[0]
+        mtc.movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
         tracker.track_movie(input_trackpoints = input_trackpoints,
                             frame_start       = frame_start,
                             moviefile_input   = infile.name,

@@ -28,7 +28,7 @@ from .bottle_api import api_bp
 from .constants import __version__,GET,GET_POST,C
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
-from .odb import InvalidAPI_Key
+from .odb import InvalidAPI_Key,InvalidUser_Email
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -41,40 +41,25 @@ CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
 # Initialization Code
 
 def fix_boto_log_level():
+    """Do not run boto loggers at debug level"""
     for name in logging.root.manager.loggerDict:
         if name.startswith('boto'):
             logging.getLogger(name).setLevel(logging.INFO)
 
-def lambda_startup():
-    logging.basicConfig(format=C.LOGGING_CONFIG, level=os.environ.get('PLANTTRACER_LOG_LEVEL',C.LOGGING_LEVEL))
-    fix_boto_log_level()
-    logging.info("lambda_startup")
 
 ################################################################
 ## API SUPPORT
 
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] [%(process)d] %(levelname)s %(filename)s:%(lineno)d %(message)s',
-    }},
-    'root': {
-        'level': 'DEBUG',
-    }
-})
 
-
-fix_boto_log_level()
-lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
-
 log_level = os.getenv("LOG_LEVEL","INFO").upper()
 logger = app.logger
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)
-app.logger.info("new Flask(__name__=%s)",__name__)
+app.logger.info("new Flask(__name__=%s) log_level=%s",__name__,log_level)
 app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
+fix_boto_log_level()
 
 
 
@@ -112,6 +97,11 @@ def handle_exception(e):
         return e         # Let Flask handle it or route it to its specific handler
     logging.exception("Unhandled exception")
     return jsonify({"error": True, "message": "Internal Server Error"}), 500
+
+@app.errorhandler(InvalidUser_Email)
+def handle_email_error(e):
+    return "<h1>Invalid User</h1><p>That email address does not exist in the database</p>", 400
+
 
 ################################################################
 # HTML Pages served with template system
@@ -207,7 +197,7 @@ def func_list():
 
 @app.route('/upload', methods=GET)
 def func_upload():
-    """/upload - Upload a new file. Can also set cookie."""
+    """/upload - Upload a new file. Can also set cookie (because of /upload link that is sent)."""
     logging.debug("/upload require_auth=True")
     response = make_response(render_template('upload.html',
                                          **page_dict('Upload a Movie',

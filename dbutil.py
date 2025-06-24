@@ -26,8 +26,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     required = parser.add_argument_group('required arguments')
     parser.add_argument("--sendlink", help="Send link to the given email address, registering it if necessary.")
+    parser.add_argument("--makelink", help="Make a link for the given email, registering it if necessary.")
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
-    parser.add_argument('--table_prefix', help='Prefix for DynamoDB tables', default='')
     parser.add_argument("--createdb", help='Create a new set of DynamoDB tables.',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.',action='store_true')
     #parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
@@ -52,18 +52,24 @@ if __name__ == "__main__":
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    os.environ[C.DYNAMODB_TABLE_PREFIX] = args.table_prefix
     ddbo = DDBO()
 
     config = configparser.ConfigParser()
 
-    if args.sendlink:
+    if args.sendlink or args.makelink:
         if not args.planttracer_endpoint:
-            raise RuntimeError("Please specify --planttracer_endpoint")
-        new_api_key = odb.make_new_api_key(email=args.sendlink)
-        mailer.send_links(email=args.sendlink, planttracer_endpoint = args.planttracer_endpoint,
-                      new_api_key=new_api_key, debug=args.debug)
+            parser.error("Please specify --planttracer_endpoint")
+        if args.sendlink:
+            mailer.send_links(email=args.sendlink,
+                              planttracer_endpoint = args.planttracer_endpoint,
+                              new_api_key=odb.make_new_api_key(email=args.sendlink),
+                              debug=args.debug)
+        if args.makelink:
+            new_api_key = odb.make_new_api_key(email=args.makelink)
+            print(f"\n*****\n***** Login with {args.planttracer_endpoint}/list?api_key={new_api_key}\n*****")
         sys.exit(0)
+
+
 
     ################################################################
     ## Startup stuff

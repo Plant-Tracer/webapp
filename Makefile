@@ -160,14 +160,14 @@ make-local-demo:
 	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local:
-	@echo run bottle locally, storing new data in database
-	if [ -z "$${DYNAMODB_TABLE_PREFIX}" ]; then echo DYNAMODB_TABLE_PREFIX is not set; exit 1; fi
-	$(LOCAL_VARS) $(PYTHON) standalone.py --port $(LOCAL_HTTP_PORT)
+	@echo run bottle locally on the demo database, but allow editing.
+	$(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo:
-	@echo run bottle locally in demo mode, using local database
+	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run
+	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 debug:
 	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG

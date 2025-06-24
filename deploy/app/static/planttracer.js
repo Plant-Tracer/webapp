@@ -6,7 +6,7 @@
 /*global user_primary_course_id */
 /*global planttracer_endpoint */
 /*global MAX_FILE_UPLOAD */
-/*global user_demo */
+/*global demo_mode */
 
 // special buttons
 const PUBLISH_BUTTON='PUBLISH';
@@ -268,7 +268,7 @@ function upload_ready_function() {
 
 ////////////////
 // PLAYBACK
-// callback when the play button is clicked
+// callback when the play button is clicked in the movie list.
 function play_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     console.log('play_clicked=',e,'movie_id=',movie_id);
@@ -454,7 +454,7 @@ function list_movies_data( movies ) {
                 tid += 1;
                 let r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
-                if ((admin || user_id == m.user_id) && user_demo==0) {
+                if ((admin || user_id == m.user_id) && demo_mode==0) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> `;
                 }
                 r += extra + "</td>\n";
@@ -527,7 +527,7 @@ function list_movies_data( movies ) {
             // below, note that 'admin' is set by the page before this runs
 
             // Create the action buttons if not user demo
-            if (user_demo) {
+            if (demo_mode) {
                 rows += '<i> demo user </i>';
             } else if (m.deleted) {
                 if (which==DELETED){
@@ -566,7 +566,7 @@ function list_movies_data( movies ) {
         }
 
         // Offer to upload movies if not in demo mode.
-        if (!user_demo) {
+        if (!demo_mode) {
             h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
 
@@ -580,7 +580,7 @@ function list_movies_data( movies ) {
     movies_fill_div( $('#your-unpublished-movies'),
                      UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
     movies_fill_div( $('#course-movies'),
-                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (user_demo || (m.user_id!=user_id)) && !m.orig_movie)));
+                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
     movies_fill_div( $('#your-deleted-movies'),
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();

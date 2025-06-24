@@ -7,7 +7,8 @@
 
 /*
  * Tracer Controller:
- * Manages the table of markers and retracks the movie as requested by the user.
+ * Manages the table of markers and tracing the movie as requested by the user.
+ *
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
@@ -20,6 +21,7 @@ const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
 const TRACKING_POLL_MSEC=1000;
 const RETRACK_MOVIE='Retrack movie';
+const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
 var div_id_counter  = 0;
@@ -202,7 +204,7 @@ class TracerController extends MovieController {
                      (event) => {this.del_row(event.target.getAttribute('object_index'));});
         $(this.div_selector + " .del-row").css('cursor','default');
         this.redraw();          // redraw with the markers
-        if (user_demo) {        // be sure to hide the just-added delete option
+        if (demo_mode) {        // be sure to hide the just-added delete option
             $('.nodemo').hide();
         }
     }
@@ -247,7 +249,7 @@ class TracerController extends MovieController {
     // Send the list of current markers to the server.
     // In demo mode, just print a message.
     put_markers() {
-        if (user_demo) {
+        if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
         }
@@ -399,7 +401,7 @@ class TracerController extends MovieController {
     rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
         this.rotate_button.prop(DISABLED,true);
-        $('#firsth2').html(`Asking server to rotate movie ${this.movie_id} 90º counter-clockwise. Please stand by...`);
+        $('#firsth2').html(`Asking server to rotate movie 90º counter-clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
@@ -423,7 +425,11 @@ var cc;
 function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
-        $('#firsth2').html(`Movie ${movie_id}: ready for initial tracing.`);
+        if (demo_mode) {
+            $('#firsth2').html('Movie cannot be traced in demo mode.');
+        } else {
+            $('#firsth2').html('Movie ready for initial tracing.');
+        }
     };
 
     var frames = [{'frame_url': frame0_url,
@@ -613,7 +619,9 @@ function graph_data(cc, frames) {
     }
 }
 
-// Not sure what we have, so ask the server and then dispatch to one of the two methods above
+/* Main function called when HTML page loads.
+ * Gets metadata for the movie and all traced frames
+ */
 function trace_movie(div_controller, movie_id, api_key) {
 
     // Wire up the close button on the demo pop-up
@@ -625,9 +633,10 @@ function trace_movie(div_controller, movie_id, api_key) {
         api_key: api_key,
         movie_id: movie_id,
         frame_start: 0,
-        frame_count: 1e6
+        frame_count: MAX_FRAMES
     };
     $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
+        console.log("get-movie-metadata=",resp)
         if (resp.error==true) {
             alert(resp.message);
             return;
@@ -640,10 +649,10 @@ function trace_movie(div_controller, movie_id, api_key) {
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
             return;
         }
-        if (user_demo) {
-            $('#firsth2').html(`Movie #${movie_id} is traced!</a>`);
+        if (demo_mode) {
+            $('#firsth2').html(`Movie is traced!</a>`);
         } else {
-            $('#firsth2').html(`Movie #${movie_id} is traced! Check for errors and retrace as necessary.</a>`);
+            $('#firsth2').html(`Movie is traced! Check for errors and retrace as necessary.</a>`);
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
