@@ -9,7 +9,6 @@ import sys
 import os
 import logging
 import traceback
-from logging.config import dictConfig
 
 from flask import Flask, request, render_template, jsonify, make_response
 from werkzeug.exceptions import NotFound
@@ -100,7 +99,7 @@ def handle_exception(e):
 
 @app.errorhandler(InvalidUser_Email)
 def handle_email_error(e):
-    return "<h1>Invalid User</h1><p>That email address does not exist in the database</p>", 400
+    return f"<h1>Invalid User</h1><p>That email address does not exist in the database {e}</p>", 400
 
 
 ################################################################

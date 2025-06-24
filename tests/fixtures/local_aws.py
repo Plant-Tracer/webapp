@@ -61,12 +61,13 @@ def local_ddb():
     os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
     os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
     os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
-    ddbo = DDBO()
-    odbmaint.drop_tables(ddbo)
-    odbmaint.create_tables(ddbo)
+
+    odbmaint.drop_tables()
+    odbmaint.create_tables()
+    ddbo = DDBO()               # it's a singleton
     yield ddbo
     if DELETE_TEST_TABLES:
-        odbmaint.drop_tables(ddbo)
+        odbmaint.drop_tables()
 
 @pytest.fixture(scope="session")
 def local_s3():

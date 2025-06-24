@@ -211,7 +211,15 @@ class DDBO:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
+        print("****** RETURN instance PREFIX=",os.environ.get(C.DYNAMODB_TABLE_PREFIX))
         return cls._instance
+
+    @classmethod
+    def resource(cls):
+        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
+        endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
+        logging.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
+        return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
 
     def __init__(self):
         if not hasattr(self, "_initialized"):
@@ -219,8 +227,7 @@ class DDBO:
         if self._initialized:
             return  # Skip re-initialization
 
-        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
-        endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
+        self.dynamodb = DDBO.resource()
         table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX, None)
         if table_prefix is None:
             if 'FLASK_ENV' in os.environ:
@@ -228,12 +235,8 @@ class DDBO:
             else:
                 table_prefix = ''
 
-        self.dynamodb = boto3.resource( 'dynamodb',
-                                        region_name=region_name,
-                                        endpoint_url=endpoint_url)
-
         # Set up the tables
-        logging.info("region_name=%s endpoint_url=%s table_prefix=%s",region_name,endpoint_url,table_prefix)
+        logging.info("table_prefix=%s",table_prefix)
         self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
@@ -251,10 +254,9 @@ class DDBO:
                 self.dynamodb.meta.client.describe_table(TableName=table.name)
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                    raise RuntimeError(f"DynamoDB table {table.name} does not exist on {endpoint_url}")
+                    raise RuntimeError(f"DynamoDB table {table.name} does not exist on {self.dynamodb.meta.client.meta.endpoint_url}") from e
                 else:
                     raise
-
         self._initialized = True
 
     # Generic stuff

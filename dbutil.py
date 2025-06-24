@@ -5,14 +5,12 @@ dbutil.py - CLI for dbmaint module.
 import sys
 import configparser
 import uuid
-import os
 import json
 
 from deploy.app import clogging
 from deploy.app import odb
 from deploy.app import odbmaint
 from deploy.app import mailer
-from deploy.app.constants import C
 from deploy.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
 
 
@@ -52,8 +50,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    ddbo = DDBO()
-
     config = configparser.ConfigParser()
 
     if args.sendlink or args.makelink:
@@ -75,10 +71,10 @@ if __name__ == "__main__":
     ## Startup stuff
 
     if args.createdb:
-        odbmaint.create_tables(ddbo)
+        odbmaint.create_tables()
 
     if args.dropdb:
-        odbmaint.drop_tables(ddbo)
+        odbmaint.drop_tables()
 
     if args.create_course:
         missing = [name for name in ['course_id','course_name','admin_email','admin_name'] if getattr(args, name) is None]
@@ -112,7 +108,7 @@ if __name__ == "__main__":
         print("adding admin to course...")
         if not args.admin_email:
             parser.error("Must provide --admin_email")
-        user = ddbo.get_user_email(args.admin_email)
+        user = DDBO().get_user_email(args.admin_email)
         if not user.get('user_id'):
             parser.error(f"User {args.admin_email} does not exist")
         if not args.course_id:
@@ -154,7 +150,7 @@ if __name__ == "__main__":
     ## Maintenance
 
     if args.report:
-        odbmaint.report(ddbo)
+        odbmaint.report(DDBO())
         sys.exit(0)
 
     #if args.freshen:

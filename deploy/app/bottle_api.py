@@ -32,12 +32,7 @@ from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
 
 
 api_bp = Blueprint('api', __name__)
-
-class _LoggerProxy:
-    def __getattr__(self, name):
-        return getattr(current_app.logger, name)
-
-logger = _LoggerProxy()
+logger = logging.getLogger(__name__)
 
 
 ### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
@@ -740,13 +735,13 @@ def api_track_movie_queue():
     movie_id       = get_movie_id()
     user_id        = get_user_id(allow_demo=False)
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return make_request(jsonify(E.INVALID_MOVIE_ACCESS), 400)
+        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 400)
 
     # Make sure we are not tracking a movie that is not an original movie
     movie_row = odb.list_movies(user_id=user_id, movie_id=movie_id)
     assert len(movie_row)==1
     if movie_row[0]['orig_movie'] is not None:
-        return make_request(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
+        return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
 
     logging.debug("calling api_track_movie")
     api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))

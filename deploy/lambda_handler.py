@@ -7,19 +7,18 @@ Perhaps we can refactor the bottle app so that the app is created here?
 
 import logging
 import traceback
+from app.bottle_app import app
 
 IMPORT_ERROR_FILE = '/tmp/import-error'
 
 try:
     from apig_wsgi import make_lambda_handler
-    from app.bottle_app import lambda_startup,app
 
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(levelname)s] %(message)s"
     )
     logger = logging.getLogger(__name__)
-    lambda_startup()
     lambda_app = make_lambda_handler(app)
 
 # pylint: disable=broad-exception-caught
