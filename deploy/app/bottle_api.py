@@ -686,12 +686,13 @@ class MovieTrackCallback:
 
 
 ##
-## @task causes this to be run in background on zappa, but in foreground when run locally
-## It's specific to zappa
-##
+## Actual code that runs to track a movie.
+## Tracks to end.
+## Can be implemented as a background task
 def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
-    Stores new trackpoints and each frame in the database. No longer renders new movie: that's now in render_tracked_movie
+    Extracts all frames from a movie and stores them in a zipfile.
+    Stores new trackpoints and each frame in the database.
     """
     # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
@@ -715,7 +716,7 @@ def api_track_movie(*,user_id, movie_id, frame_start):
                             frame_start       = frame_start,
                             moviefile_input   = infile.name,
                             callback = mtc.notify)
-    mtc.close() # close the zipfile
+    mtc.close()
     # Note: this puts the entire object in memory. That may be an issue at some point
     object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
     urn = db_object.make_urn(object_name=object_name)
@@ -735,25 +736,24 @@ def api_track_movie_queue():
              dict['frame_start'] = where the tracking started
     """
 
-    # pylint: disable=unsupported-membership-test
+    # pylint-disable: disable=unsupported-membership-test
     movie_id       = get_movie_id()
     user_id        = get_user_id(allow_demo=False)
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+        return make_request(jsonify(E.INVALID_MOVIE_ACCESS), 400)
 
     # Make sure we are not tracking a movie that is not an original movie
     movie_row = odb.list_movies(user_id=user_id, movie_id=movie_id)
     assert len(movie_row)==1
     if movie_row[0]['orig_movie'] is not None:
-        return E.MUST_TRACK_ORIG_MOVIE
+        return make_request(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
 
     logging.debug("calling api_track_movie")
-    api_track_movie(user_id=user_id, movie_id=movie_id,
-                    frame_start=get_int('frame_start'))
+    api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
 
     logging.debug("return from api_track_movie")
     # We return all the trackpoints to the client, although the client currently doesn't use them
-    return {'error': False, 'message':'Tracking is queued'}
+    return jsonify({'error': False, 'message':'Tracking is queued'})
 
 
 ## /new-frame is being able to create our own time lapse movie

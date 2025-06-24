@@ -31,7 +31,6 @@ from app import tracker
 from app.constants import MIME,E
 from app.odb import API_KEY,MOVIE_ID,TITLE,USER_ID
 
-
 # get the first MOV
 
 # Get the fixtures from user_test
@@ -124,7 +123,7 @@ def test_movie_tracking(client, new_movie):
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2 - This actually does the tracking when run outsie of lambda
+    # Now track with CV2 - This actually does the tracking when run  of lambda
     response = client.post('/api/track-movie-queue',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),

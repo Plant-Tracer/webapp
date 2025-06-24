@@ -167,9 +167,7 @@ run-local:
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
-
-debug:
+	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threadsbug:
 	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG
 
 debug-multi:
