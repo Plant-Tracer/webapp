@@ -37,7 +37,7 @@ def populate_demo_user():
                            max_enrollment = 2)
 
     # Create the demo user to own the demo movies
-    demo = odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
+    odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
     odb.make_new_api_key(email=DEMO_USER_EMAIL, demo_user=True)        # Give the demo user an API key
 
 def populate_demo_movies():

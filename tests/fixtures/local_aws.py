@@ -39,8 +39,9 @@ TEST_ADMIN_NAME  = 'Test Admin Name'
 ADMIN_EMAIL = 'admin_email'
 DEMO_EMAIL = 'demo_mail'
 ADMIN_ID = 'admin_id'
-USER_EMAIL = 'user_email'
 MOVIE_TITLE = 'movie_title'
+USER_EMAIL = 'user_email'
+
 
 TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
 TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
@@ -67,7 +68,6 @@ def local_ddb():
 
     odbmaint.drop_tables()
     odbmaint.create_tables()
-    dbutil.populate_demo_user()
 
     ddbo = DDBO()               # it's a singleton
     yield ddbo

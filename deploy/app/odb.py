@@ -551,7 +551,7 @@ class DDBO:
         except ClientError as e:
             logging.error("courses=%s coursedict=%s",self.courses,coursedict)
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-                raise ExistingCourse_Id("Course already exists") from e
+                raise ExistingCourse_Id(f"Course {coursedict[COURSE_ID]} already exists") from e
             raise
 
 

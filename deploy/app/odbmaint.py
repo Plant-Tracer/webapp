@@ -266,9 +266,6 @@ def create_tables(*,ignore_table_exists = None):
                 logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, dynamodb.meta.client.meta.endpoint_url)
 
 
-
-
-
 def drop_dynamodb_table(dynamodb, table_name: str):
     """Drops a specified DynamoDB table from the local instance.
 

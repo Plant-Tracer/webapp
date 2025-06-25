@@ -20,12 +20,13 @@ from app import bottle_app
 from app.paths import TEST_DIR, TEST_DATA_DIR
 from app.constants import C
 
-from app.odb import EMAIL
+from app.odb import EMAIL,InvalidCourse_Id,ExistingCourse_Id, UserExists, COURSE_ID, COURSE_NAME,API_KEY
 
 from fixtures.app_client import client
-from fixtures.local_aws import local_ddb, local_s3, new_course, COURSE_KEY, ADMIN_EMAIL, COURSE_NAME, COURSE_ID, USER_EMAIL, API_KEY
+from fixtures.local_aws import local_ddb, local_s3, new_course, ADMIN_EMAIL, USER_EMAIL
 
-
+import dbutil
+from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 ################################################################
 ## fixture tests
@@ -53,6 +54,25 @@ def test_new_course(new_course):
 # Make sure that there is a demo user
 def test_demo_user(new_course):
     cfg = copy.copy(new_course)
+    try:
+        odbmaint.create_course(course_id  = DEMO_COURSE_ID,
+                               course_name = DEMO_COURSE_NAME,
+                               course_key = str(uuid.uuid4())[0:8],
+                               admin_email = DEFAULT_ADMIN_EMAIL,
+                               admin_name  = DEFAULT_ADMIN_NAME,
+                               max_enrollment = 2)
+    except ExistingCourse_Id:
+        pass
+
+
+
+    try:
+        odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
+    except UserExists:
+        pass
+
+    # Create the demo user to own the demo movies
+    odb.make_new_api_key(email=DEMO_USER_EMAIL, demo_user=True)        # Give the demo user an API key
     userdict = odb.validate_api_key( C.DEMO_MODE_API_KEY )
     assert 'created' in userdict
 
