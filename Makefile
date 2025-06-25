@@ -145,18 +145,11 @@ wipe-local:
 	make make-local-bucket
 
 make-local-demo:
-	@echo creating a local course
+	@echo creating a local course called demo-course with the prefix demo-
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
 	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py \
-		--create_course \
-		--course_id demo-course \
-		--course_name "Demo course 1"  \
-		--admin_email admin@planttracer.com \
-		--admin_name "Dr. Admin" \
-		--demo_email demo@planttracer.com
 	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local:

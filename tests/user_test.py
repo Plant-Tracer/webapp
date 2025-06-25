@@ -50,16 +50,11 @@ def test_new_course(new_course):
     assert c1[ COURSE_KEY  ] == cfg[COURSE_KEY]
 
 
+# Make sure that there is a demo user
 def test_demo_user(new_course):
     cfg = copy.copy(new_course)
-    demo_email  = cfg[USER_EMAIL].replace("@","+demo@")
-
-    odb.register_email(demo_email, "Demo User", course_id=cfg[COURSE_ID], demo_user=1, admin=0)
-    res = odb.list_demo_users()
-    logging.debug("res=%s",res)
-    assert len(res)==1
-    assert res[0]['email']==demo_email
-    assert odb.remaining_course_registrations(course_key=cfg[COURSE_KEY]) == C.DEFAULT_MAX_ENROLLMENT - 3
+    userdict = odb.validate_api_key( C.DEMO_MODE_API_KEY )
+    assert 'created' in userdict
 
 def test_add_remove_user_and_admin(new_course):
     """Tests creating a new user and adding them to the course as an admin"""

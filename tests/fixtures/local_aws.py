@@ -22,6 +22,9 @@ from app import db_object
 from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
 
+import dbutil
+
+
 DELETE_TEST_TABLES = True
 
 s3client = boto3.client('s3')
@@ -64,6 +67,8 @@ def local_ddb():
 
     odbmaint.drop_tables()
     odbmaint.create_tables()
+    dbutil.populate_demo_user()
+
     ddbo = DDBO()               # it's a singleton
     yield ddbo
     if DELETE_TEST_TABLES:

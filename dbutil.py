@@ -6,17 +6,54 @@ import sys
 import configparser
 import uuid
 import json
+import os
 
 from deploy.app import clogging
 from deploy.app import odb
 from deploy.app import odbmaint
 from deploy.app import mailer
+from deploy.app.paths import TEST_DATA_DIR
 from deploy.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
 
+DEMO_COURSE_ID='demo-course'
+DEMO_COURSE_NAME='Demo Course'
+DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
+DEMO_MOVIE_DESCRIPTION = 'A demo movie.'
+DEMO_USER_EMAIL = 'demo@planttracer.com'
+DEMO_USER_NAME = 'Demo User'
+DEFAULT_ADMIN_EMAIL = 'admin@planttracer.com'
+DEFAULT_ADMIN_NAME = 'Plant Tracer Admin'
 
 DESCRIPTION="""
 DynamoDB Database Maintenance Program.
 """
+
+def populate_demo_user():
+    odbmaint.create_course(course_id  = DEMO_COURSE_ID,
+                           course_name = DEMO_COURSE_NAME,
+                           course_key = str(uuid.uuid4())[0:8],
+                           admin_email = DEFAULT_ADMIN_EMAIL,
+                           admin_name  = DEFAULT_ADMIN_NAME,
+                           max_enrollment = 2)
+
+    # Create the demo user to own the demo movies
+    demo = odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
+    odb.make_new_api_key(email=DEMO_USER_EMAIL, demo_user=True)        # Give the demo user an API key
+
+def populate_demo_movies():
+    def is_movie_fn(fn):
+        return os.path.splitext(fn)[1] in ['.mp4','.mov']
+
+    # Add the demo movies
+    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
+        with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
+            movie_id = odb.create_new_movie(user_id=demo[USER_ID],
+                                            course_id = DEMO_COURSE_ID,
+                                            title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                            description=DEMO_MOVIE_DESCRIPTION)
+            odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
+
+
 
 if __name__ == "__main__":
     import argparse
@@ -34,7 +71,6 @@ if __name__ == "__main__":
     parser.add_argument("--create_course",help="Create a course and register --admin_email --admin_name as the administrator",action='store_true')
     parser.add_argument("--delete_course",help="Delete the course specified by --course_id", action='store_true')
     parser.add_argument("--course_name",help="Course name")
-    parser.add_argument('--demo_email',help='If create_course is specified, also create a demo user with this email and upload demo movies')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
     parser.add_argument("--max_enrollment",help="Max enrollment for course",type=int,default=50)
@@ -79,6 +115,8 @@ if __name__ == "__main__":
 
     if args.createdb:
         odbmaint.create_tables()
+        populate_demo_user()
+        populate_demo_movies()
 
     if args.dropdb:
         odbmaint.drop_tables()
@@ -100,10 +138,6 @@ if __name__ == "__main__":
         except ExistingCourse_Id:
             print(f" course {args.course_id} already exists")
         print(json.dumps(odb.lookup_course_by_id(course_id=args.course_id), indent=4, default=str))
-
-        odbmaint.populate_demo_course(course_id = args.course_id,
-                                      demo_email = args.demo_email )
-        sys.exit(0)
 
     if args.delete_course:
         if not args.course_id:

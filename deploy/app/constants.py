@@ -49,9 +49,8 @@ class C:
     LOGGING_LEVEL=logging.WARNING
 
     # Demo mode
-    # special key (must begin with k and be 33 characters)
+    # special key (must begin with an 'a' and be 33 characters)
     DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
-    DEMO_MODE_USER_ID  = 'udemo' # special userid
 
     # Other
     EMAIL_TEMPLATE_FNAME = 'email.txt'

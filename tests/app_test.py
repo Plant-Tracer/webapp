@@ -118,7 +118,7 @@ def test_templates(client,new_course):
             include_text = None
             exclude_text = None
             if with_api_key==True and url=='/list':
-                exclude_text = 'user_demo = 1;'
+                exclude_text = 'user_demo = true;'
             if with_api_key:
                 client.set_cookie( apikey.cookie_name(), api_key)
             resp = client.get(url)

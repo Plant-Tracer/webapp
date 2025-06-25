@@ -42,8 +42,6 @@ ROOT_USER_ID = 'u0'                # the root user
 # attributes
 #SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
-DEMO = 'demo'
-
 # apikeys table
 API_KEY = 'api_key'
 
@@ -321,17 +319,20 @@ class DDBO:
 
     ### api_key management
 
+    def put_api_key_dict(self,api_key_dict):
+        # no ConditionExpression - it's okay if the key already exists
+        logging.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
+        return self.api_keys.put_item(Item = api_key_dict)
+
     def get_api_key_dict(self,api_key):
         try:
-            return self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
+            ret =  self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
+            logging.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
+            return ret
         except Exception as e:
             logging.error("table=%s error=%s",self.api_keys.name, e)
             raise ValueError(self.api_keys.name) from e
 
-
-    def put_api_key_dict(self,api_key_dict):
-        # no ConditionExpression - it's okay if the key already exists
-        self.api_keys.put_item(Item = api_key_dict)
 
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
@@ -783,28 +784,8 @@ def list_admins():
             break
     return admin_users
 
-def list_demo_users():
-    """Returns a list of all demo accounts."""
-    logging.warning("Scanning users for demo accounts")
-    ddbo = DDBO()
-    demo_users = []
-    last_evaluated_key = None
-
-    while True:
-        scan_kwargs = { 'FilterExpression': Attr('demo').eq(1) }
-
-        if last_evaluated_key:
-            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-
-        response = ddbo.users.scan(**scan_kwargs)
-        demo_users.extend(response['Items'])
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            break
-    return demo_users
-
-# pylint: disable=too-many-arguments
-def register_email(email, user_name, *, course_key=None, course_id=None, demo_user=0, admin=False):
+# pylint-x: disable=too-many-arguments
+def register_email(email, user_name, *, course_key=None, course_id=None, admin=False):
     """Register a user as identified by their email address for a given course.
     If the user exists, just change their primary course Id and add them to the course.
     If the user does not exist, create them.
@@ -815,7 +796,6 @@ def register_email(email, user_name, *, course_key=None, course_id=None, demo_us
     :param email: - user email
     :param course_key: - the key. We might only have this, if the user went to the we page
     :param course_id:  - the course
-    :param demo_user:  - 1 if this is a demo user
     :param admin:      - True if this is a course admin
     :return: dictionary of { USER_ID :user_id} for user who is registered.
     """
@@ -849,7 +829,6 @@ def register_email(email, user_name, *, course_key=None, course_id=None, demo_us
                        EMAIL:email,
                        USER_NAME:user_name,
                        'created' : int(time.time()),
-                       DEMO:demo_user,
                        ENABLED:1,
                        ADMIN_FOR_COURSES:admin_for_courses,
                        PRIMARY_COURSE_ID:course_id,
@@ -866,7 +845,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, demo_us
         ddbo.update_table(ddbo.users, user_id,
                           {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
                            PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
-                           DEMO:demo_user,
+                           ENABLED: 1,
                            COURSES: list(set(user[ COURSES ] + [course_id])),
                            ADMIN_FOR_COURSES: admin_for_courses})
 
@@ -921,6 +900,8 @@ def validate_api_key(api_key):
     if not is_api_key(api_key):
         raise InvalidAPI_Key()
     api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None:
+        raise InvalidAPI_Key()
     if api_key_dict[ ENABLED ]:
         user = ddbo.get_user(api_key_dict[ USER_ID ])
         if user[ ENABLED ]:
@@ -934,7 +915,8 @@ def validate_api_key(api_key):
 
 def make_new_api_key(*, email, demo_user=False):
     """Create a new api_key for an email that is registered
-    :param: email - the email
+    :param email:  the email
+    :param demo_user:  If true, then use the demo user API key, and not a random API key
     :return: api_key - the api_key
     """
     ddbo = DDBO()

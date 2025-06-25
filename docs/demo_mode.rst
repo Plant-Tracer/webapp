@@ -1,8 +1,17 @@
 Demo Mode
 =========
 
-Goals
------
+A PlantTracer database consists of several DyanmoDB tables with a given table prefix and an S3 bucket.
+
+When the database is created, a default course with the ID `demo_course` is created. There are two users: a default course admin and a default demo user. The demo course is then prepopulated with several demo movies from the test data.
+
+The demo user is identified with a special API key.
+
+Demo mode is enabled by sedding the environment variable `DEMO_COURSE_ID` to the course_id of the course that is the demo course. It need not be the demo course that is created as part of the default installation.
+
+
+Demo Mode Goals
+---------------
 
 - Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app
 

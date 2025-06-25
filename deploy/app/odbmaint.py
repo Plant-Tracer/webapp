@@ -6,21 +6,20 @@ import logging
 import copy
 import os
 import os.path
-import json
+#import json
 
 import tabulate
 
 import boto3
 from tabulate import tabulate
 from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Attr
+#from boto3.dynamodb.conditions import Attr
 
 
 from . import odb
 from .db_object import s3_client
 from .odb import USER_ID,DDBO
 from .constants import C
-from .paths import TEST_DATA_DIR
 
 
 # Configure basic logging
@@ -41,9 +40,6 @@ RANGE = 'RANGE'
 COMMENT = 'Comment'
 S = 'S' # string
 N = 'N' # number
-
-DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
-DEMO_MOVIE_DESCRIPTION = 'A demo movie.'
 
 billing = {BillingMode: PAY_PER_REQUEST} # alternative is provisioned throughput
 projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
@@ -237,7 +233,6 @@ TABLE_CONFIGURATIONS = [
 
 def create_tables(*,ignore_table_exists = None):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
-
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
     :param dynamodb_resource: The boto3 DynamoDB resource object.
@@ -269,6 +264,10 @@ def create_tables(*,ignore_table_exists = None):
                     logger.warning("Table %s already exists.", table_name)
             else:
                 logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, dynamodb.meta.client.meta.endpoint_url)
+
+
+
+
 
 def drop_dynamodb_table(dynamodb, table_name: str):
     """Drops a specified DynamoDB table from the local instance.
@@ -334,34 +333,11 @@ def create_course(*, course_id, course_key, course_name, admin_email,
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)
     logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
-    # see if we should populate with demo
-
-def is_movie_fn(fn):
-    return os.path.splitext(fn)[1] in ['.mp4','.mov']
-
-def populate_demo_course(*, course_id, demo_email):
-    """
-    Creates demo info for the demo course
-    """
-    odb.register_email(email=demo_email, user_name='Demo User', course_id = course_id)
-    odb.make_new_api_key(email=demo_email)
-    demo = odb.get_user_email(demo_email)
-    print("Demo User:")
-    print(json.dumps(demo,indent=4,default=str))
-
-    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
-        with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
-            movie_id = odb.create_new_movie(user_id=demo[USER_ID],
-                                            course_id = course_id,
-                                            title=DEMO_MOVIE_TITLE.format(ct=ct),
-                                            description=DEMO_MOVIE_DESCRIPTION)
-            odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
-
 
 def delete_course(*, course_id):
     """Delete the course"""
+    logging.debug("delete_course(%s)",course_id)
     course = odb.lookup_course_by_id(course_id=course_id)
-    print("course=",course)
     if not course:
         raise ValueError(f"course {course_id} does not exist")
     odb.delete_course(course_id=course_id)
@@ -382,10 +358,6 @@ def report(ddbo):
     for table in ddbo.tables:
         rows.append([table.name,table.item_count, count_table_items(table)])
     print(tabulate(rows,headers=headers))
-
-    print("")
-    kwargs =  { 'FilterExpression': Attr('demo').eq(1) }
-    print("Number of demo users:", count_table_items(ddbo.users,  **kwargs))
 
 
 def _flush_delete_batch(bucket: str, objects: list) -> None:
