@@ -27,7 +27,7 @@ describe('list_movies_data', () => {
     // Assign global variables from globalData
     global.user_id = parseInt(globalData.user_id, 10);
     global.admin = globalData.admin === 'true';
-    global.user_demo = globalData.user_demo === 'false';
+    global.demo_mode = globalData.demo_mode === 'false';
     global.PLAY_LABEL = globalData.PLAY_LABEL;
     global.PLAY_TRACKED_LABEL = globalData.PLAY_TRACKED_LABEL;
     global.UNPUBLISH_BUTTON = globalData.UNPUBLISH_BUTTON;
@@ -72,7 +72,7 @@ describe('list_movies_data', () => {
     list_movies_data(movies);
     expect($.fn.html).toHaveBeenCalledTimes(4);
 
-    const expectedEmptyHtml = expect.stringContaining('<table><tbody><tr><td><i>No movies</i></td></tr></tbody></table>');
+    const expectedEmptyHtml = expect.stringContaining("<table><tbody><tr><td><i>No movies</i></td></tr><tr><td colspan=\"6\"><a href=\"/upload\">Click here to upload a movie</a></td></tr></tbody></table>");
     expect($.fn.html).toHaveBeenCalledWith(expectedEmptyHtml);
   });
 
@@ -106,7 +106,7 @@ describe('list_movies_data', () => {
 
   test('should display a link to upload movies for non-demo users', () => {
     const movies = [];
-    global.user_demo = false;
+    global.demo_mode = false;
     $.fn.html = jest.fn();
     list_movies_data(movies);
     expect($.fn.html).toHaveBeenCalledTimes(4);
@@ -118,7 +118,7 @@ describe('list_movies_data', () => {
   test('should not display upload link for demo users', () => {
     const movies = [];
 
-    global.user_demo = true;
+    global.demo_mode = true;
 
     $.fn.html = jest.fn();
     list_movies_data(movies);

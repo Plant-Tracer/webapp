@@ -454,7 +454,7 @@ function list_movies_data( movies ) {
                 tid += 1;
                 let r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
-                if ((admin || user_id == m.user_id) && demo_mode==0) {
+                if ((admin || user_id == m.user_id) && !demo_mode) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> `;
                 }
                 r += extra + "</td>\n";

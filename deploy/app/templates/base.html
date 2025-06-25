@@ -26,14 +26,18 @@
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = "{{user_id}}";
-      const demo_mode = {% if demo_mode %} true {% else %} false; {% endif %} // set true if we are in demo mode
+      {% if demo_mode %}
+      const demo_mode = true;
+      {% else %}
+      const demo_mode = false;
+      {% endif %}
       const user_primary_course_id   = "{{user_primary_course_id}}";
       const primary_course_name = "{{primary_course_name}}";
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
       {% else %}
       const api_key = null;
       const user_id = null;
-      const demo_mode = null;
+      const demo_mode = false;
       const user_primary_course_id = null;
       const primary_course_name = null;
       {% endif %}
