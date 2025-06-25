@@ -74,7 +74,7 @@ jobs:
         run: |
           make pytest-coverage
 
-      - name: Run JavaScript tests and coverage
+      - name: JavaScript tests and coverage
         if: runner.os == 'Linux'
         run: |
           make jscoverage

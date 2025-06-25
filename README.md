@@ -1,3 +1,4 @@
+[![CI (pip)](https://github.com/Plant-Tracer/webapp/actions/workflows/continuous-integration-pip.yml/badge.svg)](https://github.com/Plant-Tracer/webapp/actions/workflows/continuous-integration-pip.yml)
 [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
 <a href="https://scan.coverity.com/projects/plant-tracer-webapp">
   <img alt="Coverity Scan Build Status"
