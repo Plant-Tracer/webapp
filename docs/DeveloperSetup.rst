@@ -5,7 +5,7 @@ Requirements and Preparation
 ----------------------------
 
 * GitHub: In order to commit to the `Plant-Tracer/webapp <https://github.com/Plant-Tracer/webapp>` GitHub repository, you must first have a GitHub account. Then your GitHub account must be added as a member of the Plant-Tracer Organization. You may ask any of the Organization owners to do that, or send an email request to plantadmin@planttracer.com.
- 
+
 * While there are multiple ways to authenticate a login to  GitHub, it has proven to be convenient for development purposes to use a Personal Access Token for acccess via a command line. See `<https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>` and `<https://github.com/settings/personal-access-tokens>` for more details. (Specific token settings not yet fully documented, but you want Read and Write access to Contents. Depending on your role and your own toolset, you may also want access to Actions, Discussions, Pages, and Pull Requests, but also consider whether all those permissions should exist in the same PAT.)
 
 * Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that's going to be the best place for runtime debugging. MacOS works well. Windows is not favored, but may work. This file was developed on MacOS Sonoma but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: `DevSetupUbuntu` and :doc: `WindowsDevSetup` for more detail on setting up on those platforms.
@@ -27,8 +27,10 @@ Requirements and Preparation
 
 * git and gh
 
-* MySQL 8.0. See :doc:`MySQLSetup`
-    
+* Minio  (installed locally)
+
+* DynamoDBLocal (installed locally)
+
 Setup Steps
 -----------
 #. Set your Git Hub name and username::
@@ -77,7 +79,6 @@ Setup Steps
 
     .. code-block::
 
-       export MYSQL_ROOT_PASSWORD="your-mysql-root-password"
        export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
        make create_localdb
 
@@ -85,7 +86,7 @@ Setup Steps
 
    .. code-block::
 
-      PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini make pytest-quiet
+      make pytest
 
 #. Create your first course! If you want, give it a demo account too:
 
@@ -136,20 +137,6 @@ Running Locally Quick Start
    .. code-block::
 
     python standalone.py [arguments]
-
-#. A specific case: running with movies stored in MySQL rather than S3:
-
-   .. code-block::
-
-    python standalone.py --storelocal
-
-#. Another case: running in demo mode, with movies stored in MySQL rather than S3:
-
-   * Note: there must be no user logged in for demo mode to take effect. May have to clear browser cookies.
-
-   .. code-block::
-
-       DEMO_MODE=1 python standalone.py --storelocal
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 

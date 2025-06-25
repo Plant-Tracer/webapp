@@ -38,10 +38,9 @@ Installation
 
    * Do not add any other .ini files to the repo. etc/credentials.ini is blocked by the .gitignore file, but it can be overridden.
 
-#. Create a new local database (named actions_test)::
+#. Create DynamoDB tables with a `demo-` prefix for demos and testing::
 
-   $ export MYSQL_ROOT_PASSWORD=testrootpass
-   $ make create_localdb
+   $ make make-local-demo
 
 #. Run the self-tests::
 
@@ -51,10 +50,10 @@ Installation
 
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbmaint.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
+    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbutil.py --create_course "My Course Name" --course_id "Plant101" --admin_email your_admin_email@company.com --admin_name "Your Name"
     course_key: leact-skio-proih
 
-#. You now have a course key! If the demo account is made, you have that too.
+#. You now have a course key!
 
 #. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
 

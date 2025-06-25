@@ -25,6 +25,9 @@ Region selection:
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` and `$HOME/.aws/config` the webapp will use.
 
+Optional for sending mail
+-------------------------
+`PLANTTRACER_CREDENTIALS` - A configuration file that has email credentials
 
 
 Optional for Local Development

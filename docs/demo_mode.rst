@@ -22,17 +22,17 @@ Demo Mode Goals
 Functions
 ---------
 
-- Will allow:
+Demo mode allows
 
-  - View the list of movies in a single table
+- View the list of movies in a single table
 
-  - Play a movie without tracking
+- Play a movie without tracking
 
-  - Click on 'analyze' to show the user interface for playing a movie that has a stored trace
+- Click on 'analyze' to show the user interface for playing a movie that has a stored trace
 
-  - Download a CSV representation of movie trace data
+- Download a CSV representation of movie trace data
 
-- Will not allow:
+Demo mode restrictions:
 
   - No uploading of movies
 
@@ -49,17 +49,13 @@ Functions
 Required in the database
 ------------------------
 
-- Demo mode is no longer implemented by special users. It's enabled if the environment variable DEMO_COURSE_ID is set
+Every new database is created with a demo user and a few movies.
 
-- When `DEMO_COURSE_ID` is set, a special `api_key` is always present (it's in the auth system) and it's linked to a particular user when the user is registered.
+- The demo user has a perdefiend API key.
 
-- The demo user can
+- When `DEMO_COURSE_ID` is set, the authentication routines always return the demo mode `api_key`. That is, there is no way to log in or log out.
 
-- Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
-
-- Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)
-
-- Currently, be aware that the demo movies must be tracked and published manually after the demo movies are populated into the database
+To edit the movies in the demo course, just run another instance that is attached to the same database and edit the movies in the demo course.
 
 Implementation
 --------------
@@ -67,8 +63,7 @@ Implementation
 Demo Mode uses the following environment variables:
 
 - `DEMO_COURSE_ID`       - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
-- `DEMO_DYNAMODB_PREFIX` - The table prefix. (Created as `demo` by the dbmaint.py script)
-- `DEMO_USER_EMAIL`        - Identifies the demo user. (Created as `demo@planttracer.com` by the dbmaint.py script)
+- `DEMO_DYNAMODB_PREFIX` - The table prefix. (Created as `demo-` by the `dbutil.py` script)
 
 If we are in demo mode:
 
@@ -76,9 +71,9 @@ If we are in demo mode:
 
 - auth.get_user_api_key() always returns an API Key for demo mode.
 
-- ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
+- `demo_user` JavaScript global variable set to ``true`` (if in demo mode)
 
-- ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
+- `demo_user` Jinja2 variable will get set to ``True`` (otherwise it is ``False``)
 
 Rendering control:
 

@@ -273,6 +273,7 @@ make-local-bucket:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
+	sudo apt install curl
 	which ffmpeg || sudo apt install -y ffmpeg
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm

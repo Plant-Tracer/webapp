@@ -18,7 +18,6 @@ Welcome to Plant Tracer Web Application's documentation!
    DevSetupAmazonLinuxEC2
    DevSetupUbuntu
    WindowsDevSetup
-   MySQLSetup
    Installation
    THEORY_OF_DESIGN
    gallery

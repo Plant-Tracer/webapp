@@ -100,6 +100,8 @@ These variables are specific to Planttracer and _must_ be set:
 
 `DEMO_COURSE_ID` - If set, Planttracer runs in demo mode, and this is the ID of the demo course.
 
+`PLANTTRACER_CREDENTIALS` - A configuration file that has email credentials
+
 Planttracer also uses these AWS environment variables, which are set to the local host or AWS as appropriate.
 
 `AWS_DEFAULT_REGION`
