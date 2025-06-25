@@ -21,6 +21,7 @@ LOCAL_BUCKET := planttracer-local
 LOCAL_HTTP_PORT := 8080
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT := http://localhost:9100/
+
 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
 AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
 AWS_ACCESS_KEY_ID := minioadmin
@@ -135,7 +136,7 @@ pytest1:
 ### Debug targets to develop and run locally.
 
 wipe-local:
-	@echo wiping all local artifacts and remaking the local bucket
+	@echo wiping all local artifacts and remaking the local bucket.
 	bin/local_minio_control.bash stop
 	bin/local_dynamodb_control.bash stop
 	/bin/rm -rf var
@@ -152,20 +153,15 @@ make-local-demo:
 	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
 	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
-run-local:
+run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	LOG_LEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_DEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
-run-local-demo:
+run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
 	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
-	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG
-
-debug-multi:
-	@echo run bottle locally in debug mode multi-threaded
-	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG --multi
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
@@ -213,10 +209,10 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 	touch bin/DynamoDBLocal.jar
 
 # operation:
-start_local_dynamodb:
+start_local_dynamodb: bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash start
 
-stop_local_dynamodb:
+stop_local_dynamodb:  bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
@@ -251,7 +247,13 @@ bin/minio:
 	chmod +x bin/minio bin/mc
 	ls -l bin/minio bin/mc
 
-# operation
+# operation:
+start_local_minio: bin/minio
+	bash bin/local_minio_control.bash start
+
+stop_local_minio:  bin/minio
+	bash bin/local_minio_control.bash stop
+
 list-local-buckets:
 	$(MINIO_VARS) aws s3 --endpoint-url $(MINIO_ENDPOINT) ls
 
@@ -264,7 +266,6 @@ make-local-bucket:
 	fi
 	@echo local buckets:
 	$(MINIO_VARS) aws s3 ls
-
 
 
 ################################################################

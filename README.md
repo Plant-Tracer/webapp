@@ -18,13 +18,17 @@ The application consists of two parts, both of which are contained in this repo:
 
 Data Storage
 ------------
+Server-side storage is provided by Amazon S3 and Amazon DynamoDB. For local development and Github Actions, the Makefile will install Minio (a full-featured S3 clone) and Amazon's DynamoDBlocal (a minimal clone):
+
 **Movies**, **individual movie frames**, and **zip files containing movie frames** are stored in Amazon S3.
 
 **Course data**, **account data**, and **movie frame annotations** are stored in Amazon DynamoDB.
 
+Client-side storage:
+
 **Authentication tokens** are stored in a client cookie called `api_key`.
 
-The user's **current course** is currently stored in the database, but should be moved to a cookie in the client.
+The user's **current course** is currently stored in the database, but should be moved to the client cookie.
 
 Data Flows
 ----------
@@ -37,32 +41,73 @@ The remaining static and dynamic content is downloaded from the server to the cl
 
 This design makes it easy to move from the server-based architecture to the AWS Lambda-based architecture, as Lambda limits HTTP GET and POST responses to 6MB and uploads to around 256KB. In a pure Lambda deployment, static content should probably be moved to a CDN.
 
+Installation
+============
+
 Installation on a Virtual Machine
 ---------------------------------
-This repo is designed to be checked out to `$HOME/webapp` in the service account of the user that is running the application. On a typical Amazon EC2 VM this will be `/home/ec2-user/webapp`.
+This repo is designed to be checked out to `$HOME/webapp` in the service account of the user that is running the application. The application runs out of the git repo. On a typical Amazon EC2 VM this will be `/home/ec2-user/webapp`.
+
+Once it is checked out, be sure to set the (environment variables)[docs/EnvironmentVariables.rst].
 
 Installation on a Developer's Machine
 -------------------------------------
-For testing, this repo can be checked out and run anywhere, e.g. `$HOME/gits/webapp`.
+For testing, this repo can be checked out anywhere, e.g. `$HOME/gits/webapp`.
 
+Once it is checked out, you will run:
+
+```
+make install-ubuntu # if you are on Ubuntu
+make install-macos  # if you are on MacOS
+make bin/mino       # to download and install minio
+make bin/DynamoDBLocal.jar # to download and install DynamoDBLocal
+```
+
+Once you have things installed, you can try:
+
+```
+make make-local-demo
+make run-local-demo
+```
+
+If that works, you can try the full-blown experience with:
+```
+make run-local
+```
+
+At this point is is probably a good idea to read the entire Makefile
 
 Linux and macOS Prequisities
 ----------------------------
 This code should run out-of-the-box on most Linux and macOS systems.
 
 - Python 3.11 or above
-- pip (please run in a virtual environment)
+- pip (The Makefile creates and runs out of a virtual environment)
 - OpenCV (use opencv-python-headless)
 
 To install prerequisites:
 
-```
-venv/bin/pip install -r requirements.txt
-```
+`make install-ubuntu` or `make install-macos` as appropriate.
+
 
 Environment Variables
 ---------------------
+These variables are specific to Planttracer and _must_ be set:
 
+`PLANTTRACER_S3_BUCKET` - The S3 bucket to use, e.g. `s3://planttrancer-demo`
 
-colima start
-docker ps -a
+`DYNAMODB_TABLE_PREFIX` - The prefix to use for the DynamoDB tables.
+
+`DEMO_COURSE_ID` - If set, Planttracer runs in demo mode, and this is the ID of the demo course.
+
+Planttracer also uses these AWS environment variables, which are set to the local host or AWS as appropriate.
+
+`AWS_DEFAULT_REGION`
+
+`AWS_SECRET_ACCESS_KEY`
+
+`AWS_ACCESS_KEY_ID`
+
+`AWS_ENDPOINT_URL_S3`
+
+`AWS_ENDPOINT_URL_DYNAMODB`
