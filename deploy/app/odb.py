@@ -211,7 +211,6 @@ class DDBO:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
-        print("****** RETURN instance PREFIX=",os.environ.get(C.DYNAMODB_TABLE_PREFIX))
         return cls._instance
 
     @classmethod
@@ -600,6 +599,7 @@ class DDBO:
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
+        assert 'movie_zipfile_url' not in moviedict
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
@@ -650,6 +650,7 @@ class DDBO:
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
+        logging.debug("get_movies_for_course_id(%s)=%s",course_id,movies)
         return movies
 
     ### movie_frame management
@@ -1143,8 +1144,9 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     logging.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
     movie = fix_movie(ddbo.get_movie(movie_id))
-    if get_last_frame_tracked:
+    if get_last_frame_tracked and movie.get(LAST_FRAME_TRACKED,None) is None:
         movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
+    logging.debug("get_movie_metadata: returning movie=%s",movie)
     return movie
 
 
@@ -1493,8 +1495,10 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
     :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
     """
+    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
     if movie_id is not None:
         assert is_movie_id(movie_id)
+
     if orig_movie is not None:
         assert is_movie_id(orig_movie)
 
@@ -1508,6 +1512,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
 
     # build a query for all movies for which the user is in the course
     for course_id in user[ COURSES ]:
+        logging.debug("extending for course_id=%s",course_id)
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
     return fix_movies(movies)
 

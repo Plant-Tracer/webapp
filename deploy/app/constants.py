@@ -83,6 +83,7 @@ class MIME:
     """MIME Types"""
     JPEG = 'image/jpeg'
     MP4 = 'video/quicktime'
+    ZIP = 'application/zip'
 
 class E:
     """Error constants"""

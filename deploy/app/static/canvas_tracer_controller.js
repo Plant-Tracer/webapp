@@ -20,7 +20,7 @@ const ENGINE_VERSION = '1.0';
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
 const TRACKING_POLL_MSEC=1000;
-const RETRACK_MOVIE='Retrack movie';
+const RETRACK_MOVIE='Retrace movie';
 const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;

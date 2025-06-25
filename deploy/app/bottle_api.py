@@ -25,10 +25,10 @@ from . import odb
 from . import db_object
 from . import mailer
 from . import tracker
-from .apikey import get_user_api_key,get_user_dict
+from .apikey import get_user_api_key,get_user_dict,in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO
 
 
 api_bp = Blueprint('api', __name__)
@@ -101,10 +101,10 @@ def get_user_id(allow_demo=True):
     """Returns the user_id of the currently logged in user, or throws a response.
     if allow_demo==False, then do not allow the user to be a demo user
     """
-    userdict = get_user_dict()
-    if userdict['demo'] and not allow_demo:
-        logging.info("demo account blocks requested action")
+    if in_demo_mode() and not allow_demo:
+        logging.info("demo mode blocks requested action.")
         raise AuthError('demo accounts not allowed to execute requested action')
+    userdict = get_user_dict()
     return userdict['user_id']
 
 
@@ -631,6 +631,7 @@ class MovieTrackCallback:
         self.movie_metadata = None
         self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
         self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, mode='w', compression=zipfile.ZIP_DEFLATED,compresslevel=9)
+        self.last_frame_tracked = -1
         self.ziplen = 0
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints): # pylint: disable=unused-argument
@@ -645,6 +646,7 @@ class MovieTrackCallback:
         logging.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
 
         frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+        self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
         self.ziplen += len(frame_jpeg)
         logging.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
         self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_jpeg)
@@ -712,6 +714,9 @@ def api_track_movie(*,user_id, movie_id, frame_start):
                             moviefile_input   = infile.name,
                             callback = mtc.notify)
     mtc.close()
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED:mtc.last_frame_tracked})
+
     # Note: this puts the entire object in memory. That may be an issue at some point
     object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
     urn = db_object.make_urn(object_name=object_name)
@@ -726,6 +731,7 @@ def api_track_movie_queue():
     :param api_key: the user's api_key
     :param movie_id: the movie to track; a new movie will be created
     :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
+    :param run_async: if True, do not wait for completion
     :return: dict['error'] = True/False
              dict['message'] = message to display
              dict['frame_start'] = where the tracking started
@@ -734,6 +740,7 @@ def api_track_movie_queue():
     # pylint-disable: disable=unsupported-membership-test
     movie_id       = get_movie_id()
     user_id        = get_user_id(allow_demo=False)
+    run_async      = get_bool('run_async')
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
         return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 400)
 
@@ -743,12 +750,15 @@ def api_track_movie_queue():
     if movie_row[0]['orig_movie'] is not None:
         return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
 
-    logging.debug("calling api_track_movie")
-    api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
+    if run_async:
+        raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
+    else:
+        logging.debug("calling api_track_movie")
+        api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
+        logging.debug("return from api_track_movie")
+        return jsonify({'error': False, 'message':'Tracking is completed'})
 
-    logging.debug("return from api_track_movie")
     # We return all the trackpoints to the client, although the client currently doesn't use them
-    return jsonify({'error': False, 'message':'Tracking is queued'})
 
 
 ## /new-frame is being able to create our own time lapse movie
@@ -790,7 +800,7 @@ def api_put_frame_trackpoints():
     :param: frame_number - the the frame
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
-    user_id   = get_user_id(allow_demo=False)
+    user_id  = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     frame_number = get_int('frame_number')
     logging.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie_id,frame_number)

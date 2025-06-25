@@ -14,7 +14,6 @@ class User(BaseModel):
     user_name: str
     created: int
     enabled: conint(ge=0,le=1)
-    demo: conint(ge=0,le=1)
     admin_for_courses: List[str]
     primary_course_id: str
     primary_course_name: str
@@ -91,7 +90,9 @@ class Movie(BaseModel):
     version: Optional[conint(ge=0)] = None
 
 def fix_movie_prop_value(prop, value):
-    if prop in ['published','deleted','version']:
+    if value is None:
+        return None
+    if prop in ['published','deleted','version','last_frame_tracked']:
         return int(value)
     if prop in ['fps']:
         return str(value)

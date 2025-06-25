@@ -343,12 +343,11 @@ def populate_demo_course(*, course_id, demo_email):
     """
     Creates demo info for the demo course
     """
-    odb.register_email(email=demo_email, user_name='Demo User', course_id = course_id, demo_user=1)
-    odb.make_new_api_key(email=demo_email, demo_user=True)
+    odb.register_email(email=demo_email, user_name='Demo User', course_id = course_id)
+    odb.make_new_api_key(email=demo_email)
     demo = odb.get_user_email(demo_email)
     print("Demo User:")
     print(json.dumps(demo,indent=4,default=str))
-
 
     for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:

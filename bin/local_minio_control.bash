@@ -52,7 +52,7 @@ stop_minio() {
         PID=$(cat $PIDFILE)
         if ps -p $PID > /dev/null; then
             echo "Stopping Minio Local (PID: $PID)..."
-            kill $PID
+            kill -HUP $PID
             # Give it a moment to shut down gracefully
             sleep 2
             if ps -p $PID > /dev/null; then

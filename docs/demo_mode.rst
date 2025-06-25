@@ -40,6 +40,12 @@ Functions
 Required in the database
 ------------------------
 
+- Demo mode is no longer implemented by special users. It's enabled if the environment variable DEMO_COURSE_ID is set
+
+- When `DEMO_COURSE_ID` is set, a special `api_key` is always present (it's in the auth system) and it's linked to a particular user when the user is registered.
+
+- The demo user can
+
 - Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
 
 - Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)

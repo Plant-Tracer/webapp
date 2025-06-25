@@ -149,8 +149,8 @@ make-local-demo:
 	bin/local_minio_control.bash start
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo- --createdb
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --table_prefix=demo- \
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py \
 		--create_course \
 		--course_id demo-course \
 		--course_name "Demo course 1"  \
@@ -167,7 +167,7 @@ run-local:
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threadsbug:
+	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 	$(LOCAL_VARS) $(PYTHON) standalone.py --loglevel DEBUG
 
 debug-multi:

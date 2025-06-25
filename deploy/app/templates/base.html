@@ -26,7 +26,7 @@
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = "{{user_id}}";
-      const demo_mode = {{demo_mode}}; // set true if we are in demo mode
+      const demo_mode = {% if demo_mode %} true {% else %} false; {% endif %} // set true if we are in demo mode
       const user_primary_course_id   = "{{user_primary_course_id}}";
       const primary_course_name = "{{primary_course_name}}";
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};

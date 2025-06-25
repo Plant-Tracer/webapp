@@ -18,6 +18,7 @@ from os.path import abspath, dirname
 from zipfile import ZipFile
 import copy
 
+import filetype
 import numpy as np
 import cv2
 
@@ -28,8 +29,8 @@ from app import bottle_app
 from app import odb
 from app import db_object
 from app import tracker
-from app.constants import MIME,E
-from app.odb import API_KEY,MOVIE_ID,TITLE,USER_ID
+from app.constants import MIME,E,C
+from app.odb import DDBO,API_KEY,MOVIE_ID,TITLE,USER_ID
 
 # get the first MOV
 
@@ -42,6 +43,14 @@ from movie_test import new_movie
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
+
+def is_zipfile(buf):
+    try:
+        return filetype.guess(buf).mime==MIME.ZIP
+    except AttributeError:
+        logging.error("buf=%s",buf)
+        raise
+
 
 def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
@@ -102,10 +111,13 @@ def test_track_point_annotations(client, new_movie):
 def test_movie_tracking(client, new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
-    Note: We no longer create an output movie: we just test the trackpoints
+    Tests for:
+    - all frames tracked
+    - trackpoints near correct end location
+    - zipfile created
     """
     cfg      = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
+    movie_id    = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
     api_key  = cfg[API_KEY]
     user_id  = cfg[USER_ID]
@@ -123,7 +135,7 @@ def test_movie_tracking(client, new_movie):
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2 - This actually does the tracking when run  of lambda
+    # Now track with the tracking API.
     response = client.post('/api/track-movie-queue',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
@@ -132,6 +144,33 @@ def test_movie_tracking(client, new_movie):
     ret = response.get_json()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
+
+    response = client.post('/api/get-movie-metadata',
+                           data = {'api_key': api_key,
+                                   'movie_id': str(movie_id),
+                                   'get_all_if_tracking_completed': True})
+    assert response.status_code == 200
+    ret = response.get_json()
+    logging.debug("/api/get-movie-metadata() = %s",ret)
+
+    movie_metadata = ret['metadata']
+    assert movie_metadata['movie_zipfile_urn'].startswith('s3')
+    assert movie_metadata['movie_zipfile_url'].startswith('http') # might be https
+    assert movie_metadata['last_frame_tracked'] == 53             # 0..53
+    assert len(ret['frames']) == 54
+
+
+    # check the metadata in the database
+    dbmovie_metadata = odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
+    logging.debug('movie_metadata=%s',movie_metadata)
+    assert dbmovie_metadata['status'] == C.TRACKING_COMPLETED
+    assert dbmovie_metadata['last_frame_tracked'] == 53
+    assert dbmovie_metadata['movie_zipfile_urn'].startswith('s3')
+    assert 'movie_zipfile_url' not in dbmovie_metadata # don't put signed URLs in the database
+
+    # Get the zipfile and make sure it is a zipfile
+    zipdata = db_object.read_object(movie_metadata['movie_zipfile_urn'])
+    assert is_zipfile(zipdata)
 
     # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
@@ -149,6 +188,8 @@ def test_movie_tracking(client, new_movie):
         with ZipFile(tf.name, 'r') as myzip:
             logging.info("names of files in zipfile: %s",myzip.namelist())
             frame_count = len(myzip.namelist())
+
+    assert frame_count==54
 
 
     # Check that the CSV header is set
