@@ -44,7 +44,6 @@ if __name__ == "__main__":
     parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id", action='store_true')
     parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
-    parser.add_argument("--schema", help="Specify schema file to use", default=paths.SCHEMA_FILE)
     parser.add_argument("--dump", help="Dump all objects as JSON files and movie files to new directory called DUMP.")
     parser.add_argument("--sqlbackup", help="Backup the MySQL database to a single SQL file")
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id, --course_name, or --course_name", action='store_true')
