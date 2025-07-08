@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 #
 # Run or Stop Minio on both Linux and MacOS
 # Assumes DynamoDB installed in the root directory
