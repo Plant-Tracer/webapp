@@ -12,7 +12,7 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
     cd webapp
     make install-ubuntu
 
-You maight install these for making your developer time easier:
+You maight install these for making your developer time easier::
 
     sudo apt install zsh
     sudo apt-get install -y nodejs
@@ -24,11 +24,10 @@ You maight install these for making your developer time easier:
     sudo apt install ubuntu-desktop
     # Ubuntu 24.01 ships with python3.10. We need python 3.11 or greater.
 
-
 -  add [client] and [smtp] and [imap] sections to deploy/etc/credential-localhost.ini then::
 
     export PLANTTRACER_CREDENTIALS=deploy/etc/credential-localhost.ini
     make make-local-demo
     make run-local-debug
 
-- Now proceed with the relevant :doc: `DeveloperSetup` steps::
+- Now proceed with the relevant :doc:`DeveloperSetup` steps.
