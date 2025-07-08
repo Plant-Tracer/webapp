@@ -237,15 +237,13 @@ MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
-	if [ "$$(uname -s)" = "Linux" ] ; then \
-		if [ "$$(uname -m)" = "x86_64" ] ; then \
-			curl $(LINUX_BASE)/minio -o bin/minio ; \
-			curl $(LINUX_BASE)/mc -o bin/mc ; \
-		fi
-		if [ "$$(uname -m)" = "aarch64" ] ; then \
-			curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
-			curl $(LINUX_ARM_BASE)/mc -o bin/mc ; \
-		fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
+		curl $(LINUX_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_BASE)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
+		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_ARM_BASE)/mc -o bin/mc ; \
 	fi
 	if [ "$$(uname -s)" = "Darwin" ] ; then \
 		curl $(MACOS_BASE)/minio -o bin/minio ; \
