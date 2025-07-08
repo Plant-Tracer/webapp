@@ -232,18 +232,26 @@ dump-demo-tables:
 
 # installation:
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
+LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
 MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
 	if [ "$$(uname -s)" = "Linux" ] ; then \
-		curl $(LINUX_BASE)/minio -o bin/minio ; \
-		curl $(LINUX_BASE)/mc -o bin/mc ; \
+		if [ "$$(uname -m)" = "x86_64" ] ; then \
+			curl $(LINUX_BASE)/minio -o bin/minio ; \
+			curl $(LINUX_BASE)/mc -o bin/mc ; \
+		fi
+		if [ "$$(uname -m)" = "aarch64" ] ; then \
+			curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
+			curl $(LINUX_ARM_BASE)/mc -o bin/mc ; \
+		fi
 	fi
 	if [ "$$(uname -s)" = "Darwin" ] ; then \
 		curl $(MACOS_BASE)/minio -o bin/minio ; \
 		curl $(MACOS_BASE)/mc -o bin/mc ; \
 	fi
+
 	chmod +x bin/minio bin/mc
 	ls -l bin/minio bin/mc
 

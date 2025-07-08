@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 #
-# Run or Stop DynamoDBLocal on both Linux and MacOS
+# Run or Stop Minio on both Linux and MacOS
 # Assumes DynamoDB installed in the root directory
 
 export MINIO_ROOT_USER=minioadmin
