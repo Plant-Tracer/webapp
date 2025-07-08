@@ -21,19 +21,25 @@ command -v pgrep > /dev/null || {
 
 wait_minio() {
     # Wait for port 9100 to be accepting connections
+    up=0
     for i in {1..30}; do
         if curl -s http://localhost:9100/ > /dev/null; then
-            echo "Minio is ready."
+            echo "MinIO is ready."
+            up=1
             break
         fi
-        echo "  Waiting for Minio to be ready ($i)..."
+        echo "  Waiting for MinIO to be ready ($i)..."
         sleep 1
     done
+    if [ "$up" = "0" ]; then
+        echo " Can't contact MinIO. There's a problem."
+        exit 1
+    fi
 }
 
 # Function to start Minio
 start_minio() {
-    # Run Minio Local in the background, redirecting output
+    # Run MinIO Local in the background, redirecting output
     if [ ! -d $DBDIR ]; then
         echo creating $DBDIR
         mkdir -p $DBDIR
@@ -46,7 +52,7 @@ start_minio() {
     wait_minio
 }
 
-# Function to stop Minio Local
+# Function to stop MinIO Local
 stop_minio() {
     if [ -f $PIDFILE ]; then
         PID=$(cat $PIDFILE)
@@ -60,25 +66,25 @@ stop_minio() {
                 kill -9 $PID  # Force kill if it's still running
             fi
             rm -f $PIDFILE
-            echo "Minio Local stopped."
+            echo "MinIO Local stopped."
         else
-            echo "PID file exists but Minio Local (PID: $PID) is not running. Removing stale PID file."
+            echo "PID file exists but MinIO Local (PID: $PID) is not running. Removing stale PID file."
             rm -f $PIDFILE
         fi
     else
         echo "No $PIDFILE file found. Checking for running process with pgrep."
         PID=$(pgrep -f "minio" || exit 0)
         if [ -n "$PID" ]; then
-            echo "Found running Minio Local (PID: $PID) using pgrep. Stopping..."
+            echo "Found running MinIO Local (PID: $PID) using pgrep. Stopping..."
             kill $PID
             sleep 2
             if ps -p $PID > /dev/null; then
-                echo "Minio (PID: $PID) did not shut down gracefully. Forcing kill."
+                echo "MinIO (PID: $PID) did not shut down gracefully. Forcing kill."
                 kill -9 $PID
             fi
-            echo "Minio stopped."
+            echo "MinIO stopped."
         else
-            echo "Minio is not running."
+            echo "MinIO is not running."
         fi
     fi
 }
@@ -101,10 +107,13 @@ case "$1" in
     status)
         if pgrep -f "minio" > /dev/null
         then
-            echo "Minio is running."
+            echo "MinIO is running."
         else
-            echo "Minio is not running."
+            echo "MinIO is not running."
         fi
+        ;;
+    wait)
+        wait_minio
         ;;
     debug)
         echo MYDIR=$MYDIR
@@ -113,7 +122,7 @@ case "$1" in
         echo FLAGS=$FLAGS
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status}"
+        echo "Usage: $0 {start|stop|restart|status|wait}"
         exit 1
         ;;
 esac

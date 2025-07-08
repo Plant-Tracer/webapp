@@ -145,6 +145,12 @@ wipe-local:
 	bin/local_dynamodb_control.bash start
 	make make-local-bucket
 
+delete-local:
+	@echo deleting all local artifacts
+	bin/local_minio_control.bash stop
+	bin/local_dynamodb_control.bash stop
+	/bin/rm -rf var
+
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	bin/local_minio_control.bash start
