@@ -299,6 +299,7 @@ install-macos:
 	which npm || brew install npm
 	which lsof || brew install lsof
 	which chromium || brew install chromium --no-quarantine
+	which aws || brew install awscli
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	make $(REQ)
