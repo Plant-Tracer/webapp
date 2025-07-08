@@ -5,7 +5,7 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
 
     sudo apt update
     sudo apt upgrade
-    sudo apt install git gh python3.11 python3.11-venv make
+    sudo apt install git gh python3.11 python3.11-venv make openjdk-17-jdk awscli
     git config --global --edit #set Git name and username/email for commits
     gh auth login # generate Personal Access Token if necessary
     git clone https://github.com/Plant-Tracer/webapp.git webapp
