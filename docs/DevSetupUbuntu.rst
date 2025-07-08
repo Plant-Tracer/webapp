@@ -1,7 +1,7 @@
 Setting Up Plant-Tracer webapp on Ubuntu 24.04
 ==============================================
 
-- Install ubuntu server (example from `ARM 24.04.5 LTS <https://cdimage.ubuntu.com/releases/22.04/release/>` (on UTM on MacOS)) then::
+- Install ubuntu server (example from `ARM 24.04.2 LTS <https://cdimage.ubuntu.com/releases/24.04/release/>` (on UTM on MacOS)) then::
 
     sudo apt update
     sudo apt upgrade
