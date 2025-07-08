@@ -12,7 +12,7 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
     cd webapp
     make install-ubuntu
 
-You maight install these for making your developer time easier::
+- You might install these for making your developer time easier::
 
     sudo apt install zsh
     sudo apt-get install -y nodejs
