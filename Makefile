@@ -273,10 +273,12 @@ bin/minio:
 	fi
 
 	chmod +x bin/minio
+	ls -l bin/minio
 	if [ "$$(uname -s)" = "Linux" ] ; then \
 		chmod +x bin/mc ; \
+		ls -l bin/mc ; \
 	fi
-	ls -l bin/minio bin/mc
+
 
 # operation:
 start_local_minio: bin/minio
