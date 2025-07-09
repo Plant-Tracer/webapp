@@ -251,8 +251,18 @@ bin/minio:
 		curl $(LINUX_BASE)/minio -o bin/minio ; \
 		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
 	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
+		@echo Linux x86_64 \
+		curl $(LINUX_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+	fi
 	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
 		@echo Linux aarch64 \
+		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		@echo Linux arm64 \
 		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
 		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
 	fi
