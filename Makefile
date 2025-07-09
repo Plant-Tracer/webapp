@@ -272,7 +272,10 @@ bin/minio:
 		brew install minio/stable/mc ; \
 	fi
 
-	chmod +x bin/minio bin/mc
+	chmod +x bin/minio
+	if [ "$$(uname -s)" = "Linux" ] ; then \
+		chmod +x bin/mc ; \
+	fi
 	ls -l bin/minio bin/mc
 
 # operation:
