@@ -188,3 +188,4 @@ layer
 .[#]*
 sam-installation
 *.slg
+bin/

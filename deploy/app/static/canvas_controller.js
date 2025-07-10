@@ -62,42 +62,53 @@
  */
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
-        let canvas = $( canvas_selector );
+        let canvas = $(canvas_selector);
         if (canvas == null) {
             console.log("CanvasController: Cannot find canvas=", canvas_selector);
             return;
         }
 
-        this.did_onload_callback = ((_) => {});   // by default, call nothing
-        this.c         = canvas[0];                // get the element
-        this.ctx       = this.c.getContext('2d');  // the drawing context
+        this.did_onload_callback = ((_) => { });   // by default, call nothing
+        this.c = canvas[0];                // get the element
+        this.ctx = this.c.getContext('2d');  // the drawing context
 
-        this.oc        = document.createElement('canvas'); // offscreen canvas
-        this.oc.width  = this.naturalWidth  = this.c.width;
+        this.oc = document.createElement('canvas'); // offscreen canvas
+        this.oc.width = this.naturalWidth = this.c.width;
         this.oc.height = this.naturalHeight = this.c.height;
-        this.octx      = this.oc.getContext('2d');
+        this.octx = this.oc.getContext('2d');
 
-        this.delegate  = null;              // the delegate
-        this.selected  = null;              // the selected object
-        this.objects   = new Array();       // the objects
-        this.zoom      = 1;                 // default zoom
+        this.delegate = null;              // the delegate
+        this.selected = null;              // the selected object
+        this.objects = new Array();       // the objects
+        this.zoom = 1;                 // default zoom
 
-        // Register my events.
-        // We use '=>' rather than lambda becuase '=>' wraps the current environment (including this),
+        // Register object movement events.
+        // We use '=>' rather than lambda because '=>' wraps the current environment (including this),
         // whereas 'lambda' does not.
         // Without =>, 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
 
-        this.c.addEventListener('mousemove', (e) => {this.mousemove_handler(e);} , false);
-        this.c.addEventListener('mousedown', (e) => {this.mousedown_handler(e);} , false);
-        this.c.addEventListener('mouseup',   (e) => {this.mouseup_handler(e);}, false);
+//        if (window.PointerEvent) {
+        if (false) { // ToDo: using pointer events is supposed to be the modern way, but it didn't work.
+            this.c.addEventListener('pointermove', (e) => { this.pointermove_handler(e); });
+            this.c.addEventListener('pointerdown', (e) => { this.pointerdown_handler(e); });
+            this.c.addEventListener('pointerend', (e) => { this.pointerup_handler(e); });
+        } else {
+            this.c.addEventListener('mousemove', (e) => { this.mousemove_handler(e); }, false);
+            this.c.addEventListener('mousedown', (e) => { this.mousedown_handler(e); }, false);
+            this.c.addEventListener('mouseup', (e) => { this.mouseup_handler(e); }, false);
+
+            this.c.addEventListener('touchmove', (e) => { this.touchmove_handler(e); }, { passive: false });
+            this.c.addEventListener('touchstart', (e) => { this.touchstart_handler(e); }, { passive: false });
+            this.c.addEventListener('touchend', () => { this.touchend_handler(); }, { passive: false });
+        }
 
         // Catch the zoom change event
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
             $(this.zoom_selector).on('change', (_) => {
                 const new_zoom = $(this.zoom_selector).val() / 100.0;
-                this.set_zoom( new_zoom );
+                this.set_zoom(new_zoom);
             });
         }
     }
@@ -111,7 +122,7 @@ class CanvasController {
     // Erase each object's cc and then delete the references.
     // For the canvas_movie_controller, we end up retaining a reference for all of the images
     clear_objects() {
-        for (let i=0;i<this.objects.length;i++){
+        for (let i = 0; i < this.objects.length; i++) {
             this.objects[i].cc = null;
         }
         this.objects.length = 0;
@@ -127,8 +138,10 @@ class CanvasController {
     // Mouse handling
     getMousePosition(e) {
         let rect = this.c.getBoundingClientRect();
-        return { x: (Math.round(e.x) - rect.left) / this.zoom,
-                 y: (Math.round(e.y) - rect.top) / this.zoom };
+        return {
+            x: (Math.round(e.x) - rect.left) / this.zoom,
+            y: (Math.round(e.y) - rect.top) / this.zoom
+        };
     }
 
     mousedown_handler(e) {
@@ -139,10 +152,10 @@ class CanvasController {
         // find the object clicked in
         for (let i = 0; i < this.objects.length; i++) {
             let obj = this.objects[i];
-            if (obj.draggable && obj.contains_point( mousePosition)) {
+            if (obj.draggable && obj.contains_point(mousePosition)) {
                 this.selected = obj;
                 // change the cursor to crosshair if something is selected
-                this.c.style.cursor='crosshair';
+                this.c.style.cursor = 'crosshair';
             }
         }
         this.redraw('mousedown_handler');
@@ -166,12 +179,64 @@ class CanvasController {
         // if an object is selected, unselect and change back the cursor
         let obj = this.selected;
         this.clear_selection();
-        this.c.style.cursor='auto';
+        this.c.style.cursor = 'auto';
         this.redraw('mouseup_handler');
         this.object_move_finished(obj);
     }
 
-    resize( width, height ){
+    // ToDo: Touch and Pointer event handlers added after mouse event handlers were implemented.
+    //       Refactoring all these to use common movement functions rather than writing movement
+    //       in terms of the mouse abstractions would be more general and elegant.
+    //       But during initial development and testing of touch and pointer handling, if it 
+    //       ain't broke don't fix it. -SEB
+
+    // -- Touch event handlers --
+    touchstart_handler(e) {
+        if (e.touches.length === 1) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            //ToDo: startDrag(touch.clientX, touch.clientY);
+            new_e = { "x": touch.clientX, "y": touch.clientY };
+            this.mousedown_handler(new_e);
+        }
+    }
+
+    touchmove_handler(e) {
+        if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            //ToDo: dragMove(touch.clientX, touch.clientY);
+            new_e = { "x": touch.clientX, "y": touch.clientY };
+            this.mousemove_handler(new_e);
+        }
+    }
+
+    touchend_handler() {
+        //ToDo: endDrag();
+        this.mouseup_handler();
+    }
+
+    // -- Pointer event handlers --
+    pointerdown_handler(e) {
+        e.preventDefault();
+        
+        //startDrag(e.clientX, e.clientY);
+        new_e = { "x": touch.clientX, "y": touch.clientY };
+        this.mousedown_handler(new_e);
+
+        image.setPointerCapture(e.pointerId);
+    }
+
+    pointermove_handler(e) {
+        new_e = { "x": e.clientX, "y": e.clientY };
+        this.mousemove_handler(new_e);
+    }
+
+    pointerup_handler(e) {
+        this.mouseup_handler();
+        image.releasePointerCapture(e.pointerId);
+    }
+
+    resize(width, height) {
         this.c.width = this.naturalWidth = width;
         this.c.height = this.naturalHeight = height;
         this.redraw();
@@ -181,22 +246,22 @@ class CanvasController {
     // We also have to resize the offscreen canvas
 
     set_zoom(factor) {
-        this.zoom      = factor;
-        this.oc.width  = this.c.width  = this.naturalWidth * factor;
+        this.zoom = factor;
+        this.oc.width = this.c.width = this.naturalWidth * factor;
         this.oc.height = this.c.height = this.naturalHeight * factor;
         this.redraw();
     }
 
     // Main drawing function:
-    redraw(  ) {
+    redraw() {
         // redraw the object stack.
         // We don't need to clear the canvas if the first object is draws to the bounds (like it's an image).
         if (this.objects.length == 0
-            ||  !this.objects[0].fills_bounds
-            ||  this.objects[0].x != 0
-            ||  this.objects[0].y != 0
-            ||  this.objects[0].width  != this.naturalWidth
-            ||  this.objects[0].height == this.naturalHeight){
+            || !this.objects[0].fills_bounds
+            || this.objects[0].x != 0
+            || this.objects[0].y != 0
+            || this.objects[0].width != this.naturalWidth
+            || this.objects[0].height == this.naturalHeight) {
             this.octx.clearRect(0, 0, this.oc.width, this.oc.height);
         }
 
@@ -204,30 +269,30 @@ class CanvasController {
         // the unselected (so they are on top)
         this.octx.save();
         this.octx.scale(this.zoom, this.zoom);
-        for (let s = 0; s<2; s++){
-            for (let i = 0; i< this.objects.length; i++){
+        for (let s = 0; s < 2; s++) {
+            for (let i = 0; i < this.objects.length; i++) {
                 let obj = this.objects[i];
-                if ((s==0 && this.selected!=obj) || (s==1 && this.selected==obj)){
-                    obj.draw( this.octx , this.selected==obj);
+                if ((s == 0 && this.selected != obj) || (s == 1 && this.selected == obj)) {
+                    obj.draw(this.octx, this.selected == obj);
                 }
             }
         }
         this.octx.restore();
         // Now use double-buffering to copy the off-screen context to the screen.
         // We use requestAnimationFrame() to prevent flickering.
-        requestAnimationFrame( (_) => {
+        requestAnimationFrame((_) => {
             this.ctx.clearRect(0, 0, this.c.width, this.c.height);
-            this.ctx.drawImage( this.oc, 0, 0);
+            this.ctx.drawImage(this.oc, 0, 0);
         });
     }
 
-    set_background_image( url ){
-        this.add_object( new WebImage(0, 0, url) );
+    set_background_image(url) {
+        this.add_object(new WebImage(0, 0, url));
     }
 
     // These can be subclassed, or you can use the delegate
-    object_did_move( _obj)      { if (this.delegate) this.delegate.object_did_move( _obj ); }
-    object_move_finished( _obj) { if (this.delegate) this.delegate.object_move_finished( _obj ); }
+    object_did_move(_obj) { if (this.delegate) this.delegate.object_did_move(_obj); }
+    object_move_finished(_obj) { if (this.delegate) this.delegate.object_move_finished(_obj); }
 }
 
 
@@ -260,11 +325,11 @@ class Marker extends CanvasItem {
         super(x, y, name);
         this.startingAngle = 0;
         this.endAngle = 2 * Math.PI;
-        this.r      = r;        // in pixels
+        this.r = r;        // in pixels
         this.draggable = true;  // boolean
-        this.fill   = fill;     // string for color
+        this.fill = fill;     // string for color
         this.stroke = stroke;   // string for color
-        this.name   = name;     //
+        this.name = name;     //
     }
 
     draw(ctx, selected) {
@@ -284,7 +349,7 @@ class Marker extends CanvasItem {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
         ctx.font = '18px sanserif';
-        ctx.fillText( this.name, this.x+this.r+5, this.y+this.r/2);
+        ctx.fillText(this.name, this.x + this.r + 5, this.y + this.r / 2);
         ctx.restore();
     }
 
@@ -321,7 +386,7 @@ class Line extends CanvasItem {
 
 
 class Text extends CanvasItem {
-    constructor(x, y, text, color='black') {
+    constructor(x, y, text, color = 'black') {
         super(x, y, text);
         this.font = '18px sanserif';
         this.color = color;
@@ -330,7 +395,7 @@ class Text extends CanvasItem {
     draw(ctx, selected) {
         ctx.save();
         ctx.font = this.font;
-        ctx.fillText( this.name, this.x, this.y);
+        ctx.fillText(this.name, this.x, this.y);
     }
 }
 
@@ -339,7 +404,7 @@ class Text extends CanvasItem {
  * This is the legacy system.
  *
  */
-const maxRetries    = 10;
+const maxRetries = 10;
 const retryInterval = 2000;
 
 class WebImage extends CanvasItem {
@@ -350,10 +415,10 @@ class WebImage extends CanvasItem {
         this.img = new Image();
         this.loaded = false;
         this.fills_bounds = true;
-        this.width  = 0;
+        this.width = 0;
         this.height = 0;
-        this.retries  = 0;
-        this.timeout  = null;
+        this.retries = 0;
+        this.timeout = null;
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
@@ -362,37 +427,37 @@ class WebImage extends CanvasItem {
                 clearTimeout(this.timeout);
                 this.timeout = null;
             }
-            this.width  = this.img.naturalWidth;
+            this.width = this.img.naturalWidth;
             this.height = this.img.naturalHeight;
             this.loaded = true;
             // If we are already in a canvas controller, as it to redraw.
             // If we are not yet in a canvas controller, redraw
-            if (this.cc){
+            if (this.cc) {
                 this.cc.redraw();
                 this.cc.did_onload_callback(this);
             }
         };
 
         this.img.onerror = (_) => {
-            console.log("image onerror ",this.url);
+            console.log("image onerror ", this.url);
             // Clear the timeout if it is still set
             if (this.timeout) {
                 clearTimeout(this.timeout);
                 this.timeout = null;
             }
             if (this.loaded) {
-                console.log(this.url,"loaded; won't retry.");
+                console.log(this.url, "loaded; won't retry.");
                 return;
             }
 
-            console.log("this.retries=",this.retries,"maxRetries=",maxRetries);
+            console.log("this.retries=", this.retries, "maxRetries=", maxRetries);
             if (this.retries < maxRetries) {
                 this.retries++;
                 console.log(`image failed ${this.url} retrying ${this.retries}`)
                 this.img.src = ''; // clear the source to ensure that browser attempts a reload
                 this.img.src = this.url; // queue reload
                 this.timeout = setTimeout(
-                    ()=>{this.img.onerror();}, retryInterval); // que another retry
+                    () => { this.img.onerror(); }, retryInterval); // que another retry
             }
         };
 
@@ -402,7 +467,7 @@ class WebImage extends CanvasItem {
         // the image is loaded. Hence we need to pay attenrtion to theImage.state.
         this.img.src = url;
         this.timeout = setTimeout(
-            ()=>{this.img.onerror();}, retryInterval); // quey a retry
+            () => { this.img.onerror(); }, retryInterval); // quey a retry
     }
 
     // WebImage draw
@@ -410,7 +475,7 @@ class WebImage extends CanvasItem {
         if (this.loaded) {
             ctx.drawImage(this.img, this.x, this.y, this.img.naturalWidth, this.img.naturalHeight);
         } else {
-            ctx.fillText( this.img.src, this.x, this.y, this.img.naturalWidth+selected);
+            ctx.fillText(this.img.src, this.x, this.y, this.img.naturalWidth + selected);
         }
     }
 }

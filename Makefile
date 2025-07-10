@@ -158,6 +158,10 @@ run-local:
 	@echo run bottle locally, storing new data in database
 	$(PYTHON) standalone.py --storelocal
 
+run-local-network:
+	@echo run bottle locally, binding to all network interfaces, storing new data in database
+	$(PYTHON) standalone.py --storelocal --bind :8080
+
 run-local-demo:
 	@echo run bottle locally in demo mode, using local database
 	DEMO_MODE=1 $(PYTHON) standalone.py --storelocal
