@@ -65,10 +65,8 @@ if __name__ == "__main__":
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
     parser.add_argument("--createdb", help='Create a new set of DynamoDB tables.',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.',action='store_true')
-    #parser.add_argument('--purge_test_data', help='Remove the test data from the database', action='store_true')
-    parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database. Requires --course_id', action='store_true')
-    #parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
-    parser.add_argument("--create_course",help="Create a course with --course_name, --course_id, and optional --max_enrollment, and register --admin_email --admin_name as the administrator",action='store_true')
+    parser.add_argument("--create_course",help="Create a course with --course_name, --course_id, "
+                        "and optional --max_enrollment, and register --admin_email --admin_name as the administrator",action='store_true')
     parser.add_argument("--delete_course",help="Delete the course specified by --course_id", action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
@@ -76,13 +74,17 @@ if __name__ == "__main__":
     parser.add_argument("--report",help="Print a report of the database",action='store_true')
     parser.add_argument("--add_admin", help="Add --admin_email user as a course admin to the course specified by --course_id", action='store_true')
     parser.add_argument("--remove_admin", help="Remove the --admin_email user as a course admin from the course specified by --course_id", action='store_true')
-    #parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
-    #parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
-    #parser.add_argument("--dump", help="Dump all objects as JSON files and movie files to new directory called DUMP.")
     parser.add_argument("--course_id", help="course id")
     parser.add_argument("--course_key", help="course key")
     parser.add_argument("--course_name", help="course name")
     parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
+
+    # These need to be re-implemented
+    # parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database and S3. Requires --course_id', action='store_true')
+    # parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
+    # parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
+    # parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
+    # parser.add_argument("--dump", help="Dump all objects as JSON files and movie files to new directory called DUMP.")
 
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
