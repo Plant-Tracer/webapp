@@ -45,9 +45,10 @@ def populate_demo_movies():
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
     # Add the demo movies
+    demo_user = odb.get_user_email(DEMO_USER_EMAIL)
     for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
-            movie_id = odb.create_new_movie(user_id=demo[USER_ID],
+            movie_id = odb.create_new_movie(user_id=demo_user[USER_ID],
                                             course_id = DEMO_COURSE_ID,
                                             title=DEMO_MOVIE_TITLE.format(ct=ct),
                                             description=DEMO_MOVIE_DESCRIPTION)
