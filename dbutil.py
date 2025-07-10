@@ -79,9 +79,9 @@ if __name__ == "__main__":
     parser.add_argument("--course_key", help="course key")
     parser.add_argument("--course_name", help="course name")
     parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
+    parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database and S3. Requires --course_id', action='store_true')
 
     # These need to be re-implemented
-    # parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database and S3. Requires --course_id', action='store_true')
     # parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
     # parser.add_argument("--freshen",help="Non-destructive cleans up the movie metadata for all movies.",action='store_true')
     # parser.add_argument("--clean",help="Destructive cleans up the movie metadata for all movies.",action='store_true')
