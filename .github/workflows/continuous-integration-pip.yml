@@ -56,6 +56,10 @@ jobs:
           bin/local_minio_control.bash start
           make make-local-bucket
 
+      - name: Make a demo course, user and upload the demo movies
+        run: |
+          make make-local-demo
+
       - name: Lint with pylint
         run: |
           make pylint

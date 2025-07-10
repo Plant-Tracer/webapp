@@ -64,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--sendlink", help="Send link to the given email address, registering it if necessary.")
     parser.add_argument("--makelink", help="Make a link for the given email, registering it if necessary.")
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
-    parser.add_argument("--createdb", help='Create a new set of DynamoDB tables.',action='store_true')
+    parser.add_argument("--createdb", help='Create a new set of DynamoDB tables and install the demo user and movies.',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.',action='store_true')
     parser.add_argument("--create_course",help="Create a course with --course_name, --course_id, "
                         "and optional --max_enrollment, and register --admin_email --admin_name as the administrator",action='store_true')
