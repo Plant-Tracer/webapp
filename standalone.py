@@ -39,9 +39,10 @@ if __name__ == "__main__":
         db_object.STORE_LOCAL=True
 
     bind_args = ''
-    if len(args.bind) > 0:
-        for b in args.bind:
-            bind_args += ' --bind ' + b
+    if args.bind:
+        if len(args.bind) > 0:
+            for b in args.bind:
+                bind_args += ' --bind ' + b
 
     # Now make sure that the credentials work
     # We only do this with the standalone program
