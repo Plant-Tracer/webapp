@@ -8,22 +8,26 @@ Main Flask application for planttracer.
 import sys
 import os
 import logging
-from logging.config import dictConfig
+import traceback
 
 from flask import Flask, request, render_template, jsonify, make_response
+from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import HTTPException
+
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-from . import auth
+#from . import auth
 from . import db_object
-from . import dbmaint
-from . import clogging
+#from . import odbmaint
+#from . import clogging
 from . import apikey
 
 from .bottle_api import api_bp
 from .constants import __version__,GET,GET_POST,C
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
+from .odb import InvalidAPI_Key,InvalidUser_Email
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -36,54 +40,39 @@ CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
 # Initialization Code
 
 def fix_boto_log_level():
+    """Do not run boto loggers at debug level"""
     for name in logging.root.manager.loggerDict:
         if name.startswith('boto'):
             logging.getLogger(name).setLevel(logging.INFO)
 
-def lambda_startup():
-    dbmaint.schema_upgrade(auth.get_dbwriter())
-    clogging.setup(level=os.environ.get('PLANTTRACER_LOG_LEVEL',logging.INFO))
-    fix_boto_log_level()
-
-    logging.info("p1")
-    if os.environ.get(C.PLANTTRACER_S3_BUCKET,None):
-        db_object.S3_BUCKET = os.environ[C.PLANTTRACER_S3_BUCKET]
-        logging.info("p2a %s",db_object.S3_BUCKET)
-    else:
-        config = auth.config()
-        try:
-            db_object.S3_BUCKET = config['s3']['s3_bucket']
-            logging.info("p2b %s",db_object.S3_BUCKET)
-        except KeyError as e:
-            logging.info("s3_bucket not defined in config file. using db object store instead. %s",e)
-    logging.info("p3 %s",db_object.S3_BUCKET)
 
 ################################################################
 ## API SUPPORT
 
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] [%(process)d] %(levelname)s %(filename)s:%(lineno)d %(message)s',
-    }},
-    'root': {
-        'level': 'DEBUG',
-    }
-})
 
-fix_boto_log_level()
-lambda_startup()
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
-app.logger.info("new Flask(__name__=%s)",__name__)
-app.logger.info("PLANTTRACER_CREDENTIALS=%s",os.environ.get(C.PLANTTRACER_CREDENTIALS,None))
-app.logger.info("db_object.S3_BUCKET=%s",db_object.S3_BUCKET)
-logging.info("regular logging works too")
+log_level = os.getenv("LOG_LEVEL","INFO").upper()
+logger = app.logger
+logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
+app.logger.setLevel(log_level)
+app.logger.info("new Flask(__name__=%s) log_level=%s",__name__,log_level)
+app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
+fix_boto_log_level()
+
 
 
 ################################################################
-### Error Handling
+### Error Handling. An exception automatically generates this response.
 ################################################################
+
+@app.errorhandler(404)
+def not_found_404(e):
+    return f"<h1>404 Not Found (404) </h1><pre>\n{e}\n</pre>", 404
+
+@app.errorhandler(NotFound)
+def not_found_NotFound(e):
+    return f"<h1>404 Not Found (NotFound)</h1><pre>\n{e}\n</pre>", 404
 
 @app.errorhandler(AuthError)
 def handle_auth_error(ex):
@@ -91,9 +80,27 @@ def handle_auth_error(ex):
     {'message':message, 'error':True}
     as defined in auth.AuthError
     """
+    logging.info("handle_auth_error(%s)",ex)
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
     return response
+
+@app.errorhandler(InvalidAPI_Key)
+def handle_apikey_error(ex):
+    app.logger.error("InvalidAPI_Key: %s %s",ex,type(ex))
+    return "<h1>403 Invalid api_key</h1>", 403
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return e         # Let Flask handle it or route it to its specific handler
+    logging.exception("Unhandled exception")
+    return jsonify({"error": True, "message": "Internal Server Error"}), 500
+
+@app.errorhandler(InvalidUser_Email)
+def handle_email_error(e):
+    return f"<h1>Invalid User</h1><p>That email address does not exist in the database {e}</p>", 400
+
 
 ################################################################
 # HTML Pages served with template system
@@ -105,7 +112,11 @@ def handle_auth_error(ex):
 @app.route('/', methods=GET)
 def func_root():
     """/ - serve the home page"""
-    return render_template('index.html', **page_dict())
+    try:
+        return render_template('index.html', **page_dict())
+    except Exception as ex:     # pylint: disable=broad-exception-caught
+        return f"<h1>500 Exception:</h1><pre>\n{ex}\n{traceback.print_exception(ex)}</pre>", 500
+
 
 @app.route('/about', methods=GET)
 def func_about():
@@ -135,6 +146,10 @@ def func_logout():
     resp = make_response(render_template('logout.html', **page_dict('Logout',logout=True)))
     resp.set_cookie(cookie_name(), '', expires=0)
     return resp
+
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "ok", "message": "pong"})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():
@@ -181,7 +196,7 @@ def func_list():
 
 @app.route('/upload', methods=GET)
 def func_upload():
-    """/upload - Upload a new file. Can also set cookie."""
+    """/upload - Upload a new file. Can also set cookie (because of /upload link that is sent)."""
     logging.debug("/upload require_auth=True")
     response = make_response(render_template('upload.html',
                                          **page_dict('Upload a Movie',
@@ -215,9 +230,12 @@ def func_ver():
     """Demo for reporting python version. Allows us to validate we are using Python3.
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
-    logging.info("/ver")
+    app.logger.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
                                              sys_version= sys.version))
     response.headers['Content-Type'] = 'text/plain'
     return response
+
+################################################################
+## Finally, if we are running under flask, run this.

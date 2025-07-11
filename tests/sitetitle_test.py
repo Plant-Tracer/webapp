@@ -44,6 +44,8 @@ def test_sitetitle_just_selenium(http_endpoint):
 
     browser_driver = webdriver.Chrome(options = options) # TODO: externalize browser type, if possible
     browser_driver.get(http_endpoint)
+    print("browser_driver=%s",browser_driver,browser_driver.title,browser_driver.current_url,browser_driver.get_window_size,browser_driver.page_source)
+    print(dir(browser_driver))
     assert browser_driver.title == PLANTTRACER_TITLE
     browser_driver.close()
     browser_driver.quit()

@@ -3,7 +3,7 @@ Windows Developer Setup Notes
 
 This note contains additional steps and departures from :doc: `DeveloperSetup` (which was written with Linux and MacOS in mind). Read that document first, then look here for guidance on a Windows machine.
 
-These notes were written using Windows 11 24H2 (OS Build 26100.2984) for ARM actually running on the UMT Virtualization platform running on MacOS Sequoia 15.3, in case it is helpful to know that. These steps assume an otherwise fresh Windows 11 installation. The VM has 8GB RAM, 2 CPUs, and 64GB disk. 
+These notes were written using Windows 11 24H2 (OS Build 26100.2984) for ARM actually running on the UMT Virtualization platform running on MacOS Sequoia 15.3, in case it is helpful to know that. These steps assume an otherwise fresh Windows 11 installation. The VM has 8GB RAM, 2 CPUs, and 64GB disk.
 
 There are probably many other paths to getting a working development environment -- these are just one way that is known to have worked.
 
@@ -24,11 +24,3 @@ It just might be that getting Plant-Tracer/webapp to run on Windows is more trou
 * choco install git
 
 * choco install gh
-
-* choco install mysql --version=8.0.41
-    * Lots of red XML appeared but choco said it succeeded? Some notes I've read said that's OK
-
-    * That said, mysql does not appear to be supported on Windows ARM. So, at this point, I am not proceeding down this path any further. With no MySQL client on Windows ARM, there's no reasonable way to proceed further down this path.
-
-    * I've also choco uninstall mysql which claims to have succeeded, yet the mysql executable still exists. Buggy for sure.
-

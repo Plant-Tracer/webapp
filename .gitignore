@@ -1,3 +1,14 @@
+# PlantTracer specific things
+bin/minio
+bin/minio.gz
+bin/DynamoDBLocal.jar
+bin/DynamoDBLocal_lib/**
+var/**
+dynamodb-local-metadata.json
+*.stderr
+*.stdout
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -171,7 +182,6 @@ cython_debug/
 *.mbox
 */*.mbox
 localmail.mbox
-*.bash
 *.mp4
 *.ini
 etc/github_actions_mysql_rootconfig.ini
@@ -188,3 +198,4 @@ layer
 .[#]*
 sam-installation
 *.slg
+TAGS
