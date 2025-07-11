@@ -27,6 +27,9 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
 -  Add [client] and [smtp] and [imap] sections to deploy/etc/credential-localhost.ini then::
 
     export PLANTTRACER_CREDENTIALS=deploy/etc/credential-localhost.ini
+    make start_local_minio
+    make start_local_dynamodb
+    make make make-local-bucket
     make make-local-demo
     make run-local-debug
 

@@ -154,7 +154,6 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	make make-local-bucket
 	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
 	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
