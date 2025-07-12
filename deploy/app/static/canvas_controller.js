@@ -88,11 +88,11 @@ class CanvasController {
         // Without =>, 'this' points to the HTML element that generated the event.
         // This took me several hours to figure out.
 
-//        if (window.PointerEvent) {
-        if (false) { // ToDo: using pointer events is supposed to be the modern way, but it didn't work.
+        if (window.PointerEvent) {
+//        if (false) { // ToDo: using pointer events is supposed to be the modern way, but it didn't work.
             this.c.addEventListener('pointermove', (e) => { this.pointermove_handler(e); });
             this.c.addEventListener('pointerdown', (e) => { this.pointerdown_handler(e); });
-            this.c.addEventListener('pointerend', (e) => { this.pointerup_handler(e); });
+            this.c.addEventListener('pointerup', (e) => { this.pointerup_handler(e); });
         } else {
             this.c.addEventListener('mousemove', (e) => { this.mousemove_handler(e); }, false);
             this.c.addEventListener('mousedown', (e) => { this.mousedown_handler(e); }, false);
@@ -203,6 +203,7 @@ class CanvasController {
 
     touchmove_handler(e) {
         if (e.touches.length === 1) {
+            e.preventDefault();
             const touch = e.touches[0];
             //ToDo: dragMove(touch.clientX, touch.clientY);
             new_e = { "x": touch.clientX, "y": touch.clientY };
@@ -227,6 +228,7 @@ class CanvasController {
     }
 
     pointermove_handler(e) {
+        e.preventDefault();
         new_e = { "x": e.clientX, "y": e.clientY };
         this.mousemove_handler(new_e);
     }
