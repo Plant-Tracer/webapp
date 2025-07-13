@@ -89,7 +89,6 @@ class CanvasController {
         // This took me several hours to figure out.
 
         if (window.PointerEvent) {
-//        if (false) { // ToDo: using pointer events is supposed to be the modern way, but it didn't work.
             this.c.addEventListener('pointermove', (e) => { this.pointermove_handler(e); });
             this.c.addEventListener('pointerdown', (e) => { this.pointerdown_handler(e); });
             this.c.addEventListener('pointerup', (e) => { this.pointerup_handler(e); });
@@ -196,7 +195,7 @@ class CanvasController {
             e.preventDefault();
             const touch = e.touches[0];
             //ToDo: startDrag(touch.clientX, touch.clientY);
-            new_e = { "x": touch.clientX, "y": touch.clientY };
+            let new_e = { "x": touch.clientX, "y": touch.clientY };
             this.mousedown_handler(new_e);
         }
     }
@@ -206,7 +205,7 @@ class CanvasController {
             e.preventDefault();
             const touch = e.touches[0];
             //ToDo: dragMove(touch.clientX, touch.clientY);
-            new_e = { "x": touch.clientX, "y": touch.clientY };
+            let new_e = { "x": touch.clientX, "y": touch.clientY };
             this.mousemove_handler(new_e);
         }
     }
@@ -221,21 +220,21 @@ class CanvasController {
         e.preventDefault();
         
         //startDrag(e.clientX, e.clientY);
-        new_e = { "x": touch.clientX, "y": touch.clientY };
+        let new_e = { "x": e.clientX, "y": e.clientY };
         this.mousedown_handler(new_e);
 
-        image.setPointerCapture(e.pointerId);
+        this.c.setPointerCapture(e.pointerId);
     }
 
     pointermove_handler(e) {
         e.preventDefault();
-        new_e = { "x": e.clientX, "y": e.clientY };
+        let new_e = { "x": e.clientX, "y": e.clientY };
         this.mousemove_handler(new_e);
     }
 
     pointerup_handler(e) {
         this.mouseup_handler();
-        image.releasePointerCapture(e.pointerId);
+        this.c.releasePointerCapture(e.pointerId);
     }
 
     resize(width, height) {
