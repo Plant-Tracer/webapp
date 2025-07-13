@@ -134,8 +134,9 @@ class CanvasController {
         }
     }
 
-    // Mouse handling
-    getMousePosition(e) {
+    // -- pointer device-independent marker drag handling
+
+    getPointerLocation(e) {
         let rect = this.c.getBoundingClientRect();
         return {
             x: (Math.round(e.x) - rect.left) / this.zoom,
@@ -143,60 +144,67 @@ class CanvasController {
         };
     }
 
-    mousedown_handler(e) {
-        let mousePosition = this.getMousePosition(e);
+    startMarkerDrag(e) {
+        let pointerPosition = this.getPointerLocation(e);
         // if an object is selected, unselect it
         this.clear_selection();
 
         // find the object clicked in
         for (let i = 0; i < this.objects.length; i++) {
             let obj = this.objects[i];
-            if (obj.draggable && obj.contains_point(mousePosition)) {
+            if (obj.draggable && obj.contains_point(pointerPosition)) {
                 this.selected = obj;
                 // change the cursor to crosshair if something is selected
                 this.c.style.cursor = 'crosshair';
             }
         }
-        this.redraw('mousedown_handler');
+        this.redraw();
     }
 
-    mousemove_handler(e) {
+    moveMarker(e) {
         if (this.selected == null) {
             return;
         }
-        const mousePosition = this.getMousePosition(e);
+        const mousePosition = this.getPointerLocation(e);
 
         // update position
         // Update the position in the selected object
         this.selected.x = mousePosition.x;
         this.selected.y = mousePosition.y;
-        this.redraw('mousemove_handler');
+        this.redraw();
         this.object_did_move(this.selected);
     }
 
-    mouseup_handler(_) {
+    endMarkerDrag(_) {
         // if an object is selected, unselect and change back the cursor
         let obj = this.selected;
         this.clear_selection();
         this.c.style.cursor = 'auto';
-        this.redraw('mouseup_handler');
+        this.redraw();
         this.object_move_finished(obj);
     }
 
-    // ToDo: Touch and Pointer event handlers added after mouse event handlers were implemented.
-    //       Refactoring all these to use common movement functions rather than writing movement
-    //       in terms of the mouse abstractions would be more general and elegant.
-    //       But during initial development and testing of touch and pointer handling, if it 
-    //       ain't broke don't fix it. -SEB
+    // -- Mouse event handlers --
+
+    mousedown_handler(e) {
+        this.startMarkerDrag(e);
+    }
+
+    mousemove_handler(e) {
+        this.moveMarker(e);
+    }
+
+    mouseup_handler(_) {
+        this.endMarkerDrag();
+    }
 
     // -- Touch event handlers --
     touchstart_handler(e) {
         if (e.touches.length === 1) {
             e.preventDefault();
             const touch = e.touches[0];
-            //ToDo: startDrag(touch.clientX, touch.clientY);
             let new_e = { "x": touch.clientX, "y": touch.clientY };
-            this.mousedown_handler(new_e);
+            this.startMarkerDrag(new_e);
         }
     }
 
@@ -204,36 +212,31 @@ class CanvasController {
         if (e.touches.length === 1) {
             e.preventDefault();
             const touch = e.touches[0];
-            //ToDo: dragMove(touch.clientX, touch.clientY);
             let new_e = { "x": touch.clientX, "y": touch.clientY };
-            this.mousemove_handler(new_e);
+            this.markerMove(new_e);
         }
     }
 
     touchend_handler() {
-        //ToDo: endDrag();
-        this.mouseup_handler();
+        this.endMarkerDrag();
     }
 
     // -- Pointer event handlers --
     pointerdown_handler(e) {
         e.preventDefault();
-        
-        //startDrag(e.clientX, e.clientY);
         let new_e = { "x": e.clientX, "y": e.clientY };
-        this.mousedown_handler(new_e);
-
+        this.startMarkerDrag(new_e);
         this.c.setPointerCapture(e.pointerId);
     }
 
     pointermove_handler(e) {
         e.preventDefault();
         let new_e = { "x": e.clientX, "y": e.clientY };
-        this.mousemove_handler(new_e);
+        this.moveMarker(new_e);
     }
 
     pointerup_handler(e) {
-        this.mouseup_handler();
+        this.endMarkerDrag();
         this.c.releasePointerCapture(e.pointerId);
     }
 
