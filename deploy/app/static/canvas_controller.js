@@ -165,12 +165,12 @@ class CanvasController {
         if (this.selected == null) {
             return;
         }
-        const mousePosition = this.getPointerLocation(e);
+        const pointerPosition = this.getPointerLocation(e);
 
         // update position
         // Update the position in the selected object
-        this.selected.x = mousePosition.x;
-        this.selected.y = mousePosition.y;
+        this.selected.x = pointerPosition.x;
+        this.selected.y = pointerPosition.y;
         this.redraw();
         this.object_did_move(this.selected);
     }
