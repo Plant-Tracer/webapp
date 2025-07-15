@@ -85,6 +85,8 @@ describe('CanvasController', () => {
   });
 
   test('startMarkerDrag with valid event', () => {
+    const obj = new CanvasItem(1, 2, 'test');
+    controller.add_object(obj);
     const e = { x: 10, y: 20 };
     controller.startMarkerDrag(e);
     expect(controller.selected).toBeDefined();

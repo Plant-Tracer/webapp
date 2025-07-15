@@ -327,6 +327,13 @@ class CanvasItem {
         return false;
     }
 
+    // default - subclasses should override this
+    draw(ctx, selected) {
+        ctx.save();
+        ctx.fillText(this.name, this.x, this.y);
+        ctx.restore();
+    }
+
     // Return the location as an "x,y" string
     loc() {
         return "(" + Math.round(this.x) + "," + Math.round(this.y) + ")";
