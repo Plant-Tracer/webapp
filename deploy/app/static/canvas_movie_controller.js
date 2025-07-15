@@ -13,7 +13,7 @@
 
 const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
 
-import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.js";
+import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.mjs";
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {

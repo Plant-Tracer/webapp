@@ -1,5 +1,8 @@
 "use strict";
 /* jshint esversion: 8 */
+/* eslint-env es6 */
+/* eslint parserOptions: { "sourceType": "module" } */
+
 // code for /analyze
 
 /***
@@ -63,7 +66,7 @@
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $(canvas_selector);
-        if (canvas == null) {
+        if (canvas == null  || !canvas.length) {
             console.log("CanvasController: Cannot find canvas=", canvas_selector);
             return;
         }

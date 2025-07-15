@@ -6,8 +6,12 @@
 import $ from 'jquery';
 global.$ = $;
 
-import { CanvasController, CanvasItem, Marker, WebImage, Line, Text } from '../deploy/app/static/canvas_controller.js';
+import { CanvasController, CanvasItem, Marker, WebImage, Line, Text } from 'canvas_controller.mjs';
 const CanvasText = Text;
+
+beforeAll(() => {
+  document.body.innerHTML = '<!doctype html><html><body><canvas id="test-canvas" width="100" height="100"></canvas></body></html>';
+});
 
 describe('CanvasController', () => {
   let controller;
@@ -36,11 +40,11 @@ describe('CanvasController', () => {
   });
 
   test('add_object with invalid object', () => {
-    expect(() => controller.add_object(null)).not.toThrow();
+    expect(() => controller.add_object(null)).toThrow(TypeError);
   });
 
   test('add_object with missing parameter', () => {
-    expect(() => controller.add_object()).not.toThrow();
+    expect(() => controller.add_object()).toThrow(TypeError);
   });
 
   test('clear_objects removes all objects', () => {

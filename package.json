@@ -16,26 +16,27 @@
     "eslint-config-jquery": "^3.0.2",
     "eslint-formatter-friendly": "^7.0.0",
     "jest": "^29.7.0",
+    "jest-canvas-mock": "^2.5.2",
     "jest-environment-jsdom": "^29.7.0",
     "jest-fail-on-console": "^3.3.1",
     "jest-fetch-mock": "^3.0.3",
     "regenerator-runtime": "^0.14.1"
   },
   "scripts": {
-    "test-debug": "node --experimental-vm-modules --trace-warnings --unhandled-rejections=warn-with-error-code node_modules/jest/bin/jest.js --maxWorkers 1 --verbose --expand",
-    "test": "jest",
-    "coverage": "jest --collectCoverage --"
+    "test-debug": "node --experimental-vm-modules --trace-warnings --unhandled-rejections=warn-with-error-code node_modules/jest/bin/jest.js --maxWorkers 1 --verbose --expand --debug --no-cache",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --collectCoverage --"
   },
   "jest": {
     "setupFiles": [
-      "<rootDir>/jstests/setupTests.js"
+      "<rootDir>/jstests/setupTests.js",
+      "jest-canvas-mock"
     ],
     "moduleDirectories": [
       "node_modules",
       "deploy/app/static"
     ],
     "testEnvironment": "jsdom",
-    "type": "module",
     "coverageDirectory": "coverage",
     "coverageReporters": [
       "json",
@@ -45,6 +46,9 @@
     ],
     "transform": {
       "^.+\\.jsx?$": "babel-jest"
-    }
+    },
+    "testMatch": [
+      "**/?(*.)+(spec|test).(mjs|js)"
+    ]
   }
 }
