@@ -148,11 +148,15 @@ class CanvasController {
     }
 
     startMarkerDrag(e) {
-        let pointerPosition = this.getPointerLocation(e);
         // if an object is selected, unselect it
         this.clear_selection();
 
+        if (!e || !e.x || !e.y) {
+            throw new Error('startMarkerDrag: missing or invalid event');
+        }
+
         // find the object clicked in
+        let pointerPosition = this.getPointerLocation(e);
         for (let i = 0; i < this.objects.length; i++) {
             let obj = this.objects[i];
             if (obj.draggable && obj.contains_point(pointerPosition)) {
@@ -168,6 +172,11 @@ class CanvasController {
         if (this.selected == null) {
             return;
         }
+
+        if (!e || !e.x || !e.y) {
+            throw new Error('moveMarker: missing or invalid event');
+        }
+
         const pointerPosition = this.getPointerLocation(e);
 
         // update position

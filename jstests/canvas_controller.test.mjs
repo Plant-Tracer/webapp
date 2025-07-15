@@ -16,7 +16,13 @@ beforeAll(() => {
 describe('CanvasController', () => {
   let controller;
   beforeEach(() => {
-    controller = new CanvasController('#test-canvas');
+    controller = new CanvasController('#test-canvas', '100');
+  });
+
+  test('constructor with valid selector and PointerEvent present', () => {
+    window.PointerEvent = true;
+    expect(controller.c).toBeDefined();
+    expect(controller.ctx).toBeDefined();
   });
 
   test('constructor with valid selector', () => {
@@ -77,7 +83,28 @@ describe('CanvasController', () => {
   test('getPointerLocation with missing event', () => {
     expect(() => controller.getPointerLocation()).toThrow();
   });
-});
+
+  test('startMarkerDrag with valid event', () => {
+    const e = { x: 10, y: 20 };
+    controller.startMarkerDrag(e);
+    expect(controller.selected).toBeDefined();
+  });
+
+  test('startMarkerDrag with missing event', () => { 
+    expect(() => controller.startMarkerDrag()).toThrow(Error);
+  });
+
+  test('startMarkerDrag with invalid event', () => {
+    expect(() => controller.startMarkerDrag({})).toThrow(Error);
+  });
+
+  test('moveMarker with valid event', () => {
+    const e = { x: 10, y: 20 };
+    controller.moveMarker(e);
+    expect(controller.selected).toBeDefined();
+  });
+
+  });
 
 describe('CanvasItem', () => {
   test('constructor with valid params', () => {
@@ -97,6 +124,16 @@ describe('CanvasItem', () => {
   test('contains_point always false', () => {
     const item = new CanvasItem(1, 2, 'item');
     expect(item.contains_point({ x: 1, y: 2 })).toBe(false);
+  });
+
+  test('loc with valid params', () => {
+    const item = new CanvasItem(1, 2, 'item');
+    expect(item.loc()).toBe('(1,2)');
+  });
+
+  test('loc with missing params', () => {
+    const item = new CanvasItem();
+    expect(item.loc()).toBe('(NaN,NaN)');
   });
 });
 
