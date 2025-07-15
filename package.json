@@ -42,6 +42,9 @@
       "lcov",
       "text",
       "clover"
-    ]
+    ],
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    }
   }
 }
