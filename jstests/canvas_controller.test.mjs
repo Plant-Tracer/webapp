@@ -3,6 +3,7 @@
  * @jest-environment jsdom
  */
 
+import { jest } from '@jest/globals';
 import $ from 'jquery';
 global.$ = $;
 
@@ -106,6 +107,50 @@ describe('CanvasController', () => {
     expect(controller.selected).toBeDefined();
   });
 
+  test('should start dragging a marker', () => {
+    const marker = new Marker(50, 50, 10, 'red', 'black', 'test-marker');
+    controller.add_object(marker);
+    
+    // Create a mock event at the marker's position
+    const mockEvent = {
+      x: 50,
+      y: 50
+    };
+    
+    controller.startMarkerDrag(mockEvent);
+    
+    // Verify the marker is selected
+    expect(controller.selected).toBe(marker);
+    expect(controller.c.style.cursor).toBe('crosshair');
+  });
+
+  test('should move marker diagonally and end drag', () => {
+    const marker = new Marker(50, 50, 10, 'red', 'black', 'test-marker');
+    controller.add_object(marker);
+    
+    // Start dragging at original position
+    const startEvent = { x: 50, y: 50 };
+    controller.startMarkerDrag(startEvent);
+    expect(controller.selected).toBe(marker);
+    
+    // Move diagonally up and right in 2-unit increments (5 moves for 10 units total)
+    for (let i = 1; i <= 5; i++) {
+      const moveEvent = { x: 50 + (i * 2), y: 50 - (i * 2) };
+      controller.moveMarker(moveEvent);
+    }
+    
+    // Verify final position (should be at 60, 40)
+    expect(marker.x).toBe(60);
+    expect(marker.y).toBe(40);
+    
+    // End the drag
+    controller.endMarkerDrag();
+    
+    // Verify drag is ended
+    expect(controller.selected).toBeNull();
+    expect(controller.c.style.cursor).toBe('auto');
+  });
+
   });
 
 describe('CanvasItem', () => {
@@ -178,6 +223,22 @@ describe('Line', () => {
     expect(line.x2).toBeUndefined();
     expect(line.y2).toBeUndefined();
   });
+
+  test('draw does not throw', () => {
+    const line = new Line(0, 0, 10, 10, 2, 'blue');
+    // Create a mock canvas context with required methods
+    const ctx = {
+      save: jest.fn(),
+      beginPath: jest.fn(),
+      lineWidth: 0,
+      moveTo: jest.fn(),
+      lineTo: jest.fn(),
+      strokeStyle: '',
+      stroke: jest.fn(),
+      restore: jest.fn(),
+    };
+    expect(() => line.draw(ctx, false)).not.toThrow();
+  });
 });
 
 describe('CanvasText', () => {
@@ -195,6 +256,17 @@ describe('CanvasText', () => {
     expect(text.y).toBeUndefined();
     expect(text.name).toBeUndefined();
   });
+
+  test('draw does not throw', () => {
+    const text = new CanvasText(1, 2, 'hello', 'green');
+    // Create a mock canvas context with required methods
+    const ctx = {
+      save: jest.fn(),
+      font: '',
+      fillText: jest.fn(),
+    };
+    expect(() => text.draw(ctx, false)).not.toThrow();
+  });
 });
 
 describe('WebImage', () => {
@@ -210,6 +282,28 @@ describe('WebImage', () => {
     expect(img.x).toBeUndefined();
     expect(img.y).toBeUndefined();
     expect(img.url).toBeUndefined();
+  });
+
+  test('draw does not throw when loaded', () => {
+    const img = new WebImage(0, 0, 'http://example.com/image.png');
+    img.loaded = true;
+    img.img = { naturalWidth: 100, naturalHeight: 50 };
+    const ctx = {
+      drawImage: jest.fn(),
+      fillText: jest.fn(),
+    };
+    expect(() => img.draw(ctx, false)).not.toThrow();
+  });
+
+  test('draw does not throw when not loaded', () => {
+    const img = new WebImage(0, 0, 'http://example.com/image.png');
+    img.loaded = false;
+    img.img = { src: 'http://example.com/image.png', naturalWidth: 100 };
+    const ctx = {
+      drawImage: jest.fn(),
+      fillText: jest.fn(),
+    };
+    expect(() => img.draw(ctx, false)).not.toThrow();
   });
 });
 
