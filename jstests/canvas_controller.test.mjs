@@ -153,6 +153,58 @@ describe('CanvasController', () => {
 
   });
 
+describe('CanvasController event handlers', () => {
+  let controller;
+  beforeEach(() => {
+    controller = new CanvasController('#test-canvas', '100');
+    // Add a marker for selection/movement
+    const marker = new Marker(50, 50, 10, 'red', 'black', 'test-marker');
+    controller.add_object(marker);
+  });
+
+  test('mousedown_handler selects marker', () => {
+    const event = { x: 50, y: 50 };
+    controller.mousedown_handler(event);
+    expect(controller.selected).toBeDefined();
+  });
+
+  test('mousemove_handler moves marker', () => {
+    const event = { x: 50, y: 50 };
+    controller.startMarkerDrag(event);
+    const moveEvent = { x: 60, y: 60 };
+    controller.mousemove_handler(moveEvent);
+    expect(controller.selected).toBeDefined();
+  });
+
+  test('mouseup_handler ends drag', () => {
+    const event = { x: 50, y: 50 };
+    controller.startMarkerDrag(event);
+    controller.mouseup_handler();
+    expect(controller.selected).toBeNull();
+  });
+
+  test('touchstart_handler selects marker', () => {
+    const event = { touches: [{ clientX: 50, clientY: 50 }], preventDefault: jest.fn() };
+    controller.touchstart_handler(event);
+    expect(controller.selected).toBeDefined();
+  });
+
+  test('touchmove_handler moves marker', () => {
+    const startEvent = { touches: [{ clientX: 50, clientY: 50 }], preventDefault: jest.fn() };
+    controller.touchstart_handler(startEvent);
+    const moveEvent = { touches: [{ clientX: 60, clientY: 60 }], preventDefault: jest.fn() };
+    controller.touchmove_handler(moveEvent);
+    expect(controller.selected).toBeDefined();
+  });
+
+  test('touchend_handler ends drag', () => {
+    const startEvent = { touches: [{ clientX: 50, clientY: 50 }], preventDefault: jest.fn() };
+    controller.touchstart_handler(startEvent);
+    controller.touchend_handler();
+    expect(controller.selected).toBeNull();
+  });
+});
+
 describe('CanvasItem', () => {
   test('constructor with valid params', () => {
     const item = new CanvasItem(1, 2, 'item');

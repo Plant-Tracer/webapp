@@ -225,7 +225,7 @@ class CanvasController {
             e.preventDefault();
             const touch = e.touches[0];
             let new_e = { "x": touch.clientX, "y": touch.clientY };
-            this.markerMove(new_e);
+            this.moveMarker(new_e);
         }
     }
 
