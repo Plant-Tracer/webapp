@@ -2,7 +2,9 @@
 
 canvas {
     border: 1px solid black;
+    touch-action: none;
 }
+
 .float-movie {
     float: left;
     padding: 2px;
