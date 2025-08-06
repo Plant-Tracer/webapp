@@ -84,19 +84,23 @@ Setup Steps
 
       make pytest
 
-#. Create your first course! If you want, give it a demo account too:
+#. Create your first course!:
 
-   * "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+   * --course_name "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+
+   * --course_id is a simple unique identfier for the course. (--course_name is more descriptive)
 
    * --admin-email is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is joecool@company.com, then an admin email address might be joecool+admin@company.com
 
    * --admin-name "Your Name" should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
 
-   * --demo_email is the email address for a demo user. A demo user is logged in by default when the PlantTracer server is started in demo mode. Omit this parameter if there is no need to use this course in demo mode.
-
    .. code-block::
 
-    python dbutil.py --create_course "My Course Name" --course_id "My Course ID" --admin_email your_admin_email@company.com --admin_name "Your Name" 
+    export AWS_ACCESS_KEY_ID=plant_tracer_access
+    export AWS_ACCESS_SECRET_KEY=plant_tracer_secret
+    export AWS_DEFAULT_REGION=ignored
+    export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
+    python dbutil.py --create_course --course_name "My Course Name" --course_id "My Course ID" --admin_email your_admin_email@company.com --admin_name "Your Name" 
 
 #. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
 
@@ -123,6 +127,9 @@ Running Locally Quick Start
 
    .. code-block::
 
+    export AWS_ACCESS_KEY_ID=plant_tracer_access
+    export AWS_ACCESS_SECRET_KEY=plant_tracer_secret
+    export AWS_DEFAULT_REGION=ignored
     export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
     make run-local-debug # Ctrl-C to quit
 
