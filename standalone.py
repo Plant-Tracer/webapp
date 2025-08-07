@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--loginfo", help='print the loggers', action='store_true')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--workers', type=int, default=2)
+
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)

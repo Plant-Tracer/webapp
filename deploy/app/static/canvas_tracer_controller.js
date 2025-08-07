@@ -1,5 +1,10 @@
-// code for /analyze
 "use strict";
+
+//code for /analyze
+
+/* eslint-env es6 */
+/* eslint parserOptions: { "sourceType": "module" } */
+
 /* jshint esversion: 8 */
 /*global api_key,movie_id,API_BASE,STATIC_BASE,URL */
 /*global console,alert */
@@ -27,7 +32,7 @@ var cell_id_counter = 0;
 var div_id_counter  = 0;
 var div_template = '';          // will be set with the div template
 
-import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.js";
+import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
 

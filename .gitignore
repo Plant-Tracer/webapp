@@ -28,6 +28,7 @@ eggs/
 parts/
 sdist/
 var/
+logs/
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -199,3 +200,4 @@ layer
 sam-installation
 *.slg
 TAGS
+bin/

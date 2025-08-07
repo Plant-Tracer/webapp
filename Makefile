@@ -167,11 +167,14 @@ run-local-demo-debug:
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
 	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
+
+DEBUG:="LOG_LEVEL=DEBUG $(PYTHON) standalone.py"
+
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
-	PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  $venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
