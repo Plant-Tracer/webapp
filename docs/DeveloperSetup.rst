@@ -94,13 +94,31 @@ Setup Steps
 
    * --admin-name "Your Name" should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
 
+   * Set up the environment as in the command below
+
    .. code-block::
 
-    export AWS_ACCESS_KEY_ID=plant_tracer_access
-    export AWS_ACCESS_SECRET_KEY=plant_tracer_secret
-    export AWS_DEFAULT_REGION=ignored
-    export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
-    python dbutil.py --create_course --course_name "My Course Name" --course_id "My Course ID" --admin_email your_admin_email@company.com --admin_name "Your Name" 
+    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
+
+#. The information for the new course will be output and look something like this:
+
+   .. code-block::
+    
+    creating course...
+    2025-08-07 17:42:36,177  odb.py:376 WARNING: NOTE: create_user does not check to make sure user sbarber2+admin@gmail.com's course test exists
+    Transaction succeeded: user inserted.
+    created test
+    {
+        "admins_for_course": [
+            "udcaba1d8-3f26-4a62-86bc-46f4144c2d4c"
+        ],
+        "course_id": "test",
+        "max_enrollment": "50",
+        "course_name": "Test Course",
+        "course_key": "2b32-4faf"
+    }
+
+#. Note the course_key value: this value is what to give users in order that they can register for the course.
 
 #. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
 
@@ -127,9 +145,6 @@ Running Locally Quick Start
 
    .. code-block::
 
-    export AWS_ACCESS_KEY_ID=plant_tracer_access
-    export AWS_ACCESS_SECRET_KEY=plant_tracer_secret
-    export AWS_DEFAULT_REGION=ignored
     export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
     make run-local-debug # Ctrl-C to quit
 

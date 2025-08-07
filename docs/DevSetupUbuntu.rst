@@ -33,4 +33,16 @@ Setting Up Plant-Tracer webapp on Ubuntu 24.04
     make make-local-demo
     make run-local-debug
 
-- Now proceed with the relevant :doc:`DeveloperSetup` steps.
+- This will output a URL to login to the demo course that allows editing -- of the form::
+
+    *****
+    ***** Login with http://localhost:8080/list?api_key=ab3bc1e2673a647e08d8b1283e8484293
+    *****
+
+- To stop the Plant Tracer server, Ctrl-C out of it.
+
+- To stop the local DynamoDB and Minio, and delete the database entirely::
+
+    make delete-local
+
+- There is some more information in :doc:`DeveloperSetup` document.
