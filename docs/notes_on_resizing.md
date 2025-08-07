@@ -1,3 +1,5 @@
+# Notes on Resizing
+
 ```
 LD50-P [ec2-user@mv1 ~]$ df -h
 Filesystem      Size  Used Avail Use% Mounted on

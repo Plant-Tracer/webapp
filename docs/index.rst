@@ -18,6 +18,10 @@ Welcome to Plant Tracer Web Application's documentation!
    DevSetupAmazonLinuxEC2
    DevSetupUbuntu
    WindowsDevSetup
+   Local Development and Github Actions
+   EnvironmentVariables
+   DynamoDB
+   S3
    Installation
    THEORY_OF_DESIGN
    gallery
@@ -30,6 +34,7 @@ Welcome to Plant Tracer Web Application's documentation!
    README_SAM
    sam_notes
    mv1
+   notes_on_resizing
 
 Indices and tables
 ==================
