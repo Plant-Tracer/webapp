@@ -65,7 +65,7 @@ Release Notes
 *************
 
     * dbmaint: add --add_admin and --remove_admin commands
-    
+
 0.9.3 Summary
 *************
 
@@ -87,7 +87,6 @@ Release Notes
     * Copyright and Terms of Use: page cleanup
     * dbmaint: help documentation cleanup
     * Documentation: converted from Markup to ReStructuredText. Index created.
-    * Documentation: update and make more complete, including MySQL setup instructions
+    * Documentation: update and make more complete
     * Documentation: Installation steps updated
     * Documentation: Add ReleaseHistory page
-  

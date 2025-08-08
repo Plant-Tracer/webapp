@@ -6,9 +6,14 @@ import localmail
 import time
 import sys
 import os
+import json
 from os.path import join,dirname,abspath
 
 import app.auth as auth
+from app.constants import C
+from app import mailer
+from app.mailer import SMTP_HOST, SMTP_PORT, SMTP_NO_TLS, SMTP_USERNAME, SMTP_PASSWORD, IMAP_HOST, IMAP_PORT, IMAP_NO_SSL, IMAP_USERNAME, IMAP_PASSWORD
+
 
 def singleton(cls):
     instances = {}
@@ -46,23 +51,20 @@ class Localmail():
         self.mailbox = 'localmail.mbox'
 
         self.localmail_config = configparser.ConfigParser()
-        self.localmail_config.read( auth.credentials_file() )
-        if 'localmail' not in self.localmail_config:
-            logging.warning('[localmail] not found in config. Using default values.')
-        else:
-            self.smtp_port = int(self.localmail_config['localmail']['smtp_port'])
-            self.imap_port = int(self.localmail_config['localmail']['imap_port'])
-            try:
-                self.http_port = int(self.localmail_config['localmail']['http_port'])
-            except KeyError:
-                self.http_port = None
-            try:
-                self.mailbox = self.localmail_config['localmail']['mailbox']
-            except KeyError:
-                self.http_port = None
+        self.localmail_config.add_section('smtp')
+        self.localmail_config.set('smtp',SMTP_HOST,'localhost')
+        self.localmail_config.set('smtp',SMTP_PORT,str(self.smtp_port))
+        self.localmail_config.set('smtp',SMTP_USERNAME,'X')
+        self.localmail_config.set('smtp',SMTP_PASSWORD,'X')
+        self.localmail_config.set('smtp',SMTP_NO_TLS,'Y')
 
-        logging.info("smtp_port=%s imap_port=%s http_port=%s mailbox=%s",
-                     self.smtp_port, self.imap_port, self.http_port, self.mailbox)
+
+        self.localmail_config.add_section('imap')
+        self.localmail_config.set('imap',IMAP_HOST,'localhost')
+        self.localmail_config.set('imap',IMAP_PORT,str(self.imap_port))
+        self.localmail_config.set('imap',IMAP_NO_SSL,'Y')
+        self.localmail_config.set('imap',IMAP_USERNAME,'X')
+        self.localmail_config.set('imap',IMAP_PASSWORD,'X')
 
         mutex.acquire()
         thread = threading.Thread(
@@ -85,9 +87,14 @@ class Localmail():
         with open( self.mailbox,"w") as f:
             print(f.truncate())
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mailer_config():
     lm = Localmail()
+    os.environ[C.SMTPCONFIG_JSON] =  json.dumps(dict(lm.localmail_config['smtp']),default=str)
     yield lm.localmail_config
+    try:
+        del os.environ[C.SMTPCONFIG_JSON]
+    except KeyError:
+        pass                    # this shouldn't happen, but it did in testing...
     lm.dump_mailbox()
     lm.clear_mailbox()

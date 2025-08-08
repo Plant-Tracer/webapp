@@ -1,26 +1,46 @@
 # Makefile for Planttracer web application
+# - Local development
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
+#
+# Environment variables:
+# PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
+#
 
-PYLINT_THRESHOLD=9.5
+PYLINT_THRESHOLD := 9.5
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
+# all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
+# See below for the rules
+
+REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
+LOCAL_BUCKET := planttracer-local
+LOCAL_HTTP_PORT := 8080
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
+MINIO_ENDPOINT := http://localhost:9100/
+
+AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
+AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
+AWS_ACCESS_KEY_ID := minioadmin
+AWS_SECRET_ACCESS_KEY := minioadmin
+AWS_DEFAULT_REGION=us-east-1
+MINIO_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
+DYNAMODB_VARS := AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION)
+LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
+
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
-REQ = venv/pyvenv.cfg
+
 PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
-ROOT_ETC=etc
 DEPLOY_ETC=deploy/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
-# Note: PLANTTRACER_CREDENTIALS must be set
-
-venv:
+venv/pyvenv.cfg:
 	@echo install venv for the development environment
 	python3 -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
@@ -28,21 +48,6 @@ venv:
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
 	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
-
-$(REQ):
-	make venv
-
-.PHONY: venv
-
-
-################################################################
-# SAM Commands
-
-sam-deploy:
-	sam validate
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
-	sam deploy --no-confirm-changeset
-	sam logs --tail
 
 
 ################################################################
@@ -53,27 +58,33 @@ sam-deploy:
 all:
 	@echo verify syntax and then restart
 	make pylint
+	make run-local
 
 check:
 	make pylint
 	make pytest
 
-################################################################
-## Program testing
-##
-## Static Analysis
+tags:
+	etags deploy/app/*.py tests/*.py tests/fixtures/*.py deploy/app/static/*.js
 
+################################################################
+## Program development: static analysis tools
+##
+
+## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy
-	$(PYTHON) -m pylint $(PYLINT_OPTS) *.py
+	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy *.py
 
+## Use this to also test the tests...
 pylint-tests: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" tests
+	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
+## Mypy static analysis
 mypy:
-	mypy --show-error-codes --pretty --ignore-missing-imports --strict .
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict deploy tests
 
+## black static analysis
 black:
 	black --line-length 127 .
 
@@ -81,118 +92,92 @@ black-check:
 	black --line-length 127 . --check
 	@echo "If this fails, simply run: make black"
 
+## isort
 isort:
 	isort . --profile=black
 
 isort-check:
 	isort --check . --profile=black
 
+## flake
 flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
-localmail-config:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	grep -q '\[smtp\]' $${PLANTTRACER_CREDENTIALS} || cat tests/etc/localmail.ini-stub >> $${PLANTTRACER_CREDENTIALS}
-
 ################################################################
+## Program development: dynamic analysis
 ##
-## Dynamic Analysis
-## If you are testing just one thing, put it here!
-#
-# In the tests below, we always test the database connectivity first
-# It makes no sense to run the tests otherwise
 
+## These tests now use fixtures that automatically create in-memory configurations and DynamoDB databases.
+## No environment variables need to be set.
+
+pytest:  $(REQ)
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests
+
+pytest-debug: $(REQ)
+	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
+
+pytest-coverage: $(REQ)
+	$(PIP_INSTALL) codecov pytest pytest_cov
+	$(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
+	@echo covreage report in htmlcov/
+
+# This doesn't work yet...
+pytest-selenium:
+	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/movie_tracker_test.py
 TEST1FUNCTION="-k test_movie_tracking"
 pytest1:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
 	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
-pytest:  $(REQ) localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=INFO .
-
-pytest-selenium:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
-
-pytest-debug: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	$(PYTHON) -m pytest --log-cli-level=DEBUG tests/dbreader_test.py
-	@echo dbreader_test is successful
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG
-
-pytest-app-framework:
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	@echo validate app framework
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/app_test.py -k test_templates
-
-pytest-quiet: localmail-config
-	if [ -z "$${PLANTTRACER_CREDENTIALS}" ]; then echo PLANTTRACER_CREDENTIALS is not set; exit 1; fi
-	@echo quietly make pytest and stop at the firt error
-	$(PYTHON) -m pytest --log-cli-level=ERROR tests/dbreader_test.py
-	@echo dbreader_test is successful
-	$(PYTHON) -m pytest --log-cli-level=ERROR
-
-test-schema-upgrade:
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1 || echo database does not exist
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --createdb test_db1 --schema $(ROOT_ETC)/schema_0.sql
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --upgradedb test_db1
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/mysql-root-localhost.ini --dropdb test_db1
-
-pytest-coverage: $(REQ) localmail-config
-	$(PIP_INSTALL) codecov pytest pytest_cov
-	$(PYTHON) -m pytest -v --cov=. --cov-report=xml tests
-
 ################################################################
-### Debug targets run running locally
+### Debug targets to develop and run locally.
 
-run-local:
-	@echo run bottle locally, storing new data in database
-	$(PYTHON) standalone.py --storelocal
+wipe-local:
+	@echo wiping all local artifacts and remaking the local bucket.
+	bin/local_minio_control.bash stop
+	bin/local_dynamodb_control.bash stop
+	/bin/rm -rf var
+	mkdir -p var
+	bin/local_minio_control.bash start
+	bin/local_dynamodb_control.bash start
+	make make-local-bucket
 
-run-local-network:
-	@echo run bottle locally, binding to all network interfaces, storing new data in database
-	$(PYTHON) standalone.py --storelocal --bind :8080
+delete-local:
+	@echo deleting all local artifacts
+	bin/local_minio_control.bash stop
+	bin/local_dynamodb_control.bash stop
+	/bin/rm -rf var
 
-run-local-demo:
-	@echo run bottle locally in demo mode, using local database
-	DEMO_MODE=1 $(PYTHON) standalone.py --storelocal
+make-local-demo:
+	@echo creating a local course called demo-course with the prefix demo-
+	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
+	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
+	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
-DEBUG:=$(PYTHON) standalone.py --loglevel DEBUG
-debug:
-	make debug-local
+run-local-debug:
+	@echo run bottle locally on the demo database, but allow editing.
+	LOG_LEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_DEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
-debug-local:
-	@echo run bottle locally in debug mode, storing new data in database
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG) --storelocal
+run-local-demo-debug:
+	@echo run bottle locally in demo mode, using local database and debug mode
+	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
-debug-single:
-	@echo run bottle locally in debug mode single-threaded
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)
 
-debug-multi:
-	@echo run bottle locally in debug mode multi-threaded
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-localhost.ini $(DEBUG)   --multi
-
-debug-dev:
-	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database
-	@echo for debugging Python and Javascript with remote database
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini $(DEBUG)
+DEBUG:="LOG_LEVEL=DEBUG $(PYTHON) standalone.py"
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
-	PLANTTRACER_CREDENTIALS=$(APP_ETC)/credentials-aws-dev.ini PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(DEBUG)
+	@echo This makes it easy to modify the JavaScript locally with the remote API support
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  $venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
+	@echo just test the tracker...
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
@@ -215,54 +200,170 @@ jstest-debug:
 
 
 ################################################################
-# Installations are used by the CI pipeline and by developers
-# $(REQ) gets made by the virtual environment installer, but you need to have python installed first.
-PLANTTRACER_LOCALDB_NAME ?= actions_test
+# DynamoDBLocal
+# Installations are used by the CI pipeline and by local developers
+# See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html for info about DynamoDB (local version)
 
-create_localdb:
-	test -n "$(PLANTTRACER_CREDENTIALS)" || (echo "PLANTTRACER_CREDENTIALS must be set"; exit 1)
-	test -n "$(MYSQL_ROOT_PASSWORD)" || (echo "MYSQL_ROOT_PASSWORD must be set"; exit 1)
-	@echo Creating local database, exercise the upgrade code and write credentials
-	@echo to $(PLANTTRACER_CREDENTIALS) using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	@echo $(PLANTTRACER_CREDENTIALS) will be used automatically by other tests
-	pwd
-	mkdir -p $(ROOT_ETC)
-	ls -l $(ROOT_ETC)
-	$(PYTHON) $(DBMAINT) --create_client=$$MYSQL_ROOT_PASSWORD --writeconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	ls -l $(ROOT_ETC)
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini  \
-                             --createdb $(PLANTTRACER_LOCALDB_NAME) \
-                             --schema $(DEPLOY_ETC)/schema_0.sql \
-                             --writeconfig $(PLANTTRACER_CREDENTIALS)
-	$(PYTHON) $(DBMAINT) --upgradedb --loglevel DEBUG
-	$(PYTHON) -m pytest -x --log-cli-level=DEBUG tests/dbreader_test.py
+# installation:
+DDBL_DOWNLOAD_URL:=https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.zip
+bin/dynamodb_local_latest.zip:
+	test -f bin/dynamodb_local_latest.zip || curl $(DDBL_DOWNLOAD_URL) -o bin/dynamodb_local_latest.zip
+	test -f bin/dynamodb_local_latest.zip || (echo could not download $(DDBL_DOWNLOAD_URL); exit 1)
+	find bin -ls
 
-remove_localdb:
-	@echo Removing local database using $(ROOT_ETC)/github_actions_mysql_rootconfig.ini
-	$(PYTHON) $(DBMAINT) --rootconfig $(ROOT_ETC)/github_actions_mysql_rootconfig.ini --dropdb $(PLANTTRACER_LOCALDB_NAME)
+bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
+	(cd bin; unzip -uq dynamodb_local_latest.zip DynamoDBLocal.jar 'DynamoDBLocal_lib/*')
+	touch bin/DynamoDBLocal.jar
+
+# operation:
+start_local_dynamodb: bin/DynamoDBLocal.jar
+	bash bin/local_dynamodb_control.bash start
+
+stop_local_dynamodb:  bin/DynamoDBLocal.jar
+	bash bin/local_dynamodb_control.bash stop
+
+list-tables:
+	$(DYNAMODB_VARS) aws dynamodb list-tables
+
+dump-demo-tables:
+	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
+		echo $$tn:; \
+		$(DYNAMODB_VARS) aws dynamodb describe-table --table-name $$tn ; \
+		$(DYNAMODB_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		done
 
 
-install-chromium-browser-ubuntu: $(REQ)
-	sudo apt-get install -y chromium-browser
-	chromium --version
+################################################################
+# Minio (S3 clone -- see: https://min.io/)
+# Installations are used by the CI pipeline and by local developers
 
-install-chromium-browser-macos: $(REQ)
-	brew install chromium --no-quarantine
+# installation:
+LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
+LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64/
+LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
+LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64/
+MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
+bin/minio:
+	@echo downloading and installing minio
+	mkdir -p bin
+	uname -a
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
+		@echo Linux amd64 ; \
+		curl $(LINUX_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
+		@echo Linux x86_64 ; \
+		curl $(LINUX_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
+		@echo Linux aarch64 ; \
+		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		@echo Linux arm64 ; \
+		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
+		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	fi
+	if [ "$$(uname -s)" = "Darwin" ] ; then \
+		@echo Darwin ; \
+		curl $(MACOS_BASE)/minio -o bin/minio ; \
+		brew install minio/stable/mc ; \
+	fi
 
+	chmod +x bin/minio
+	ls -l bin/minio
+	if [ "$$(uname -s)" = "Linux" ] ; then \
+		chmod +x bin/mc ; \
+		ls -l bin/mc ; \
+	fi
+
+
+# operation:
+start_local_minio: bin/minio
+	bash bin/local_minio_control.bash start
+
+stop_local_minio:  bin/minio
+	bash bin/local_minio_control.bash stop
+
+list-local-buckets:
+	$(MINIO_VARS) aws s3 --endpoint-url $(MINIO_ENDPOINT) ls
+
+make-local-bucket:
+	if $(MINIO_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
+	 	echo $(LOCAL_BUCKET) exists ; \
+	else \
+		echo creating s3://$(LOCAL_BUCKET)/ ; \
+		$(MINIO_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
+	fi
+	@echo local buckets:
+	$(MINIO_VARS) aws s3 ls
+
+
+################################################################
 # Includes ubuntu dependencies
-install-ubuntu: $(REQ)
+install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
-	which ffmpeg || sudo apt install ffmpeg
-	which node || sudo apt-get install nodejs
-	which npm || sudo apt-get install npm
+	sudo apt install curl
+	which ffmpeg || sudo apt install -y ffmpeg
+	which node || sudo apt install -y nodejs
+	which npm || sudo apt install -y npm
+	which chromium || sudo apt-get install -y chromium-browser
+	which lsof || sudo apt-get install -y lsof
 	npm ci
+	make $(REQ)
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
+
+# Includes MacOS dependencies managed through Brew
+install-macos:
+	brew update
+	brew upgrade
+	which python3 || brew install python3
+	which ffmpeg || brew install ffmpeg
+	which node || brew install node
+	which npm || brew install npm
+	which lsof || brew install lsof
+	which chromium || brew install chromium --no-quarantine
+	which aws || brew install awscli
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
+	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
+
+# Includes Windows dependencies
+# restart the shell after installs are done
+# choco install as administrator
+# Note: development on windows is not currently supported
+install-windows:
+	choco install -y make
+	choco install -y ffmpeg
+	choco install -y nodejs
+	choco install -y chromium
+	npm ci
+	npm install -g typescript webpack webpack-cli
+	make $(REQ)
+	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
+
+
+################################################################
+### Cleanup
+
+clean:
+	find . -name '*~' -exec rm {} \;
+	/bin/rm -rf __pycache__ */__pycache__
+
+## What follows is under development
+
+################################################################
+# SAM Commands - for deploying on AWS Lambda. This is all under development
 
 # Install for AWS Linux for running SAM
 # Start with:
 # sudo dfn install git && git clone --recursive https://github.com/Plant-Tracer/webapp && (cd webapp; make aws-install)
-install-aws:
+install-aws-sam-tools:
 	echo install for AWS Linux, for making the lambda.
 	echo note does not install ffmpeg currently
 	(cd $HOME; \
@@ -280,37 +381,11 @@ install-aws:
 	make $(REQ)
 	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
-# Includes MacOS dependencies managed through Brew
-install-macos:
-	brew update
-	brew upgrade
-	brew install python3
-	brew install ffmpeg
-	brew install node
-	brew install npm
-	npm ci
-	npm install -g typescript webpack webpack-cli
-	make $(REQ)
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
-
-# Includes Windows dependencies
-# restart the shell after installs are done	
-# choco install as administrator	
-install-windows: $(REQ)
-	choco install -y make
-	choco install -y ffmpeg
-	choco install -y nodejs
-	npm ci
-	npm install -g typescript webpack webpack-cli
-	make $(REQ)
-	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
-
-################################################################
-### Cleanup
-
-clean:
-	find . -name '*~' -exec rm {} \;
-	/bin/rm -rf __pycache__ */__pycache__
+sam-deploy:
+	sam validate
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
+	sam deploy --no-confirm-changeset
+	sam logs --tail
 
 ################################################################
 ### Compile JavaScript to TypeScript
