@@ -48,7 +48,7 @@ echo 'export CPPFLAGS="-I/opt/homebrew/opt/openjdk/include"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-2. Download the git repo.
+3. Download the git repo.
 
 ```
 % git clone --recursive https://github.com/Plant-Tracer/webapp.git
@@ -62,17 +62,15 @@ Resolving deltas: 100% (7355/7355), done.
 % 
 ```
 
-3. Use the macOS installer built into the Makefile:
+4. Use the macOS installer built into the Makefile:
 ```
 cd Makefile
 make install-macos
 ```
 
-4. Check to make sure our commit is valid:
+5. Check to make sure our commit is valid:
 ```
-make check
+make pylint
 make pytest
 ```
-
-5. 
 
