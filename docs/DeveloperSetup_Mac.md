@@ -1,6 +1,13 @@
 # Developer Setup Mac
 This tutorial takes a new macOS install and gets you to running PlantTracer locally and on Amazon.
 
+It makes use of the following services, which you will install:
+
+|Service|Endpoint|Purpose|
+|-----------|----|--------|
+|DynamoDBLocal.jar|http://localhost:8010/|AWS DynamoDB Emulator
+|Minio|http://localhost:9100/|AWS S3 Emulator
+
 # Initial mac Configuration
 1. Install developer tools.
  
@@ -52,5 +59,11 @@ Resolving deltas: 100% (7355/7355), done.
 % make install-macos
 ```
 
-4. 
+4. Check to make sure our commit is valid:
+```
+% make check
+% make pytest
+```
+
+5. 
 
