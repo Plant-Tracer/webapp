@@ -289,7 +289,7 @@ make-local-bucket:
 
 ################################################################
 # Includes ubuntu dependencies
-install-ubuntu:
+install-ubuntu: venv/pyvenv.cfg
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	sudo apt install curl
@@ -303,9 +303,10 @@ install-ubuntu:
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
 # Includes MacOS dependencies managed through Brew
-install-macos:
+install-macos: venv/pyvenv.cfg
 	brew update
 	brew upgrade
+	/usr/libexec/java_home  || brew install openjdk
 	which python3 || brew install python3
 	which ffmpeg || brew install ffmpeg
 	which node || brew install node
@@ -322,7 +323,7 @@ install-macos:
 # restart the shell after installs are done
 # choco install as administrator
 # Note: development on windows is not currently supported
-install-windows:
+install-windows: venv/pyvenv.cfg
 	choco install -y make
 	choco install -y ffmpeg
 	choco install -y nodejs
