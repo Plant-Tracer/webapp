@@ -19,8 +19,18 @@ Agree to the license agreement.
 ```
    
 <img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/53738f7e-3168-4041-a211-f6d1058ae0bd" />
+...
+<img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/03ccb527-14ba-4d0c-84d9-48bd337f93a1" />
+
 
 (You will need to enter your password and type **RETURN/ENTER**.)
+
+Follow the instructions and type:
+```
+echo >> /Users/simsong/.zprofile
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/simsong/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
 
 2. Download the git repo.
 
