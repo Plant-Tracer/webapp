@@ -22,14 +22,17 @@ LOCAL_HTTP_PORT := 8080
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT := http://localhost:9100/
 
-AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
-AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
+AWS_ENDPOINT_URL_S3 := $(MINIO_ENDPOINT)
+AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
 AWS_ACCESS_KEY_ID := minioadmin
 AWS_SECRET_ACCESS_KEY := minioadmin
 AWS_DEFAULT_REGION=us-east-1
-MINIO_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
-DYNAMODB_VARS := AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION)
+AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1
+MINIO_VARS := $(AWS_VARS)    AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
+DYNAMODB_VARS := $(AWS_VARS) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) 
 LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
+
+
 
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
@@ -233,6 +236,7 @@ dump-demo-tables:
 		done
 
 
+.PHONY: start_local_dynamodb stop_local_dynamodb list-tables dump-demo-tables
 ################################################################
 # Minio (S3 clone -- see: https://min.io/)
 # Installations are used by the CI pipeline and by local developers
@@ -306,7 +310,6 @@ install-ubuntu: venv/pyvenv.cfg
 install-macos: venv/pyvenv.cfg
 	brew update
 	brew upgrade
-	/usr/libexec/java_home  || brew install openjdk
 	which python3 || brew install python3
 	which ffmpeg || brew install ffmpeg
 	which node || brew install node
