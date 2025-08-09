@@ -248,29 +248,16 @@ bin/minio:
 	mkdir -p bin
 	uname -a
 	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
-		echo Linux amd64 ; \
-		curl $(LINUX_BASE)/minio -o bin/minio ; \
-		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
-	fi
-	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
-		echo Linux x86_64 ; \
-		curl $(LINUX_BASE)/minio -o bin/minio ; \
-		curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
-	fi
-	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
-		echo Linux aarch64 ; \
-		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
-		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
-	fi
-	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
-		echo Linux arm64 ; \
-		curl $(LINUX_ARM_BASE)/minio -o bin/minio ; \
-		curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
-	fi
-	if [ "$$(uname -s)" = "Darwin" ] ; then \
-		echo Darwin ; \
-		curl $(MACOS_BASE)/minio -o bin/minio ; \
-		brew install minio/stable/mc ; \
+		echo Linux amd64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
+		echo Linux x86_64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
+		echo Linux aarch64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		echo Linux arm64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
+	else \
+		echo unknown os/architecture; exit 1; \
 	fi
 	chmod +x bin/minio
 	ls -l bin/minio
