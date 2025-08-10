@@ -16,7 +16,7 @@ The following environment variables must be set to run Java programs on your Mac
 |PATH|Must include `/opt/homebrew/opt/openjdk/bin`|
 |CPPFLAGS|Must include `-I/opt/homebrew/opt/openjdk/include`
 
-The DynamoDBLocal and Minio programs require that the following AWS  variables be set. They can be set on the command line as environment variables (as is done in the Makefile), they can be set in your ~.zshrc file, or they can be in your ~/.aws/credentials and ~/.aws/config files:
+The DynamoDBLocal and Minio programs require that the following AWS  variables be set. They can be set on the command line as environment variables (as is done in the `Makefile`), they can be set in your `~/.zshrc` file, or they can be in your `~/.aws/credentials` and `~/.aws/config` files:
 
 |Variable|Value|
 |--------|-----|
