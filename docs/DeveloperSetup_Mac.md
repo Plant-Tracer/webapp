@@ -27,9 +27,8 @@ The DynamoDBLocal and Minio programs require that the following AWS  variables b
 |AWS_ENDPOINT_URL_DYNAMODB|http://localhost:8010/|
 
 
-
-
-# Initial mac Configuration
+# Mac Configuration
+## Prep your mac
 1. Install developer tools.
  
 From a clean install, open the Terminal window and type `make`. You should get an error message:
@@ -69,7 +68,9 @@ echo 'export CPPFLAGS="-I/opt/homebrew/opt/openjdk/include"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-3. Download the git repo.
+## Download and install the required software
+
+1. Download the git repo.
 
 ```
 % git clone --recursive https://github.com/Plant-Tracer/webapp.git
@@ -83,14 +84,14 @@ Resolving deltas: 100% (7355/7355), done.
 % 
 ```
 
-4. Use the macOS installer built into the Makefile:
+2. Use the macOS installer built into the Makefile to install additional software
 ```
 cd webapp
 make install-macos
 ```
 
 ## Each time you reboot
-Each time you reboot you will need to start these servers
+Now you must start the servers. You will also need to do this every time you reboot and want to develop.
 
 1. Start the local servers
 
@@ -100,7 +101,6 @@ make start_local_minio
 ```
 
 2. (First time through), make the local S3 bucket and verify it is there:
-
 
 ```
 make make-local-bucket
