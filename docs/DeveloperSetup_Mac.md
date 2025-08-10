@@ -8,6 +8,27 @@ It makes use of the following services, which you will install:
 |DynamoDBLocal.jar|http://localhost:8010/|AWS DynamoDB Emulator
 |Minio|http://localhost:9100/|AWS S3 Emulator
 
+
+The following environment variables must be set to run Java programs on your Mac with homebrew (we install these below in your ~/.zshrc file):
+
+|Variable|Value|
+|--------|-----|
+|PATH|Must include `/opt/homebrew/opt/openjdk/bin`|
+|CPPFLAGS|Must include `-I/opt/homebrew/opt/openjdk/include`
+
+The DynamoDBLocal and Minio programs require that the following AWS  variables be set. They can be set on the command line as environment variables (as is done in the Makefile), they can be set in your ~.zshrc file, or they can be in your ~/.aws/credentials and ~/.aws/config files:
+
+|Variable|Value|
+|--------|-----|
+|AWS_ACCESS_KEY_ID|minioadmin|
+|AWS_SECRET_ACCESS_KEY|minioadmin|
+|AWS_DEFAULT_REGION|us-east-1|
+|AWS_ENDPOINT_URL_S3|http://localhost:9100/|
+|AWS_ENDPOINT_URL_DYNAMODB|http://localhost:8010/|
+
+
+
+
 # Initial mac Configuration
 1. Install developer tools.
  
