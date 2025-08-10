@@ -335,3 +335,68 @@ Notice that our code automatically generates a WARNING of every table scan opera
 
 Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the `--makelink` option for the admin user. 
 
+Courses can be created the with `dbutil --create_course` command. Please review the source code in `dbutil.py`. You will see that this option requires the following arguments:
+
+https://github.com/Plant-Tracer/webapp/blob/e46ac75396755687c50d4dc87f2358e9206031e1/dbutil.py#L127-L144
+
+* `--course_id` -- a brief name of the course (e.g. `PLANT101`)
+* `--course_name` --- a longer name, (e.g. `"Introduction to Plant Movement"`)
+* `--admin_email` --- The admin's email
+* `--admin_name`  --- The admin's name
+* `--max_enrollment` --- The maximum number of studnets (defaults to 50)
+
+Let's try it:
+```
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --create_course --course_id PLANT101 --course_name "Introduction to Plant Movement" --admin_email "simsong@gmail
+.com" --admin_name "Simson Garfinkel"
+creating course...
+2025-08-10 10:40:25,248  odb.py:376 WARNING: NOTE: create_user does not check to make sure user simsong@gmail.com's course PLANT101 exists
+Transaction succeeded: user inserted.
+created PLANT101
+{
+    "admins_for_course": [
+        "u2a66cd2e-b18e-474c-b902-248530dd8612"
+    ],
+    "course_id": "PLANT101",
+    "max_enrollment": "50",
+    "course_name": "Introduction to Plant Movement",
+    "course_key": "8f61-414e"
+}
+(venv) simsong@Seasons-2 webapp %
+```
+
+Now let's try the report:
+```
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+table               .item_count    count_table_items()
+----------------  -------------  ---------------------
+dev-api_keys                  1                      1
+dev-users                     3                      3
+dev-movies                    2                      2
+dev-movie_frames              0                      0
+dev-courses                   2                      2
+dev-course_users              3                      3
+dev-logs                      0                      0
+(venv) simsong@Seasons-2 webapp %
+```
+Notice:
+* `dev-users` has gone from 2 to 3
+* `dev-courses` has gone from 1 to 2
+* `dev-course_users` has gone from 2 to 3
+
+To log in we will need a magic link that works with our existing endpoint (http://localhost:8080):
+
+```
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
+
+*****
+***** Login with http://localhost:8080/list?api_key=a71358e5d3c6f453cb363d0aa69ce5664
+*****
+(venv) simsong@Seasons-2 webapp %
+```
+
+And I should be able to log in with this:
+
+<img width="1191" height="985" alt="image" src="https://github.com/user-attachments/assets/a9309acc-090c-42a6-b1bf-73c23330a619" />
+
+
