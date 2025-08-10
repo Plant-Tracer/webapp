@@ -33,7 +33,7 @@ You will also want to set these variables:
 |`DYNAMODB_TABLE_PREFIX`|`demo-`|Prefix for all DynamoDB tables|
 
 You may optionally set these variables:
-|Variable|Value for `make pytest` in Github actions`|Purpose|
+|Variable|Value set for `make pytest` in Github actions|Purpose|
 |--------|-----|----|
 |`DEMO_COURSE_ID`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst) and `DEMO_COURSE_ID` specifies the course that is viewed.|
 |`LOG_LEVEL`|`DEBUG`|If set, all logging is at this log level|
