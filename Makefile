@@ -17,15 +17,17 @@ JS_FILES := $(TS_FILES:.ts=.js)
 # See below for the rules
 
 REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
-LOCAL_BUCKET := planttracer-local
-LOCAL_HTTP_PORT := 8080
-DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
-MINIO_ENDPOINT := http://localhost:9100/
+LOCAL_BUCKET=planttracer-local
+LOCAL_HTTP_PORT=8080
 
-AWS_ENDPOINT_URL_S3 := $(MINIO_ENDPOINT)
+
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
+MINIO_ENDPOINT=http://localhost:9100/
+
 AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
-AWS_ACCESS_KEY_ID := minioadmin
-AWS_SECRET_ACCESS_KEY := minioadmin
+AWS_ENDPOINT_URL_S3 := $(MINIO_ENDPOINT)
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_DEFAULT_REGION=us-east-1
 
 # AWS_VARS are required for any command that uses AWS
