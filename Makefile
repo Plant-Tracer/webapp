@@ -27,10 +27,8 @@ AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
 AWS_ACCESS_KEY_ID := minioadmin
 AWS_SECRET_ACCESS_KEY := minioadmin
 AWS_DEFAULT_REGION=us-east-1
-AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1
-MINIO_VARS := $(AWS_VARS)    AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT)
-DYNAMODB_VARS := $(AWS_VARS) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) 
-LOCAL_VARS := $(MINIO_VARS) $(DYNAMODB_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
+AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
+PT_VARS := $(AWS_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 
 
 
@@ -115,25 +113,25 @@ flake:
 ## No environment variables need to be set.
 
 pytest:  $(REQ)
-	$(PYTHON) -m pytest -v --log-cli-level=INFO tests
+	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests
 
 pytest-debug: $(REQ)
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
+	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
 
 pytest-coverage: $(REQ)
 	$(PIP_INSTALL) codecov pytest pytest_cov
-	$(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
+	$(AWS_VARS) $(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
 	@echo covreage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
-	$(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
+	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/movie_tracker_test.py
-TEST1FUNCTION="-k test_movie_tracking"
+TEST1MODULE=tests/db_object_test.py
+TEST1FUNCTION="-k test_write_read_delete_object"
 pytest1:
-	$(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -157,18 +155,18 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	DYNAMODB_TABLE_PREFIX=demo- $(LOCAL_VARS) $(PYTHON) dbutil.py --createdb
-	$(MINIO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+	DYNAMODB_TABLE_PREFIX=demo- $(AWS_VARS) $(PYTHON) dbutil.py --createdb
+	$(AWS_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_DEVEL=DEBUG $(LOCAL_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	LOG_LEVEL=DEBUG $(PT_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_DEVEL=DEBUG $(PT_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=DEBUG $(LOCAL_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	LOG_LEVEL=DEBUG $(PT_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 DEBUG:="LOG_LEVEL=DEBUG $(PYTHON) standalone.py"
@@ -226,13 +224,13 @@ stop_local_dynamodb:  bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
-	$(DYNAMODB_VARS) aws dynamodb list-tables
+	$(AWS_VARS) aws dynamodb list-tables
 
 dump-demo-tables:
 	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
 		echo $$tn:; \
-		$(DYNAMODB_VARS) aws dynamodb describe-table --table-name $$tn ; \
-		$(DYNAMODB_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		$(AWS_VARS) aws dynamodb describe-table --table-name $$tn ; \
+		$(AWS_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
 		done
 
 
@@ -278,18 +276,19 @@ stop_local_minio:  bin/minio
 	bash bin/local_minio_control.bash stop
 
 list-local-buckets:
-	$(MINIO_VARS) aws s3 --endpoint-url $(MINIO_ENDPOINT) ls
+	$(AWS_VARS) aws s3 ls
 
 make-local-bucket:
-	if $(MINIO_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
+	if $(AWS_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
 	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
 		echo creating s3://$(LOCAL_BUCKET)/ ; \
-		$(MINIO_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
+		$(AWS_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
 	fi
 	echo local buckets:
-	$(MINIO_VARS) aws s3 ls
+	$(AWS_VARS) aws s3 ls
 
+.PHONY: start_local_minio stop_local_minio list-local-buckets make-local-bucket
 
 ################################################################
 # Includes ubuntu dependencies
