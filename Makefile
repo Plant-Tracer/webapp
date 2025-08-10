@@ -27,9 +27,16 @@ AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
 AWS_ACCESS_KEY_ID := minioadmin
 AWS_SECRET_ACCESS_KEY := minioadmin
 AWS_DEFAULT_REGION=us-east-1
+
+# AWS_VARS are required for any command that uses AWS
 AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
+
+# PT_VARS are required for any command that uses planttracer but with dynamically-generated prefixes
 PT_VARS := $(AWS_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 
+# DEMO_VARS are required for any command that requires a DYNAMODB_TABLE_PREFIX.
+# For example, if you are running a local server, or a local demo
+DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 
 
 ################################################################
@@ -113,25 +120,25 @@ flake:
 ## No environment variables need to be set.
 
 pytest:  $(REQ)
-	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests
+	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests
 
 pytest-debug: $(REQ)
-	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
+	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
 
 pytest-coverage: $(REQ)
 	$(PIP_INSTALL) codecov pytest pytest_cov
-	$(AWS_VARS) $(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
+	$(PT_VARS) $(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
 	@echo covreage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
-	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
+	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/db_object_test.py
 TEST1FUNCTION="-k test_write_read_delete_object"
 pytest1:
-	$(AWS_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -155,33 +162,34 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	DYNAMODB_TABLE_PREFIX=demo- $(AWS_VARS) $(PYTHON) dbutil.py --createdb
-	$(AWS_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+	$(DEMO_VARS) $(PYTHON) dbutil.py --createdb
+	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=DEBUG $(PT_VARS) DYNAMODB_TABLE_PREFIX=demo- $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_DEVEL=DEBUG $(PT_VARS) DYNAMODB_TABLE_PREFIX=demo- LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=DEBUG $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(DEMO_VARS) LOG_DEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=DEBUG $(PT_VARS)  DYNAMODB_TABLE_PREFIX=demo- DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
-
-DEBUG:="LOG_LEVEL=DEBUG $(PYTHON) standalone.py"
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
-	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  $venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	@echo And we should not require any of the variables -but we enable them just in case
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
 	/bin/rm -f outfile.mp4
 	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
+
+.PHONY: wipe-local delete-local make-local-demorun-local-debug run-local-demo-debug debut-dev-api tracker-debug
 
 ################################################################
 ### JavaScript
@@ -224,13 +232,13 @@ stop_local_dynamodb:  bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
-	$(AWS_VARS) aws dynamodb list-tables
+	$(PT_VARS) aws dynamodb list-tables
 
 dump-demo-tables:
 	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
 		echo $$tn:; \
-		$(AWS_VARS) aws dynamodb describe-table --table-name $$tn ; \
-		$(AWS_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		$(PT_VARS) aws dynamodb describe-table --table-name $$tn ; \
+		$(PT_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
 		done
 
 

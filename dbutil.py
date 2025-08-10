@@ -14,6 +14,7 @@ from deploy.app import odbmaint
 from deploy.app import mailer
 from deploy.app.paths import TEST_DATA_DIR
 from deploy.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
+from deploy.app.constants import C
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
@@ -92,6 +93,10 @@ if __name__ == "__main__":
     clogging.setup(level=args.loglevel)
 
     config = configparser.ConfigParser()
+
+    if C.DYNAMODB_TABLE_PREFIX not in os.environ:
+        print(f"ERROR: Environment variable {C.DYNAMODB_TABLE_PREFIX} is not set",file=sys.stderr)
+        sys.exit(1)
 
     if args.sendlink or args.makelink:
         if not args.planttracer_endpoint:

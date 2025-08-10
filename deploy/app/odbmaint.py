@@ -243,6 +243,8 @@ def create_tables(*,ignore_table_exists = None):
     :return: the connected ddbo object
     """
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
+    if table_prefix is None:
+        raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
     dynamodb = DDBO.resource()
     for table_config in TABLE_CONFIGURATIONS:
         # prepend the prefix to the table name before creating it
@@ -294,6 +296,8 @@ def drop_dynamodb_table(dynamodb, table_name: str):
 
 def drop_tables():
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
+    if table_prefix is None:
+        raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
     dynamodb = DDBO.resource()
     tables_to_drop = [ table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:

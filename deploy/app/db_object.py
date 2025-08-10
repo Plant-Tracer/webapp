@@ -139,8 +139,16 @@ def write_object(urn, object_data):
     logger.info("write_object(%s,len=%s)",urn,len(object_data))
     o = urllib.parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
-        s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-        return
+        try:
+            s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
+            return
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'InvalidBucketName':
+                logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)
+            else:
+                logging.error("*** Unexpected ClientError: %s",error_code)
+            raise 
     raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
