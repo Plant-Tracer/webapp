@@ -85,9 +85,26 @@ Resolving deltas: 100% (7355/7355), done.
 
 4. Use the macOS installer built into the Makefile:
 ```
-cd Makefile
+cd webapp
 make install-macos
 ```
+
+5. Make sure that you are running both the local servers:
+
+```
+make start_local_dynamodb
+make start_local_minio
+```
+
+7. Make the local S3 bucket and verify it is there:
+
+
+```
+make make-local-bucket
+make list-local-buckets
+```
+
+6. Make sure the local bucket got created
 
 5. Check to make sure our commit is valid:
 ```
