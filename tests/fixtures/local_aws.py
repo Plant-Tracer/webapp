@@ -22,10 +22,16 @@ from app import db_object
 from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
 
-import dbutil
+logger = logging.getLogger(__name__)
 
+#
+# Note: Curently not all of the test tables are being deleted, and we don't know why
+# DELETE_TEST_TABLES forces that the tables get deleted
+# CHECK_DELTETE_TEST_TABLES makes an exception get thrown if they are not.
+#
 
 DELETE_TEST_TABLES = True
+CHECK_DELETE_TEST_TABLES = False
 
 s3client = boto3.client('s3')
 
@@ -55,6 +61,7 @@ def local_ddb():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
     """
+    logger.info("Starting local DynamoDBlocal")
     subprocess.call( [os.path.join(ROOT_DIR,'bin/local_dynamodb_control.bash'),'start'])
 
     # Make a random prefix for this run.
@@ -66,13 +73,13 @@ def local_ddb():
     os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
     os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
-    odbmaint.drop_tables()
+    odbmaint.drop_tables(check=False) # make sure tables do not exist
     odbmaint.create_tables()
 
     ddbo = DDBO()               # it's a singleton
     yield ddbo
     if DELETE_TEST_TABLES:
-        odbmaint.drop_tables()
+        odbmaint.drop_tables(check=CHECK_DELETE_TEST_TABLES)
 
 @pytest.fixture(scope="session")
 def local_s3():
@@ -150,7 +157,7 @@ def new_movie(new_course):
                                     title = movie_title,
                                     description = 'Description')
 
-    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    logger.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
         movie_data_sha256 = db_object.sha256(movie_data)

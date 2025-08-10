@@ -243,6 +243,7 @@ def create_tables(*,ignore_table_exists = None):
     :return: the connected ddbo object
     """
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
+    logger.info("create_tables table_prefix=%s",table_prefix)
     if table_prefix is None:
         raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
     dynamodb = DDBO.resource()
@@ -268,7 +269,7 @@ def create_tables(*,ignore_table_exists = None):
                 logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, dynamodb.meta.client.meta.endpoint_url)
 
 
-def drop_dynamodb_table(dynamodb, table_name: str):
+def drop_dynamodb_table(dynamodb, table_name: str,check:bool):
     """Drops a specified DynamoDB table from the local instance.
 
     :param table_name: The name of the table to drop.
@@ -278,7 +279,7 @@ def drop_dynamodb_table(dynamodb, table_name: str):
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table not found).
     :raises Exception: For any unexpected errors during deletion.
     """
-    logger.info("Attempting to delete table: %s", table_name)
+    logger.info("Attempting to delete table: %s check=%s", table_name, check)
     try:
         table = dynamodb.Table(table_name)
         table.delete() # Initiates the deletion process
@@ -292,16 +293,20 @@ def drop_dynamodb_table(dynamodb, table_name: str):
             logger.info("Table %s is already in the process of being deleted.", table_name)
         else:
             logger.error("Error deleting table %s: %s", table_name, e)
+        if check:
+            raise RuntimeError(f"Could not delete table {table_name}: {e}") from e
 
 
-def drop_tables():
+
+def drop_tables(check=False):
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
+    logger.info("drop_tables table_prefix=%s check=%s",table_prefix,check)
     if table_prefix is None:
         raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
     dynamodb = DDBO.resource()
     tables_to_drop = [ table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
-        drop_dynamodb_table(dynamodb, table_name)
+        drop_dynamodb_table(dynamodb, table_name, check=check)
 
 def purge_all_movies(ddbo):
     """"Deleting an entire table is significantly more efficient than removing items one-by-one,
