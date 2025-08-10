@@ -15,11 +15,13 @@ def writefile(fname,name,content):
 HTTPD_TEMPLATE=readfile('planttracer-template.conf')
 SYSTEMD_TEMPLATE=readfile('planttracer-template.service')
 
-# name,port,demo,base
-DEFS = """app,8010,NO,/home/ec2-user/webapp
-demo,8020,yes,/home/ec2-user/webapp
-dev2,8030,NO,/home/ec2-user/dev2
-dev-slg,8040,NO,/home/ec2-user/dev-slg"""
+# name,port,demovar,demoval,base
+DEFS = """app,8010,DEMO,OFF,/home/ubuntu/webapp
+demo,8020,DEMO_COURSE_ID,demo,/home/ubuntu/webapp
+dev,8030,DEMO,OFF,/home/ubuntu/dev
+dev-slg,8040,DEMO,OFF,/home/ubuntu/dev-slg
+dev-seb,8050,DEMO,OFF,/home/ubuntu/dev-seb
+"""
 
 
 for d in DEFS.split('\n'):

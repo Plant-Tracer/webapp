@@ -303,7 +303,9 @@ make-local-bucket:
 install-ubuntu: venv/pyvenv.cfg
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
-	sudo apt install curl
+	which curl || sudo apt install curl
+	which zip || sudo apt install zip
+	which aws || sudo snap  install aws-cli --classic
 	which ffmpeg || sudo apt install -y ffmpeg
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm
