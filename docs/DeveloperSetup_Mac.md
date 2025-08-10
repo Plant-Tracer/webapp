@@ -225,8 +225,9 @@ MinIO is ready.
 
 You can now create a web app instance within the DyanmoDBlocal and the Minio instances. This will:
 * Create all of the tables with a specific prefix (that you will specify)
-* Create a demo user  (created by `odbmaint.create_course()`)
-* Create an admin user (also created by `odbmaint.create_course()`)
+* Create a demo user with the email `demo@planttracer.com` (created by `odbmaint.create_course()`)
+* Create an admin user for the course with the email `admin@planttracer.com` (also created by `odbmaint.create_course()`)
+* Created a demo course with the CourseId `demo-course`
 * Create the demo movies (created by `dbutil.populate_demo_movies()`)
 
 Notice that below we set all of the environment variables first. You might want to do this in a file that your `source`. _We do not recommend that you put this in your `~/.bashrc` or `~/.zshrc` files, becuase setting these variables will cause problems if you need to use Amazon Web Services for something else.
@@ -289,7 +290,20 @@ Now connect to `http://127.0.0.1:8080`:
 
 <img width="1024" height="677" alt="image" src="https://github.com/user-attachments/assets/57585fc5-1db7-4f09-926f-bcf7476f2819" />
 
-There's not much you can do at this point until we create a course and a user
+Alternatively, we could run in demo mode:
+
+```
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
+```
+
+And now if we go to `http://127.0.0.1:8080` we see:
+<img width="1053" height="630" alt="image" src="https://github.com/user-attachments/assets/7a608a60-18e1-4c52-8e2c-105f98a0eb5a" />
+
+Click on the link and you see:
+<img width="1053" height="630" alt="image" src="https://github.com/user-attachments/assets/0bc90c71-873a-49e2-b71c-0bf86528633b" />
+
+
+
 
 ## Creating a course and a user
 While the application is running, open another window. 
