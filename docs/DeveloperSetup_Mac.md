@@ -89,14 +89,17 @@ cd webapp
 make install-macos
 ```
 
-5. Make sure that you are running both the local servers:
+## Each time you reboot
+Each time you reboot you will need to start these servers
+
+1. Start the local servers
 
 ```
 make start_local_dynamodb
 make start_local_minio
 ```
 
-7. Make the local S3 bucket and verify it is there:
+2. (First time through), make the local S3 bucket and verify it is there:
 
 
 ```
@@ -104,9 +107,9 @@ make make-local-bucket
 make list-local-buckets
 ```
 
-6. Make sure the local bucket got created
+## Validate the release
 
-5. Check to make sure our commit is valid:
+1. Check to make sure our commit is valid:
 ```
 make pylint
 make pytest
