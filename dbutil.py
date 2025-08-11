@@ -109,7 +109,8 @@ if __name__ == "__main__":
                               debug=args.debug)
         if args.makelink:
             new_api_key = odb.make_new_api_key(email=args.makelink)
-            print(f"\n*****\n***** Login with {args.planttracer_endpoint}/list?api_key={new_api_key}\n*****")
+            delim = '' if args.planttracer_endpoint.endswith('/') else '/'
+            print(f"\n*****\n***** Login with {args.planttracer_endpoint}{delim}list?api_key={new_api_key}\n*****")
         sys.exit(0)
 
 

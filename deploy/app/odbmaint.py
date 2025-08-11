@@ -290,7 +290,7 @@ def drop_dynamodb_table(dynamodb, table_name: str):
 
     except ClientError as e:
         if e.response['Error']['Code'] == 'ResourceNotFoundException':
-            logger.info("Table %s does not exist when dropping table.", table_name)
+            logger.warning("Table %s does not exist when dropping table.", table_name)
         elif e.response['Error']['Code'] == 'ValidationException' and "table is being deleted" in str(e):
             logger.info("Table %s is already in the process of being deleted.", table_name)
         else:
