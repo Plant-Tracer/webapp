@@ -35,7 +35,8 @@ def populate_demo_user():
                            course_key = str(uuid.uuid4())[0:8],
                            admin_email = DEFAULT_ADMIN_EMAIL,
                            admin_name  = DEFAULT_ADMIN_NAME,
-                           max_enrollment = 2)
+                           max_enrollment = 2,
+                           ok_if_exists = True)
 
     # Create the demo user to own the demo movies
     odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     if args.create_course:
         missing = [name for name in ['course_id','course_name','admin_email','admin_name'] if getattr(args, name) is None]
         if missing:
-            parser.error(f"--create_course requires --course_name, --course_id, --admin_email and --admin_name. Missing: {', '.join('--' + m for m in missing)}")
+            parser.error(f"--create_course requires --course_name, --course_id, --admin_email and --admin_name. Missing: {','.join('--' + m for m in missing)}")
         print("creating course...")
         course_key = str(uuid.uuid4())[9:18]
         try:
@@ -136,7 +137,8 @@ if __name__ == "__main__":
                                    course_name = args.course_name,
                                    admin_email = args.admin_email,
                                    admin_name = args.admin_name,
-                                   max_enrollment = args.max_enrollment)
+                                   max_enrollment = args.max_enrollment,
+                                   ok_if_exists = False)
             print(f"created {args.course_id}")
         except ExistingCourse_Id:
             print(f" course {args.course_id} already exists")

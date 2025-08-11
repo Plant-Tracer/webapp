@@ -13,7 +13,7 @@ import hashlib
 
 import requests
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError,ParamValidationError
 
 from .constants import C
 
@@ -68,6 +68,8 @@ def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
     if scheme not in SUPPORTED_SCHEMES:
         raise ValueError(f"Invalid scheme {scheme}")
     netloc = os.getenv(C.PLANTTRACER_S3_BUCKET)
+    if netloc.startswith("s3:"):
+        raise RuntimeError(f"{C.PLANTTRACER_S3_BUCKET} {netloc} should not start with s3://")
     ret = f"{scheme}://{netloc}/{object_name}"
     logger.debug("make_urn urn=%s",ret)
     return ret
@@ -137,11 +139,15 @@ def read_object(urn):
 def write_object(urn, object_data):
     logging.info("write_object(%s,len=%s)",urn,len(object_data))
     logger.info("write_object(%s,len=%s)",urn,len(object_data))
+    assert "s3://s3://" not in urn
     o = urllib.parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
         try:
             s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
             return
+        except ParamValidationError as e:
+            logger.error("ParamValidationError. urn=%s o=%s  e=%s",urn,o,e)
+            raise
         except ClientError as e:
             error_code = e.response['Error']['Code']
             if error_code == 'InvalidBucketName':

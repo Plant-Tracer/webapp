@@ -517,13 +517,14 @@ class DDBO:
     ### course management
 
     def get_course(self,course_id):
-        course = self.courses.get_item(Key = { COURSE_ID :course_id}).get('Item',None)
+        course = self.courses.get_item(ConsistentRead=True,
+                                       Key = { COURSE_ID :course_id}).get('Item',None)
         if not course:
             raise InvalidCourse_Id(course_id)
         return course
 
 
-    def put_course(self, coursedict):
+    def put_course(self, coursedict, *, ok_if_exists=False):
         """Puts the course into the database. Raises an error if the course already exists"""
         try:
             coursedict = Course(**coursedict).model_dump() # validate coursedict
@@ -546,8 +547,12 @@ class DDBO:
         ################
 
         try:
-            self.courses.put_item(Item=coursedict,
-                                  ConditionExpression= 'attribute_not_exists(course_id)')
+            
+            if ok_if_exists:
+                self.courses.put_item(Item=coursedict)
+            else:
+                self.courses.put_item(Item=coursedict,
+                                      ConditionExpression='attribute_not_exists(course_id)')
         except ClientError as e:
             logging.error("courses=%s coursedict=%s",self.courses,coursedict)
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
@@ -794,8 +799,8 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
 
     Does not make an api_key or send the links with the api_key.
     :param email: - user email
-    :param course_key: - the key. We might only have this, if the user went to the we page
-    :param course_id:  - the course
+    :param course_key: - the key. We might only have this, if the user went to the web page.
+    :param course_id:  - the course id. 
     :param admin:      - True if this is a course admin
     :return: dictionary of { USER_ID :user_id} for user who is registered.
     """
@@ -807,7 +812,9 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     if (course_key is None) and (course_id is None):
         raise ValueError("Either the course_key or the course_id must be provided")
 
-    # Get the course name and (optionally) course_id
+    # Get the course dictionary. Ideally, we have the course_id.
+    # If we do not have the course_id, try to get it form the course_key
+    # Hopefully the course was created some time in past.
     ddbo = DDBO()
     if course_id is not None:
         course = ddbo.get_course(course_id)
@@ -955,15 +962,16 @@ def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
 
 @log
-def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT):
+def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT, ok_if_exists=False):
     """Create a new course
     """
     DDBO().put_course({ COURSE_ID :course_id,
                         COURSE_NAME:course_name,
                         COURSE_KEY:course_key,
                         ADMINS_FOR_COURSE:[],
-                        MAX_ENROLLMENT:max_enrollment})
-
+                        MAX_ENROLLMENT:max_enrollment},
+                      ok_if_exists=ok_if_exists)
+    
 @log
 def delete_course(*,course_id):
     """Delete a course.

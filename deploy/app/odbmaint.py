@@ -6,14 +6,13 @@ import logging
 import copy
 import os
 import os.path
-#import json
+import time
 
 import tabulate
 
 import boto3
 from tabulate import tabulate
 from botocore.exceptions import ClientError
-#from boto3.dynamodb.conditions import Attr
 
 
 from . import odb
@@ -257,7 +256,11 @@ def create_tables(*,ignore_table_exists = None):
         logger.info("Attempting to create table: %s", table_name)
         try:
             table = dynamodb.create_table(**tc)
+            # because tables don't get created instantly and wait_until_exists
+            # has a hard-coded 20-second delay, we sleep a bit...
+            time.sleep(C.TABLE_CREATE_SLEEP_TIME) 
             logger.info("Waiting for table %s to be active...", table_name)
+            print("Waiting for table %s to be active..." % table_name)
             table.wait_until_exists()
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
@@ -313,7 +316,8 @@ def purge_all_movies(ddbo):
 
 #pylint: disable=too-many-arguments
 def create_course(*, course_id, course_key, course_name, admin_email,
-                  admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT):
+                  admin_name,max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
+                  ok_if_exists = False ):
     """
     :param course_id: course to be created
     :param course_key: course key for student registrations
@@ -325,10 +329,11 @@ def create_course(*, course_id, course_key, course_name, admin_email,
     odb.create_course(course_id = course_id,
                       course_key = course_key,
                       course_name = course_name,
-                      max_enrollment = max_enrollment)
+                      max_enrollment = max_enrollment,
+                      ok_if_exists = ok_if_exists)
 
     # set up the admin
-    odb.register_email(email=admin_email, course_key=course_key, user_name=admin_name)
+    odb.register_email(email=admin_email, course_id=course_id, user_name=admin_name)
     admin = odb.get_user_email(admin_email)
     admin_id = admin[USER_ID]
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)

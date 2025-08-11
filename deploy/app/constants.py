@@ -17,6 +17,7 @@ class C:
     # AWS variables (used by boto3)
     AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
     AWS_PROFILE = 'AWS_PROFILE'
+    TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
