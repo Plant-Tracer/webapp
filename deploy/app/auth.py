@@ -7,66 +7,15 @@ This provides for all authentication in the planttracer system:
 """
 import os
 import os.path
-import configparser
 import logging
-import functools
+import json
 
-from . import dbfile
-from .constants import C
-from .paths import DEFAULT_CREDENTIALS_FILE
+import boto3
+from botocore.exceptions import ClientError
 
-SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
-
-################################################################
-# Authentication configuration - for server
-##
-
-
-def credentials_file():
-    name = os.environ.get(C.PLANTTRACER_CREDENTIALS, DEFAULT_CREDENTIALS_FILE)
-    if not os.path.exists(name):
-        logging.error("Cannot find %s (PLANTTRACER_CREDENTIALS=%s)",os.path.abspath(name),name)
-        raise FileNotFoundError(name)
-    return name
-
-def config():
-    cp = configparser.ConfigParser()
-    cp.read( credentials_file() )
-    return cp
-
-def smtp_config():
-    """Get the smtp config from the [smtp] section of a credentials file.
-    If the file specifies a AWS secret, get that.
-    """
-    if C.SMTPCONFIG_ARN in os.environ:
-        return dbfile.get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
-
-    cp = config()
-    ret = cp['smtp']
-    for key in SMTP_ATTRIBS:
-        assert key in ret
-    return ret
-
-@functools.cache
-def get_dbreader():
-    """Get the dbreader authentication info from:
-    1 - the [dbreader] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbreader] section of the credentials file
-    """
-    if C.DBREADER_ARN in os.environ:
-        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBREADER_ARN] )
-    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbreader')
-
-
-@functools.cache
-def get_dbwriter():
-    """Get the dbwriter authentication info from:
-    1 - the [dbwriter] section of the file specified by the DBCREDENTIALS_PATH environment variable if it exists.
-    2 - the [dbwriter] section of the credentials file
-    """
-    if C.DBWRITER_ARN in os.environ:
-        return dbfile.DBMySQLAuth.FromSecret( os.environ[C.DBWRITER_ARN] )
-    return dbfile.DBMySQLAuth.FromConfigFile( credentials_file(), 'dbwriter')
+AWS_SECRET_NAME = 'AWS_SECRET_NAME'
+AWS_REGION_NAME = 'AWS_REGION_NAME'
+SECRETSMANAGER = 'secretsmanager'
 
 
 class AuthError(Exception):
@@ -88,3 +37,36 @@ class AuthError(Exception):
 
 class EmailNotInDatabase(Exception):
     """Handle error condition below"""
+
+
+
+################################################################
+## AWS Secrets Stuff
+
+class SecretsManagerError(Exception):
+    """ SecretsManagerError """
+
+def get_aws_secret_for_arn(secret_name):
+    region_name = secret_name.split(':')[3]
+    logging.debug("secret_name=%s region_name=%s",secret_name, region_name)
+    session = boto3.Session()
+    client = session.client( service_name=SECRETSMANAGER,
+                             region_name=region_name)
+    try:
+        get_secret_value_response = client.get_secret_value( SecretId=secret_name )
+    except ClientError as e:
+        logging.error('Cannot get secretId=%s',secret_name)
+        raise SecretsManagerError(e) from e
+    secret = json.loads(get_secret_value_response['SecretString'])
+    return secret
+
+
+def get_aws_secret_for_section(section):
+    if AWS_SECRET_NAME in section:
+        secret_name = os.path.expandvars(section[AWS_SECRET_NAME])
+        return get_aws_secret_for_arn(secret_name)
+    return None
+
+################################################################
+# Authentication configuration - for server
+##

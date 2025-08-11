@@ -4,6 +4,8 @@ Constants are created in classes so we can import the class and don't have to im
 
 #pylint: disable=too-few-public-methods
 
+import logging
+
 __version__ = '0.9.6'
 
 GET=['GET']
@@ -12,18 +14,48 @@ GET_POST = ['GET','POST']
 
 class C:
     """Constants"""
-    # Environment variables:
-    DBREADER_ARN = 'DBREADER_ARN'
-    DBWRITER_ARN = 'DBWRITER_ARN'
-    DEMO_MODE = 'DEMO_MODE'
-    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
-    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS'
+    # AWS variables (used by boto3)
+    AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
+    AWS_PROFILE = 'AWS_PROFILE'
+    TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
+
+    # Environment variables for AWS Configuration
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
+    DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # run in demo mode with this course_id
     FFMPEG_PATH = 'FFMPEG_PATH'
+    AWS_ACCESS_KEY_ID = 'AWS_ACCESS_KEY_ID'
+    AWS_SECRET_ACCESS_KEY = 'AWS_SECRET_ACCESS_KEY'
+    AWS_ENDPOINT_URL = 'AWS_ENDPOINT_URL'
+    AWS_ENDPOINT_URL_DYNAMODB = 'AWS_ENDPOINT_URL_DYNAMODB' # official name
+    AWS_ENDPOINT_URL_S3 = 'AWS_ENDPOINT_URL_S3' # official name
+    DYNAMODB_TABLE_PREFIX = 'DYNAMODB_TABLE_PREFIX'
+    PLANTTRACER_CREDENTIALS = 'PLANTTRACER_CREDENTIALS' # where the .ini file is with [smtp] and [imap] config
+    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'                   # if set, the ARN of the AWS Secrets manager for the SMTP config
+    SMTPCONFIG_JSON = 'SMTPCONFIG_JSON'                 # if set, a JSON dictionary of the SMTP configuration
+
+    # test values
+    TEST_ACCESS_KEY_ID = 'minioadmin'
+    TEST_SECRET_ACCESS_KEY = 'minioadmin'
+    TEST_PLANTTRACER_S3_BUCKET = 'planttracer-local'
+    TEST_ENDPOINT_URL_S3 = 'http://localhost:9100'
+    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
+
+    DEFAULT_MAX_ENROLLMENT = 100
+    LOG_MAX_RECORDS = 1024
+
+    # Logging
+    LOGGING_CONFIG='%(asctime)s  %(filename)s:%(lineno)d %(levelname)s: %(message)s'
+    LOGGING_LEVEL=logging.WARNING
+
+    # Demo mode
+    # special key (must begin with an 'a' and be 33 characters)
+    DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
 
     # Other
     EMAIL_TEMPLATE_FNAME = 'email.txt'
+    MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
@@ -46,12 +78,12 @@ class C:
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'
     API_KEY_COOKIE_MAX_AGE = 60*60*24*180
-    SMTPCONFIG_ARN = 'SMTPCONFIG_ARN'
 
 class MIME:
     """MIME Types"""
     JPEG = 'image/jpeg'
     MP4 = 'video/quicktime'
+    ZIP = 'application/zip'
 
 class E:
     """Error constants"""
@@ -64,6 +96,7 @@ class E:
     INVALID_COURSE_ID = {'error': True, 'message': 'There is no course for that course ID'}
     INVALID_COURSE_KEY = {'error': True, 'message': 'There is no course for that course key.'}
     INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
+    INVALID_FRAME_NUMBER = { 'error': True, 'message': 'Invalid frame number'}
     INVALID_FRAME_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie frame.'}
     INVALID_FRAME_FORMAT = { 'error': True, 'message': 'Format must be "json" or "jpeg".'}
     INVALID_MOVIE_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie.'}

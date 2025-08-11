@@ -6,7 +6,7 @@
 /*global user_primary_course_id */
 /*global planttracer_endpoint */
 /*global MAX_FILE_UPLOAD */
-/*global user_demo */
+/*global demo_mode */
 
 // special buttons
 const PUBLISH_BUTTON='PUBLISH';
@@ -268,11 +268,11 @@ function upload_ready_function() {
 
 ////////////////
 // PLAYBACK
-// callback when the play button is clicked
-function play_clicked( e, movie_id ) {
+// callback when the play button is clicked in the movie list.
+function play_clicked( e ) {
+    const movie_id = e.getAttribute('x-movie_id');
     console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
-    //const movie_id = e.getAttribute('x-movie_id');
     const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
     $(`#tr-${rowid}`).show();
     const td = $(`#td-${rowid}`);
@@ -312,7 +312,7 @@ function analyze_clicked( e ) {
 // This sends the data to the server and then redraws the screen
 function set_property(user_id, movie_id, property, value)
 {
-    console.log(`set_property(${user_id}, ${movie_id}, ${property}, ${value})`);
+    console.log(`set_property('${user_id}', ${movie_id}, ${property}, ${value})`);
     let formData = new FormData();
     formData.append("api_key",  api_key); // on the upload form
     if (user_id) formData.append("set_user_id", user_id);
@@ -416,7 +416,7 @@ function action_button_clicked( e ) {
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 
 //                           #1          #2               #3               #4              #5                 #6                #7
-const TABLE_HEAD = "<tr> <th>id</th> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
+const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
@@ -454,7 +454,7 @@ function list_movies_data( movies ) {
                 tid += 1;
                 let r = `<td> <span id='${tid}' x-movie_id='${movie_id}' x-property='${property}'> ${text} </span>`;
                 // check to see if this is editable;
-                if ((admin || user_id == m.user_id) && user_demo==0) {
+                if ((admin || user_id == m.user_id) && !demo_mode) {
                     r += `<span class='editor' x-target-id='${tid}' onclick='row_pencil_clicked(this)'> ✏️  </span> `;
                 }
                 r += extra + "</td>\n";
@@ -497,11 +497,11 @@ function list_movies_data( movies ) {
 
             // Get the metadata for the movie
             const movieDate = new Date(m.date_uploaded * 1000);
-            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this,${movie_id})'>`;
+            const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
             let playt = '';
             let analyze_label = 'analyze';
             if (m.tracked_movie_id){
-                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this,${m.tracked_movie_id})'>`;
+                playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this)'>`;
                 analyze_label = 're-analyze';
             }
             const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
@@ -511,7 +511,7 @@ function list_movies_data( movies ) {
             const you_class = (m.user_id == user_id) ? "you" : "";
 
             let rows = `<tr class='${you_class}'>` +
-                `<td> ${movie_id} </td> <td class='${you_class}'> ${m.name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+                `<td class='${you_class}'> ${m.user_name} </td> <td> ${up_down} </td>` + // #1, #2, #3
                 make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
                 `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
                 `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
@@ -527,7 +527,7 @@ function list_movies_data( movies ) {
             // below, note that 'admin' is set by the page before this runs
 
             // Create the action buttons if not user demo
-            if (user_demo) {
+            if (demo_mode) {
                 rows += '<i> demo user </i>';
             } else if (m.deleted) {
                 if (which==DELETED){
@@ -566,7 +566,7 @@ function list_movies_data( movies ) {
         }
 
         // Offer to upload movies if not in demo mode.
-        if (!user_demo) {
+        if (!demo_mode) {
             h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
         }
 
@@ -580,7 +580,7 @@ function list_movies_data( movies ) {
     movies_fill_div( $('#your-unpublished-movies'),
                      UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
     movies_fill_div( $('#course-movies'),
-                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (user_demo || (m.user_id!=user_id)) && !m.orig_movie)));
+                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
     movies_fill_div( $('#your-deleted-movies'),
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
@@ -641,7 +641,7 @@ function list_users_data( users, course_array ) {
             ret += '<tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>\n';
             current_course = user.primary_course_id;
         }
-        ret +=  `<tr><td>${user.name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
+        ret +=  `<tr><td>${user.user_name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
         return ret;
     }
     users.forEach( user => ( h+= user_html(user) ));

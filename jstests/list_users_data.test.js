@@ -31,7 +31,7 @@ describe('list_users_data', () => {
     const users = [
       {
         user_id: parseInt(userData.user1.user_id, 10),
-        name: userData.user1.name,
+        name: userData.user1.user_name,
         email: userData.user1.email,
         active: userData.user1.active === 'true',
         date_joined: parseInt(userData.user1.date_joined, 10),
@@ -44,7 +44,7 @@ describe('list_users_data', () => {
     expect($.fn.html).toHaveBeenCalledTimes(1);
 
     const expectedHtml = expect.stringContaining(
-      `<table><tbody><tr><td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
+      `<table><tbody><tr><td>${userData.user1.user_name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
     );
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml);
   });
@@ -53,7 +53,7 @@ describe('list_users_data', () => {
     const users = [
       {
         user_id: parseInt(userData.user1.user_id, 10),
-        name: userData.user1.name,
+        user_name: userData.user1.user_name,
         email: userData.user1.email,
         active: userData.user1.active === 'true',
         date_joined: parseInt(userData.user1.date_joined, 10),
@@ -61,7 +61,7 @@ describe('list_users_data', () => {
       },
       {
         user_id: parseInt(userData.user2.user_id, 10),
-        name: userData.user2.name,
+        user_name: userData.user2.user_name,
         email: userData.user2.email,
         active: userData.user2.active === 'true',
         date_joined: parseInt(userData.user2.date_joined, 10),
@@ -74,10 +74,10 @@ describe('list_users_data', () => {
     expect($.fn.html).toHaveBeenCalledTimes(1);
 
     const expectedHtml1 = expect.stringContaining(
-      `<table><tbody><tr><td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
+      `<table><tbody><tr><td>${userData.user1.user_name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td><td>n/a</td><td>n/a</td></tr>`
     );
     const expectedHtml2 = expect.stringContaining(
-      `<tr><td>${userData.user2.name} (${userData.user2.user_id}) </td><td>${userData.user2.email}</td><td>n/a</td><td>n/a</td></tr>`
+      `<tr><td>${userData.user2.user_name} (${userData.user2.user_id}) </td><td>${userData.user2.email}</td><td>n/a</td><td>n/a</td></tr>`
     );
 
     expect($.fn.html).toHaveBeenCalledWith(expectedHtml1);

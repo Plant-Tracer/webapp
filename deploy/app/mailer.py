@@ -8,15 +8,21 @@ import smtplib
 import logging
 import imaplib
 import os
+import json
+import configparser
 from email.parser import BytesParser
 from email import policy
 
 from jinja2.nativetypes import NativeEnvironment
 
-from . import auth
+from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
 from .constants import C
 
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
+
+SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
 SMTP_PASSWORD = 'SMTP_PASSWORD'
@@ -38,6 +44,31 @@ class InvalidMailerConfiguration(Exception):
 
 class NoMailerConfiguration(Exception):
     """ No mailer configured"""
+
+def get_smtp_config():
+    """Get the smtp config from the [smtp] section of a credentials file.
+    If the file specifies a AWS secret, get that.
+    """
+    logging.debug("get_smtp_config")
+    if C.SMTPCONFIG_ARN in os.environ:
+        return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
+
+    if C.SMTPCONFIG_JSON in os.environ:
+        cp = configparser.ConfigParser()
+        cp.add_section('smtp')
+        for (k,v) in json.loads(os.environ[C.SMTPCONFIG_JSON]).items():
+            cp.set('smtp',k,v)
+        return cp['smtp']
+
+    cp = configparser.ConfigParser()
+    if C.PLANTTRACER_CREDENTIALS not in os.environ:
+        raise ValueError(f"{C.PLANTTRACER_CREDENTIALS} not set")
+    cp.read(os.environ[C.PLANTTRACER_CREDENTIALS])
+    ret = cp['smtp']
+    for key in SMTP_ATTRIBS:
+        assert key in ret
+    return ret
+
 
 def send_message(*,
                  from_addr: str,
@@ -88,10 +119,10 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     DRY_RUN = False
     SMTP_DEBUG = 'YES' if debug else ''
     try:
-        smtp_config = auth.smtp_config()
+        smtp_config = get_smtp_config()
         smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
     except KeyError as e:
-        raise mailer.NoMailerConfiguration() from e
+        raise NoMailerConfiguration() from e
     try:
         send_message(from_addr=PROJECT_EMAIL,
                             to_addrs=TO_ADDRS,
@@ -99,7 +130,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
                             dry_run=DRY_RUN,
                             msg=msg)
     except smtplib.SMTPAuthenticationError as e:
-        raise mailer.InvalidMailerConfiguration(str(dict(smtp_config))) from e
+        raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
     return new_api_key
 
 IMAP_HOST = 'IMAP_HOST'

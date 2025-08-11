@@ -5,10 +5,10 @@ Requirements and Preparation
 ----------------------------
 
 * GitHub: In order to commit to the `Plant-Tracer/webapp <https://github.com/Plant-Tracer/webapp>` GitHub repository, you must first have a GitHub account. Then your GitHub account must be added as a member of the Plant-Tracer Organization. You may ask any of the Organization owners to do that, or send an email request to plantadmin@planttracer.com.
- 
+
 * While there are multiple ways to authenticate a login to  GitHub, it has proven to be convenient for development purposes to use a Personal Access Token for acccess via a command line. See `<https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>` and `<https://github.com/settings/personal-access-tokens>` for more details. (Specific token settings not yet fully documented, but you want Read and Write access to Contents. Depending on your role and your own toolset, you may also want access to Actions, Discussions, Pages, and Pull Requests, but also consider whether all those permissions should exist in the same PAT.)
 
-* Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that's going to be the best place for runtime debugging. MacOS works well. Windows is not favored, but may work. This file was developed on MacOS Sonoma but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: `DevSetupUbuntu` and :doc: `WindowsDevSetup` for more detail on setting up on those platforms.
+* Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that's going to be the best place for runtime debugging. MacOS works well. Windows is not supported for either development or runtime. This file was developed on MacOS Sequoia but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: `DevSetupUbuntu` for more detail on setting up on that platforms.
 
 * Install the following things on your development machine, in roughly the order presented, if they aren't already there. How to do that is beyond the scope of this document.
 
@@ -27,8 +27,10 @@ Requirements and Preparation
 
 * git and gh
 
-* MySQL 8.0. See :doc:`MySQLSetup`
-    
+* Minio  (installed locally)
+
+* DynamoDBLocal (installed locally)
+
 Setup Steps
 -----------
 #. Set your Git Hub name and username::
@@ -69,40 +71,54 @@ Setup Steps
 
     make install-macos
 
-#. Create a new local database
-
-    * The database will be named actions_test by default
-
-    * You may override the default with the ``PLANTTRACER_LOCALDB_NAME`` environment variable
+#. Create a new local database with demo course
 
     .. code-block::
 
-       export MYSQL_ROOT_PASSWORD="your-mysql-root-password"
        export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
-       make create_localdb
+       make make-local-demo
 
 #. Run the self-tests:
 
    .. code-block::
 
-      PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini make pytest-quiet
+      make pytest
 
-#. Create your first course! If you want, give it a demo account too:
+#. Create your first course!:
 
-   * "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+   * --course_name "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+
+   * --course_id is a simple unique identfier for the course. (--course_name is more descriptive)
 
    * --admin-email is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is joecool@company.com, then an admin email address might be joecool+admin@company.com
 
    * --admin-name "Your Name" should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
 
-   * --demo_email is the email address for a demo user. A demo user is logged in by default when the PlantTracer server is started in demo mode. Omit this parameter if there is no need to use this course in demo mode.
+   * Set up the environment as in the command below
 
    .. code-block::
 
-    python dbutil.py --create_course "My Course Name" --admin_email your_admin_email@company.com --admin_name "Your Name" [--demo_email your_demo_email@company.com]
-    >>> course_key: leact-skio-proih #save this course_key, you will need it later!
+    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
 
-#. You now have a course key! If the demo account is made, you have that too.
+#. The information for the new course will be output and look something like this:
+
+   .. code-block::
+    
+    creating course...
+    2025-08-07 17:42:36,177  odb.py:376 WARNING: NOTE: create_user does not check to make sure user sbarber2+admin@gmail.com's course test exists
+    Transaction succeeded: user inserted.
+    created test
+    {
+        "admins_for_course": [
+            "udcaba1d8-3f26-4a62-86bc-46f4144c2d4c"
+        ],
+        "course_id": "test",
+        "max_enrollment": "50",
+        "course_name": "Test Course",
+        "course_key": "2b32-4faf"
+    }
+
+#. Note the course_key value: this value is what to give users in order that they can register for the course.
 
 #. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
 
@@ -120,7 +136,7 @@ Setup Steps
     IMAP_HOST=imap.mycompany.com
     IMAP_PORT=993
 
-#. If you have created a demo account, that action has also added demo movies to the database. To finish setting up demo mode, run the server in non-demo mode, track all the demo movies manually, and publish them.
+#. The demo course has also added demo movies to the database. To finish setting up demo mode, run the server in non-demo mode, track all the demo movies manually, and publish them.
 
 Running Locally Quick Start
 ---------------------------
@@ -129,27 +145,8 @@ Running Locally Quick Start
 
    .. code-block::
 
-    make run-local # Ctrl-C to quit
-
-#. To run a Plant-Tracer/webapp server process locally, examine the debug-* targets in Makefile. The general form is:
-
-   .. code-block::
-
-    python standalone.py [arguments]
-
-#. A specific case: running with movies stored in MySQL rather than S3:
-
-   .. code-block::
-
-    python standalone.py --storelocal
-
-#. Another case: running in demo mode, with movies stored in MySQL rather than S3:
-
-   * Note: there must be no user logged in for demo mode to take effect. May have to clear browser cookies.
-
-   .. code-block::
-
-       DEMO_MODE=1 python standalone.py --storelocal
+    export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
+    make run-local-debug # Ctrl-C to quit
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:
 

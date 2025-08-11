@@ -1,0 +1,101 @@
+{
+    "$id": "https://example.com/schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "PlantTracer Database Schema",
+    "type": "object",
+    "properties": {
+        "user": {
+            "title": "user",
+            "type": "object",
+            "properties": {
+                "user_id": { "type": "string", "description": "The user_id. Typically a GUID" },
+                "email": { "type": "string", "description": "The person's email." },
+                "name": { "type": "string", "description": "The person's name." },
+                "created": { "type": "integer", "description": "Time_t of when the entry was created", "minimum": 0 },
+                "enabled": { "type": "integer", "description": "1 if enabled", "minimum": 0 },
+                "demo": { "type": "integer", "description": "1 if this is a demo account", "minimum": 0 },
+                "admin": { "type": "array", "description": "A list of the courseIds in which the user is an admin", "items": { "type": "string" } },
+                "courses": { "type": "array", "description": "A list of the courseIds in which the user is enrolled", "items": { "type": "string" } },
+                "first_used_at": { "type": "integer", "description": "When it was first used" },
+                "last_used_at": { "type": "integer", "description": "When it was last used" },
+                "primary_course_id": { "type": "string", "description": "The user's primary course" }
+            }
+        },
+        "api_keys": {
+            "title": "api_keys",
+            "type": "object",
+            "properties": {
+                "api_key": { "type": "string", "description": "The API key itself (primary key)" },
+                "user_id": { "type": "string", "description": "The user to whom the key belongs" },
+                "enabled": { "type": "integer", "description": "1 if enabled, 0 otherwise" },
+                "first_used_at": { "type": "integer", "description": "Timestamp of first use" },
+                "last_used_at": { "type": "integer", "description": "Timestamp of last use" },
+                "use_count": { "type": "integer", "description": "Number of times the key has been used" }
+            }
+        },
+        "courses": {
+            "title": "courses",
+            "type": "object",
+            "properties": {
+                "course_id": { "type": "string", "description": "Unique identifier for the course" },
+                "course_key": { "type": "string", "description": "Unique key for the course" },
+                "course_name": { "type": "string", "description": "Name of the course" },
+                "course_section": { "type": ["string", "null"], "description": "Section of the course" },
+                "max_enrollment": { "type": "integer", "description": "Maximum number of students" },
+                "movie_count": { "type": "integer", "description": "Number of movies in the course" },
+                "enrolled": { "type": "integer", "description": "Number of enrolled users" }
+            }
+        },
+        "movies": {
+            "title": "movies",
+            "type": "object",
+            "properties": {
+                "movie_id": { "type": "string", "description": "Unique identifier for the movie" },
+                "title": { "type": "string", "description": "Title of the movie" },
+                "description": { "type": "string", "description": "Description of the movie" },
+                "created_at": { "type": "integer", "description": "Timestamp when the movie was created" },
+                "user_id": { "type": "string", "description": "The user who created the movie" },
+                "course_id": { "type": "string", "description": "The course to which the movie belongs" },
+                "published": { "type": "integer", "description": "1 if published, 0 otherwise" },
+                "deleted": { "type": "integer", "description": "1 if deleted, 0 otherwise" },
+                "date_uploaded": { "type": "integer", "description": "Timestamp when the movie was uploaded" },
+                "mtime": { "type": "integer", "description": "Last modification time" },
+                "version": { "type": "integer", "description": "Version number" },
+                "fps": { "type": "string", "description": "Frames per second" },
+                "width": { "type": "integer", "description": "Width of the movie" },
+                "height": { "type": "integer", "description": "Height of the movie" },
+                "total_frames": { "type": "integer", "description": "Total number of frames" },
+                "total_bytes": { "type": "integer", "description": "Size in bytes" },
+                "status": { "type": "string", "description": "Status of the movie" },
+                "movie_data_urn": { "type": "string", "description": "URN for the movie data" },
+                "movie_zipfile_urn": { "type": "string", "description": "URN for the zipped movie" },
+                "orig_movie": { "type": ["string", "null"], "description": "Original movie's ID if derived" },
+                "tracked_movie_id": { "type": ["string", "null"], "description": "Tracked movie ID (optional)" }
+            }
+        },
+        "movie_frames": {
+            "title": "movie_frames",
+            "type": "object",
+            "properties": {
+                "movie_id": { "type": "string", "description": "The movie this frame belongs to" },
+                "url": { "type": "string", "description": "URL to the frame data" },
+                "uploaded": { "type": "integer", "description": "Upload time (time_t)" },
+                "modified": { "type": "integer", "description": "Last modified time (time_t)" },
+                "frame_time": { "type": "integer", "description": "Frame time (time_t)" },
+                "trackpoints": {
+                    "type": "array",
+                    "description": "Array of trackpoints for this frame",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "x": { "type": "number", "description": "X coordinate" },
+                            "y": { "type": "number", "description": "Y coordinate" },
+                            "label": { "type": "string", "description": "Label for the trackpoint" }
+                        },
+                        "required": ["x", "y", "label"]
+                    }
+                }
+            }
+        }
+    }
+}

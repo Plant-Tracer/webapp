@@ -19,30 +19,33 @@
 
     <script>
       // These variables will be substituted by the template engine
+      "use strict";
       const version = '{{version}}';
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
       {% if logged_in %}
       const api_key = "{{api_key}}";
-      const user_id = {{user_id}};
-      const user_demo = {{user_demo}}; // set true if we are in demo mode
-      const user_primary_course_id   = {{user_primary_course_id}};
+      const user_id = "{{user_id}}";
+      {% if demo_mode %}
+      const demo_mode = true;
+      {% else %}
+      const demo_mode = false;
+      {% endif %}
+      const user_primary_course_id   = "{{user_primary_course_id}}";
       const primary_course_name = "{{primary_course_name}}";
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
       {% else %}
       const api_key = null;
       const user_id = null;
-      const user_demo = null;
+      const demo_mode = false;
       const user_primary_course_id = null;
       const primary_course_name = null;
       {% endif %}
-
       {% if admin %}
       const admin = true;
       {% else %}
       const admin = false;
       {% endif %}
-
     </script>
 
     <style>
@@ -74,7 +77,7 @@
           <li class="pure-menu-item">
             <a href="list" class="pure-menu-link">Movies</a>
           </li>
-          {% if not user_demo %}
+          {% if not demo_mode %}
           <li class="pure-menu-item">
             <a href="upload" class="pure-menu-link">Upload</a>
           </li>
@@ -100,7 +103,7 @@
           <li class="pure-menu-item">
             <a href="privacy" class="pure-menu-link">Privacy</a>
           </li>
-          {% if not user_demo %}
+          {% if not demo_mode %}
           {% if logged_in %}
           <li class="pure-menu-item">
             <a href="logout" class="pure-menu-link">Logout</a>
@@ -120,7 +123,7 @@
 
     {% if logged_in %}
     <div>
-      {{user_name}} ({{user_id}}) Course: {{primary_course_name}}
+      Logged in as <b>{{user_name}}</b>. Current course: <b>{{primary_course_name}}</b>.
     </div>
     {% endif %}
 
@@ -136,19 +139,22 @@
         <p id="copyright" class="legal-license"><a href='tos'>Copyright &#169; 2023-2025</a></p>
         <hr/>
         <p><small>
-            {% if user_demo %}
+            {% if demo_mode %}
             <b>demo mode</b>
             {% endif %}
-            ver {{version}} {{git_branch}} {{git_last_commit}} {{git_head_time}} ({{dbreader_host}})</small></p>
+            {% if version %}
+            ver {{version}} {{git_branch}} {{git_last_commit}} {{git_head_time}}
+            {% endif %}
+        </small></p>
       </div>
     </div>
     <script>
-
+      "use strict";
       // demo mode: show the 'demo' CSS class and hide the 'nodemo'
       // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
       // if we are in demo mode.
       $( document ).ready( function() {
-        if (user_demo) {
+        if (demo_mode) {
           $('.demo').show();
           $('.nodemo').hide();
         } else {

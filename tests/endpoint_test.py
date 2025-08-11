@@ -14,23 +14,24 @@ import time
 import json
 import base64
 from urllib3.util import Retry
+import uuid
 
 import pytest
 
-import app.db as db
-import app.db_object as db_object
+from app import odb
+from app import db_object
+from app.odb import DDBO,is_api_key
 from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
 from app.constants import C,E,__version__,GET,POST,GET_POST
 
+from fixtures import local_aws
+from fixtures.local_aws import ADMIN_ID, ADMIN_EMAIL
 from fixtures.app_client import client
 from fixtures.localmail_config import mailer_config
-import user_test
-from user_test import new_course, new_user, api_key
+from fixtures.local_aws import local_ddb, local_s3, new_course, api_key
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
-ENDPOINT_URL = 'ENDPOINT_URL'
-SKIP_ENDPOINT_TEST = 'SKIP_ENDPOINT_TEST'
 
 def test_ver1(client):
     r = client.get('/ver')
@@ -52,19 +53,21 @@ def test_add(client):
     assert r.json == {'result': 30, 'error': False}
 
 
-def test_api_key(client, api_key):
+def test_api_key(client, new_course):
+    api_key = new_course[local_aws.API_KEY]
+    logging.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
     assert r.json['error'] == False
-    assert r.json['userinfo']['name'] == 'Test User Name'
+    assert r.json['userinfo']['user_name'] == 'Course User'
 
     r = client.post('/api/check-api_key', data={'api_key': 'invalid'})
-    assert r.status_code == 200
+    assert r.status_code == 403
     assert r.json['error'] == True
 
-def test_api_get_logs(client, new_user):
-    api_key = new_user[user_test.API_KEY]
-    user_id = new_user[user_test.USER_ID]
+def test_api_get_logs(client, new_course):
+    api_key = new_course[local_aws.API_KEY]
+    user_id = new_course[local_aws.USER_ID]
 
     r = client.post('/api/get-logs',
                     data={'api_key': api_key, 'log_user_id' : user_id})
@@ -81,11 +84,13 @@ def test_api_get_logs(client, new_user):
 def test_bulk_register_success(client, new_course, mailer_config):
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
+    ddbo = DDBO()
     email_address = 'testuser@example.com'
-    course_id = new_course[user_test.COURSE_ID]
-    admin_user = db.lookup_user(email=None, user_id=new_course[user_test.ADMIN_ID], get_admin=True, get_courses=None)
-    api_key = db.make_new_api_key(email=new_course[user_test.ADMIN_EMAIL])
-   
+    course_id = new_course[local_aws.COURSE_ID]
+    admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])
+    api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    assert is_api_key(api_key)
+
     r = client.post('/api/bulk-register',
                     data={'api_key': api_key,
                           'course_id': str(course_id),
@@ -96,7 +101,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     res = r.json
     assert res['error'] is False
     assert res['message'] == 'Registered 1 email addresses'
-    db.delete_user(email=email_address,purge_movies=True)
+    odb.delete_user(user_id=res['user_ids'][0]  , purge_movies=True)
 
 def test_bulk_register_invalid_email(client, new_course, mailer_config):
     """This tests the bulk-register api when given an invalid email address
@@ -140,7 +145,7 @@ def test_upload_movie_data(client, api_key):
     assert res['error'] == False
 
     # Purge the movie (to clean up)
-    db.purge_movie(movie_id = movie_id)
+    odb.purge_movie(movie_id = movie_id)
 
 # need /api/get-movie-data
 # need /api/get-movie-metadata

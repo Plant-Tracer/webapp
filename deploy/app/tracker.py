@@ -16,6 +16,10 @@ import cv2
 import numpy as np
 
 from . import paths
+from .constants import C
+
+logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
+logger = logging.getLogger(__name__)
 
 FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT='point_array_out'

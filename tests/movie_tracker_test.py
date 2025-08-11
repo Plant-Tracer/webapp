@@ -18,30 +18,39 @@ from os.path import abspath, dirname
 from zipfile import ZipFile
 import copy
 
+import filetype
 import numpy as np
 import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import app.dbfile as dbfile
-import app.bottle_api as bottle_api
-import app.bottle_app as bottle_app
-import app.db as db
-import app.db_object as db_object
-import app.tracker as tracker
-from app.constants import MIME,E
+from app import bottle_api
+from app import bottle_app
+from app import odb
+from app import db_object
+from app import tracker
+from app.constants import MIME,E,C
+from app.odb import DDBO,API_KEY,MOVIE_ID,TITLE,USER_ID
 
 # get the first MOV
 
 # Get the fixtures from user_test
 from fixtures.app_client import client
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
+from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH,MOVIE_TITLE,local_s3
 from movie_test import new_movie
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
 TEST_LABEL2 = 'test-label2'
 TEST_LABEL3 = 'test-label3'
+
+def is_zipfile(buf):
+    try:
+        return filetype.guess(buf).mime==MIME.ZIP
+    except AttributeError:
+        logging.error("buf=%s",buf)
+        raise
+
 
 def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
@@ -54,11 +63,11 @@ def test_track_point_annotations(client, new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_urn = db.create_new_frame(movie_id=movie_id, frame_number=0)
-    db.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
+    frame_urn = odb.create_new_movie_frame(movie_id=movie_id, frame_number=0)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
-    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
+    tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
     assert len(tps)==2
     logging.debug("tps[0]=%s",tps[0])
     logging.debug("tp0=%s",tp0)
@@ -81,7 +90,7 @@ def test_track_point_annotations(client, new_movie):
     assert response.status_code == 200
 
     # Validate that the trackpoints were written into the database
-    tps = db.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
+    tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
     assert tps[0]['y'] == tp0['y']
@@ -102,10 +111,13 @@ def test_track_point_annotations(client, new_movie):
 def test_movie_tracking(client, new_movie):
     """
     Load up our favorite trackpoint ask the API to track a movie!
-    Note: We no longer create an output movie: we just test the trackpoints
+    Tests for:
+    - all frames tracked
+    - trackpoints near correct end location
+    - zipfile created
     """
     cfg      = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
+    movie_id    = cfg[MOVIE_ID]
     movie_title = cfg[MOVIE_TITLE]
     api_key  = cfg[API_KEY]
     user_id  = cfg[USER_ID]
@@ -123,7 +135,7 @@ def test_movie_tracking(client, new_movie):
     logging.debug("save trackpoints ret=%s",ret)
     assert ret['error']==False
 
-    # Now track with CV2 - This actually does the tracking when run outsie of lambda
+    # Now track with the tracking API.
     response = client.post('/api/track-movie-queue',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
@@ -132,6 +144,33 @@ def test_movie_tracking(client, new_movie):
     ret = response.get_json()
     logging.debug("track movie ret=%s",ret)
     assert ret['error']==False
+
+    response = client.post('/api/get-movie-metadata',
+                           data = {'api_key': api_key,
+                                   'movie_id': str(movie_id),
+                                   'get_all_if_tracking_completed': True})
+    assert response.status_code == 200
+    ret = response.get_json()
+    logging.debug("/api/get-movie-metadata() = %s",ret)
+
+    movie_metadata = ret['metadata']
+    assert movie_metadata['movie_zipfile_urn'].startswith('s3')
+    assert movie_metadata['movie_zipfile_url'].startswith('http') # might be https
+    assert movie_metadata['last_frame_tracked'] == 53             # 0..53
+    assert len(ret['frames']) == 54
+
+
+    # check the metadata in the database
+    dbmovie_metadata = odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
+    logging.debug('movie_metadata=%s',movie_metadata)
+    assert dbmovie_metadata['status'] == C.TRACKING_COMPLETED
+    assert dbmovie_metadata['last_frame_tracked'] == 53
+    assert dbmovie_metadata['movie_zipfile_urn'].startswith('s3')
+    assert 'movie_zipfile_url' not in dbmovie_metadata # don't put signed URLs in the database
+
+    # Get the zipfile and make sure it is a zipfile
+    zipdata = db_object.read_object(movie_metadata['movie_zipfile_urn'])
+    assert is_zipfile(zipdata)
 
     # Download the trackpoints as a CSV and make sure it is formatted okay.
     # The trackpoints go with the original movie, not the tracked one.
@@ -142,13 +181,15 @@ def test_movie_tracking(client, new_movie):
     lines = response.text.splitlines()
 
     # Verify a ZIP file with the individual frames was created
-    zipfile_data = db.get_movie_data(movie_id=movie_id, zipfile=True)
+    zipfile_data = odb.get_movie_data(movie_id=movie_id, zipfile=True)
     with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
         tf.write(zipfile_data)
         tf.flush()
         with ZipFile(tf.name, 'r') as myzip:
             logging.info("names of files in zipfile: %s",myzip.namelist())
             frame_count = len(myzip.namelist())
+
+    assert frame_count==54
 
 
     # Check that the CSV header is set

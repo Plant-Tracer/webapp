@@ -20,18 +20,14 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import app.dbfile as dbfile
-
 import app.bottle_api as bottle_api
 import app.bottle_app as bottle_app
-import app.db as db
 import app.tracker as tracker
 
 from app.constants import MIME
 
 # Get the fixtures from user_test
-from user_test import new_user,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,DBWRITER,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
-from movie_test import new_movie
+from fixtures.local_aws import new_movie,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},

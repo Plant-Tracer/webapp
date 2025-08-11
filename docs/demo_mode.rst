@@ -1,8 +1,17 @@
 Demo Mode
 =========
 
-Goals
------
+A PlantTracer database consists of several DyanmoDB tables with a given table prefix and an S3 bucket.
+
+When the database is created, a default course with the ID `demo_course` is created. There are two users: a default course admin and a default demo user. The demo course is then prepopulated with several demo movies from the test data.
+
+The demo user is identified with a special API key.
+
+Demo mode is enabled by sedding the environment variable `DEMO_COURSE_ID` to the course_id of the course that is the demo course. It need not be the demo course that is created as part of the default installation.
+
+
+Demo Mode Goals
+---------------
 
 - Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app
 
@@ -13,17 +22,17 @@ Goals
 Functions
 ---------
 
-- Will allow:
+Demo mode allows
 
-  - View the list of movies in a single table
+- View the list of movies in a single table
 
-  - Play a movie without tracking
+- Play a movie without tracking
 
-  - Click on 'analyze' to show the user interface for playing a movie that has a stored trace
+- Click on 'analyze' to show the user interface for playing a movie that has a stored trace
 
-  - Download a CSV representation of movie trace data
+- Download a CSV representation of movie trace data
 
-- Will not allow:
+Demo mode restrictions:
 
   - No uploading of movies
 
@@ -40,42 +49,40 @@ Functions
 Required in the database
 ------------------------
 
-- Demo mode user with their own API key and course (dbmaint.py --create_course with --demo_email will do this)
+Every new database is created with a demo user and a few movies.
 
-- Tracked movies in the demo mode user's course (dbmaint.py --create_course with --demo_email will automatically inserts all the movies it finds in tests/data into the database)
+- The demo user has a perdefiend API key.
 
-- Currently, be aware that the demo movies must be tracked and published manually after the demo movies are populated into the database
+- When `DEMO_COURSE_ID` is set, the authentication routines always return the demo mode `api_key`. That is, there is no way to log in or log out.
+
+To edit the movies in the demo course, just run another instance that is attached to the same database and edit the movies in the demo course.
 
 Implementation
 --------------
 
-- Only checks for demo mode if ``DEMO_MODE`` environment variable is set to 1
+Demo Mode uses the following environment variables:
 
-- If ``DEMO_MODE`` is set and there is no user logged in, then we are in DEMO_MODE
+- `DEMO_COURSE_ID`       - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
+- `DEMO_DYNAMODB_PREFIX` - The table prefix. (Created as `demo-` by the `dbutil.py` script)
 
-- If the logged-in user's demo attribute is true (1), then demo mode is available
+If we are in demo mode:
 
-- If we are in DEMO_MODE
+- We are always logged in, and always in Demo Mode.
 
-  - auth.get_user_api_key()
+- auth.get_user_api_key() always returns an API Key for demo mode.
 
-    - If there is a user logged in, we get that user
+- `demo_user` JavaScript global variable set to ``true`` (if in demo mode)
 
-    - If there is no user logged in, we get the demo user
+- `demo_user` Jinja2 variable will get set to ``True`` (otherwise it is ``False``)
 
-    - Once we get the demo user, the web browser's API_KEY cookie will be set to the demo user. So logging out will remove it and the immediately set back it
+Rendering control:
 
-    - (To get out of demo mode, you'll need to click on a link that has a different API key)
+  - CSS Class ``demo`` elements display only if in demo mode
+  - CSS Class ``nodemo`` elements display only if not in demo mode
 
-- ``user_demo`` JavaScript global variable set to ``1`` (if in demo mode)
+To make changes to the demo course:
 
-- ``user_demo`` Jinja2 variable will get set to ``1`` (otherwise it is ``0``)
-
-- More straightforward than conditional page rendering is using css classes to control the
-  displaying of HTML elements for demo mode
-
-  - Class ``demo`` elements display only if in demo mode
-  - Class ``nodemo`` elements display only if not in demo mode
+- Create another user who is enrolled in `DEMO_COURSE` and another login with the same `DEMO_PREFIX`
 
 Troubleshooting/Development Note
 --------------------------------
