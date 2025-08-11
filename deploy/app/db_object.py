@@ -148,7 +148,7 @@ def write_object(urn, object_data):
                 logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)
             else:
                 logging.error("*** Unexpected ClientError: %s",error_code)
-            raise 
+            raise
     raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
