@@ -182,16 +182,10 @@ if __name__ == "__main__":
     ################################################################
     ## Cleanup
 
-    #if args.purge_test_data:
-    #    odbmaint.purge_test_data()
-
     if args.purge_all_movies:
         if not args.course_id:
             parser.error("Must provide --course_id")
         odbmaint.purge_all_movies(DDBO())
-
-    #if args.purge_movie:
-    #    odb.purge_movie(movie_id=args.purge_movie)
 
     ################################################################
     ## Maintenance
@@ -199,15 +193,3 @@ if __name__ == "__main__":
     if args.report:
         odbmaint.report(DDBO())
         sys.exit(0)
-
-    #if args.freshen:
-    #    odbmaint.freshen(False)
-    #    sys.exit(0)
-
-    #if args.clean:
-    #    odbmaint.freshen(True)
-    #    sys.exit(0)
-
-    #if args.dump:
-    #    odbmaint.dump(config,args.dump)
-    #    sys.exit()
