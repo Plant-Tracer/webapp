@@ -547,7 +547,7 @@ class DDBO:
         ################
 
         try:
-            
+
             if ok_if_exists:
                 self.courses.put_item(Item=coursedict)
             else:
@@ -599,6 +599,8 @@ class DDBO:
     ### movie management
 
     def get_movie(self, movie_id):
+        """Given a movie_id, return the movie object."""
+        # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
         return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
@@ -800,7 +802,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     Does not make an api_key or send the links with the api_key.
     :param email: - user email
     :param course_key: - the key. We might only have this, if the user went to the web page.
-    :param course_id:  - the course id. 
+    :param course_id:  - the course id.
     :param admin:      - True if this is a course admin
     :return: dictionary of { USER_ID :user_id} for user who is registered.
     """
@@ -971,7 +973,7 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
                         ADMINS_FOR_COURSE:[],
                         MAX_ENROLLMENT:max_enrollment},
                       ok_if_exists=ok_if_exists)
-    
+
 @log
 def delete_course(*,course_id):
     """Delete a course.
