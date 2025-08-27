@@ -128,7 +128,7 @@ pytest-debug: $(REQ)
 	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
 
 pytest-coverage: $(REQ)
-	$(PIP_INSTALL) codecov pytest pytest_cov
+	$(PIP_INSTALL) codecov pytest pytest-cov
 	$(PT_VARS) $(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
 	@echo covreage report in htmlcov/
 
