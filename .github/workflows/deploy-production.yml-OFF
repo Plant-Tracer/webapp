@@ -1,6 +1,6 @@
 # See https://stackoverflow.com/questions/60710209/trigger-github-actions-only-when-pr-is-merged
 name: Deploy to app.planttracer.com
-concurrency: deploy-production
+concurrency:deploy-production
 
 on:
   pull_request:
