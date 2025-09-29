@@ -164,12 +164,12 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	$(DEMO_VARS) $(PYTHON) PYTHONPATH=src-static-api dbutil.py --createdb
+	$(DEMO_VARS) PYTHONPATH=src-static-api $(PYTHON) dbutil.py --createdb
 	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(DEMO_VARS) LOG_LEVEL=DEBUG $(PYTHON) PTHONPATH=src-static-api dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(DEMO_VARS) LOG_LEVEL=DEBUG PTHONPATH=src-static-api $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(DEMO_VARS) LOG_DEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
