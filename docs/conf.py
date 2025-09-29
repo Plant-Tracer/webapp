@@ -15,8 +15,9 @@ ROOT_DIR = dirname(MY_DIR)
 DEPLOY_DIR = join(ROOT_DIR,'src-static-api')
 
 sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, DEPLOY_DIR)
 
-from src-static-api.app.constants import __version__
+from app.constants import __version__
 
 project = 'Plant Tracer Web Application'
 copyright = '2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
