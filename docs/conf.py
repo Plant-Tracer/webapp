@@ -12,11 +12,11 @@ import sys
 from os.path import dirname,abspath,join
 MY_DIR = dirname(abspath(__file__))
 ROOT_DIR = dirname(MY_DIR)
-DEPLOY_DIR = join(ROOT_DIR,'deploy')
+DEPLOY_DIR = join(ROOT_DIR,'src-static-api')
 
 sys.path.insert(0, ROOT_DIR)
 
-from deploy.app.constants import __version__
+from src-static-api.app.constants import __version__
 
 project = 'Plant Tracer Web Application'
 copyright = '2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner'
