@@ -46,7 +46,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 
 PYTHON=venv/bin/python
 PIP_INSTALL=venv/bin/pip install --no-warn-script-location
-DEPLOY_ETC=deploy/etc
+DEPLOY_ETC=src-static-api/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
@@ -55,7 +55,7 @@ venv/pyvenv.cfg:
 	python3 -m venv venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
-	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
+	if [ -r src-static-api/requirements.txt ]; then $(PIP_INSTALL) -r src-static-api/requirements.txt ; fi
 	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
 	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
 
@@ -75,7 +75,7 @@ check:
 	make pytest
 
 tags:
-	etags deploy/app/*.py tests/*.py tests/fixtures/*.py deploy/app/static/*.js
+	etags src-static-api/app/*.py tests/*.py tests/fixtures/*.py src-static-api/app/static/*.js
 
 ################################################################
 ## Program development: static analysis tools
@@ -197,17 +197,17 @@ tracker-debug:
 ### JavaScript
 
 eslint:
-	if [ ! -d deploy/app/static ]; then echo no deploy/app/static ; exit 1 ; fi
-	(cd deploy/app/static;make eslint)
-	if [ ! -d deploy/app/templates ]; then echo no deploy/app/templates ; exit 1 ; fi
-	(cd deploy/app/templates;make eslint)
+	if [ ! -d src-static-api/app/static ]; then echo no src-static-api/app/static ; exit 1 ; fi
+	(cd src-static-api/app/static;make eslint)
+	if [ ! -d src-static-api/app/templates ]; then echo no src-static-api/app/templates ; exit 1 ; fi
+	(cd src-static-api/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=deploy/app/static npm run coverage
-	NODE_PATH=deploy/app/static npm test
+	NODE_PATH=src-static-api/app/static npm run coverage
+	NODE_PATH=src-static-api/app/static npm test
 
 jstest-debug:
-	NODE_PATH=deploy/app/static npm run test-debug
+	NODE_PATH=src-static-api/app/static npm run test-debug
 
 
 ################################################################
