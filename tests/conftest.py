@@ -11,7 +11,7 @@ from os.path import abspath, dirname,join
 
 MY_DIR = dirname(abspath(__file__))
 GIT_ROOT = dirname(MY_DIR)
-DEPLOY_DIR   = join(GIT_ROOT,'deploy')
+DEPLOY_DIR   = join(GIT_ROOT,'src-static-api')
 APP_DIR   = join(DEPLOY_DIR,'app')
 sys.path.append(DEPLOY_DIR)
 sys.path.append(GIT_ROOT)
