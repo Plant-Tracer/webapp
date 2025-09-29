@@ -84,11 +84,11 @@ tags:
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy *.py
+	PYTHONPATH=src-static-api $(PYTHON) -m pylint $(PYLINT_OPTS) deploy *.py
 
 ## Use this to also test the tests...
 pylint-tests: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+	PYTHONPATH=src-static-api $(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
 ## Mypy static analysis
 mypy:
