@@ -599,6 +599,7 @@ class DDBO:
     ### movie management
 
     def get_movie(self, movie_id):
+        """Given a movie_id, return the movie object."""
         # NOTE: Make more efficient by specifying which attributes of the Item to return with projection.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
