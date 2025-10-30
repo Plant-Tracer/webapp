@@ -1,14 +1,12 @@
 /*
  * PlantTracer time lapse camera.
- * (C) 2025 Simson L. Garfinkel, with lots of help from ChatGPT
+ * (C) 2025 Simson L. Garfinkel.
  */
 
 const UPLOAD_INTERVAL_SECONDS = 5;
 const UPLOAD_TIMEOUT_SECONDS = 60;
-let  frames_uploaded = 0;
-let  debug = false;
-let __runController = null;
-
+var  frames_uploaded = 0;
+var  debug = false;
 const VIDEO_MEDIA_WITH_CONSTRAINTS = {
     video: {
         width: { ideal: 640 },
@@ -16,30 +14,6 @@ const VIDEO_MEDIA_WITH_CONSTRAINTS = {
     }
 };
 
-
-function computeFit(srcW, srcH, dstW, dstH) {
-    const s = Math.min(dstW / srcW, dstH / srcH);
-    const dw = Math.round(srcW * s);
-    const dh = Math.round(srcH * s);
-    const dx = Math.floor((dstW - dw) / 2);
-    const dy = Math.floor((dstH - dh) / 2);
-    return { dx, dy, dw, dh };
-}
-
-function formatTimestamp() {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const timeStr = now.toLocaleTimeString([], { hour12: false });
-    return `${dateStr} ${timeStr}`;
-}
-
-
-// Portrait detection for auto-rotate (source aspect, not CSS)
-function isPortrait(video) {
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
-    return vh > vw;
-}
 
 function setStatus(msg) {
     document.getElementById('status-message').textContent = msg;
@@ -62,7 +36,6 @@ function post_image_to_console(blob) {
     reader.readAsDataURL(blob);
 }
 
-// (unused) post_image_to_screen is dead code now; kept for debugging convenience.
 function post_image_to_screen(image) {
     const url = URL.createObjectURL(image);
     const img = document.createElement("img");
@@ -72,20 +45,18 @@ function post_image_to_screen(image) {
 }
 
 
-// Reuse a single AudioContext to avoid exceeding browser limits
-const __audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playTone(frequency = 440, duration = 1.0) {
-    const osc = __audioCtx.createOscillator();
-    const gain =__audioCtx.createGain();
+function playTone(frequency = 440, duration = 0.2) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     osc.type = "sine";                     // waveform: sine, square, triangle, sawtooth
     osc.frequency.value = frequency;       // Hz, e.g. 440 = A4
     gain.gain.value = 0.1;                 // volume (0.0–1.0)
 
-    osc.connect(gain).connect(__audioCtx.destination);
-    const t0 = __audioCtx.currentTime;
-    osc.start(t0);
-    osc.stop(t0 + duration);  // stop after N seconds
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);  // stop after N seconds
 }
 
 
@@ -144,68 +115,10 @@ function post_image(image) {
         });
 }
 
-async function captureAndSend(video, totalSeconds, post_image, debug = false) {
-    // Output size based on orientation
-    const portrait = isPortrait(video);
-    const OUT_W = portrait ? 480 : 640;
-    const OUT_H = portrait ? 640 : 480;
-
-    // Off-screen canvas
-    const cap = document.createElement("canvas");
-    cap.width = OUT_W;
-    cap.height = OUT_H;
-    const cctx = cap.getContext("2d");
-
-    // Fit full frame without distortion
-    const vw = video.videoWidth  || OUT_W;
-    const vh = video.videoHeight || OUT_H;
-    const fit = computeFit(vw, vh, OUT_W, OUT_H);
-
-    // Draw video frame
-    cctx.clearRect(0, 0, OUT_W, OUT_H);
-    cctx.drawImage(video, 0, 0, vw, vh, fit.dx, fit.dy, fit.dw, fit.dh);
-
-    // Draw full white bar + timestamp (same style as overlay, but 100% filled)
-    const barH = Math.max(28, Math.round(OUT_H * 0.07));
-    const y = OUT_H - barH;
-
-    cctx.fillStyle = "#000";
-    cctx.fillRect(0, y, OUT_W, barH);
-
-    cctx.fillStyle = "#fff";
-    cctx.fillRect(0, y, OUT_W, barH);
-
-    cctx.font = `${Math.round(barH * 0.55)}px sans-serif`;
-    cctx.textBaseline = "middle";
-    cctx.fillStyle = "#000";
-    cctx.textAlign = "left";
-    cctx.fillText(formatTimestamp(), 8, y + barH / 2);
-
-    // Encode
-    const blob = await new Promise(res => cap.toBlob(res, "image/jpeg", 0.95));
-
-    // Post or debug
-    if (debug) {
-        // show in console or DOM — your existing debug helper
-        post_image_to_console(blob);
-    } else {
-        await post_image(blob);
-    }
-}
-
-
 async function run_camera() {
-    // kill old listeners (if any) before wiring new ones
-    if (__runController) {
-        __runController.abort();
-    }
-    __runController = new AbortController();
-    const { signal } = __runController;
-
-    // set up buttons
     const run_button = document.getElementById('run-button');
     const stop_button = document.getElementById('stop-button');
-    const debug_button = document.getElementById('debug-button');
+    const debug_button = document.getElementById('stop-button');
 
     // Check if the browser supports media devices
     console.log("run_camera...");
@@ -217,184 +130,47 @@ async function run_camera() {
     try {
         // Access the camera
         const stream = await navigator.mediaDevices.getUserMedia(VIDEO_MEDIA_WITH_CONSTRAINTS);
-        const { container, video, overlay, octx, resizeOverlay } = setupLiveView(stream);
-        await video.play(); // ensure dimensions become available
-
         const track = stream.getVideoTracks()[0];
         const settings = track.getSettings();
         console.log(`Camera started. Actual resolution: ${settings.width}x${settings.height}`);
+
+        // Create a video element to display the stream
+        const video = document.createElement("video");
+        document.body.appendChild(video);
+        video.srcObject = stream;
         await video.play();     // waits for video play to start
 
-        const viewCanvas = document.createElement("canvas");           // shows scaled, full frame
-        const viewCtx = viewCanvas.getContext("2d");
-        // Make the canvas actually cover the viewport (CSS pixels)
-        Object.assign(viewCanvas.style, {
-            position: "fixed",
-            inset: "0",
-            width: "100vw",
-            height: "100vh",
-            display: "block",
-            pointerEvents: "none",
-            background: "black",  // optional; avoids flash
-        });
-        document.body.appendChild(viewCanvas);
-
-        const captureCanvas = document.createElement("canvas");        // offscreen for upload
-        const captureCtx = captureCanvas.getContext("2d");
+        // Create a canvas to display the image
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        document.body.appendChild(canvas); // ADDED
+        video.style.display = "none";      // ADDED: keep only the annotated canvas visible
 
         run_button.disabled = true;
         debug_button.disabled = true;
         stop_button.disabled = false;
 
-        [run_button, stop_button, debug_button].forEach(el => {
-            if (!el) return;
-            el.style.position = el.style.position || "relative";
-            el.style.zIndex = "1";
-        });
-
-
-        function resizeViewCanvas() {
-            const cssW = window.innerWidth;
-            const cssH = window.innerHeight;
-            const dpr  = window.devicePixelRatio || 1;
-            // drawing buffer in device pixels for crispness
-            viewCanvas.width  = Math.round(cssW * dpr);
-            viewCanvas.height = Math.round(cssH * dpr);
-            // scale context so we can draw in CSS pixel units below
-            viewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        }
-        resizeViewCanvas();
-
-        function setupLiveView(stream) {
-            // Container
-            const container = document.createElement("div");
-            Object.assign(container.style, {
-                position: "relative",
-                width: "100%",
-                height: "100%",
-                maxWidth: "100vw",
-                maxHeight: "100vh",
-                background: "black",
-                overflow: "hidden",
-            });
-            document.body.appendChild(container);
-
-            // Live <video>
-            const video = document.createElement("video");
-            video.srcObject = stream;
-            video.playsInline = true;
-            video.muted = true;
-            video.autoplay = true;
-            Object.assign(video.style, {
-                position: "absolute",
-                inset: "0",
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",   // <-- full image visible, no cropping
-                background: "black",
-            });
-            container.appendChild(video);
-
-            // Transparent overlay canvas for the bar + text
-            const overlay = document.createElement("canvas");
-            const octx = overlay.getContext("2d");
-            Object.assign(overlay.style, {
-                position: "absolute",
-                inset: "0",
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-            });
-            container.appendChild(overlay);
-
-            // Size the overlay drawing buffer to match its CSS size * DPR
-            function resizeOverlay() {
-                const rect = container.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 1;
-                overlay.width  = Math.max(1, Math.round(rect.width  * dpr));
-                overlay.height = Math.max(1, Math.round(rect.height * dpr));
-                // draw in CSS pixels by scaling context
-                octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            }
-
-            // Initial sizing
-            resizeOverlay();
-
-            return { container, video, overlay, octx, resizeOverlay };
-        }
-
-        function drawOverlay(octx, overlay, secondsRemaining, totalSeconds) {
-            const W = overlay.width  / (window.devicePixelRatio || 1);
-            const H = overlay.height / (window.devicePixelRatio || 1);
-
-            // Clear
-            octx.clearRect(0, 0, W, H);
-
-            // Bar geometry
-            const barH = Math.max(28, Math.round(H * 0.07));
-            const y = H - barH;
-
-            // Background bar (black)
-            octx.fillStyle = "#000";
-            octx.fillRect(0, y, W, barH);
-
-            // Progress (white)
-            const progressed = Math.max(0, Math.min(totalSeconds, totalSeconds - secondsRemaining));
-            const frac = totalSeconds ? progressed / totalSeconds : 1;
-            octx.fillStyle = "#fff";
-            octx.fillRect(0, y, Math.round(W * frac), barH);
-
-            // Text: left = timestamp (black), right = seconds (black)
-            const text = formatTimestamp();
-            const right = `${Math.max(0, secondsRemaining)}s`;
-
-            octx.font = `${Math.round(barH * 0.55)}px sans-serif`;
-            octx.textBaseline = "middle";
-            octx.fillStyle = "#000";
-            const ty = y + barH / 2;
-
-            octx.textAlign = "left";
-            octx.fillText(text, 8, ty);
-
-            octx.textAlign = "right";
-            octx.fillText(right, W - 8, ty);
-        }
-
-
-
-
-        // Ensure we have real video dimensions before the first paint
-        if (!video.videoWidth || !video.videoHeight) {
-            await new Promise(r => video.addEventListener("loadedmetadata", r, { once: true }));
-        }
+        const canvasToBlob = (c, type, q) => new Promise(res => c.toBlob(res, type, q));
 
         function drawFrame(secondsRemaining) {
-            const VIEW_W = window.innerWidth;
-            const VIEW_H = window.innerHeight;
-            // Draw in CSS pixel coordinates (we scaled the context in resizeViewCanvas)
+            // sync canvas to video
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            const vw = video.videoWidth || 640;
-            const vh = video.videoHeight || 480;
-            const fit = computeFit(vw, vh, VIEW_W, VIEW_H);
+            const barH = Math.max(28, Math.round(canvas.height * 0.07)); // 7% or min 28px
+            const y = canvas.height - barH;
 
-            // Clear + draw full frame, letterboxed
-            viewCtx.clearRect(0, 0, VIEW_W, VIEW_H);
-            viewCtx.drawImage(video, 0, 0, vw, vh, fit.dx, fit.dy, fit.dw, fit.dh);
+            // background bar (black)
+            context.fillStyle = "#000";
+            context.fillRect(0, y, canvas.width, barH);
 
-            // --- overlay bar (same as before, but on viewCanvas/viewCtx) ---
-            const barH = Math.max(28, Math.round(VIEW_H * 0.07));
-            const y = VIEW_H - barH;
-
-            // black background bar
-            viewCtx.fillStyle = "#000";
-            viewCtx.fillRect(0, y, VIEW_W, barH);
-
-            // white progress
+            // white progress from left to right
             const total = UPLOAD_INTERVAL_SECONDS;
             const progressed = total - secondsRemaining;
             const frac = Math.min(1, Math.max(0, progressed / total));
-            viewCtx.fillStyle = "#fff";
-            viewCtx.fillRect(0, y, Math.round(VIEW_W * frac), barH);
+            context.fillStyle = "#fff";
+            context.fillRect(0, y, Math.round(canvas.width * frac), barH);
 
             // date + time (black text, no shadow)
             const now = new Date();
@@ -403,16 +179,31 @@ async function run_camera() {
             const leftText = `${dateStr} ${timeStr}`;
             const rightText = `${secondsRemaining}s`;
 
-            viewCtx.font = `${Math.round(barH * 0.55)}px sans-serif`;
-            viewCtx.textBaseline = "middle";
-            viewCtx.fillStyle = "#000";
+            context.font = `${Math.round(barH * 0.55)}px sans-serif`;
+            context.textBaseline = "middle";
+            context.fillStyle = "#000";
 
             const textY = y + barH / 2;
-            viewCtx.textAlign = "left";
-            viewCtx.fillText(leftText, 8, textY);
+            context.textAlign = "left";
+            context.fillText(leftText, 8, textY);
 
-            viewCtx.textAlign = "right";
-            viewCtx.fillText(rightText, VIEW_W - 8, textY);
+            context.textAlign = "right";
+            context.fillText(rightText, canvas.width - 8, textY);
+        }
+
+
+        async function captureAndSend() {
+            drawFrame(0);
+            playTone(880, 0.1);  // short, higher-pitch beep
+
+            const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+
+            if (debug) {
+                post_image_to_console(blob);
+                return;
+            }
+
+            await post_image(blob);  // or just post_image(blob) if it’s sync
         }
 
         let busy = false;        // lock to prevent overlapping runs
@@ -426,53 +217,32 @@ async function run_camera() {
                 secondsRemaining -= 1;
                 if (secondsRemaining > 0) {
                     // update bar only
-                    drawOverlay(octx, overlay, secondsRemaining, UPLOAD_INTERVAL_SECONDS);
+                    drawFrame(secondsRemaining);
                     playTone(261.63, 0.05); // quiet tick middle C
                 } else {
                     // final: draw full bar and capture
-                    playTone(440, 0.50); // quiet tick A
                     await captureAndSend();
                     secondsRemaining = UPLOAD_INTERVAL_SECONDS; // reset cycle
-                    drawOverlay(octx, overlay, secondsRemaining, UPLOAD_INTERVAL_SECONDS);
+                    drawFrame(secondsRemaining);
                 }
             } finally {
                 busy = false;
             }
         }, 1000);
 
-        // Repaint on viewport changes (covers orientation)
-        // keep a reference so we can remove it later
-        const onResize = () => {
-            resizeViewCanvas();
-            drawOverlay(octx, overlay, secondsRemaining, UPLOAD_INTERVAL_SECONDS);
-        };
-        window.addEventListener("resize", onResize, { signal });
+
 
         // Stop camera when stop_button clicked
-        let stopped = false;
-        const onStop = () => {
-            if (stopped) return;
-            stopped = true;
+        stop_button.addEventListener("click", () => {
             console.log("Stopping camera...");
             clearInterval(intervalId);
             stream.getTracks().forEach(t => t.stop());  // stop all tracks
-            container.remove();
             video.pause();
             video.srcObject = null;
-
-            // Abort all listeners for this run (resize + this click)
-            __runController.abort();
-            __runController = null;
-
-            // remove view canvas & video element to avoid leaks
-            viewCanvas.remove();
-            video.remove();
-            // enable buttons
             run_button.disabled = false;
             stop_button.disabled = true;
             debug_button.disabled = true;
-        };
-        stop_button.addEventListener("click", onStop, { once: true, signal });
+        });
     } catch (error) {
         console.error("Error accessing camera:", error);
     }
