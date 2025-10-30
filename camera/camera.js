@@ -143,17 +143,58 @@ async function run_camera() {
         // Create a canvas to display the image
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
+        document.body.appendChild(canvas); // ADDED
+        video.style.display = "none";      // ADDED: keep only the annotated canvas visible
 
         run_button.disabled = true;
         debug_button.disabled = true;
         stop_button.disabled = false;
 
         const canvasToBlob = (c, type, q) => new Promise(res => c.toBlob(res, type, q));
-        async function captureAndSend() {
-            playTone(880, 0.1);  // short, higher-pitch beep
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+
+        function drawFrame(secondsRemaining) {
+            // sync canvas to video
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const barH = Math.max(28, Math.round(canvas.height * 0.07)); // 7% or min 28px
+            const y = canvas.height - barH;
+
+            // background bar (black)
+            context.fillStyle = "#000";
+            context.fillRect(0, y, canvas.width, barH);
+
+            // white progress from left to right
+            const total = UPLOAD_INTERVAL_SECONDS;
+            const progressed = total - secondsRemaining;
+            const frac = Math.min(1, Math.max(0, progressed / total));
+            context.fillStyle = "#fff";
+            context.fillRect(0, y, Math.round(canvas.width * frac), barH);
+
+            // date + time (black text, no shadow)
+            const now = new Date();
+            const dateStr = now.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const timeStr = now.toLocaleTimeString([], { hour12: false });
+            const leftText = `${dateStr} ${timeStr}`;
+            const rightText = `${secondsRemaining}s`;
+
+            context.font = `${Math.round(barH * 0.55)}px sans-serif`;
+            context.textBaseline = "middle";
+            context.fillStyle = "#000";
+
+            const textY = y + barH / 2;
+            context.textAlign = "left";
+            context.fillText(leftText, 8, textY);
+
+            context.textAlign = "right";
+            context.fillText(rightText, canvas.width - 8, textY);
+        }
+
+
+        async function captureAndSend() {
+            drawFrame(0);
+            playTone(880, 0.1);  // short, higher-pitch beep
 
             const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
 
@@ -165,18 +206,30 @@ async function run_camera() {
             await post_image(blob);  // or just post_image(blob) if it’s sync
         }
 
-        // lock to prevent overlapping runs
-        let busy = false;
+        let busy = false;        // lock to prevent overlapping runs
+        let secondsRemaining = UPLOAD_INTERVAL_SECONDS;
+        drawFrame(secondsRemaining);                  // initial paint
 
         const intervalId = setInterval(async () => {
             if (busy) return;
             busy = true;
             try {
-                await captureAndSend();  // safe even if async
+                secondsRemaining -= 1;
+                if (secondsRemaining > 0) {
+                    // update bar only
+                    drawFrame(secondsRemaining);
+                    playTone(261.63, 0.05); // quiet tick middle C
+                } else {
+                    // final: draw full bar and capture
+                    await captureAndSend();
+                    secondsRemaining = UPLOAD_INTERVAL_SECONDS; // reset cycle
+                    drawFrame(secondsRemaining);
+                }
             } finally {
                 busy = false;
             }
-        }, UPLOAD_INTERVAL_SECONDS * 1000);
+        }, 1000);
+
 
 
         // Stop camera when stop_button clicked
