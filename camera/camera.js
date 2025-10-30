@@ -6,7 +6,7 @@
 const UPLOAD_INTERVAL_SECONDS = 5;
 const UPLOAD_TIMEOUT_SECONDS = 60;
 var  frames_uploaded = 0;
-
+var  debug = false;
 const VIDEO_MEDIA_WITH_CONSTRAINTS = {
     video: {
         width: { ideal: 640 },
@@ -15,11 +15,50 @@ const VIDEO_MEDIA_WITH_CONSTRAINTS = {
 };
 
 
-console.log("TODO - compute the correct URL")
-
 function setStatus(msg) {
     document.getElementById('status-message').textContent = msg;
 }
+
+function post_image_to_console(blob) {
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = reader.result; // "data:image/jpeg;base64,..." etc.
+        const style = [
+            "display:inline-block",
+            "line-height:0",
+            "padding:80px 120px",          // box size
+            `background:url("${dataUrl}") center / contain no-repeat`,
+            "border:1px solid #999",
+        ].join(";");
+
+        console.log("%c ", style);
+    };
+    reader.readAsDataURL(blob);
+}
+
+function post_image_to_screen(image) {
+    const url = URL.createObjectURL(image);
+    const img = document.createElement("img");
+    img.src = url;
+    img.style.width = "320px";
+    document.body.appendChild(img);
+}
+
+
+function playTone(frequency = 440, duration = 0.2) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";                     // waveform: sine, square, triangle, sawtooth
+    osc.frequency.value = frequency;       // Hz, e.g. 440 = A4
+    gain.gain.value = 0.1;                 // volume (0.0–1.0)
+
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);  // stop after N seconds
+}
+
 
 /* post_image:
  * 1. contact the server for the signed POST parameters.
@@ -63,7 +102,6 @@ function post_image(image) {
         })
         .then(uploadResponse => {
             if (!uploadResponse.ok) {
-                setStatus(`Error uploading image status=${uploadResponse.status} ${uploadResponse.statusText}`);
                 throw new Error(`Upload failed: ${uploadResponse.statusText}`);
             }
             setStatus(`Image ${frames_uploaded} uploaded.`);
@@ -77,10 +115,10 @@ function post_image(image) {
         });
 }
 
-
 async function run_camera() {
     const run_button = document.getElementById('run-button');
     const stop_button = document.getElementById('stop-button');
+    const debug_button = document.getElementById('stop-button');
 
     // Check if the browser supports media devices
     console.log("run_camera...");
@@ -91,7 +129,7 @@ async function run_camera() {
 
     try {
         // Access the camera
-        const stream = await navigator.mediaDevices.getUserMedia( VIDEO_MEDIA_WITH_CONSTRAINTS );
+        const stream = await navigator.mediaDevices.getUserMedia(VIDEO_MEDIA_WITH_CONSTRAINTS);
         const track = stream.getVideoTracks()[0];
         const settings = track.getSettings();
         console.log(`Camera started. Actual resolution: ${settings.width}x${settings.height}`);
@@ -102,30 +140,56 @@ async function run_camera() {
         video.srcObject = stream;
         await video.play();     // waits for video play to start
 
-        // The camera is now running live.
         // Create a canvas to display the image
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
 
         run_button.disabled = true;
+        debug_button.disabled = true;
         stop_button.disabled = false;
 
-        // Function to capture and send an image
-        const captureAndSend = async () => {
-
-            // Set canvas size to match video size
+        const canvasToBlob = (c, type, q) => new Promise(res => c.toBlob(res, type, q));
+        async function captureAndSend() {
+            playTone(880, 0.1);  // short, higher-pitch beep
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-
-            // Draw the current video frame to the canvas
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Convert the canvas to a data URL
-            canvas.toBlob(post_image, "image/jpeg", 0.95);
-        };
+            const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
 
-        // Capture and send an image every UPLOAD_INTERVAL_SECONDS seconds
-        setInterval(captureAndSend, UPLOAD_INTERVAL_SECONDS * 1000);
+            if (debug) {
+                post_image_to_console(blob);
+                return;
+            }
+
+            await post_image(blob);  // or just post_image(blob) if it’s sync
+        }
+
+        // lock to prevent overlapping runs
+        let busy = false;
+
+        const intervalId = setInterval(async () => {
+            if (busy) return;
+            busy = true;
+            try {
+                await captureAndSend();  // safe even if async
+            } finally {
+                busy = false;
+            }
+        }, UPLOAD_INTERVAL_SECONDS * 1000);
+
+
+        // Stop camera when stop_button clicked
+        stop_button.addEventListener("click", () => {
+            console.log("Stopping camera...");
+            clearInterval(intervalId);
+            stream.getTracks().forEach(t => t.stop());  // stop all tracks
+            video.pause();
+            video.srcObject = null;
+            run_button.disabled = false;
+            stop_button.disabled = true;
+            debug_button.disabled = true;
+        });
     } catch (error) {
         console.error("Error accessing camera:", error);
     }
@@ -134,4 +198,5 @@ async function run_camera() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("camera ready function running.");
     document.getElementById('run-button').addEventListener('click',run_camera);
+    document.getElementById('debug-button').addEventListener('click', () => { debug=true; run_camera()});
 });
