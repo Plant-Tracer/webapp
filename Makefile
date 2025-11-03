@@ -137,8 +137,8 @@ pytest-selenium:
 	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/db_object_test.py
-TEST1FUNCTION="-k test_write_read_delete_object"
+TEST1MODULE=tests/schema_test.py
+#TEST1FUNCTION="-k test_movie_schema"
 pytest1:
 	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
