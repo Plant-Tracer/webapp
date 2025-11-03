@@ -69,6 +69,7 @@ class C:
     YES = 'YES'
     NO = 'NO'
     MOVIE_EXTENSION = ".mov"
+    ZIP_MOVIE_EXTENSION = '_mp4.zip'
     JPEG_EXTENSION = ".jpg"
     PUT = 'put'
     GET = 'get'
