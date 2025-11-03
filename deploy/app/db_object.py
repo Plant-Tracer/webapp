@@ -1,9 +1,11 @@
-"""Support for the object-store. Currently we have support for:
+"""
+Support for the object-store. Currently we have support for:
 
 S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be authenticated to the bucket
 
-movie_name = {course_id}/{movie_id}.mov
-frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
+All objects have this standard naming convention.
+Nevertheless, we store the frame names in the DynamoDB. We may stop doing that shortly.
+
 """
 
 import os
@@ -16,6 +18,9 @@ import boto3
 from botocore.exceptions import ClientError,ParamValidationError
 
 from .constants import C
+
+MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
+FRAME_TEMPLATE = "{course_id}/{movie_id}/frame_number:06d}{ext}"
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +57,13 @@ def sha256(data):
     h.update(data)
     return h.hexdigest()
 
-def object_name(*,course_id,movie_id,frame_number=None,ext):
+def object_name(*,course_id,movie_id,frame_number=None, ext):
     """object_name is a URN that is generated according to a scheme
     that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
-    fm = f"/{frame_number:06d}" if frame_number is not None else ""
-    return f"{course_id}/{movie_id}{fm}{ext}"
+    if frame_number is None:
+        return MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id,ext=ext)
+    return FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number,ext=ext)
 
 
 def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
