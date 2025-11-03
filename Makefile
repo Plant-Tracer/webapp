@@ -16,7 +16,7 @@ JS_FILES := $(TS_FILES:.ts=.js)
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
 
-REQ := venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
+REQ := .venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 LOCAL_BUCKET=planttracer-local
 LOCAL_HTTP_PORT=8080
 
@@ -44,15 +44,15 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
-PYTHON=venv/bin/python
-PIP_INSTALL=venv/bin/pip install --no-warn-script-location
+PYTHON=.venv/bin/python
+PIP_INSTALL=.venv/bin/pip install --no-warn-script-location
 DEPLOY_ETC=deploy/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
-venv/pyvenv.cfg:
-	@echo install venv for the development environment
-	python3 -m venv venv
+.venv/pyvenv.cfg:
+	@echo install .venv for the development environment
+	python3 -m venv .venv
 	$(PYTHON) -m pip install --upgrade pip
 	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
 	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
@@ -170,12 +170,12 @@ make-local-demo:
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
 	$(DEMO_VARS) LOG_LEVEL=DEBUG $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_DEVEL=DEBUG .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -183,7 +183,7 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
@@ -302,7 +302,7 @@ make-local-bucket:
 
 ################################################################
 # Includes ubuntu dependencies
-install-ubuntu: venv/pyvenv.cfg
+install-ubuntu: .venv/pyvenv.cfg
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	which curl || sudo apt install curl
@@ -318,7 +318,7 @@ install-ubuntu: venv/pyvenv.cfg
 	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
 
 # Includes MacOS dependencies managed through Brew
-install-macos: venv/pyvenv.cfg
+install-macos: .venv/pyvenv.cfg
 	brew update
 	brew upgrade
 	which python3 || brew install python3
@@ -337,7 +337,7 @@ install-macos: venv/pyvenv.cfg
 # restart the shell after installs are done
 # choco install as administrator
 # Note: development on windows is not currently supported
-install-windows: venv/pyvenv.cfg
+install-windows: .venv/pyvenv.cfg
 	choco install -y make
 	choco install -y ffmpeg
 	choco install -y nodejs
