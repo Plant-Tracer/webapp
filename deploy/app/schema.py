@@ -104,6 +104,9 @@ class Movie(BaseModel):
 
     published: Annotated[int, Field(ge=0, le=1)]
     deleted: Annotated[int, Field(ge=0, le=1)]
+
+    # Optional follow
+
     date_uploaded: int | None = None
     orig_movie: str | None = None
     fps: str | None = None  # otherwise we get roundoff errors
