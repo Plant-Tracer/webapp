@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+<h2> Dashboard </h2>
+<h3>User Info</h3>
+<table class="pure-table">
+  <thead>
+  </thead>
+  <tbody>
+    <tr><th>Preferred Name</th><td>{{ user.preferred_name }}</td></tr>
+    <tr><th>Email</th><td>{{ user.email }}</td></tr>
+    <tr><th>course_key</th><td>{{ user.course_key }}</td></tr>
+    <tr><th>Web browser IP address:</th><td>{{ client_ip }}</td></tr>
+    {% if user.public_ip %}
+    <tr><th>Instance public IP address:</th><td>{{ user.public_ip }}</td></tr>
+    <tr><th>Access:</th><td><span class="check-btn">(check)</span></td></tr>
+    {% else %}
+    <tr><th colspan="2">Instance not registered <span class="reload-btn">(reload)</span></th></tr>
+    {% endif %}
+  </tbody>
+</table>
+<h3>User Log</h3>
+<table class="pure-table">
+  <thead>
+    <tr><th class="sk">sk</th><th class="client_ip">client_ip</th><th class="message">message</th><th class="claims">claims</th></tr>
+  </thead>
+  <tbody>
+    {% for log in logs %}
+    <tr>
+      <th class="sk">{{ log.sk }}</th>
+      <td class="client_ip">{{ log.client_ip }}</td>
+      <td class="message">{{ log.message }}</td>
+      <td class="claims">{{ log.claims }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>Authenticated Sessions</h3>
+  <h4>Active Sessions Table</h4>
+  <table class="pure-table">
+  <thead>
+    <tr><th>Session #</th><th>sid</th><th>IP Address</th><th>Created</th><th>Expires</th><th>Delete</th></tr>
+  </thead>
+  <tbody>
+    {% for session in sessions %}
+    <tr class="{% if session.sid==ses.sid %}current-session{% endif %}" >
+      <th>{{ loop.index }}</th>
+      <th>{{ session.sid }}</th>
+      <td>{{ session.client_ip }}</td>
+      <td>{{ session.session_created | eastern }}</td>
+      <td>{{ session.session_expire |eastern }}</td>
+      <td><span class="delete-btn" data-sid="{{ session.sid }}">×</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p><i>(All times in eastern time.)</i></p>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+   document.querySelectorAll(".delete-btn").forEach(btn => {
+     btn.style.cursor = "pointer"; // make it obvious it is clickable
+     btn.addEventListener("click", async (event) => {
+       const sid = btn.dataset.sid;
+       try {
+         const resp = await fetch("/api/v1", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ action: "delete-session", sid: sid
+           })
+         });
+
+         if (resp.ok) {           // Remove the row containing the clicked button
+           btn.closest("tr").remove();
+         } else {
+           btn.textContent = "failed";
+           btn.classList.add = "failed";
+           console.error("Delete failed:", resp.status, resp.statusText, "body:",await resp.text());
+         }
+       } catch (err) {
+         btn.textContent = "delete session failed";
+         btn.classList.add = "failed";
+         console.error("Fetch error:", err);
+       }
+     });
+   });
+
+   document.querySelectorAll(".check-btn").forEach(btn => {
+     btn.style.cursor = "pointer"; // make it obvious it is clickable
+     btn.addEventListener("click", async (event) => {
+       btn.textContent = "Checking...";
+       const sid = btn.dataset.sid;
+       try {
+         const resp = await fetch("/api/v1", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             action: "check-access",
+             auth: {
+               email: "{{ user.email }}",
+               course_key: "{{ user.course_key }}" }
+           })
+         });
+
+         if (resp.ok) {           // Remove the row containing the clicked button
+           const data = await resp.json();
+           console.log("data:",data)
+           btn.textContent = data.message;
+         } else {
+           btn.textContent = "Access check failed (1)";
+           btn.classList.add = "failed";
+         }
+       } catch (err) {
+         btn.textContent = "Access check failed (2)";
+         btn.classList.add = "failed";
+         console.error("Fetch error:", err);
+       }
+     });
+   });
+
+
+ });
+</script>
+
+
+{% endblock content %}
