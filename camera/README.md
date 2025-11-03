@@ -15,14 +15,32 @@ Camera workflow:
   - apikey is transmitted as POST.
 - If called with GET, present a form asking for apikey (largely for testing).
 
-- camera.js touches API `/api/v1/camera-start?apikey=<apikey>`
-- creates and returns `movie_id`
-- each frame is uploaded with `/api/v1/camera-upload-frame?apikey=<apikey>&movie_id=<move_id>`
-  - gets an S3 post
+- camera.js touches API `/api/v1/camera-start`
+  - parameters:
+    - apikey=<apikey>.
+    - frame_start=nnn (starting frame).
+    - optional: movie_id (if we are continuing to upload a movie)
+  - Returns:
+    - `movie_id` for the user's current course with state=UPLOADING
+    - signed POSTs for the first N uploads in array of (frame,post parameters)
+
+- each frame is uploaded with the S3 signed post obtained above.
+  - gets an signed S3 post
   - uploads
-- Upload generates an S3 event to add the image to the DynamoDB database.
+   - JPEG to S3.  JPEG metadata should include the exact time that the picture was taken.
+
 - When camera finishes, it runs `/api/v1/camera-stop?apikey=<apikey>&movie_id=<movie_id>`
+  - scans for all frames that were uploade
+  - causes a zipfile of all frames to be create and stored.
   - causes all frames to be integrated into a single MPEG
+
+Needed - Data model for movie.
+-----------------------------
+Each movie has:
+ - mp4 of the movie
+ - zipfile of the movie's frames (created on demand and persisted until the end of the course)
+ - frames database with the trackpoints for each frame (this is not the most efficient approach; the maximum size of a dynamodb record is 400KB. We could store 12,500 elements in it. Can we store this in the movies array?)
+ - key frame from movie (first, middle?)
 
 
 Camera code base:
