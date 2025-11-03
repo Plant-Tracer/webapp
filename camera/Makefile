@@ -1,5 +1,5 @@
 # ===== camera_app Makefile =====
-# lambda-home is the minimal home page. It requires no e11 packages
+# lambda-camera is the minimal camera page.
 STACK           ?= camera_app
 STACK_STAGE     ?= camera_app-stage
 CAPS            ?= CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
@@ -9,11 +9,11 @@ PYTHON          = python3.13
 DJLINT_FLAGS ?= --profile=jinja --lint --quiet --ignore J004,J018
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
-PY    := PYTHONPATH=$$(pwd)/src/home_app/app.whl:$(PYTHONPATH) .venv/bin/python
+PY    := PYTHONPATH=$$(pwd)/src/camera_app/app.whl:$(PYTHONPATH) .venv/bin/python
 
 PRODUCTION_URL="https://camera.planttracer.com"
 STAGE_URL="https://camera-stage.planttracer.com"
-TEMPLATE_DIR := src/home_app/templates
+TEMPLATE_DIR := src/camera_app/templates
 
 #export PIP_PLATFORM_OPT="--platform manylinux2014_x86_64 --implementation cp --python-version 313 --only-binary=:all:"
 export PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -21,22 +21,22 @@ export PIP_NO_INPUT=1
 export PYTHONDONTWRITEBYTECODE=1
 
 .PHONY: install vend-app lint pytest test
-install:
+install: .venv/pyvenv.cfg
 	make .venv/pyvenv.cfg
-	npm install -g browser-sync
 
 .venv/pyvenv.cfg: pyproject.toml Makefile
 	python3.13 -m venv .venv
 	.venv/bin/pip install -e .
 	.venv/bin/pip install -e ".[dev]"
+	npm install -g browser-sync
 
 vend-app: Makefile
-	@echo "Building src/home_app/app.whl via pip"
+	@echo "Building src/camera_app/app.whl via pip"
 	( cd .. && .venv/bin/python -m pip wheel --no-deps -w dist . )
-	@echo "Installing wheel into src/home_app/ as app.whl"
-	install -d src/home_app
-	install -m 444 $$(ls -t ../dist/*.whl | head -1) src/home_app/app.whl
-	@echo "OK -> src/home_app/app.whl"
+	@echo "Installing wheel into src/camera_app/ as app.whl"
+	install -d src/camera_app
+	install -m 444 $$(ls -t ../dist/*.whl | head -1) src/camera_app/app.whl
+	@echo "OK -> src/camera_app/app.whl"
 
 lint: .venv/pyvenv.cfg
 	make vend-app
@@ -73,23 +73,23 @@ src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
 functions:
 	@echo "Production function:"
 	@aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`HomeFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
+		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
 	@echo "Stage function:"
 	@aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`HomeFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
+		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
 
 # Tail logs
 prod-tail:
 	@echo "Tailing production logs..."
 	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`HomeFunction`].OutputValue' --output text)" \
+		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text)" \
 		--since 15m --follow --region $(REGION) --profile $(PROFILE)
 
 # Tail stage logs (separate stack)
 stage-tail:
 	@echo "Tailing stage logs..."
 	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`HomeFunction`].OutputValue' --output text)" \
+		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text)" \
 		--since 15m --follow --region $(REGION) --profile $(PROFILE)
 
 # Download deployed Lambda package for inspection
@@ -98,7 +98,7 @@ fetch-zip-prod:
 		--stack-name $(STACK) \
 		--region $(REGION) \
 		--profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`HomeFunction`].OutputValue' \
+		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' \
 		--output text); \
 	echo "Fetching deployment package for $$FUNC..."; \
 	URL=$$(aws lambda get-function --function-name $$FUNC \

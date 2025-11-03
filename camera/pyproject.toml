@@ -1,7 +1,6 @@
 # Install optional dependencies with:
 # pip install -e .[dev]
 
-
 [project]
 name = "camera"
 version = "0.1.1"
@@ -67,7 +66,6 @@ disable = [
     "line-too-long",
     "unspecified-encoding",
     "too-few-public-methods"
-
 ]
 
 [tool.pylint.design]
