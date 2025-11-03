@@ -5,4 +5,5 @@
 - [ ] Get rid of frames table. Store frames within dynamoDB movies table.
 - [ ] add ZIPfile URL to the movies object
 - [ ] Function to convert from movie & time or movie & frame-number to URL. (Can't do both.)
-- [ ] functio for first N frames of movie.
+- [ ] function for first N frames of movie.
+- [ ] split odb.get_movie_data into odb.get_movie_data() and odb.get_movie_urn(); remove the urn= parameter from get_movie_data()
