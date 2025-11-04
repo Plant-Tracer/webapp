@@ -690,6 +690,8 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
     Extracts all frames from a movie and stores them in a zipfile.
     Stores new trackpoints and each frame in the database.
+    Writes the zipfile to storage (becuase we use it later).
+    Memory requirements: the entire movie & the entire zipfile (roughly 3x the movie in total)
     """
     # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
@@ -717,8 +719,8 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED:mtc.last_frame_tracked})
 
-    # Note: this puts the entire object in memory. That may be an issue at some point
-    object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
+    # Note: this puts the entire movie in memory. That may be an issue at some point
+    object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext=C.ZIP_MOVIE_EXTENSION)
     urn = db_object.make_urn(object_name=object_name)
     db_object.write_object(urn=urn, object_data=mtc.zipfile_data)
     odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)

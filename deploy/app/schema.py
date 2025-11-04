@@ -7,9 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, List, Annotated
 from pydantic import (
     BaseModel,
-    conint,
     Field,
-    create_model,
     field_validator,
     TypeAdapter,
     ValidationError,
@@ -104,9 +102,6 @@ class Movie(BaseModel):
 
     published: Annotated[int, Field(ge=0, le=1)]
     deleted: Annotated[int, Field(ge=0, le=1)]
-
-    # Optional follow
-
     date_uploaded: int | None = None
     orig_movie: str | None = None
     fps: str | None = None  # otherwise we get roundoff errors
