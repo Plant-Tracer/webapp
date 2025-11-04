@@ -19,6 +19,7 @@ boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager
 # --- This is how you include your local wheel ---
 # It assumes you have renamed it in the 'dependencies/' folder
 # deploy = { path = "dependencies/deploy-1.1.0-py3-none-any.whl" }
+requests = "^2.32.5"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -29,7 +30,6 @@ pytest = "*"
 pip-tools = "*"
 pytest-cov = "*"
 ruff = "*"
-flask = "*"
 
 # -----------------------------------------------------------------
 # This section tells Python to use Poetry to build the project

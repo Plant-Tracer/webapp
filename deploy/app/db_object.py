@@ -13,7 +13,6 @@ import logging
 import urllib.parse
 import hashlib
 
-import requests
 import boto3
 from botocore.exceptions import ClientError,ParamValidationError
 
@@ -125,52 +124,6 @@ def object_exists(urn):
             raise
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
-
-def read_object(urn):
-    o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
-    if o.scheme == C.SCHEME_S3 :
-        # We are getting the object, so we do not need a presigned url
-        try:
-            return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
-        except ClientError as ex:
-            logging.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
-            return None
-    elif o.scheme in ['http','https']:
-        r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
-        return r.content
-    else:
-        raise ValueError("Unknown schema: "+urn)
-
-def write_object(urn, object_data):
-    logging.info("write_object(%s,len=%s)",urn,len(object_data))
-    logger.info("write_object(%s,len=%s)",urn,len(object_data))
-    assert "s3://s3://" not in urn
-    o = urllib.parse.urlparse(urn)
-    if o.scheme== C.SCHEME_S3:
-        try:
-            s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-            return
-        except ParamValidationError as e:
-            logger.error("ParamValidationError. urn=%s o=%s  e=%s",urn,o,e)
-            raise
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'InvalidBucketName':
-                logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)
-            else:
-                logging.error("*** Unexpected ClientError: %s",error_code)
-            raise
-    raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
-
-def delete_object(urn):
-    logging.debug("delete_object(%s)",urn)
-    o = urllib.parse.urlparse(urn)
-    if o.scheme== C.SCHEME_S3:
-        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
-    else:
-        raise ValueError(f"Cannot delete object urn={urn}")
-
 
 if __name__ == "__main__":
     import argparse

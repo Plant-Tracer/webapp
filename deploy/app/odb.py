@@ -17,8 +17,6 @@ from collections import defaultdict
 from functools import wraps
 from decimal import Decimal
 
-from flask import request
-
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
@@ -1168,31 +1166,6 @@ def course_enrollments(course_id):
 
 
 
-########################
-### Movie Management ###
-########################
-
-@log
-def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
-    """Returns the movie contents for a movie_id.
-    If urn==True, just return the urn
-    """
-    movie = DDBO().get_movie(movie_id)
-    try:
-        if zipfile:
-            urn = movie['movie_zipfile_urn']
-        else:
-            urn = movie['movie_data_urn']
-    except TypeError as e:
-        raise InvalidMovie_Id(movie_id) from e
-
-    if get_urn:
-        return urn
-
-    if urn:
-        return db_object.read_object(urn)
-    raise InvalidMovie_Id()
-
 
 @log
 def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
@@ -1282,94 +1255,12 @@ def get_movie(*, movie_id):
 #    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 
-def set_movie_data(*,movie_id, movie_data):
-    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone.
-    increments version.
-    """
-    assert is_movie_id(movie_id)
-    ddbo = DDBO()
-    movie = ddbo.get_movie(movie_id)
-
-    logging.debug("got movie=%s version=%s",movie,movie[VERSION])
-    purge_movie_data(movie_id=movie_id)
-    purge_movie_frames( movie_id=movie_id )
-    purge_movie_zipfile( movie_id=movie_id )
-    object_name = db_object.object_name( course_id = course_id_for_movie_id( movie_id ),
-                                        movie_id = movie_id,
-                                        ext=C.MOVIE_EXTENSION)
-    movie_data_urn        = db_object.make_urn( object_name = object_name)
-
-    db_object.write_object(movie_data_urn, movie_data)
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn,
-                                              DATE_UPLOADED:int(time.time()),
-                                              TOTAL_BYTES:len(movie_data),
-                                              TOTAL_FRAMES:None,
-                                              VERSION:movie[VERSION]+1 })
-
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
 
-
-################################################################
-## Deleting
-
-@log
-def purge_movie_data(*,movie_id):
-    """Delete the movie data associated with a movie"""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    ddbo = DDBO()
-    urn = ddbo.get_movie(movie_id).get(MOVIE_DATA_URN,None)
-    if urn:
-        db_object.delete_object( urn )
-        ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
-
-@log
-def purge_movie_frames(*,movie_id, frame_numbers=None):
-    """Delete the frames and zipfile associated with a movie.
-    :param frames: If None, delete them all
-    """
-
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
-    ddbo = DDBO()
-    if frame_numbers is None:
-        frames = ddbo.get_frames( movie_id )
-    else:
-        frames = [ddbo.get_movie_frame(movie_id, frame_number) for frame_number in frame_numbers]
-
-    for frame in frames:
-        frame_urn = frame.get(FRAME_URN,None)
-        if frame_urn is not None:
-            db_object.delete_object(frame_urn)
-    ddbo.delete_movie_frames( frames )
-
-
-@log
-def purge_movie_zipfile(*,movie_id):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    ddbo = DDBO()
-    movie = ddbo.get_movie(movie_id)
-    if movie.get('movie_zipfile_urn',None) is not None:
-        db_object.delete_object(movie['movie_zipfile_urn'])
-        ddbo.update_table(ddbo.movies, movie_id, {'movie_zipfile_urn':None})
-
-@log
-def purge_movie(*,movie_id):
-    """Actually delete a movie and all its frames"""
-    purge_movie_data(movie_id=movie_id)
-    purge_movie_frames( movie_id=movie_id )
-    purge_movie_zipfile( movie_id=movie_id )
-
-
-@log
-def delete_movie(*,movie_id, delete=1):
-    """Set a movie's deleted bit to be true"""
-    assert delete in (0,1)
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies,movie_id, {DELETED:delete})
 
 def list_movies(*,user_id, movie_id=None, orig_movie=None):
     """
