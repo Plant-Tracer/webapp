@@ -25,6 +25,8 @@ Globals:
     Environment:
       Variables:
         LOG_LEVEL: !Ref LogLevel
+        PYTHONPATH: "/var/task/camera_app/deploy.whl"
+        TABLE_PREFIX: !ref TablePrefix
 
 Parameters:
   HostedZoneId:
@@ -39,6 +41,9 @@ Parameters:
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the function
+  TablePrefix:
+    Type: String
+    Description: PlantTracer table prefix
 
 Conditions:
   CreateAcmCert: !Equals [!Ref CertificateArn, ""]
@@ -84,7 +89,7 @@ Resources:
       Policies:
         - Version: '2012-10-17'
           Statement:
-            - Sid: Api_KeysTableRW
+            - Sid: DynamoDBTables
               Effect: Allow
               Action:
                 - dynamodb:DescribeTable
@@ -94,34 +99,8 @@ Resources:
                 - dynamodb:UpdateItem
                 - dynamodb:Query
               Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*"
-
-            - Sid: MoviesTableRW
-              Effect: Allow
-              Action:
-                - dynamodb:DescribeTable
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:DeleteItem
-                - dynamodb:UpdateItem
-                - dynamodb:Query
-              Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*"
-
-            - Sid: Movies_FramesTableRW
-              Effect: Allow
-              Action:
-                - dynamodb:DescribeTable
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:DeleteItem
-                - dynamodb:UpdateItem
-                - dynamodb:Query
-              Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}-*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}-*/index/*"
 
       Events:
         AnyRoot:
@@ -144,48 +123,17 @@ Resources:
             Schedule: rate(5 minutes)
             Input: '{"action":"heartbeat"}'
 
-  # Sessions table holds the cookie sessions
-  SessionsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BillingMode: PAY_PER_REQUEST
-      TableName: !Sub "${AWS::StackName}-sessions"
-      AttributeDefinitions:
-        - AttributeName: sid
-          AttributeType: S
-        - AttributeName: email
-          AttributeType: S
-      KeySchema:
-        - AttributeName: sid
-          KeyType: HASH
-      TimeToLiveSpecification:
-        AttributeName: ttl
-        Enabled: true
-      GlobalSecondaryIndexes:
-        - IndexName: GSI_Email
-          KeySchema:
-            - AttributeName: email
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-
 Outputs:
   # Production-specific outputs
   ApiId:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
   CustomDomainUrl:
-    Description: Public base URL
-    Value: "https://planttracer.com/"
-  # Common outputs
+    Description: Camer base URL
+    Value: "https://camera.planttracer.com/"
   CameraFunction:
     Description: Camera Lambda function name
     Value: !Ref CameraFunction
   HostedZoneId:
     Description: Route53 Hosted Zone
     Value: !Ref HostedZoneId
-  UsersTableIndexArn:
-    Description: ARN for Users Table Index
-    Value: !Sub "${SessionsTable.Arn}/index/*"

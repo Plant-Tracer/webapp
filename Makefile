@@ -19,7 +19,7 @@ JS_FILES := $(TS_FILES:.ts=.js)
 REQ := .venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
 LOCAL_BUCKET=planttracer-local
 LOCAL_HTTP_PORT=8080
-
+LOG_LEVEL ?= DEBUG		# default to debug unless changed
 
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT=http://localhost:9100/
@@ -44,21 +44,20 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
-PYTHON=.venv/bin/python
-PIP_INSTALL=.venv/bin/pip install --no-warn-script-location
 DEPLOY_ETC=deploy/etc
 APP_ETC=$(DEPLOY_ETC)
 DBMAINT=dbutil.py
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
-	python3 -m venv .venv
-	$(PYTHON) -m pip install --upgrade pip
-	if [ -r requirements.txt ]; then $(PIP_INSTALL) -r requirements.txt ; fi
-	if [ -r deploy/requirements.txt ]; then $(PIP_INSTALL) -r deploy/requirements.txt ; fi
-	if [ -r tests/requirements.txt ]; then $(PIP_INSTALL) -r tests/requirements.txt ; fi
-	if [ -r docs/requirements.txt ]; then $(PIP_INSTALL) -r docs/requirements.txt ; fi
+	poetry config virtualenvs.in-project true
+	poetry install
 
+
+dist: pyproject.toml
+	@echo building the deloy wheel
+	poetry build --format=wheel
+	ls -l dist/
 
 ################################################################
 #
@@ -84,11 +83,11 @@ tags:
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
 pylint: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) deploy *.py
+	poetry run pylint  $(PYLINT_OPTS) deploy *.py
 
 ## Use this to also test the tests...
 pylint-tests: $(REQ)
-	$(PYTHON) -m pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
 ## Mypy static analysis
 mypy:
@@ -120,27 +119,24 @@ flake:
 
 ## These tests now use fixtures that automatically create in-memory configurations and DynamoDB databases.
 ## No environment variables need to be set.
+## set LOG_LEVEL at start of CLI to change the  log level
 
-pytest:  $(REQ)
-	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests
-
-pytest-debug: $(REQ)
-	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG tests
+pytest: $(REQ)
+	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
 
 pytest-coverage: $(REQ)
-	$(PIP_INSTALL) codecov pytest pytest_cov
-	$(PT_VARS) $(PYTHON) -m pytest -v --cov=. --cov-report=xml --cov-report=html tests
+	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
 	@echo covreage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
-	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=INFO tests/sitetitle_test.py
+	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/schema_test.py
+TEST1MODULE=tests/app_test.py
 #TEST1FUNCTION="-k test_movie_schema"
 pytest1:
-	$(PT_VARS) $(PYTHON) -m pytest -v --log-cli-level=DEBUG --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -164,18 +160,18 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	$(DEMO_VARS) $(PYTHON) dbutil.py --createdb
+	$(DEMO_VARS) poetry run python dbutil.py --createdb
 	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(DEMO_VARS) LOG_LEVEL=DEBUG $(PYTHON) dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=DEBUG .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -183,12 +179,12 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=DEBUG  .venv/bin/flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
 	/bin/rm -f outfile.mp4
-	$(PYTHON) tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
+	poetry run python tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
 
 .PHONY: wipe-local delete-local make-local-demorun-local-debug run-local-demo-debug debut-dev-api tracker-debug
@@ -249,7 +245,7 @@ dump-demo-tables:
 # Minio (S3 clone -- see: https://min.io/)
 # Installations are used by the CI pipeline and by local developers
 
-# installation:
+# Sources:
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
 LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64/
 LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
@@ -305,33 +301,35 @@ make-local-bucket:
 install-ubuntu: .venv/pyvenv.cfg
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
-	which curl || sudo apt install curl
-	which zip || sudo apt install zip
 	which aws || sudo snap  install aws-cli --classic
+	which chromium || sudo apt-get install -y chromium-browser
+	which curl || sudo apt install curl
 	which ffmpeg || sudo apt install -y ffmpeg
+	which lsof || sudo apt-get install -y lsof
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm
-	which chromium || sudo apt-get install -y chromium-browser
-	which lsof || sudo apt-get install -y lsof
+	which poetry || sudo apt-get install -y poetry
+	which zip || sudo apt install zip
 	npm ci
 	make $(REQ)
-	if [ -r requirements-ubuntu.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
+
 
 # Includes MacOS dependencies managed through Brew
 install-macos: .venv/pyvenv.cfg
 	brew update
 	brew upgrade
-	which python3 || brew install python3
+	which aws || brew install awscli
+	which chromium || brew install chromium --no-quarantine
 	which ffmpeg || brew install ffmpeg
+	which lsof || brew install lsof
 	which node || brew install node
 	which npm || brew install npm
-	which lsof || brew install lsof
-	which chromium || brew install chromium --no-quarantine
-	which aws || brew install awscli
+	which poetry || brew install poetry
+	which python3 || brew install python3
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	make $(REQ)
-	if [ -r requirements-macos.txt ]; then $(PIP_INSTALL) -r requirements-macos.txt ; fi
+
 
 # Includes Windows dependencies
 # restart the shell after installs are done
@@ -342,10 +340,10 @@ install-windows: .venv/pyvenv.cfg
 	choco install -y ffmpeg
 	choco install -y nodejs
 	choco install -y chromium
+	choco install -y poetry
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	make $(REQ)
-	if [ -r requirements-windows.txt ]; then $(PIP_INSTALL) -r requirements-windows.txt ; fi
 
 
 ################################################################
@@ -379,7 +377,7 @@ install-aws-sam-tools:
 	sudo dnf install -y cronie
 	npm ci
 	make $(REQ)
-	if [ -r requirements-aws.txt ]; then $(PIP_INSTALL) -r requirements-ubuntu.txt ; fi
+
 
 sam-deploy:
 	sam validate

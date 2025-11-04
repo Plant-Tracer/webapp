@@ -20,7 +20,7 @@ from botocore.exceptions import ClientError,ParamValidationError
 from .constants import C
 
 MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
-FRAME_TEMPLATE = "{course_id}/{movie_id}/frame_number:06d}{ext}"
+FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
 
 logger = logging.getLogger(__name__)
 

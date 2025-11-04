@@ -31,11 +31,10 @@ install: .venv/pyvenv.cfg
 	npm install -g browser-sync
 
 vend-app: Makefile
-	@echo "Building src/camera_app/app.whl via pip"
-	( cd .. && .venv/bin/python -m pip wheel --no-deps -w dist . )
+	@echo "Building src/camera_app/deploy.whl"
+	( cd .. && make dist)
 	@echo "Installing wheel into src/camera_app/ as app.whl"
-	install -d src/camera_app
-	install -m 444 $$(ls -t ../dist/*.whl | head -1) src/camera_app/app.whl
+	install -m 444 $$(ls -t ../dist/*.whl | head -1) src/camera_app/deploy.whl
 	@echo "OK -> src/camera_app/app.whl"
 
 lint: .venv/pyvenv.cfg
