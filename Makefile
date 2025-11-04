@@ -308,7 +308,7 @@ install-ubuntu:
 	which lsof || sudo apt-get install -y lsof
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm
-	which poetry || sudo apt-get install -y poetry
+	which poetry || curl -sSL https://install.python-poetry.org | python3 -
 	which zip || sudo apt install zip
 	npm ci
 	make $(REQ)
