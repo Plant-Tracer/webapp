@@ -712,10 +712,11 @@ def verify_table_health():
 
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
-    try:
-        user_ipaddr  = request.remote_addr
-    except RuntimeError:
-        user_ipaddr  = '<local>'
+    user_ipaddr = "n/a"         # we wanted to remove the flask dependency
+    #try:
+    #    user_ipaddr  = request.remote_addr
+    #except RuntimeError:
+    #    user_ipaddr  = '<local>'
 
     # Make copies of func_args and func_return so we can modify without fear
     func_args   = copy.copy(func_args)

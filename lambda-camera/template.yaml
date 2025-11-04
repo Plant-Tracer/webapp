@@ -12,30 +12,30 @@
 # Live:
 #   sam sync --stack-name e11-home --template template.yaml
 # Result:
-#   - An HTTP API at https://planttracer.com/
+#   - An HTTP API at https://camera.planttracer.com/
 #   - Routes handled by the Lambda handler in camera.py (lambda_handler)
 #   - JSON API (POST) for grading; also supports ping/ping-mail actions
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: e11 camera Lambda with custom domain (planttracer.com)
+Description: e11 camera Lambda with custom domain (camera.planttracer.com)
 
 Globals:
   Function:
     Environment:
       Variables:
         LOG_LEVEL: !Ref LogLevel
-        PYTHONPATH: "/var/task/camera_app/deploy.whl"
-        TABLE_PREFIX: !ref TablePrefix
+        TABLE_PREFIX: !Ref TablePrefix
+
 
 Parameters:
   HostedZoneId:
     Type: String
-    Description: Route53 Hosted Zone ID for planttracer.com (e.g., Z123ABC...)
+    Description: Route53 Hosted Zone ID for camera.planttracer.com (e.g., Z123ABC...)
   CertificateArn:
     Type: String
     Default: ""
-    Description: "(Optional) Existing ACM certificate ARN for planttracer.com. Leave blank to auto-create."
+    Description: "(Optional) Existing ACM certificate ARN for camera.planttracer.com. Leave blank to auto-create."
   LogLevel:
     Type: String
     Default: INFO
@@ -54,13 +54,13 @@ Resources:
     Type: AWS::CertificateManager::Certificate
     Condition: CreateAcmCert
     Properties:
-      DomainName: planttracer.com
+      DomainName: camera.planttracer.com
       ValidationMethod: DNS
       DomainValidationOptions:
-        - DomainName: planttracer.com
+        - DomainName: camera.planttracer.com
           HostedZoneId: !Ref HostedZoneId
 
-  # HTTP API fronting the Lambda, bound to planttracer.com in Route53
+  # HTTP API fronting the Lambda, bound to camera.planttracer.com in Route53
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -69,7 +69,7 @@ Resources:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
-        DomainName: planttracer.com
+        DomainName: camera.planttracer.com
         CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
@@ -99,8 +99,8 @@ Resources:
                 - dynamodb:UpdateItem
                 - dynamodb:Query
               Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}-*"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}-*/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
 
       Events:
         AnyRoot:

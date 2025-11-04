@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% title content %} PlantTracer Camera {% endblock title %}
+{% block title %} PlantTracer Camera {% endblock title %}
 {% block content %}
 <h1>PlantTracer Camera</h1>
 
@@ -13,6 +13,5 @@ This form is for debugging.
   <input type="number" value="60" min="1" max="60" id="spf" name="spf" ><br><br>
   <input type="submit" value="Start">
 </form>
-
 
 {% endblock content %}

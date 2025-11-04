@@ -1,49 +1,50 @@
-# Install optional dependencies with:
-# pip install -e .[dev]
-
-[project]
+[tool.poetry]
 name = "camera"
 version = "0.1.1"
 description = "Time lapse camera for Plant Tracer"
-authors = [
-    {name = "Simson Garfinkel",email = "simsong@acm.org"}
-]
+authors = ["Simson Garfinkel <simsong@acm.org>"]
 license = "GPL-3.0-or-later"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
-dependencies = [
-    "boto3",
-    "jinja2",
-    "pydantic",
-    "boto3-stubs[essential,route53,secretsmanager,dynamodb]"
+packages = [
+    { include = "camera_app", from = "src" }
 ]
 
-[project.optional-dependencies]
-dev = [
-    "djlint",
-    "pylint",
-    "pyright",
-    "pytest",
-    "pip-tools",
-    "pytest-cov",
-    "ruff",
-    "flask"
-]
+[tool.poetry.dependencies]
+python = ">=3.13,<3.14"
+boto3 = "*"
+jinja2 = "*"
+pydantic = "*"
+boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager", "dynamodb"] }
 
+# --- This is how you include your local wheel ---
+# It assumes you have renamed it in the 'dependencies/' folder
+# deploy = { path = "dependencies/deploy-1.1.0-py3-none-any.whl" }
+
+
+[tool.poetry.group.dev.dependencies]
+djlint = "*"
+pylint = "*"
+pyright = "*"
+pytest = "*"
+pip-tools = "*"
+pytest-cov = "*"
+ruff = "*"
+flask = "*"
+
+# -----------------------------------------------------------------
+# This section tells Python to use Poetry to build the project
+# -----------------------------------------------------------------
 [build-system]
-requires = ["setuptools>=70", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[tool.setuptools.package-dir]
-"" = "src"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["home_app"]
+# -----------------------------------------------------------------
+# All your tool configurations below this line stay exactly the same
+# -----------------------------------------------------------------
 
 [tool.djlint]
 profile = "jinja"
-ignore = ["jinja-block","jinja-variable","J004", "J018"]
+ignore = ["jinja-block", "jinja-variable", "J004", "J018"]
 extend_exclude = "node_modules/**,.venv/**"
 indent = 4
 
@@ -55,7 +56,7 @@ ignore-paths = [
 ]
 source-roots = [".."]
 [tool.pylint.FORMAT]
-max-line-length=200
+max-line-length = 200
 
 [tool.pylint.messages_control]
 # Disable specific messages by their symbolic name or message ID.

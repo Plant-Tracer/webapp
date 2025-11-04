@@ -6,7 +6,7 @@ Runs the camera.
 """
 
 # at top of home_app/home.py (module import time)
-from os.path import join, dirname, isdir
+from os.path import join,dirname
 import base64
 import binascii
 import functools
@@ -19,23 +19,15 @@ from typing import Any, Dict, Tuple, Optional
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
-from deploy.app import odb
-from deploy.app import db_object
-from deploy.app.constants import C
+from .deploy.app import odb
+from .deploy.app import db_object
+from .deploy.app.constants import C
 
 MY_DIR = dirname(__file__)
-sys.path.append(MY_DIR)
-
-# fix the path. Don't know why this is necessary
-NESTED = join(MY_DIR, ".aws-sam", "build", "CameraFunction")
-if isdir(join(NESTED, "camera")):
-    sys.path.insert(0, NESTED)
-
 TEMPLATE_DIR = join(MY_DIR, "templates")
 STATIC_DIR = join(MY_DIR, "static")
 
 __version__ = "0.1.0"
-
 
 ################################################################
 ### Logger
@@ -76,10 +68,7 @@ WEBSITE_DOMAIN = "camera.planttracer.com"
 WEBSITE_URL = f"https://{WEBSITE_DOMAIN}"
 
 # jinja2
-env = Environment( loader=FileSystemLoader(
-    ["templates", TEMPLATE_DIR, os.path.join(NESTED, "templates")]
-))
-
+env = Environment( loader=FileSystemLoader( [TEMPLATE_DIR]))
 
 def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None ) -> Dict[str, Any]:
     """End HTTP event processing with a JSON object"""
@@ -226,14 +215,15 @@ def api_camera_start(event, context, payload)  -> Dict[str, Any]:
     movie_id = payload.get(odb.MOVIE_ID)
     if movie_id is None:
         # Get a new movie_id
-        movie_id = odb.create_new_movie(user[odb.USER_ID], description='Upload started '+time.asctime())
+        movie_id = odb.create_new_movie(user_id=user[odb.USER_ID],
+                                        description='Upload started '+time.asctime())
 
     # Generate the URLs
     start = payload['start']
     count = payload['count']
-    object_names = [db_object.object_name(course_id = user[odb.DEFAULT_COURSE_ID],
+    object_names = [db_object.object_name(course_id = user[odb.PRIMARY_COURSE_ID],
                                           movie_id = movie_id,
-                                          frame_number = frame_number, C.JPEG_EXTENSION)
+                                          frame_number = frame_number, ext=C.JPEG_EXTENSION)
                     for frame_number in range(start,count)]
 
     object_urns = [db_object.make_urn(object_name=name) for name in object_names]
@@ -276,6 +266,11 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
 # pylint: disable=too-many-return-statements, disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
+
+    print("now running import deploy")
+    print("cwd=",os.getcwd())
+
+
     method, path, payload = parse_event(event)
 
     # Detect if this is a browser request vs API request

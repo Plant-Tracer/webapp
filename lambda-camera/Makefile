@@ -1,7 +1,7 @@
 # ===== camera_app Makefile =====
 # lambda-camera is the minimal camera page.
-STACK           ?= camera_app
-STACK_STAGE     ?= camera_app-stage
+STACK           ?= camera-app
+STACK_STAGE     ?= camera-app-stage
 CAPS            ?= CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
 REGION          ?= us-east-1
 PROFILE         ?= planttracer
@@ -15,31 +15,33 @@ PRODUCTION_URL="https://camera.planttracer.com"
 STAGE_URL="https://camera-stage.planttracer.com"
 TEMPLATE_DIR := src/camera_app/templates
 
-#export PIP_PLATFORM_OPT="--platform manylinux2014_x86_64 --implementation cp --python-version 313 --only-binary=:all:"
-export PIP_DISABLE_PIP_VERSION_CHECK=1
-export PIP_NO_INPUT=1
 export PYTHONDONTWRITEBYTECODE=1
+
+DEPLOY_WHEEL=src/camera_app/deploy.whl
 
 .PHONY: install vend-app lint pytest test
 install: .venv/pyvenv.cfg
-	make .venv/pyvenv.cfg
 
 .venv/pyvenv.cfg: pyproject.toml Makefile
-	python3.13 -m venv .venv
-	.venv/bin/pip install -e .
-	.venv/bin/pip install -e ".[dev]"
+	poetry config virtualenvs.in-project true
+	poetry install
 	npm install -g browser-sync
 
-vend-app: Makefile
+$(DEPLOY_WHEEL):
 	@echo "Building src/camera_app/deploy.whl"
 	( cd .. && make dist)
-	@echo "Installing wheel into src/camera_app/ as app.whl"
-	install -m 444 $$(ls -t ../dist/*.whl | head -1) src/camera_app/deploy.whl
-	@echo "OK -> src/camera_app/app.whl"
+	@echo "Installing wheel into $(DEPLOY_WHEEL)"
+	install -m 444 $$(ls -t ../dist/*.whl | head -1) $(DEPLOY_WHEEL)
+
+src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
+	poetry export -f requirements.txt --output src/requirements.txt
+
+vend-app: Makefile
+	rsync --verbose --archive  --include '*.py' --exclude '*' ../deploy/app/ src/camera_app/deploy/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app
-	.venv/bin/djlint $(DJLINT_FLAGS) $(TEMPLATE_DIR)/*.html
+	poetry run djlint $(DJLINT_FLAGS) $(TEMPLATE_DIR)/*.html
 	$(PY) -m ruff check --fix
 	$(PY) -m pylint src
 	$(PY) -m pyright
@@ -47,15 +49,16 @@ lint: .venv/pyvenv.cfg
 check: .venv/pyvenv.cfg
 	make vend-app
 	make lint
-	$(PY) -m pytest -q --cov=.   --cov-report=term --cov-report=xml --junitxml=junit.xml -o junit_family=legacy --log-cli-level=DEBUG tests/
+	poetry run pytest -q --cov=.   --cov-report=term --cov-report=xml --junitxml=junit.xml -o junit_family=legacy --log-cli-level=DEBUG tests/
 
 # AWS Lambda Vend, Build and Deploy (VBD)
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
+	make lint
 	make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
 	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
-	curl --silent  https://csci-e-11.org/ | head -3
+	curl --silent  https://camera.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	make lint
@@ -64,9 +67,6 @@ stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	sam build --parallel --use-container --config-file samconfig-stage.toml -t template-stage.yaml
 	sam deploy --config-file "$$(pwd)/samconfig-stage.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
 	curl --silent  https://stage.csci-e-11.org/ | head -3
-
-src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
-	.venv/bin/pip-compile -q pyproject.toml --output-file src/requirements.txt
 
 # Show function names
 functions:
