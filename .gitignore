@@ -201,3 +201,4 @@ sam-installation
 *.slg
 TAGS
 bin/
+*.whl

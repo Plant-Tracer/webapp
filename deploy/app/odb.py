@@ -750,7 +750,74 @@ def log_args(func):
     return wrapper
 
 
-################ REGISTRATION ################
+# pylint: disable=too-many-arguments, too-many-branches
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
+              log_user_id=None,
+              ipaddr=None, security=True):
+    """get log entries (to which the user is entitled) - Implements /api/get-log
+    :param: user_id    - The user who is initiating the query
+    :param: start_time - The earliest log entry to provide (time_t)
+    :param: end_time   - the last log entry to provide (time_t)
+    :param: course_id  - if provided, only provide log entries for this course
+    :param: log_user_id - if provided, only provide log entries for this person
+    :param: security   - False to disable security checks
+    :return: list of dictionaries of log records.
+    """
+    ddbo = DDBO()
+    # Use epoch max if end_time not given
+    if end_time is None:
+        end_time = int(time.time())
+
+    # Select GSI based on parameters
+    if log_user_id:
+        index_name = 'user_id_idx'
+        key_condition = Key( USER_ID ).eq(log_user_id)
+    elif ipaddr:
+        index_name = 'ipaddr_idx'
+        key_condition = Key('ipaddr').eq(ipaddr)
+    elif course_id:
+        index_name = 'course_time_t_idx'
+        key_condition = Key( COURSE_ID ).eq(course_id)
+        if start_time and end_time:
+            key_condition &= Key('time_t').between(start_time, end_time)
+        elif start_time:
+            key_condition &= Key('time_t').gte(start_time)
+        elif end_time:
+            key_condition &= Key('time_t').lte(end_time)
+    else:
+        raise InvalidFrameAccess("No index provided.")
+
+    # Prepare query
+    kwargs = {
+        'IndexName': index_name,
+        'KeyConditionExpression': key_condition
+    }
+
+    # Perform paginated query
+    items = []
+    while True:
+        response = ddbo.logs.query(**kwargs)
+        items.extend(response.get('Items', []))
+        if 'LastEvaluatedKey' not in response:
+            break
+        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+    # Optional filtering in Python
+    if course_id and index_name != 'course_time_t_idx':
+        items = [item for item in items if item.get( COURSE_ID ) == course_id]
+    if start_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
+    if end_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
+
+    #
+    if security:
+        logging.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
+
+    return items
+
+################################################################
+## User management
 
 
 def list_users_courses(*, user_id):
@@ -1157,23 +1224,24 @@ def can_access_movie(*, user_id, movie_id):
         return True
     return False
 
-################################################################
-## Movie frames
-
 @log
-def create_new_movie(*, user_id, course_id, title=None, description=None, orig_movie=None):
+def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
-    :param: user_id  - person creating movie. Stored in movies table.
-    :param: title - title of movie. Stored in movies table
-    :param: description - description of movie
-    :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
-    :param: orig_movie - if presented, the movie_id of the movie on which this is based
+    :param user_id: - person creating movie. Stored in movies table.
+    :param title: - title of movie. Stored in movies table
+    :param description: - description of movie
+    :param movie_metadata: - if presented, metadata for the movie. Stored in movies SQL table.
+    :param orig_movie: - if presented, the movie_id of the movie on which this is based
+    :return: movie_id of the created movie
+
     """
     # Create a new movie record
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
+    if course_id is None:
+        course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
     ddbo.put_movie({MOVIE_ID:movie_id,
                     COURSE_ID: course_id,
@@ -1301,6 +1369,34 @@ def delete_movie(*,movie_id, delete=1):
     assert delete in (0,1)
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies,movie_id, {DELETED:delete})
+
+def list_movies(*,user_id, movie_id=None, orig_movie=None):
+    """
+    :param user_id:  only list movies visible to user_id (0 for all movies)
+    :param movie_id:  if provided, only use this movie
+    :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
+    :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
+    """
+    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
+    if movie_id is not None:
+        assert is_movie_id(movie_id)
+
+    if orig_movie is not None:
+        assert is_movie_id(orig_movie)
+
+    ddbo = DDBO()
+    user = ddbo.get_user(user_id)
+    if orig_movie is not None:
+        raise NotImplementedError("orig_movie not implemented")
+    movies = []
+    if movie_id is not None:
+        return fix_movies([ddbo.get_movie(movie_id)])
+
+    # build a query for all movies for which the user is in the course
+    for course_id in user[ COURSES ]:
+        logging.debug("extending for course_id=%s",course_id)
+        movies.extend( ddbo.get_movies_for_course_id(course_id) )
+    return fix_movies(movies)
 
 
 ################################################################
@@ -1474,109 +1570,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
                                           FRAME_NUMBER:frame_number},
                                      UpdateExpression='SET trackpoints=:val',
                                      ExpressionAttributeValues={':val':trackpoints})
-
-
-
-
-################################################################
-
-def list_movies(*,user_id, movie_id=None, orig_movie=None):
-    """
-    :param user_id:  only list movies visible to user_id (0 for all movies)
-    :param movie_id:  if provided, only use this movie
-    :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
-    :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
-    """
-    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
-    if movie_id is not None:
-        assert is_movie_id(movie_id)
-
-    if orig_movie is not None:
-        assert is_movie_id(orig_movie)
-
-    ddbo = DDBO()
-    user = ddbo.get_user(user_id)
-    if orig_movie is not None:
-        raise NotImplementedError("orig_movie not implemented")
-    movies = []
-    if movie_id is not None:
-        return fix_movies([ddbo.get_movie(movie_id)])
-
-    # build a query for all movies for which the user is in the course
-    for course_id in user[ COURSES ]:
-        logging.debug("extending for course_id=%s",course_id)
-        movies.extend( ddbo.get_movies_for_course_id(course_id) )
-    return fix_movies(movies)
-
-################################################################
-## Logs
-################################################################
-
-# pylint: disable=too-many-arguments, too-many-branches
-def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
-              log_user_id=None,
-              ipaddr=None, security=True):
-    """get log entries (to which the user is entitled) - Implements /api/get-log
-    :param: user_id    - The user who is initiating the query
-    :param: start_time - The earliest log entry to provide (time_t)
-    :param: end_time   - the last log entry to provide (time_t)
-    :param: course_id  - if provided, only provide log entries for this course
-    :param: log_user_id - if provided, only provide log entries for this person
-    :param: security   - False to disable security checks
-    :return: list of dictionaries of log records.
-    """
-    ddbo = DDBO()
-    # Use epoch max if end_time not given
-    if end_time is None:
-        end_time = int(time.time())
-
-    # Select GSI based on parameters
-    if log_user_id:
-        index_name = 'user_id_idx'
-        key_condition = Key( USER_ID ).eq(log_user_id)
-    elif ipaddr:
-        index_name = 'ipaddr_idx'
-        key_condition = Key('ipaddr').eq(ipaddr)
-    elif course_id:
-        index_name = 'course_time_t_idx'
-        key_condition = Key( COURSE_ID ).eq(course_id)
-        if start_time and end_time:
-            key_condition &= Key('time_t').between(start_time, end_time)
-        elif start_time:
-            key_condition &= Key('time_t').gte(start_time)
-        elif end_time:
-            key_condition &= Key('time_t').lte(end_time)
-    else:
-        raise InvalidFrameAccess("No index provided.")
-
-    # Prepare query
-    kwargs = {
-        'IndexName': index_name,
-        'KeyConditionExpression': key_condition
-    }
-
-    # Perform paginated query
-    items = []
-    while True:
-        response = ddbo.logs.query(**kwargs)
-        items.extend(response.get('Items', []))
-        if 'LastEvaluatedKey' not in response:
-            break
-        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-
-    # Optional filtering in Python
-    if course_id and index_name != 'course_time_t_idx':
-        items = [item for item in items if item.get( COURSE_ID ) == course_id]
-    if start_time and index_name != 'course_time_t_idx':
-        items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
-    if end_time and index_name != 'course_time_t_idx':
-        items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
-
-    #
-    if security:
-        logging.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
-
-    return items
 
 
 ################################################################

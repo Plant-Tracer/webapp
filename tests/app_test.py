@@ -28,7 +28,14 @@ def test_version(client):  # Use the app fixture
     response = client.get('/ver')
     assert bottle_app.__version__ in response.text
 
+
+# These check type conversion
+
 def test_get_float(mocker):
+    mock_get = mocker.patch("app.bottle_api.get")
+    mock_get.return_value = "3"
+    assert bottle_api.get_float("key") == 3.0  # Note: 3.0 is a float, 3 is an int
+
     mocker.patch("app.bottle_api.get", return_value="3")
     assert bottle_api.get_float("key")==3
     mocker.patch("app.bottle_api.get", return_value="xxx")
