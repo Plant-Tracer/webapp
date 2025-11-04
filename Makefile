@@ -298,7 +298,7 @@ make-local-bucket:
 
 ################################################################
 # Includes ubuntu dependencies
-install-ubuntu: .venv/pyvenv.cfg
+install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	which aws || sudo snap  install aws-cli --classic
@@ -315,7 +315,7 @@ install-ubuntu: .venv/pyvenv.cfg
 
 
 # Includes MacOS dependencies managed through Brew
-install-macos: .venv/pyvenv.cfg
+install-macos:
 	brew update
 	brew upgrade
 	which aws || brew install awscli
