@@ -1,21 +1,3 @@
-# HOW TO DEPLOY WITH SAM (creates samconfig.toml on first guided deploy):
-#   sam build -t template.yaml
-#   sam deploy -t template.yaml --guided --profile fas
-#     # Answer the prompts; you'll be asked for:
-#     #   - Stack Name (e.g., e11-home)
-#     #   - AWS Region (e.g., us-east-1)
-#     #   - Parameters: DynamoTableArn, HostedZoneId
-#     #   - (Optional) CertificateArn; leave blank to auto-create one in ACM
-#   # On next runs:
-#   make generate-templates && sam build && sam deploy
-#
-# Live:
-#   sam sync --stack-name e11-home --template template.yaml
-# Result:
-#   - An HTTP API at https://app-resize.planttracer.com/
-#   - Routes handled by the Lambda handler in resize.py (lambda_handler)
-#   - JSON API (POST) for grading; also supports ping/ping-mail actions
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: PlantTracer resizer Lambda with custom domain (app-resize.planttracer.com)
@@ -125,6 +107,46 @@ Resources:
             Schedule: rate(5 minutes)
             Input: '{"action":"heartbeat"}'
 
+  # --- NEW FUNCTION FOR S3 ---
+  S3ResizeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.13
+      BuildProperties:
+        RequirementsFile: requirements.txt   # relative to CodeUri (src/)
+    Properties:
+      Runtime: python3.13
+      CodeUri: src/
+      Handler: resize_app.resize.lambda_function  # Handler as requested
+      Timeout: 60
+      MemorySize: 256
+      # Note: Re-using the same global environment variables
+      Policies:
+        # Policy to read from the S3 bucket
+        - S3ReadPolicy:
+            BucketName: !Ref WatchedBucket
+        # Same DynamoDB policy as the API function
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DynamoDBTables
+              Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+      Events:
+        S3Upload:
+          Type: S3
+          Properties:
+            Bucket: !Ref WatchedBucket
+            Events: s3:ObjectCreated:* # Triggers on any upload/creation
+
 Outputs:
   # Production-specific outputs
   ApiId:
@@ -134,8 +156,11 @@ Outputs:
     Description: Camer base URL
     Value: "https://app-resize.planttracer.com/"
   ResizeFunction:
-    Description: Resize Lambda function name
+    Description: Resize Lambda function name (for API)
     Value: !Ref ResizeFunction
+  S3ResizeLambda:
+    Description: Resize Lambda function name (for S3)
+    Value: !Ref S3ResizeFunction
   HostedZoneId:
     Description: Route53 Hosted Zone
     Value: !Ref HostedZoneId

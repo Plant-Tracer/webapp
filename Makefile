@@ -62,6 +62,7 @@ dist: pyproject.toml
 distclean:
 	@echo removing all virtual environments
 	/bin/rm -rf .venv */.venv */.aws-sam
+	/bin/rm -rf .ruff_cache */.ruff_cache
 	/bin/rm -rf _build
 
 
