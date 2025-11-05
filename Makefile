@@ -81,7 +81,7 @@ tags:
 ##
 
 ## Use this targt for static analysis of the python files used for deployment
-PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
+PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
 lint: $(REQ)
 	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
 
