@@ -18,7 +18,6 @@ from app.constants import C
 from app import odb
 from app import odb_movie_data
 from app import odbmaint
-from app import s3_presigned
 
 from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
