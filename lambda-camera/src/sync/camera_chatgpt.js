@@ -1,1 +1,0 @@
-../camera_app/static/camera_chatgpt.js
