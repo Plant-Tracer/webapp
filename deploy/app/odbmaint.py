@@ -16,7 +16,7 @@ from botocore.exceptions import ClientError
 
 
 from . import odb
-from .db_object import s3_client
+from .s3_presigned import s3_client
 from .odb import USER_ID,DDBO
 from .constants import C
 
@@ -258,9 +258,9 @@ def create_tables(*,ignore_table_exists = None):
             table = dynamodb.create_table(**tc)
             # because tables don't get created instantly and wait_until_exists
             # has a hard-coded 20-second delay, we sleep a bit...
-            time.sleep(C.TABLE_CREATE_SLEEP_TIME) 
+            time.sleep(C.TABLE_CREATE_SLEEP_TIME)
             logger.info("Waiting for table %s to be active...", table_name)
-            print("Waiting for table %s to be active..." % table_name)
+            print(f"Waiting for table {table_name} to be active...")
             table.wait_until_exists()
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:

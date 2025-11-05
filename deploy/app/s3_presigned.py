@@ -1,9 +1,11 @@
-"""Support for the object-store. Currently we have support for:
+"""
+Support for the object-store. Currently we have support for:
 
 S3 - s3://bucket/name       - Stored in amazon S3. Running program needs to be authenticated to the bucket
 
-movie_name = {course_id}/{movie_id}.mov
-frame_name = {course_id}/{movie_id}/frame_number:06d}.jpg
+All objects have this standard naming convention.
+Nevertheless, we store the frame names in the DynamoDB. We may stop doing that shortly.
+
 """
 
 import os
@@ -11,11 +13,13 @@ import logging
 import urllib.parse
 import hashlib
 
-import requests
 import boto3
-from botocore.exceptions import ClientError,ParamValidationError
+from botocore.exceptions import ClientError
 
 from .constants import C
+
+MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
+FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ CORS_CONFIGURATION = {
     }]
 }
 
-def sha256(data):
+def sha256_hash(data):
     """Note: We use sha256 and have it hard coded everywhere. But the hashes should really be pluggable, in the form 'hashalg:hash'
     e.g. "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
     """
@@ -52,12 +56,13 @@ def sha256(data):
     h.update(data)
     return h.hexdigest()
 
-def object_name(*,course_id,movie_id,frame_number=None,ext):
+def make_object_name(*,course_id,movie_id,frame_number=None, ext):
     """object_name is a URN that is generated according to a scheme
     that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
-    fm = f"/{frame_number:06d}" if frame_number is not None else ""
-    return f"{course_id}/{movie_id}{fm}{ext}"
+    if frame_number is None:
+        return MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id,ext=ext)
+    return FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number,ext=ext)
 
 
 def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
@@ -85,12 +90,10 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             Params={'Bucket': o.netloc,
                     'Key': o.path[1:]},
             ExpiresIn=expires)
-    else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
+    raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None,expires=3600):
     """Returns a dictionary with 'url' and 'fields'"""
-    logger.debug("make_presigned_post sha256=%s (not used for S3, was used for storing objects in DB)",sha256)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         return s3_client().generate_presigned_post(
@@ -102,8 +105,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
             ],
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
-    else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+    raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
 def object_exists(urn):
     assert len(urn) > 0
@@ -119,52 +121,6 @@ def object_exists(urn):
             raise
     else:
         raise RuntimeError(f"Unknown scheme: {o.scheme}")
-
-def read_object(urn):
-    o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
-    if o.scheme == C.SCHEME_S3 :
-        # We are getting the object, so we do not need a presigned url
-        try:
-            return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
-        except ClientError as ex:
-            logging.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
-            return None
-    elif o.scheme in ['http','https']:
-        r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
-        return r.content
-    else:
-        raise ValueError("Unknown schema: "+urn)
-
-def write_object(urn, object_data):
-    logging.info("write_object(%s,len=%s)",urn,len(object_data))
-    logger.info("write_object(%s,len=%s)",urn,len(object_data))
-    assert "s3://s3://" not in urn
-    o = urllib.parse.urlparse(urn)
-    if o.scheme== C.SCHEME_S3:
-        try:
-            s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
-            return
-        except ParamValidationError as e:
-            logger.error("ParamValidationError. urn=%s o=%s  e=%s",urn,o,e)
-            raise
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'InvalidBucketName':
-                logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)
-            else:
-                logging.error("*** Unexpected ClientError: %s",error_code)
-            raise
-    raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
-
-def delete_object(urn):
-    logging.debug("delete_object(%s)",urn)
-    o = urllib.parse.urlparse(urn)
-    if o.scheme== C.SCHEME_S3:
-        s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
-    else:
-        raise ValueError(f"Cannot delete object urn={urn}")
-
 
 if __name__ == "__main__":
     import argparse

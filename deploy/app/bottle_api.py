@@ -22,13 +22,14 @@ from flask import Blueprint, request, make_response, redirect, current_app, json
 from validate_email_address import validate_email
 
 from . import odb
-from . import db_object
 from . import mailer
 from . import tracker
 from .apikey import get_user_api_key,get_user_dict,in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO
+from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
+from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
 
 api_bp = Blueprint('api', __name__)
@@ -277,12 +278,12 @@ def api_new_movie():
                                            description=request.values.get('description') )
 
     # Get the object name and create the upload URL
-    object_name= db_object.object_name( course_id = odb.course_id_for_movie_id( ret[ MOVIE_ID ]),
+    oname= make_object_name( course_id = odb.course_id_for_movie_id( ret[ MOVIE_ID ]),
                                         movie_id = ret[ MOVIE_ID ],
                                         ext=C.MOVIE_EXTENSION)
-    movie_data_urn        = db_object.make_urn( object_name = object_name)
+    movie_data_urn        = make_urn( object_name = oname)
     odb.set_movie_data_urn(movie_id=ret[ MOVIE_ID ], movie_data_urn=movie_data_urn)
-    ret['presigned_post'] = db_object.make_presigned_post(urn=movie_data_urn,
+    ret['presigned_post'] = make_presigned_post(urn=movie_data_urn,
                                                           mime_type='video/mp4',
                                                           sha256=movie_data_sha256)
     return ret
@@ -302,7 +303,7 @@ def api_get_movie_data():
     if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
         return make_response(E.INVALID_MOVIE_ACCESS, 404)
 
-    data_urn = odb.get_movie_data(movie_id=movie_id,
+    data_urn = get_movie_data(movie_id=movie_id,
                                   zipfile = get('format')=='zip',
                                   get_urn = True)
 
@@ -311,7 +312,7 @@ def api_get_movie_data():
         return "#REDIRECT " + data_urn
 
     # Otherwise, redirect to the signed url
-    return redirect(db_object.make_signed_url(urn=data_urn))
+    return redirect(make_signed_url(urn=data_urn))
 
 
 def set_movie_metadata(*,user_id=odb.ROOT_USER_ID, set_movie_id,movie_metadata):
@@ -332,7 +333,7 @@ def api_get_frame_jpeg(*,movie_id, frame_number):
     If we have to extract the frame, write it to the database
     Used by get-frame below. Assumes that we have already verified access to the frame
     """
-    movie_data = odb.get_movie_data(movie_id = movie_id)
+    movie_data = get_movie_data(movie_id = movie_id)
     if movie_data is None:
         raise odb.InvalidFrameAccess()
 
@@ -348,7 +349,7 @@ def api_get_frame_urn(*,frame_number,movie_id):
         return urn
     # Get the frame data so we can get it a URN
     frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id)
-    frame_urn = odb.create_new_movie_frame(movie_id=movie_id,
+    frame_urn = create_new_movie_frame(movie_id=movie_id,
                                            frame_number=frame_number,
                                            frame_data=frame_data)
     assert frame_urn is not None
@@ -388,9 +389,9 @@ def api_get_frame():
     # See if there is a urn
     urn = odb.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
     logging.debug("urn=%s",urn)
-    if urn is not None and not db_object.object_exists(urn):
+    if urn is not None and not object_exists(urn):
         logging.warning("%s does not exist",urn)
-        odb.purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
+        purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
         urn = None
 
     if urn is None:
@@ -401,12 +402,12 @@ def api_get_frame():
             assert frame_data is not None
         except ValueError:
             return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
-        urn = odb.create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
+        urn = create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
 
     logging.debug('getframe 4')
     logging.debug("api_get_frame urn=%s",urn)
-    url = db_object.make_signed_url(urn=urn)
+    url = make_signed_url(urn=urn)
     logging.debug("api_get_frame url=%s",url)
     logging.debug('getframe 10 ')
     return redirect(url)
@@ -434,11 +435,11 @@ def api_edit_movie():
     if action=='rotate90cw':
         with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_input:
             with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_output:
-                movie_input.write( odb.get_movie_data( movie_id = movie_id))
+                movie_input.write( get_movie_data( movie_id = movie_id))
                 tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
                 movie_output.seek(0)
                 movie_data = movie_output.read()
-                odb.set_movie_data(movie_id=movie_id, movie_data=movie_data)
+                set_movie_data(movie_id=movie_id, movie_data=movie_data)
                 return {'error': False}
     else:
         return E.INVALID_EDIT_ACTION
@@ -454,7 +455,7 @@ def api_delete_movie():
     if not odb.can_access_movie(user_id=get_user_id(allow_demo=False),
                                 movie_id=get_movie_id()):
         return E.INVALID_MOVIE_ACCESS
-    odb.delete_movie(movie_id=get_movie_id(),
+    delete_movie(movie_id=get_movie_id(),
                     delete=get_bool('delete',True))
     return {'error': False}
 
@@ -494,7 +495,7 @@ def api_get_movie_metadata():
 
     # If we do not have the movie width and height, get them and write them back to the database
     if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
-        movie_data     = odb.get_movie_data(movie_id = movie_id)
+        movie_data     = get_movie_data(movie_id = movie_id)
 
         if movie_data is None:
             return make_response(E.NO_MOVIE_DATA, 400)
@@ -505,7 +506,7 @@ def api_get_movie_metadata():
 
     # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
     if movie_metadata.get('movie_zipfile_urn',None):
-        movie_metadata['movie_zipfile_url'] = db_object.make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
+        movie_metadata['movie_zipfile_url'] = make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
 
     ret = {'error':False, 'metadata':movie_metadata }
 
@@ -690,6 +691,8 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
     Extracts all frames from a movie and stores them in a zipfile.
     Stores new trackpoints and each frame in the database.
+    Writes the zipfile to storage (becuase we use it later).
+    Memory requirements: the entire movie & the entire zipfile (roughly 3x the movie in total)
     """
     # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
@@ -697,7 +700,7 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     # Write the movie to a tempfile, because OpenCV has to read movies from files.
     mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
     with tempfile.NamedTemporaryFile(suffix='.mp4',mode='wb') as infile:
-        movie_data     = odb.get_movie_data(movie_id=movie_id)
+        movie_data     = get_movie_data(movie_id=movie_id)
         movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
         infile.write( movie_data  )
         infile.flush()
@@ -717,10 +720,10 @@ def api_track_movie(*,user_id, movie_id, frame_start):
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED:mtc.last_frame_tracked})
 
-    # Note: this puts the entire object in memory. That may be an issue at some point
-    object_name = db_object.object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext='_mp4.zip')
-    urn = db_object.make_urn(object_name=object_name)
-    db_object.write_object(urn=urn, object_data=mtc.zipfile_data)
+    # Note: this puts the entire movie in memory. That may be an issue at some point
+    oname = make_object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext=C.ZIP_MOVIE_EXTENSION)
+    urn = make_urn(object_name=oname)
+    write_object(urn=urn, object_data=mtc.zipfile_data)
     odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)
     mtc.done() # sets the status to tracking complete
 
@@ -782,7 +785,7 @@ def api_new_frame():
         frame_data = base64.b64decode( request.values.get('frame_base64_data'))
     except TypeError:
         frame_data = None
-    frame_urn = odb.create_new_movie_frame( movie_id = movie_id,
+    frame_urn = create_new_movie_frame( movie_id = movie_id,
                                             frame_number = get_int('frame_number'),
                                             frame_data = frame_data)
     return {'error': False, 'frame_urn': frame_urn}

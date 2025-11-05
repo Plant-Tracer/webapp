@@ -1,0 +1,16 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "camera-app"
+region = "us-east-1"
+profile = "planttracer"
+resolve_s3 = true
+s3_prefix = "camera-app"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+disable_rollback = false
+# --- THIS IS THE FIXED LINE ---
+parameter_overrides = "HostedZoneId=\"Z02875141U8JDG1N8N5BO\" CertificateArn=\"\" LogLevel=\"DEBUG\" TablePrefix=\"m1-\""
+#
+image_repositories = []
+template_file = ".aws-sam/build/template.yaml"

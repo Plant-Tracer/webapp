@@ -17,14 +17,11 @@ from collections import defaultdict
 from functools import wraps
 from decimal import Decimal
 
-from flask import request
-
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
-from . import db_object
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C
 
@@ -218,6 +215,7 @@ class DDBO:
         logging.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
 
+    # pylint: disable=too-many-locals
     def __init__(self):
         if not hasattr(self, "_initialized"):
             self._initialized = False
@@ -229,8 +227,7 @@ class DDBO:
         if table_prefix is None:
             if 'FLASK_ENV' in os.environ:
                 raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
-            else:
-                table_prefix = ''
+            table_prefix = ''
 
         # Set up the tables
         logging.info("table_prefix=%s",table_prefix)
@@ -250,10 +247,9 @@ class DDBO:
             try:
                 self.dynamodb.meta.client.describe_table(TableName=table.name)
             except ClientError as e:
-                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                if e.response.get('Error',{}).get('Code','') == 'ResourceNotFoundException':
                     raise RuntimeError(f"DynamoDB table {table.name} does not exist on {self.dynamodb.meta.client.meta.endpoint_url}") from e
-                else:
-                    raise
+                raise
         self._initialized = True
 
     # Generic stuff
@@ -264,6 +260,7 @@ class DDBO:
                     for item in key_schema
                     if item['KeyType'] == 'HASH')
 
+    # pylint: disable=too-many-locals
     def update_table(self, table, key_value, updates: dict):
         """
         Generic updater for any DynamoDB Table resource.
@@ -598,12 +595,19 @@ class DDBO:
 
     ### movie management
 
-    def get_movie(self, movie_id):
-        """Given a movie_id, return the movie object."""
-        # NOTE: Make more efficient by specifying which attributes of the Item to return with projection.
+    def get_movie(self, movie_id) -> dict:
+        """Given a movie_id, return the movie object.
+
+        Raises:
+            InvalidMovie_Id: If the movie_id is invalid or the movie is not found.
+        """
+        # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        movie_dict = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        if isinstance(movie_dict,dict):
+            return movie_dict
+        raise InvalidMovie_Id(movie_id)
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
@@ -712,10 +716,11 @@ def verify_table_health():
 
 def logit(*, func_name, func_args, func_return):
     # Get the name of the caller
-    try:
-        user_ipaddr  = request.remote_addr
-    except RuntimeError:
-        user_ipaddr  = '<local>'
+    user_ipaddr = "n/a"         # we wanted to remove the flask dependency
+    #try:
+    #    user_ipaddr  = request.remote_addr
+    #except RuntimeError:
+    #    user_ipaddr  = '<local>'
 
     # Make copies of func_args and func_return so we can modify without fear
     func_args   = copy.copy(func_args)
@@ -750,7 +755,74 @@ def log_args(func):
     return wrapper
 
 
-################ REGISTRATION ################
+# pylint: disable=too-many-arguments, too-many-branches
+def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
+              log_user_id=None,
+              ipaddr=None, security=True):
+    """get log entries (to which the user is entitled) - Implements /api/get-log
+    :param: user_id    - The user who is initiating the query
+    :param: start_time - The earliest log entry to provide (time_t)
+    :param: end_time   - the last log entry to provide (time_t)
+    :param: course_id  - if provided, only provide log entries for this course
+    :param: log_user_id - if provided, only provide log entries for this person
+    :param: security   - False to disable security checks
+    :return: list of dictionaries of log records.
+    """
+    ddbo = DDBO()
+    # Use epoch max if end_time not given
+    if end_time is None:
+        end_time = int(time.time())
+
+    # Select GSI based on parameters
+    if log_user_id:
+        index_name = 'user_id_idx'
+        key_condition = Key( USER_ID ).eq(log_user_id)
+    elif ipaddr:
+        index_name = 'ipaddr_idx'
+        key_condition = Key('ipaddr').eq(ipaddr)
+    elif course_id:
+        index_name = 'course_time_t_idx'
+        key_condition = Key( COURSE_ID ).eq(course_id)
+        if start_time and end_time:
+            key_condition &= Key('time_t').between(start_time, end_time)
+        elif start_time:
+            key_condition &= Key('time_t').gte(start_time)
+        elif end_time:
+            key_condition &= Key('time_t').lte(end_time)
+    else:
+        raise InvalidFrameAccess("No index provided.")
+
+    # Prepare query
+    kwargs = {
+        'IndexName': index_name,
+        'KeyConditionExpression': key_condition
+    }
+
+    # Perform paginated query
+    items = []
+    while True:
+        response = ddbo.logs.query(**kwargs)
+        items.extend(response.get('Items', []))
+        if 'LastEvaluatedKey' not in response:
+            break
+        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+    # Optional filtering in Python
+    if course_id and index_name != 'course_time_t_idx':
+        items = [item for item in items if item.get( COURSE_ID ) == course_id]
+    if start_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
+    if end_time and index_name != 'course_time_t_idx':
+        items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
+
+    #
+    if security:
+        logging.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
+
+    return items
+
+################################################################
+## User management
 
 
 def list_users_courses(*, user_id):
@@ -1080,8 +1152,8 @@ def remaining_course_registrations(*,course_key):
 
 @log
 def course_enrollments(course_id):
-    """Return a list of all those enrolled in the course (including staff)"""
-    """Gets all the movie frames"""
+    """Return a list of all those enrolled in the course (including staff)
+    Gets all the movie frames"""
     ddbo = DDBO()
     user_ids = []
     last_evaluated_key = None
@@ -1099,31 +1171,6 @@ def course_enrollments(course_id):
     return user_ids
 
 
-
-########################
-### Movie Management ###
-########################
-
-@log
-def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
-    """Returns the movie contents for a movie_id.
-    If urn==True, just return the urn
-    """
-    movie = DDBO().get_movie(movie_id)
-    try:
-        if zipfile:
-            urn = movie['movie_zipfile_urn']
-        else:
-            urn = movie['movie_data_urn']
-    except TypeError as e:
-        raise InvalidMovie_Id(movie_id) from e
-
-    if get_urn:
-        return urn
-
-    if urn:
-        return db_object.read_object(urn)
-    raise InvalidMovie_Id()
 
 
 @log
@@ -1157,23 +1204,24 @@ def can_access_movie(*, user_id, movie_id):
         return True
     return False
 
-################################################################
-## Movie frames
-
 @log
-def create_new_movie(*, user_id, course_id, title=None, description=None, orig_movie=None):
+def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
-    :param: user_id  - person creating movie. Stored in movies table.
-    :param: title - title of movie. Stored in movies table
-    :param: description - description of movie
-    :param: movie_metadata - if presented, metadata for the movie. Stored in movies SQL table.
-    :param: orig_movie - if presented, the movie_id of the movie on which this is based
+    :param user_id: - person creating movie. Stored in movies table.
+    :param title: - title of movie. Stored in movies table
+    :param description: - description of movie
+    :param movie_metadata: - if presented, metadata for the movie. Stored in movies SQL table.
+    :param orig_movie: - if presented, the movie_id of the movie on which this is based
+    :return: movie_id of the created movie
+
     """
     # Create a new movie record
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
+    if course_id is None:
+        course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
     ddbo.put_movie({MOVIE_ID:movie_id,
                     COURSE_ID: course_id,
@@ -1213,30 +1261,6 @@ def get_movie(*, movie_id):
 #    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 
-def set_movie_data(*,movie_id, movie_data):
-    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone.
-    increments version.
-    """
-    assert is_movie_id(movie_id)
-    ddbo = DDBO()
-    movie = ddbo.get_movie(movie_id)
-
-    logging.debug("got movie=%s version=%s",movie,movie[VERSION])
-    purge_movie_data(movie_id=movie_id)
-    purge_movie_frames( movie_id=movie_id )
-    purge_movie_zipfile( movie_id=movie_id )
-    object_name = db_object.object_name( course_id = course_id_for_movie_id( movie_id ),
-                                        movie_id = movie_id,
-                                        ext=C.MOVIE_EXTENSION)
-    movie_data_urn        = db_object.make_urn( object_name = object_name)
-
-    db_object.write_object(movie_data_urn, movie_data)
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn,
-                                              DATE_UPLOADED:int(time.time()),
-                                              TOTAL_BYTES:len(movie_data),
-                                              TOTAL_FRAMES:None,
-                                              VERSION:movie[VERSION]+1 })
-
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
     assert is_movie_id(movie_id)
@@ -1244,63 +1268,33 @@ def set_movie_data_urn(*,movie_id, movie_data_urn):
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
 
 
-################################################################
-## Deleting
-
-@log
-def purge_movie_data(*,movie_id):
-    """Delete the movie data associated with a movie"""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    ddbo = DDBO()
-    urn = ddbo.get_movie(movie_id).get(MOVIE_DATA_URN,None)
-    if urn:
-        db_object.delete_object( urn )
-        ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
-
-@log
-def purge_movie_frames(*,movie_id, frame_numbers=None):
-    """Delete the frames and zipfile associated with a movie.
-    :param frames: If None, delete them all
+def list_movies(*,user_id, movie_id=None, orig_movie=None):
     """
+    :param user_id:  only list movies visible to user_id (0 for all movies)
+    :param movie_id:  if provided, only use this movie
+    :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
+    :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
+    """
+    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
+    if movie_id is not None:
+        assert is_movie_id(movie_id)
 
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    if orig_movie is not None:
+        assert is_movie_id(orig_movie)
+
     ddbo = DDBO()
-    if frame_numbers is None:
-        frames = ddbo.get_frames( movie_id )
-    else:
-        frames = [ddbo.get_movie_frame(movie_id, frame_number) for frame_number in frame_numbers]
+    user = ddbo.get_user(user_id)
+    if orig_movie is not None:
+        raise NotImplementedError("orig_movie not implemented")
+    movies = []
+    if movie_id is not None:
+        return fix_movies([ddbo.get_movie(movie_id)])
 
-    for frame in frames:
-        frame_urn = frame.get(FRAME_URN,None)
-        if frame_urn is not None:
-            db_object.delete_object(frame_urn)
-    ddbo.delete_movie_frames( frames )
-
-
-@log
-def purge_movie_zipfile(*,movie_id):
-    """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
-    ddbo = DDBO()
-    movie = ddbo.get_movie(movie_id)
-    if movie.get('movie_zipfile_urn',None) is not None:
-        db_object.delete_object(movie['movie_zipfile_urn'])
-        ddbo.update_table(ddbo.movies, movie_id, {'movie_zipfile_urn':None})
-
-@log
-def purge_movie(*,movie_id):
-    """Actually delete a movie and all its frames"""
-    purge_movie_data(movie_id=movie_id)
-    purge_movie_frames( movie_id=movie_id )
-    purge_movie_zipfile( movie_id=movie_id )
-
-
-@log
-def delete_movie(*,movie_id, delete=1):
-    """Set a movie's deleted bit to be true"""
-    assert delete in (0,1)
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies,movie_id, {DELETED:delete})
+    # build a query for all movies for which the user is in the course
+    for course_id in user[ COURSES ]:
+        logging.debug("extending for course_id=%s",course_id)
+        movies.extend( ddbo.get_movies_for_course_id(course_id) )
+    return fix_movies(movies)
 
 
 ################################################################
@@ -1323,31 +1317,6 @@ def movie_zipfile_urn_for_movie_id(movie_id):
     # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
     return DDBO().get_movie(movie_id)[MOVIE_ZIPFILE_URN]
 
-# New implementation that writes to s3
-# Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
-def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
-    """Determine the URN for a movie_id/frame_number.
-    if frame_data is provided, save it as an object in s3 (Otherwise just return the frame_urn)
-    Store frame info in the movie_frames table.
-    returns frame_urn
-    """
-    logging.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
-    course_id = course_id_for_movie_id(movie_id)
-    if frame_data is not None:
-        # upload the frame to the store and make a frame_urn
-        object_name = db_object.object_name(course_id=course_id,
-                                            movie_id=movie_id,
-                                            frame_number = frame_number,
-                                            ext=C.JPEG_EXTENSION)
-        frame_urn = db_object.make_urn( object_name = object_name)
-        db_object.write_object(frame_urn, frame_data)
-    else:
-        frame_urn = None
-
-    DDBO().put_movie_frame({"movie_id":movie_id,
-                            "frame_number":frame_number,
-                            "frame_urn":frame_urn})
-    return frame_urn
 
 
 @log
@@ -1362,18 +1331,6 @@ def get_frame_urn(*, movie_id, frame_number):
     if frame is None:
         return None
     return frame.get(FRAME_URN,None)
-
-
-def get_frame_data(*, movie_id, frame_number):
-    """Get a frame by movie_id and either frame number.
-    Don't log this to prevent blowing up.
-    :param: movie_id - the movie_id wanted
-    :param: frame_number - provide one of these. Specifies which frame to get
-    :return: returns the frame data or None
-    """
-    logging.warning("We should only get the value that we need")
-    frame_urn = DDBO().get_movie_frame(movie_id, frame_number)[FRAME_URN]
-    return db_object.read_object(frame_urn)
 
 
 ################################################################
@@ -1474,109 +1431,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
                                           FRAME_NUMBER:frame_number},
                                      UpdateExpression='SET trackpoints=:val',
                                      ExpressionAttributeValues={':val':trackpoints})
-
-
-
-
-################################################################
-
-def list_movies(*,user_id, movie_id=None, orig_movie=None):
-    """
-    :param user_id:  only list movies visible to user_id (0 for all movies)
-    :param movie_id:  if provided, only use this movie
-    :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
-    :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
-    """
-    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
-    if movie_id is not None:
-        assert is_movie_id(movie_id)
-
-    if orig_movie is not None:
-        assert is_movie_id(orig_movie)
-
-    ddbo = DDBO()
-    user = ddbo.get_user(user_id)
-    if orig_movie is not None:
-        raise NotImplementedError("orig_movie not implemented")
-    movies = []
-    if movie_id is not None:
-        return fix_movies([ddbo.get_movie(movie_id)])
-
-    # build a query for all movies for which the user is in the course
-    for course_id in user[ COURSES ]:
-        logging.debug("extending for course_id=%s",course_id)
-        movies.extend( ddbo.get_movies_for_course_id(course_id) )
-    return fix_movies(movies)
-
-################################################################
-## Logs
-################################################################
-
-# pylint: disable=too-many-arguments, too-many-branches
-def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
-              log_user_id=None,
-              ipaddr=None, security=True):
-    """get log entries (to which the user is entitled) - Implements /api/get-log
-    :param: user_id    - The user who is initiating the query
-    :param: start_time - The earliest log entry to provide (time_t)
-    :param: end_time   - the last log entry to provide (time_t)
-    :param: course_id  - if provided, only provide log entries for this course
-    :param: log_user_id - if provided, only provide log entries for this person
-    :param: security   - False to disable security checks
-    :return: list of dictionaries of log records.
-    """
-    ddbo = DDBO()
-    # Use epoch max if end_time not given
-    if end_time is None:
-        end_time = int(time.time())
-
-    # Select GSI based on parameters
-    if log_user_id:
-        index_name = 'user_id_idx'
-        key_condition = Key( USER_ID ).eq(log_user_id)
-    elif ipaddr:
-        index_name = 'ipaddr_idx'
-        key_condition = Key('ipaddr').eq(ipaddr)
-    elif course_id:
-        index_name = 'course_time_t_idx'
-        key_condition = Key( COURSE_ID ).eq(course_id)
-        if start_time and end_time:
-            key_condition &= Key('time_t').between(start_time, end_time)
-        elif start_time:
-            key_condition &= Key('time_t').gte(start_time)
-        elif end_time:
-            key_condition &= Key('time_t').lte(end_time)
-    else:
-        raise InvalidFrameAccess("No index provided.")
-
-    # Prepare query
-    kwargs = {
-        'IndexName': index_name,
-        'KeyConditionExpression': key_condition
-    }
-
-    # Perform paginated query
-    items = []
-    while True:
-        response = ddbo.logs.query(**kwargs)
-        items.extend(response.get('Items', []))
-        if 'LastEvaluatedKey' not in response:
-            break
-        kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
-
-    # Optional filtering in Python
-    if course_id and index_name != 'course_time_t_idx':
-        items = [item for item in items if item.get( COURSE_ID ) == course_id]
-    if start_time and index_name != 'course_time_t_idx':
-        items = [item for item in items if int(item.get('time_t', 0)) >= start_time]
-    if end_time and index_name != 'course_time_t_idx':
-        items = [item for item in items if int(item.get('time_t', 0)) <= end_time]
-
-    #
-    if security:
-        logging.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
-
-    return items
 
 
 ################################################################

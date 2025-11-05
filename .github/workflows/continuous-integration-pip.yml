@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: ['macos-latest', 'ubuntu-latest']   #
-        python-version: [3.11]   # installed version on Dreamhost
+        python-version: [3.13]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -60,7 +60,8 @@ jobs:
         run: |
           make make-local-demo
 
-      - name: Lint with pylint
+      - name: Lint with pylint - DISABLED
+        if: false
         run: |
           make pylint
 

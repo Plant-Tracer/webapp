@@ -14,6 +14,7 @@ from deploy.app import odbmaint
 from deploy.app import mailer
 from deploy.app.paths import TEST_DATA_DIR
 from deploy.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
+from deploy.app.odb_movie_data import set_movie_data
 from deploy.app.constants import C
 
 DEMO_COURSE_ID='demo-course'
@@ -54,7 +55,7 @@ def populate_demo_movies():
                                             course_id = DEMO_COURSE_ID,
                                             title=DEMO_MOVIE_TITLE.format(ct=ct),
                                             description=DEMO_MOVIE_DESCRIPTION)
-            odb.set_movie_data(movie_id=movie_id, movie_data = f.read())
+            set_movie_data(movie_id=movie_id, movie_data = f.read())
 
 
 

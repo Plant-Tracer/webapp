@@ -17,10 +17,6 @@ from werkzeug.exceptions import HTTPException
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
-#from . import auth
-from . import db_object
-#from . import odbmaint
-#from . import clogging
 from . import apikey
 
 from .bottle_api import api_bp
@@ -56,8 +52,6 @@ log_level = os.getenv("LOG_LEVEL","INFO").upper()
 logger = app.logger
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)
-app.logger.info("new Flask(__name__=%s) log_level=%s",__name__,log_level)
-app.logger.info("make_urn('')=%s",db_object.make_urn(object_name=''))
 fix_boto_log_level()
 
 
