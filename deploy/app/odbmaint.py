@@ -16,7 +16,7 @@ from botocore.exceptions import ClientError
 
 
 from . import odb
-from .db_object import s3_client
+from .s3_presigned import s3_client
 from .odb import USER_ID,DDBO
 from .constants import C
 

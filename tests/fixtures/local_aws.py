@@ -16,8 +16,8 @@ import boto3
 
 from app.constants import C
 from app import odb
+from app import odb_movie_data
 from app import odbmaint
-from app import db_object
 
 from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
@@ -153,11 +153,10 @@ def new_movie(new_course):
     logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
-        movie_data_sha256 = db_object.sha256(movie_data)
     assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
     assert len(movie_data) > 0
 
-    odb.set_movie_data(movie_id = movie_id, movie_data = movie_data)
+    odb_movie_data.set_movie_data(movie_id = movie_id, movie_data = movie_data)
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[DELETED] == 0
     assert movie[PUBLISHED] == 0
@@ -168,5 +167,5 @@ def new_movie(new_course):
 
     yield cfg
 
-    odb.purge_movie(movie_id = movie_id)
-    odb.delete_movie(movie_id = movie_id)
+    odb_movie_data.purge_movie(movie_id = movie_id)
+    odb_movie_data.delete_movie(movie_id = movie_id)

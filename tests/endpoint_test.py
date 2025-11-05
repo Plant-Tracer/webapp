@@ -19,7 +19,8 @@ import uuid
 import pytest
 
 from app import odb
-from app import db_object
+from app import odb_movie_data
+from app import s3_presigned
 from app.odb import DDBO,is_api_key
 from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
 from app.constants import C,E,__version__,GET,POST,GET_POST
@@ -126,7 +127,7 @@ def test_upload_movie_data(client, api_key):
     with open(TEST_MOVIE_FILENAME, 'rb') as f:
         movie_data = f.read()
     movie_base64_data = base64.b64encode(movie_data)
-    movie_data_sha256 = db_object.sha256(movie_data)
+    movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
     r = client.post('/api/new-movie',
                     data={'api_key': api_key,
                           'title': 'Test Title at '+time.asctime(),
@@ -145,7 +146,7 @@ def test_upload_movie_data(client, api_key):
     assert res['error'] == False
 
     # Purge the movie (to clean up)
-    odb.purge_movie(movie_id = movie_id)
+    odb_movie_data.purge_movie(movie_id = movie_id)
 
 # need /api/get-movie-data
 # need /api/get-movie-metadata
