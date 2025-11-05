@@ -22,7 +22,6 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
-from . import db_object
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C
 
@@ -216,6 +215,7 @@ class DDBO:
         logging.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
 
+    # pylint: disable=too-many-locals
     def __init__(self):
         if not hasattr(self, "_initialized"):
             self._initialized = False
@@ -227,8 +227,7 @@ class DDBO:
         if table_prefix is None:
             if 'FLASK_ENV' in os.environ:
                 raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
-            else:
-                table_prefix = ''
+            table_prefix = ''
 
         # Set up the tables
         logging.info("table_prefix=%s",table_prefix)
@@ -248,10 +247,9 @@ class DDBO:
             try:
                 self.dynamodb.meta.client.describe_table(TableName=table.name)
             except ClientError as e:
-                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                if e.response.get('Error',{}).get('Code','') == 'ResourceNotFoundException':
                     raise RuntimeError(f"DynamoDB table {table.name} does not exist on {self.dynamodb.meta.client.meta.endpoint_url}") from e
-                else:
-                    raise
+                raise
         self._initialized = True
 
     # Generic stuff
@@ -262,6 +260,7 @@ class DDBO:
                     for item in key_schema
                     if item['KeyType'] == 'HASH')
 
+    # pylint: disable=too-many-locals
     def update_table(self, table, key_value, updates: dict):
         """
         Generic updater for any DynamoDB Table resource.
@@ -596,12 +595,15 @@ class DDBO:
 
     ### movie management
 
-    def get_movie(self, movie_id):
+    def get_movie(self, movie_id) -> dict:
         """Given a movie_id, return the movie object."""
         # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        return self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        movie_dict = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        if isinstance(movie_dict,dict):
+            return movie_dict
+        raise InvalidMovie_Id(movie_id)
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
@@ -1146,8 +1148,8 @@ def remaining_course_registrations(*,course_key):
 
 @log
 def course_enrollments(course_id):
-    """Return a list of all those enrolled in the course (including staff)"""
-    """Gets all the movie frames"""
+    """Return a list of all those enrolled in the course (including staff)
+    Gets all the movie frames"""
     ddbo = DDBO()
     user_ids = []
     last_evaluated_key = None
@@ -1311,31 +1313,6 @@ def movie_zipfile_urn_for_movie_id(movie_id):
     logging.warning("INEFFICIENT CALL. Just return movie_id.movie_zipfile_urn")
     return DDBO().get_movie(movie_id)['movie_zipfile_urn']
 
-# New implementation that writes to s3
-# Possible -  move jpeg compression here? and do not write out the frame if it was already written out?
-def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
-    """Determine the URN for a movie_id/frame_number.
-    if frame_data is provided, save it as an object in s3 (Otherwise just return the frame_urn)
-    Store frame info in the movie_frames table.
-    returns frame_urn
-    """
-    logging.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
-    course_id = course_id_for_movie_id(movie_id)
-    if frame_data is not None:
-        # upload the frame to the store and make a frame_urn
-        object_name = db_object.object_name(course_id=course_id,
-                                            movie_id=movie_id,
-                                            frame_number = frame_number,
-                                            ext=C.JPEG_EXTENSION)
-        frame_urn = db_object.make_urn( object_name = object_name)
-        db_object.write_object(frame_urn, frame_data)
-    else:
-        frame_urn = None
-
-    DDBO().put_movie_frame({"movie_id":movie_id,
-                            "frame_number":frame_number,
-                            "frame_urn":frame_urn})
-    return frame_urn
 
 
 @log
@@ -1350,18 +1327,6 @@ def get_frame_urn(*, movie_id, frame_number):
     if frame is None:
         return None
     return frame.get(FRAME_URN,None)
-
-
-def get_frame_data(*, movie_id, frame_number):
-    """Get a frame by movie_id and either frame number.
-    Don't log this to prevent blowing up.
-    :param: movie_id - the movie_id wanted
-    :param: frame_number - provide one of these. Specifies which frame to get
-    :return: returns the frame data or None
-    """
-    logging.warning("We should only get the value that we need")
-    frame_urn = DDBO().get_movie_frame(movie_id, frame_number)[FRAME_URN]
-    return db_object.read_object(frame_urn)
 
 
 ################################################################

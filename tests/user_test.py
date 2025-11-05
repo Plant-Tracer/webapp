@@ -2,30 +2,16 @@
 Test the various functions in the database involving user creation.
 """
 
-import sys
-import os
 import uuid
 import logging
-import pytest
-import base64
-import time
-import copy
-import hashlib
-from os.path import abspath, dirname
 
 from app import odb
 from app import odbmaint
-from app import bottle_api
-from app import bottle_app
-from app.paths import TEST_DIR, TEST_DATA_DIR
 from app.constants import C
 
-from app.odb import EMAIL,InvalidCourse_Id,ExistingCourse_Id, UserExists, COURSE_ID, COURSE_NAME,API_KEY, COURSE_KEY
+from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
 
-from fixtures.app_client import client
-from fixtures.local_aws import local_ddb, local_s3, new_course, ADMIN_EMAIL, USER_EMAIL
-
-import dbutil
+from fixtures.local_aws import ADMIN_EMAIL
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 ################################################################
@@ -42,7 +28,7 @@ def test_new_course(new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
-    logging.info("Created course %s", course_key )
+    logging.info("Created course %s admin_email %s", course_key, admin_email )
 
     # Check course lookup functions
     c1 = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])
@@ -53,7 +39,7 @@ def test_new_course(new_course):
 
 # Make sure that there is a demo user
 def test_demo_user(new_course):
-    cfg = copy.copy(new_course)
+    #cfg = copy.copy(new_course)
     try:
         odbmaint.create_course(course_id  = DEMO_COURSE_ID,
                                course_name = DEMO_COURSE_NAME,
@@ -63,8 +49,6 @@ def test_demo_user(new_course):
                                max_enrollment = 2)
     except ExistingCourse_Id:
         pass
-
-
 
     try:
         odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
@@ -79,7 +63,7 @@ def test_demo_user(new_course):
 def test_add_remove_user_and_admin(new_course):
     """Tests creating a new user and adding them to the course as an admin"""
     cfg = copy.copy(new_course)
-    course_key = cfg[COURSE_KEY]
+    #course_key = cfg[COURSE_KEY]
 
     for admin in range(0,2):
         new_email = f"some-user{str(uuid.uuid4())[0:8]}@company.com"
@@ -109,12 +93,12 @@ def test_add_remove_user_and_admin(new_course):
 
 def test_course_list(client, new_course):
     cfg        = copy.copy(new_course)
-    user_email = cfg[USER_EMAIL]
+    #user_email = cfg[USER_EMAIL]
     api_key    = cfg[API_KEY]
 
     user_dict = odb.validate_api_key(api_key)
     user_id   = user_dict['user_id']
-    primary_course_id = user_dict['primary_course_id']
+    #primary_course_id = user_dict['primary_course_id']
 
     recs1 = odb.list_users_courses(user_id=user_id)
     users1 = recs1['users']

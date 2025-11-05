@@ -9,15 +9,12 @@ PYTHON          = python3.13
 DJLINT_FLAGS ?= --profile=jinja --lint --quiet --ignore J004,J018
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
-PY    := PYTHONPATH=$$(pwd)/src/camera_app/app.whl:$(PYTHONPATH) .venv/bin/python
 
 PRODUCTION_URL="https://camera.planttracer.com"
 STAGE_URL="https://camera-stage.planttracer.com"
 TEMPLATE_DIR := src/camera_app/templates
 
 export PYTHONDONTWRITEBYTECODE=1
-
-DEPLOY_WHEEL=src/camera_app/deploy.whl
 
 .PHONY: install vend-app lint pytest test
 install: .venv/pyvenv.cfg
@@ -27,24 +24,20 @@ install: .venv/pyvenv.cfg
 	poetry install
 	npm install -g browser-sync
 
-$(DEPLOY_WHEEL):
-	@echo "Building src/camera_app/deploy.whl"
-	( cd .. && make dist)
-	@echo "Installing wheel into $(DEPLOY_WHEEL)"
-	install -m 444 $$(ls -t ../dist/*.whl | head -1) $(DEPLOY_WHEEL)
 
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
 	poetry export -f requirements.txt --output src/requirements.txt
 
+.PHONY: vend-app
 vend-app: Makefile
-	rsync --verbose --archive  --include '*.py' --exclude '*' ../deploy/app/ src/camera_app/deploy/app/
+	rsync --verbose --archive ../deploy/app/{constants.py,odb.py,s3_presigned.py,schema.py} src/camera_app/deploy/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app
 	poetry run djlint $(DJLINT_FLAGS) $(TEMPLATE_DIR)/*.html
-	$(PY) -m ruff check --fix
-	$(PY) -m pylint src
-	$(PY) -m pyright
+	poetry run ruff check --fix
+	poetry run pylint src
+	echo poetry run pyright does not work well yet
 
 check: .venv/pyvenv.cfg
 	make vend-app

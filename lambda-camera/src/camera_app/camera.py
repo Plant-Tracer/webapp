@@ -19,8 +19,8 @@ from typing import Any, Dict, Tuple, Optional
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
-from .deploy.app import odb
-from .deploy.app import db_object
+from .deploy.app.odb import validate_api_key,API_KEY,USER_ID,MOVIE_ID,PRIMARY_COURSE_ID,create_new_movie
+from .deploy.app.s3_presigned import make_object_name,make_urn,make_signed_url
 from .deploy.app.constants import C
 
 MY_DIR = dirname(__file__)
@@ -208,26 +208,26 @@ def api_camera_start(event, context, payload)  -> Dict[str, Any]:
     """
 
     LOGGER.info("api_camera event=%s context=%s payload=%s", event, context, payload)
-    user = odb.validate_api_key(payload.get(odb.API_KEY, ""))
+    user = validate_api_key(payload.get(API_KEY, ""))
     if not user:
         return resp_json(200, {"message": "api_key not provided or invalid"})
 
-    movie_id = payload.get(odb.MOVIE_ID)
+    movie_id = payload.get(MOVIE_ID)
     if movie_id is None:
         # Get a new movie_id
-        movie_id = odb.create_new_movie(user_id=user[odb.USER_ID],
+        movie_id = create_new_movie(user_id=user[USER_ID],
                                         description='Upload started '+time.asctime())
 
     # Generate the URLs
     start = payload['start']
     count = payload['count']
-    object_names = [db_object.object_name(course_id = user[odb.PRIMARY_COURSE_ID],
+    object_names = [make_object_name(course_id = user[PRIMARY_COURSE_ID],
                                           movie_id = movie_id,
                                           frame_number = frame_number, ext=C.JPEG_EXTENSION)
                     for frame_number in range(start,count)]
 
-    object_urns = [db_object.make_urn(object_name=name) for name in object_names]
-    signed_urls = [db_object.make_signed_url(urn=urn) for urn in object_urns]
+    object_urns = [make_urn(object_name=name) for name in object_names]
+    signed_urls = [make_signed_url(urn=urn) for urn in object_urns]
     return resp_json(200, {'signed_urls':signed_urls, 'start':start})
 
 ################################################################

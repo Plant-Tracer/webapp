@@ -66,11 +66,11 @@ dist: pyproject.toml
 
 all:
 	@echo verify syntax and then restart
-	make pylint
+	make lint
 	make run-local
 
 check:
-	make pylint
+	make lint
 	make pytest
 
 tags:
@@ -82,12 +82,11 @@ tags:
 
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --rcfile .pylintrc --fail-under=$(PYLINT_THRESHOLD) --verbose
-pylint: $(REQ)
-	poetry run pylint  $(PYLINT_OPTS) deploy *.py
+lint: $(REQ)
+	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
 
-## Use this to also test the tests...
-pylint-tests: $(REQ)
-	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+
 
 ## Mypy static analysis
 mypy:

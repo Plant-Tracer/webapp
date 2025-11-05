@@ -11,10 +11,9 @@ Nevertheless, we store the frame names in the DynamoDB. We may stop doing that s
 import os
 import logging
 import urllib.parse
-import hashlib
 
 import boto3
-from botocore.exceptions import ClientError,ParamValidationError
+from botocore.exceptions import ClientError
 
 from .constants import C
 
@@ -47,16 +46,7 @@ CORS_CONFIGURATION = {
     }]
 }
 
-def sha256(data):
-    """Note: We use sha256 and have it hard coded everywhere. But the hashes should really be pluggable, in the form 'hashalg:hash'
-    e.g. "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
-    """
-
-    h = hashlib.sha256()
-    h.update(data)
-    return h.hexdigest()
-
-def object_name(*,course_id,movie_id,frame_number=None, ext):
+def make_object_name(*,course_id,movie_id,frame_number=None, ext):
     """object_name is a URN that is generated according to a scheme
     that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
@@ -90,12 +80,10 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             Params={'Bucket': o.netloc,
                     'Key': o.path[1:]},
             ExpiresIn=expires)
-    else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
+    raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600, sha256=None):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600):
     """Returns a dictionary with 'url' and 'fields'"""
-    logger.debug("make_presigned_post sha256=%s (not used for S3, was used for storing objects in DB)",sha256)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         return s3_client().generate_presigned_post(
@@ -107,8 +95,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
             ],
             Fields= { 'Content-Type':mime_type },
             ExpiresIn=expires)
-    else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+    raise RuntimeError(f"Unknown scheme: {o.scheme}")
 
 def object_exists(urn):
     assert len(urn) > 0
