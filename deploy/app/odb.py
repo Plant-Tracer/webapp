@@ -597,7 +597,7 @@ class DDBO:
 
     def get_movie(self, movie_id) -> dict:
         """Given a movie_id, return the movie object.
-        
+
         Raises:
             InvalidMovie_Id: If the movie_id is invalid or the movie is not found.
         """
@@ -1303,19 +1303,19 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
 
 @functools.lru_cache(maxsize=128)
 def course_id_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL. Just return movie_id.course_id")
+    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
     return DDBO().get_movie(movie_id)[ COURSE_ID ]
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL. Just return movie_id.movie_data_urn")
+    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
     return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
 
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    logging.warning("INEFFICIENT CALL. Just return movie_id.movie_zipfile_urn")
-    return DDBO().get_movie(movie_id)['movie_zipfile_urn']
+    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
+    return DDBO().get_movie(movie_id)[MOVIE_ZIPFILE_URN]
 
 
 
