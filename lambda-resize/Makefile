@@ -1,7 +1,7 @@
-# ===== camera_app Makefile =====
-# lambda-camera is the minimal camera page.
-STACK           ?= camera-app
-STACK_STAGE     ?= camera-app-stage
+# ===== resize_app Makefile =====
+# lambda-resize is the minimal resize page.
+STACK           ?= resize-app
+STACK_STAGE     ?= resize-app-stage
 CAPS            ?= CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
 REGION          ?= us-east-1
 PROFILE         ?= planttracer
@@ -10,9 +10,9 @@ DJLINT_FLAGS ?= --profile=jinja --lint --quiet --ignore J004,J018
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-PRODUCTION_URL="https://camera.planttracer.com"
-STAGE_URL="https://camera-stage.planttracer.com"
-TEMPLATE_DIR := src/camera_app/templates
+PRODUCTION_URL="https://app-resize.planttracer.com"
+STAGE_URL="https://resize-stage.planttracer.com"
+TEMPLATE_DIR := src/resize_app/templates
 
 export PYTHONDONTWRITEBYTECODE=1
 
@@ -30,7 +30,7 @@ src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
 
 .PHONY: vend-app
 vend-app: Makefile
-	rsync --verbose --archive ../deploy/app/*.py src/camera_app/deploy/app/
+	rsync --verbose --archive ../deploy/app/*.py src/resize_app/deploy/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app
@@ -51,7 +51,7 @@ prod-vbd: template.yaml samconfig.toml src/requirements.txt
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
 	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
-	curl --silent  https://camera.planttracer.com/ | head -3
+	curl --silent  https://app-resize.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	make lint
@@ -65,23 +65,23 @@ stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 functions:
 	@echo "Production function:"
 	@aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
+		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
 	@echo "Stage function:"
 	@aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
+		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text 2>/dev/null || echo "Stack not found"
 
 # Tail logs
 prod-tail:
 	@echo "Tailing production logs..."
 	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text)" \
+		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text)" \
 		--since 15m --follow --region $(REGION) --profile $(PROFILE)
 
 # Tail stage logs (separate stack)
 stage-tail:
 	@echo "Tailing stage logs..."
 	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' --output text)" \
+		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text)" \
 		--since 15m --follow --region $(REGION) --profile $(PROFILE)
 
 # Download deployed Lambda package for inspection
@@ -90,7 +90,7 @@ fetch-zip-prod:
 		--stack-name $(STACK) \
 		--region $(REGION) \
 		--profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`CameraFunction`].OutputValue' \
+		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' \
 		--output text); \
 	echo "Fetching deployment package for $$FUNC..."; \
 	URL=$$(aws lambda get-function --function-name $$FUNC \
