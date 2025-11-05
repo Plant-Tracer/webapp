@@ -13,6 +13,7 @@ import copy
 import hashlib
 import requests
 import json
+import filetype
 import re
 import urllib
 from urllib.parse import quote
@@ -29,7 +30,8 @@ from app.constants import C,E,MIME
 from app.s3_presigned import s3_client
 
 # Get the fixtures from user_test
-from fixtures.local_aws import new_course,new_movie, local_s3, TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+from fixtures.local_aws import new_course,new_movie, local_s3, local_ddb, TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+from fixtures.app_client import client
 
 POST_TIMEOUT = 2
 GET_TIMEOUT = 2
@@ -158,7 +160,7 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
     movie_title = f'test-movie title {str(uuid.uuid4())}'
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data = f.read()
-    movie_data_sha256 = s3_object.sha256_hash(movie_data)
+    movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
     resp = client.post('/api/new-movie',
                            data = {'api_key': api_key,
                                    "title": movie_title,
@@ -307,7 +309,7 @@ def test_movie_extract2(client, new_movie):
     api_key = cfg[API_KEY]
     user_id = cfg[USER_ID]
 
-    movie_data = odb.get_movie_data(movie_id = movie_id)
+    movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)
     assert is_mp4(movie_data)
 
     # Grab three frames with the tracker and make sure they are different
@@ -426,7 +428,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logging.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = odb.get_movie_data(movie_id=movie_id)
+    retrieved_movie_data = odb_movie_data.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
 
@@ -438,5 +440,5 @@ def test_new_movie_api(client, new_course):
     assert res['error'] is False
 
     logging.debug("new_movie fixture: Purge the movie that we have deleted")
-    odb.purge_movie(movie_id=movie_id)
+    odb_movie_data.purge_movie(movie_id=movie_id)
     logging.debug("new_movie fixture: done")
