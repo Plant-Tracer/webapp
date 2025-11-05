@@ -596,7 +596,11 @@ class DDBO:
     ### movie management
 
     def get_movie(self, movie_id) -> dict:
-        """Given a movie_id, return the movie object."""
+        """Given a movie_id, return the movie object.
+        
+        Raises:
+            InvalidMovie_Id: If the movie_id is invalid or the movie is not found.
+        """
         # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
