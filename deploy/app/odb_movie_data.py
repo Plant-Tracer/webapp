@@ -48,6 +48,7 @@ def write_object(urn, object_data):
             logger.error("ParamValidationError. urn=%s o=%s  e=%s",urn,o,e)
             raise
         except ClientError as e:
+            # Use safe navigation to avoid KeyError if 'Error' or 'Code' is missing from the response
             error_code = e.response.get('Error',{}).get('Code','')
             if error_code == 'InvalidBucketName':
                 logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)

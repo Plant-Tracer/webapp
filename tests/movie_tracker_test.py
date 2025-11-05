@@ -28,7 +28,6 @@ from app import bottle_api
 from app import bottle_app
 from app import odb
 from app import odb_movie_data
-from app import s3_presigned
 from app import tracker
 from app.constants import MIME,E,C
 from app.odb import DDBO,API_KEY,MOVIE_ID,TITLE,USER_ID
