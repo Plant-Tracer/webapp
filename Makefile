@@ -83,14 +83,12 @@ tags:
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
 lint: $(REQ)
-	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
-
-#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
-
+	make pylint
+	make eslint
 
 pylint:
-	@echo we are transitioning from '"make pylint"' to '"make lint"'
-	make lint
+	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
+#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
 ## Mypy static analysis
 mypy:
