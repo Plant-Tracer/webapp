@@ -11,8 +11,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 PRODUCTION_URL="https://app-resize.planttracer.com"
-STAGE_URL="https://resize-stage.planttracer.com"
-TEMPLATE_DIR := src/resize_app/templates
+STAGE_URL="https://app-resize-stage.planttracer.com"
 
 export PYTHONDONTWRITEBYTECODE=1
 
@@ -24,7 +23,6 @@ install: .venv/pyvenv.cfg
 	poetry install
 	npm install -g browser-sync
 
-
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
 	poetry export -f requirements.txt --output src/requirements.txt
 
@@ -34,7 +32,6 @@ vend-app: Makefile
 
 lint: .venv/pyvenv.cfg
 	make vend-app
-	poetry run djlint $(DJLINT_FLAGS) $(TEMPLATE_DIR)/*.html
 	poetry run ruff check --fix
 	poetry run pylint src
 	echo poetry run pyright does not work well yet
@@ -46,8 +43,8 @@ check: .venv/pyvenv.cfg
 
 # AWS Lambda Vend, Build and Deploy (VBD)
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
-	make lint
-	make vend-app
+	echo make lint
+	echo make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
 	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml

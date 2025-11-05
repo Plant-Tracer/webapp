@@ -8,6 +8,8 @@ Globals:
       Variables:
         LOG_LEVEL: !Ref LogLevel
         TABLE_PREFIX: !Ref TablePrefix
+    Architectures:
+      - arm64
 
 Parameters:
   HostedZoneId:
@@ -25,7 +27,7 @@ Parameters:
   TablePrefix:
     Type: String
     Description: PlantTracer table prefix
-  WatchedBucket:
+  WatchedS3Bucket:
     Type: String
     Default: planttracer-prod
 
@@ -57,6 +59,7 @@ Resources:
         CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
+
   # Lambda function — JSON-only API (no Flask)
   ResizeFunction:
     Type: AWS::Serverless::Function
@@ -85,6 +88,14 @@ Resources:
               Resource:
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+            - Sid: AllowS3ReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}"
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}/*"
 
       Events:
         AnyRoot:
@@ -124,7 +135,7 @@ Resources:
       Policies:
         # Policy to read from the S3 bucket
         - S3ReadPolicy:
-            BucketName: !Ref WatchedBucket
+            BucketName: !Ref WatchedS3Bucket
         # Same DynamoDB policy as the API function
         - Version: '2012-10-17'
           Statement:
@@ -140,12 +151,39 @@ Resources:
               Resource:
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
-      Events:
-        S3Upload:
-          Type: S3
-          Properties:
-            Bucket: !Ref WatchedBucket
-            Events: s3:ObjectCreated:* # Triggers on any upload/creation
+            - Sid: AllowS3ReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}"
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}/*"
+
+
+  # EventBridge rule - invokes EventConsumerFunction
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: EventRule
+      State: ENABLED
+      EventPattern:
+        source: ["aws.s3"]
+        detail-type: ["Object Created"]
+        detail:
+          bucket:
+            name: [!Ref WatchedS3Bucket]
+      Targets:
+        - Arn: !GetAtt S3ResizeFunction.Arn
+          Id: S3ResizeFunctionTarget
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3ResizeFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventRule.Arn
 
 Outputs:
   # Production-specific outputs

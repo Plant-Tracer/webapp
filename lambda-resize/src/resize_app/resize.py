@@ -6,7 +6,7 @@ Runs the camera.
 """
 
 # at top of home_app/home.py (module import time)
-from os.path import join,dirname
+from os.path import dirname
 import base64
 import binascii
 import functools
@@ -17,15 +17,9 @@ import sys
 import time
 from typing import Any, Dict, Tuple, Optional
 
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
-from .deploy.app.odb import validate_api_key,API_KEY,USER_ID,MOVIE_ID,PRIMARY_COURSE_ID,create_new_movie
-from .deploy.app.s3_presigned import make_object_name,make_urn,make_signed_url
-from .deploy.app.constants import C
 
 MY_DIR = dirname(__file__)
-TEMPLATE_DIR = join(MY_DIR, "templates")
-STATIC_DIR = join(MY_DIR, "static")
 
 __version__ = "0.1.0"
 
@@ -64,11 +58,8 @@ LOGGER = get_logger("grader")
 ################################################################
 ## Minimal support for a Python-based website in Lamda with jinja2 support
 ##
-WEBSITE_DOMAIN = "camera.planttracer.com"
-WEBSITE_URL = f"https://{WEBSITE_DOMAIN}"
 
 # jinja2
-env = Environment( loader=FileSystemLoader( [TEMPLATE_DIR]))
 
 def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None ) -> Dict[str, Any]:
     """End HTTP event processing with a JSON object"""
@@ -82,85 +73,6 @@ def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, st
         },
         "body": json.dumps(body),
     }
-
-
-def resp_text( status: int, body: str,
-               headers: Optional[Dict[str, str]] = None,
-               cookies: Optional[list[str]] = None) -> Dict[str, Any]:
-    """End HTTP event processing with text/html"""
-    LOGGER.debug("resp_text(status=%s)", status)
-    return {
-        "statusCode": status,
-        "headers": {
-            "Content-Type": "text/html; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-            **(headers or {}),
-        },
-        "body": body,
-        "cookies": cookies or [],
-    }
-
-
-def resp_png( status: int, png_bytes: bytes,
-              headers: Optional[Dict[str, str]] = None,
-              cookies: Optional[list[str]] = None ) -> Dict[str, Any]:
-    """End HTTP event processing with binary PNG"""
-    LOGGER.debug("resp_png(status=%s, len=%s)", status, len(png_bytes))
-    return {
-        "statusCode": status,
-        "headers": {
-            "Content-Type": "image/png",
-            "Access-Control-Allow-Origin": "*",
-            **(headers or {}),
-        },
-        "body": base64.b64encode(png_bytes).decode("ascii"),
-        "isBase64Encoded": True,
-        "cookies": cookies or [],
-    }
-
-
-def redirect( location: str, extra_headers: Optional[dict] = None, cookies: Optional[list] = None) ->Dict[str, Any]:
-    """End HTTP event processing with redirect to another website"""
-    LOGGER.debug("redirect(%s,%s,%s)", location, extra_headers, cookies)
-    headers = {"Location": location}
-    if extra_headers:
-        headers.update(extra_headers)
-    return {"statusCode": 302, "headers": headers, "cookies": cookies or [], "body": ""}
-
-
-def error_404(page) -> Dict[str, Any]:
-    """Generate an error"""
-    template = env.get_template("404.html")
-    return resp_text(404, template.render(page=page))
-
-
-def render_template(page="index.html", **kwargs)  -> Dict[str, Any]:
-    """generic template handler"""
-
-    try:
-        template = env.get_template(page)
-        return resp_text(200, template.render(**kwargs))
-    except TemplateNotFound:
-        return error_404(page)
-
-
-def static_file(fname)  -> Dict[str, Any]:
-    """Serve a static file"""
-    if ("/" in fname) or (".." in fname) or ("\\" in fname):
-        # path transversal attack?
-        return error_404(fname)
-    headers = {}
-    try:
-        if fname.endswith(".png"):
-            with open(join(STATIC_DIR, fname), "rb") as f:
-                return resp_png(200, f.read())
-
-        with open(join(STATIC_DIR, fname), "r", encoding="utf-8") as f:
-            if fname.endswith(".css"):
-                headers["Content-Type"] = "text/css; charset=utf-8"
-            return resp_text(200, f.read(), headers=headers)
-    except FileNotFoundError:
-        return error_404(fname)
 
 
 def _with_request_log_level(payload: Dict[str, Any]):
@@ -193,7 +105,7 @@ def api_heartbeat(event, context)  -> Dict[str, Any]:
     return resp_json( 200, { "now": time.time() } )
 
 
-def api_camera_start(event, context, payload)  -> Dict[str, Any]:
+def api_resize(event, context, payload)  -> Dict[str, Any]:
     """
     1. Validate api_key.
     2. Create the movie if it is not provided.
@@ -207,28 +119,10 @@ def api_camera_start(event, context, payload)  -> Dict[str, Any]:
              dict['start'] = first URL frame number
     """
 
-    LOGGER.info("api_camera event=%s context=%s payload=%s", event, context, payload)
-    user = validate_api_key(payload.get(API_KEY, ""))
-    if not user:
-        return resp_json(200, {"message": "api_key not provided or invalid"})
-
-    movie_id = payload.get(MOVIE_ID)
-    if movie_id is None:
-        # Get a new movie_id
-        movie_id = create_new_movie(user_id=user[USER_ID],
-                                        description='Upload started '+time.asctime())
-
-    # Generate the URLs
-    start = payload['start']
-    count = payload['count']
-    object_names = [make_object_name(course_id = user[PRIMARY_COURSE_ID],
-                                          movie_id = movie_id,
-                                          frame_number = frame_number, ext=C.JPEG_EXTENSION)
-                    for frame_number in range(start,count)]
-
-    object_urns = [make_urn(object_name=name) for name in object_names]
-    signed_urls = [make_signed_url(urn=urn) for urn in object_urns]
-    return resp_json(200, {'signed_urls':signed_urls, 'start':start})
+    LOGGER.info("api_resize event=%s context=%s payload=%s", event, context, payload)
+    start = time.time()
+    end = time.time()
+    return resp_json(200, {'start':start, 'end':end})
 
 ################################################################
 ## Parse Lambda Events and cookies
@@ -259,23 +153,23 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
     return method, path, payload
 
 
+def do_ping():
+    return resp_json( 200,
+                      { "error": False, "message": "ok", "path": sys.path, "context": dict(context),
+                        "environ": dict(os.environ) } )
+
+def api_log(event,context):
+    return resp_json( 400, {"message":"Log not yet implemented"})
+
 ################################################################
 ## main entry point from lambda system
-
 
 # pylint: disable=too-many-return-statements, disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
 
-    print("now running import deploy")
-    print("cwd=",os.getcwd())
-
-
     method, path, payload = parse_event(event)
 
-    # Detect if this is a browser request vs API request
-    accept_header = event.get("headers", {}).get("accept", "")
-    is_browser_request = "text/html" in accept_header
     with _with_request_log_level(payload):
         try:
             LOGGER.info( "req method='%s' path='%s' action='%s'", method, path, payload.get("action") )
@@ -285,47 +179,31 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                 ################################################################
                 # JSON API Actions
                 #
-                case ("POST", "/api/v1", "ping"):
-                    return resp_json( 200,
-                                      { "error": False, "message": "ok", "path": sys.path, "context": dict(context),
-                                        "environ": dict(os.environ) } )
+                case (_, "/api/v1", "ping"):
+                    return do_ping()
 
-                case ("POST", "/api/v1", "camera-start"):
-                    return api_camera_start(event, context, payload)
+                case (_, '/api/v1/ping', _):
+                    return do_ping()
+
+                case ("POST", "/api/v1", "resize-start"):
+                    return api_resize(event, context, payload)
 
                 case ("POST", "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)
+
+                case ("POST", "/api/v1", "log"):
+                    return api_log(event, context)
 
                 case ("POST", "/api/v1", _):
                     return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
 
                 ################################################################
-                # Human actions
-                case ("GET", "/", _):
-                    return render_template("index.html")
-
-                case ("GET", "/about", _):
-                    return render_template("about.html")
-
-                # This must be last - catch all GETs, check for /static
-                # used for serving css and javascript
-                case ("GET", p, _):
-                    if p.startswith("/static"):
-                        return static_file(p.removeprefix("/static/"))
-                    return error_404(p)
-
-                ################################################################
                 # error
                 case (_, _, _):
-                    return error_404(path)
+                    return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             LOGGER.exception("Unhandled exception! e=%s", e)
-
-            if is_browser_request:
-                # Return HTML error page for browser requests
-                template = env.get_template("error_generic.html")
-                return resp_text(500, template.render(error_message=str(e)))
 
             # Return JSON for API requests
             return resp_json(500, {"error": True, "message": str(e)})
