@@ -11,6 +11,7 @@ Nevertheless, we store the frame names in the DynamoDB. We may stop doing that s
 import os
 import logging
 import urllib.parse
+import hashlib
 
 import boto3
 from botocore.exceptions import ClientError
@@ -45,6 +46,15 @@ CORS_CONFIGURATION = {
         'MaxAgeSeconds': 3600
     }]
 }
+
+def sha256_hash(data):
+    """Note: We use sha256 and have it hard coded everywhere. But the hashes should really be pluggable, in the form 'hashalg:hash'
+    e.g. "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    """
+
+    h = hashlib.sha256()
+    h.update(data)
+    return h.hexdigest()
 
 def make_object_name(*,course_id,movie_id,frame_number=None, ext):
     """object_name is a URN that is generated according to a scheme
@@ -82,7 +92,7 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',expires=3600):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None,expires=3600):
     """Returns a dictionary with 'url' and 'fields'"""
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:

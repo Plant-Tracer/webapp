@@ -158,7 +158,7 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
     movie_title = f'test-movie title {str(uuid.uuid4())}'
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data = f.read()
-    movie_data_sha256 = db_object.sha256(movie_data)
+    movie_data_sha256 = s3_object.sha256_hash(movie_data)
     resp = client.post('/api/new-movie',
                            data = {'api_key': api_key,
                                    "title": movie_title,
@@ -372,7 +372,7 @@ def test_new_movie_api(client, new_course):
     logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
-        movie_data_sha256 = db_object.sha256(movie_data)
+        movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
     assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
     assert len(movie_data) > 0
 

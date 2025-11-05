@@ -88,6 +88,10 @@ lint: $(REQ)
 #	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
 
 
+pylint:
+	@echo we are transitioning from '"make pylint"' to '"make lint"'
+	make lint
+
 ## Mypy static analysis
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict deploy tests

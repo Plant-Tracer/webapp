@@ -27,10 +27,12 @@ import cv2
 from app import bottle_api
 from app import bottle_app
 from app import odb
-from app import db_object
+from app import odb_movie_data
+from app import s3_presigned
 from app import tracker
 from app.constants import MIME,E,C
 from app.odb import DDBO,API_KEY,MOVIE_ID,TITLE,USER_ID
+from app.odb_movie_data import read_object,create_new_movie_frame
 
 # get the first MOV
 
@@ -63,7 +65,7 @@ def test_track_point_annotations(client, new_movie):
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_urn = odb.create_new_movie_frame(movie_id=movie_id, frame_number=0)
+    frame_urn = create_new_movie_frame(movie_id=movie_id, frame_number=0)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
@@ -169,7 +171,7 @@ def test_movie_tracking(client, new_movie):
     assert 'movie_zipfile_url' not in dbmovie_metadata # don't put signed URLs in the database
 
     # Get the zipfile and make sure it is a zipfile
-    zipdata = db_object.read_object(movie_metadata['movie_zipfile_urn'])
+    zipdata = read_object(movie_metadata['movie_zipfile_urn'])
     assert is_zipfile(zipdata)
 
     # Download the trackpoints as a CSV and make sure it is formatted okay.
@@ -181,7 +183,7 @@ def test_movie_tracking(client, new_movie):
     lines = response.text.splitlines()
 
     # Verify a ZIP file with the individual frames was created
-    zipfile_data = odb.get_movie_data(movie_id=movie_id, zipfile=True)
+    zipfile_data = odb_movie_data.get_movie_data(movie_id=movie_id, zipfile=True)
     with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
         tf.write(zipfile_data)
         tf.flush()
@@ -245,12 +247,6 @@ def test_movie_tracking(client, new_movie):
     movie_id = ret['metadata']['movie_id']
     frame0 = ret['frames']['0']
 
-
-    # we no longer get signed URLs
-    #url = frame0['frame_url']
-    #params = parse_qs(urlparse(url).query)
-    #frame = db_object.read_signed_url(urn=params['urn'][0], sig=params['sig'][0])
-    #assert len(frame)>100   # we should do a better job verifying JPEG
 
     # See if we can find our starting data
     track1 = [tp for tp in frame0['markers'] if tp['label']=='track1'][0]

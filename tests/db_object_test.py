@@ -24,12 +24,12 @@ from fixtures.local_aws import local_s3
 s3client = boto3.client('s3')
 
 def test_object_name():
-    assert s3_presigned.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
-    assert s3_presigned.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
+    assert s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
+    assert s3_presigned.make_object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
 # pylint: disable=unused-argument
 def test_make_urn(local_s3):
-    name = s3_presigned.object_name(course_id=1, movie_id=2, ext='.txt')
+    name = s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.txt')
     a = s3_presigned.make_urn(object_name=name)
     assert a.endswith(".txt")
 
@@ -42,7 +42,7 @@ def test_write_read_delete_object(local_s3):
 
     course_id = 'bogus'
     movie_id = odb.new_movie_id()
-    name = s3_presigned.object_name(course_id=course_id, movie_id=movie_id, ext='.txt')
+    name = s3_presigned.make_object_name(course_id=course_id, movie_id=movie_id, ext='.txt')
     urn  = s3_presigned.make_urn(object_name=name)
     try:
         odb_movie_data.write_object(urn=urn, object_data=DATA)
