@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "camera"
+name = "resize"
 version = "0.1.1"
-description = "Time lapse camera for Plant Tracer"
+description = "Time lapse resize for Plant Tracer"
 authors = ["Simson Garfinkel <simsong@acm.org>"]
 license = "GPL-3.0-or-later"
 readme = "README.md"
 packages = [
-    { include = "camera_app", from = "src" }
+    { include = "resize_app", from = "src" }
 ]
 
 [tool.poetry.dependencies]
@@ -103,5 +103,5 @@ pythonpath = [
  "src",
  "tests",
  "../",
- "src/camera_app/e11.whl"]
+ "src/resize_app/e11.whl"]
 addopts = "-ra -q"
