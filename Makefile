@@ -167,12 +167,12 @@ make-local-demo:
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
 	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -180,7 +180,7 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...

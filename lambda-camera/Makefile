@@ -30,7 +30,7 @@ src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
 
 .PHONY: vend-app
 vend-app: Makefile
-	rsync --verbose --archive ../deploy/app/*.py src/camera_app/deploy/app/
+	rsync --verbose --archive ../src/app/*.py src/camera_app/src/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app

@@ -19,9 +19,9 @@ from typing import Any, Dict, Tuple, Optional
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
-from .deploy.app.odb import validate_api_key,API_KEY,USER_ID,MOVIE_ID,PRIMARY_COURSE_ID,create_new_movie
-from .deploy.app.s3_presigned import make_object_name,make_urn,make_signed_url
-from .deploy.app.constants import C
+from .src.app.odb import validate_api_key,API_KEY,USER_ID,MOVIE_ID,PRIMARY_COURSE_ID,create_new_movie
+from .src.app.s3_presigned import make_object_name,make_urn,make_signed_url
+from .src.app.constants import C
 
 MY_DIR = dirname(__file__)
 TEMPLATE_DIR = join(MY_DIR, "templates")
@@ -266,10 +266,6 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
 # pylint: disable=too-many-return-statements, disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
-
-    print("now running import deploy")
-    print("cwd=",os.getcwd())
-
 
     method, path, payload = parse_event(event)
 

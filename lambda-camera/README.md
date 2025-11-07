@@ -47,4 +47,4 @@ Camera code base:
 - AWS SAM, modeled on https://github.com/Harvard-CSCI-E-11/spring26/tree/main/etc/e11-cli/lambda-home
 - lambda function serves both API endpoints and static pages
 
-- deploy/app/* needs to be vended into app/
+- src/app/* needs to be vended into app/
