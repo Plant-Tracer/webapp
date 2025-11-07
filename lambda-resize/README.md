@@ -9,4 +9,4 @@ Ground rules:
 Resize code base:
 - AWS SAM, modeled on https://github.com/Harvard-CSCI-E-11/spring26/tree/main/etc/e11-cli/lambda-home
 - lambda function serves as API endpoints
-- ../deploy/app/* vended into app/deploy as necessary
+- ../src/app/* vended into app/src as necessary
