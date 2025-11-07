@@ -61,7 +61,7 @@ dist: pyproject.toml
 distclean:
 	@echo removing all virtual environments
 	/bin/rm -rf .venv */.venv */.aws-sam
-	/bin/rm -rf .ruff_cache */.ruff_cache
+	/bin/rm -rf .*cache */.*cache
 	/bin/rm -rf _build
 
 
@@ -93,12 +93,12 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
-#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+	poetry run pylint  $(PYLINT_OPTS) src tests *.py
+#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" src tests
 
 ## Mypy static analysis
 mypy:
-	mypy --show-error-codes --pretty --ignore-missing-imports --strict deploy tests
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict src tests
 
 ## black static analysis
 black:
@@ -173,12 +173,12 @@ make-local-demo:
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
 	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -186,7 +186,7 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app deploy.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
