@@ -44,8 +44,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
-DEPLOY_ETC=deploy/etc
-APP_ETC=$(DEPLOY_ETC)
+APP_ETC=app/etc
 DBMAINT=dbutil.py
 
 .venv/pyvenv.cfg:
@@ -62,7 +61,7 @@ dist: pyproject.toml
 distclean:
 	@echo removing all virtual environments
 	/bin/rm -rf .venv */.venv */.aws-sam
-	/bin/rm -rf .ruff_cache */.ruff_cache
+	/bin/rm -rf .*cache */.*cache
 	/bin/rm -rf _build
 
 
@@ -81,7 +80,7 @@ check:
 	make pytest
 
 tags:
-	etags deploy/app/*.py tests/*.py tests/fixtures/*.py deploy/app/static/*.js
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
 
 ################################################################
 ## Program development: static analysis tools
@@ -94,12 +93,12 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) deploy tests *.py
-#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" deploy tests
+	poetry run pylint  $(PYLINT_OPTS) src tests *.py
+#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" src tests
 
 ## Mypy static analysis
 mypy:
-	mypy --show-error-codes --pretty --ignore-missing-imports --strict deploy tests
+	mypy --show-error-codes --pretty --ignore-missing-imports --strict src tests
 
 ## black static analysis
 black:
@@ -174,12 +173,12 @@ make-local-demo:
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
 	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -187,7 +186,7 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app deploy.app.bottle_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
@@ -201,17 +200,17 @@ tracker-debug:
 ### JavaScript
 
 eslint:
-	if [ ! -d deploy/app/static ]; then echo no deploy/app/static ; exit 1 ; fi
-	(cd deploy/app/static;make eslint)
-	if [ ! -d deploy/app/templates ]; then echo no deploy/app/templates ; exit 1 ; fi
-	(cd deploy/app/templates;make eslint)
+	if [ ! -d src/app/static ]; then echo no src/app/static ; exit 1 ; fi
+	(cd src/app/static;make eslint)
+	if [ ! -d src/app/templates ]; then echo no src/app/templates ; exit 1 ; fi
+	(cd src/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=deploy/app/static npm run coverage
-	NODE_PATH=deploy/app/static npm test
+	NODE_PATH=src/app/static npm run coverage
+	NODE_PATH=src/app/static npm test
 
 jstest-debug:
-	NODE_PATH=deploy/app/static npm run test-debug
+	NODE_PATH=src/app/static npm run test-debug
 
 
 ################################################################
@@ -325,7 +324,6 @@ install-ubuntu:
 # Includes MacOS dependencies managed through Brew
 install-macos:
 	brew update
-	brew upgrade
 	which aws || brew install awscli
 	which chromium || brew install chromium --no-quarantine
 	which ffmpeg || brew install ffmpeg

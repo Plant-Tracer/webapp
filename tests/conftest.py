@@ -10,7 +10,11 @@ from os.path import abspath, dirname, join
 
 MY_DIR = dirname(abspath(__file__))
 GIT_ROOT = dirname(MY_DIR)
-DEPLOY_DIR = join(GIT_ROOT, "deploy")
-APP_DIR = join(DEPLOY_DIR, "app")
-sys.path.append(DEPLOY_DIR)
-sys.path.append(GIT_ROOT)
+
+SRC_DIR = join(GIT_ROOT, "src")
+sys.path.append(SRC_DIR)
+
+APP_DIR = join(SRC_DIR, "app")
+sys.path.append(APP_DIR)
+
+print("sys.path=",sys.path)

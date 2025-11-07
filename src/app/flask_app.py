@@ -19,7 +19,7 @@ from werkzeug.exceptions import HTTPException
 # pylint: disable=no-member
 from . import apikey
 
-from .bottle_api import api_bp
+from .flask_api import api_bp
 from .constants import __version__,GET,GET_POST,C
 from .auth import AuthError
 from .apikey import cookie_name, page_dict

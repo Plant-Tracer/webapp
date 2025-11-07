@@ -20,8 +20,8 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import app.bottle_api as bottle_api
-import app.bottle_app as bottle_app
+import app.flask_api as flask_api
+import app.flask_app as flask_app
 import app.tracker as tracker
 
 from app.constants import MIME

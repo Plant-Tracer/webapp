@@ -20,7 +20,7 @@ from urllib.parse import quote
 from os.path import abspath, dirname
 
 from app import odb
-from app import bottle_api
+from app import flask_api
 from app import tracker
 from app import s3_presigned
 from app import odb_movie_data
@@ -298,7 +298,7 @@ def test_movie_extract1(client, new_movie):
     assert is_jpeg(data)
 
     # Make sure that the URN was properly created
-    urn = bottle_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
+    urn = flask_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
     assert urn.startswith('s3:/')
 
 def test_movie_extract2(client, new_movie):

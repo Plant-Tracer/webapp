@@ -15,8 +15,8 @@ import xml.etree.ElementTree
 
 from app.paths import STATIC_DIR,TEST_DATA_DIR
 from app import odb
-from app import bottle_api
-from app import bottle_app
+from app import flask_api
+from app import flask_app
 from app import auth
 from app import apikey
 
@@ -26,28 +26,28 @@ from fixtures.app_client import client
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
-    assert bottle_app.__version__ in response.text
+    assert flask_app.__version__ in response.text
 
 
 # These check type conversion
 
 def test_get_float(mocker):
-    mock_get = mocker.patch("app.bottle_api.get")
+    mock_get = mocker.patch("app.flask_api.get")
     mock_get.return_value = "3"
-    assert bottle_api.get_float("key") == 3.0  # Note: 3.0 is a float, 3 is an int
+    assert flask_api.get_float("key") == 3.0  # Note: 3.0 is a float, 3 is an int
 
-    mocker.patch("app.bottle_api.get", return_value="3")
-    assert bottle_api.get_float("key")==3
-    mocker.patch("app.bottle_api.get", return_value="xxx")
-    assert bottle_api.get_float("key",default=4)==4
+    mocker.patch("app.flask_api.get", return_value="3")
+    assert flask_api.get_float("key")==3
+    mocker.patch("app.flask_api.get", return_value="xxx")
+    assert flask_api.get_float("key",default=4)==4
 
 def test_get_bool(mocker):
-    mocker.patch("app.bottle_api.get", return_value="YES")
-    assert bottle_api.get_bool("key")==True
-    mocker.patch("app.bottle_api.get", return_value="xxx")
-    assert bottle_api.get_bool("key",default=False)==False
-    mocker.patch("app.bottle_api.get", return_value=3.4)
-    assert bottle_api.get_bool("key",default=True)==True
+    mocker.patch("app.flask_api.get", return_value="YES")
+    assert flask_api.get_bool("key")==True
+    mocker.patch("app.flask_api.get", return_value="xxx")
+    assert flask_api.get_bool("key",default=False)==False
+    mocker.patch("app.flask_api.get", return_value=3.4)
+    assert flask_api.get_bool("key",default=True)==True
 
 
 PLANTTRACER_JS = 'planttracer.js'
