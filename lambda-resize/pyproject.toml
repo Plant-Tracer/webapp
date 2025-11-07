@@ -1,0 +1,107 @@
+[tool.poetry]
+name = "resize"
+version = "0.1.1"
+description = "Time lapse resize for Plant Tracer"
+authors = ["Simson Garfinkel <simsong@acm.org>"]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+packages = [
+    { include = "resize_app", from = "src" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.13,<3.14"
+boto3 = "*"
+jinja2 = "*"
+pydantic = "*"
+boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager", "dynamodb"] }
+
+# --- This is how you include your local wheel ---
+# It assumes you have renamed it in the 'dependencies/' folder
+# deploy = { path = "dependencies/deploy-1.1.0-py3-none-any.whl" }
+requests = "^2.32.5"
+
+
+[tool.poetry.group.dev.dependencies]
+djlint = "*"
+pylint = "*"
+pyright = "*"
+pytest = "*"
+pip-tools = "*"
+pytest-cov = "*"
+ruff = "*"
+
+# -----------------------------------------------------------------
+# This section tells Python to use Poetry to build the project
+# -----------------------------------------------------------------
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# -----------------------------------------------------------------
+# All your tool configurations below this line stay exactly the same
+# -----------------------------------------------------------------
+
+[tool.djlint]
+profile = "jinja"
+ignore = ["jinja-block", "jinja-variable", "J004", "J018"]
+extend_exclude = "node_modules/**,.venv/**"
+indent = 4
+
+[tool.pylint]
+# Specify the Python version Pylint should assume for syntax checking.
+py-version = "3.13"
+ignore-paths = [
+    "src/home_app/e11/.*"
+]
+source-roots = [".."]
+[tool.pylint.FORMAT]
+max-line-length = 200
+
+[tool.pylint.messages_control]
+# Disable specific messages by their symbolic name or message ID.
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "line-too-long",
+    "unspecified-encoding",
+    "too-few-public-methods",
+    "invalid-name"
+]
+
+[tool.pylint.design]
+# Set the maximum number of arguments for a function.
+max-args = 10
+
+# Set the maximum number of public methods in a class.
+max-public-methods = 20
+
+[tool.pyright]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+exclude = [
+  "**/build",
+  "**/.aws-sam",
+  "**/.venv",
+  "**/.mypy_cache",
+  "**/.pytest_cache",
+  "**/__pycache__",
+]
+typeCheckingMode = "basic"
+reportMissingTypeStubs = "warning"
+
+[[tool.pyright.executionEnvironments]]
+root = "."
+extraPaths = ["src", "src/home_app", "src/home_app/e11.whl", "../"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+ "src",
+ "tests",
+ "../",
+ "src/resize_app/e11.whl"]
+addopts = "-ra -q"

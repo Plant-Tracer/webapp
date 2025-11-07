@@ -7,7 +7,7 @@ Perhaps we can refactor the bottle app so that the app is created here?
 
 import logging
 import traceback
-from app.bottle_app import app
+from app.flask_app import app
 
 IMPORT_ERROR_FILE = '/tmp/import-error'
 

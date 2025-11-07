@@ -4,8 +4,8 @@
 
 This project contains source code and supporting files for a serverless application that we deploy with the SAM CLI. It includes the following files and folders.
 
-- deploy - Code for the application's Lambda function.
-- deploy/Dockerfile - creates the container, installing all packages in deploy/requirements.txt
+- src - Code for the application's Lambda function.
+- src/Dockerfile - creates the container, installing all packages in src/requirements.txt
 - events - Invocation events that one day will be used to test invoking the function
 - tests - Unit tests that will one day be used to test the application code.
 - template.yaml - The template that defines the application's AWS resources.
