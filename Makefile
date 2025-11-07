@@ -325,7 +325,6 @@ install-ubuntu:
 # Includes MacOS dependencies managed through Brew
 install-macos:
 	brew update
-	brew upgrade
 	which aws || brew install awscli
 	which chromium || brew install chromium --no-quarantine
 	which ffmpeg || brew install ffmpeg
