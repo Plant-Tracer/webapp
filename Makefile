@@ -44,8 +44,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 ################################################################
 # Create the virtual enviornment for testing and CI/CD
 
-DEPLOY_ETC=deploy/etc
-APP_ETC=$(DEPLOY_ETC)
+APP_ETC=app/etc
 DBMAINT=dbutil.py
 
 .venv/pyvenv.cfg:
@@ -81,7 +80,7 @@ check:
 	make pytest
 
 tags:
-	etags deploy/app/*.py tests/*.py tests/fixtures/*.py deploy/app/static/*.js
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
 
 ################################################################
 ## Program development: static analysis tools
@@ -201,17 +200,17 @@ tracker-debug:
 ### JavaScript
 
 eslint:
-	if [ ! -d deploy/app/static ]; then echo no deploy/app/static ; exit 1 ; fi
-	(cd deploy/app/static;make eslint)
-	if [ ! -d deploy/app/templates ]; then echo no deploy/app/templates ; exit 1 ; fi
-	(cd deploy/app/templates;make eslint)
+	if [ ! -d src/app/static ]; then echo no src/app/static ; exit 1 ; fi
+	(cd src/app/static;make eslint)
+	if [ ! -d src/app/templates ]; then echo no src/app/templates ; exit 1 ; fi
+	(cd src/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=deploy/app/static npm run coverage
-	NODE_PATH=deploy/app/static npm test
+	NODE_PATH=src/app/static npm run coverage
+	NODE_PATH=src/app/static npm test
 
 jstest-debug:
-	NODE_PATH=deploy/app/static npm run test-debug
+	NODE_PATH=src/app/static npm run test-debug
 
 
 ################################################################

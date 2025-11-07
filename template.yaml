@@ -71,7 +71,7 @@ Resources:
             Method: ANY
     Metadata:
       DockerTag: python3.11-v1  # which tag to use
-      DockerContext: ./deploy   # points to the folder containing the function code
+      DockerContext: ./src   # points to the folder containing the function code
       Dockerfile: Dockerfile    # identifies dockerfile for creating image
 
 Outputs:
