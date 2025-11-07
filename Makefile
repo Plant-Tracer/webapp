@@ -59,6 +59,13 @@ dist: pyproject.toml
 	poetry build --format=wheel
 	ls -l dist/
 
+distclean:
+	@echo removing all virtual environments
+	/bin/rm -rf .venv */.venv */.aws-sam
+	/bin/rm -rf .ruff_cache */.ruff_cache
+	/bin/rm -rf _build
+
+
 ################################################################
 #
 # By default, PYLINT generates an error if your code does not rank 10.0.

@@ -1,0 +1,204 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: PlantTracer resizer Lambda with custom domain (app-resize.planttracer.com)
+
+Globals:
+  Function:
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LogLevel
+        TABLE_PREFIX: !Ref TablePrefix
+    Architectures:
+      - arm64
+
+Parameters:
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for app-resize.planttracer.com (e.g., Z123ABC...)
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: "(Optional) Existing ACM certificate ARN for app-resize.planttracer.com. Leave blank to auto-create."
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
+    Description: Default LOG_LEVEL environment value for the function
+  TablePrefix:
+    Type: String
+    Description: PlantTracer table prefix
+  WatchedS3Bucket:
+    Type: String
+    Default: planttracer-prod
+
+Conditions:
+  CreateAcmCert: !Equals [!Ref CertificateArn, ""]
+
+Resources:
+  # Optional, auto-created ACM cert for the custom domain (regional, DNS validated)
+  HomeCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateAcmCert
+    Properties:
+      DomainName: app-resize.planttracer.com
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: app-resize.planttracer.com
+          HostedZoneId: !Ref HostedZoneId
+
+  # HTTP API fronting the Lambda, bound to app-resize.planttracer.com in Route53
+  HomeHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: ['GET','POST','OPTIONS']
+      Domain:
+        DomainName: app-resize.planttracer.com
+        CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+
+  # Lambda function — JSON-only API (no Flask)
+  ResizeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.13
+      BuildProperties:
+        RequirementsFile: requirements.txt   # relative to CodeUri (src/)
+    Properties:
+      Runtime: python3.13
+      CodeUri: src/
+      Handler: resize_app.resize.lambda_handler
+      Timeout: 60
+      MemorySize: 256
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DynamoDBTables
+              Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+            - Sid: AllowS3ReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}"
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}/*"
+
+      Events:
+        AnyRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HomeHttpApi
+            Path: /
+            Method: ANY
+            PayloadFormatVersion: "2.0"
+        AnyProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HomeHttpApi
+            Path: /{proxy+}
+            Method: ANY
+            PayloadFormatVersion: "2.0"
+        Heartbeat:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Input: '{"action":"heartbeat"}'
+
+  # --- NEW FUNCTION FOR S3 ---
+  S3ResizeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.13
+      BuildProperties:
+        RequirementsFile: requirements.txt   # relative to CodeUri (src/)
+    Properties:
+      Runtime: python3.13
+      CodeUri: src/
+      Handler: resize_app.resize.lambda_function  # Handler as requested
+      Timeout: 60
+      MemorySize: 256
+      # Note: Re-using the same global environment variables
+      Policies:
+        # Policy to read from the S3 bucket
+        - S3ReadPolicy:
+            BucketName: !Ref WatchedS3Bucket
+        # Same DynamoDB policy as the API function
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: DynamoDBTables
+              Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+            - Sid: AllowS3ReadWrite
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}"
+                - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}/*"
+
+
+  # EventBridge rule - invokes EventConsumerFunction
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: EventRule
+      State: ENABLED
+      EventPattern:
+        source: ["aws.s3"]
+        detail-type: ["Object Created"]
+        detail:
+          bucket:
+            name: [!Ref WatchedS3Bucket]
+      Targets:
+        - Arn: !GetAtt S3ResizeFunction.Arn
+          Id: S3ResizeFunctionTarget
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3ResizeFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventRule.Arn
+
+Outputs:
+  # Production-specific outputs
+  ApiId:
+    Description: HTTP API ID
+    Value: !Ref HomeHttpApi
+  CustomDomainUrl:
+    Description: Camer base URL
+    Value: "https://app-resize.planttracer.com/"
+  ResizeFunction:
+    Description: Resize Lambda function name (for API)
+    Value: !Ref ResizeFunction
+  S3ResizeLambda:
+    Description: Resize Lambda function name (for S3)
+    Value: !Ref S3ResizeFunction
+  HostedZoneId:
+    Description: Route53 Hosted Zone
+    Value: !Ref HostedZoneId
