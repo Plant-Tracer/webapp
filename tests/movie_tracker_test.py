@@ -24,7 +24,6 @@ import cv2
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from app import flask_api
 from app import flask_app
 from app import odb
 from app import odb_movie_data
