@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C
 
-# tables
+# DynamoDB tables
 API_KEYS = 'api_keys'
 USERS  = 'users'
 UNIQUE_EMAILS = 'unique_emails'
@@ -34,10 +34,14 @@ FRAMES = 'movie_frames'
 COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
+
+################################################################
+
 ROOT_USER_ID = 'u0'                # the root user
 
+
 # attributes
-#SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
+# SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
 # apikeys table
 API_KEY = 'api_key'
@@ -72,13 +76,13 @@ CREATED = 'created'
 EMAIL = 'email'
 NAME = 'name'
 
-# movie_frames table
+# movie_frames table - currently stores metadata.
+# Needs to be move dinto movies table
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
 USER_ID = 'user_id'
-
 PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
