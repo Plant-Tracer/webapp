@@ -774,6 +774,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
         end_time = int(time.time())
 
     # Select GSI based on parameters
+    # We can only pick one GSI
     if log_user_id:
         index_name = 'user_id_idx'
         key_condition = Key( USER_ID ).eq(log_user_id)
@@ -906,7 +907,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         admin_for_courses = [course_id]
     try:
         user_id = new_user_id()
-        ddbo.put_user({USER_ID:user_id,
+z        ddbo.put_user({USER_ID:user_id,
                        EMAIL:email,
                        USER_NAME:user_name,
                        'created' : int(time.time()),

@@ -6,54 +6,20 @@ Runs the camera.
 """
 
 # at top of home_app/home.py (module import time)
-from os.path import dirname
 import base64
 import binascii
-import functools
-import logging
 import json
 import os
 import sys
 import time
+import uuid
 from typing import Any, Dict, Tuple, Optional
 
-
-
-MY_DIR = dirname(__file__)
+from common import LOGGER
+import src.app.odb as odb
+from odb import DDBO
 
 __version__ = "0.1.0"
-
-################################################################
-### Logger
-@functools.cache  # singleton
-def _configure_root_once():
-    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
-    level = getattr(logging, level_name, logging.INFO)
-
-    # Configure a dedicated app logger; avoid touching the root logger.
-    app_logger = logging.getLogger("e11")
-    app_logger.setLevel(level)
-
-    if not app_logger.handlers:
-        handler = logging.StreamHandler()
-        fmt = "%(asctime)s %(levelname)s [%(name)s %(filename)s:%(lineno)d %(funcName)s] %(message)s"
-        handler.setFormatter(logging.Formatter(fmt))
-        app_logger.addHandler(handler)
-
-    # Prevent bubbling to root (stops double logs)
-    app_logger.propagate = False
-
-    # If this code is used as a library elsewhere, avoid “No handler” warnings:
-    logging.getLogger(__name__).addHandler(logging.NullHandler())
-
-
-def get_logger(name: str | None = None) -> logging.Logger:
-    """Get a logger under the 'e11' namespace (e.g., e11.grader)."""
-    _configure_root_once()
-    return logging.getLogger("e11" + ("" if not name else f".{name}"))
-
-
-LOGGER = get_logger("grader")
 
 ################################################################
 ## Minimal support for a Python-based website in Lamda with jinja2 support
@@ -97,7 +63,6 @@ def _with_request_log_level(payload: Dict[str, Any]):
 ## api code.
 ## api calls do not use sessions. Authenticated APIs (e.g. api_register, api_grade)
 ## authenticate with api_authenticate(payload), which returns the user directory.
-
 
 def api_heartbeat(event, context)  -> Dict[str, Any]:
     """Called periodically. Not authenticated. Main purpose clean up active camera sessions"""
@@ -153,13 +118,28 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
     return method, path, payload
 
 
-def do_ping():
+def write_log( message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):
+    if time_t is None:
+        time_t = time.time()
+
+    ddbo = DDBO()
+    ddbo.logs.put_item(Item={'log_id':uuid.uuid4(),
+                             'time':time_t,
+                             'user_id':log_user_id,
+                             'ipaddr':ipaddr,
+                             'message':message})
+
+def api_ping(event, context):
+    write_log('ping')
     return resp_json( 200,
-                      { "error": False, "message": "ok", "path": sys.path, "context": dict(context),
+                      { "error": False, "message": "ok", "path": sys.path,
+                        "event" : dict(event),
+                        "context": dict(context),
                         "environ": dict(os.environ) } )
 
-def api_log(event,context):
-    return resp_json( 400, {"message":"Log not yet implemented"})
+def api_log():
+    logs = odb.get_logs(user_id=None)
+    return resp_json( 400, {"logs":logs})
 
 ################################################################
 ## main entry point from lambda system
@@ -180,10 +160,10 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                 # JSON API Actions
                 #
                 case (_, "/api/v1", "ping"):
-                    return do_ping()
+                    return api_ping(event,context)
 
                 case (_, '/api/v1/ping', _):
-                    return do_ping()
+                    return api_ping(event,context)
 
                 case ("POST", "/api/v1", "resize-start"):
                     return api_resize(event, context, payload)
@@ -192,7 +172,7 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                     return api_heartbeat(event, context)
 
                 case ("POST", "/api/v1", "log"):
-                    return api_log(event, context)
+                    return api_log()
 
                 case ("POST", "/api/v1", _):
                     return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})

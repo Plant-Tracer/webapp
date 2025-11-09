@@ -5,14 +5,14 @@ Pure Python: uses PyAV (libav*), Pillow; no subprocess calls to ffmpeg.
 """
 
 import io
-import math
 import zipfile
-from pathlib import Path
 from typing import Tuple, Optional
 
 import av  # pip install av
 from PIL import Image, ImageOps  # pip install pillow
 
+
+from common import LOGGER
 
 # ---------- Geometry & rotation helpers ----------
 
@@ -31,18 +31,9 @@ def _rotation_degrees_from_frame(frame: av.video.frame.VideoFrame) -> int:
                 if "rotation" in d:
                     rot = int(round(d["rotation"])) % 360
                     return (rot + 360) % 360
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.error("Exception: %s",e)
 
-    # Older approach: stream metadata "rotate"
-    try:
-        stream = frame.pts is not None and frame._stream  # internal, best-effort
-        # Fallback: not reliable; prefer container stream metadata if available.
-    except Exception:
-        stream = None
-
-    # We can also look at container stream metadata if provided by caller
-    # (handled in transcode loop via provided rotate_hint)
     return 0
 
 
