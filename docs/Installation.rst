@@ -44,7 +44,7 @@ Installation
 
 #. Run the self-tests::
 
-   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
+   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini make check
 
 #. Create your first course! If you want, give it a demo account too:
 
