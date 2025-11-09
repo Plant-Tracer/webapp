@@ -61,7 +61,7 @@ class C:
     STATIC_BASE='STATIC_BASE'
     TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     MAX_FILE_UPLOAD = 1024*1024*256
-    MAX_FRAMES = 1e6            # max possible frames in a movie
+    MAX_MOVIE_FRAMES = 1e6            # max possible frames in a movie
     NOTIFY_UPDATE_INTERVAL = 5.0
     TRACK_DELAY = 'TRACK_DELAY'
     CHECK_MX = False                # True didn't work

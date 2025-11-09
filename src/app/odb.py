@@ -27,13 +27,16 @@ from .constants import C
 
 # DynamoDB tables
 API_KEYS = 'api_keys'
-USERS  = 'users'
-UNIQUE_EMAILS = 'unique_emails'
-MOVIES = 'movies'
-FRAMES = 'movie_frames'
-COURSES = 'courses'
-COURSE_USERS = 'course_users'
+USERS  = 'users'                # all user content. PK={user_id}
+UNIQUE_EMAILS = 'unique_emails' # solely used to insure that a new email is not in use. PK={email}
+MOVIES = 'movies'               # all movies. PK={movie_id}
+MOVIE_FRAMES = 'movie_frames'   # currently, PK={movie_id * frame_number}. This table needs to go away
+COURSES = 'courses'             # currently PK={coure_id}, index={course_key}. Master list of course info (except registrations)
+COURSE_USERS = 'course_users'   # PK={course_id}{user_id} - who is registered for each course
 LOGS = 'logs'
+
+# course_users should move to courses.
+# movie_frames should go away
 
 ################################################################
 
@@ -240,7 +243,7 @@ class DDBO:
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
         self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
-        self.movie_frames    = self.dynamodb.Table( table_prefix + FRAMES )
+        self.movie_frames    = self.dynamodb.Table( table_prefix + MOVIE_FRAMES )
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
         self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
