@@ -22,6 +22,8 @@ from .constants import C
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
+# pylint: disable=invalid-name
+
 SMTP_ATTRIBS = ['SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_PORT', 'SMTP_HOST']
 SMTP_HOST = 'SMTP_HOST'
 SMTP_USERNAME = 'SMTP_USERNAME'
@@ -102,32 +104,30 @@ def send_message(*,
 
 def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
-    PROJECT_EMAIL = 'admin@planttracer.com'
 
     logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
 
-    TO_ADDRS = [email]
+    to_addrs = [email]
     with open(os.path.join(TEMPLATE_DIR, C.EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
 
     logging.info("sending new link to %s",email)
     msg = msg_env.render(to_addrs=",".join([email]),
-                         from_addr=PROJECT_EMAIL,
+                         from_addr=C.PROJECT_EMAIL,
                          planttracer_endpoint=planttracer_endpoint,
                          api_key=new_api_key)
 
-    DRY_RUN = False
-    SMTP_DEBUG = 'YES' if debug else ''
+    dry_run = False
     try:
         smtp_config = get_smtp_config()
-        smtp_config['SMTP_DEBUG'] = SMTP_DEBUG
+        smtp_config['SMTP_DEBUG'] = 'YES' if (SMTP_DEBUG or debug) else ''
     except KeyError as e:
         raise NoMailerConfiguration() from e
     try:
-        send_message(from_addr=PROJECT_EMAIL,
-                            to_addrs=TO_ADDRS,
+        send_message(from_addr=C.PROJECT_EMAIL,
+                            to_addrs=to_addrs,
                             smtp_config=smtp_config,
-                            dry_run=DRY_RUN,
+                            dry_run=dry_run,
                             msg=msg)
     except smtplib.SMTPAuthenticationError as e:
         raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
@@ -147,16 +147,16 @@ def imap_inbox_scan(imap_config, callback):
     """
     deleted = 0
     if IMAP_NO_SSL in imap_config:
-        M = imaplib.IMAP4(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
+        m = imaplib.IMAP4(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
     else:
-        M = imaplib.IMAP4_SSL(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
-    M.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD])
-    M.select()
+        m = imaplib.IMAP4_SSL(host=imap_config[IMAP_HOST], port=int(imap_config[IMAP_PORT]))
+    m.login(imap_config[IMAP_USERNAME], imap_config[IMAP_PASSWORD])
+    m.select()
     # pylint: disable=unused-variable
-    typ, data = M.search(None, 'ALL')
+    typ, data = m.search(None, 'ALL')
     # pylint: enable=unused-variable
     for num in data[0].split():
-        typ, d2 = M.fetch(num, '(RFC822)')
+        typ, d2 = m.fetch(num, '(RFC822)')
         for val in d2:
             if isinstance(val, tuple):
                 # pylint: disable=unpacking-non-sequence
@@ -165,12 +165,12 @@ def imap_inbox_scan(imap_config, callback):
                 num = a.decode('utf-8').split()[0]
                 msg = BytesParser(policy=policy.default).parsebytes(b)
                 if callback(num, msg) is DELETE:
-                    M.store(num, '+FLAGS', '\\Deleted')
+                    m.store(num, '+FLAGS', '\\Deleted')
                     deleted += 1
     try:
-        M.expunge()
-        M.close()
-        M.logout()
+        m.expunge()
+        m.close()
+        m.logout()
     except imaplib.IMAP4. abort as e:
         print(e, file=sys.stderr)
     return deleted

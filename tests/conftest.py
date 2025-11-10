@@ -5,6 +5,7 @@ There can be a conftest for each directory
 See - https://stackoverflow.com/questions/34466027/what-is-conftest-py-for-in-pytest
 """
 
+import logging
 import sys
 from os.path import abspath, dirname, join
 
@@ -18,3 +19,4 @@ APP_DIR = join(SRC_DIR, "app")
 sys.path.append(APP_DIR)
 
 print("sys.path=",sys.path)
+logger = logging.getLogger(__name__)

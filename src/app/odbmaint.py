@@ -2,6 +2,8 @@
 Maintain the DynamoDB Database.
 """
 
+#pylint: disable=invalid-name
+
 import logging
 import copy
 import os

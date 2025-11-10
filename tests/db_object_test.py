@@ -1,25 +1,18 @@
 """
 Tests the DB object storage layer
 """
-#import sys
-#import os
 import logging
-#import json
-#import subprocess
 import uuid
-#import xml.etree.ElementTree
 import hashlib
 
-#import pytest
 import boto3
 
-#from app.paths import STATIC_DIR,TEST_DATA_DIR
-#from app.constants import C
+from fixtures.local_aws import local_s3 # pylint: disable=unused-import
+
 from app import s3_presigned
 from app import odb_movie_data
 from app import odb
 
-from fixtures.local_aws import local_s3
 
 s3client = boto3.client('s3')
 
