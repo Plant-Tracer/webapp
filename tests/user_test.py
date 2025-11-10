@@ -6,14 +6,13 @@ import uuid
 import logging
 import copy
 
+from fixtures.local_aws import ADMIN_EMAIL, local_ddb, local_s3, new_course # pylint: disable=unused-import
+from fixtures.app_client import client # pylint: disable=unused-import
+
 from app import odb
 from app import odbmaint
 from app.constants import C
-
 from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
-
-from fixtures.local_aws import ADMIN_EMAIL, local_ddb, local_s3, new_course
-from fixtures.app_client import client
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 ################################################################

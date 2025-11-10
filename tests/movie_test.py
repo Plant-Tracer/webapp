@@ -2,22 +2,22 @@
 Test the various functions in the database involving movie creation.
 """
 
-import sys
 import os
 import uuid
-import logging
-import pytest
-import base64
-import time
 import copy
-import hashlib
-import requests
-import json
-import filetype
 import re
 import urllib
 from urllib.parse import quote
-from os.path import abspath, dirname
+
+import requests
+import filetype
+import pytest
+
+# Get the fixtures from user_test
+from fixtures.local_aws import new_course,new_movie, local_s3, local_ddb, TEST_PLANTMOVIE_PATH, MOVIE_TITLE # pylint: disable=unused-import
+from fixtures.app_client import client # pylint: disable=unused-import
+
+from conftest import logger
 
 from app import odb
 from app import flask_api
@@ -26,12 +26,9 @@ from app import s3_presigned
 from app import odb_movie_data
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
-from app.constants import C,E,MIME
+from app.constants import E,MIME
 from app.s3_presigned import s3_client
 
-# Get the fixtures from user_test
-from fixtures.local_aws import new_course,new_movie, local_s3, local_ddb, TEST_PLANTMOVIE_PATH, MOVIE_TITLE
-from fixtures.app_client import client
 
 POST_TIMEOUT = 2
 GET_TIMEOUT = 2
@@ -44,14 +41,14 @@ def is_jpeg(buf):
     try:
         return filetype.guess(buf).mime==MIME.JPEG
     except AttributeError:
-        logging.error("buf=%s",buf)
+        logger.error("buf=%s",buf)
         raise
 
 def is_mp4(buf):
     try:
         return filetype.guess(buf).mime==MIME.MP4
     except AttributeError:
-        logging.error("buf=%s",buf)
+        logger.error("buf=%s",buf)
         raise
 
 
@@ -60,8 +57,8 @@ def movie_list(the_client, api_key):
     resp = the_client.post('/api/list-movies',
                            data = {'api_key': api_key})
     res = resp.get_json()
-    logging.debug("res=%s",res)
-    logging.debug("movie_list res=%s",res)
+    logger.debug("res=%s",res)
+    logger.debug("movie_list res=%s",res)
     assert res['error'] is False
     return res['movies']
 
@@ -74,7 +71,7 @@ def get_movie(the_client, api_key, movie_id):
 
 
 def data_from_redirect(url, the_client):
-    logging.info("REDIRECT: url=%s ",url)
+    logger.info("REDIRECT: url=%s ",url)
     url = url.replace("#REDIRECT ","")
     o = urllib.parse.urlparse(url)
     if url.startswith('/api/get-object?'):
@@ -83,7 +80,7 @@ def data_from_redirect(url, the_client):
         urn = urllib.parse.unquote(m.group(1))
         sig = urllib.parse.unquote(m.group(2))
         resp = the_client.get(f'/api/get-object?urn={quote(urn)}&sig={quote(sig)}')
-        logging.debug("returning resp.data len=%s",len(resp.data))
+        logger.debug("returning resp.data len=%s",len(resp.data))
         return resp.data
     if url.startswith('http'):
         # Request it using http:, which is probably a call to S3
@@ -111,13 +108,13 @@ def test_new_movie(client, new_movie):
     # Did the movie appear in the list?
     movies = movie_list(client, api_key)
     count = 0
-    logging.debug("movies=%s",movies)
+    logger.debug("movies=%s",movies)
     for movie in movies:
         if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
             count += 1
-            logging.debug("found movie: %s",movie)
+            logger.debug("found movie: %s",movie)
         else:
-            logging.debug("skip deleted=%s published=%s title=%s ",
+            logger.debug("skip deleted=%s published=%s title=%s ",
                           movie['deleted']==0,
                           movie['published']==0,
                           movie['title']==movie_title)
@@ -134,14 +131,14 @@ def test_new_movie(client, new_movie):
                            data = {'api_key': api_key,
                                    'movie_id': movie_id,
                                    'redirect_inline':True})
-    logging.debug("test_new_movie: resp.data[0:10]=%s len=%s",resp.data[0:10],len(resp.data))
+    logger.debug("test_new_movie: resp.data[0:10]=%s len=%s",resp.data[0:10],len(resp.data))
     if resp.data[0:10] == b"#REDIRECT ":
         movie_data = data_from_redirect(resp.text, client)
     else:
         movie_data = resp.data
 
     # movie_data is now a movie. We should validate it.
-    logging.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
+    logger.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
     assert len(movie_data)>0
     assert is_mp4(movie_data)
 
@@ -174,7 +171,7 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
     assert 'presigned_post' in res
 
     odb_movie_data.purge_movie(movie_id = res['movie_id'])
-    logging.info("PURGE MOVIE %s",res['movie_id'])
+    logger.info("PURGE MOVIE %s",res['movie_id'])
 
 
 def test_movie_update_metadata(client, new_movie):
@@ -194,7 +191,7 @@ def test_movie_update_metadata(client, new_movie):
                                    'property': 'title',
                                    'value': new_title})
     res = resp.get_json()
-    logging.debug("res=%s",res)
+    logger.debug("res=%s",res)
     assert res['error'] is False
 
     # Get the list of movies
@@ -217,10 +214,10 @@ def test_movie_update_metadata(client, new_movie):
                                    'property': 'deleted',
                                    'value': 1})
     res = resp.get_json()
-    logging.debug("after set deleted=1 res=%s",res)
+    logger.debug("after set deleted=1 res=%s",res)
     assert res['error'] is False
     movie = get_movie(client, api_key, movie_id)
-    logging.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
+    logger.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
     assert movie['deleted'] == 1
 
     # Undelete the movie
@@ -234,7 +231,7 @@ def test_movie_update_metadata(client, new_movie):
 
     # Get the movie's to make sure that it is now deleted
     movie = get_movie(client, api_key, movie_id)
-    logging.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
+    logger.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
     assert movie['deleted'] == 0
 
     # Try to publish the movie under the user's API key. This should not work
@@ -247,7 +244,7 @@ def test_movie_update_metadata(client, new_movie):
     res = resp.get_json()
     assert res['error'] is False
     movie = get_movie(client, api_key, movie_id)
-    logging.debug("movie=%s",movie)
+    logger.debug("movie=%s",movie)
     assert movie[MOVIE_ID] == movie_id
     assert movie['published'] == 1
 
@@ -255,9 +252,9 @@ def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
+    #movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    user_id = cfg[USER_ID]
+    #user_id = cfg[USER_ID]
 
     # Check for insufficient arguments
     # Should produce http403
@@ -267,7 +264,7 @@ def test_movie_extract1(client, new_movie):
     assert r == E.INVALID_API_KEY
 
     # Check for invalid frame_number
-    logging.debug("test_movie_extract1: point1")
+    logger.debug("test_movie_extract1: point1")
     resp = client.post('/api/get-frame',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
@@ -279,7 +276,7 @@ def test_movie_extract1(client, new_movie):
     # Check for getting by frame_number
     # should produce a redirect.
     # Getting data from the redirect should produce a JPEG...
-    logging.debug("test_movie_extract1: point2")
+    logger.debug("test_movie_extract1: point2")
     resp = client.post('/api/get-frame',
                            data = {'api_key': api_key,
                                    'movie_id': str(movie_id),
@@ -288,12 +285,12 @@ def test_movie_extract1(client, new_movie):
     assert resp.status_code == 302
     # Follow the redirect manually
     redirect_url = resp.headers['Location']
-    redirect_resp = requests.get(redirect_url)
+    redirect_resp = requests.get(redirect_url,timeout=30)
 
     # Get the data
     data = redirect_resp.content
     if data is None:
-        logging.error("resp=%s redirect_resp=%s",resp,redirect_resp)
+        logger.error("resp=%s redirect_resp=%s",resp,redirect_resp)
         assert data is not None
     assert is_jpeg(data)
 
@@ -305,9 +302,9 @@ def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
+    #movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    user_id = cfg[USER_ID]
+    #user_id = cfg[USER_ID]
 
     movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)
     assert is_mp4(movie_data)
@@ -315,7 +312,7 @@ def test_movie_extract2(client, new_movie):
     # Grab three frames with the tracker and make sure they are different
     def get_movie_data_jpeg(frame_number):
         data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
-        logging.debug("len(data)=%s",len(data))
+        logger.debug("len(data)=%s",len(data))
         assert is_jpeg(data)
         return data
 
@@ -346,25 +343,26 @@ def test_movie_extract2(client, new_movie):
 
     # Now grab the data from each make sure that they are JPEGs.
     for url in [jpeg0_url,jpeg1_url,jpeg2_url]:
-        r = requests.get(url)
+        r = requests.get(url,timeout=30)
         assert is_jpeg(r.content)
 
 
 @pytest.mark.skip(reason='logging disabled')
 def test_log_search_movie(new_movie):
     cfg        = copy.copy(new_movie)
-    api_key    = cfg[API_KEY]
+    #api_key    = cfg[API_KEY]
     user_id    = cfg[USER_ID]
-    movie_id   = cfg[MOVIE_ID]
-    movie_title= cfg[MOVIE_TITLE]
+    #movie_id   = cfg[MOVIE_ID]
+    #movie_title= cfg[MOVIE_TITLE]
 
     #dbreader = get_dbreader()
     #res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
     res = odb.get_logs( user_id=user_id)
-    logging.info("log entries for movie:")
+    logger.info("log entries for movie:")
     for r in res:
-        logging.info("%s",r)
+        logger.info("%s",r)
 
+# pytest: disable=too-many-locals
 def test_new_movie_api(client, new_course):
     """Create a new movie_id and return it.
     This uses the movie API where the movie is uploaded with the
@@ -375,7 +373,7 @@ def test_new_movie_api(client, new_course):
     api_key_invalid = api_key+"invalid"
     movie_title = f'test-movie title {str(uuid.uuid4())}'
 
-    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    logger.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
         movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
@@ -388,9 +386,9 @@ def test_new_movie_api(client, new_course):
                                    "title": movie_title,
                                    "description": "test movie description",
                                    "movie_data_sha256": movie_data_sha256})
-    logging.debug("invalid api_key resp=%s",resp)
-    logging.debug("invalid api_key resp.text=%s",resp.text)
-    logging.debug("invalid api_key resp.json=%s",resp.json)
+    logger.debug("invalid api_key resp=%s",resp)
+    logger.debug("invalid api_key resp.text=%s",resp.text)
+    logger.debug("invalid api_key resp.json=%s",resp.json)
     assert 'error' in resp.get_json()
     assert resp.get_json()['error'] is True
 
@@ -413,36 +411,36 @@ def test_new_movie_api(client, new_course):
     movie_id = res['movie_id']
     assert odb.is_movie_id(movie_id)
 
-    logging.debug("new_movie fixture: movie_id=%s",movie_id)
+    logger.debug("new_movie fixture: movie_id=%s",movie_id)
     cfg[MOVIE_ID] = movie_id
     cfg[MOVIE_TITLE] = movie_title
 
     url    = res['presigned_post']['url']
     fields = res['presigned_post']['fields']
 
-    logging.debug("new_movie fixture: url=%s fields=%s",url,fields)
+    logger.debug("new_movie fixture: url=%s fields=%s",url,fields)
 
     # Now send the data
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         # Do a real post! (probably going to S3)
-        logging.debug("calling requests.post(%s,data=%s)",url,fields)
+        logger.debug("calling requests.post(%s,data=%s)",url,fields)
         r = requests.post(url, files={'file':f}, data=fields, timeout=POST_TIMEOUT)
-        logging.info("uploaded to %s r=%s",url, r)
+        logger.info("uploaded to %s r=%s",url, r)
         assert r.ok
 
     # Make sure data got there
-    logging.debug("new_movie fixture: movie uploaded")
+    logger.debug("new_movie fixture: movie uploaded")
     retrieved_movie_data = odb_movie_data.get_movie_data(movie_id=movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
 
-    logging.debug("new_movie fixture: Delete the movie we uploaded")
+    logger.debug("new_movie fixture: Delete the movie we uploaded")
     resp = client.post('/api/delete-movie',
                            data={'api_key': api_key,
                                  'movie_id': movie_id})
     res = resp.get_json()
     assert res['error'] is False
 
-    logging.debug("new_movie fixture: Purge the movie that we have deleted")
+    logger.debug("new_movie fixture: Purge the movie that we have deleted")
     odb_movie_data.purge_movie(movie_id=movie_id)
-    logging.debug("new_movie fixture: done")
+    logger.debug("new_movie fixture: done")
