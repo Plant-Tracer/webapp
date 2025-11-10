@@ -140,8 +140,8 @@ pytest-selenium:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/app_test.py
-#TEST1FUNCTION="-k test_movie_schema"
+TEST1MODULE=tests/movie_test.py
+TEST1FUNCTION="-k test_movie_extract2"
 pytest1:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 

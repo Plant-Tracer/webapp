@@ -319,11 +319,15 @@ def test_movie_extract2(client, new_movie):
         assert is_jpeg(data)
         return data
 
-    frame0 = get_movie_data_jpeg(0)
-    frame1 = get_movie_data_jpeg(1)
-    frame2 = get_movie_data_jpeg(2)
+    frames = {}
+    for n in (0,1,2):
+        frames[n] = get_movie_data_jpeg(n)
 
-    assert frame0 != frame1 != frame2
+    if frames[0] != frames[1] != frames[2]:
+        for n in (0,1,2):
+            with open(f"/tmp/frame{n}","wb") as f:
+                f.write(frames[n])
+        raise RuntimeError("did not get 3 different frames for frames[0], frames[1], frames[2]")
 
     # Grab three frames with the API and see if they are different
     def get_jpeg_frame_redirect(number):
