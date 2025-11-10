@@ -907,7 +907,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         admin_for_courses = [course_id]
     try:
         user_id = new_user_id()
-z        ddbo.put_user({USER_ID:user_id,
+        ddbo.put_user({USER_ID:user_id,
                        EMAIL:email,
                        USER_NAME:user_name,
                        'created' : int(time.time()),

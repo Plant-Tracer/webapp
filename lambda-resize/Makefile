@@ -24,11 +24,11 @@ install: .venv/pyvenv.cfg
 	npm install -g browser-sync
 
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
-	poetry export -f requirements.txt --output src/requirements.txt
+	poetry export -f requirements.txt --without-hashes --output src/requirements.txt
 
 .PHONY: vend-app
 vend-app: Makefile
-	rsync --verbose --archive ../src/app/*.py src/resize_app/src/app/
+	rsync --verbose --archive ../src/app/{odb,schema,constants}.py src/resize_app/src/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app
@@ -43,11 +43,15 @@ check: .venv/pyvenv.cfg
 
 # AWS Lambda Vend, Build and Deploy (VBD)
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
-	echo make lint
-	echo make vend-app
+	make lint
+	make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
-	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
+	aws configure set default.s3.multipart_threshold 500MB
+	aws configure set default.s3.max_concurrent_requests 2
+	aws configure set default.s3.multipart_chunksize 32MB
+	AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=10 AWS_S3_MULTIPART_THRESHOLD=200MB\
+		sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
 	curl --silent  https://app-resize.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt

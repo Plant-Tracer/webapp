@@ -7,12 +7,10 @@ Pure Python: uses PyAV (libav*), Pillow; no subprocess calls to ffmpeg.
 import io
 import zipfile
 from typing import Tuple, Optional
+import argparse
 
 import av  # pip install av
 from PIL import Image, ImageOps  # pip install pillow
-
-
-from common import LOGGER
 
 # ---------- Geometry & rotation helpers ----------
 
@@ -22,35 +20,31 @@ def _rotation_degrees_from_frame(frame: av.video.frame.VideoFrame) -> int:
     Falls back to stream 'rotate' metadata if available.
     """
     # Newer FFmpeg writes a display matrix in side data.
-    try:
-        for sd in frame.side_data:
-            if sd.type.name == "DISPLAYMATRIX":
-                # Matrix maps frame to display; angle is derived as per FFmpeg
-                # PyAV exposes .to_dict() -> {'rotation': 90.0} in recent builds.
-                d = sd.to_dict()
-                if "rotation" in d:
-                    rot = int(round(d["rotation"])) % 360
-                    return (rot + 360) % 360
-    except Exception as e:
-        LOGGER.error("Exception: %s",e)
+    for sd in frame.side_data:
+        if sd.type.name == "DISPLAYMATRIX":
+            # Matrix maps frame to display; angle is derived as per FFmpeg
+            # PyAV exposes .to_dict() -> {'rotation': 90.0} in recent builds.
+            d = sd.to_dict()
+            if "rotation" in d:
+                rot = int(round(d["rotation"])) % 360
+                return (rot + 360) % 360
 
     return 0
 
 
 def _apply_rotation(img: Image.Image, degrees: int) -> Image.Image:
-    if degrees == 0:
-        return img
-    elif degrees == 90:
-        return img.transpose(Image.Transpose.ROTATE_270)  # PIL is counterclockwise
-    elif degrees == 180:
-        return img.transpose(Image.Transpose.ROTATE_180)
-    elif degrees == 270:
-        return img.transpose(Image.Transpose.ROTATE_90)
-    else:
-        # Non right-angle rotations are rare; round to nearest right angle
-        q = (int(round(degrees / 90.0)) * 90) % 360
-        return _apply_rotation(img, q)
-
+    match (degrees):
+        case (0):
+            return img
+        case (90):
+            return img.transpose(Image.Transpose.ROTATE_270)  # PIL is counterclockwise
+        case (180):
+            return img.transpose(Image.Transpose.ROTATE_180)
+        case (270):
+            return img.transpose(Image.Transpose.ROTATE_90)
+        case _:
+            q = (int(round(degrees / 90.0)) * 90) % 360
+            return _apply_rotation(img, q)
 
 def _compute_fit_size(src_wh: Tuple[int, int],
                       max_wh: Tuple[int, int]) -> Tuple[int, int]:
@@ -72,21 +66,21 @@ def _resize_image(img: Image.Image,
     mode = "fit": scale proportionally <= target, no padding (<= VGA both dims).
     mode = "letterbox": exact target_wh with bars as needed.
     """
-    tw, th = target_wh
-    if mode == "fit":
-        nw, nh = _compute_fit_size(img.size, target_wh)
-        if (nw, nh) == img.size:
-            return img
-        return img.resize((nw, nh), resample=resample)
-    elif mode == "letterbox":
-        # ImageOps.pad preserves aspect, then pads to exact target
-        return ImageOps.pad(img, target_wh, method=resample, color=pad_color)
-    else:
-        raise ValueError("mode must be 'fit' or 'letterbox'")
+    match (mode):
+        case ("fit"):
+            nw, nh = _compute_fit_size(img.size, target_wh)
+            if (nw, nh) == img.size:
+                return img
+            img.resize((nw, nh), resample=resample)
+        case ("letterbox"):
+            return ImageOps.pad(img, target_wh, method=resample, color=pad_color)
+        case ("_"):
+            raise ValueError("mode must be 'fit' or 'letterbox'")
 
 
 # ---------- Main processing ----------
 
+# pylint: disable=too-many-positional-arguments, disable=too-many-locals
 def video_to_vga_zip(
     input_path: str,
     zip_path: str,
@@ -134,10 +128,10 @@ def video_to_vga_zip(
                 w, h = img.size
                 if w >= h:
                     # Landscape → fit inside 640x480
-                    target_wh_this = (640, 480)
+                    target_wh_this = target_wh
                 else:
                     # Portrait → fit inside 480x640 (preserve portrait)
-                    target_wh_this = (480, 640)
+                    target_wh_this = target_wh
 
                 # Downscale
                 img = _resize_image(img, target_wh=target_wh_this, mode=mode)
@@ -166,7 +160,6 @@ def video_to_vga_zip(
 # ---------- CLI wrapper ----------
 
 def main():
-    import argparse
     p = argparse.ArgumentParser(
         description="Downscale a video to VGA frames and stream them into a ZIP (no intermediates)."
     )

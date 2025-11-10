@@ -15,9 +15,9 @@ import time
 import uuid
 from typing import Any, Dict, Tuple, Optional
 
-from common import LOGGER
-import src.app.odb as odb
-from odb import DDBO
+from .common import LOGGER
+from .src.app import odb
+from .src.app.odb import DDBO
 
 __version__ = "0.1.0"
 
@@ -127,6 +127,7 @@ def write_log( message, *, time_t=None, course_id=None, log_user_id=None, ipaddr
                              'time':time_t,
                              'user_id':log_user_id,
                              'ipaddr':ipaddr,
+                             'course_id':course_id,
                              'message':message})
 
 def api_ping(event, context):
@@ -168,13 +169,13 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                 case ("POST", "/api/v1", "resize-start"):
                     return api_resize(event, context, payload)
 
-                case ("POST", "/api/v1", "heartbeat"):
+                case (_, "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)
 
-                case ("POST", "/api/v1", "log"):
+                case (_, "/api/v1", "log"):
                     return api_log()
 
-                case ("POST", "/api/v1", _):
+                case (_, "/api/v1", _):
                     return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
 
                 ################################################################
