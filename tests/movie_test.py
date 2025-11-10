@@ -323,7 +323,7 @@ def test_movie_extract2(client, new_movie):
     for n in (0,1,2):
         frames[n] = get_movie_data_jpeg(n)
 
-    if frames[0] != frames[1] != frames[2]:
+    if (frames[0] != frames[1]) or (frames[0]!= frames[2]):
         for n in (0,1,2):
             with open(f"/tmp/frame{n}","wb") as f:
                 f.write(frames[n])
