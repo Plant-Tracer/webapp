@@ -129,6 +129,7 @@ def favicon_base64():
     with open( join( ETC_DIR, C.FAVICON), 'rb') as f:
         return base64.b64encode(f.read()).decode('utf-8')
 
+# pylint: disable=too-many-locals
 def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     """Returns a dictionary that can be used by post of the templates.
     :param: title - the title we should give the page

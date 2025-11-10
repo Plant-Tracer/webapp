@@ -5,7 +5,7 @@ Currently dependent upon DynamoDB.
 (C) 2025 Simson L. Garfinkel
 """
 
-#pylint: disable=too-many-lines
+#pylint: disable=too-many-lines, disable=invalid-name
 import os
 import logging
 import json
@@ -622,9 +622,9 @@ class DDBO:
     def batch_delete_movie_ids(self, ids):
         """Delete movie items from the table using batch_writer."""
         with self.movies.batch_writer() as batch:
-            for theId in ids:
-                assert is_movie_id(theId)
-                batch.delete_item(Key={ MOVIE_ID: theId})
+            for the_id in ids:
+                assert is_movie_id(the_id)
+                batch.delete_item(Key={ MOVIE_ID: the_id})
 
     def get_movies_for_user_id(self, user_id):
         """Query movies.user_id_idx and return all movie records for the given user_id (with pagination)."""

@@ -2,7 +2,7 @@
 Constants are created in classes so we can import the class and don't have to import each constant.
 """
 
-#pylint: disable=too-few-public-methods
+#pylint: disable=too-few-public-methods,disable=invalid-name
 
 import logging
 
@@ -20,6 +20,7 @@ class C:
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
+    PROJECT_EMAIL = 'admin@planttracer.com'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
