@@ -1,19 +1,25 @@
 # ===== resize_app Makefile =====
 # lambda-resize is the minimal resize page.
+AWS_PROFILE         ?= planttracer
+AWS_REGION          ?= us-east-1
 STACK           ?= resize-app
 STACK_STAGE     ?= resize-app-stage
-CAPS            ?= CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
-REGION          ?= us-east-1
-PROFILE         ?= planttracer
 PYTHON          = python3.13
 DJLINT_FLAGS ?= --profile=jinja --lint --quiet --ignore J004,J018
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+BUILD_DIR := .aws-sam/build/$(FUNC)
+ZIP_PATH  := .aws-sam/build/$(FUNC).zip
+SRC_TPL   := .aws-sam/build/template.yaml
+PKG_TPL   := packaged.yaml
+
 PRODUCTION_URL="https://app-resize.planttracer.com"
 STAGE_URL="https://app-resize-stage.planttracer.com"
 
 export PYTHONDONTWRITEBYTECODE=1
+export AWS_PROFILE
+export AWS_REGION
 
 .PHONY: install vend-app lint pytest test
 install: .venv/pyvenv.cfg
@@ -24,7 +30,7 @@ install: .venv/pyvenv.cfg
 	npm install -g browser-sync
 
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
-	poetry export -f requirements.txt --without-hashes --output src/requirements.txt
+	poetry export -f requirements.txt --only main --without-hashes --output src/requirements.txt
 
 .PHONY: vend-app
 vend-app: Makefile
@@ -47,11 +53,7 @@ prod-vbd: template.yaml samconfig.toml src/requirements.txt
 	make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
-	aws configure set default.s3.multipart_threshold 500MB
-	aws configure set default.s3.max_concurrent_requests 2
-	aws configure set default.s3.multipart_chunksize 32MB
-	AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=10 AWS_S3_MULTIPART_THRESHOLD=200MB\
-		sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
+	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
 	curl --silent  https://app-resize.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt

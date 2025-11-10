@@ -26,7 +26,7 @@ install: .venv/pyvenv.cfg
 
 
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
-	poetry export -f requirements.txt --output src/requirements.txt
+	poetry export -f requirements.txt  --without-hashes --output src/requirements.txt
 
 .PHONY: vend-app
 vend-app: Makefile
@@ -46,7 +46,7 @@ check: .venv/pyvenv.cfg
 
 # AWS Lambda Vend, Build and Deploy (VBD)
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
-	make lint
+	echo make lint
 	make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml

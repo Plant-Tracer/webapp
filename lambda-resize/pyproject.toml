@@ -12,9 +12,7 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.13,<3.14"
 boto3 = "*"
-jinja2 = "*"
 pydantic = "*"
-boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager", "dynamodb"] }
 
 # --- This is how you include your local wheel ---
 # It assumes you have renamed it in the 'dependencies/' folder
@@ -32,6 +30,7 @@ pytest = "*"
 pip-tools = "*"
 pytest-cov = "*"
 ruff = "*"
+boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager", "dynamodb"] }
 
 # -----------------------------------------------------------------
 # This section tells Python to use Poetry to build the project

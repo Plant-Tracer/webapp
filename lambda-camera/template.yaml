@@ -27,7 +27,6 @@ Globals:
         LOG_LEVEL: !Ref LogLevel
         TABLE_PREFIX: !Ref TablePrefix
 
-
 Parameters:
   HostedZoneId:
     Type: String
@@ -49,7 +48,6 @@ Conditions:
   CreateAcmCert: !Equals [!Ref CertificateArn, ""]
 
 Resources:
-  # Optional, auto-created ACM cert for the custom domain (regional, DNS validated)
   HomeCertificate:
     Type: AWS::CertificateManager::Certificate
     Condition: CreateAcmCert
@@ -60,7 +58,6 @@ Resources:
         - DomainName: camera.planttracer.com
           HostedZoneId: !Ref HostedZoneId
 
-  # HTTP API fronting the Lambda, bound to camera.planttracer.com in Route53
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -73,6 +70,7 @@ Resources:
         CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
+
   # Lambda function — JSON-only API (no Flask)
   CameraFunction:
     Type: AWS::Serverless::Function
@@ -101,7 +99,6 @@ Resources:
               Resource:
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
-
       Events:
         AnyRoot:
           Type: HttpApi
