@@ -69,14 +69,15 @@ jobs:
         run: |
           make eslint
 
-      - name: Normal pytest
+      - name: Run checks (lint and test)
         if: runner.os != 'Linux'
         run: |
-          make pytest
+          make check
 
-      - name: Run pytest with coverage
+      - name: Run checks with coverage
         if: runner.os == 'Linux'
         run: |
+          make lint
           make pytest-coverage
 
       - name: JavaScript tests and coverage

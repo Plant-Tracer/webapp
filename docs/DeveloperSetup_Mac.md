@@ -27,13 +27,13 @@ The DynamoDBLocal and Minio programs require that the following AWS  variables b
 |`AWS_ENDPOINT_URL_DYNAMODB`|`http://localhost:8010/`|
 
 You will also want to set these variables:
-|Variable|Value for `make pytest` in Github actions`|Purpose|
+|Variable|Value for `make check` in Github actions`|Purpose|
 |--------|-----|----|
 |`PLANTTRACER_S3_BUCKET`|`planttracer-local`|Bucket where videos are stored|
 |`DYNAMODB_TABLE_PREFIX`|`demo-`|Prefix for all DynamoDB tables|
 
 You may optionally set these variables:
-|Variable|Value set for `make pytest` in Github actions|Purpose|
+|Variable|Value set for `make check` in Github actions|Purpose|
 |--------|-----|----|
 |`DEMO_COURSE_ID`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst) and `DEMO_COURSE_ID` specifies the course that is viewed.|
 |`LOG_LEVEL`|`DEBUG`|If set, all logging is at this log level|
@@ -42,7 +42,7 @@ Note that there are multiple ways that a single service can be sliced or partiti
 
 * A single server might have multiple Plant Tracer web app instances listening on different ports.
 * Each web app instance can store in its own S3 bucket. Alternatively, you can use the same S3 bucket for multiple web app instances, because each movie is stored with a UUID in the form `s3://{PLANTTRACER_S3_BUCKET/{COURSE_ID}/{MovieID/`. 
-* Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing with `pytest`, tables are created with the randomized prefix `test-????` where `????` is a randomly hexadecimal string.
+* Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing, tables are created with the randomized prefix `test-????` where `????` is a randomly hexadecimal string.
 * Within each web app instance, there can be one or more courses, each with its own course identifier (name).
 
 Note that any course can be come a demo course. What makes it a demo course is that the web app instance has the `DEMO_COURSE_ID` environment variable set. This allows the same course to be accessed for non-demo purposes and demo purposes. When you access a web app instance that has the `DEMO_COURSE_ID` environment variable set, you are automatically authenticated as the demo user and can only access that user's movies and public movies.
@@ -131,13 +131,12 @@ make list-local-buckets
 
 1. Check to make sure the commit that you checked out is valid:
 ```
-make pylint
-make pytest
+make check
 ```
-If these do not work, speak with a maintainer, as the build is broken.
+If this does not work, speak with a maintainer, as the build is broken.
 
 # Developing locally
-At this point you have checked out the git repo and verified that `make pylint` and `make pytest` run without error. This means:
+At this point you have checked out the git repo and verified that `make check` runs without error. This means:
 * You have all the necessary software installed.
 * DynamoDBlocal works
 * Minio works.

@@ -82,7 +82,7 @@ Setup Steps
 
    .. code-block::
 
-      make pytest
+      make check
 
 #. Create your first course!:
 
