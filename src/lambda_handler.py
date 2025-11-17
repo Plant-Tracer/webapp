@@ -28,9 +28,9 @@ except Exception as e:
         f.write("\n")
         f.write(''.join(traceback.TracebackException.from_exception(e).format()))
     def lambda_handler(event, context): # pylint: disable=unused-argument
-        with open(IMPORT_ERROR_FILE,'r') as f:
+        with open(IMPORT_ERROR_FILE,'r') as error_file:
             return {
                 "statusCode": 200,
-                "body": "error:\n" + f.read()
+                "body": "error:\n" + error_file.read()
             }
     lambda_app = lambda_handler

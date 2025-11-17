@@ -1,19 +1,16 @@
 """
 Test the various functions in the database involving user creation.
 """
-
-import uuid
-import logging
 import copy
+import logging
+import uuid
+
+from fixtures.local_aws import ADMIN_EMAIL
 
 from app import odb
 from app import odbmaint
 from app.constants import C
-
 from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
-
-from fixtures.local_aws import ADMIN_EMAIL, local_ddb, local_s3, new_course
-from fixtures.app_client import client
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 ################################################################
@@ -40,7 +37,7 @@ def test_new_course(new_course):
 
 
 # Make sure that there is a demo user
-def test_demo_user(new_course):
+def test_demo_user(new_course):  # pylint: disable=unused-argument
     #cfg = copy.copy(new_course)
     try:
         odbmaint.create_course(course_id  = DEMO_COURSE_ID,

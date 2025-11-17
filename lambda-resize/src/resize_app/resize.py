@@ -1,8 +1,7 @@
 """
-Main entry point for AWS Lambda Dashboard
+Main entry point for Resizer.
+Handles both web interface and S3 watcher.
 
-Generate the https://camera.planttracer.org/ home page.
-Runs the camera.
 """
 
 # at top of home_app/home.py (module import time)
@@ -16,8 +15,6 @@ import os
 import sys
 import time
 from typing import Any, Dict, Tuple, Optional
-
-
 
 MY_DIR = dirname(__file__)
 
@@ -56,10 +53,9 @@ def get_logger(name: str | None = None) -> logging.Logger:
 LOGGER = get_logger("grader")
 
 ################################################################
-## Minimal support for a Python-based website in Lamda with jinja2 support
+## Minimal support for a Python-based REST API. No static pages, no jinja.
 ##
 
-# jinja2
 
 def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None ) -> Dict[str, Any]:
     """End HTTP event processing with a JSON object"""
@@ -103,7 +99,6 @@ def api_heartbeat(event, context)  -> Dict[str, Any]:
     """Called periodically. Not authenticated. Main purpose clean up active camera sessions"""
     LOGGER.info("heartbeat event=%s context=%s", event, context)
     return resp_json( 200, { "now": time.time() } )
-
 
 def api_resize(event, context, payload)  -> Dict[str, Any]:
     """

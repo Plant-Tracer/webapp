@@ -1,5 +1,6 @@
 import pytest
-import app.flask_app as flask_app
+
+from app import flask_app
 
 @pytest.fixture(scope="session")
 def client():

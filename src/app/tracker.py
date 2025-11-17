@@ -146,10 +146,9 @@ def extract_frame(*, movie_data, frame_number, fmt):
         if fn==frame_number:
             if fmt=='CV2':
                 return frame
-            elif fmt=='jpeg':
+            if fmt=='jpeg':
                 return convert_frame_to_jpeg(frame)
-            else:
-                raise ValueError("Invalid fmt: "+fmt)
+            raise ValueError("Invalid fmt: "+fmt)
     raise ValueError(f"invalid frame_number {frame_number}")
 
 def cleanup_mp4(*,infile,outfile):

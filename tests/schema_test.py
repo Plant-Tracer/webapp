@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
+from app import schema
 from app.paths import logger
-import app.schema as schema
 
 
 def test_movie_schema():
@@ -54,7 +54,7 @@ def test_user_schema():
         schema.validate_user_field("unknown", 0)
 
     with pytest.raises(ValidationError):
-        m = schema.Movie(
+        schema.Movie(
             movie_id="mtest",
             title="ttest",
             description="dtest",

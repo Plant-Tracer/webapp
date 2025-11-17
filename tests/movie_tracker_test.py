@@ -1,43 +1,22 @@
 """
 movie_tracker_test.py - test the api tracking
 """
-import subprocess
-import pytest
-import sys
-import os
-import logging
-import json
-import tempfile
-import glob
-import base64
-import csv
-import math
-import urllib
-from urllib.parse import urlparse,parse_qs
-from os.path import abspath, dirname
-from zipfile import ZipFile
 import copy
+import csv
+import json
+import logging
+import math
+import sys
+import tempfile
+from zipfile import ZipFile
 
 import filetype
-import numpy as np
-import cv2
 
-# https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
-
-from app import flask_app
 from app import odb
 from app import odb_movie_data
-from app import tracker
-from app.constants import MIME,E,C
-from app.odb import DDBO,API_KEY,MOVIE_ID,TITLE,USER_ID
-from app.odb_movie_data import read_object,create_new_movie_frame
-
-# get the first MOV
-
-# Get the fixtures from user_test
-from fixtures.app_client import client
-from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH,MOVIE_TITLE,local_s3
-from movie_test import new_movie
+from app.constants import C, E, MIME
+from app.odb import API_KEY, MOVIE_ID
+from app.odb_movie_data import create_new_movie_frame, read_object
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
@@ -56,14 +35,12 @@ def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    user_id = cfg[USER_ID]
 
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
     tp2 = {'x':25,'y':25,'label':TEST_LABEL3}
-    frame_urn = create_new_movie_frame(movie_id=movie_id, frame_number=0)
+    create_new_movie_frame(movie_id=movie_id, frame_number=0)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
 
     # See if I can get it back
@@ -118,9 +95,7 @@ def test_movie_tracking(client, new_movie):
     """
     cfg      = copy.copy(new_movie)
     movie_id    = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
     api_key  = cfg[API_KEY]
-    user_id  = cfg[USER_ID]
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
     # save the trackpoints
@@ -133,7 +108,7 @@ def test_movie_tracking(client, new_movie):
     assert response.status_code == 200
     ret = response.get_json()
     logging.debug("save trackpoints ret=%s",ret)
-    assert ret['error']==False
+    assert ret['error'] is False
 
     # Now track with the tracking API.
     response = client.post('/api/track-movie-queue',
@@ -143,7 +118,7 @@ def test_movie_tracking(client, new_movie):
     assert response.status_code == 200
     ret = response.get_json()
     logging.debug("track movie ret=%s",ret)
-    assert ret['error']==False
+    assert ret['error'] is False
 
     response = client.post('/api/get-movie-metadata',
                            data = {'api_key': api_key,
@@ -241,7 +216,7 @@ def test_movie_tracking(client, new_movie):
     ret = response.get_json()
     logging.debug("r10=%s",ret)
     print(json.dumps(ret,indent=4),file=sys.stderr)
-    assert ret['error'] == False
+    assert ret['error'] is False
     movie_id = ret['metadata']['movie_id']
     frame0 = ret['frames']['0']
 

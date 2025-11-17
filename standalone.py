@@ -13,7 +13,11 @@ import logging
 from gunicorn.app.wsgiapp import run
 
 
-from deploy.app import clogging
+try:
+    from deploy.app import clogging  # pylint: disable=import-error
+except ImportError:
+    # deploy.app may not be available in all environments
+    import logging as clogging  # pylint: disable=reimported
 
 def main():
     parser = argparse.ArgumentParser()

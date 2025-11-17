@@ -74,7 +74,13 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "line-too-long",
-    "unspecified-encoding"
+    "unspecified-encoding",
+    "invalid-name",  # Allow naming conventions that match existing codebase style
+    "too-many-locals",  # Some functions legitimately need many locals
+    "too-many-statements",  # Some functions are complex by design
+    "too-many-positional-arguments",  # Some functions have many args by design
+    "redefined-outer-name",  # Common in test fixtures
+    "unnecessary-comprehension"  # Sometimes clearer than alternatives
 ]
 
 [tool.pylint.design]

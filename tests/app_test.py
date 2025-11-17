@@ -3,26 +3,22 @@ Tests for the application
 """
 
 
-import pytest
-import sys
-import os
 import logging
-import json
+import os
 import subprocess
 import uuid
-
 import xml.etree.ElementTree
 
-from app.paths import STATIC_DIR,TEST_DATA_DIR
-from app import odb
+import pytest
+
+from fixtures.local_aws import new_course, new_movie
+
+from app import apikey
 from app import flask_api
 from app import flask_app
-from app import auth
-from app import apikey
-
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
-from fixtures.local_aws import local_ddb, local_s3, new_course, new_movie, api_key
-from fixtures.app_client import client
+from app import odb
+from app.paths import STATIC_DIR
+from app.odb import API_KEY, MOVIE_ID, VERSION
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -43,11 +39,11 @@ def test_get_float(mocker):
 
 def test_get_bool(mocker):
     mocker.patch("app.flask_api.get", return_value="YES")
-    assert flask_api.get_bool("key")==True
+    assert flask_api.get_bool("key") is True
     mocker.patch("app.flask_api.get", return_value="xxx")
-    assert flask_api.get_bool("key",default=False)==False
+    assert flask_api.get_bool("key",default=False) is False
     mocker.patch("app.flask_api.get", return_value=3.4)
-    assert flask_api.get_bool("key",default=True)==True
+    assert flask_api.get_bool("key",default=True) is True
 
 
 PLANTTRACER_JS = 'planttracer.js'
@@ -69,15 +65,15 @@ def test_error(client):
     response = client.post('/api/list-movies',
                            data = {'api_key':'invalid'})
 
-    cookie_name = apikey.cookie_name()
     set_cookie_header = response.headers.get('Set-Cookie')
-    assert set_cookie_header == 'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+    _cookie_name = apikey.cookie_name()
+    assert set_cookie_header == f'Set-Cookie: {_cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
 
 # make sure we get no api_key with a bad request
 @pytest.mark.skip(reason='authentication not yet working')
 def test_null_api_key(mocker):
     mocker.patch("flask.request.values.get", return_value=None)
-    assert apikey.get_user_api_key() == None
+    assert apikey.get_user_api_key() is None
 
 
 ################################################################
@@ -93,22 +89,22 @@ def test_templates(client,new_course):
     def validate_html(url, html, include_text=None, exclude_text=None):
         '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
         try:
-            doc = xml.etree.ElementTree.fromstring(html)
+            _doc = xml.etree.ElementTree.fromstring(html)
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
-                    raise RuntimeError(f"'{include_text}' not in text {new_user}")
+                    raise RuntimeError(f"'{include_text}' not in text")
             if exclude_text is not None:
                 if exclude_text in html:
                     dump_lines(html)
-                    raise RuntimeError(f"'{exclude_text}' in text {new_user}")
+                    raise RuntimeError(f"'{exclude_text}' in text")
             return
         except xml.etree.ElementTree.ParseError as e:
             logging.error("*****************************************************")
             logging.error("url=%s error=%s",url,e)
             dump_lines(html)
             invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'
-            logging.error(f"invalid html written to {invalid_fname}")
+            logging.error("invalid html written to %s", invalid_fname)
             with open( invalid_fname,"w") as f:
                 f.write(html)
             try:
@@ -124,7 +120,7 @@ def test_templates(client,new_course):
                     '/resend','/tos','/upload','/users']:
             include_text = None
             exclude_text = None
-            if with_api_key==True and url=='/list':
+            if with_api_key is True and url=='/list':
                 exclude_text = 'user_demo = true;'
             if with_api_key:
                 client.set_cookie( apikey.cookie_name(), api_key)
@@ -141,7 +137,6 @@ def test_templates(client,new_course):
 def test_api_edit_movie(new_movie,client):
     # Verifies that editing the movie version has updated
     api_key = new_movie[API_KEY]
-    user_id  = new_movie[USER_ID]
     movie_id = new_movie[MOVIE_ID]
 
     movie = odb.get_movie(movie_id = movie_id)
@@ -153,7 +148,7 @@ def test_api_edit_movie(new_movie,client):
                        data={'api_key': api_key,
                              'movie_id': movie_id,
                              'action' : 'bad-action'})
-    assert resp.json['error']==True
+    assert resp.json['error'] is True
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[VERSION] == 1  # because it was not updated
 
@@ -161,7 +156,7 @@ def test_api_edit_movie(new_movie,client):
                        data={'api_key': api_key,
                              'movie_id': movie_id,
                              'action' : 'rotate90cw'})
-    assert resp.json['error']==False
+    assert resp.json['error'] is False
 
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[VERSION] == 2  # because it was edited

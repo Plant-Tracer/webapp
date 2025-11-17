@@ -1,4 +1,20 @@
+import copy
+import logging
+import time
+
 import pytest
+
+from fixtures.app_client import client
+from fixtures.local_aws import USER_EMAIL
+
+from app import odb
+from app.odb import API_KEY
+
+# These are for the old MySQL-based logging system (currently disabled)
+# dbfile and dbreader would need to be imported from the old system if re-enabled
+dbfile = None  # type: ignore
+dbreader = None  # type: ignore
+db = odb  # type: ignore
 
 @pytest.mark.skip(reason="logging currently disabled")
 def test_get_logs(new_course):
@@ -15,7 +31,7 @@ def test_get_logs(new_course):
 
     api_key  = new_course[API_KEY]
     user_id  = new_course['user_id']
-    response = client.post('/api/get-logs',
+    _response = client.post('/api/get-logs',
                            data = {'api_key': api_key, 'user_id':user_id})
 
     # Turns out that there are no logs with this user, since the scaffolding calls register_email

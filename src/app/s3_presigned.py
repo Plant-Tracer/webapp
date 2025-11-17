@@ -92,7 +92,7 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None,expires=3600):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600):  # pylint: disable=unused-argument
     """Returns a dictionary with 'url' and 'fields'"""
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:

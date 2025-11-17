@@ -12,7 +12,6 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.13,<3.14"
 boto3 = "*"
-jinja2 = "*"
 pydantic = "*"
 boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager", "dynamodb"] }
 
@@ -20,6 +19,9 @@ boto3-stubs = { version = "*", extras = ["essential", "route53", "secretsmanager
 # It assumes you have renamed it in the 'dependencies/' folder
 # deploy = { path = "dependencies/deploy-1.1.0-py3-none-any.whl" }
 requests = "^2.32.5"
+av = "^16.0.1"
+pillow = "^12.0.0"
+numpy = "^2.3.5"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -31,16 +33,9 @@ pip-tools = "*"
 pytest-cov = "*"
 ruff = "*"
 
-# -----------------------------------------------------------------
-# This section tells Python to use Poetry to build the project
-# -----------------------------------------------------------------
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-# -----------------------------------------------------------------
-# All your tool configurations below this line stay exactly the same
-# -----------------------------------------------------------------
 
 [tool.djlint]
 profile = "jinja"
@@ -95,13 +90,12 @@ reportMissingTypeStubs = "warning"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
-extraPaths = ["src", "src/home_app", "src/home_app/e11.whl", "../"]
+extraPaths = ["src", "src/resize_app", "../"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [
  "src",
  "tests",
- "../",
- "src/resize_app/e11.whl"]
+ "../"]
 addopts = "-ra -q"

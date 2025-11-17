@@ -130,10 +130,9 @@ def add_argument(parser, *, loglevel_default='INFO'):
 def syslog_default_address():
     if os.path.exists(DEVLOG):
         return DEVLOG
-    elif os.path.exists(DEVLOG_MAC):
+    if os.path.exists(DEVLOG_MAC):
         return DEVLOG_MAC
-    else:
-        raise RuntimeError(f"Neither {DEVLOG} nor {DEVLOG_MAC} are present.")
+    raise RuntimeError(f"Neither {DEVLOG} nor {DEVLOG_MAC} are present.")
 
 
 class MaxLengthFormatter(logging.Formatter):

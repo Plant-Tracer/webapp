@@ -1,24 +1,62 @@
+# HOW TO DEPLOY WITH SAM (creates samconfig.toml on first guided deploy):
+#   sam build
+#   sam deploy --guided --profile planttracer
+#
+# This template is parameterized for 'prod' and 'stage' environments.
+# The environment is controlled by the 'EnvironmentName' parameter,
+# which should be set in your samconfig.toml file.
+#
+# Example (samconfig-stage.toml):
+#   [default.deploy.parameters]
+#   stack_name = "home-app-stage"
+#   EnvironmentName = "stage"
+#   ...
+#
+# Example (samconfig.toml for prod):
+#   [default.deploy.parameters]
+#   stack_name = "home-app"
+#   EnvironmentName = "prod"
+#   ...
+
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: PlantTracer resizer Lambda with custom domain (app-resize.planttracer.com)
+Description: PlantTracer resizer Lambda (Unified Prod/Stage)
+
+Mappings:
+  EnvConfig:
+    prod:
+      DomainName: "app-resize.planttracer.com"
+      StageName: "prod"
+      Description: "Resizer Lambda Production (app-resize.planttracer.com)"
+      CustomDomainUrl: "https://app-resize.planttracer.com/"
+    stage:
+      DomainName: "app-resize-stage.planttracer.com"
+      StageName: "stage"
+      Description: "Resizer Lambda Stage (app-resize-stage.planttracer.com)"
+      CustomDomainUrl: "https://app-resize-stage.planttracer.com/"
 
 Globals:
   Function:
+    Architectures: [ arm64 ]
     Environment:
       Variables:
         LOG_LEVEL: !Ref LogLevel
         TABLE_PREFIX: !Ref TablePrefix
-    Architectures:
-      - arm64
 
 Parameters:
+  EnvironmentName:
+    Type: String
+    Default: stage
+    AllowedValues: [prod, stage]
+    Description: The deployment environment (prod or stage).
   HostedZoneId:
     Type: String
-    Description: Route53 Hosted Zone ID for app-resize.planttracer.com (e.g., Z123ABC...)
+    Description: Route53 Hosted Zone ID for planttracer.com (e.g., Z123ABC...)
   CertificateArn:
     Type: String
     Default: ""
-    Description: "(Optional) Existing ACM certificate ARN for app-resize.planttracer.com. Leave blank to auto-create."
+    Description: "(Optional) Existing ACM certificate. Leave blank to auto-create."
   LogLevel:
     Type: String
     Default: INFO
@@ -40,13 +78,13 @@ Resources:
     Type: AWS::CertificateManager::Certificate
     Condition: CreateAcmCert
     Properties:
-      DomainName: app-resize.planttracer.com
+      DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
       ValidationMethod: DNS
       DomainValidationOptions:
-        - DomainName: app-resize.planttracer.com
+        - DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
           HostedZoneId: !Ref HostedZoneId
 
-  # HTTP API fronting the Lambda, bound to app-resize.planttracer.com in Route53
+  # HTTP API fronting the Lambda, bound to specified domain
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -55,7 +93,7 @@ Resources:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
-        DomainName: app-resize.planttracer.com
+        DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
         CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
@@ -88,6 +126,7 @@ Resources:
               Resource:
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+
             - Sid: AllowS3ReadWrite
               Effect: Allow
               Action:
@@ -118,13 +157,13 @@ Resources:
             Schedule: rate(5 minutes)
             Input: '{"action":"heartbeat"}'
 
-  # --- NEW FUNCTION FOR S3 ---
+  # --- Catch uploads! ---
   S3ResizeFunction:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: python3.13
       BuildProperties:
-        RequirementsFile: requirements.txt   # relative to CodeUri (src/)
+        RequirementsFile: requirements.txt        # relative to CodeUri (src/)
     Properties:
       Runtime: python3.13
       CodeUri: src/
@@ -136,6 +175,7 @@ Resources:
         # Policy to read from the S3 bucket
         - S3ReadPolicy:
             BucketName: !Ref WatchedS3Bucket
+
         # Same DynamoDB policy as the API function
         - Version: '2012-10-17'
           Statement:
@@ -151,6 +191,7 @@ Resources:
               Resource:
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
                 - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+
             - Sid: AllowS3ReadWrite
               Effect: Allow
               Action:
@@ -160,8 +201,7 @@ Resources:
                 - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}"
                 - !Sub "arn:${AWS::Partition}:s3:::${WatchedS3Bucket}/*"
 
-
-  # EventBridge rule - invokes EventConsumerFunction
+  # EventBridge rule - invokes EventConsumerFunction when S3 upload happens
   EventRule:
     Type: AWS::Events::Rule
     Properties:
@@ -191,8 +231,8 @@ Outputs:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
   CustomDomainUrl:
-    Description: Camer base URL
-    Value: "https://app-resize.planttracer.com/"
+    Description: URL Endpoint
+    Value: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
   ResizeFunction:
     Description: Resize Lambda function name (for API)
     Value: !Ref ResizeFunction

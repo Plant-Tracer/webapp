@@ -1,32 +1,16 @@
 """
 tracker_test.py - test the tracker.py module.
 """
-import subprocess
-import pytest
-import sys
-import os
 import logging
-import json
-import tempfile
-import glob
-import base64
-import csv
 import math
-from os.path import abspath, dirname
-import copy
+import os
+import tempfile
 
-import numpy as np
-import cv2
+import pytest
 
-# https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
+from fixtures.local_aws import TEST_CIRCUMNUTATION_PATH, TEST_PLANTMOVIE_PATH
 
-import app.flask_app as flask_app
-import app.tracker as tracker
-
-from app.constants import MIME
-
-# Get the fixtures from user_test
-from fixtures.local_aws import new_movie,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
+from app import tracker
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},

@@ -1,37 +1,28 @@
 """
 Test the various functions in the database involving movie creation.
 """
-
-import sys
-import os
-import uuid
-import logging
-import pytest
-import base64
-import time
 import copy
-import hashlib
-import requests
-import json
-import filetype
+import logging
+import os
 import re
+import uuid
 import urllib
 from urllib.parse import quote
-from os.path import abspath, dirname
 
-from app import odb
+import filetype
+import pytest
+import requests
+
+from fixtures.local_aws import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+
 from app import flask_api
-from app import tracker
-from app import s3_presigned
+from app import odb
 from app import odb_movie_data
-
-from app.odb import API_KEY,MOVIE_ID,USER_ID
-from app.constants import C,E,MIME
+from app import s3_presigned
+from app import tracker
+from app.constants import E, MIME
+from app.odb import API_KEY, MOVIE_ID, USER_ID
 from app.s3_presigned import s3_client
-
-# Get the fixtures from user_test
-from fixtures.local_aws import new_course,new_movie, local_s3, local_ddb, TEST_PLANTMOVIE_PATH, MOVIE_TITLE
-from fixtures.app_client import client
 
 POST_TIMEOUT = 2
 GET_TIMEOUT = 2
@@ -96,7 +87,7 @@ def data_from_redirect(url, the_client):
 ################################################################
 
 # Test for edge cases
-def test_edge_case(new_movie):
+def test_edge_case(new_movie):  # pylint: disable=unused-argument
     with pytest.raises(odb.InvalidMovie_Id):
         odb_movie_data.get_movie_data(movie_id = 3)
     with pytest.raises(ValueError):
@@ -153,7 +144,7 @@ def test_new_movie(client, new_movie):
     assert res['error'] is False
     assert res['metadata']['title'] == movie_title
 
-def test_movie_upload_presigned_post(client, new_course, local_s3):
+def test_movie_upload_presigned_post(client, new_course, local_s3):  # pylint: disable=unused-argument
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
     cfg = copy.copy(new_course)
     api_key = cfg[API_KEY]
@@ -255,9 +246,7 @@ def test_movie_extract1(client, new_movie):
     """Check single frame extarct and error handling"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    user_id = cfg[USER_ID]
 
     # Check for insufficient arguments
     # Should produce http403
@@ -288,7 +277,7 @@ def test_movie_extract1(client, new_movie):
     assert resp.status_code == 302
     # Follow the redirect manually
     redirect_url = resp.headers['Location']
-    redirect_resp = requests.get(redirect_url)
+    redirect_resp = requests.get(redirect_url, timeout=GET_TIMEOUT)
 
     # Get the data
     data = redirect_resp.content
@@ -305,9 +294,7 @@ def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    user_id = cfg[USER_ID]
 
     movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)
     assert is_mp4(movie_data)
@@ -342,17 +329,14 @@ def test_movie_extract2(client, new_movie):
 
     # Now grab the data from each make sure that they are JPEGs.
     for url in [jpeg0_url,jpeg1_url,jpeg2_url]:
-        r = requests.get(url)
+        r = requests.get(url, timeout=GET_TIMEOUT)
         assert is_jpeg(r.content)
 
 
 @pytest.mark.skip(reason='logging disabled')
 def test_log_search_movie(new_movie):
     cfg        = copy.copy(new_movie)
-    api_key    = cfg[API_KEY]
     user_id    = cfg[USER_ID]
-    movie_id   = cfg[MOVIE_ID]
-    movie_title= cfg[MOVIE_TITLE]
 
     #dbreader = get_dbreader()
     #res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))

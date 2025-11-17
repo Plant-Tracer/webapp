@@ -755,11 +755,10 @@ def api_track_movie_queue():
 
     if run_async:
         raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
-    else:
-        logging.debug("calling api_track_movie")
-        api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
-        logging.debug("return from api_track_movie")
-        return jsonify({'error': False, 'message':'Tracking is completed'})
+    logging.debug("calling api_track_movie")
+    api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
+    logging.debug("return from api_track_movie")
+    return jsonify({'error': False, 'message':'Tracking is completed'})
 
     # We return all the trackpoints to the client, although the client currently doesn't use them
 

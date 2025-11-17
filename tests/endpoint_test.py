@@ -59,12 +59,12 @@ def test_api_key(client, new_course):
     logging.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
-    assert r.json['error'] == False
+    assert r.json['error'] is False
     assert r.json['userinfo']['user_name'] == 'Course User'
 
     r = client.post('/api/check-api_key', data={'api_key': 'invalid'})
     assert r.status_code == 403
-    assert r.json['error'] == True
+    assert r.json['error'] is True
 
 def test_api_get_logs(client, new_course):
     api_key = new_course[local_aws.API_KEY]
@@ -136,14 +136,14 @@ def test_upload_movie_data(client, api_key):
                           'movie_data_sha256': movie_data_sha256 })
     logging.debug("r.json=%s",r.json)
     res = r.json
-    assert res['error'] == False
+    assert res['error'] is False
     movie_id = res['movie_id']
 
     # Now delete the movie
     r = client.post('/api/delete-movie', data = {'api_key': api_key,
                   'movie_id': movie_id})
     res = r.json
-    assert res['error'] == False
+    assert res['error'] is False
 
     # Purge the movie (to clean up)
     odb_movie_data.purge_movie(movie_id = movie_id)

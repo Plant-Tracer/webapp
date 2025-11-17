@@ -9,7 +9,7 @@ import os
 import json
 from os.path import join,dirname,abspath
 
-import app.auth as auth
+from app import auth
 from app.constants import C
 from app import mailer
 from app.mailer import SMTP_HOST, SMTP_PORT, SMTP_NO_TLS, SMTP_USERNAME, SMTP_PASSWORD, IMAP_HOST, IMAP_PORT, IMAP_NO_SSL, IMAP_USERNAME, IMAP_PASSWORD
