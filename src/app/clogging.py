@@ -48,8 +48,6 @@ import logging.handlers
 import os
 import os.path
 import socket
-import sys
-import uuid
 import functools
 
 __author__ = "Simson L. Garfinkel"
@@ -70,52 +68,6 @@ MAX_LENGTH = 1000
 # Global state variables. Keep track as to whether or not syslog
 # handler was added and whether or not the basicConfig was setup.
 
-added_syslog = False
-called_basicConfig = False
-
-
-def applicationIdFromEnvironment():
-    return "_".join(['application'] + os.environ['CONTAINER_ID'].split("_")[1:3])
-
-
-FAKE_APPLICATION_ID = 'FAKE_APPLICATION_ID'
-
-
-def applicationId():
-    """Return the Yarn (or local) applicationID.
-    The environment variables are only set if we are running in a Yarn container.
-    """
-    try:
-        import cspark           # pylint: disable=import-outside-toplevel
-    except ImportError:
-        sys.path.append(os.path.dirname(__file__))
-        import cspark           # pylint: disable=import-outside-toplevel
-
-    if not cspark.spark_running():
-        if FAKE_APPLICATION_ID not in os.environ:
-            os.environ[FAKE_APPLICATION_ID] = f"NoYarn-{str(uuid.uuid4())}"
-        return os.environ[FAKE_APPLICATION_ID]
-
-    try:
-        return applicationIdFromEnvironment()
-    except KeyError:
-        pass
-
-    # Perhaps we are running on the head-end. If so, run a Spark job that finds it.
-    try:
-        from pyspark import SparkContext # pylint: disable=import-outside-toplevel
-        sc = SparkContext.getOrCreate()
-        if "local" in sc.getConf().get("spark.master"):
-            return f"local{os.getpid()}"
-        # Note: make sure that the following map does not require access to any existing module.
-        return sc.applicationId
-    except ImportError:
-        pass
-
-    # Application ID cannot be determined.
-    return f"unknown{os.getpid()}"
-
-
 ################################################################
 # Support for ArgumentParser
 
@@ -130,10 +82,9 @@ def add_argument(parser, *, loglevel_default='INFO'):
 def syslog_default_address():
     if os.path.exists(DEVLOG):
         return DEVLOG
-    elif os.path.exists(DEVLOG_MAC):
+    if os.path.exists(DEVLOG_MAC):
         return DEVLOG_MAC
-    else:
-        raise RuntimeError(f"Neither {DEVLOG} nor {DEVLOG_MAC} are present.")
+    raise RuntimeError(f"Neither {DEVLOG} nor {DEVLOG_MAC} are present.")
 
 
 class MaxLengthFormatter(logging.Formatter):

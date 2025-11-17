@@ -1,19 +1,25 @@
 # ===== resize_app Makefile =====
 # lambda-resize is the minimal resize page.
+AWS_PROFILE         ?= planttracer
+AWS_REGION          ?= us-east-1
 STACK           ?= resize-app
 STACK_STAGE     ?= resize-app-stage
-CAPS            ?= CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
-REGION          ?= us-east-1
-PROFILE         ?= planttracer
 PYTHON          = python3.13
 DJLINT_FLAGS ?= --profile=jinja --lint --quiet --ignore J004,J018
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+BUILD_DIR := .aws-sam/build/$(FUNC)
+ZIP_PATH  := .aws-sam/build/$(FUNC).zip
+SRC_TPL   := .aws-sam/build/template.yaml
+PKG_TPL   := packaged.yaml
+
 PRODUCTION_URL="https://app-resize.planttracer.com"
 STAGE_URL="https://app-resize-stage.planttracer.com"
 
 export PYTHONDONTWRITEBYTECODE=1
+export AWS_PROFILE
+export AWS_REGION
 
 .PHONY: install vend-app lint pytest test
 install: .venv/pyvenv.cfg
@@ -24,11 +30,11 @@ install: .venv/pyvenv.cfg
 	npm install -g browser-sync
 
 src/requirements.txt: pyproject.toml Makefile .venv/pyvenv.cfg
-	poetry export -f requirements.txt --output src/requirements.txt
+	poetry export -f requirements.txt --only main --without-hashes --output src/requirements.txt
 
 .PHONY: vend-app
 vend-app: Makefile
-	rsync --verbose --archive ../deploy/app/*.py src/resize_app/src/app/
+	rsync --verbose --archive ../src/app/{odb,schema,constants}.py src/resize_app/src/app/
 
 lint: .venv/pyvenv.cfg
 	make vend-app
@@ -43,8 +49,8 @@ check: .venv/pyvenv.cfg
 
 # AWS Lambda Vend, Build and Deploy (VBD)
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
-	echo make lint
-	echo make vend-app
+	make lint
+	make vend-app
 	sam validate --config-file samconfig.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
 	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml

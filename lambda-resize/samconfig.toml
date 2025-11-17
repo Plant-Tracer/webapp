@@ -10,7 +10,7 @@ confirm_changeset = true
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 disable_rollback = false
 # --- THIS IS THE FIXED LINE ---
-parameter_overrides = "HostedZoneId=\"Z02875141U8JDG1N8N5BO\" CertificateArn=\"\" LogLevel=\"DEBUG\" TablePrefix=\"m1-\""
+parameter_overrides = "UploadBucketName=\"planttracer-prod\" HostedZoneId=\"Z02875141U8JDG1N8N5BO\" CertificateArn=\"\" LogLevel=\"DEBUG\" TablePrefix=\"m1-\""
 #
 image_repositories = []
 template_file = ".aws-sam/build/template.yaml"
