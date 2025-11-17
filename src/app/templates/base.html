@@ -14,7 +14,7 @@
           integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous"/>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />  <!-- possibly remove -->
 
-    <script type="text/javascript" charset="utf8" src="static/jquery.js"></script>
+    <script type="text/javascript" charset="utf8" src="static/utils.js"></script>
     <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
 
     <script>
@@ -153,7 +153,7 @@
       // demo mode: show the 'demo' CSS class and hide the 'nodemo'
       // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
       // if we are in demo mode.
-      $( document ).ready( function() {
+      $(document).ready(function() {
         if (demo_mode) {
           $('.demo').show();
           $('.nodemo').hide();

@@ -2,9 +2,6 @@
 {% extends 'base.html' %}
 
 {% block script %}
-<!-- See https://datatables.net/download/ for info on datatables -->
-<link href="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.css" rel="stylesheet"/>
-<script src="https://cdn.datatables.net/v/dt/dt-1.13.6/datatables.min.js"></script>
 <script type="text/javascript" charset="utf8" src="static/audit.js"></script>
 {% endblock %}
 
@@ -25,6 +22,10 @@
 <h2>Audit Log</h2>
 <i>The audit log shows all actions that are yours or about you. If you are the admin in a course, you see all actions related to the course.</i>
 
-<table id='audit'></table>
+<div id="audit-search-container" style="margin-bottom: 10px;">
+    <input type="text" id="audit-search" placeholder="Search audit log..." style="padding: 5px; width: 300px;"/>
+</div>
+
+<table id='audit' style="width: 100%; border-collapse: collapse;"></table>
 
 {% endblock %}

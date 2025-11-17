@@ -88,7 +88,7 @@
   let params = new URLSearchParams(window.location.search);
 
   // When the document loads, run the trace_movie() functions.
-  $( document ).ready( function() {
+  $(document).ready(function() {
     trace_movie('div#tracer', params.get('movie_id'), api_key);
   });
 

@@ -3,7 +3,6 @@
 /* global api_key, user_primary_course_id */
 /* global API_BASE */
 /* global console,alert */
-/* global $ */
 
 ////////////////////////////////////////////////////////////////
 // page: /users
@@ -38,8 +37,7 @@ function bulk_register_users() {
 }
 
 function bulk_register_setup() {
-    let register_emails_button = $("#register-emails-button")
-    register_emails_button.on('click', () => {bulk_register_users();});
+    $('#register-emails-button').on('click', () => {bulk_register_users();});
 }
 
 // export {}

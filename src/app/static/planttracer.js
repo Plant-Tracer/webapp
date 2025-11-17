@@ -33,8 +33,8 @@ if (typeof Audio !== 'undefined') {
 ////////////////////////////////////////////////////////////////
 // For the demonstration page
 function add_func() {
-    let a = parseFloat($('#a').val());
-    let b = parseFloat($('#b').val());
+    const a = parseFloat($('#a').val());
+    const b = parseFloat($('#b').val());
     $('#sum').html( a + b );
 }
 
@@ -143,7 +143,7 @@ async function upload_movie_post(movie_title, description, movieFile)
     formData.append("title",       movie_title);
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
-    formData.append("movie_data_length",  movieFile.fileSize);
+    formData.append("movie_data_length",  movieFile.size);
     const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
     const obj = await r.json();
     console.log('new-movie obj=',obj);
@@ -174,20 +174,20 @@ async function upload_movie_post(movie_title, description, movieFile)
         }
     } catch(e) {
         $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
-        return;
+            return;
     }
     // Movie was uploaded! Clear the form and show the first frame
 
-    $('#upload_message').text('Movie uploaded.'); // .text() for <div>s.
-    $('#movie-title').val('');                    // .val() for fields
+    $('#upload_message').text('Movie uploaded.');
+    $('#movie-title').val('');
     $('#movie-description').val('');
     $('#movie-file').val('');
 
     const track_movie = `/analyze?movie_id=${movie_id}`;
-    $('#uploaded_movie_title').text(movie_title);        // display the movie title
-    $('#movie_id').text(movie_id);                       // display the movie_id
-    $('#image-preview').attr('src',first_frame_url(movie_id));          // display the first frame
-    $('#track_movie_link').attr('href',track_movie);
+    $('#uploaded_movie_title').text(movie_title);
+    $('#movie_id').text(movie_id);
+    $('#image-preview').attr('src', first_frame_url(movie_id));
+    $('#track_movie_link').attr('href', track_movie);
 
     // Clear the movie uploaded
     $('#upload-preview').show();
@@ -200,7 +200,8 @@ function upload_movie()
 {
     const movie_title = $('#movie-title').val();
     const description = $('#movie-description').val();
-    const movieFile   = $('#movie-file').prop('files')[0];
+    const movieFileInput = $('#movie-file');
+    const movieFile = movieFileInput.prop('files')[0];
 
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -212,11 +213,11 @@ function upload_movie()
         return;
     }
 
-    if (movieFile.fileSize > MAX_FILE_UPLOAD) {
-        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
+    if (movieFile && movieFile.size > MAX_FILE_UPLOAD) {
+        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`;
         return;
     }
-    $('#upload_message').html(`Uploading movie ...`);
+    $('#upload_message').html(`Uploading movie ...`;
 
     upload_movie_post(movie_title, description, movieFile);
 }
@@ -251,7 +252,7 @@ async function rotate_movie() {
     }
     const m1 = get_movie_metadata(movie_id);
     console.log("New metadata:",m1);
-    $('#image-preview').attr('src',first_frame_url(movie_id));          // reload the first frame
+    $('#image-preview').attr('src', first_frame_url(movie_id));
 }
 
 function purge_movie() {
@@ -273,7 +274,7 @@ function play_clicked( e ) {
     const movie_id = e.getAttribute('x-movie_id');
     console.log('play_clicked=',e,'movie_id=',movie_id);
     const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
-    const rowid    = e.getAttribute('x-rowid'); // so we can make it visible
+    const rowid = e.getAttribute('x-rowid');
     $(`#tr-${rowid}`).show();
     const td = $(`#td-${rowid}`);
 
@@ -283,20 +284,15 @@ function play_clicked( e ) {
     td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
             `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
     td.show();
-    const video = $(`#video-${rowid}`).show();
-    const vid   = video.attr('id');
-    //console.log('url=',url);
-    //console.log('rowid=',rowid,'movie_id=',movie_id,'tr=',tr,'td=',td,'video=',video,'vid=',vid);
-    //video.attr('src',url);
-    //video.html(``);
+    const video = $(`#video-${rowid}`);
+    const vid = video.prop('id');
     console.log('video=',video);
-    document.getElementById( vid ).play();
+    video.get(0).play();
 }
 
 function hide_clicked( e ) {
     let rowid = e.getAttribute('x-rowid');
-    let video = $(`#video-${rowid}`);
-    video.hide();
+    $(`#video-${rowid}`).hide();
     $(`#tr-${rowid}`).hide();
     $(`#td-${rowid}`).hide();
 }
@@ -323,7 +319,7 @@ function set_property(user_id, movie_id, property, value)
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){
-                $('#message').html('error: '+data.message);
+                $('#message').html('error: '+data.message;
             } else {
                 list_ready_function();
             }
@@ -348,7 +344,7 @@ function row_pencil_clicked( e ) {
     console.log('row_pencil_clicked e=',e);
     const target = e.getAttribute('x-target-id'); // name of the target
     console.log('target=',target);
-    const t = document.getElementById(target);       // element of the target
+    const t = $(target).get(0);       // element of the target
     console.log('t=',t);
     const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
@@ -429,7 +425,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-    function movies_fill_div( div, which, mlist) {
+            function movies_fill_div( divSelector, which, mlist) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -572,16 +568,19 @@ function list_movies_data( movies ) {
 
         h += "</tbody>";
         h += "</table>";
-        div.html(h);
+        const divElement = $(divSelector);
+        if (divElement) {
+            divElement.innerHTML = h;
+        }
     }
     // Create the four tables
-    movies_fill_div( $('#your-published-movies'),
+    movies_fill_div( '#your-published-movies',
                      PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)));
-    movies_fill_div( $('#your-unpublished-movies'),
+    movies_fill_div( '#your-unpublished-movies',
                      UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
-    movies_fill_div( $('#course-movies'),
+    movies_fill_div( '#course-movies',
                          COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
-    movies_fill_div( $('#your-deleted-movies'),
+    movies_fill_div( '#your-deleted-movies',
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
 }
