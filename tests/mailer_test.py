@@ -6,25 +6,21 @@ TODO: Test with real mail server when running on Dreamhost?
 """
 
 
-from jinja2.nativetypes import NativeEnvironment
 import time
-import sys
-import os
 import uuid
 import logging
-import pytest
-import configparser
-import threading
 import copy
 
 from os.path import abspath, dirname, join
 
-from fixtures.localmail_config import mailer_config
-from fixtures.app_client import client
-from fixtures.local_aws import local_ddb,local_s3,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
-
+import pytest
+from jinja2.nativetypes import NativeEnvironment
 from app import odb
 from app import mailer
+
+from .fixtures.localmail_config import mailer_config
+from .fixtures.app_client import client
+from .fixtures.local_aws import local_ddb,local_s3,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
 
 
 MSG = """to: {{ to_addrs }}
@@ -58,13 +54,13 @@ def test_send_message(mailer_config):
 
     # Now let's see if the message got delivered evey 100 msec and then delete it
     # Wait for up to 5 seconds
-    def cb(num, M):
+    def callback(num, M):
         if nonce in M['subject']:
             return mailer.DELETE
 
     imap_config = mailer_config['imap']
     for i in range(50):
-        deleted = mailer.imap_inbox_scan(imap_config, cb)
+        deleted = mailer.imap_inbox_scan(imap_config, callback)
         if deleted > 0:
             break
 
@@ -76,10 +72,10 @@ def test_send_message(mailer_config):
 
 #@pytest.mark.skip(reason="changing authentication")
 def test_register_email(client, mailer_config,new_course):
+    """Some tests of the email registration software in db"""
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
 
-    """Some tests of the email registration software in db"""
     with pytest.raises(odb.InvalidUser_Email):
         odb.register_email(email='invalid-email', user_name='valid-name', course_key=course_key)
 
@@ -100,7 +96,7 @@ def test_register_email(client, mailer_config,new_course):
     try:
         user_id = response.json['user_id']
     except KeyError as e:
-        raise ValueError(f"/api/register response {response.json} is invalid")
+        raise ValueError(f"/api/register response {response.json} is invalid") from e
 
     # TODO: verify if registration mail appeared
     # Now delete the user

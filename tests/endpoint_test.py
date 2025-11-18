@@ -3,33 +3,27 @@
 """
 
 import logging
-import subprocess
-import copy
 import sys
 import os
-from os.path import dirname, abspath
 import glob
 import re
 import time
-import json
 import base64
-from urllib3.util import Retry
-import uuid
 
-import pytest
+from urllib3.util import Retry
 
 from app import odb
 from app import odb_movie_data
 from app import s3_presigned
 from app.odb import DDBO,is_api_key
-from app.paths import TEST_DIR, STANDALONE_PATH, TEST_MOVIE_FILENAME
-from app.constants import C,E,__version__,GET,POST,GET_POST
+from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
+from app.constants import __version__
 
-from fixtures import local_aws
-from fixtures.local_aws import ADMIN_ID, ADMIN_EMAIL
-from fixtures.app_client import client
-from fixtures.localmail_config import mailer_config
-from fixtures.local_aws import local_ddb, local_s3, new_course, api_key
+from .fixtures import local_aws
+from .fixtures.local_aws import ADMIN_ID, ADMIN_EMAIL
+from .fixtures.app_client import client                     # pylint: disable=unused-import
+from .fixtures.localmail_config import mailer_config        # pylint: disable=unused-import
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key # pylint: disable=unused-import
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
@@ -59,12 +53,12 @@ def test_api_key(client, new_course):
     logging.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
-    assert r.json['error'] == False
+    assert r.json['error'] is False
     assert r.json['userinfo']['user_name'] == 'Course User'
 
     r = client.post('/api/check-api_key', data={'api_key': 'invalid'})
     assert r.status_code == 403
-    assert r.json['error'] == True
+    assert r.json['error'] is True
 
 def test_api_get_logs(client, new_course):
     api_key = new_course[local_aws.API_KEY]
@@ -88,7 +82,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     ddbo = DDBO()
     email_address = 'testuser@example.com'
     course_id = new_course[local_aws.COURSE_ID]
-    admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])
+    #admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])
     api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
     assert is_api_key(api_key)
 
@@ -136,14 +130,14 @@ def test_upload_movie_data(client, api_key):
                           'movie_data_sha256': movie_data_sha256 })
     logging.debug("r.json=%s",r.json)
     res = r.json
-    assert res['error'] == False
+    assert res['error'] is False
     movie_id = res['movie_id']
 
     # Now delete the movie
     r = client.post('/api/delete-movie', data = {'api_key': api_key,
                   'movie_id': movie_id})
     res = r.json
-    assert res['error'] == False
+    assert res['error'] is False
 
     # Purge the movie (to clean up)
     odb_movie_data.purge_movie(movie_id = movie_id)

@@ -79,7 +79,8 @@ disable = [
     "redefined-outer-name",
     "unused-argument",
     "invalid-name",
-    "too-many-locals"
+    "too-many-locals",
+    "fixme"
 ]
 
 [tool.pylint.design]

@@ -1,7 +1,5 @@
-import pytest
 import logging
-import sys
-from os.path import dirname,abspath
+import pytest
 
 from app.constants import E
 from app.gravitropism import calculate_results_gravitropism
@@ -23,10 +21,10 @@ logging.basicConfig(level=logging.INFO)
     (3, 4, 0, 1, 2, {'distance': pytest.approx(4.24, 0.01), 'rate': pytest.approx(
         2.12, 0.01), 'angle': pytest.approx(-135.0, 0.1)})
 ])
+
+# pylint: disable=too-many-positional-arguments
 def test_calculate_two_points(x1, y1, x2, y2, time_elapsed, expected_results):
-
     results = calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed)
-
     assert results == expected_results
 
 

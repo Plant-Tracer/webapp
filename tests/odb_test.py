@@ -1,10 +1,10 @@
 import uuid
-import boto3
 import os
 import time
 import json
 from decimal import Decimal
 
+import boto3
 from botocore.exceptions import ClientError,ParamValidationError
 
 import pytest
@@ -13,7 +13,7 @@ from app import odb
 from app.odb import DDBO,UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
 from app.constants import MIME,C
 
-from fixtures.local_aws import local_ddb
+from .fixtures.local_aws import local_ddb # pylint: disable=unused-import
 
 MYDIR = os.path.dirname(__file__)
 
@@ -53,7 +53,6 @@ TEST_ADMIN_DATA = {
     'user_name': 'Admin Firstname Lastname',
     'created': int(time.time()),
     'enabled': 1,
-    'courses' : [],
     'admin_for_courses': [TEST_COURSE_ID],
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
@@ -88,6 +87,7 @@ TEST_MOVIE_FRAME_DATA = {
 }
 
 
+# pylint: disable=too-many-statements
 def test_odb(local_ddb):
     ddbo = local_ddb
     start_time = int(time.time())
@@ -145,7 +145,7 @@ def test_odb(local_ddb):
     # Delete the API key
     ddbo.del_api_key(api_key)
     a3   = ddbo.get_api_key_dict(api_key)
-    assert a3 == None
+    assert a3 is None
 
     # rename the user
     new_email = TEST_USER_EMAIL+"-new"
