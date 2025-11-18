@@ -308,6 +308,8 @@ make-local-bucket:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
+	which pipx || sudo apt install -y pipx
+	pipx install poetry --force
 	which aws || sudo snap  install aws-cli --classic
 	which chromium || sudo apt-get install -y chromium-browser
 	which curl || sudo apt install curl
@@ -315,7 +317,6 @@ install-ubuntu:
 	which lsof || sudo apt-get install -y lsof
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm
-	which poetry || curl -sSL https://install.python-poetry.org | python3 -
 	which zip || sudo apt install zip
 	npm ci
 	make $(REQ)
