@@ -16,22 +16,16 @@
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
-const RULER_MARKER_COLOR = 'orange';
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const ENGINE = 'CV2';
-const ENGINE_VERSION = '1.0';
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
 const TRACKING_POLL_MSEC=1000;
 const RETRACK_MOVIE='Retrace movie';
 const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
-var div_id_counter  = 0;
-var div_template = '';          // will be set with the div template
 
-import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.mjs";
+import { CanvasController, WebImage, Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
 
@@ -102,7 +96,7 @@ class TracerController extends MovieController {
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
         this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        this.rotate_button.prop('disabled',false);
+        this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         if (this.last_tracked_frame > 0 ){
@@ -119,22 +113,22 @@ class TracerController extends MovieController {
         // First see if marker name is too short
         if (val.length < MIN_MARKER_NAME_LEN) {
             this.add_marker_status.text("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
-            this.add_marker_button.prop('disabled',true);
+            this.add_marker_button.prop(DISABLED,true);
             return;
         } else {
             this.add_marker_status.text("");
-            this.add_marker_button.prop('disabled',false);
+            this.add_marker_button.prop(DISABLED,false);
         }
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
             if(this.objects[i].name == val){
                 this.add_marker_status.text("That name is in use, choose another.");
-                this.add_marker_button.prop('disabled',true);
+                this.add_marker_button.prop(DISABLED,true);
                 return;
             }
         }
         this.add_marker_status.text('');
-        this.add_marker_button.prop('disabled',false);
+        this.add_marker_button.prop(DISABLED,false);
     }
 
     // new marker added
@@ -151,7 +145,7 @@ class TracerController extends MovieController {
         this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
         this.create_marker_table(); // redraw table
         // Finally enable the track-to-end button
-        this.track_button.prop('disabled',false);
+        this.track_button.prop(DISABLED,false);
     }
 
     // TODO: refactor to eliminate redundancy this.graphdata.calc_scale()
@@ -224,7 +218,7 @@ class TracerController extends MovieController {
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
         if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
-            this.track_button.prop('disabled',false); // enable the button if track point is moved
+            this.track_button.prop(DISABLED,false); // enable the button if track point is moved
         }
     }
 
@@ -288,7 +282,7 @@ class TracerController extends MovieController {
         // Ask the server to track from this frame to the end of the movie.
         // If successfull, set up a status worker to poll
         this.tracking_status.text("Asking server to track movie...");
-        this.track_button.prop('disabled',true); // disable it until tracking is finished
+        this.track_button.prop(DISABLED,true); // disable it until tracking is finished
 
         const params = {
             api_key: this.api_key,
@@ -303,7 +297,7 @@ class TracerController extends MovieController {
         $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
             if(data.error){
                 alert(data.message);
-                this.track_button.prop('disabled',false); // re-enable
+                this.track_button.prop(DISABLED,false); // re-enable
                 this.tracking=false;
                 this.set_movie_control_buttons();
             } else {
@@ -347,11 +341,11 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller + ' input').prop('disabled',true); // disable all the inputs
-            this.rotate_button.prop('disabled',true);
+            $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
+            this.rotate_button.prop(DISABLED,true);
             return;
         }
-        this.rotate_button.prop('disabled',false);
+        this.rotate_button.prop(DISABLED,false);
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
@@ -396,14 +390,14 @@ class TracerController extends MovieController {
         this.download_button.show();
         // change from 'track movie' to 'Retrack movie' and re-enable it
         $(this.div_selector + ' input.track_button').val( RETRACK_MOVIE );
-        this.track_button.prop('disabled',false);
+        this.track_button.prop(DISABLED,false);
         // We do not need to redraw, because the frame hasn't changed
         */
     }
 
     rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
-        this.rotate_button.prop('disabled',true);
+        this.rotate_button.prop(DISABLED,true);
         $('#firsth2').html(`Asking server to rotate movie 90º counter-clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
@@ -439,7 +433,7 @@ function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_
                    'markers':DEFAULT_MARKERS }];
     cc.load_movie(frames);
     cc.create_marker_table();
-    cc.track_button.prop('disabled',true); // disable it until we have a marker added.
+    cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
@@ -458,7 +452,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
-    cc.track_button.prop('disabled',false); // We have markers, so allow tracking from beginning.
+    cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
     if (movie_frames.length > 0 ){
         cc.track_button.val( RETRACK_MOVIE );
         cc.download_button.show();

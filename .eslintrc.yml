@@ -5,6 +5,8 @@ env:
 
 extends: eslint:recommended
 
+ignorePatterns: ["unzipit-worker.module.js"]
+
 parserOptions:
   ecmaVersion: latest
 
