@@ -8,6 +8,8 @@
 /*global MAX_FILE_UPLOAD */
 /*global demo_mode */
 
+
+
 // special buttons
 const PUBLISH_BUTTON='PUBLISH';
 const UNPUBLISH_BUTTON='UNPUBLISH';
@@ -214,7 +216,7 @@ function upload_movie()
     }
 
     if (movieFile && movieFile.size > MAX_FILE_UPLOAD) {
-        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`;
+        $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
     $('#upload_message').html(`Uploading movie ...`;

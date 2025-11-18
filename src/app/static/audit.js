@@ -1,6 +1,5 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global api_key */
 
 ////////////////////////////////////////////////////////////////
 // page: /audit
@@ -12,7 +11,7 @@ let filteredLogs = [];
 function createTableHeader(table, columns) {
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    
+
     columns.forEach(column => {
         const th = document.createElement('th');
         th.textContent = column;
@@ -24,7 +23,7 @@ function createTableHeader(table, columns) {
         th.addEventListener('click', () => sortTable(column));
         headerRow.appendChild(th);
     });
-    
+
     thead.appendChild(headerRow);
     table.appendChild(thead);
 }
@@ -35,9 +34,9 @@ function createTableBody(table, logs, columns) {
     if (existingTbody) {
         existingTbody.remove();
     }
-    
+
     const tbody = document.createElement('tbody');
-    
+
     if (logs.length === 0) {
         const row = document.createElement('tr');
         const cell = document.createElement('td');
@@ -60,7 +59,7 @@ function createTableBody(table, logs, columns) {
             tbody.appendChild(row);
         });
     }
-    
+
     table.appendChild(tbody);
 }
 
@@ -74,28 +73,28 @@ function sortTable(column) {
         sortColumn = column;
         sortDirection = 'asc';
     }
-    
+
     filteredLogs.sort((a, b) => {
         const aVal = a[column];
         const bVal = b[column];
-        
+
         if (aVal === null || aVal === undefined) return 1;
         if (bVal === null || bVal === undefined) return -1;
-        
+
         if (typeof aVal === 'number' && typeof bVal === 'number') {
             return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
-        
+
         const aStr = String(aVal).toLowerCase();
         const bStr = String(bVal).toLowerCase();
-        
+
         if (sortDirection === 'asc') {
             return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
         } else {
             return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
         }
     });
-    
+
     const table = $('#audit').get(0);
     const columns = Object.keys(allLogs[0] || {});
     createTableBody(table, filteredLogs, columns);
@@ -108,12 +107,12 @@ function filterTable(searchText) {
         const lowerSearch = searchText.toLowerCase();
         filteredLogs = allLogs.filter(log => {
             return Object.values(log).some(val => {
-                return val !== null && val !== undefined && 
+                return val !== null && val !== undefined &&
                        String(val).toLowerCase().includes(lowerSearch);
             });
         });
     }
-    
+
     const table = $('#audit').get(0);
     const columns = Object.keys(allLogs[0] || {});
     createTableBody(table, filteredLogs, columns);
@@ -129,30 +128,30 @@ function build_audit_table() {
                 $('#message').html('error: ' + data.message);
                 return;
             }
-            
+
             if (!data.logs || data.logs.length === 0) {
                 $('#audit').html('<tbody><tr><td>No logs available</td></tr></tbody>');
                 return;
             }
-            
+
             allLogs = data.logs;
             filteredLogs = [...allLogs];
-            
+
             const table = $('#audit').get(0);
             if (!table) return;
-            
+
             // Clear existing table
             table.innerHTML = '';
-            
+
             // Get column names from first log entry
             const columns = Object.keys(allLogs[0]);
-            
+
             // Create table header
             createTableHeader(table, columns);
-            
+
             // Create table body with data
             createTableBody(table, filteredLogs, columns);
-            
+
             // Set up search functionality
             $('#audit-search').on('input', (e) => {
                 filterTable(e.target.value);

@@ -3,7 +3,6 @@
 //code for /analyze
 
 /* eslint-env es6 */
-/* eslint parserOptions: { "sourceType": "module" } */
 
 /* jshint esversion: 8 */
 
@@ -39,14 +38,6 @@ setOptions({
 });
 
 const DISABLED='disabled';
-
-function dict_to_array( dict ) {
-    let array = [];
-    for (const key in dict) {
-        array[parseInt(key)] = dict[key];
-    }
-    return array;
-}
 
 function get_ruler_size(str) {
     const match = str.match(/^Ruler\s*(\d+)mm$/);
@@ -373,12 +364,19 @@ class TracerController extends MovieController {
     }
 
     /** movie is tracked - display the results */
-    movie_tracked(data) {
-
+    movie_tracked(_data) {
         // This should work. but it is not. So just force a reload until I can figure out what's wrong.
         location.reload(true);
 
         /***
+
+        function dict_to_array( dict ) {
+            let array = [];
+            for (const key in dict) {
+                array[parseInt(key)] = dict[key];
+            }
+            return array;
+        }
 
         this.tracking = false;
         this.tracking_status.text('Movie tracking complete.');
@@ -417,7 +415,7 @@ class TracerController extends MovieController {
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
 var cc;
-function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
+function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
         if (demo_mode) {
@@ -442,7 +440,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
-    names.forEach((name, i) => {
+    names.forEach((_name, i) => {
         movie_frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
                      'markers':metadata_frames[i].markers };
     });
@@ -492,7 +490,7 @@ function graph_data(cc, frames) {
     const ctxY = document.getElementById('apex-yChart').getContext('2d');
 
     // Graph for Frame Number or Time vs X Position
-    const xChart = new Chart(ctxX, {
+    const _xChart = new Chart(ctxX, {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -538,7 +536,7 @@ function graph_data(cc, frames) {
     });
 
     // Graph for Y Position
-    const yChart = new Chart(ctxY, {
+    const _yChart = new Chart(ctxY, {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -616,7 +614,7 @@ function graph_data(cc, frames) {
 /* Main function called when HTML page loads.
  * Gets metadata for the movie and all traced frames
  */
-function trace_movie(div_controller, movie_id, api_key) {
+function trace_movie(div_controller, _movie_id, api_key) {
 
     // Wire up the close button on the demo pop-up
     $('#demo-popup-close').on('click',function() {
