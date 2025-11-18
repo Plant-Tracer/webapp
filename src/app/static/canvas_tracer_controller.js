@@ -614,7 +614,7 @@ function graph_data(cc, frames) {
 /* Main function called when HTML page loads.
  * Gets metadata for the movie and all traced frames
  */
-function trace_movie(div_controller, _movie_id, api_key) {
+function trace_movie(div_controller, movie_id, api_key) {
 
     // Wire up the close button on the demo pop-up
     $('#demo-popup-close').on('click',function() {

@@ -1,12 +1,10 @@
 "use strict";
 /* jshint esversion: 8 */
-/*global api_key */
 /*global admin */
 /*global user_id */
 /*global user_primary_course_id */
 /*global planttracer_endpoint */
 /*global MAX_FILE_UPLOAD */
-/*global demo_mode */
 
 
 
@@ -22,12 +20,12 @@ const UPLOAD_TIMEOUT_SECONDS = 20;
 // sounds for buttons
 var SOUNDS = [];
 if (typeof Audio !== 'undefined') {
-  SOUNDS[DELETE_BUTTON] = new Audio('https://planttracer.com/pop-up-something-160353.mp3');
-  SOUNDS[UNDELETE_BUTTON] = new Audio('https://planttracer.com/soap-bubbles-pop-96873.mp3');
+    SOUNDS[DELETE_BUTTON] = new Audio('https://planttracer.com/pop-up-something-160353.mp3');
+    SOUNDS[UNDELETE_BUTTON] = new Audio('https://planttracer.com/soap-bubbles-pop-96873.mp3');
 } else {
-  // Provide fallbacks or empty mock objects for testing
-  SOUNDS[DELETE_BUTTON] = { play: () => {} };
-  SOUNDS[UNDELETE_BUTTON] = { play: () => {} };
+    // Provide fallbacks or empty mock objects for testing
+    SOUNDS[DELETE_BUTTON] = { play: () => {} };
+    SOUNDS[UNDELETE_BUTTON] = { play: () => {} };
 }
 
 
@@ -176,7 +174,8 @@ async function upload_movie_post(movie_title, description, movieFile)
         }
     } catch(e) {
         $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
-            return;
+        console.log("error: ",e);
+        return;
     }
     // Movie was uploaded! Clear the form and show the first frame
 
@@ -219,7 +218,7 @@ function upload_movie()
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
-    $('#upload_message').html(`Uploading movie ...`;
+    $('#upload_message').html(`Uploading movie ...`);
 
     upload_movie_post(movie_title, description, movieFile);
 }
@@ -288,7 +287,7 @@ function play_clicked( e ) {
     td.show();
     const video = $(`#video-${rowid}`);
     const vid = video.prop('id');
-    console.log('video=',video);
+    console.log('video=',video,"vid=",vid);
     video.get(0).play();
 }
 
@@ -321,7 +320,7 @@ function set_property(user_id, movie_id, property, value)
         .then((response) => response.json())
         .then((data) => {
             if (data.error!=false){
-                $('#message').html('error: '+data.message;
+                $('#message').html('error: '+data.message);
             } else {
                 list_ready_function();
             }
@@ -427,7 +426,7 @@ function list_movies_data( movies ) {
 
     // movies_fill_div() - creates the
     // This fills in the given table with a given list
-            function movies_fill_div( divSelector, which, mlist) {
+    function movies_fill_div( divSelector, which, mlist) {
         // Top of table
         let h = "<table>";
         if (mlist.length > 0 ){
@@ -581,7 +580,7 @@ function list_movies_data( movies ) {
     movies_fill_div( '#your-unpublished-movies',
                      UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
     movies_fill_div( '#course-movies',
-                         COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
+                     COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
     movies_fill_div( '#your-deleted-movies',
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
     $('.movie_player').hide();
@@ -666,6 +665,15 @@ function list_users()
             list_users_data( data.users, course_array);
         });
 }
+
+window.helpers = {
+    upload_movie,
+    rotate_movie,
+    play_clicked,
+    hide_clicked,
+    analyze_clicked,
+    row_pencil_clicked,
+    action_button_clicked};
 
 // Wire up whatever happens to be present
 // audit, list and upload are wired with their own ready functions
