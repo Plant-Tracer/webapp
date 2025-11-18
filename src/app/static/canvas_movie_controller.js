@@ -12,7 +12,7 @@
 
 const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
 
-import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.mjs";
+import { CanvasController, WebImage, Text } from "./canvas_controller.mjs";
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
@@ -133,6 +133,7 @@ class MovieController extends CanvasController {
 
     // override this in your subclass to add things that annotate the movie.
     add_frame_objects( frame ){
+        console.log(`add_frame_objects(${frame})`);
     }
 
     /** play is using for playing (delta=+1) and reversing (delta=-1).

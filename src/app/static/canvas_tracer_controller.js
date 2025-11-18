@@ -6,8 +6,6 @@
 /* eslint parserOptions: { "sourceType": "module" } */
 
 /* jshint esversion: 8 */
-/*global api_key,movie_id,API_BASE,STATIC_BASE,URL */
-/*global console,alert */
 
 /*
  * Tracer Controller:
@@ -25,7 +23,7 @@ const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
 
-import { CanvasController, WebImage, Line } from "./canvas_controller.mjs";
+import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.js';
 

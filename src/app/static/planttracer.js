@@ -675,5 +675,20 @@ $( document ).ready( function() {
 });
 
 if (typeof module != 'undefined'){
-module.exports = {list_movies_data, list_users_data, register_func, upload_movie_post, resend_func, check_upload_metadata, row_checkbox_clicked, computeSHA256, add_func, first_frame_url, purge_movie, upload_ready_function, list_users, set_property}
+    module.exports = {
+        add_func,
+        check_upload_metadata,
+        computeSHA256,
+        first_frame_url,
+        list_movies_data,
+        list_users,
+        list_users_data,
+        purge_movie,
+        register_func,
+        resend_func,
+        row_checkbox_clicked,
+        set_property,
+        upload_movie_post,
+        upload_ready_function
+    }
 }

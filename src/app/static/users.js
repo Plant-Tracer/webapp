@@ -1,8 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global api_key, user_primary_course_id */
-/* global API_BASE */
-/* global console,alert */
+/* global user_primary_course_id */
+
 
 ////////////////////////////////////////////////////////////////
 // page: /users
@@ -27,7 +26,7 @@ function bulk_register_users() {
                 $('#message').html('error: '+ data.message);
                 return;
             } else {
-                $('#message').html(data.message); 
+                $('#message').html(data.message);
             }
         }
     );
