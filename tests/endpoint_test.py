@@ -10,17 +10,17 @@ import re
 import time
 import base64
 
-from urllib3.util import Retry
+#from urllib3.util import Retry
 
 from app import odb
 from app import odb_movie_data
 from app import s3_presigned
-from app.odb import DDBO,is_api_key
+from app.odb import is_api_key
 from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
 from app.constants import __version__
 
 from .fixtures import local_aws
-from .fixtures.local_aws import ADMIN_ID, ADMIN_EMAIL
+from .fixtures.local_aws import ADMIN_EMAIL
 from .fixtures.app_client import client                     # pylint: disable=unused-import
 from .fixtures.localmail_config import mailer_config        # pylint: disable=unused-import
 from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key # pylint: disable=unused-import
@@ -79,7 +79,7 @@ def test_api_get_logs(client, new_course):
 def test_bulk_register_success(client, new_course, mailer_config):
     """This tests the bulk-register api happy path when given a list of 1 email addresses
     """
-    ddbo = DDBO()
+    #ddbo = DDBO()
     email_address = 'testuser@example.com'
     course_id = new_course[local_aws.COURSE_ID]
     #admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])

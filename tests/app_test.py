@@ -10,18 +10,17 @@ import uuid
 import xml.etree.ElementTree
 import pytest
 
-from fixtures.local_aws import local_ddb, local_s3, new_course, new_movie, api_key # pytest: disable=unused-import
-from fixtures.app_client import client  # pytest: disable=unused-import
-
-from app.paths import STATIC_DIR,TEST_DATA_DIR
+from app.paths import STATIC_DIR
 from app import odb
 from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
+from app.odb import VERSION, API_KEY, MOVIE_ID
 
-from conftest import logger
+from .fixtures.local_aws import local_ddb, local_s3, new_course, new_movie, api_key # pylint: disable=unused-import
+from .fixtures.app_client import client  # pylint: disable=unused-import
+from .conftest import logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -108,7 +107,7 @@ def test_templates(client,new_course):
             logger.error("url=%s error=%s",url,e)
             dump_lines(html)
             invalid_fname = '/tmp/invalid-' + str(uuid.uuid4()) + '.html'
-            logger.error(f"invalid html written to %s",invalid_fname)
+            logger.error("invalid html written to %s",invalid_fname)
             with open( invalid_fname,"w") as f:
                 f.write(html)
             try:

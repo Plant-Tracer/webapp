@@ -11,16 +11,14 @@ import uuid
 import logging
 import copy
 
-from os.path import abspath, dirname, join
-
 import pytest
 from jinja2.nativetypes import NativeEnvironment
 from app import odb
 from app import mailer
 
-from .fixtures.localmail_config import mailer_config
-from .fixtures.app_client import client
-from .fixtures.local_aws import local_ddb,local_s3,new_course,MOVIE_ID,MOVIE_TITLE,API_KEY,COURSE_KEY
+from .fixtures.localmail_config import mailer_config # pylint: disable=unused-import
+from .fixtures.app_client import client              # pylint: disable=unused-import
+from .fixtures.local_aws import new_course,COURSE_KEY # pylint: disable=unused-import
 
 
 MSG = """to: {{ to_addrs }}
@@ -57,6 +55,7 @@ def test_send_message(mailer_config):
     def callback(num, M):
         if nonce in M['subject']:
             return mailer.DELETE
+        return None
 
     imap_config = mailer_config['imap']
     for i in range(50):

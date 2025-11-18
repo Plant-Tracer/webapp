@@ -12,8 +12,7 @@ import logging
 
 from gunicorn.app.wsgiapp import run
 
-
-from deploy.app import clogging
+from src.app import clogging
 
 def main():
     parser = argparse.ArgumentParser()
