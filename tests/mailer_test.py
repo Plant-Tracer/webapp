@@ -18,7 +18,7 @@ from app import mailer
 
 from .fixtures.localmail_config import mailer_config # pylint: disable=unused-import
 from .fixtures.app_client import client              # pylint: disable=unused-import
-from .fixtures.local_aws import new_course,COURSE_KEY # pylint: disable=unused-import
+from .fixtures.local_aws import new_course,COURSE_KEY,local_ddb,local_s3 # pylint: disable=unused-import
 
 
 MSG = """to: {{ to_addrs }}
