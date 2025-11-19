@@ -24,7 +24,7 @@ var cell_id_counter = 0;
 
 import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
-import { unzip, setOptions } from './unzipit.module.js';
+import { unzip, setOptions } from './unzipit.module.mjs';
 
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
@@ -33,7 +33,7 @@ const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
 
 // NOTE ./static is needed below but not above!
 setOptions({
-  workerURL: './static/unzipit-worker.module.js',
+  workerURL: './static/unzipit-worker.module.mjs',
   numWorkers: 2,
 });
 
