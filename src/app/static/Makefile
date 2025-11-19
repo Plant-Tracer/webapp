@@ -1,2 +1,2 @@
 eslint:
-	npx eslint *.js
+	npx eslint --config eslint.config *.js
