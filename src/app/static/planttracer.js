@@ -569,7 +569,7 @@ function list_movies_data( movies ) {
 
         h += "</tbody>";
         h += "</table>";
-        const divElement = $(divSelector);
+        const divElement = document.querySelector(divSelector);
         if (divElement) {
             divElement.innerHTML = h;
         }
@@ -583,7 +583,7 @@ function list_movies_data( movies ) {
                      COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie)));
     movies_fill_div( '#your-deleted-movies',
                      DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
-    $('.movie_player').hide();
+    document.querySelectorAll('.movie_player').forEach(el => el.style.display = 'none');
 }
 
 // Gets the list from the server of every movie we can view and displays it in the HTML element
