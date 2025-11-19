@@ -68,7 +68,7 @@ class MovieStepper {
         this.video.requestVideoFrameCallback( (now, metadata) => {
             this.currentFrameIndex = 0;
             this.video.pause();
-            console.log(`now=${now} metadata=${metadata} pause 1`);
+            console.log("pause 1", "now=", now, "metadata=", metadata);
         });
     }
 
