@@ -19,11 +19,9 @@ from app.odb import is_api_key
 from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
 from app.constants import __version__
 
+# Fixtures are imported in conftest.py
 from .fixtures import local_aws
 from .fixtures.local_aws import ADMIN_EMAIL
-from .fixtures.app_client import client                     # pylint: disable=unused-import
-from .fixtures.localmail_config import mailer_config        # pylint: disable=unused-import
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key # pylint: disable=unused-import
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")

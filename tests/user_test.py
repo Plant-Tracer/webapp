@@ -12,8 +12,8 @@ from app.constants import C
 from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
-from .fixtures.local_aws import ADMIN_EMAIL, local_ddb, local_s3, new_course # pylint: disable=unused-import
-from .fixtures.app_client import client # pylint: disable=unused-import
+# Fixtures are imported in conftest.py
+from .fixtures.local_aws import ADMIN_EMAIL
 
 
 

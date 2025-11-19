@@ -18,9 +18,7 @@ from app.constants import MIME,E,C
 from app.odb import API_KEY,MOVIE_ID
 from app.odb_movie_data import read_object,create_new_movie_frame
 
-# Get the fixtures from user_test
-from .fixtures.app_client import client # pylint: disable=unused-import
-from .fixtures.local_aws import local_ddb,new_course,local_s3  # pylint: disable=unused-import
+# Fixtures are in conftest.py
 from .conftest import logger
 from .movie_test import new_movie # pylint: disable=unused-import
 

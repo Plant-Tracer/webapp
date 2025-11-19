@@ -23,9 +23,8 @@ from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.constants import E,MIME
 from app.s3_presigned import s3_client
 
-# Get the fixtures from user_test
-from .fixtures.local_aws import new_course,new_movie, local_s3, local_ddb, TEST_PLANTMOVIE_PATH, MOVIE_TITLE # pylint: disable=unused-import
-from .fixtures.app_client import client # pylint: disable=unused-import
+# Get constants from fixtures (fixtures themselves are in conftest.py)
+from .fixtures.local_aws import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
 
 from .conftest import logger
 

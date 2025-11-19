@@ -12,8 +12,7 @@ import pytest
 
 from app import tracker
 
-# Get the fixtures from user_test
-from .fixtures.local_aws import new_movie,new_course,local_ddb,local_s3      # pylint: disable=unused-import
+# Get the fixtures from conftest.py - they are auto-discovered by pytest
 from .fixtures.local_aws import TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_PATH
 from .conftest import logger
 

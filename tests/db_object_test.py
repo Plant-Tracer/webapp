@@ -11,7 +11,7 @@ from app import s3_presigned
 from app import odb_movie_data
 from app import odb
 
-from .fixtures.local_aws import local_s3              # pylint: disable=unused-import
+# Fixtures are imported in conftest.py
 
 s3client = boto3.client('s3')
 

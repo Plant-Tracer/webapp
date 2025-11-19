@@ -10,7 +10,7 @@ from app import odb
 from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
 #from app.constants import MIME,C
 
-from .fixtures.local_aws import local_ddb # pylint: disable=unused-import
+# Fixtures are imported in conftest.py
 
 MYDIR = os.path.dirname(__file__)
 
