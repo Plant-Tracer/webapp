@@ -214,7 +214,12 @@ function upload_movie()
         return;
     }
 
-    if (movieFile && movieFile.size > MAX_FILE_UPLOAD) {
+    if (!movieFile) {
+        $('#message').html('<b>Please select a movie file to upload');
+        return;
+    }
+
+    if (movieFile.size > MAX_FILE_UPLOAD) {
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
