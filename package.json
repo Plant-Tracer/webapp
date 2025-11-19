@@ -34,7 +34,7 @@
     ],
     "moduleDirectories": [
       "node_modules",
-      "deploy/app/static"
+      "src/app/static"
     ],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",
