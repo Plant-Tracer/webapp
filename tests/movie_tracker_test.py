@@ -20,7 +20,6 @@ from app.odb_movie_data import read_object,create_new_movie_frame
 
 # Fixtures are in conftest.py
 from .conftest import logger
-from .movie_test import new_movie # pylint: disable=unused-import
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
