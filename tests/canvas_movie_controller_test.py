@@ -26,8 +26,6 @@ class ServerThread(threading.Thread):
     def __init__(self, app, port=8765):
         threading.Thread.__init__(self, daemon=True)
         self.server = make_server('127.0.0.1', port, app)
-        self.ctx = app.app_context()
-        self.ctx.push()
 
     def run(self):
         self.server.serve_forever()
@@ -37,8 +35,11 @@ class ServerThread(threading.Thread):
 
 
 @pytest.fixture(scope="module")
-def live_server():
-    """Start a live Flask server for Selenium tests."""
+def live_server(local_ddb, local_s3):
+    """Start a live Flask server for Selenium tests.
+    
+    Depends on local_ddb and local_s3 fixtures to ensure AWS services are available.
+    """
     app = flask_app.app
     app.config['TESTING'] = True
     
@@ -48,7 +49,7 @@ def live_server():
     server.start()
     
     # Give server time to start
-    time.sleep(1)
+    time.sleep(2)
     
     yield f"http://127.0.0.1:{port}"
     
