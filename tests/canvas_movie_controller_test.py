@@ -87,8 +87,8 @@ def test_canvas_movie_controller_page_load(chrome_driver, live_server):
     2. The canvas element is present
     3. The movie controller is initialized
     """
-    # Navigate to demo_tracer1 which uses canvas_movie_controller.js
-    url = f"{live_server}/demo_tracer1.html"
+    # Navigate to demo_tracer2 which uses canvas_movie_controller.js
+    url = f"{live_server}/demo_tracer2.html"
     
     try:
         chrome_driver.get(url)
@@ -102,9 +102,9 @@ def test_canvas_movie_controller_page_load(chrome_driver, live_server):
         canvas_elements = chrome_driver.find_elements(By.TAG_NAME, "canvas")
         assert len(canvas_elements) > 0, "Canvas element not found on page"
         
-        # Check for JavaScript errors in console
+        # Check for JavaScript errors in console (ignore favicon.ico 404s)
         logs = chrome_driver.get_log('browser')
-        severe_errors = [log for log in logs if log['level'] == 'SEVERE']
+        severe_errors = [log for log in logs if log['level'] == 'SEVERE' and 'favicon.ico' not in log.get('message', '')]
         assert len(severe_errors) == 0, f"JavaScript errors found: {severe_errors}"
         
     except TimeoutException:
@@ -119,7 +119,7 @@ def test_canvas_movie_controller_initialization(chrome_driver, live_server):
     1. The MovieController class is available
     2. The add_frame_objects method exists and can be called
     """
-    url = f"{live_server}/demo_tracer1.html"
+    url = f"{live_server}/demo_tracer2.html"
     
     try:
         chrome_driver.get(url)
@@ -151,7 +151,7 @@ def test_canvas_movie_controller_frame_navigation(chrome_driver, live_server):
     1. Movie control buttons are present
     2. Frame navigation works (if applicable)
     """
-    url = f"{live_server}/demo_tracer1.html"
+    url = f"{live_server}/demo_tracer2.html"
     
     try:
         chrome_driver.get(url)
@@ -174,9 +174,9 @@ def test_canvas_movie_controller_frame_navigation(chrome_driver, live_server):
             if elements:
                 found_controls.append(button_class)
         
-        # Verify no severe JavaScript errors
+        # Verify no severe JavaScript errors (ignore favicon.ico 404s)
         logs = chrome_driver.get_log('browser')
-        severe_errors = [log for log in logs if log['level'] == 'SEVERE']
+        severe_errors = [log for log in logs if log['level'] == 'SEVERE' and 'favicon.ico' not in log.get('message', '')]
         assert len(severe_errors) == 0, f"JavaScript errors found: {severe_errors}"
         
     except TimeoutException:
@@ -189,7 +189,7 @@ def test_canvas_movie_controller_console_logs(chrome_driver, live_server):
     
     This test checks that methods like add_frame_objects() and play() are called.
     """
-    url = f"{live_server}/demo_tracer1.html"
+    url = f"{live_server}/demo_tracer2.html"
     
     try:
         chrome_driver.get(url)
@@ -205,8 +205,8 @@ def test_canvas_movie_controller_console_logs(chrome_driver, live_server):
         # Get all console logs
         logs = chrome_driver.get_log('browser')
         
-        # Verify no severe errors
-        severe_errors = [log for log in logs if log['level'] == 'SEVERE']
+        # Verify no severe errors (ignore favicon.ico 404s)
+        severe_errors = [log for log in logs if log['level'] == 'SEVERE' and 'favicon.ico' not in log.get('message', '')]
         assert len(severe_errors) == 0, f"JavaScript errors found: {severe_errors}"
         
         # Verify page loaded
