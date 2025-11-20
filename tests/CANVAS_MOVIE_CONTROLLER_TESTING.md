@@ -1,10 +1,10 @@
-# Testing canvas_movie_controller.js with Local Server and Chromium
+# Testing canvas_movie_controller.js with Selenium and Chromium
 
-This document describes how to test the `canvas_movie_controller.js` functionality using a local Flask server and Chromium browser.
+This document describes how to test the `canvas_movie_controller.js` functionality using Selenium with Chromium browser.
 
 ## Overview
 
-After removing jQuery from `canvas_movie_controller.js`, it's important to verify that the movie controller still works correctly in a real browser environment. These tests use Selenium with Chromium to automate browser testing.
+After removing jQuery from `canvas_movie_controller.js`, it's important to verify that the movie controller still works correctly in a real browser environment. These tests use Selenium with Chromium to automate browser testing with a live Flask server running in a background thread.
 
 ## Prerequisites
 
@@ -58,7 +58,14 @@ The test suite verifies:
 3. **Movie Controller Initialization**: The MovieController class initializes correctly
 4. **Frame Navigation**: Movie control buttons are present and functional
 5. **JavaScript Errors**: No severe JavaScript errors occur during page load and interaction
-6. **Console Output**: Verifies that methods like `add_frame_objects()` and `play()` are called
+6. **Console Output**: Verifies that methods work without producing severe console errors
+
+## Key Features
+
+- **Automatic Server**: Tests start Flask server in background thread automatically
+- **No Connection Refused**: Uses embedded server, not external localhost connection
+- **Clean Output**: Minimal logging, only shows failures
+- **Graceful Degradation**: Skips tests if Chrome/Chromium not available
 
 ## Test Pages
 
@@ -70,17 +77,13 @@ The tests use the following demo pages:
 
 ## Debugging
 
-### View Console Logs
+### View Browser Console Logs
 
-To see all browser console logs (including `console.log` statements), run with verbose output:
+To see all browser console logs, run with verbose output:
 
 ```bash
-pytest -v tests/canvas_movie_controller_test.py -s --log-cli-level=INFO
+pytest -v tests/canvas_movie_controller_test.py -s
 ```
-
-### Take Screenshots
-
-The integration test automatically saves screenshots to `/tmp/canvas_movie_controller_test.png` for visual verification.
 
 ### Check for JavaScript Errors
 
@@ -100,24 +103,9 @@ sudo apt-get install chromium-browser
 brew install chromium --no-quarantine
 ```
 
-### Server Not Running
-
-If the integration test is skipped because the server isn't running:
-
-1. Make sure DynamoDB Local and Minio are running
-2. Start the Flask server with `make run-local-demo-debug`
-3. Verify the server is accessible at `http://localhost:8080`
-
 ### Port Already in Use
 
-If port 8080 is already in use, you can change the port:
-
-```bash
-# Set a custom port
-LOCAL_HTTP_PORT=8081 make run-local-demo-debug
-```
-
-Then update the test fixture in `canvas_movie_controller_test.py` to use port 8081.
+If port 8765 (used by test server) is already in use, the tests will fail. The port is automatically selected to avoid conflicts with the default development server (8080).
 
 ## CI/CD Integration
 

@@ -8,27 +8,28 @@ This document verifies that comprehensive testing has been implemented for `canv
 
 ## Implementation Summary
 
-✅ **Completed:** Comprehensive testing infrastructure using local server and Chromium browser
+✅ **Completed:** Comprehensive testing infrastructure using embedded Flask server and Chromium browser
 
 ## Testing Infrastructure Components
 
 ### 1. Automated Browser Tests (Selenium + Chromium)
-**File:** `tests/canvas_movie_controller_test.py` (205 lines)
+**File:** `tests/canvas_movie_controller_test.py`
 
 **Coverage:**
 - ✅ Page loading verification
 - ✅ Canvas element initialization
 - ✅ JavaScript error detection (console errors)
 - ✅ Frame navigation controls testing
-- ✅ Integration with local Flask server
-- ✅ Graceful handling when server unavailable (CI/CD friendly)
+- ✅ Embedded Flask server in background thread
+- ✅ Graceful handling when Chrome/Chromium unavailable
+- ✅ Minimal debug output (clean test results)
 
 **Test Functions:**
 ```python
 test_canvas_movie_controller_page_load()        # Basic page load test
 test_canvas_movie_controller_initialization()   # Controller init test
 test_canvas_movie_controller_frame_navigation() # Navigation controls test
-test_canvas_movie_controller_with_running_server() # Full integration test
+test_canvas_movie_controller_console_logs()     # Console output verification
 ```
 
 ### 2. Testing Documentation
@@ -61,7 +62,7 @@ test_canvas_movie_controller_with_running_server() # Full integration test
 - Required methods presence
 - Works without server setup (fast feedback)
 
-## How Tests Verify Local Server + Chromium
+## How Tests Verify Flask Server + Chromium
 
 ### Test Flow
 
@@ -71,9 +72,10 @@ test_canvas_movie_controller_with_running_server() # Full integration test
    - Sets up browser options (no-sandbox, disable-gpu, etc.)
 
 2. **Server Interaction**
-   - Connects to local Flask server at `http://localhost:8080`
-   - Loads demo pages: `/demo/tracer1`, `/demo/tracer2`, `/demo/tracer3`
+   - Starts Flask server in background thread on port 8765
+   - Loads demo pages: `/demo/tracer1`
    - Waits for page load and JavaScript initialization
+   - No external server needed - fully self-contained
 
 3. **Canvas Verification**
    - Checks canvas element exists in DOM
@@ -92,32 +94,19 @@ test_canvas_movie_controller_with_running_server() # Full integration test
 
 ## Running the Tests
 
-### Option 1: Full Integration Test (Recommended)
+### Automated Tests (Recommended)
 
-Terminal 1 - Start services:
+No server setup needed - the tests handle everything automatically:
+
 ```bash
 cd /home/runner/work/webapp/webapp
-make wipe-local
-make make-local-demo
-make run-local-demo-debug
+pytest -v tests/canvas_movie_controller_test.py
 ```
 
-Terminal 2 - Run tests:
-```bash
-cd /home/runner/work/webapp/webapp
-pytest -v tests/canvas_movie_controller_test.py -s
-```
-
-### Option 2: Quick Syntax Validation
+### Quick Syntax Validation
 
 ```bash
 python3 tests/test_canvas_controller_syntax.py
-```
-
-### Option 3: Manual Browser Testing
-
-```bash
-bash tests/manual_browser_test.sh
 ```
 
 ## Test Verification Results
