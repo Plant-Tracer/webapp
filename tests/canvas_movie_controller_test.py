@@ -88,7 +88,7 @@ def test_canvas_movie_controller_page_load(chrome_driver, live_server):
     3. The movie controller is initialized
     """
     # Navigate to demo_tracer1 which uses canvas_movie_controller.js
-    url = f"{live_server}/demo/tracer1"
+    url = f"{live_server}/demo_tracer1.html"
     
     try:
         chrome_driver.get(url)
@@ -119,7 +119,7 @@ def test_canvas_movie_controller_initialization(chrome_driver, live_server):
     1. The MovieController class is available
     2. The add_frame_objects method exists and can be called
     """
-    url = f"{live_server}/demo/tracer1"
+    url = f"{live_server}/demo_tracer1.html"
     
     try:
         chrome_driver.get(url)
@@ -151,7 +151,7 @@ def test_canvas_movie_controller_frame_navigation(chrome_driver, live_server):
     1. Movie control buttons are present
     2. Frame navigation works (if applicable)
     """
-    url = f"{live_server}/demo/tracer1"
+    url = f"{live_server}/demo_tracer1.html"
     
     try:
         chrome_driver.get(url)
@@ -189,7 +189,7 @@ def test_canvas_movie_controller_console_logs(chrome_driver, live_server):
     
     This test checks that methods like add_frame_objects() and play() are called.
     """
-    url = f"{live_server}/demo/tracer1"
+    url = f"{live_server}/demo_tracer1.html"
     
     try:
         chrome_driver.get(url)
