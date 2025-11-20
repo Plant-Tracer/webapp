@@ -1,7 +1,13 @@
 # https://coderefinery.github.io/documentation/gh_workflow/
 name: documentation
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
