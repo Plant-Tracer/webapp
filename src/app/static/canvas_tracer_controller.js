@@ -3,12 +3,8 @@
 //code for /analyze
 
 /* eslint-env es6 */
-/* eslint parserOptions: { "sourceType": "module" } */
 
 /* jshint esversion: 8 */
-/*global api_key,movie_id,API_BASE,STATIC_BASE,URL */
-/*global console,alert */
-/*global $ */
 
 /*
  * Tracer Controller:
@@ -17,24 +13,18 @@
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
-const RULER_MARKER_COLOR = 'orange';
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const ENGINE = 'CV2';
-const ENGINE_VERSION = '1.0';
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-const ADD_MARKER_STATUS_TEXT="Drag each marker to the appropriate place on the image. You can also create additional markers."
 const TRACKING_POLL_MSEC=1000;
 const RETRACK_MOVIE='Retrace movie';
 const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
-var div_id_counter  = 0;
-var div_template = '';          // will be set with the div template
 
-import { CanvasController, CanvasItem, Marker, WebImage, Line } from "./canvas_controller.mjs";
+import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
-import { unzip, setOptions } from './unzipit.module.js';
+import { unzip, setOptions } from './unzipit.module.mjs';
 
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
@@ -43,19 +33,11 @@ const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
 
 // NOTE ./static is needed below but not above!
 setOptions({
-  workerURL: './static/unzipit-worker.module.js',
+  workerURL: './static/unzipit-worker.module.mjs',
   numWorkers: 2,
 });
 
 const DISABLED='disabled';
-
-function dict_to_array( dict ) {
-    let array = [];
-    for (const key in dict) {
-        array[parseInt(key)] = dict[key];
-    }
-    return array;
-}
 
 function get_ruler_size(str) {
     const match = str.match(/^Ruler\s*(\d+)mm$/);
@@ -106,7 +88,6 @@ class TracerController extends MovieController {
         this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
-        this.track_button = $(this.div_selector + " input.track_button");
         if (this.last_tracked_frame > 0 ){
             this.track_button.val( RETRACK_MOVIE );
             this.download_button.show();
@@ -383,12 +364,19 @@ class TracerController extends MovieController {
     }
 
     /** movie is tracked - display the results */
-    movie_tracked(data) {
-
+    movie_tracked(_data) {
         // This should work. but it is not. So just force a reload until I can figure out what's wrong.
         location.reload(true);
 
         /***
+
+        function dict_to_array( dict ) {
+            let array = [];
+            for (const key in dict) {
+                array[parseInt(key)] = dict[key];
+            }
+            return array;
+        }
 
         this.tracking = false;
         this.tracking_status.text('Movie tracking complete.');
@@ -427,7 +415,7 @@ class TracerController extends MovieController {
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
 var cc;
-function trace_movie_one_frame(movie_id, div_controller, movie_metadata, frame0_url, api_key) {
+function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
         if (demo_mode) {
@@ -452,7 +440,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
-    names.forEach((name, i) => {
+    names.forEach((_name, i) => {
         movie_frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
                      'markers':metadata_frames[i].markers };
     });
@@ -466,8 +454,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
         cc.download_button.show();
     }
     if (show_results) {
-        let results_div = document.getElementById("analysis-results");
-        results_div.style.display = "block";
+        $('#analysis-results').show();
         graph_data(cc, movie_frames);
     }
 }
@@ -503,7 +490,7 @@ function graph_data(cc, frames) {
     const ctxY = document.getElementById('apex-yChart').getContext('2d');
 
     // Graph for Frame Number or Time vs X Position
-    const xChart = new Chart(ctxX, {
+    const _xChart = new Chart(ctxX, {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -549,7 +536,7 @@ function graph_data(cc, frames) {
     });
 
     // Graph for Y Position
-    const yChart = new Chart(ctxY, {
+    const _yChart = new Chart(ctxY, {
         type: 'line',
         data: {
             labels: frame_labels,

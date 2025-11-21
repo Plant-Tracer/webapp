@@ -1,32 +1,20 @@
 """
 tracker_test.py - test the tracker.py module.
 """
-import subprocess
-import pytest
-import sys
-import os
-import logging
-import json
-import tempfile
-import glob
-import base64
-import csv
-import math
-from os.path import abspath, dirname
-import copy
 
-import numpy as np
-import cv2
+import os
+import tempfile
+import math
+
+import pytest
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-import app.flask_app as flask_app
-import app.tracker as tracker
+from app import tracker
 
-from app.constants import MIME
-
-# Get the fixtures from user_test
-from fixtures.local_aws import new_movie,new_course,API_KEY,MOVIE_ID,MOVIE_TITLE,USER_ID,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH
+# Get the fixtures from conftest.py - they are auto-discovered by pytest
+from .fixtures.local_aws import TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_PATH
+from .conftest import logger
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},
@@ -62,13 +50,13 @@ def test_track_movie():
         assert os.path.getsize(tf.name)>100
 
     #for tp in trackpoints:
-    #    logging.info("tp=%s",tp)
+    #    logger.info("tp=%s",tp)
 
     # Check the trackpoints
     assert len(trackpoints) == 3 * 296
     EPSILON = 1.0
     def close(tp1,tp2):
-        logging.debug("tp1=%s tp2=%s",tp1,tp2)
+        logger.debug("tp1=%s tp2=%s",tp1,tp2)
         assert tp1['frame_number']==tp2['frame_number']
         assert tp1['label']==tp2['label']
         assert math.fabs(tp1['x']-tp2['x']) <= EPSILON

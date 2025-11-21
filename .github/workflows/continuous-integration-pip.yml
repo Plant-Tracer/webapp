@@ -2,7 +2,17 @@
 # 2025-06-15 - slg - Complete rewrite to avoid MySQL and use DynamoDB and S3 local variants.
 #                    These are automatically configured with install-ubuntu or install-macos
 name: CI (pip)
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+
+# Cancel in-progress runs when a new run is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:

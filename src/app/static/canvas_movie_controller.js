@@ -1,6 +1,5 @@
 "use strict";
 /*jshint esversion: 8 */
-/*global $*/
 
 /**
  * Canvas Movie Controller:
@@ -13,7 +12,7 @@
 
 const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
 
-import { CanvasController, CanvasItem, Marker, WebImage, Text } from "./canvas_controller.mjs";
+import { CanvasController, WebImage, Text } from "./canvas_controller.mjs";
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
@@ -41,15 +40,15 @@ class MovieController extends CanvasController {
         $(div_selector + " input.next_frame").on('click',  () => {this.goto_frame(this.frame_number+1);});
         $(div_selector + " input.prev_frame").on('click',  () => {this.goto_frame(this.frame_number-1);});
         $(div_selector + " input.frame_number_field").on('input', () => {
-            let new_frame = this.frame_number_field[0].value;
+            let new_frame = this.frame_number_field.val();
             if (new_frame=='') {            // turn '' into a "0"
-                this.frame_number_field[0].value='0';
+                this.frame_number_field.val('0');
                 this.frame_number = 0;
             }
             // remove leading 0 from two-digit numbers
             if (new_frame.length == 2 && new_frame[0]=='0') {
                 new_frame = new_frame[1];
-                this.frame_number_field[0].value=new_frame;
+                this.frame_number_field.val(new_frame);
             }
             this.goto_frame( new_frame );
         });
@@ -134,6 +133,7 @@ class MovieController extends CanvasController {
 
     // override this in your subclass to add things that annotate the movie.
     add_frame_objects( frame ){
+        console.log(`add_frame_objects(${frame})`);
     }
 
     /** play is using for playing (delta=+1) and reversing (delta=-1).

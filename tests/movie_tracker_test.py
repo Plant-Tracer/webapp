@@ -12,19 +12,14 @@ import copy
 import filetype
 
 
-# Get the fixtures from user_test
-from fixtures.app_client import client
-from fixtures.local_aws import local_ddb,new_course,TEST_PLANTMOVIE_PATH,TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_ROTATED_PATH,MOVIE_TITLE,local_s3
-
-from conftest import logger
-
 from app import odb
 from app import odb_movie_data
 from app.constants import MIME,E,C
 from app.odb import API_KEY,MOVIE_ID
 from app.odb_movie_data import read_object,create_new_movie_frame
 
-from movie_test import new_movie # pytest: disable=unused-import
+# Fixtures are in conftest.py
+from .conftest import logger
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'

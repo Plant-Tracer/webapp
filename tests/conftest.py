@@ -20,3 +20,8 @@ sys.path.append(APP_DIR)
 
 print("sys.path=",sys.path)
 logger = logging.getLogger(__name__)
+
+# Import fixtures so pytest can discover them
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402
+from .fixtures.localmail_config import mailer_config  # noqa: F401, E402
+from .fixtures.app_client import client  # noqa: F401, E402

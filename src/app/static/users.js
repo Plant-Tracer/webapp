@@ -1,9 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global api_key, user_primary_course_id */
-/* global API_BASE */
-/* global console,alert */
-/* global $ */
+/* global user_primary_course_id */
+
 
 ////////////////////////////////////////////////////////////////
 // page: /users
@@ -28,7 +26,7 @@ function bulk_register_users() {
                 $('#message').html('error: '+ data.message);
                 return;
             } else {
-                $('#message').html(data.message); 
+                $('#message').html(data.message);
             }
         }
     );
@@ -38,8 +36,7 @@ function bulk_register_users() {
 }
 
 function bulk_register_setup() {
-    let register_emails_button = $("#register-emails-button")
-    register_emails_button.on('click', () => {bulk_register_users();});
+    $('#register-emails-button').on('click', () => {bulk_register_users();});
 }
 
 // export {}

@@ -9,7 +9,7 @@ package and the other uses the selenium package directly.
 
 import os
 import logging
-import functools
+#import functools
 
 import pytest
 
