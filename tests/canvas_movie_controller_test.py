@@ -3,79 +3,17 @@ Test canvas_movie_controller.js functionality using Selenium and Chromium.
 
 This test verifies that the canvas movie controller works correctly after jQuery removal,
 by using Flask's test client with Selenium to test in a real browser (Chromium).
+
+The chrome_driver and live_server fixtures are now defined in conftest.py and shared
+across all test files.
 """
 
-import os
 import time
-import threading
 import pytest
-from werkzeug.serving import make_server
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException, TimeoutException
-
-import app.flask_app as flask_app
-
-
-class ServerThread(threading.Thread):
-    """Run Flask server in a background thread for testing."""
-    
-    def __init__(self, app, port=8765):
-        threading.Thread.__init__(self, daemon=True)
-        self.server = make_server('127.0.0.1', port, app)
-
-    def run(self):
-        self.server.serve_forever()
-
-    def shutdown(self):
-        self.server.shutdown()
-
-
-@pytest.fixture(scope="module")
-def live_server(local_ddb, local_s3):
-    """Start a live Flask server for Selenium tests.
-    
-    Depends on local_ddb and local_s3 fixtures to ensure AWS services are available.
-    """
-    app = flask_app.app
-    app.config['TESTING'] = True
-    
-    # Use a different port to avoid conflicts
-    port = 8765
-    server = ServerThread(app, port)
-    server.start()
-    
-    # Give server time to start
-    time.sleep(2)
-    
-    yield f"http://127.0.0.1:{port}"
-    
-    server.shutdown()
-
-
-@pytest.fixture(scope="function")
-def chrome_driver():
-    """Fixture to provide a configured Chrome/Chromium WebDriver."""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    
-    # Set Chrome path if specified in environment
-    if 'CHROME_PATH' in os.environ:
-        options.binary_location = os.environ['CHROME_PATH']
-    
-    try:
-        driver = webdriver.Chrome(options=options)
-        yield driver
-        driver.quit()
-    except WebDriverException as e:
-        pytest.skip(f"Chrome/Chromium not available: {e}")
+from selenium.common.exceptions import TimeoutException
 
 
 def test_canvas_movie_controller_page_load(chrome_driver, live_server):

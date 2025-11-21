@@ -25,6 +25,11 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from app import odb
 from app.odb import MOVIE_ID
 
+# Constants for the test
+DRAG_OFFSET_X = 50  # Pixels to drag right
+DRAG_OFFSET_Y = 30  # Pixels to drag down
+POSITION_TOLERANCE = 10  # Allowed pixel difference for position verification
+
 
 def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_movie):
     """
@@ -127,22 +132,15 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     # Find the canvas element
     canvas = chrome_driver.find_element(By.CSS_SELECTOR, "div#tracer canvas")
 
-    # Calculate the drag offset (drag 50 pixels to the right and 30 pixels down)
-    drag_offset_x = 50
-    drag_offset_y = 30
-
-    # We need to account for the zoom factor (default is 1.0)
-    # The canvas coordinates are at (initial_x, initial_y)
-    # We need to convert to screen coordinates
-
-    # Perform the drag operation
-    # Start at the trackpoint location on the canvas
+    # Perform the drag operation using Selenium ActionChains
+    # This simulates a user clicking, dragging, and releasing a trackpoint
+    # The offsets are relative to the canvas element
     actions = ActionChains(chrome_driver)
 
     # Move to the initial trackpoint position (relative to canvas top-left)
     actions.move_to_element_with_offset(canvas, initial_x, initial_y)
     actions.click_and_hold()
-    actions.move_by_offset(drag_offset_x, drag_offset_y)
+    actions.move_by_offset(DRAG_OFFSET_X, DRAG_OFFSET_Y)
     actions.release()
     actions.perform()
 
@@ -176,13 +174,13 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
                               f"(changed from {initial_x}, {initial_y})")
 
                         # Verify the change is approximately what we expected
-                        expected_x = initial_x + drag_offset_x
-                        expected_y = initial_y + drag_offset_y
+                        expected_x = initial_x + DRAG_OFFSET_X
+                        expected_y = initial_y + DRAG_OFFSET_Y
 
-                        # Allow tolerance of 10 pixels due to rounding and coordinate transformations
-                        assert abs(final_x - expected_x) < 10, \
+                        # Verify within tolerance due to rounding and coordinate transformations
+                        assert abs(final_x - expected_x) < POSITION_TOLERANCE, \
                             f"X coordinate mismatch: expected ~{expected_x}, got {final_x}"
-                        assert abs(final_y - expected_y) < 10, \
+                        assert abs(final_y - expected_y) < POSITION_TOLERANCE, \
                             f"Y coordinate mismatch: expected ~{expected_y}, got {final_y}"
 
                         break
