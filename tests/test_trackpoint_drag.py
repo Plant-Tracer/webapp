@@ -24,7 +24,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from app import odb
-from app.odb import MOVIE_ID, API_KEY, USER_ID
+from app.odb import DDBO, MOVIE_ID, API_KEY, USER_ID
 from tests.fixtures.local_aws import ADMIN_ID
 
 # Suppress verbose logging from urllib3 and selenium
@@ -65,7 +65,8 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     
     # Validate that the API key exists in the database before using it
     # This ensures we're testing with a valid key
-    api_key_dict = odb.get_api_key_dict(api_key)
+    ddbo = DDBO()  # Get the database object instance
+    api_key_dict = ddbo.get_api_key_dict(api_key)
     if not api_key_dict:
         pytest.fail(f"API key {api_key} not found in database. Test fixture may be broken.")
     
