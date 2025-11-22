@@ -71,7 +71,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     except TimeoutException:
         pytest.fail("List page failed to load")
 
-    # Find and click the analyze button for our movie
+    # Verify the movie appears in the list by checking for the analyze button
     # The button has class 'analyze' and x-movie_id attribute
     analyze_button_selector = f"input.analyze[x-movie_id='{movie_id}']"
 
@@ -95,8 +95,11 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         page_source = chrome_driver.page_source
         pytest.fail(f"Analyze button not found for movie {movie_id}. Page has {len(page_source)} chars")
 
-    # Click the analyze button
-    analyze_button.click()
+    # Navigate directly to the analyze page with both movie_id and api_key
+    # This ensures the api_key is available in the browser for AJAX calls
+    # (Clicking the button would navigate without api_key, causing authentication issues)
+    analyze_url = f"{live_server}/analyze?movie_id={movie_id}&api_key={api_key}"
+    chrome_driver.get(analyze_url)
 
     # Wait for the analyze page to load
     try:
