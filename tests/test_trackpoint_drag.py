@@ -23,7 +23,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from app import odb
-from app.odb import MOVIE_ID
+from app.odb import MOVIE_ID, API_KEY
 
 # Constants for the test
 DRAG_OFFSET_X = 50  # Pixels to drag right
@@ -37,17 +37,25 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
 
     This test:
     1. Creates a movie using the new_movie fixture
-    2. Navigates to the movie list page
+    2. Navigates to the movie list page (with api_key for authentication)
     3. Clicks the "analyze" button for the movie
     4. Waits for the first frame to be extracted (if necessary)
     5. Waits for trackpoints to be placed
     6. Drags a trackpoint to a new location
     7. Polls the database to verify the trackpoint was updated
+
+    Note: The new_movie fixture provides:
+    - MOVIE_ID: The movie ID to test
+    - API_KEY: The api key for authentication (required for /list page)
+    - ADMIN_ID, USER_ID: User IDs for the test users
+    - COURSE_ID, COURSE_NAME: Course information
     """
     movie_id = new_movie[MOVIE_ID]
+    api_key = new_movie[API_KEY]
 
-    # Navigate to the list page
-    url = f"{live_server}/list"
+    # Navigate to the list page with api_key for authentication
+    # The /list page requires authentication, so we pass api_key as a URL parameter
+    url = f"{live_server}/list?api_key={api_key}"
     chrome_driver.get(url)
 
     # Wait for the page to load
