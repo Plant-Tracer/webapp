@@ -24,7 +24,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from app import odb
-from app.odb import MOVIE_ID, API_KEY
+from app.odb import MOVIE_ID, API_KEY, USER_ID
+from tests.fixtures.local_aws import ADMIN_ID
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -60,6 +61,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     
     # Ensure api_key is a clean string (no trailing whitespace or extra characters)
     api_key = str(api_key).strip()
+    user_id = new_movie[ADMIN_ID]
     
     # Validate that the API key exists in the database before using it
     # This ensures we're testing with a valid key
@@ -67,10 +69,23 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     if not api_key_dict:
         pytest.fail(f"API key {api_key} not found in database. Test fixture may be broken.")
     
-    # Log the API key information for debugging
+    # Validate that the API key belongs to the correct user
+    api_key_user_id = api_key_dict.get(USER_ID)
+    if api_key_user_id != user_id:
+        pytest.fail(f"API key user_id mismatch! API key belongs to {api_key_user_id} but expected {user_id}")
+    
+    # Validate that the movie belongs to the correct user
+    movie_dict = odb.get_movie(movie_id=movie_id)
+    movie_user_id = movie_dict.get(USER_ID)
+    if movie_user_id != user_id:
+        pytest.fail(f"Movie user_id mismatch! Movie belongs to {movie_user_id} but expected {user_id}")
+    
+    # Log the validation information for debugging
     print(f"Using API key: {api_key}")
     print(f"API key length: {len(api_key)}")
-    print(f"API key dict: {api_key_dict}")
+    print(f"User ID: {user_id}")
+    print(f"API key validated for user: {api_key_user_id}")
+    print(f"Movie validated for user: {movie_user_id}")
 
     # First, navigate to the server homepage to establish the domain
     chrome_driver.get(live_server)
