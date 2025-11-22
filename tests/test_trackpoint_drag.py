@@ -58,29 +58,29 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     """
     movie_id = new_movie[MOVIE_ID]
     api_key = new_movie[API_KEY]
-    
+
     # Ensure api_key is a clean string (no trailing whitespace or extra characters)
     api_key = str(api_key).strip()
     user_id = new_movie[ADMIN_ID]
-    
+
     # Validate that the API key exists in the database before using it
     # This ensures we're testing with a valid key
     ddbo = DDBO()  # Get the database object instance
     api_key_dict = ddbo.get_api_key_dict(api_key)
     if not api_key_dict:
         pytest.fail(f"API key {api_key} not found in database. Test fixture may be broken.")
-    
+
     # Validate that the API key belongs to the correct user
     api_key_user_id = api_key_dict.get(USER_ID)
     if api_key_user_id != user_id:
         pytest.fail(f"API key user_id mismatch! API key belongs to {api_key_user_id} but expected {user_id}")
-    
+
     # Validate that the movie belongs to the correct user
     movie_dict = odb.get_movie(movie_id=movie_id)
     movie_user_id = movie_dict.get(USER_ID)
     if movie_user_id != user_id:
         pytest.fail(f"Movie user_id mismatch! Movie belongs to {movie_user_id} but expected {user_id}")
-    
+
     # Log the validation information for debugging
     print(f"Using API key: {api_key}")
     print(f"API key length: {len(api_key)}")
@@ -90,7 +90,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
 
     # First, navigate to the server homepage to establish the domain
     chrome_driver.get(live_server)
-    
+
     # Set the api_key cookie directly in the browser
     # The cookie name is 'api_key' as defined in constants.py API_KEY_COOKIE_BASE
     # Don't specify domain - let it default to the current domain
@@ -99,7 +99,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         'value': api_key,
         'path': '/'
     })
-    
+
     # Verify the cookie was set correctly
     cookies = chrome_driver.get_cookies()
     api_key_cookie = None
@@ -107,17 +107,17 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         if cookie['name'] == 'api_key':
             api_key_cookie = cookie
             break
-    
+
     if not api_key_cookie:
         pytest.fail("Failed to set api_key cookie in browser")
-    
+
     # Verify the cookie value matches what we set
     cookie_value = api_key_cookie['value']
     print(f"Cookie value: {cookie_value}")
     print(f"Cookie value length: {len(cookie_value)}")
     print(f"Original API key: {api_key}")
     print(f"Values match: {cookie_value == api_key}")
-    
+
     if cookie_value != api_key:
         pytest.fail(f"Cookie value mismatch! Expected '{api_key}' but got '{cookie_value}'")
 
@@ -186,7 +186,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     actions.click_and_hold()
     actions.move_by_offset(1, 1)  # Tiny movement to trigger save
     actions.release()
-    
+
     try:
         actions.perform()
         # Check if there's an alert (error) after the action
@@ -242,7 +242,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     actions.click_and_hold()
     actions.move_by_offset(DRAG_OFFSET_X, DRAG_OFFSET_Y)
     actions.release()
-    
+
     try:
         actions.perform()
         # Check if there's an alert (error) after the action

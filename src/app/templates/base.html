@@ -67,9 +67,9 @@
         <b> ADMIN </b>
         {% endif %}
         <!-- Note - URLs cannot begin with '/' because that assumes
-          that deployment will be in root of the domain. That
-          doesn't happen when deploying in a AWS Lambda domain followed
-          by a prefix such as Prod/ or Test/.
+             that deployment will be in root of the domain. That
+             doesn't happen when deploying in a AWS Lambda domain followed
+             by a prefix such as Prod/ or Test/.
           -->
         <a href="." class="pure-menu-heading pure-menu-link">PlantTracer</a>
         <ul class="pure-menu-list">
@@ -130,8 +130,8 @@
     <div id='message' class='alert'><b>{{message}}</b></div>
 
     <div class='content'>
-    {% block body %}
-    {% endblock %}
+      {% block body %}
+      {% endblock %}
     </div>
 
     <div class='footer'>
@@ -154,13 +154,13 @@
       // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
       // if we are in demo mode.
       $(document).ready(function() {
-        if (demo_mode) {
-          $('.demo').show();
-          $('.nodemo').hide();
-        } else {
-          $('.demo').hide();
-          $('.nodemo').show();
-        }
+      if (demo_mode) {
+      $('.demo').show();
+      $('.nodemo').hide();
+      } else {
+      $('.demo').hide();
+      $('.nodemo').show();
+      }
       });
     </script>
   </body>

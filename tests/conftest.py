@@ -27,13 +27,14 @@ sys.path.append(SRC_DIR)
 APP_DIR = join(SRC_DIR, "app")
 sys.path.append(APP_DIR)
 
-print("sys.path=",sys.path)
 logger = logging.getLogger(__name__)
 
+import app.flask_app as flask_app
+
 # Import fixtures so pytest can discover them
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402
-from .fixtures.localmail_config import mailer_config  # noqa: F401, E402
-from .fixtures.app_client import client  # noqa: F401, E402
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pytest: disable=unused-import
+from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pytest: disable=unused-import
+from .fixtures.app_client import client  # noqa: F401, E402 pytest: disable=unused-import
 
 
 class ServerThread(threading.Thread):
@@ -56,7 +57,6 @@ def live_server(local_ddb, local_s3):
 
     Depends on local_ddb and local_s3 fixtures to ensure AWS services are available.
     """
-    import app.flask_app as flask_app
     app = flask_app.app
     app.config['TESTING'] = True
 
