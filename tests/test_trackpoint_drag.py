@@ -58,9 +58,20 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     movie_id = new_movie[MOVIE_ID]
     api_key = new_movie[API_KEY]
 
-    # Navigate to the list page with api_key for authentication
-    # The /list page requires authentication, so we pass api_key as a URL parameter
-    url = f"{live_server}/list?api_key={api_key}"
+    # First, navigate to the server to set the domain for the cookie
+    chrome_driver.get(live_server)
+    
+    # Set the api_key cookie directly in the browser
+    # The cookie name is 'api_key' as defined in constants.py API_KEY_COOKIE_BASE
+    chrome_driver.add_cookie({
+        'name': 'api_key',
+        'value': api_key,
+        'path': '/',
+        'domain': '127.0.0.1'
+    })
+
+    # Navigate to the list page (authentication will use the cookie)
+    url = f"{live_server}/list"
     chrome_driver.get(url)
 
     # Wait for the page to load
@@ -95,10 +106,9 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         page_source = chrome_driver.page_source
         pytest.fail(f"Analyze button not found for movie {movie_id}. Page has {len(page_source)} chars")
 
-    # Navigate directly to the analyze page with both movie_id and api_key
-    # This ensures the api_key is available in the browser for AJAX calls
-    # (Clicking the button would navigate without api_key, causing authentication issues)
-    analyze_url = f"{live_server}/analyze?movie_id={movie_id}&api_key={api_key}"
+    # Navigate directly to the analyze page with movie_id
+    # The api_key cookie is already set and will be used for authentication
+    analyze_url = f"{live_server}/analyze?movie_id={movie_id}"
     chrome_driver.get(analyze_url)
 
     # Wait for the analyze page to load

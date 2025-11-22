@@ -126,10 +126,7 @@ def func_audit():
 
 @app.route('/analyze', methods=GET)
 def func_analyze():
-    response = make_response(render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True)))
-    # if api_key was in the query string, set the cookie
-    apikey.add_cookie(response)
-    return response
+    return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
 
 ##
 ## Login page includes the api keys of all the demo users.
