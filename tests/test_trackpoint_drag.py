@@ -58,16 +58,16 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     movie_id = new_movie[MOVIE_ID]
     api_key = new_movie[API_KEY]
 
-    # First, navigate to the server to set the domain for the cookie
+    # First, navigate to the server homepage to establish the domain
     chrome_driver.get(live_server)
     
     # Set the api_key cookie directly in the browser
     # The cookie name is 'api_key' as defined in constants.py API_KEY_COOKIE_BASE
+    # Don't specify domain - let it default to the current domain
     chrome_driver.add_cookie({
         'name': 'api_key',
         'value': api_key,
-        'path': '/',
-        'domain': '127.0.0.1'
+        'path': '/'
     })
 
     # Navigate to the list page (authentication will use the cookie)
