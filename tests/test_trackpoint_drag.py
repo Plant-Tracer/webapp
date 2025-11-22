@@ -15,6 +15,7 @@ the new_movie fixture to create a movie in the database.
 """
 
 import time
+import logging
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -24,6 +25,10 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from app import odb
 from app.odb import MOVIE_ID, API_KEY
+
+# Suppress verbose logging from urllib3 and selenium
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('selenium').setLevel(logging.WARNING)
 
 # Constants for the test
 DRAG_OFFSET_X = 50  # Pixels to drag right
@@ -101,31 +106,43 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     except TimeoutException:
         pytest.fail("Analyze page failed to load canvas element")
 
-    # Wait for the canvas and movie to be ready
-    # Poll for trackpoints to be visible on the canvas
-    # Trackpoints are drawn as circles with the Marker class
+    # Wait for the page to be ready - wait for the movie controller to initialize
+    # The default markers are loaded into JavaScript but NOT saved to database initially
+    # They are only saved when user interacts with them
+    time.sleep(2)  # Give time for JavaScript to initialize and render markers
+
+    # Find the canvas element
+    canvas = chrome_driver.find_element(By.CSS_SELECTOR, "div#tracer canvas")
+
+    # The default markers (Apex, Ruler 0mm, Ruler 10mm) are at positions (50,50), (50,100), (50,150)
+    # We need to perform a small drag to trigger saving them to the database
+    # This simulates the user placing/adjusting the initial markers
+    actions = ActionChains(chrome_driver)
+    actions.move_to_element_with_offset(canvas, 50, 50)  # Move to Apex marker
+    actions.click_and_hold()
+    actions.move_by_offset(1, 1)  # Tiny movement to trigger save
+    actions.release()
+    actions.perform()
+
+    # Now wait for trackpoints to be saved to the database
     # Use short waits (0.1 sec) and poll the database as instructed
-    max_wait = 30
+    max_wait = 10
     start_time = time.time()
     trackpoints_ready = False
 
     while time.time() - start_time < max_wait:
         # Check if trackpoints exist in the database for frame 0
-        try:
-            trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
-            if len(trackpoints) > 0:
-                trackpoints_ready = True
-                print(f"Found {len(trackpoints)} trackpoints in database")
-                break
-        except Exception as e:
-            print(f"Error checking trackpoints: {e}")
+        trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
+        if len(trackpoints) > 0:
+            trackpoints_ready = True
+            break
         time.sleep(0.1)
 
     if not trackpoints_ready:
         chrome_driver.save_screenshot('/tmp/trackpoints_not_found.png')
-        pytest.fail("Trackpoints were not placed on frame 0 within 30 seconds")
+        pytest.fail("Trackpoints were not saved to database after initial placement")
 
-    # Get initial trackpoint positions
+    # Get initial trackpoint positions (after the small adjustment)
     initial_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
     assert len(initial_trackpoints) > 0, "No trackpoints found in database"
 
@@ -134,11 +151,6 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     initial_x = initial_trackpoint['x']
     initial_y = initial_trackpoint['y']
     label = initial_trackpoint['label']
-
-    print(f"Initial trackpoint '{label}': x={initial_x}, y={initial_y}")
-
-    # Find the canvas element
-    canvas = chrome_driver.find_element(By.CSS_SELECTOR, "div#tracer canvas")
 
     # Perform the drag operation using Selenium ActionChains
     # This simulates a user clicking, dragging, and releasing a trackpoint
@@ -165,38 +177,33 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     final_y = initial_y
 
     while time.time() - start_time < max_wait:
-        try:
-            final_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
+        final_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
 
-            # Find the trackpoint with the same label
-            for tp in final_trackpoints:
-                if tp['label'] == label:
-                    final_x = tp['x']
-                    final_y = tp['y']
+        # Find the trackpoint with the same label
+        for tp in final_trackpoints:
+            if tp['label'] == label:
+                final_x = tp['x']
+                final_y = tp['y']
 
-                    # Check if the position changed
-                    # Allow some tolerance for rounding
-                    if abs(final_x - initial_x) > 5 or abs(final_y - initial_y) > 5:
-                        trackpoint_updated = True
-                        print(f"Updated trackpoint '{label}': x={final_x}, y={final_y} " +
-                              f"(changed from {initial_x}, {initial_y})")
+                # Check if the position changed
+                # Allow some tolerance for rounding
+                if abs(final_x - initial_x) > 5 or abs(final_y - initial_y) > 5:
+                    trackpoint_updated = True
 
-                        # Verify the change is approximately what we expected
-                        expected_x = initial_x + DRAG_OFFSET_X
-                        expected_y = initial_y + DRAG_OFFSET_Y
+                    # Verify the change is approximately what we expected
+                    expected_x = initial_x + DRAG_OFFSET_X
+                    expected_y = initial_y + DRAG_OFFSET_Y
 
-                        # Verify within tolerance due to rounding and coordinate transformations
-                        assert abs(final_x - expected_x) < POSITION_TOLERANCE, \
-                            f"X coordinate mismatch: expected ~{expected_x}, got {final_x}"
-                        assert abs(final_y - expected_y) < POSITION_TOLERANCE, \
-                            f"Y coordinate mismatch: expected ~{expected_y}, got {final_y}"
+                    # Verify within tolerance due to rounding and coordinate transformations
+                    assert abs(final_x - expected_x) < POSITION_TOLERANCE, \
+                        f"X coordinate mismatch: expected ~{expected_x}, got {final_x}"
+                    assert abs(final_y - expected_y) < POSITION_TOLERANCE, \
+                        f"Y coordinate mismatch: expected ~{expected_y}, got {final_y}"
 
-                        break
+                    break
 
-            if trackpoint_updated:
-                break
-        except Exception as e:
-            print(f"Error polling trackpoints: {e}")
+        if trackpoint_updated:
+            break
 
         time.sleep(0.1)
 
