@@ -57,6 +57,9 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     """
     movie_id = new_movie[MOVIE_ID]
     api_key = new_movie[API_KEY]
+    
+    # Ensure api_key is a clean string (no trailing whitespace or extra characters)
+    api_key = str(api_key).strip()
 
     # First, navigate to the server homepage to establish the domain
     chrome_driver.get(live_server)
@@ -135,7 +138,23 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     actions.click_and_hold()
     actions.move_by_offset(1, 1)  # Tiny movement to trigger save
     actions.release()
-    actions.perform()
+    
+    try:
+        actions.perform()
+        # Check if there's an alert (error) after the action
+        time.sleep(0.5)  # Give time for alert to appear
+        try:
+            alert = chrome_driver.switch_to.alert
+            alert_text = alert.text
+            # If we got an alert, fail immediately with the error
+            chrome_driver.save_screenshot('/tmp/alert_error.png')
+            pytest.fail(f"Alert appeared after drag action: {alert_text}")
+        except:
+            # No alert, continue normally
+            pass
+    except Exception as e:
+        chrome_driver.save_screenshot('/tmp/drag_error.png')
+        pytest.fail(f"Error performing drag action: {e}")
 
     # Now wait for trackpoints to be saved to the database
     # Use short waits (0.1 sec) and poll the database as instructed
@@ -175,10 +194,23 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     actions.click_and_hold()
     actions.move_by_offset(DRAG_OFFSET_X, DRAG_OFFSET_Y)
     actions.release()
-    actions.perform()
-
-    # Give the browser time to process the drag and send the update to the server
-    time.sleep(0.5)
+    
+    try:
+        actions.perform()
+        # Check if there's an alert (error) after the action
+        time.sleep(0.5)  # Give time for alert to appear
+        try:
+            alert = chrome_driver.switch_to.alert
+            alert_text = alert.text
+            # If we got an alert, fail immediately with the error
+            chrome_driver.save_screenshot('/tmp/alert_error_main_drag.png')
+            pytest.fail(f"Alert appeared after main drag action: {alert_text}")
+        except:
+            # No alert, continue normally
+            pass
+    except Exception as e:
+        chrome_driver.save_screenshot('/tmp/main_drag_error.png')
+        pytest.fail(f"Error performing main drag action: {e}")
 
     # Poll the database to verify the trackpoint was updated
     # Use short waits (0.1 sec) and poll as instructed
