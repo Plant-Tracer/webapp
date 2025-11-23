@@ -21,7 +21,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, NoAlertPresentException
 
 from app import odb
 from app.odb import DDBO, MOVIE_ID, API_KEY, USER_ID
@@ -37,6 +37,7 @@ DRAG_OFFSET_Y = 30  # Pixels to drag down
 POSITION_TOLERANCE = 10  # Allowed pixel difference for position verification
 
 
+# pylint: disable=too-many-branches, disable=too-many-statements
 def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_movie):
     """
     Test that dragging a trackpoint in the browser updates the database.
@@ -191,16 +192,16 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         actions.perform()
         # Check if there's an alert (error) after the action
         time.sleep(0.5)  # Give time for alert to appear
+
         try:
             alert = chrome_driver.switch_to.alert
             alert_text = alert.text
             # If we got an alert, fail immediately with the error
             chrome_driver.save_screenshot('/tmp/alert_error.png')
             pytest.fail(f"Alert appeared after drag action: {alert_text}")
-        except:
-            # No alert, continue normally
+        except NoAlertPresentException:
             pass
-    except Exception as e:
+    except Exception as e:      # pylint: disable=broad-exception-caught
         chrome_driver.save_screenshot('/tmp/drag_error.png')
         pytest.fail(f"Error performing drag action: {e}")
 
@@ -253,10 +254,10 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
             # If we got an alert, fail immediately with the error
             chrome_driver.save_screenshot('/tmp/alert_error_main_drag.png')
             pytest.fail(f"Alert appeared after main drag action: {alert_text}")
-        except:
+        except NoAlertPresentException:
             # No alert, continue normally
             pass
-    except Exception as e:
+    except Exception as e:# pylint: disable=broad-exception-caught
         chrome_driver.save_screenshot('/tmp/main_drag_error.png')
         pytest.fail(f"Error performing main drag action: {e}")
 

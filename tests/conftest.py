@@ -7,7 +7,6 @@ See - https://stackoverflow.com/questions/34466027/what-is-conftest-py-for-in-py
 
 import logging
 import os
-import sys
 import time
 import threading
 from os.path import abspath, dirname, join
@@ -18,23 +17,19 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
-MY_DIR = dirname(abspath(__file__))
-GIT_ROOT = dirname(MY_DIR)
-
-SRC_DIR = join(GIT_ROOT, "src")
-sys.path.append(SRC_DIR)
-
-APP_DIR = join(SRC_DIR, "app")
-sys.path.append(APP_DIR)
-
-logger = logging.getLogger(__name__)
-
-import app.flask_app as flask_app
+from app import flask_app
 
 # Import fixtures so pytest can discover them
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pytest: disable=unused-import
-from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pytest: disable=unused-import
-from .fixtures.app_client import client  # noqa: F401, E402 pytest: disable=unused-import
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
+from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pylint: disable=unused-import
+from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unused-import
+
+MY_DIR = dirname(abspath(__file__))
+GIT_ROOT = dirname(MY_DIR)
+SRC_DIR = join(GIT_ROOT, "src")
+APP_DIR = join(SRC_DIR, "app")
+
+logger = logging.getLogger(__name__)
 
 
 class ServerThread(threading.Thread):

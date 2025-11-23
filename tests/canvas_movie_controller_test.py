@@ -106,6 +106,7 @@ def test_canvas_movie_controller_frame_navigation(chrome_driver, live_server):
 
         # Look for movie control buttons
         buttons = chrome_driver.find_elements(By.CSS_SELECTOR, "input[type='button']")
+        assert buttons is not None
 
         # Common movie control button classes
         button_classes = ['first_button', 'play_forward', 'play_reverse',

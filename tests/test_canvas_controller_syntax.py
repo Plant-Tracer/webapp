@@ -4,7 +4,6 @@ Simple syntax and import tests for canvas_movie_controller.js
 These tests verify basic functionality without requiring a full server setup.
 """
 
-import os
 from pathlib import Path
 
 

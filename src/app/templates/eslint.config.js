@@ -15,6 +15,10 @@ module.exports = [
         },
         rules: {
             "@html-eslint/indent": "error",
+            "@html-eslint/quotes": "off",
+            "@html-eslint/element-newline": "off",
+            "@html-eslint/indent": "off",
+            "@html-eslint/no-extra-spacing-attrs": "off",
         },
     },
 ];
