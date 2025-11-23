@@ -25,9 +25,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 
 from app import odb
 from app.odb import DDBO, MOVIE_ID, API_KEY, USER_ID
-from app.paths import logger
 from app.constants import logger
-from tests.fixtures.local_aws import ADMIN_ID
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)

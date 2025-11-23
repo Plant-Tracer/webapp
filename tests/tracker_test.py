@@ -11,7 +11,7 @@ import pytest
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
 from app import tracker
-from app.paths import logger
+from app.constants import logger
 
 # Get the fixtures from conftest.py - they are auto-discovered by pytest
 from .fixtures.local_aws import TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_PATH

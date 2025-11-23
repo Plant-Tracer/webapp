@@ -8,7 +8,7 @@ import subprocess
 import uuid
 
 import pytest
-import html5validator
+import html5validate
 
 from app.paths import STATIC_DIR
 from app import odb
@@ -88,9 +88,9 @@ def test_templates(client,new_course):
             logger.error("%s: %s",ct, line)
 
     def validate_html(url, html, include_text=None, exclude_text=None):
-        '''If html5validator can't properly properly parse the htmlraise an error.'''
+        '''If html5validate can't properly properly parse the htmlraise an error.'''
         try:
-            html5validator.validate(html)
+            html5validate.validate(html)
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
@@ -100,7 +100,7 @@ def test_templates(client,new_course):
                     dump_lines(html)
                     raise RuntimeError(f"'{exclude_text}' in text")
             return
-        except html5validator.ParserError as e:
+        except html5validate.ParserError as e:
             logger.error("*****************************************************")
             logger.error("url=%s error=%s",url,e)
             dump_lines(html)

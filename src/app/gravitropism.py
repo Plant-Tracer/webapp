@@ -2,7 +2,7 @@
 
 import math
 
-from .constants import E,C
+from .constants import E
 
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     """
