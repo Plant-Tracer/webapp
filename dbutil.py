@@ -59,6 +59,15 @@ def populate_demo_movies():
 
 
 
+def dump_movie(movie_id):
+    print(f"Movie {movie_id}" )
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    print(json.dumps(movie,indent=4,default=str))
+    trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
+    print(json.dumps(trackpoints,indent=4,default=str))
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESCRIPTION,
@@ -83,6 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--course_name", help="course name")
     parser.add_argument("--debug", help='Enable debug (mostly for SMTP)', action='store_true')
     parser.add_argument('--purge_all_movies', help='Remove all of the movies from the database and S3. Requires --course_id', action='store_true')
+    parser.add_argument("--dump_movie", help="provides information about a movie")
 
     # These need to be re-implemented
     # parser.add_argument("--purge_movie",help="Remove the movie and all of its associated data from the database",type=int)
@@ -113,7 +123,6 @@ if __name__ == "__main__":
             delim = '' if args.planttracer_endpoint.endswith('/') else '/'
             print(f"\n*****\n***** Login with {args.planttracer_endpoint}{delim}list?api_key={new_api_key}\n*****")
         sys.exit(0)
-
 
 
     ################################################################
@@ -179,6 +188,10 @@ if __name__ == "__main__":
         admin_id = odb.get_user_email(args.admin_email)['user_id']
         odb.remove_course_admin( admin_id = admin_id, course_id = args.course_id)
         sys.exit(0)
+
+
+    if args.dump_movie:
+        dump_movie(args.dump_movie)
 
     ################################################################
     ## Cleanup
