@@ -8,7 +8,7 @@ import subprocess
 import uuid
 
 import pytest
-import html5validate
+from html5validator import validator as html5validate
 
 from app.paths import STATIC_DIR
 from app import odb
