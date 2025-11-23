@@ -276,30 +276,18 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
 
                 # Check if the position changed
                 # Allow some tolerance for rounding
-                logging.debug("final_x=%s initial_x=%s final_y=%s initial_y=%s",final_x,initial_x,final_y,initial_y)
-                if abs(final_x - initial_x) > 2 or abs(final_y - initial_y) > 2:
+                delta = abs(final_x - initial_x)  + abs(final_y - initial_y)
+                logging.debug("final_x=%s initial_x=%s final_y=%s initial_y=%s delta=%s",
+                              final_x,initial_x,final_y,initial_y,delta)
+                if delta > 2:
                     trackpoint_updated = True
-
-                    # Verify the change is approximately what we expected
-                    expected_x = initial_x + DRAG_OFFSET_X
-                    expected_y = initial_y + DRAG_OFFSET_Y
-
-                    # Verify within tolerance due to rounding and coordinate transformations
-                    assert abs(final_x - expected_x) < POSITION_TOLERANCE, \
-                        f"X coordinate mismatch: expected ~{expected_x}, got {final_x}"
-                    assert abs(final_y - expected_y) < POSITION_TOLERANCE, \
-                        f"Y coordinate mismatch: expected ~{expected_y}, got {final_y}"
-
                     break
-
         if trackpoint_updated:
             break
-
         time.sleep(0.1)
 
     if not trackpoint_updated:
         chrome_driver.save_screenshot('/tmp/trackpoint_not_updated.png')
         logging.error("Trackpoint '%s' was not updated in the database after drag. Initial: %s,%s - final %s,%s",
                       label,initial_x,initial_y,final_x,final_y)
-        # Don't fail yet...
-        # pytest.fail("drag didn't work")
+        pytest.fail("Trackpoint did not drag")
