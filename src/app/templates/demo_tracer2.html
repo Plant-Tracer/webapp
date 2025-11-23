@@ -2,20 +2,20 @@
 <html lang="en">
   <head>
     <title>Demo</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" >
     <script type="module" src="./static/canvas_controller.mjs"></script>
     <script type="module" src="./static/canvas_movie_controller.js"></script>
   </head>
 
   <style>
-      {% include 'tracer_app.css' %}
+   {% include 'tracer_app.css' %}
   </style>
   <body>
-      <p>This demo shows the TraceController <i>after</i> the image is
-          traced.  The user still has the ability to drag and edit the
-          initial track points, but can also change frames.
-      </p>
-      {% include 'tracer_app.html' %}
+    <p>This demo shows the TraceController <i>after</i> the image is
+      traced.  The user still has the ability to drag and edit the
+      initial track points, but can also change frames.
+    </p>
+    {% include 'tracer_app.html' %}
   </body>
   <script>
    const API_BASE='';
@@ -23,14 +23,14 @@
   </script>
 
   <script type='module'>
-    // This demo draws three dragable objects and adds some text.
+   // This demo draws three dragable objects and adds some text.
    import { TracerController, trace_movie_one_frame, trace_movie_frames } from "./static/canvas_tracer_controller.js";
    const movie_id = 10;
    const movie_zipfile  = 'https://planttracer.com/demo/frames.zip';
    const movie_metadata = {movie_id:movie_id, width:512, height:512};
    const movie_frame_markers = {0:[{x:100,y:100,label:'first trackpoint'},
-                                      {x:100,y:150,label:'second trackpoint'},
-                                      {x:100,y:200,label:'third trackpoint'}],
+                                   {x:100,y:150,label:'second trackpoint'},
+                                   {x:100,y:200,label:'third trackpoint'}],
                                 1:[{x:110,y:105,label:'first trackpoint'},
                                    {x:120,y:155,label:'second trackpoint'},
                                    {x:130,y:205,label:'third trackpoint'}],

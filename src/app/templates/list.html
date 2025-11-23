@@ -6,38 +6,38 @@
 <div id='load_message'><b>{{load_message}}</b></div>
 
 <style>
-tr.you {
+  tr.you {
   color: blue;
-}
+  }
 
-div.mtable table {
- border:1px solid black;
- border-collapse:collapse;
-}
+  div.mtable table {
+  border:1px solid black;
+  border-collapse:collapse;
+  }
 
-div.mtable input[type=checkbox] {
-   color:black;
-   background-color: yellow;
-   padding: 3px;
-}
+  div.mtable input[type=checkbox] {
+  color:black;
+  background-color: yellow;
+  padding: 3px;
+  }
 
-/* table headers for the movie tables. */
-div.mtable th {
-}
+  /* table headers for the movie tables. */
+  div.mtable th {
+  }
 
-div.mtable td {
- border:1px solid blue;
- padding: 3px;
-}
+  div.mtable td {
+  border:1px solid blue;
+  padding: 3px;
+  }
 
-div.mtable td.check {
- text-align:center;
-}
+  div.mtable td.check {
+  text-align:center;
+  }
 
-input[type=checkbox] {
- width: 20px;
- height: 20px;
-}
+  input[type=checkbox] {
+  width: 20px;
+  height: 20px;
+  }
 
 </style>
 
@@ -65,13 +65,13 @@ input[type=checkbox] {
 </div>
 
 
-  <h2 class="nodemo">Your Movies</h2>
-  <h2 class="demo">Demo Movies</h2>
-  <p class="nodemo">
-    (<a href="upload">click here to upload a new movie</a>)
-  </p>
+<h2 class="nodemo">Your Movies</h2>
+<h2 class="demo">Demo Movies</h2>
+<p class="nodemo">
+  (<a href="upload">click here to upload a new movie</a>)
+</p>
 
-  <div class="nodemo">
+<div class="nodemo">
   <h3>Published</h3>
   <p class='instructions'><i>Published movies can be viewed by anyone in
       your course. Click the 'unpublish' button to unpublish a
@@ -89,11 +89,11 @@ input[type=checkbox] {
 <h3 class='nodemo'>Course movies for {{primary_course_name}}</h3>
 <p class='instructions nodemo'><i>These are the course movies available to you from other students in your course.</i></p>
 <p class='instructions nodemo'> Students can only see the published movies of
-    other students in this course, while the course admins can see all of the movies. </p>
+  other students in this course, while the course admins can see all of the movies. </p>
 
 {% if admin %}
 <p class='instructions'>Admins can publish or unpublish movies by pressing the PUBLISH or UNPUBLISH buttons, respectively. Admins cannot delete or undelete movies; only
-students can delete or undelete their own movies.</p>
+  students can delete or undelete their own movies.</p>
 {% endif %}
 <div class='mtable' id='course-movies'></div>
 
@@ -106,9 +106,9 @@ students can delete or undelete their own movies.</p>
 </div>
 
 <script>
-"use strict";
-$(document).ready(function() {
-   list_ready_function();
-});
+  "use strict";
+  $(document).ready(function() {
+  list_ready_function();
+  });
 </script>
 {% endblock %}
