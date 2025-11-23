@@ -101,8 +101,10 @@ def get_user_api_key():
         return api_key_cookie
 
     # See if the value was manually provided
+    # NOTE - we are literally having the parameter "api_key" set to "undefined" (the quoted string)
+    # since the elimination of JQuery. This needs to be fixed.
     api_key_get = request.values.get('api_key', None)
-    if (api_key_get is not None) and (api_key != 'undefined'):
+    if (api_key_get is not None) and (api_key_get != 'undefined'):
         return api_key_get
 
     # No API key
