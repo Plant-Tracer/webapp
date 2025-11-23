@@ -801,8 +801,11 @@ def api_put_frame_trackpoints():
     :param: frame_number - the the frame
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
     """
+    logging.debug("api_put_frame_trackpoints")
     user_id  = get_user_id(allow_demo=False)
+    logging.debug("api_put_frame_trackpoints user_id=%s",user_id)
     movie_id = get_movie_id()
+    logging.debug("api_put_frame_trackpoints movie_id=%s",movie_id)
     frame_number = get_int('frame_number')
     logging.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie_id,frame_number)
     if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):

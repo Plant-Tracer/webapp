@@ -14,13 +14,13 @@ from os.path import join,dirname,abspath
 
 import boto3
 
-from app.constants import C
-from app import odb
-from app import odb_movie_data
-from app import odbmaint
+from src.app.constants import C
+from src.app import odb
+from src.app import odb_movie_data
+from src.app import odbmaint
 
-from app.paths import ROOT_DIR,TEST_DATA_DIR
-from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
+from src.app.paths import ROOT_DIR,TEST_DATA_DIR
+from src.app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
 
 import dbutil
 
@@ -145,12 +145,12 @@ def new_movie(new_course):
 
     cfg = copy.copy(new_course)
     movie_title = f'test-movie title {str(uuid.uuid4())}'
-    movie_id = odb.create_new_movie(user_id = cfg[ADMIN_ID],
+    movie_id = odb.create_new_movie(user_id = cfg[USER_ID],
                                     course_id = cfg[COURSE_ID],
                                     title = movie_title,
                                     description = 'Description')
 
-    logging.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    logging.debug("new_movie fixture: movie_id=%s user_id=%s Opening %s",movie_id, cfg[USER_ID], TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
     assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)

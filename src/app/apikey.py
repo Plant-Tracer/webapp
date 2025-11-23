@@ -6,6 +6,7 @@ All done through get_user_dict() below, which is kind of gross.
 
 """
 
+import copy
 import logging
 import os
 import functools
@@ -89,18 +90,20 @@ def get_user_api_key():
        None if user is not logged in and no demo mode
     """
     # If we are in demo mode, get the demo mode api_key
+    logging.debug("get_user_api_key. request.values=%s request.cookies=%s",dict(request.values),dict(request.cookies))
     if in_demo_mode():
         return C.DEMO_MODE_API_KEY
 
-    api_key = request.values.get('api_key', None) # must be 'api_key', because may be in URL
-    if api_key is not None:
-        return api_key
+    # First check the cookie
+    api_key_cookie = request.cookies.get(cookie_name(), None)
+    if api_key_cookie:
+        logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key_cookie)
+        return api_key_cookie
 
-    # Return the api_key if it is in a cookie.
-    api_key = request.cookies.get(cookie_name(), None)
-    if api_key:
-        logging.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key)
-        return api_key
+    # See if the value was manually provided
+    api_key_get = request.values.get('api_key', None)
+    if (api_key_get is not None) and (api_key != 'undefined'):
+        return api_key_get
 
     # No API key
     return None
@@ -109,6 +112,7 @@ def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
     logging.debug("get_user_dict")
     api_key = get_user_api_key()
+    logging.debug("get_user_dict api_key=%s",api_key)
     if api_key is None:
         logging.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
@@ -199,5 +203,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     for (k,v) in ret.items():
         if v is None:
             ret[k] = "null"
-    logging.debug("page_dict=%s",ret)
+
+    ret_without_favicon = copy.copy(ret)
+    ret_without_favicon['favicon_base64'] = '(removed)'
+    logging.debug("page_dict=%s",ret_without_favicon)
     return ret

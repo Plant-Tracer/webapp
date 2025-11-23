@@ -6,3 +6,5 @@ pytest
 localmail
 pydantic
 python-magic
+html5validator
+html5lib

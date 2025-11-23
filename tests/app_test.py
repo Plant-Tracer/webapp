@@ -7,8 +7,8 @@ import os
 import subprocess
 import uuid
 
-import xml.etree.ElementTree
 import pytest
+import html5validate
 
 from app.paths import STATIC_DIR
 from app import odb
@@ -88,10 +88,9 @@ def test_templates(client,new_course):
             logger.error("%s: %s",ct, line)
 
     def validate_html(url, html, include_text=None, exclude_text=None):
-        '''xml.etree.ElementTree can't properly parse the htmlraise an error.'''
+        '''If html5validate can't properly properly parse the htmlraise an error.'''
         try:
-            doc = xml.etree.ElementTree.fromstring(html)
-            assert doc is not None
+            html5validate.validate(html)
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
@@ -101,7 +100,7 @@ def test_templates(client,new_course):
                     dump_lines(html)
                     raise RuntimeError(f"'{exclude_text}' in text")
             return
-        except xml.etree.ElementTree.ParseError as e:
+        except html5validate.ParserError as e:
             logger.error("*****************************************************")
             logger.error("url=%s error=%s",url,e)
             dump_lines(html)

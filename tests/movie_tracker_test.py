@@ -38,9 +38,7 @@ def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
 
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
