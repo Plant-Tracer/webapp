@@ -7,11 +7,12 @@ This provides for all authentication in the planttracer system:
 """
 import os
 import os.path
-import logging
 import json
 
 import boto3
 from botocore.exceptions import ClientError
+
+from .constants import logger
 
 AWS_SECRET_NAME = 'AWS_SECRET_NAME'
 AWS_REGION_NAME = 'AWS_REGION_NAME'
@@ -48,14 +49,14 @@ class SecretsManagerError(Exception):
 
 def get_aws_secret_for_arn(secret_name):
     region_name = secret_name.split(':')[3]
-    logging.debug("secret_name=%s region_name=%s",secret_name, region_name)
+    logger.debug("secret_name=%s region_name=%s",secret_name, region_name)
     session = boto3.Session()
     client = session.client( service_name=SECRETSMANAGER,
                              region_name=region_name)
     try:
         get_secret_value_response = client.get_secret_value( SecretId=secret_name )
     except ClientError as e:
-        logging.error('Cannot get secretId=%s',secret_name)
+        logger.error('Cannot get secretId=%s',secret_name)
         raise SecretsManagerError(e) from e
     secret = json.loads(get_secret_value_response['SecretString'])
     return secret

@@ -25,8 +25,9 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 
 from app import odb
 from app.odb import DDBO, MOVIE_ID, API_KEY, USER_ID
+from app.paths import logger
+from app.constants import logger
 from tests.fixtures.local_aws import ADMIN_ID
-from .conftest import logger
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -211,7 +212,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     while time.time() - start_time < max_wait:
         # Check if trackpoints exist in the database for frame 0
         initial_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
-        logging.debug("initial_trackpoints=%s",initial_trackpoints)
+        logger.debug("initial_trackpoints=%s",initial_trackpoints)
         if len(initial_trackpoints) > 0:
             trackpoints_ready = True
             break
@@ -266,7 +267,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
 
     while time.time() - start_time < max_wait:
         final_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
-        logging.debug("final_trackpoints=%s",final_trackpoints)
+        logger.debug("final_trackpoints=%s",final_trackpoints)
 
         # Find the trackpoint with the same label
         for tp in final_trackpoints:
@@ -277,7 +278,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
                 # Check if the position changed
                 # Allow some tolerance for rounding
                 delta = abs(final_x - initial_x)  + abs(final_y - initial_y)
-                logging.debug("final_x=%s initial_x=%s final_y=%s initial_y=%s delta=%s",
+                logger.debug("final_x=%s initial_x=%s final_y=%s initial_y=%s delta=%s",
                               final_x,initial_x,final_y,initial_y,delta)
                 if delta > 2:
                     trackpoint_updated = True
@@ -288,6 +289,6 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
 
     if not trackpoint_updated:
         chrome_driver.save_screenshot('/tmp/trackpoint_not_updated.png')
-        logging.error("Trackpoint '%s' was not updated in the database after drag. Initial: %s,%s - final %s,%s",
+        logger.error("Trackpoint '%s' was not updated in the database after drag. Initial: %s,%s - final %s,%s",
                       label,initial_x,initial_y,final_x,final_y)
         pytest.fail("Trackpoint did not drag")

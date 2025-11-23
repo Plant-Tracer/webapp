@@ -19,7 +19,7 @@ from app.odb import API_KEY,MOVIE_ID
 from app.odb_movie_data import read_object,create_new_movie_frame
 
 # Fixtures are in conftest.py
-from .conftest import logger
+from app.constants import logger
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'

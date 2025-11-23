@@ -1,12 +1,8 @@
 """ Implement the gravitropism algorithm """
 
 import math
-import logging
 
 from .constants import E,C
-
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
 
 def calculate_results_gravitropism(x1, y1, x2, y2, time_elapsed):
     """

@@ -5,7 +5,6 @@ There can be a conftest for each directory
 See - https://stackoverflow.com/questions/34466027/what-is-conftest-py-for-in-pytest
 """
 
-import logging
 import os
 import time
 import threading
@@ -28,9 +27,6 @@ MY_DIR = dirname(abspath(__file__))
 GIT_ROOT = dirname(MY_DIR)
 SRC_DIR = join(GIT_ROOT, "src")
 APP_DIR = join(SRC_DIR, "app")
-
-logger = logging.getLogger(__name__)
-
 
 class ServerThread(threading.Thread):
     """Run Flask server in a background thread for testing."""

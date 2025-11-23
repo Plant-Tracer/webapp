@@ -7,8 +7,8 @@ Main Flask application for planttracer.
 
 import sys
 import os
-import logging
 import traceback
+import logging
 
 from flask import Flask, request, render_template, jsonify, make_response
 from werkzeug.exceptions import NotFound
@@ -20,7 +20,7 @@ from werkzeug.exceptions import HTTPException
 from . import apikey
 
 from .flask_api import api_bp
-from .constants import __version__,GET,GET_POST,C
+from .constants import __version__,GET,GET_POST,C,log_level,logger
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import InvalidAPI_Key,InvalidUser_Email
@@ -48,8 +48,6 @@ def fix_boto_log_level():
 
 app = Flask(__name__)
 app.register_blueprint(api_bp, url_prefix='/api')
-log_level = os.getenv("LOG_LEVEL","INFO").upper()
-logger = app.logger
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)
 fix_boto_log_level()
@@ -74,7 +72,7 @@ def handle_auth_error(ex):
     {'message':message, 'error':True}
     as defined in auth.AuthError
     """
-    logging.info("handle_auth_error(%s)",ex)
+    logger.info("handle_auth_error(%s)",ex)
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
     return response
@@ -88,7 +86,7 @@ def handle_apikey_error(ex):
 def handle_exception(e):
     if isinstance(e, HTTPException):
         return e         # Let Flask handle it or route it to its specific handler
-    logging.exception("Unhandled exception")
+    logger.exception("Unhandled exception")
     return jsonify({"error": True, "message": "Internal Server Error"}), 500
 
 @app.errorhandler(InvalidUser_Email)
@@ -191,7 +189,7 @@ def func_list():
 @app.route('/upload', methods=GET)
 def func_upload():
     """/upload - Upload a new file. Can also set cookie (because of /upload link that is sent)."""
-    logging.debug("/upload require_auth=True")
+    logger.debug("/upload require_auth=True")
     response = make_response(render_template('upload.html',
                                          **page_dict('Upload a Movie',
                                                      require_auth=True)))

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.paths import logger
+from app.constants import logger
 from app import schema
 
 

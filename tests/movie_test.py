@@ -26,7 +26,7 @@ from app.s3_presigned import s3_client
 # Get constants from fixtures (fixtures themselves are in conftest.py)
 from .fixtures.local_aws import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
 
-from .conftest import logger
+from app.constants import logger
 
 
 POST_TIMEOUT = 2

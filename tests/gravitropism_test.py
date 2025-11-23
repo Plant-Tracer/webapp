@@ -1,12 +1,7 @@
-import logging
 import pytest
 
 from app.constants import E
 from app.gravitropism import calculate_results_gravitropism
-
-
-# Configuring the logging module
-logging.basicConfig(level=logging.INFO)
 
 
 @pytest.mark.parametrize("x1, y1, x2, y2, time_elapsed, expected_results", [

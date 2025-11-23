@@ -2,7 +2,6 @@
 (with a fixture that uses requests)
 """
 
-import logging
 import sys
 import os
 import glob
@@ -17,7 +16,7 @@ from app import odb_movie_data
 from app import s3_presigned
 from app.odb import is_api_key
 from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
-from app.constants import __version__
+from app.constants import __version__,logger
 
 # Fixtures are imported in conftest.py
 from .fixtures import local_aws
@@ -48,7 +47,7 @@ def test_add(client):
 
 def test_api_key(client, new_course):
     api_key = new_course[local_aws.API_KEY]
-    logging.debug("api_key=%s",api_key)
+    logger.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
     assert r.json['error'] is False
@@ -90,7 +89,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
                           'email-addresses': [email_address],
                           'planttracer-endpoint': 'https://example.com/',
                          })
-    logging.debug("r.json=%s",r.json)
+    logger.debug("r.json=%s",r.json)
     res = r.json
     assert res['error'] is False
     assert res['message'] == 'Registered 1 email addresses'
@@ -126,7 +125,7 @@ def test_upload_movie_data(client, api_key):
                           'description': 'test-upload',
                           'movie_base64_data': movie_base64_data,
                           'movie_data_sha256': movie_data_sha256 })
-    logging.debug("r.json=%s",r.json)
+    logger.debug("r.json=%s",r.json)
     res = r.json
     assert res['error'] is False
     movie_id = res['movie_id']

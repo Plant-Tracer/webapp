@@ -4,7 +4,6 @@ Maintain the DynamoDB Database.
 
 #pylint: disable=invalid-name
 
-import logging
 import copy
 import os
 import os.path
@@ -20,12 +19,7 @@ from botocore.exceptions import ClientError
 from . import odb
 from .s3_presigned import s3_client
 from .odb import USER_ID,DDBO
-from .constants import C
-
-
-# Configure basic logging
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
+from .constants import C,logger
 
 KeySchema = 'KeySchema'
 KeyType = 'KeyType'
@@ -339,12 +333,12 @@ def create_course(*, course_id, course_key, course_name, admin_email,
     admin = odb.get_user_email(admin_email)
     admin_id = admin[USER_ID]
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)
-    logging.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
+    logger.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
 
 def delete_course(*, course_id):
     """Delete the course"""
-    logging.debug("delete_course(%s)",course_id)
+    logger.debug("delete_course(%s)",course_id)
     course = odb.lookup_course_by_id(course_id=course_id)
     if not course:
         raise ValueError(f"course {course_id} does not exist")

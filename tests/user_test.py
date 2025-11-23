@@ -3,12 +3,11 @@ Test the various functions in the database involving user creation.
 """
 
 import uuid
-import logging
 import copy
 
 from app import odb
 from app import odbmaint
-from app.constants import C
+from app.constants import C,logger
 from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
@@ -22,16 +21,16 @@ from .fixtures.local_aws import ADMIN_EMAIL
 ################################################################
 
 def test_ddb(local_ddb):
-    logging.info("test_ddb local_ddb=%s",local_ddb)
+    logger.info("test_ddb local_ddb=%s",local_ddb)
 
 def test_ddb2(local_ddb):
-    logging.info("test_ddb local_ddb=%s",local_ddb)
+    logger.info("test_ddb local_ddb=%s",local_ddb)
 
 def test_new_course(new_course):
     cfg = copy.copy(new_course)
     course_key = cfg[COURSE_KEY]
     admin_email = cfg[ADMIN_EMAIL]
-    logging.info("Created course %s admin_email %s", course_key, admin_email )
+    logger.info("Created course %s admin_email %s", course_key, admin_email )
 
     # Check course lookup functions
     c1 = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])
@@ -75,7 +74,7 @@ def test_add_remove_user_and_admin(new_course):
                                   user_name='User Name',
                                   admin = admin)['user_id']
 
-        logging.info("generated admin_email=%s user_id=%s",new_email, user_id)
+        logger.info("generated admin_email=%s user_id=%s",new_email, user_id)
         course_id = odb.lookup_course_by_key(course_key = cfg[COURSE_KEY])['course_id']
 
         if not admin:

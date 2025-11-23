@@ -5,7 +5,6 @@ Moved to a separate python file so that it doesn't need to be loaded for python 
 """
 
 #pylint: disable=too-many-lines
-import logging
 import time
 import urllib
 import urllib.parse
@@ -14,20 +13,18 @@ import requests
 from botocore.exceptions import ClientError,ParamValidationError
 
 from .s3_presigned import s3_client,make_urn,make_object_name
-from .constants import C
+from .constants import C,logger
 from .odb import DDBO,InvalidMovie_Id,is_movie_id,VERSION,course_id_for_movie_id,MOVIE_DATA_URN,DATE_UPLOADED,TOTAL_BYTES,TOTAL_FRAMES,FRAME_URN,DELETED
-
-logger = logging.getLogger(__name__)
 
 def read_object(urn):
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
+    logger.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
         # We are getting the object, so we do not need a presigned url
         try:
             return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
         except ClientError as ex:
-            logging.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
             return None
     elif o.scheme in ['http','https']:
         r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
@@ -36,7 +33,7 @@ def read_object(urn):
         raise ValueError("Unknown schema: "+urn)
 
 def write_object(urn, object_data):
-    logging.info("write_object(%s,len=%s)",urn,len(object_data))
+    logger.info("write_object(%s,len=%s)",urn,len(object_data))
     logger.info("write_object(%s,len=%s)",urn,len(object_data))
     assert "s3://s3://" not in urn
     o = urllib.parse.urlparse(urn)
@@ -53,12 +50,12 @@ def write_object(urn, object_data):
             if error_code == 'InvalidBucketName':
                 logger.error("*** Bucket '%s' does not exist or is invalid",o.netloc)
             else:
-                logging.error("*** Unexpected ClientError: %s",error_code)
+                logger.error("*** Unexpected ClientError: %s",error_code)
             raise
     raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
 def delete_object(urn):
-    logging.debug("delete_object(%s)",urn)
+    logger.debug("delete_object(%s)",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
         s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
@@ -103,7 +100,7 @@ def set_movie_data(*,movie_id, movie_data):
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
 
-    logging.debug("got movie=%s version=%s",movie,movie[VERSION])
+    logger.debug("got movie=%s version=%s",movie,movie[VERSION])
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
@@ -125,7 +122,7 @@ def set_movie_data(*,movie_id, movie_data):
 
 def purge_movie_data(*,movie_id):
     """Delete the movie data associated with a movie"""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    logger.debug("purge_movie_data movie_id=%s",movie_id)
     ddbo = DDBO()
     urn = ddbo.get_movie(movie_id).get(MOVIE_DATA_URN,None)
     if urn:
@@ -137,7 +134,7 @@ def purge_movie_frames(*,movie_id, frame_numbers=None):
     :param frames: If None, delete them all
     """
 
-    logging.debug("purge_movie_frames movie_id=%s",movie_id)
+    logger.debug("purge_movie_frames movie_id=%s",movie_id)
     ddbo = DDBO()
     if frame_numbers is None:
         frames = ddbo.get_frames( movie_id )
@@ -154,7 +151,7 @@ def purge_movie_frames(*,movie_id, frame_numbers=None):
 
 def purge_movie_zipfile(*,movie_id):
     """Delete the frames associated with a movie."""
-    logging.debug("purge_movie_data movie_id=%s",movie_id)
+    logger.debug("purge_movie_data movie_id=%s",movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     if movie.get('movie_zipfile_urn',None) is not None:
@@ -183,7 +180,7 @@ def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
     Store frame info in the movie_frames table.
     returns frame_urn
     """
-    logging.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
+    logger.debug("create_new_movie_frame(movie_id=%s, frame_number=%s, type(frame_data)=%s",movie_id, frame_number, type(frame_data))
     course_id = course_id_for_movie_id(movie_id)
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
@@ -209,6 +206,6 @@ def get_frame_data(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: returns the frame data or None
     """
-    logging.warning("We should only get the value that we need")
+    logger.warning("We should only get the value that we need")
     frame_urn = DDBO().get_movie_frame(movie_id, frame_number)[FRAME_URN]
     return read_object(frame_urn)

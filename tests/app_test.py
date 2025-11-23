@@ -8,7 +8,7 @@ import subprocess
 import uuid
 
 import pytest
-from html5validator import validator as html5validate
+import html5validator
 
 from app.paths import STATIC_DIR
 from app import odb
@@ -19,7 +19,7 @@ from app import apikey
 from app.odb import VERSION, API_KEY, MOVIE_ID
 
 # Fixtures are imported in conftest.py
-from .conftest import logger
+from app.constants import logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -88,9 +88,9 @@ def test_templates(client,new_course):
             logger.error("%s: %s",ct, line)
 
     def validate_html(url, html, include_text=None, exclude_text=None):
-        '''If html5validate can't properly properly parse the htmlraise an error.'''
+        '''If html5validator can't properly properly parse the htmlraise an error.'''
         try:
-            html5validate.validate(html)
+            html5validator.validate(html)
             if include_text is not None:
                 if include_text not in html:
                     dump_lines(html)
@@ -100,7 +100,7 @@ def test_templates(client,new_course):
                     dump_lines(html)
                     raise RuntimeError(f"'{exclude_text}' in text")
             return
-        except html5validate.ParserError as e:
+        except html5validator.ParserError as e:
             logger.error("*****************************************************")
             logger.error("url=%s error=%s",url,e)
             dump_lines(html)
