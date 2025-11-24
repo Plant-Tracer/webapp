@@ -9,7 +9,7 @@ authors = [
 license = "GPL"
 readme = "README.md"
 packages = [
-    { include = "src" },
+    { include = "app", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -111,9 +111,15 @@ extraPaths = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [
- "src",
- "tests"
-]
 addopts = "-ra -q"
 python_files = ["test_*.py"]
+norecursedirs = ["lib/ctools"]
+log_cli = true
+
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources",
+  "ignore:pkg_resources is deprecated:UserWarning",
+]
+
+[tool.pytest.ini_options.env]
+PYTEST = "1"

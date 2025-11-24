@@ -14,13 +14,13 @@ from os.path import join,dirname,abspath
 
 import boto3
 
-from src.app.constants import C
-from src.app import odb
-from src.app import odb_movie_data
-from src.app import odbmaint
+from app.constants import C
+from app import odb
+from app import odb_movie_data
+from app import odbmaint
 
-from src.app.paths import ROOT_DIR,TEST_DATA_DIR
-from src.app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
+from app.paths import ROOT_DIR,TEST_DATA_DIR
+from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
 
 import dbutil
 

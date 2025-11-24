@@ -8,14 +8,14 @@ import uuid
 import json
 import os
 
-from src.app import clogging
-from src.app import odb
-from src.app import odbmaint
-from src.app import mailer
-from src.app.paths import TEST_DATA_DIR
-from src.app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
-from src.app.odb_movie_data import set_movie_data
-from src.app.constants import C
+from app import clogging
+from app import odb
+from app import odbmaint
+from app import mailer
+from app.paths import TEST_DATA_DIR
+from app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
+from app.odb_movie_data import set_movie_data
+from app.constants import C
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'

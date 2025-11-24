@@ -34,7 +34,7 @@ AWS_DEFAULT_REGION=us-east-1
 AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
 
 # PT_VARS are required for any command that uses planttracer but with dynamically-generated prefixes
-PT_VARS := $(AWS_VARS) PYTHONPATH=$$(pwd)/src PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
+PT_VARS := $(AWS_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 
 # DEMO_VARS are required for any command that requires a DYNAMODB_TABLE_PREFIX.
 # For example, if you are running a local server, or a local demo
@@ -140,7 +140,7 @@ pytest-selenium:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/app_test.py
+TEST1MODULE=tests/odb_test.py
 #TEST1FUNCTION="-k test_trackpoint_drag_and_database_update"
 pytest1:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
