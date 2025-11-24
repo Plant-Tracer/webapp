@@ -13,6 +13,14 @@ __version__ = '0.9.6'
 log_level = os.getenv("LOG_LEVEL","INFO").upper()
 logger = logging.getLogger(__name__)
 
+def printable80(d):
+    values = dict(d)
+    for (k,v) in values:
+        if len(str(v))>80:
+            k[v] = str(v)[0:80]+"..."
+    return values
+
+
 # but these are:
 GET=['GET']
 POST=['POST']

@@ -18,7 +18,7 @@ from flask import request
 
 from . import odb
 from .paths import ETC_DIR
-from .constants import C,__version__,logger
+from .constants import C,__version__,logger,printable80,log_level
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
@@ -89,7 +89,9 @@ def get_user_api_key():
        None if user is not logged in and no demo mode
     """
     # If we are in demo mode, get the demo mode api_key
-    logger.debug("get_user_api_key. request.values=%s request.cookies=%s",dict(request.values),dict(request.cookies))
+    if log_level=='DEBUG':
+        logger.debug("get_user_api_key. request.values=%s request.cookies=%s",printable80(request.values),dict(request.cookies))
+
     if in_demo_mode():
         return C.DEMO_MODE_API_KEY
 
@@ -109,6 +111,10 @@ def get_user_api_key():
     # No API key
     return None
 
+def user_dict_for_api_key(api_key):
+    """Returns the userdict for an api_key. """
+    return odb.validate_api_key(api_key)
+
 def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
     logger.debug("get_user_dict")
@@ -120,9 +126,9 @@ def get_user_dict():
         if request.full_path.startswith('/api/'):
             raise InvalidAPI_Key("get_user_dict 1")
 
-    # We have a key. Now validate it.
+    # We have a key. Get the userdict
     # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
-    userdict = odb.validate_api_key(api_key)
+    userdict = user_dict_for_api_key(api_key)
     if userdict is None:
         logger.info("api_key %s is invalid  ipaddr=%s request.url=%s",
                      api_key,request.remote_addr,request.url)

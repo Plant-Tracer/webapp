@@ -226,7 +226,7 @@ TABLE_CONFIGURATIONS = [
 
 
 
-def create_tables(*,ignore_table_exists = None):
+def create_tables(*,ignore_table_exists = False):
     """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
@@ -249,25 +249,23 @@ def create_tables(*,ignore_table_exists = None):
         except KeyError:
             pass
         tc[TableName] = table_name = table_prefix + tc[TableName]
-        logger.info("Attempting to create table: %s", table_name)
         try:
             table = dynamodb.create_table(**tc)
             # because tables don't get created instantly and wait_until_exists
             # has a hard-coded 20-second delay, we sleep a bit...
             time.sleep(C.TABLE_CREATE_SLEEP_TIME)
             logger.info("Waiting for table %s to be active...", table_name)
-            print(f"Waiting for table {table_name} to be active...")
             table.wait_until_exists()
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
             if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
-                if (ignore_table_exists is not None) and (table_name not in ignore_table_exists):
+                if (not ignore_table_exists) and (table_name not in ignore_table_exists):
                     logger.warning("Table %s already exists.", table_name)
             else:
                 logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, dynamodb.meta.client.meta.endpoint_url)
 
 
-def drop_dynamodb_table(dynamodb, table_name: str):
+def drop_dynamodb_table(dynamodb, table_name: str, silent_warnings=False):
     """Drops a specified DynamoDB table from the local instance.
 
     :param table_name: The name of the table to drop.
@@ -286,21 +284,23 @@ def drop_dynamodb_table(dynamodb, table_name: str):
 
     except ClientError as e:
         if e.response['Error']['Code'] == 'ResourceNotFoundException':
-            logger.warning("Table %s does not exist when dropping table.", table_name)
+            if not silent_warnings:
+                logger.warning("Table %s does not exist when dropping table.", table_name)
         elif e.response['Error']['Code'] == 'ValidationException' and "table is being deleted" in str(e):
-            logger.info("Table %s is already in the process of being deleted.", table_name)
+            if not silent_warnings:
+                logger.warning("Table %s is already in the process of being deleted.", table_name)
         else:
             logger.error("Error deleting table %s: %s", table_name, e)
 
 
-def drop_tables():
+def drop_tables(silent_warnings=False):
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
     if table_prefix is None:
         raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
     dynamodb = DDBO.resource()
     tables_to_drop = [ table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
-        drop_dynamodb_table(dynamodb, table_name)
+        drop_dynamodb_table(dynamodb, table_name, silent_warnings=silent_warnings)
 
 def purge_all_movies(ddbo):
     """"Deleting an entire table is significantly more efficient than removing items one-by-one,

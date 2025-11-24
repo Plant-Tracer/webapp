@@ -8,6 +8,7 @@ See - https://stackoverflow.com/questions/34466027/what-is-conftest-py-for-in-py
 import os
 import time
 import threading
+import logging
 from os.path import abspath, dirname, join
 
 import pytest
@@ -22,6 +23,12 @@ from app import flask_app
 from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
 from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pylint: disable=unused-import
 from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unused-import
+
+# Suppress verbose logging from urllib3 and selenium
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('selenium').setLevel(logging.WARNING)
+
+
 
 MY_DIR = dirname(abspath(__file__))
 GIT_ROOT = dirname(MY_DIR)

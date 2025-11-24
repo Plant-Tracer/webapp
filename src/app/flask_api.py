@@ -25,7 +25,7 @@ from . import mailer
 from . import tracker
 from .apikey import get_user_api_key,get_user_dict,in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C,E,POST,GET_POST,__version__,logger,log_level
+from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO
 from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
@@ -56,11 +56,7 @@ def invalid_api_key(ex):
 def get(key, default=None):
     # If we are logging, don't log super long values... (like movie uploads)
     if log_level=='DEBUG':
-        values = dict(request.values)
-        for (k,v) in values:
-            if len(str(v))>80:
-                k[v] = str(v)[0:80]+"..."
-        logger.debug("request.values=%s",values)
+        logger.debug("request.values=%s",printable80(request.values))
     return request.values.get(key, default)
 
 def get_movie_id():
