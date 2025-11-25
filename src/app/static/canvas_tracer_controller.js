@@ -415,8 +415,8 @@ class TracerController extends MovieController {
 
 // Called when we want to trace a movie for which we do not have frame-by-frame metadata.
 // set up the default
-var cc;
-function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, api_key) {
+var cc;                         // where we hold the controller
+function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, metadata_frames, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (_) => {
         if (demo_mode) {
@@ -428,6 +428,11 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 
     var frames = [{'frame_url': frame0_url,
                    'markers':DEFAULT_MARKERS }];
+    // If we have markers for frame 0, use them instead
+    if (metadata_frames && metadata_frames[0] && metadata_frames[0].markers) {
+        frames[0].markers = metadata_frames[0].markers;
+    }
+
     cc.load_movie(frames);
     cc.create_marker_table();
     cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
@@ -614,6 +619,7 @@ function graph_data(cc, frames) {
 
 /* Main function called when HTML page loads.
  * Gets metadata for the movie and all traced frames
+ * Note - This assumes that we either have no frames or the zipfile with all frames. That's not a good assumption
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
@@ -639,7 +645,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
             const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
-            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0);
+            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             return;
         }
         if (demo_mode) {
