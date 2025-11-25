@@ -45,7 +45,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 # Create the virtual enviornment for testing and CI/CD
 
 APP_ETC=app/etc
-DBMAINT=dbutil.py
+DBUTIL=src/dbutil.py
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
@@ -167,13 +167,13 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	$(DEMO_VARS) poetry run python dbutil.py --createdb
+	$(DEMO_VARS) poetry run python $(DBUTIL) --createdb
 	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode

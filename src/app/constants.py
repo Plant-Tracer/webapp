@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 def printable80(d):
     values = dict(d)
-    for (k,v) in values:
+    for (k,v) in values.items():
         if len(str(v))>80:
-            k[v] = str(v)[0:80]+"..."
+            values[k] = str(v)[0:80]+"..."
     return values
 
 
@@ -25,7 +25,6 @@ def printable80(d):
 GET=['GET']
 POST=['POST']
 GET_POST = ['GET','POST']
-
 
 
 class C:

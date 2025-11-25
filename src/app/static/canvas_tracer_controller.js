@@ -228,10 +228,6 @@ class TracerController extends MovieController {
         return markers;
     }
 
-    json_markers() {
-        return JSON.stringify(this.get_markers());
-    }
-
     // Send the list of current markers to the server.
     // In demo mode, just print a message.
     put_markers() {
@@ -243,8 +239,11 @@ class TracerController extends MovieController {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
-            trackpoints  : this.json_markers()
+            trackpoints  : JSON.stringify(this.get_markers()) // markers as a JSON string because we do POST as a form, not as REST
         };
+        for (let tp of this.get_markers()) {
+            console.log("frame=",this.frame_number,"tp=",tp);
+        }
         $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
