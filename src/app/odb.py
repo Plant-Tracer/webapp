@@ -1437,10 +1437,20 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
     trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
-    DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
-                                          FRAME_NUMBER:frame_number},
-                                     UpdateExpression='SET trackpoints=:val',
-                                     ExpressionAttributeValues={':val':trackpoints})
+    ddbo = DDBO()
+    ddbo.movie_frames.update_item( Key={MOVIE_ID:movie_id,
+                                        FRAME_NUMBER:frame_number},
+                                   UpdateExpression='SET trackpoints=:val',
+                                   ExpressionAttributeValues={':val':trackpoints})
+
+    # update the last frame tracked. This is way, way more expensive than it should be.
+    movie = ddbo.get_movie(movie_id)
+    if movie['last_frame_tracked'] is None:
+        assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
+        movie['last_frame_tracked'] = frame_number
+    else:
+        movie['last_frame_tracked'] = max(movie['last_frame_tracked'],frame_number)
+    ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
 
 
 ################################################################
