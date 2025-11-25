@@ -26,6 +26,8 @@ import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
 
+// The default markers get added to a movie that is not tracked.
+// Note that a movie that is just tracked at frame 0 is tracked...
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
                          {'x':50,'y':150,'label':'Ruler 10mm'}

@@ -1191,18 +1191,28 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
 
 @log
 def can_access_movie(*, user_id, movie_id):
-    """Return if the user is allowed to access the movie."""
+    """
+    Checks to see if the user is allowed to access the movie:
+    :param user_id: the user_id
+    :param movie_id: the movie_id
+    :return: the movie object dictionary.
+
+    User can access the movie if:
+    - User is movie owner
+    - User is in the movie's course (NOTE: it should check to see if movie is published or if the user is the course admin)
+    - (Note: should allow access if the user is a super admin)
+
+    Raises UnauthorizedUser if user is not allowed to access the movie. This is caught by the flask framework, so we don't need special handling.
+    """
     logger.warning("UNNEDED USERID QUERY")
-    logger.warning("UNNEDED USERID QUERY2")
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     if movie[ USER_ID ] == user_id:
-        return True
+        return movie
     user = ddbo.get_user(user_id)
-    logger.debug("Can user '%s' access movie '%s'",json.dumps(user,default=str),json.dumps(movie,default=str))
     if movie[ COURSE_ID ] in user[ COURSES ]:
-        return True
-    return False
+        return movie
+    raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
 @log
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None):

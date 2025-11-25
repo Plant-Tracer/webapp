@@ -26,7 +26,7 @@ from . import tracker
 from .apikey import get_user_api_key,get_user_dict,in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
 from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
@@ -49,6 +49,11 @@ class InvalidFrameNumber(Exception):
 def invalid_api_key(ex):
     logger.info("invalid_api_key(%s)",ex)
     return E.INVALID_API_KEY, 403
+
+@api_bp.errorhandler(UnauthorizedUser)
+def unauthorized_user(ex):
+    logger.info("UnauthorizedUser(%s)",ex)
+    return E.INVALID_MOVIE_ACCESS, 403
 
 
 ################################################################
@@ -300,10 +305,10 @@ def api_get_movie_data():
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
     movie_id = get_movie_id()
-    if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-        return make_response(E.INVALID_MOVIE_ACCESS, 404)
+    movie    = odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id)
+    assert movie_id == movie[MOVIE_ID]
 
-    data_urn = get_movie_data(movie_id=movie_id,
+    data_urn = get_movie_data(movie_id=movie[MOVIE_ID],
                                   zipfile = get('format')=='zip',
                                   get_urn = True)
 
@@ -378,16 +383,14 @@ def api_get_frame():
     movie_id     = get_movie_id()
 
     logger.debug('logger.debug /get-frame. user_id=%s frame_number=%s movie_id=%s',user_id,frame_number,movie_id)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        logger.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 403)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     if frame_number<0:
         logger.error("invalid frame number %s",frame_number)
         return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
 
     # See if there is a urn
-    urn = odb.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
+    urn = odb.get_frame_urn(movie_id=movie[MOVIE_ID], frame_number=frame_number)
     logger.debug("urn=%s",urn)
     if urn is not None and not object_exists(urn):
         logger.warning("%s does not exist",urn)
@@ -428,8 +431,7 @@ def api_edit_movie():
     """
     movie_id = get_movie_id()
     user_id  = get_user_id(allow_demo=False)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+    odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     action = get("action")
     if action=='rotate90cw':
@@ -452,11 +454,9 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if not odb.can_access_movie(user_id=get_user_id(allow_demo=False),
-                                movie_id=get_movie_id()):
-        return E.INVALID_MOVIE_ACCESS
-    delete_movie(movie_id=get_movie_id(),
-                    delete=get_bool('delete',True))
+    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False),
+                             movie_id=get_movie_id())
+    delete_movie(movie_id=movie[MOVIE_ID], delete=get_bool('delete',True))
     return {'error': False}
 
 ################################################################
@@ -488,10 +488,9 @@ def api_get_movie_metadata():
     frame_count = get_int('frame_count')
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
 
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return make_response(E.INVALID_MOVIE_ACCESS,404)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    movie_metadata =  odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
+    movie_metadata =  odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # If we do not have the movie width and height, get them and write them back to the database
     if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
@@ -545,38 +544,40 @@ def api_get_movie_trackpoints():
     :param: format - 'xlsx' or 'json'
     """
     movie_id = get_movie_id()
-    if odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
-        # get_movie_trackpoints() returns a dictionary for each trackpoint.
-        # we want a dictionary for each frame_number
-        trackpoint_dicts = odb.get_movie_trackpoints(movie_id=movie_id)
-        frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
-        labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
-        frame_dicts    = defaultdict(dict)
+    movie = odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id)
 
-        if get('format')=='json':
-            return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
+    # NOTE - getting the movie should (soon) get all the trackpoints, as they will all be stored together
+    # get_movie_trackpoints() returns a dictionary for each trackpoint.
+    # we want a dictionary for each frame_number
+    trackpoint_dicts = odb.get_movie_trackpoints(movie_id=movie[MOVIE_ID])
+    frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
+    labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
+    frame_dicts    = defaultdict(dict)
 
-        for tp in trackpoint_dicts:
-            frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
-            frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
+    if get('format')=='json':
+        return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
 
-        fieldnames = ['frame_number']
-        for label in labels:
-            fieldnames.append(label+' x')
-            fieldnames.append(label+' y')
-        logger.debug("fieldnames=%s",fieldnames)
+    for tp in trackpoint_dicts:
+        frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
+        frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
 
-        # Now write it out with the dictwriter
-        with io.StringIO() as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
-            writer.writeheader()
-            for frame in frame_numbers:
-                frame_dicts[frame]['frame_number'] = frame
-                writer.writerow(frame_dicts[frame])
-            response = make_response(f.getvalue())
-            response.headers['Content-Type'] =  'text/csv'
-            return response
-    return E.INVALID_MOVIE_ACCESS
+    fieldnames = ['frame_number']
+    for label in labels:
+        fieldnames.append(label+' x')
+        fieldnames.append(label+' y')
+    logger.debug("fieldnames=%s",fieldnames)
+
+    # Now write it out with the dictwriter
+    with io.StringIO() as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
+        writer.writeheader()
+        for frame in frame_numbers:
+            frame_dicts[frame]['frame_number'] = frame
+            writer.writerow(frame_dicts[frame])
+        response = make_response(f.getvalue())
+        response.headers['Content-Type'] =  'text/csv'
+        return response
+
 
 
 ################################################################
@@ -744,11 +745,10 @@ def api_track_movie_queue():
     movie_id       = get_movie_id()
     user_id        = get_user_id(allow_demo=False)
     run_async      = get_bool('run_async')
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 400)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     # Make sure we are not tracking a movie that is not an original movie
-    movie_row = odb.list_movies(user_id=user_id, movie_id=movie_id)
+    movie_row = odb.list_movies(user_id=user_id, movie_id=movie[MOVIE_ID])
     assert len(movie_row)==1
     if movie_row[0]['orig_movie'] is not None:
         return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
@@ -777,13 +777,12 @@ def api_new_frame():
 
     """
     movie_id=get_movie_id()
-    if not odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
     try:
         frame_data = base64.b64decode( request.values.get('frame_base64_data'))
     except TypeError:
         frame_data = None
-    frame_urn = create_new_movie_frame( movie_id = movie_id,
+    frame_urn = create_new_movie_frame( movie_id = movie[MOVIE_ID],
                                             frame_number = get_int('frame_number'),
                                             frame_data = frame_data)
     return {'error': False, 'frame_urn': frame_urn}
@@ -800,6 +799,8 @@ def api_put_frame_trackpoints():
     :param: movie_id - the movie
     :param: frame_number - the the frame
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
+
+    NOTE: This can be made much more efficient. We should only be getting the movie data ONCE from dynamoDB...
     """
     print("log_level=",log_level)
     logger.debug("api_put_frame_trackpoints")
@@ -807,13 +808,11 @@ def api_put_frame_trackpoints():
     movie_id = get_movie_id()
     frame_number = get_int('frame_number')
     trackpoints=get_json('trackpoints')
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     if log_level=='DEBUG':
-        logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie_id,frame_number)
+        logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
             logger.debug("%s",tp)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        logger.debug("user %s cannot access movie_id %s",user_id, movie_id)
-        return {'error':True, 'message':f'User {user_id} cannot access movie_id={movie_id}'}
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 
