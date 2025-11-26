@@ -82,6 +82,8 @@ disable = [
     "unused-argument",
     "invalid-name",
     "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
     "fixme"
 ]
 

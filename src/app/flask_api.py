@@ -408,11 +408,8 @@ def api_get_frame():
         urn = create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
 
-    logger.debug('getframe 4')
-    logger.debug("api_get_frame urn=%s",urn)
     url = make_signed_url(urn=urn)
-    logger.debug("api_get_frame url=%s",url)
-    logger.debug('getframe 10 ')
+    logger.debug("api_get_frame urn=%s url=%s",urn,url)
     return redirect(url)
 
 
