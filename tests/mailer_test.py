@@ -8,13 +8,13 @@ TODO: Test with real mail server when running on Dreamhost?
 
 import time
 import uuid
-import logging
 import copy
 
 import pytest
 from jinja2.nativetypes import NativeEnvironment
 from app import odb
 from app import mailer
+from app.constants import logger
 
 from .fixtures.local_aws import COURSE_KEY
 
@@ -61,7 +61,7 @@ def test_send_message(mailer_config):
         if deleted > 0:
             break
 
-        logging.warning("response %s not found. Sleep again count %d", nonce, i)
+        logger.warning("response %s not found. Sleep again count %d", nonce, i)
         time.sleep(0.1)
     if deleted == 0:
         raise RuntimeError(f"Could not find and delete test message using smtp_config={smtp_config} imap_config={imap_config}")

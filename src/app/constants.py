@@ -5,12 +5,27 @@ Constants are created in classes so we can import the class and don't have to im
 #pylint: disable=too-few-public-methods,disable=invalid-name
 
 import logging
+import os
 
 __version__ = '0.9.6'
 
+# these aren't strictly constants...
+log_level = os.getenv("LOG_LEVEL","INFO").upper()
+logger = logging.getLogger(__name__)
+
+def printable80(d):
+    values = dict(d)
+    for (k,v) in values.items():
+        if len(str(v))>80:
+            values[k] = str(v)[0:80]+"..."
+    return values
+
+
+# but these are:
 GET=['GET']
 POST=['POST']
 GET_POST = ['GET','POST']
+
 
 class C:
     """Constants"""

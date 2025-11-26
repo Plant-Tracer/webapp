@@ -14,70 +14,70 @@
 <style>
   {% include 'tracer_app.css' %}
 
-.dot {
+  .dot {
   text-align:center;
   font-size:32px;
   position:relative;
   line-height:0px;
-}
+  }
 </style>
 
 <h2 id='firsth2'>Movie Loading...</h2>
 
 {% include 'tracer_app.html' %}
 
-<br/>
+<br>
 <div style="float:left" id="explain">
-<h3>Plant Motion Analysis</h3>
+  <h3>Plant Motion Analysis</h3>
 
-<p class='demo'>
+  <p class='demo'>
     In demo mode, you may only play an already traced movie. You may also move markers,
     but the movement won't be saved.
 
     When logged in as a user (not in demo mode), you may add and delete markers, position them and
     have their new positions saved,
     and trace and re-trace movies. When in demo mode, these features are disabled.
-</p>
+  </p>
 
-<p>To analyze the motion of the plant in the video:</p>
-<ul>
-  <li>Place the Apex marker on the plant's apex</li>
-  <li>Move the Ruler markers to the corresponding parts of the ruler in the video (if there is a ruler in the video)</li>
-  <li>Press the <i>Trace movie</i> or <i>Re-trace movie</i> button to initiate tracing</li>
-</ul>
+  <p>To analyze the motion of the plant in the video:</p>
+  <ul>
+    <li>Place the Apex marker on the plant's apex</li>
+    <li>Move the Ruler markers to the corresponding parts of the ruler in the video (if there is a ruler in the video)</li>
+    <li>Press the <i>Trace movie</i> or <i>Re-trace movie</i> button to initiate tracing</li>
+  </ul>
 
-<p>You may add additional markers to trace additional points of interest.</p>
+  <p>You may add additional markers to trace additional points of interest.</p>
 
-<p>
+  <p>
     Once the movie is traced, you may play the traced movie using the controls on the movie player
     section of the page. You may play the whole movie from the current point, step forwards or backwards
     one frame at a time, or go to a specified frame.
-</p>
+  </p>
 
-<p>
+  <p>
     If you notice that tracing a given marker has not been successful for the entire length of
     the movie, go find the frame where tracing is lost, re-position the marker, and press <i>Re-trace movie</i>
     to re-trace from that point forward. You may have to repeat this process.
-</p>
+  </p>
 
-<h3>Units and Conventions</h3>
+  <h3>Units and Conventions</h3>
 
-<p>
-  Pixel coordinates are relative to the origin point (0,0) in the top left corner of the frame. Coordinate values increase from left to right and top to bottom.
-</p>
+  <p>
+    Pixel coordinates are relative to the origin point (0,0) in the top left corner of the frame. Coordinate values increase from left to right and top to bottom.
+  </p>
 
-<p>
+  <p>
     In the Marker Table <em>Location (mm)</em> column, millimeter values are expressed as millimeters from the top left corner of the frame.
-</p>
+  </p>
 
-<p>
+  <p>
     In the <em>Time vs Position </em>line graphs, the X Position and Y Position values are
     distances from the Apex marker's location in frame 0.
-</p>
+  </p>
 
-<p>
+  <p>
     This version of PlantTracer does not calculate or display the time elapsed in the uploaded videos. Please refer to the <a href="https://plant-tracer.github.io/webapp/UserTutorial.html">Help</a> for an example of how to calculate time in seconds from the frame values provided.
-</p>
+  </p>
 </div>
 
 <script type='module'>
@@ -89,7 +89,7 @@
 
   // When the document loads, run the trace_movie() functions.
   $(document).ready(function() {
-    trace_movie('div#tracer', params.get('movie_id'), api_key);
+  trace_movie('div#tracer', params.get('movie_id'), api_key);
   });
 
 

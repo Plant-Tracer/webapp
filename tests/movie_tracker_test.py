@@ -19,7 +19,7 @@ from app.odb import API_KEY,MOVIE_ID
 from app.odb_movie_data import read_object,create_new_movie_frame
 
 # Fixtures are in conftest.py
-from .conftest import logger
+from app.constants import logger
 
 # Bogus labels for generic test
 TEST_LABEL1 = 'test-label1'
@@ -38,9 +38,12 @@ def test_track_point_annotations(client, new_movie):
     """See if we can save two trackpoints in the frame and get them back"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
     api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
+    ddbo = cfg['ddbo']
+
+    # When we start, make sure that the the last frame tracked is None
+    movie = ddbo.get_movie(movie_id)
+    assert movie['last_frame_tracked'] is None
 
     tp0 = {'x':10,'y':11,'label':TEST_LABEL1}
     tp1 = {'x':20,'y':21,'label':TEST_LABEL2}
@@ -48,6 +51,10 @@ def test_track_point_annotations(client, new_movie):
     frame_urn = create_new_movie_frame(movie_id=movie_id, frame_number=0)
     logger.debug("frame_urn=%s",frame_urn)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[ tp0, tp1 ])
+
+    # Make sure that the last frame tracked is now 0
+    movie = ddbo.get_movie(movie_id)
+    assert movie['last_frame_tracked']==0
 
     # See if I can get it back
     tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_count=1)
@@ -73,6 +80,7 @@ def test_track_point_annotations(client, new_movie):
     assert response.status_code == 200
 
     # Validate that the trackpoints were written into the database
+    # We are writing it back to frame 1
     tps = odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
     assert len(tps)==3
     assert tps[0]['x'] == tp0['x']
@@ -89,6 +97,10 @@ def test_track_point_annotations(client, new_movie):
     assert tps[2]['y'] == tp2['y']
     assert tps[2]['label'] == tp2['label']
     assert tps[2]['frame_number'] == 1
+
+    # Get the movie and make sure that the last frame tracked is frame 0, not undef
+    movie = ddbo.get_movie(movie_id)
+    assert movie['last_frame_tracked']==1
 
 
 # pylint: disable=too-many-statements

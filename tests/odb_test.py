@@ -8,7 +8,7 @@ import pytest
 
 from app import odb
 from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
-#from app.constants import MIME,C
+from app.constants import logger
 
 # Fixtures are imported in conftest.py
 
@@ -96,8 +96,12 @@ def test_odb(local_ddb):
     # Create the user.
     ddbo.put_user(TEST_USER_DATA)
     # This should fail because the user we are putting exist
-    with pytest.raises(UserExists):
-        ddbo.put_user(TEST_USER_DATA)
+    try:
+        with pytest.raises(UserExists):
+            ddbo.put_user(TEST_USER_DATA)
+    except Exception as e:
+        logger.error("exception=%s %s",type(e),e)
+        raise
 
     # Register the user into the course
     odb.register_email(TEST_USER_EMAIL, TEST_USER_NAME, course_id=TEST_COURSE_ID)

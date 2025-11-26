@@ -22,11 +22,11 @@ from app import odb_movie_data
 from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.constants import E,MIME
 from app.s3_presigned import s3_client
+from app.constants import logger
 
 # Get constants from fixtures (fixtures themselves are in conftest.py)
 from .fixtures.local_aws import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
 
-from .conftest import logger
 
 
 POST_TIMEOUT = 2

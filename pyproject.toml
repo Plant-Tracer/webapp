@@ -9,7 +9,7 @@ authors = [
 license = "GPL"
 readme = "README.md"
 packages = [
-    { include = "src" },
+    { include = "app", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -34,6 +34,8 @@ requests = ">=2.32.4,<3.0.0"
 tabulate = "*"
 validate_email_address = "*"
 apig-wsgi = "^2.20.0"
+html5lib = "^1.1"
+html5validate = "^0.0.2"
 
 [tool.poetry.group.dev.dependencies]
 boto3-stubs = {extras = ["essential"], version = "*"}
@@ -80,6 +82,8 @@ disable = [
     "unused-argument",
     "invalid-name",
     "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
     "fixme"
 ]
 
@@ -109,9 +113,15 @@ extraPaths = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [
- "src",
- "tests"
-]
 addopts = "-ra -q"
 python_files = ["test_*.py"]
+norecursedirs = ["lib/ctools"]
+log_cli = true
+
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources",
+  "ignore:pkg_resources is deprecated:UserWarning",
+]
+
+[tool.pytest.ini_options.env]
+PYTEST = "1"

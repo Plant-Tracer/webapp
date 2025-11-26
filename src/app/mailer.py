@@ -5,7 +5,6 @@ because the responder does analysis of mail files."""
 
 import sys
 import smtplib
-import logging
 import imaplib
 import os
 import json
@@ -17,10 +16,8 @@ from jinja2.nativetypes import NativeEnvironment
 
 from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
-from .constants import C
+from .constants import C,logger
 
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
 
 # pylint: disable=invalid-name
 
@@ -51,7 +48,7 @@ def get_smtp_config():
     """Get the smtp config from the [smtp] section of a credentials file.
     If the file specifies a AWS secret, get that.
     """
-    logging.debug("get_smtp_config")
+    logger.debug("get_smtp_config")
     if C.SMTPCONFIG_ARN in os.environ:
         return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
 
@@ -92,7 +89,7 @@ def send_message(*,
     debug = SMTP_DEBUG or smtp_config.get('SMTP_DEBUG','')[0:1]=='Y'
 
     with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
-        logging.info("sending mail to %s with SMTP", ",".join(to_addrs))
+        logger.info("sending mail to %s with SMTP", ",".join(to_addrs))
         if debug:
             smtp.set_debuglevel(1)
         smtp.ehlo()
@@ -105,13 +102,13 @@ def send_message(*,
 def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
 
-    logging.warning("TK: Insert delay for MIN_SEND_INTERVAL")
+    logger.warning("TK: Insert delay for MIN_SEND_INTERVAL")
 
     to_addrs = [email]
     with open(os.path.join(TEMPLATE_DIR, C.EMAIL_TEMPLATE_FNAME), "r") as f:
         msg_env = NativeEnvironment().from_string(f.read())
 
-    logging.info("sending new link to %s",email)
+    logger.info("sending new link to %s",email)
     msg = msg_env.render(to_addrs=",".join([email]),
                          from_addr=C.PROJECT_EMAIL,
                          planttracer_endpoint=planttracer_endpoint,

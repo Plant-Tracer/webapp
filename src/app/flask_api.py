@@ -6,7 +6,6 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 
 """
 import json
-import logging
 import sys
 import smtplib
 import tempfile
@@ -26,14 +25,13 @@ from . import mailer
 from . import tracker
 from .apikey import get_user_api_key,get_user_dict,in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C,E,POST,GET_POST,__version__
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO
+from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
+from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
 from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
 
 api_bp = Blueprint('api', __name__)
-logger = logging.getLogger(__name__)
 
 
 ### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
@@ -49,14 +47,21 @@ class InvalidFrameNumber(Exception):
 ### Handle invalid apikey exceptions
 @api_bp.errorhandler(InvalidAPI_Key)
 def invalid_api_key(ex):
-    logging.info("invalid_api_key(%s)",ex)
+    logger.info("invalid_api_key(%s)",ex)
     return E.INVALID_API_KEY, 403
+
+@api_bp.errorhandler(UnauthorizedUser)
+def unauthorized_user(ex):
+    logger.info("UnauthorizedUser(%s)",ex)
+    return E.INVALID_MOVIE_ACCESS, 403
 
 
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
-    logging.debug("request.values=%s",request.values)
+    # If we are logging, don't log super long values... (like movie uploads)
+    if log_level=='DEBUG':
+        logger.debug("request.values=%s",printable80(request.values))
     return request.values.get(key, default)
 
 def get_movie_id():
@@ -77,7 +82,7 @@ def get_json(key):
         return None
 
 def get_int(key, default=None):
-    logging.debug("get_int key=%s get(key)=%s",key,get(key))
+    logger.debug("get_int key=%s get(key)=%s",key,get(key))
     try:
         return int(get(key))
     except (TypeError,ValueError):
@@ -103,7 +108,7 @@ def get_user_id(allow_demo=True):
     if allow_demo==False, then do not allow the user to be a demo user
     """
     if in_demo_mode() and not allow_demo:
-        logging.info("demo mode blocks requested action.")
+        logger.info("demo mode blocks requested action.")
         raise AuthError('demo accounts not allowed to execute requested action')
     userdict = get_user_dict()
     return userdict['user_id']
@@ -140,7 +145,7 @@ def api_register():
     email = request.values.get('email')
     planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
-        logging.info("email not valid: %s", email)
+        logger.info("email not valid: %s", email)
         return E.INVALID_EMAIL
     course_key = request.values.get('course_key').strip()
     if not odb.validate_course_key(course_key=course_key):
@@ -152,27 +157,27 @@ def api_register():
     user_id = user[USER_ID]
     new_api_key = odb.make_new_api_key(email=email)
     if not new_api_key:
-        logging.info("email not in database: %s",email)
+        logger.info("email not in database: %s",email)
         return E.INVALID_EMAIL
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
         mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
         ret = {'error': False, 'message': 'Registration key sent to '+email+link_html, 'user_id':user_id}
     except mailer.InvalidMailerConfiguration:
-        logging.error("Mailer reports Mailer not properly configured.")
+        logger.error("Mailer reports Mailer not properly configured.")
         ret =  {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
     except mailer.NoMailerConfiguration:
-        logging.error("Mailer reports no mailer configured.")
+        logger.error("Mailer reports no mailer configured.")
         ret =  {'error':True, 'message':'Mailer not properly configured (NoMailerConfiguration).'+link_html}
     except smtplib.SMTPAuthenticationError:
-        logging.error("Mailer reports smtplib.SMTPAuthenticationError.")
+        logger.error("Mailer reports smtplib.SMTPAuthenticationError.")
         ret = {'error':True, 'message':'Mailer reports smtplib.SMTPAuthenticationError.'+link_html}
     return ret
 
 def send_link(*, email, planttracer_endpoint):
     new_api_key = odb.make_new_api_key(email=email)
     if not new_api_key:
-        logging.info("email not in database: %s",email)
+        logger.info("email not in database: %s",email)
         raise EmailNotInDatabase(email)
     mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
 
@@ -182,19 +187,19 @@ def api_send_link():
     """Register the email address if it does not exist. Send a login and upload link"""
     email = request.values.get('email')
     planttracer_endpoint = request.values.get('planttracer_endpoint')
-    logging.info("resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
+    logger.info("resend-link email=%s planttracer_endpoint=%s",email,planttracer_endpoint)
     if not validate_email(email, check_mx=C.CHECK_MX):
-        logging.info("email not valid: %s", email)
+        logger.info("email not valid: %s", email)
         return E.INVALID_EMAIL
     try:
         send_link(email=email, planttracer_endpoint=planttracer_endpoint)
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
     except mailer.NoMailerConfiguration:
-        logging.error("no mailer configuration")
+        logger.error("no mailer configuration")
         return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
-        logging.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
+        logger.error("invalid mailer configuration: %s type(e)=%s",e,type(e))
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
@@ -222,10 +227,10 @@ def api_bulk_register():
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
     except mailer.NoMailerConfiguration:
-        logging.error("no mailer configuration")
+        logger.error("no mailer configuration")
         return E.NO_MAILER_CONFIGURATION
     except mailer.InvalidMailerConfiguration as e:
-        logging.error("invalid mailer configuration: %s",e)
+        logger.error("invalid mailer configuration: %s",e)
         return E.INVALID_MAILER_CONFIGURATION
     return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses', 'user_ids':user_ids}
 
@@ -261,7 +266,7 @@ def api_new_movie():
              dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
     """
     # pylint: disable=unsupported-membership-test
-    logging.info("api_new_movie")
+    logger.info("api_new_movie")
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
@@ -300,10 +305,10 @@ def api_get_movie_data():
               IF MOVIE IS IN DB - The raw movie data as a movie.
     """
     movie_id = get_movie_id()
-    if not odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id):
-        return make_response(E.INVALID_MOVIE_ACCESS, 404)
+    movie    = odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id)
+    assert movie_id == movie[MOVIE_ID]
 
-    data_urn = get_movie_data(movie_id=movie_id,
+    data_urn = get_movie_data(movie_id=movie[MOVIE_ID],
                                   zipfile = get('format')=='zip',
                                   get_urn = True)
 
@@ -377,26 +382,24 @@ def api_get_frame():
     frame_number = get_int('frame_number',0)
     movie_id     = get_movie_id()
 
-    logging.debug('logging.debug /get-frame. user_id=%s frame_number=%s movie_id=%s',user_id,frame_number,movie_id)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        logging.info("User %s cannot access movie_id %s",user_id, movie_id)
-        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 403)
+    logger.debug('logger.debug /get-frame. user_id=%s frame_number=%s movie_id=%s',user_id,frame_number,movie_id)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     if frame_number<0:
-        logging.error("invalid frame number %s",frame_number)
+        logger.error("invalid frame number %s",frame_number)
         return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
 
     # See if there is a urn
-    urn = odb.get_frame_urn(movie_id=movie_id, frame_number=frame_number)
-    logging.debug("urn=%s",urn)
+    urn = odb.get_frame_urn(movie_id=movie[MOVIE_ID], frame_number=frame_number)
+    logger.debug("urn=%s",urn)
     if urn is not None and not object_exists(urn):
-        logging.warning("%s does not exist",urn)
+        logger.warning("%s does not exist",urn)
         purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
         urn = None
 
     if urn is None:
         # the frame is not in the database, so we need to make it.
-        logging.debug('getframe 5')
+        logger.debug('getframe 5')
         try:
             frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
             assert frame_data is not None
@@ -405,11 +408,8 @@ def api_get_frame():
         urn = create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
         assert urn is not None
 
-    logging.debug('getframe 4')
-    logging.debug("api_get_frame urn=%s",urn)
     url = make_signed_url(urn=urn)
-    logging.debug("api_get_frame url=%s",url)
-    logging.debug('getframe 10 ')
+    logger.debug("api_get_frame urn=%s url=%s",urn,url)
     return redirect(url)
 
 
@@ -428,8 +428,7 @@ def api_edit_movie():
     """
     movie_id = get_movie_id()
     user_id  = get_user_id(allow_demo=False)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+    odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     action = get("action")
     if action=='rotate90cw':
@@ -452,11 +451,9 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    if not odb.can_access_movie(user_id=get_user_id(allow_demo=False),
-                                movie_id=get_movie_id()):
-        return E.INVALID_MOVIE_ACCESS
-    delete_movie(movie_id=get_movie_id(),
-                    delete=get_bool('delete',True))
+    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False),
+                             movie_id=get_movie_id())
+    delete_movie(movie_id=movie[MOVIE_ID], delete=get_bool('delete',True))
     return {'error': False}
 
 ################################################################
@@ -488,10 +485,9 @@ def api_get_movie_metadata():
     frame_count = get_int('frame_count')
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
 
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return make_response(E.INVALID_MOVIE_ACCESS,404)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    movie_metadata =  odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
+    movie_metadata =  odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # If we do not have the movie width and height, get them and write them back to the database
     if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
@@ -545,38 +541,40 @@ def api_get_movie_trackpoints():
     :param: format - 'xlsx' or 'json'
     """
     movie_id = get_movie_id()
-    if odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id):
-        # get_movie_trackpoints() returns a dictionary for each trackpoint.
-        # we want a dictionary for each frame_number
-        trackpoint_dicts = odb.get_movie_trackpoints(movie_id=movie_id)
-        frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
-        labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
-        frame_dicts    = defaultdict(dict)
+    movie = odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id)
 
-        if get('format')=='json':
-            return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
+    # NOTE - getting the movie should (soon) get all the trackpoints, as they will all be stored together
+    # get_movie_trackpoints() returns a dictionary for each trackpoint.
+    # we want a dictionary for each frame_number
+    trackpoint_dicts = odb.get_movie_trackpoints(movie_id=movie[MOVIE_ID])
+    frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
+    labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
+    frame_dicts    = defaultdict(dict)
 
-        for tp in trackpoint_dicts:
-            frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
-            frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
+    if get('format')=='json':
+        return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
 
-        fieldnames = ['frame_number']
-        for label in labels:
-            fieldnames.append(label+' x')
-            fieldnames.append(label+' y')
-        logging.debug("fieldnames=%s",fieldnames)
+    for tp in trackpoint_dicts:
+        frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
+        frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
 
-        # Now write it out with the dictwriter
-        with io.StringIO() as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
-            writer.writeheader()
-            for frame in frame_numbers:
-                frame_dicts[frame]['frame_number'] = frame
-                writer.writerow(frame_dicts[frame])
-            response = make_response(f.getvalue())
-            response.headers['Content-Type'] =  'text/csv'
-            return response
-    return E.INVALID_MOVIE_ACCESS
+    fieldnames = ['frame_number']
+    for label in labels:
+        fieldnames.append(label+' x')
+        fieldnames.append(label+' y')
+    logger.debug("fieldnames=%s",fieldnames)
+
+    # Now write it out with the dictwriter
+    with io.StringIO() as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
+        writer.writeheader()
+        for frame in frame_numbers:
+            frame_dicts[frame]['frame_number'] = frame
+            writer.writerow(frame_dicts[frame])
+        response = make_response(f.getvalue())
+        response.headers['Content-Type'] =  'text/csv'
+        return response
+
 
 
 ################################################################
@@ -644,12 +642,12 @@ class MovieTrackCallback:
         # Write the frame data to the database if we do not have it
         # Moving to an object-oriented API would make this a whole lot more efficient...
 
-        logging.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
+        logger.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
 
         frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
         self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
         self.ziplen += len(frame_jpeg)
-        logging.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
+        logger.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
         self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_jpeg)
 
         # Update the trackpoints
@@ -659,7 +657,7 @@ class MovieTrackCallback:
         total_frames = self.movie_metadata['total_frames']
         message = f"Tracked frames {frame_number+1} of {total_frames}"
         odb.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-        logging.debug("NOTIFY AFTER. self=%s self.ziplen=%s",self,self.ziplen)
+        logger.debug("NOTIFY AFTER. self=%s self.ziplen=%s",self,self.ziplen)
 
     def close(self):
         """Close the zipfile"""
@@ -671,15 +669,15 @@ class MovieTrackCallback:
 
     @property
     def zipfile_data(self):
-        logging.debug("zipfile_data %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
+        logger.debug("zipfile_data %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
         with open(self.zipfile_name,'rb') as f:
             return f.read()
 
     def done(self):
-        logging.debug("DONE. Set TRACKING_COMPLETED")
+        logger.debug("DONE. Set TRACKING_COMPLETED")
         odb.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
         if self.zipfile_name:
-            logging.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
+            logger.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
             os.unlink(self.zipfile_name)
 
 
@@ -744,11 +742,10 @@ def api_track_movie_queue():
     movie_id       = get_movie_id()
     user_id        = get_user_id(allow_demo=False)
     run_async      = get_bool('run_async')
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        return make_response(jsonify(E.INVALID_MOVIE_ACCESS), 400)
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     # Make sure we are not tracking a movie that is not an original movie
-    movie_row = odb.list_movies(user_id=user_id, movie_id=movie_id)
+    movie_row = odb.list_movies(user_id=user_id, movie_id=movie[MOVIE_ID])
     assert len(movie_row)==1
     if movie_row[0]['orig_movie'] is not None:
         return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
@@ -756,9 +753,9 @@ def api_track_movie_queue():
     if run_async:
         raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
 
-    logging.debug("calling api_track_movie")
+    logger.debug("calling api_track_movie")
     api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
-    logging.debug("return from api_track_movie")
+    logger.debug("return from api_track_movie")
     return jsonify({'error': False, 'message':'Tracking is completed'})
 
 
@@ -777,13 +774,12 @@ def api_new_frame():
 
     """
     movie_id=get_movie_id()
-    if not odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id):
-        return E.INVALID_MOVIE_ACCESS
+    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
     try:
         frame_data = base64.b64decode( request.values.get('frame_base64_data'))
     except TypeError:
         frame_data = None
-    frame_urn = create_new_movie_frame( movie_id = movie_id,
+    frame_urn = create_new_movie_frame( movie_id = movie[MOVIE_ID],
                                             frame_number = get_int('frame_number'),
                                             frame_data = frame_data)
     return {'error': False, 'frame_urn': frame_urn}
@@ -800,17 +796,23 @@ def api_put_frame_trackpoints():
     :param: movie_id - the movie
     :param: frame_number - the the frame
     :param: trackpoints - JSON string, must be an array of trackpoints, if provided
+
+    NOTE: This can be made much more efficient. We should only be getting the movie data ONCE from dynamoDB...
     """
+    logger.debug("log_level=%s", log_level)
+    logger.debug("api_put_frame_trackpoints")
     user_id  = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     frame_number = get_int('frame_number')
-    logging.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie_id,frame_number)
-    if not odb.can_access_movie(user_id=user_id, movie_id=movie_id):
-        logging.debug("user %s cannot access movie_id %s",user_id, movie_id)
-        return {'error':True, 'message':f'User {user_id} cannot access movie_id={movie_id}'}
-    trackpoints=get_json('trackpoints')
+    trackpoints = get_json('trackpoints')
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    if log_level=='DEBUG':
+        logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
+        for tp in trackpoints:
+            logger.debug("%s",tp)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
-    return {'error': False, 'message':'Trackpoints recorded.'}
+
+    return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 
 
 ################################################################
