@@ -259,7 +259,11 @@ def create_tables(*,ignore_table_exists = False):
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
             if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
-                if (not ignore_table_exists) and (table_name not in ignore_table_exists):
+                # ignore_table_exists can be a bool or a collection of table names to ignore
+                should_warn = not ignore_table_exists
+                if isinstance(ignore_table_exists, (list, tuple, set)) and table_name in ignore_table_exists:
+                    should_warn = False
+                if should_warn:
                     logger.warning("Table %s already exists.", table_name)
             else:
                 logger.error("Error creating table %s: %s.  endpoint=%s", table_name, e, dynamodb.meta.client.meta.endpoint_url)
