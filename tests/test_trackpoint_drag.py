@@ -186,7 +186,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
             if analyze_button.is_displayed():
                 break
         except NoSuchElementException:
-            pass
+            pass  # Element not found yet, continue polling
         time.sleep(0.25)
 
     if not analyze_button or not analyze_button.is_displayed():
@@ -243,7 +243,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
             chrome_driver.save_screenshot('/tmp/alert_error.png')
             pytest.fail(f"Alert appeared after drag action: {alert_text}")
         except NoAlertPresentException:
-            pass
+            pass  # No alert present, which is the expected behavior - continue
     except Exception as e:      # pylint: disable=broad-exception-caught
         chrome_driver.save_screenshot('/tmp/drag_error.png')
         pytest.fail(f"Error performing drag action: {e}")
@@ -267,4 +267,4 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
         chrome_driver.save_screenshot('/tmp/trackpoints_not_found.png')
         pytest.fail("Trackpoints were not saved to database after initial placement")
 
-    logger.warning("Trackpoints were saved in DynamoDB. Dagging from chromium of trackpoints does not work, so no validation that trackpoints can be moved.")
+    logger.warning("Trackpoints were saved in DynamoDB. Dragging from chromium of trackpoints does not work, so no validation that trackpoints can be moved.")

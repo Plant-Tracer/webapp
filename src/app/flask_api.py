@@ -799,7 +799,7 @@ def api_put_frame_trackpoints():
 
     NOTE: This can be made much more efficient. We should only be getting the movie data ONCE from dynamoDB...
     """
-    print("log_level=",log_level)
+    logger.debug("log_level=%s", log_level)
     logger.debug("api_put_frame_trackpoints")
     user_id  = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
