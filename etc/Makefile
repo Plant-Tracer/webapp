@@ -9,6 +9,6 @@ install: setup_services.py
 fix-certs:
 	sudo /opt/certbot/bin/certbot --nginx
 	sudo nginx -t
-	sudo systemctl restart nginx 
+	sudo systemctl restart nginx
 
 .PHONY: install fix-certs

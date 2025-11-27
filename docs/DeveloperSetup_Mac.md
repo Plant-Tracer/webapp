@@ -41,7 +41,7 @@ You may optionally set these variables:
 Note that there are multiple ways that a single service can be sliced or partitioned:
 
 * A single server might have multiple Plant Tracer web app instances listening on different ports.
-* Each web app instance can store in its own S3 bucket. Alternatively, you can use the same S3 bucket for multiple web app instances, because each movie is stored with a UUID in the form `s3://{PLANTTRACER_S3_BUCKET/{COURSE_ID}/{MovieID/`. 
+* Each web app instance can store in its own S3 bucket. Alternatively, you can use the same S3 bucket for multiple web app instances, because each movie is stored with a UUID in the form `s3://{PLANTTRACER_S3_BUCKET/{COURSE_ID}/{MovieID/`.
 * Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing with `pytest`, tables are created with the randomized prefix `test-????` where `????` is a randomly hexadecimal string.
 * Within each web app instance, there can be one or more courses, each with its own course identifier (name).
 
@@ -50,7 +50,7 @@ Note that any course can be come a demo course. What makes it a demo course is t
 # Mac Configuration
 ## Prep your mac
 1. Install developer tools.
- 
+
 From a clean install, open the Terminal window and type `make`. You should get an error message:
 <img width="949" height="455" alt="image" src="https://github.com/user-attachments/assets/a51cd276-7eae-4de8-8ba7-cea15ebe3bb6" />
 
@@ -64,7 +64,7 @@ Agree to the license agreement.
 ```
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
-   
+
 <img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/53738f7e-3168-4041-a211-f6d1058ae0bd" />
 ...
 <img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/03ccb527-14ba-4d0c-84d9-48bd337f93a1" />
@@ -101,7 +101,7 @@ remote: Compressing objects: 100% (577/577), done.
 remote: Total 10477 (delta 866), reused 827 (delta 827), pack-reused 9073 (from 3)
 Receiving objects: 100% (10477/10477), 106.38 MiB | 48.78 MiB/s, done.
 Resolving deltas: 100% (7355/7355), done.
-% 
+%
 ```
 
 2. Use the macOS installer built into the Makefile to install additional software
@@ -148,7 +148,7 @@ Note that our virtual environment is currently stored in the `venv` directory, a
 
 ```
 cd ~/gits/webapp          # or wherever you have it installed
-source venv/bin/activate  
+source venv/bin/activate
 python --version          # Verify you get the correct python
 ```
 
@@ -306,7 +306,7 @@ Click on the link and you see:
 
 
 ## Creating a course and a user
-While the application is running, open another window. 
+While the application is running, open another window.
 
 We will first use the `--report` option to see what is in the database:
 ```
@@ -333,7 +333,7 @@ dev-logs                      0                      0
 ```
 Notice that our code automatically generates a WARNING of every table scan operaiton, as these operaitons are typically expensive in DynamoDB. This is just for development purposes.  (The report option will be expanded over time.)
 
-Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the `--makelink` option for the admin user. 
+Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the `--makelink` option for the admin user.
 
 Courses can be created the with `dbutil --create_course` command. Please review the source code in `dbutil.py`. You will see that this option requires the following arguments:
 

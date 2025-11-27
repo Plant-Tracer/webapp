@@ -23,7 +23,7 @@ beforeAll(() => {
 
 describe('list_movies_data', () => {
   let mockElements;
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
     // Assign global variables from globalData
@@ -38,7 +38,7 @@ describe('list_movies_data', () => {
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
     global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
-    
+
     // Mock document.querySelector to return mock elements with innerHTML setter
     mockElements = {};
     document.querySelector = jest.fn((selector) => {
@@ -47,7 +47,7 @@ describe('list_movies_data', () => {
       }
       return mockElements[selector];
     });
-    
+
     // Mock document.querySelectorAll for hiding movie players
     document.querySelectorAll = jest.fn(() => []);
   });
@@ -73,7 +73,7 @@ describe('list_movies_data', () => {
 
     list_movies_data(movies);
     expect(document.querySelector).toHaveBeenCalledTimes(4);
-    
+
     // Check that the published movies div was populated
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain("<table>");

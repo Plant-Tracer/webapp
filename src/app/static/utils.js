@@ -20,7 +20,7 @@ function $(selector) {
             }
         };
     }
-    
+
     if (typeof selector === 'string') {
         // If it's a string starting with #, use getElementById for efficiency
         if (selector.startsWith('#')) {
@@ -272,7 +272,7 @@ class DOMWrapper {
     get [0]() {
         return this.element;
     }
-    
+
     // Support for .length property like jQuery
     get length() {
         return this.element ? 1 : 0;
@@ -312,12 +312,12 @@ $.post = function(url, data) {
             }
         }
     }
-    
+
     const callbacks = {
         done: [],
         fail: []
     };
-    
+
     const promise = fetch(url, { method: 'POST', body: formData })
         .then(response => {
             if (!response.ok) {
@@ -342,7 +342,7 @@ $.post = function(url, data) {
             }
             throw error;
         });
-    
+
     return {
         done: function(callback) {
             if (callback) callbacks.done.push(callback);

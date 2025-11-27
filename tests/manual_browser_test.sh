@@ -1,6 +1,6 @@
 #!/bin/bash
 # Manual Browser Testing Script for canvas_movie_controller.js
-# 
+#
 # This script helps you manually test the canvas movie controller
 # with a local server and Chromium browser.
 #
@@ -54,7 +54,7 @@ echo "Opening test pages in Chromium..."
 echo
 echo "Testing pages:"
 echo "  - /demo/tracer1"
-echo "  - /demo/tracer2"  
+echo "  - /demo/tracer2"
 echo "  - /demo/tracer3"
 echo
 echo "What to check:"

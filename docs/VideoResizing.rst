@@ -34,17 +34,17 @@ Lapse-It free version adds a Lapse-It trailer to each video that needs to be rem
 Steps to Export a Resized Video Using Lapse-It
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Open Lapse-It**  
+1. **Open Lapse-It**
    - Launch the Lapse-It app on your device.
 
-2. **Select the Video**  
+2. **Select the Video**
    - Choose the recorded time-lapse video you want to export.
 
-3. **Adjust the Resolution**  
+3. **Adjust the Resolution**
    - Tap on **Render**.
    - In the resolution settings, select a preset that ensures neither width nor height exceeds **640 pixels**. If a custom resolution option is available, set the maximum dimension to **640 pixels**.
 
-4. **Export the Video**  
+4. **Export the Video**
    - Confirm the settings and tap **Render**.
    - Wait for the process to complete, then save or share the exported video.
 
@@ -66,7 +66,7 @@ Explanation
 - ``-i input.mp4`` → Specifies the input video file.
 - ``-vf "scale='if(gt(iw,ih),640,-1)':'if(gt(iw,ih),-1,640)'"`` → Resizes the video while maintaining aspect ratio:
 
-  - ``iw`` = input width, 
+  - ``iw`` = input width,
   - ``ih`` = input height.
   - If the width (``iw``) is greater than the height (``ih``), the width is set to **640**, and the height is automatically scaled (``-1``).
   - Otherwise, the height is set to **640**, and the width is automatically scaled (``-1``).
@@ -85,14 +85,14 @@ QuickTime Player comes installed by default with MacOS and can be used to trim p
 Steps to Resize Video Using QuickTime Player
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Open QuickTime Player**  
+1. **Open QuickTime Player**
    - Locate your video file and open it with **QuickTime Player**.
 
-2. **Export the Video with a Smaller Resolution**  
+2. **Export the Video with a Smaller Resolution**
    - Click on **File** > **Export As**.
    - Choose a resolution that ensures no dimension exceeds **640 pixels** (e.g., **480p** or manually adjust if available).
 
-3. **Save the Resized Video**  
+3. **Save the Resized Video**
    - Choose a destination folder.
    - Click **Save**, and QuickTime will process the resized video.
 
@@ -104,20 +104,20 @@ Windows has a built-in video editor called ClipChamp. Prior to the existence of 
 Steps to Resize Video Using Clipchamp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Open Clipchamp**  
+1. **Open Clipchamp**
    - Press ``Win + S`` and search for **Clipchamp**, then open it.
 
-2. **Import the Video**  
+2. **Import the Video**
    - Click **Create a new video**.
    - Drag and drop your video file into the media library.
 
-3. **Resize the Video**  
+3. **Resize the Video**
    - Click on the video in the timeline.
    - Go to the **Transform** or **Resize** section.
    - Select **"Fit"** to maintain the aspect ratio.
    - Manually adjust the resolution so that neither width nor height exceeds **640 pixels**.
 
-4. **Export the Resized Video**  
+4. **Export the Resized Video**
    - Click **Export** at the top right.
    - Choose a resolution that ensures no dimension exceeds 640 pixels.
    - Click **Export**, and save your resized video.
