@@ -41,7 +41,7 @@ For the most thorough testing, run the integration test with a real local server
    ```bash
    make run-local-demo-debug
    ```
-   
+
    This starts the server at `http://localhost:8080`
 
 3. **Run the integration test:**

@@ -26,6 +26,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from app import odb
 from app.odb import DDBO, MOVIE_ID, API_KEY, USER_ID
 from app.constants import logger
+from .selenium_utils import authenticate_browser
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -102,9 +103,6 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     """
     movie_id = new_movie[MOVIE_ID]
     api_key  = new_movie[API_KEY]
-
-    # Ensure api_key is a clean string (no trailing whitespace or extra characters)
-    api_key = str(api_key).strip()
     user_id = new_movie[USER_ID]
 
     # Validate that the API key exists in the database before using it
@@ -132,33 +130,7 @@ def test_trackpoint_drag_and_database_update(chrome_driver, live_server, new_mov
     print(f"API key validated for user: {api_key_user_id}")
     print(f"Movie validated for user: {movie_user_id}")
 
-    # First, navigate to the server homepage to establish the domain
-    chrome_driver.get(live_server)
-
-    # Set the api_key cookie directly in the browser
-    # The cookie name is 'api_key' as defined in constants.py API_KEY_COOKIE_BASE
-    # Don't specify domain - let it default to the current domain
-    chrome_driver.add_cookie({
-        'name': 'api_key',
-        'value': api_key,
-        'path': '/'
-    })
-
-    # Verify the cookie was set correctly
-    cookies = chrome_driver.get_cookies()
-    api_key_cookie = None
-    for cookie in cookies:
-        if cookie['name'] == 'api_key':
-            api_key_cookie = cookie
-            break
-
-    if not api_key_cookie:
-        pytest.fail("Failed to set api_key cookie in browser")
-
-    # Verify the cookie value matches what we set
-    cookie_value = api_key_cookie['value']
-    if cookie_value != api_key:
-        pytest.fail(f"Cookie value mismatch! Expected '{api_key}' but got '{cookie_value}'")
+    authenticate_browser(chrome_driver, live_server, api_key)
 
     # Navigate to the list page (authentication will use the cookie)
     url = f"{live_server}/list"

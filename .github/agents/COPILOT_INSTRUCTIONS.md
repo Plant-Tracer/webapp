@@ -15,7 +15,7 @@ When working with the `app.odb` module, follow these patterns:
 2. **Instance methods** require creating a `DDBO()` instance first:
    ```python
    from app.odb import DDBO
-   
+
    ddbo = DDBO()  # It's a singleton
    api_key_dict = ddbo.get_api_key_dict(api_key)
    movie_dict = ddbo.get_movie(movie_id)
@@ -28,7 +28,7 @@ When working with the `app.odb` module, follow these patterns:
 
 ### Common Mistake to Avoid
 
-❌ **WRONG:** `odb.get_api_key_dict(api_key)` 
+❌ **WRONG:** `odb.get_api_key_dict(api_key)`
 - This will cause `AttributeError: module 'app.odb' has no attribute 'get_api_key_dict'`
 
 ✅ **CORRECT:**

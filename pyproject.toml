@@ -123,5 +123,9 @@ filterwarnings = [
   "ignore:pkg_resources is deprecated:UserWarning",
 ]
 
+markers = [
+  "selenium: marks tests that require Selenium WebDriver (deselect with '-m \"not selenium\"')",
+]
+
 [tool.pytest.ini_options.env]
 PYTEST = "1"

@@ -165,7 +165,7 @@ When running with local server, the tests capture and verify:
   [INFO] add_frame_objects(0)
   [INFO] add_frame_objects(1)
   [INFO] play(1)
-  
+
 [✓] No SEVERE errors found
 [✓] Canvas element present
 [✓] Movie controls functional
@@ -202,7 +202,7 @@ The implementation satisfies the requirement: "please be sure that this code is 
 
 ---
 
-*Generated:* 2025-11-19  
-*PR:* #797 (sub-PR)  
-*Review Comment:* #2542956141  
+*Generated:* 2025-11-19
+*PR:* #797 (sub-PR)
+*Review Comment:* #2542956141
 *Commits:* 47d6951, e55e5f5
