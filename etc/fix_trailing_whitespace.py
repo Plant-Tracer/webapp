@@ -6,7 +6,6 @@ Only rewrites files that actually have trailing whitespace issues.
 This helps maintain clean code without unnecessary file modifications.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
