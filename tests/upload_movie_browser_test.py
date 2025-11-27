@@ -98,3 +98,4 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
 
     # Cleanup movie data so fixtures remain isolated
     odb_movie_data.purge_movie(movie_id=movie_id)
+    odb_movie_data.delete_movie(movie_id=movie_id)
