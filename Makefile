@@ -216,8 +216,8 @@ jscoverage:
 
 merge-coverage:
 	@echo Merging Jest and browser coverage...
-	@poetry run python -c "from tests.js_coverage_utils import merge_coverage_files; from pathlib import Path; merge_coverage_files(Path('coverage/coverage-final.json'), Path('coverage/browser-coverage.json'), Path('coverage/coverage-final.json'))"
-	@echo Coverage merged into coverage/coverage-final.json
+	@poetry run python -c "from tests.js_coverage_utils import merge_coverage_files; from pathlib import Path; merge_coverage_files(Path('coverage/coverage-final.json'), Path('coverage/browser-coverage.json'), Path('coverage/merged-coverage.json'))"
+	@echo Coverage merged into coverage/merged-coverage.json
 
 jstest-debug:
 	NODE_PATH=src/app/static npm run test-debug
