@@ -153,7 +153,7 @@ def merge_coverage_files(
             # Deep merge coverage data - combine hit counts for overlapping files
             for file_path, file_coverage in browser_coverage.items():
                 if file_path in merged:
-                    merged[file_path] = merge_file_coverage(merged[file_path], file_coverage)
+                    merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
                 else:
                     merged[file_path] = file_coverage
 
