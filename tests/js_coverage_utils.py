@@ -150,13 +150,11 @@ def merge_coverage_files(
     if browser_coverage_path.exists():
         with open(browser_coverage_path, 'r', encoding='utf-8') as f:
             browser_coverage = json.load(f)
-            # Properly merge coverage data by combining hit counters
+            # Deep merge coverage data - combine hit counts for overlapping files
             for file_path, file_coverage in browser_coverage.items():
                 if file_path in merged:
-                    # Merge overlapping file coverage by combining counters
-                    merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
+                    merged[file_path] = merge_file_coverage(merged[file_path], file_coverage)
                 else:
-                    # New file - just add it
                     merged[file_path] = file_coverage
 
     # Save merged coverage
