@@ -46,7 +46,15 @@ def fix_boto_log_level() -> None:
 ## API SUPPORT
 
 
-app = Flask(__name__)
+# Use instrumented static files in test mode for coverage collection
+static_folder = 'static'
+if os.environ.get('COLLECT_JS_COVERAGE', '').lower() in ('1', 'true', 'yes'):
+    instrumented_static = os.path.join(os.path.dirname(__file__), 'static-instrumented')
+    if os.path.exists(instrumented_static):
+        static_folder = 'static-instrumented'
+        logger.info("Using instrumented static files from static-instrumented/ for JS coverage")
+
+app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
 app.register_blueprint(api_bp, url_prefix='/api')
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)

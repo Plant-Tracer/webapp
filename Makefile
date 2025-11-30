@@ -137,7 +137,9 @@ pytest: $(REQ)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
 
 pytest-coverage: $(REQ)
-	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	@echo "Instrumenting JavaScript files for browser coverage..."
+	@NODE_ENV=test node scripts/instrument-js.js || echo "Warning: Could not instrument JS files. Browser coverage may not be collected."
+	$(PT_VARS) COLLECT_JS_COVERAGE=true poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -211,8 +213,12 @@ eslint:
 	(cd src/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=src/app/static npm run coverage
+	NODE_ENV=test NODE_PATH=src/app/static npm run coverage
 	NODE_PATH=src/app/static npm test
+
+instrument-js:
+	@echo "Instrumenting JavaScript files for browser coverage..."
+	@NODE_ENV=test node scripts/instrument-js.js
 
 merge-coverage:
 	@echo Merging Jest and browser coverage...
