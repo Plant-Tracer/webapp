@@ -84,7 +84,8 @@ disable = [
     "too-many-locals",
     "too-many-branches",
     "too-many-statements",
-    "fixme"
+    "fixme",
+    "too-many-positional-arguments",
 ]
 
 [tool.pylint.design]

@@ -46,6 +46,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 
 APP_ETC=app/etc
 DBUTIL=src/dbutil.py
+.PHONY: dist distclean
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
@@ -66,9 +67,8 @@ distclean:
 
 
 ################################################################
-#
-# By default, PYLINT generates an error if your code does not rank 10.0.
-# This makes us tolerant of minor problems.
+# Main targets used by CI/CD system and developers
+.PHONY: all check coverage tags
 
 all:
 	@echo verify syntax and then restart
@@ -78,6 +78,11 @@ all:
 check:
 	make lint
 	make pytest
+	make jscoverage
+
+coverage:
+	make pytest-coverage
+	make jscoverage
 
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
@@ -133,7 +138,7 @@ pytest: $(REQ)
 
 pytest-coverage: $(REQ)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
-	@echo covreage report in htmlcov/
+	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
@@ -208,6 +213,11 @@ eslint:
 jscoverage:
 	NODE_PATH=src/app/static npm run coverage
 	NODE_PATH=src/app/static npm test
+
+merge-coverage:
+	@echo Merging Jest and browser coverage...
+	@poetry run python -c "from tests.js_coverage_utils import merge_coverage_files; from pathlib import Path; merge_coverage_files(Path('coverage/coverage-final.json'), Path('coverage/browser-coverage.json'), Path('coverage/merged-coverage.json'))"
+	@echo Coverage merged into coverage/merged-coverage.json
 
 jstest-debug:
 	NODE_PATH=src/app/static npm run test-debug
