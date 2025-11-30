@@ -1,4 +1,8 @@
 # https://coverage.readthedocs.io/en/latest/excluding.html
+[run]
+# Use relative paths for codecov compatibility
+relative_files = True
+
 [report]
 exclude_also =
     def __repr__
@@ -6,7 +10,6 @@ exclude_also =
     if settings.DEBUG
     raise AssertionError
     raise NotImplementedError
-    if 0:
     if __name__ ?== ?.__main__.:
     if TYPE_CHECKING:
     class .*\bProtocol\):

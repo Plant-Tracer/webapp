@@ -83,6 +83,8 @@ check:
 coverage:
 	make pytest-coverage
 	make jscoverage
+	@echo "Normalizing JavaScript coverage paths for codecov..."
+	@poetry run python3 scripts/normalize_coverage_paths.py coverage/coverage-final.json || echo "Warning: Could not normalize coverage paths"
 
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
@@ -140,6 +142,8 @@ pytest-coverage: $(REQ)
 	@echo "Instrumenting JavaScript files for browser coverage..."
 	@NODE_ENV=test node scripts/instrument-js.js || echo "Warning: Could not instrument JS files. Browser coverage may not be collected."
 	$(PT_VARS) COLLECT_JS_COVERAGE=true poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	@echo "Normalizing coverage file paths for codecov..."
+	@poetry run python3 scripts/normalize_coverage_paths.py coverage/coverage-final.json || echo "Warning: Could not normalize coverage paths"
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...

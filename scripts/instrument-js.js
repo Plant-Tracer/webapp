@@ -25,8 +25,9 @@ const babelConfig = {
   }]],
   plugins: [
     ['istanbul', {
-      // Use absolute paths that match Jest's coverage format
+      // Use relative paths from git root for codecov compatibility
       cwd: GIT_ROOT,
+      includeAllSources: false,
     }]
   ],
   retainLines: true,

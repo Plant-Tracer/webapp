@@ -45,6 +45,15 @@
       "text",
       "clover"
     ],
+    "collectCoverageFrom": [
+      "src/app/static/**/*.{js,mjs}",
+      "!src/app/static/**/*.test.{js,mjs}",
+      "!src/app/static/**/node_modules/**"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/jstests/"
+    ],
     "transform": {
       "^.+\\.jsx?$": "babel-jest"
     },
