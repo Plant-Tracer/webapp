@@ -10,6 +10,88 @@ from pathlib import Path
 from typing import Any
 
 
+def _merge_hit_counters(base: dict[str, int], overlay: dict[str, int]) -> dict[str, int]:
+    """
+    Merge two hit counter dicts by adding values together.
+
+    Args:
+        base: Base hit counter dict (e.g., {"0": 1, "1": 2})
+        overlay: Overlay hit counter dict to merge
+
+    Returns:
+        Merged hit counter dict with values summed
+    """
+    result = dict(base)
+    for key, value in overlay.items():
+        result[key] = result.get(key, 0) + value
+    return result
+
+
+def _merge_branch_counters(base: dict[str, list], overlay: dict[str, list]) -> dict[str, list]:
+    """
+    Merge two branch counter dicts by adding array elements.
+
+    Args:
+        base: Base branch counter dict (e.g., {"0": [1, 0], "1": [2, 3]})
+        overlay: Overlay branch counter dict to merge
+
+    Returns:
+        Merged branch counter dict with array elements summed
+    """
+    result = {}
+    all_keys = set(base.keys()) | set(overlay.keys())
+
+    for key in all_keys:
+        base_arr = base.get(key, [])
+        overlay_arr = overlay.get(key, [])
+
+        # Handle different array lengths by extending with zeros
+        max_len = max(len(base_arr), len(overlay_arr))
+        base_arr = list(base_arr) + [0] * (max_len - len(base_arr))
+        overlay_arr = list(overlay_arr) + [0] * (max_len - len(overlay_arr))
+
+        result[key] = [b + o for b, o in zip(base_arr, overlay_arr)]
+
+    return result
+
+
+def _merge_file_coverage(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """
+    Merge two Istanbul file coverage objects.
+
+    Combines hit counters (s, f, b) by adding values, and preserves
+    the map structures from the base with overlay additions.
+
+    Args:
+        base: Base coverage object for a file
+        overlay: Overlay coverage object to merge
+
+    Returns:
+        Merged coverage object
+    """
+    result = dict(base)
+
+    # Merge statement hits (s)
+    if 's' in overlay:
+        result['s'] = _merge_hit_counters(result.get('s', {}), overlay['s'])
+
+    # Merge function hits (f)
+    if 'f' in overlay:
+        result['f'] = _merge_hit_counters(result.get('f', {}), overlay['f'])
+
+    # Merge branch hits (b)
+    if 'b' in overlay:
+        result['b'] = _merge_branch_counters(result.get('b', {}), overlay['b'])
+
+    # Update maps to include any new entries from overlay
+    for map_key in ('statementMap', 'fnMap', 'branchMap'):
+        if map_key in overlay:
+            base_map = result.get(map_key, {})
+            result[map_key] = {**base_map, **overlay[map_key]}
+
+    return result
+
+
 def extract_coverage_from_browser(driver) -> dict[str, Any] | None:
     """
     Extract Istanbul coverage data from browser's window.__coverage__.
@@ -68,9 +150,14 @@ def merge_coverage_files(
     if browser_coverage_path.exists():
         with open(browser_coverage_path, 'r', encoding='utf-8') as f:
             browser_coverage = json.load(f)
-            # Merge coverage data - browser coverage takes precedence for overlapping files
+            # Properly merge coverage data by combining hit counters
             for file_path, file_coverage in browser_coverage.items():
-                merged[file_path] = file_coverage
+                if file_path in merged:
+                    # Merge overlapping file coverage by combining counters
+                    merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
+                else:
+                    # New file - just add it
+                    merged[file_path] = file_coverage
 
     # Save merged coverage
     output_path.parent.mkdir(parents=True, exist_ok=True)
