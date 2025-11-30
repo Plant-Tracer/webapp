@@ -81,7 +81,7 @@ def handle_apikey_error(ex: InvalidAPI_Key) -> tuple[str, int]:
     return "<h1>403 Invalid api_key</h1>", 403
 
 @app.errorhandler(Exception)
-def handle_exception(e: Exception) -> Response | HTTPException | tuple[Response, int]:
+def handle_exception(e: Exception) -> HTTPException | tuple[Response, int]:
     """Handle unhandled exceptions."""
     if isinstance(e, HTTPException):
         return e  # Let Flask handle it or route it to its specific handler
