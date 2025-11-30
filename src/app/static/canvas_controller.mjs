@@ -66,13 +66,13 @@
 class CanvasController {
     constructor(canvas_selector, zoom_selector) {      // html_id is where this canvas gets inserted
         let canvas = $(canvas_selector);
-        if (canvas == null  || !canvas.length) {
+        if (canvas.length == 0) {
             console.log("CanvasController: Cannot find canvas=", canvas_selector);
             return;
         }
 
         this.did_onload_callback = ((_) => { });   // by default, call nothing
-        this.c = canvas[0];                // get the element
+        this.c = canvas.get(0);                // get the element
         this.ctx = this.c.getContext('2d');  // the drawing context
 
         this.oc = document.createElement('canvas'); // offscreen canvas

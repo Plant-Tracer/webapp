@@ -5,8 +5,13 @@ env:
 
 extends: eslint:recommended
 
+ignorePatterns: ["unzipit-worker.module.mjs", "unzipit.module.mjs"]
+
 parserOptions:
   ecmaVersion: latest
+
+overrides:
+  - files: ["*.js"]
 
 rules:
   "no-unused-vars": ["error", { "args": "all", "argsIgnorePattern" : "^_" }]

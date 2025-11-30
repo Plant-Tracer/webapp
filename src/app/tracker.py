@@ -48,15 +48,15 @@ def cv2_track_frame(*,frame_prev, frame_this, trackpoints):
     :return: array of trackpoints
 
     """
-    winSize=(15, 15)
-    maxLevel=2
+    winSize=(15, 15)            # pylint: disable=invalid-name
+    maxLevel=2                  # pylint: disable=invalid-name
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-    tpts = np.array([[pt['x'],pt['y']] for pt in trackpoints],dtype=np.float32)
+    cv2_tpts = np.array([[pt['x'],pt['y']] for pt in trackpoints],dtype=np.float32)
 
     try:
         gray_frame0 = cv2.cvtColor(frame_prev, cv2.COLOR_BGR2GRAY)
         gray_frame1 = cv2.cvtColor(frame_this, cv2.COLOR_BGR2GRAY)
-        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, tpts, None,
+        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(gray_frame0, gray_frame1, cv2_tpts, None,
                                                                       winSize=winSize, maxLevel=maxLevel, criteria=criteria)
         trackpoints_out = []
         for (i,pt) in enumerate(trackpoints):
@@ -89,7 +89,7 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
     if frame_label is not None:
         # Label in upper right hand corner
         text = str(frame_label)
-        WHITE = (255,255,255)
+        WHITE = (255,255,255)                   # pylint: disable=invalid-name
         text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
         text_origin = ( frame_width - text_size[0] - TEXT_MARGIN, text_size[1]+TEXT_MARGIN)
         cv2.rectangle(frame, text_origin, (text_origin[0]+text_size[0],text_origin[1]-text_size[1]), RED, -1)
@@ -139,16 +139,16 @@ def extract_frame(*, movie_data, frame_number, fmt):
         cap = cv2.VideoCapture(tf.name)
 
     # skip to frame_number (first frame is #0)
-    for fn in range(frame_number+1):
+    for _ in range(frame_number+1):
         ret, frame = cap.read()
         if not ret:
             raise ValueError(f"invalid frame_number {frame_number}")
-        if fn==frame_number:
-            if fmt=='CV2':
+        match fmt:
+            case 'CV2':
                 return frame
-            elif fmt=='jpeg':
+            case 'jpeg':
                 return convert_frame_to_jpeg(frame)
-            else:
+            case _:
                 raise ValueError("Invalid fmt: "+fmt)
     raise ValueError(f"invalid frame_number {frame_number}")
 
@@ -161,10 +161,11 @@ def cleanup_mp4(*,infile,outfile):
             raise FileNotFoundError(p)
 
     # If outfile exists, it will be overwritten
-    args = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
-    subprocess.call([ FFMPEG_PATH ] + args)
+    cargs = ['-y','-hide_banner','-loglevel','error','-i',infile,'-vcodec','h264',outfile]
+    subprocess.call([ FFMPEG_PATH ] + cargs)
 
 
+# pylint: disable=too-many-locals
 def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     # movie_trackpoints is an array of records where each has the form:
@@ -295,21 +296,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Get the trackpoints
-    trackpoints = json.loads(args.points_to_track)
+    tpts = json.loads(args.points_to_track)
     # Make sure every trackpoint is for frame 0
-    input_trackpoints = [ {**tp,**{'frame_number':0}} for tp in trackpoints]
+    ipts = [ {**tp,**{'frame_number':0}} for tp in tpts]
 
     # Get the new trackpoints
-    trackpoints = []
+    tpts = []
     # pylint: disable=unused-argument
-    def callback(*,frame_number,frame_data,frame_trackpoints):
-        trackpoints.extend(frame_trackpoints)
+    def cb2(*,frame_number,frame_data,frame_trackpoints):
+        tpts.extend(frame_trackpoints)
 
 
     track_movie(moviefile_input=args.moviefile,
-                input_trackpoints=input_trackpoints,
-                callback=callback )
+                input_trackpoints=ipts,
+                callback=cb2 )
     # Now render the movie
     render_tracked_movie( moviefile_input= args.moviefile, moviefile_output='tracked.mp4',
-                          movie_trackpoints=trackpoints)
+                          movie_trackpoints=tpts)
     subprocess.call(['open','tracked.mp4'])

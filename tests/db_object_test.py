@@ -1,25 +1,17 @@
 """
 Tests the DB object storage layer
 """
-#import sys
-#import os
-import logging
-#import json
-#import subprocess
 import uuid
-#import xml.etree.ElementTree
 import hashlib
 
-#import pytest
 import boto3
 
-#from app.paths import STATIC_DIR,TEST_DATA_DIR
-#from app.constants import C
 from app import s3_presigned
 from app import odb_movie_data
 from app import odb
+from app.constants import logger
 
-from fixtures.local_aws import local_s3
+# Fixtures are imported in conftest.py
 
 s3client = boto3.client('s3')
 
@@ -47,7 +39,7 @@ def test_write_read_delete_object(local_s3):
     try:
         odb_movie_data.write_object(urn=urn, object_data=DATA)
     except s3client.exceptions.NoSuchBucket as e:
-        logging.error("urn=%s error: %s",urn,e)
+        logger.error("urn=%s error: %s",urn,e)
         raise RuntimeError() from e
 
     obj_data = odb_movie_data.read_object(urn=urn)

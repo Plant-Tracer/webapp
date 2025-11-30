@@ -5,18 +5,12 @@ Should this be moved to constants?
 import os
 from os.path import dirname, abspath, join
 import shutil
-import logging
 
 from .constants import C
-
-logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
-logger = logging.getLogger(__name__)
 
 HOME = os.getenv('HOME')
 if HOME is None:
     HOME = ''
-
-logging.debug("__file__=%s",__file__)
 
 APP_DIR         = dirname(abspath(__file__))
 DEPLOY_DIR      = dirname(APP_DIR)

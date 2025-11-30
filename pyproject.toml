@@ -9,7 +9,7 @@ authors = [
 license = "GPL"
 readme = "README.md"
 packages = [
-    { include = "src" },
+    { include = "app", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -34,6 +34,8 @@ requests = ">=2.32.4,<3.0.0"
 tabulate = "*"
 validate_email_address = "*"
 apig-wsgi = "^2.20.0"
+html5lib = "^1.1"
+html5validate = "^0.0.2"
 
 [tool.poetry.group.dev.dependencies]
 boto3-stubs = {extras = ["essential"], version = "*"}
@@ -54,6 +56,7 @@ selenium = "^4.38.0"
 pytest-mock = "^3.15.1"
 pytest-env = "^1.2.0"
 service_identity = "*"
+filetype = "^1.2.0"
 
 
 [build-system]
@@ -74,13 +77,18 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "line-too-long",
-    "unspecified-encoding"
+    "unspecified-encoding",
+    "redefined-outer-name",
+    "unused-argument",
+    "invalid-name",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "fixme"
 ]
 
 [tool.pylint.design]
-# Set the maximum number of arguments for a function.
 max-args = 10
-# Set the maximum number of public methods in a class.
 max-public-methods = 20
 
 [tool.pyright]
@@ -105,9 +113,19 @@ extraPaths = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [
- "src",
- "tests"
-]
 addopts = "-ra -q"
-python_files = ["test_*.py"]
+python_files = ["*_test.py"]
+norecursedirs = ["lib/ctools"]
+log_cli = true
+
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources",
+  "ignore:pkg_resources is deprecated:UserWarning",
+]
+
+markers = [
+  "selenium: marks tests that require Selenium WebDriver (deselect with '-m \"not selenium\"')",
+]
+
+[tool.pytest.ini_options.env]
+PYTEST = "1"

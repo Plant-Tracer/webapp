@@ -33,7 +33,7 @@ def s3_client():
     region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
     endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
 
-    logging.info("s3_client region=%s endpoint_url=%s ",region_name,endpoint_url)
+    logger.info("s3_client region=%s endpoint_url=%s ",region_name,endpoint_url)
 
     return boto3.Session().client( 's3', region_name = region_name, endpoint_url=endpoint_url)
 
@@ -81,7 +81,7 @@ def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
 
 def make_signed_url(*,urn,operation=C.GET, expires=3600):
     assert isinstance(urn,str)
-    logging.debug("make_signed_url urn=%s",urn)
+    logger.debug("make_signed_url urn=%s",urn)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
@@ -92,8 +92,10 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None,expires=3600):
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None, expires=3600):
     """Returns a dictionary with 'url' and 'fields'"""
+    logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
+                 urn,maxsize,mime_type,sha256,expires)
     o = urllib.parse.urlparse(urn)
     if o.scheme==C.SCHEME_S3:
         return s3_client().generate_presigned_post(
@@ -110,7 +112,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
 def object_exists(urn):
     assert len(urn) > 0
     o = urllib.parse.urlparse(urn)
-    logging.debug("urn=%s o=%s",urn,o)
+    logger.debug("urn=%s o=%s",urn,o)
     if o.scheme==C.SCHEME_S3:
         try:
             s3_client().head_object(Bucket=o.netloc, Key=o.path[1:])

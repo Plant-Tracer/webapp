@@ -1,6 +1,5 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global alert,document,MediaStreamTrackProcessor,console,createImageBitmap,window,HTMLVideoElement */
 // code for /analyze
 
 // https://stackoverflow.com/questions/996505/lru-cache-implementation-in-javascript
@@ -69,7 +68,7 @@ class MovieStepper {
         this.video.requestVideoFrameCallback( (now, metadata) => {
             this.currentFrameIndex = 0;
             this.video.pause();
-            console.log("pause 1");
+            console.log("pause 1", "now=", now, "metadata=", metadata);
         });
     }
 

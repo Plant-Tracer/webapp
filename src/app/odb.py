@@ -5,9 +5,8 @@ Currently dependent upon DynamoDB.
 (C) 2025 Simson L. Garfinkel
 """
 
-#pylint: disable=too-many-lines
+#pylint: disable=too-many-lines, disable=invalid-name
 import os
-import logging
 import json
 import copy
 import functools
@@ -23,7 +22,7 @@ from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
-from .constants import C
+from .constants import C,logger
 
 # DynamoDB tables
 API_KEYS = 'api_keys'
@@ -180,17 +179,17 @@ def dynamodb_error_debugger(func):
             # However, the error message from botocore.exceptions.ClientError
             # itself often contains valuable context like the operation name.
 
-            logging.error("-" * 60)
-            logging.error("DYNAMODB OPERATION FAILED in method: %s",func.__name__)
-            logging.error("  Error Type: %s",type(e).__name__)
+            logger.error("-" * 60)
+            logger.error("DYNAMODB OPERATION FAILED in method: %s",func.__name__)
+            logger.error("  Error Type: %s",type(e).__name__)
 
             error_message = e.response.get('Error', {}).get('Message', str(e))
-            logging.error("  Error Message from DynamoDB: %s",error_message)
+            logger.error("  Error Message from DynamoDB: %s",error_message)
 
             # The 'OperationName' is part of the error response for ClientError
             operation_name_from_error = e.operation_name
             if operation_name_from_error:
-                logging.error("  Failed AWS API Operation: %s",operation_name_from_error)
+                logger.error("  Failed AWS API Operation: %s",operation_name_from_error)
 
             # The 'Parameters' (api_params) are not directly accessible from the
             # exception object in a generic way *outside* the original call scope.
@@ -198,9 +197,9 @@ def dynamodb_error_debugger(func):
             # boto3 call is made, or inspect 'e.response' carefully.
             # Example:
             if 'RequestParameters' in e.response.get('Error', {}):
-                logging.error("  Request Parameters (if available): %s",e.response['Error']['RequestParameters'])
+                logger.error("  Request Parameters (if available): %s",e.response['Error']['RequestParameters'])
 
-            logging.error("-" * 60)
+            logger.error("-" * 60)
             raise # Re-raise the original exception so the test still fails
     return wrapper
 
@@ -219,7 +218,7 @@ class DDBO:
     def resource(cls):
         region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
-        logging.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
+        logger.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
 
     # pylint: disable=too-many-locals
@@ -237,7 +236,7 @@ class DDBO:
             table_prefix = ''
 
         # Set up the tables
-        logging.info("table_prefix=%s",table_prefix)
+        logger.info("table_prefix=%s",table_prefix)
         self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
@@ -277,7 +276,7 @@ class DDBO:
         :param updates:     dict mapping attribute names → new values;
                             if value is None, that attribute will be removed.
         """
-        logging.debug("UPDATES=%s",updates)
+        logger.debug("UPDATES=%s",updates)
 
         # 1) figure out the PK name & build the Key dict
         pk = self._get_partition_key_name(table.key_schema)
@@ -295,7 +294,7 @@ class DDBO:
 
             if val is None:
                 remove_exprs.append(name_ph)
-                logging.debug("REMOVE %s val=%s",name_ph,val)
+                logger.debug("REMOVE %s val=%s",name_ph,val)
             else:
                 val_ph = f":{attr}"
                 set_exprs.append(f"{name_ph} = {val_ph}")
@@ -325,16 +324,16 @@ class DDBO:
 
     def put_api_key_dict(self,api_key_dict):
         # no ConditionExpression - it's okay if the key already exists
-        logging.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
+        logger.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
         return self.api_keys.put_item(Item = api_key_dict)
 
     def get_api_key_dict(self,api_key):
         try:
             ret =  self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
-            logging.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
+            logger.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
             return ret
         except Exception as e:
-            logging.error("table=%s error=%s",self.api_keys.name, e)
+            logger.error("table=%s error=%s",self.api_keys.name, e)
             raise ValueError(self.api_keys.name) from e
 
 
@@ -360,7 +359,7 @@ class DDBO:
         items = response.get('Items', [])
         if items:
             return items[0]
-        logging.debug("email %s not in table %s",email,self.users)
+        logger.debug("email %s not in table %s",email,self.users)
         raise InvalidUser_Email(email)
 
     def put_user(self, user):
@@ -370,14 +369,14 @@ class DDBO:
         try:
             user = User(**user).model_dump() # validate User
         except ValidationError:
-            logging.error("user=%s",user)
+            logger.error("user=%s",user)
             raise
         email = user[ EMAIL ]
         assert email is not None
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
-        logging.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
-        logging.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
+        logger.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
+        logger.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
 
         try:
             self.dynamodb.meta.client.transact_write_items(
@@ -401,7 +400,7 @@ class DDBO:
             print("Transaction succeeded: user inserted.")
         except ClientError as e:
             # If any ConditionCheck fails, you’ll land here:
-            logging.info("Transaction canceled: %s", e.response['Error']['Message'])
+            logger.info("Transaction canceled: %s", e.response['Error']['Message'])
             raise UserExists() from e
 
     def rename_user(self, *, user_id, new_email):
@@ -452,7 +451,7 @@ class DDBO:
         Deletes all of the user's movies (if purge_movies is True)
         Also deletes the user from any courses where they may be an admin.
         """
-        logging.debug("delete_user user_id = %s purge_movies=%s",user_id,purge_movies)
+        logger.debug("delete_user user_id = %s purge_movies=%s",user_id,purge_movies)
         assert is_user_id(user_id)
         movies = self.get_movies_for_user_id(user_id)
         if purge_movies:
@@ -498,7 +497,7 @@ class DDBO:
         # Finally delete the user and the unique email
         email = self.users.get_item(Key={ USER_ID :user_id},ConsistentRead=True)['Item'][ EMAIL ]
         client = self.dynamodb.meta.client
-        logging.warning("Does not require the email exists in unique_emails. When we did that, it did not work.")
+        logger.warning("Does not require the email exists in unique_emails. When we did that, it did not work.")
         client.transact_write_items(
             TransactItems=[
                 {
@@ -533,7 +532,7 @@ class DDBO:
         try:
             coursedict = Course(**coursedict).model_dump() # validate coursedict
         except ValidationError:
-            logging.error("coursedict=%s",coursedict)
+            logger.error("coursedict=%s",coursedict)
             raise
 
         ################ see if a course_key already exists
@@ -542,9 +541,9 @@ class DDBO:
                                        KeyConditionExpression=Key('course_key').eq(coursedict['course_key']) )
         except ClientError as e:
             if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                logging.error("Resource not found: %s. Perhaps table prefix is incorrect?",self.courses)
+                logger.error("Resource not found: %s. Perhaps table prefix is incorrect?",self.courses)
                 raise ValueError(self.courses) from e
-            logging.error("courses=%s",self.courses)
+            logger.error("courses=%s",self.courses)
             raise
         if resp['Count'] > 0:
             raise ExistingCourse_Id(f"Course key {coursedict[COURSE_KEY]} already exists")
@@ -558,7 +557,7 @@ class DDBO:
                 self.courses.put_item(Item=coursedict,
                                       ConditionExpression='attribute_not_exists(course_id)')
         except ClientError as e:
-            logging.error("courses=%s coursedict=%s",self.courses,coursedict)
+            logger.error("courses=%s coursedict=%s",self.courses,coursedict)
             if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 raise ExistingCourse_Id(f"Course {coursedict[COURSE_ID]} already exists") from e
             raise
@@ -577,8 +576,8 @@ class DDBO:
         # delete the course
         self.courses.delete_item(Key = { COURSE_ID :course_id})
 
-        logging.warning("scan the users and remove the course from every user that has it.")
-        logging.warning("eliminate this scan by having the courses track their users.")
+        logger.warning("scan the users and remove the course from every user that has it.")
+        logger.warning("eliminate this scan by having the courses track their users.")
         last_evaluated_key = None
         while True:
             scan_kwargs = {}
@@ -622,16 +621,16 @@ class DDBO:
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
-            logging.error("moviedict=%s",moviedict)
+            logger.error("moviedict=%s",moviedict)
             raise
         self.movies.put_item(Item=moviedict)
 
     def batch_delete_movie_ids(self, ids):
         """Delete movie items from the table using batch_writer."""
         with self.movies.batch_writer() as batch:
-            for theId in ids:
-                assert is_movie_id(theId)
-                batch.delete_item(Key={ MOVIE_ID: theId})
+            for the_id in ids:
+                assert is_movie_id(the_id)
+                batch.delete_item(Key={ MOVIE_ID: the_id})
 
     def get_movies_for_user_id(self, user_id):
         """Query movies.user_id_idx and return all movie records for the given user_id (with pagination)."""
@@ -669,7 +668,7 @@ class DDBO:
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
-        logging.debug("get_movies_for_course_id(%s)=%s",course_id,movies)
+        logger.debug("get_movies_for_course_id(%s)=%s",course_id,movies)
         return movies
 
     ### movie_frame management
@@ -713,7 +712,7 @@ def verify_table_health():
     ddbo = DDBO()
     for table in ddbo.tables:
         response = table.scan(limit=1)
-        logging.info("table=%s response=%s",table,response)
+        logger.info("table=%s response=%s",table,response)
 
 
 #############
@@ -738,7 +737,7 @@ def logit(*, func_name, func_args, func_return):
 
     if len(func_return) > C.MAX_FUNC_RETURN_LOG:
         func_return = json.dumps({'log_size':len(func_return), 'error':True}, default=str)
-    logging.debug("%s %s(%s) = %s ", user_ipaddr, func_name, func_args, func_return)
+    logger.debug("%s %s(%s) = %s ", user_ipaddr, func_name, func_args, func_return)
 
 def log(func):
     """Logging decorator --- log both the arguments and what was returned.
@@ -781,6 +780,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
         end_time = int(time.time())
 
     # Select GSI based on parameters
+    # We can only pick one GSI
     if log_user_id:
         index_name = 'user_id_idx'
         key_condition = Key( USER_ID ).eq(log_user_id)
@@ -824,7 +824,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 
     #
     if security:
-        logging.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
+        logger.warning("TODO: If the user %s is not an admin on the course %s, they can only see their own logs",user_id,course_id)
 
     return items
 
@@ -929,7 +929,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         admin_for_courses = user[ADMIN_FOR_COURSES]
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
-        logging.debug("user=%s",user)
+        logger.debug("user=%s",user)
         ddbo.update_table(ddbo.users, user_id,
                           {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
                            PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
@@ -1104,7 +1104,7 @@ def remove_course_admin(*, course_id, admin_id):
                             PRIMARY_COURSE_NAME:None})
 
     except ValueError:
-        logging.warning("removing courses from %s from user %s",course_id,admin_id)
+        logger.warning("removing courses from %s from user %s",course_id,admin_id)
 
     try:
         admin_for_courses = admin[ ADMIN_FOR_COURSES ]
@@ -1115,7 +1115,7 @@ def remove_course_admin(*, course_id, admin_id):
                             PRIMARY_COURSE_NAME:None})
 
     except ValueError:
-        logging.warning("remove admin_for_courses fail: %s from user %s",course_id,admin_id)
+        logger.warning("remove admin_for_courses fail: %s from user %s",course_id,admin_id)
 
     ## Update admin in courses
 
@@ -1128,17 +1128,17 @@ def remove_course_admin(*, course_id, admin_id):
         ddbo.update_table(ddbo.courses, course_id,{ADMINS_FOR_COURSE:admins_for_course})
 
     except ValueError:
-        logging.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
+        logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 
 @log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
-    logging.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
+    logger.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
     assert is_user_id(user_id)
     assert isinstance(course_id,str)
     user = DDBO().get_user(user_id)
-    logging.debug("user=%s",user)
+    logger.debug("user=%s",user)
     return course_id in user[ ADMIN_FOR_COURSES ]
 
 @log
@@ -1187,29 +1187,39 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     :param get_last_frame_tracked: If true, set moviedict.last_frame_tracked = frame number of last frame tracked (expensive)
     :return: a dictionary with metdata for the movie
     """
-    logging.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
+    logger.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
     movie = fix_movie(ddbo.get_movie(movie_id))
     if get_last_frame_tracked and movie.get(LAST_FRAME_TRACKED,None) is None:
         movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
-    logging.debug("get_movie_metadata: returning movie=%s",movie)
+    logger.debug("get_movie_metadata: returning movie=%s",movie)
     return movie
 
 
 @log
 def can_access_movie(*, user_id, movie_id):
-    """Return if the user is allowed to access the movie."""
-    logging.warning("UNNEDED USERID QUERY")
-    logging.warning("UNNEDED USERID QUERY2")
+    """
+    Checks to see if the user is allowed to access the movie:
+    :param user_id: the user_id
+    :param movie_id: the movie_id
+    :return: the movie object dictionary.
+
+    User can access the movie if:
+    - User is movie owner
+    - User is in the movie's course (NOTE: it should check to see if movie is published or if the user is the course admin)
+    - (Note: should allow access if the user is a super admin)
+
+    Raises UnauthorizedUser if user is not allowed to access the movie. This is caught by the flask framework, so we don't need special handling.
+    """
+    logger.warning("UNNEDED USERID QUERY")
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     if movie[ USER_ID ] == user_id:
-        return True
+        return movie
     user = ddbo.get_user(user_id)
-    logging.debug("Can user '%s' access movie '%s'",json.dumps(user,default=str),json.dumps(movie,default=str))
     if movie[ COURSE_ID ] in user[ COURSES ]:
-        return True
-    return False
+        return movie
+    raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
 @log
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None):
@@ -1257,7 +1267,7 @@ def get_movie(*, movie_id):
 #def set_movie_metadata(*, movie_id, movie_metadata):
 #    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
 #
-#    logging.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
+#    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
 #    assert is_movie_id(movie_id)
 #    assert MOVIE_ID not in movie_metadata
 #    assert 'id' not in movie_metadata
@@ -1282,7 +1292,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     :param orig_movie:  if provided, only list movies for which the original movie is orig_movie_id
     :return:A list of movies that the user is allowed to access. Each movie is a moviedict with full metadata.
     """
-    logging.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
+    logger.debug("list_movies(user_id=%s, movie_id=%s, orig_movie=%s)",user_id,movie_id,orig_movie)
     if movie_id is not None:
         assert is_movie_id(movie_id)
 
@@ -1299,7 +1309,7 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
 
     # build a query for all movies for which the user is in the course
     for course_id in user[ COURSES ]:
-        logging.debug("extending for course_id=%s",course_id)
+        logger.debug("extending for course_id=%s",course_id)
         movies.extend( ddbo.get_movies_for_course_id(course_id) )
     return fix_movies(movies)
 
@@ -1333,7 +1343,7 @@ def get_frame_urn(*, movie_id, frame_number):
     :param: frame_number - provide one of these. Specifies which frame to get
     :return: the URN or None
     """
-    logging.debug("movie_id=%s frame_number=%s",movie_id,frame_number)
+    logger.debug("movie_id=%s frame_number=%s",movie_id,frame_number)
     frame = DDBO().get_movie_frame(movie_id, frame_number)
     if frame is None:
         return None
@@ -1345,7 +1355,7 @@ def get_frame_urn(*, movie_id, frame_number):
 
 def iter_movie_frames_in_range(table, movie_id, f1, f2):
     """Yield movie_frame records for movie_id where frame_number is between f1 and f2."""
-    logging.debug("iter_movie_frames_in_range table=%s movie_id=%s f1=%s f2=%s",table,movie_id,f1,f2)
+    logger.debug("iter_movie_frames_in_range table=%s movie_id=%s f1=%s f2=%s",table,movie_id,f1,f2)
     last_evaluated_key = None
     while True:
         query_kwargs = { }
@@ -1358,7 +1368,7 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
                                **query_kwargs)
 
         for i in response['Items']:
-            logging.debug("a frame response=%s",i)
+            logger.debug("a frame response=%s",i)
 
         yield from response['Items']
 
@@ -1432,12 +1442,22 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
     """
     # Remove numpy from trackpoints
     trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
-    logging.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
+    logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
-    DDBO().movie_frames.update_item( Key={MOVIE_ID:movie_id,
-                                          FRAME_NUMBER:frame_number},
-                                     UpdateExpression='SET trackpoints=:val',
-                                     ExpressionAttributeValues={':val':trackpoints})
+    ddbo = DDBO()
+    ddbo.movie_frames.update_item( Key={MOVIE_ID:movie_id,
+                                        FRAME_NUMBER:frame_number},
+                                   UpdateExpression='SET trackpoints=:val',
+                                   ExpressionAttributeValues={':val':trackpoints})
+
+    # update the last frame tracked. This is way, way more expensive than it should be.
+    movie = ddbo.get_movie(movie_id)
+    if movie['last_frame_tracked'] is None:
+        assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
+        movie['last_frame_tracked'] = frame_number
+    else:
+        movie['last_frame_tracked'] = max(movie['last_frame_tracked'],frame_number)
+    ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
 
 
 ################################################################
@@ -1479,14 +1499,14 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
 
     """
     # First compute @is_owner
-    logging.debug("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
+    logger.debug("set_user_id=%s set_movie_id=%s prop=%s value=%s", set_user_id, set_movie_id, prop, value)
     assert is_user_id(user_id)
     assert is_movie_id(set_movie_id) or (set_movie_id is None)
     assert is_user_id(set_user_id) or (set_user_id is None)
     assert isinstance(prop, str)
     assert value is not None
 
-    logging.debug("prop=%s value=%s type=%s",prop,value,type(value))
+    logger.debug("prop=%s value=%s type=%s",prop,value,type(value))
 
     ddbo = DDBO()
 
@@ -1502,7 +1522,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
             is_admin = movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ]
 
             acl  = SET_MOVIE_METADATA[prop]
-            logging.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
+            logger.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
 
             if not ((is_owner is not None and '@is_owner' in acl) or (is_admin is not None and '@is_admin' in acl)):
                 # permission not granted

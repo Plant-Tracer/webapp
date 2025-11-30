@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from app.paths import logger
-import app.schema as schema
+from app.constants import logger
+from app import schema
 
 
 def test_movie_schema():
@@ -64,4 +64,5 @@ def test_user_schema():
             course_id="ctest",
             published=0,
         )
+        logger.debug("m=%s",m)
     logger.debug("u=%s", u)

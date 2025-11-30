@@ -45,7 +45,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 # Create the virtual enviornment for testing and CI/CD
 
 APP_ETC=app/etc
-DBMAINT=dbutil.py
+DBUTIL=src/dbutil.py
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
@@ -140,8 +140,8 @@ pytest-selenium:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/app_test.py
-#TEST1FUNCTION="-k test_movie_schema"
+TEST1MODULE=tests/test_trackpoint_drag.py
+#TEST1FUNCTION="-k test_trackpoint_drag_and_database_update"
 pytest1:
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
@@ -167,13 +167,13 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	$(DEMO_VARS) poetry run python dbutil.py --createdb
+	$(DEMO_VARS) poetry run python $(DBUTIL) --createdb
 	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  dbutil.py --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_DEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
@@ -308,15 +308,17 @@ make-local-bucket:
 install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
+	which pipx || sudo apt install -y pipx
+	pipx install poetry --force
 	which aws || sudo snap  install aws-cli --classic
-	which chromium || sudo apt-get install -y chromium-browser
+	which chromium || sudo apt-get install -y chromium-browser chromium-chromedriver
 	which curl || sudo apt install curl
 	which ffmpeg || sudo apt install -y ffmpeg
 	which lsof || sudo apt-get install -y lsof
 	which node || sudo apt install -y nodejs
 	which npm || sudo apt install -y npm
-	which poetry || curl -sSL https://install.python-poetry.org | python3 -
-	which zip || sudo apt install zip
+	which zip || sudo apt install -y zip
+	which java || sudo apt install -y openjdk-21-jre-headless
 	npm ci
 	make $(REQ)
 
