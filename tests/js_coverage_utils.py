@@ -29,7 +29,7 @@ def _merge_coverage_counters(
     result = dict(existing)
     for key, count in new.items():
         if key in result:
-            result[key] = result[key] + count
+            result[key] += count
         else:
             result[key] = count
     return result
@@ -52,21 +52,17 @@ def _merge_branch_counters(
     Returns:
         Merged branch counters with summed hit counts per branch
     """
+    from itertools import zip_longest
+
     result = {key: list(counts) for key, counts in existing.items()}
     for key, counts in new.items():
         if key in result:
-            # Sum counts for each branch path
+            # Sum counts for each branch path, handling different lengths
             existing_counts = result[key]
-            merged_counts = []
-            for i, count in enumerate(counts):
-                if i < len(existing_counts):
-                    merged_counts.append(existing_counts[i] + count)
-                else:
-                    merged_counts.append(count)
-            # Handle case where existing has more branches
-            if len(existing_counts) > len(counts):
-                merged_counts.extend(existing_counts[len(counts):])
-            result[key] = merged_counts
+            result[key] = [
+                (e or 0) + (n or 0)
+                for e, n in zip_longest(existing_counts, counts, fillvalue=0)
+            ]
         else:
             result[key] = list(counts)
     return result
@@ -113,8 +109,11 @@ def merge_file_coverage(
             new['b']
         )
 
-    # For maps (statementMap, fnMap, branchMap), use new data if structure changed
-    # This handles cases where code was modified between test runs
+    # For maps (statementMap, fnMap, branchMap), always use new data.
+    # These maps define the structure of the code (locations of statements, functions,
+    # and branches). When instrumenting the same file, Istanbul generates consistent
+    # maps, so using the newer version ensures we have current source mappings.
+    # The counters (s, f, b) are what we merge; the maps just describe what they mean.
     for map_key in ('statementMap', 'fnMap', 'branchMap'):
         if map_key in new:
             result[map_key] = new[map_key]
