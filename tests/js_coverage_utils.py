@@ -10,117 +10,84 @@ from pathlib import Path
 from typing import Any
 
 
-def _merge_coverage_counters(
-    existing: dict[str, int],
-    new: dict[str, int]
-) -> dict[str, int]:
+def _merge_hit_counters(base: dict[str, int], overlay: dict[str, int]) -> dict[str, int]:
     """
-    Merge two coverage counter dictionaries by summing counts.
-
-    Used for 's' (statement) and 'f' (function) coverage counters.
+    Merge two hit counter dicts by adding values together.
 
     Args:
-        existing: Existing coverage counters (e.g., {"0": 1, "1": 2})
-        new: New coverage counters to merge in
+        base: Base hit counter dict (e.g., {"0": 1, "1": 2})
+        overlay: Overlay hit counter dict to merge
 
     Returns:
-        Merged counters with summed hit counts
+        Merged hit counter dict with values summed
     """
-    result = dict(existing)
-    for key, count in new.items():
-        if key in result:
-            result[key] += count
-        else:
-            result[key] = count
+    result = dict(base)
+    for key, value in overlay.items():
+        result[key] = result.get(key, 0) + value
     return result
 
 
-def _merge_branch_counters(
-    existing: dict[str, list[int]],
-    new: dict[str, list[int]]
-) -> dict[str, list[int]]:
+def _merge_branch_counters(base: dict[str, list], overlay: dict[str, list]) -> dict[str, list]:
     """
-    Merge branch coverage counters by summing branch hit counts.
-
-    Branch counters are arrays where each element represents a branch path.
-    For example, an if/else has [then_count, else_count].
+    Merge two branch counter dicts by adding array elements.
 
     Args:
-        existing: Existing branch counters (e.g., {"0": [1, 0], "1": [0, 2]})
-        new: New branch counters to merge in
+        base: Base branch counter dict (e.g., {"0": [1, 0], "1": [2, 3]})
+        overlay: Overlay branch counter dict to merge
 
     Returns:
-        Merged branch counters with summed hit counts per branch
+        Merged branch counter dict with array elements summed
     """
-    from itertools import zip_longest
+    result = {}
+    all_keys = set(base.keys()) | set(overlay.keys())
 
-    result = {key: list(counts) for key, counts in existing.items()}
-    for key, counts in new.items():
-        if key in result:
-            # Sum counts for each branch path, handling different lengths
-            existing_counts = result[key]
-            result[key] = [
-                (e or 0) + (n or 0)
-                for e, n in zip_longest(existing_counts, counts, fillvalue=0)
-            ]
-        else:
-            result[key] = list(counts)
+    for key in all_keys:
+        base_arr = base.get(key, [])
+        overlay_arr = overlay.get(key, [])
+
+        # Handle different array lengths by extending with zeros
+        max_len = max(len(base_arr), len(overlay_arr))
+        base_arr = list(base_arr) + [0] * (max_len - len(base_arr))
+        overlay_arr = list(overlay_arr) + [0] * (max_len - len(overlay_arr))
+
+        result[key] = [b + o for b, o in zip(base_arr, overlay_arr)]
+
     return result
 
 
-def merge_file_coverage(
-    existing: dict[str, Any],
-    new: dict[str, Any]
-) -> dict[str, Any]:
+def _merge_file_coverage(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     """
-    Deep merge two Istanbul file coverage objects.
+    Merge two Istanbul file coverage objects.
 
-    Combines coverage counters (s, f, b) by summing hit counts rather than
-    replacing them. This ensures coverage data from multiple test runs
-    (e.g., Jest unit tests and browser integration tests) is properly combined.
+    Combines hit counters (s, f, b) by adding values, and preserves
+    the map structures from the base with overlay additions.
 
     Args:
-        existing: Existing file coverage object
-        new: New file coverage object to merge in
+        base: Base coverage object for a file
+        overlay: Overlay coverage object to merge
 
     Returns:
-        Merged file coverage with combined hit counts
+        Merged coverage object
     """
-    result = dict(existing)
+    result = dict(base)
 
-    # Merge statement counters (s)
-    if 's' in new:
-        result['s'] = _merge_coverage_counters(
-            result.get('s', {}),
-            new['s']
-        )
+    # Merge statement hits (s)
+    if 's' in overlay:
+        result['s'] = _merge_hit_counters(result.get('s', {}), overlay['s'])
 
-    # Merge function counters (f)
-    if 'f' in new:
-        result['f'] = _merge_coverage_counters(
-            result.get('f', {}),
-            new['f']
-        )
+    # Merge function hits (f)
+    if 'f' in overlay:
+        result['f'] = _merge_hit_counters(result.get('f', {}), overlay['f'])
 
-    # Merge branch counters (b)
-    if 'b' in new:
-        result['b'] = _merge_branch_counters(
-            result.get('b', {}),
-            new['b']
-        )
+    # Merge branch hits (b)
+    if 'b' in overlay:
+        result['b'] = _merge_branch_counters(result.get('b', {}), overlay['b'])
 
-    # For maps (statementMap, fnMap, branchMap), always use new data.
-    # These maps define the structure of the code (locations of statements, functions,
-    # and branches). When instrumenting the same file, Istanbul generates consistent
-    # maps, so using the newer version ensures we have current source mappings.
-    # The counters (s, f, b) are what we merge; the maps just describe what they mean.
+    # Update maps to include any new entries from overlay
     for map_key in ('statementMap', 'fnMap', 'branchMap'):
-        if map_key in new:
-            result[map_key] = new[map_key]
-
-    # Update path if present
-    if 'path' in new:
-        result['path'] = new['path']
+        if map_key in overlay:
+            base_map = result.get(map_key, {})
+            result[map_key] = {**base_map, **overlay[map_key]}
 
     return result
 
@@ -186,7 +153,7 @@ def merge_coverage_files(
             # Deep merge coverage data - combine hit counts for overlapping files
             for file_path, file_coverage in browser_coverage.items():
                 if file_path in merged:
-                    merged[file_path] = merge_file_coverage(merged[file_path], file_coverage)
+                    merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
                 else:
                     merged[file_path] = file_coverage
 
