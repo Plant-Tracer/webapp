@@ -30,8 +30,8 @@ Camera workflow:
    - JPEG to S3.  JPEG metadata should include the exact time that the picture was taken.
 
 - When camera finishes, it runs `/api/v1/camera-stop?apikey=<apikey>&movie_id=<movie_id>`
-  - scans for all frames that were uploade
-  - causes a zipfile of all frames to be create and stored.
+  - scans for all frames that were uploaded
+  - causes a zipfile of all frames to be created and stored.
   - causes all frames to be integrated into a single MPEG
 
 Needed - Data model for movie.
