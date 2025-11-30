@@ -13,7 +13,6 @@ import logging
 from flask import Flask, request, render_template, jsonify, make_response, Response
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
-from typing import Any
 
 
 # Bottle creates a large number of no-member errors, so we just remove the warning

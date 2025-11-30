@@ -100,7 +100,7 @@ JavaScript coverage is currently only collected when running Jest unit tests (`n
 
 **Location**: `src/app/s3_presigned.py`
 
-**Current Coverage Gap**: 
+**Current Coverage Gap**:
 - Error handling for S3 operations
 - Invalid bucket/key scenarios
 - Network failures during presigned URL generation
@@ -134,7 +134,7 @@ JavaScript coverage is currently only collected when running Jest unit tests (`n
 
 **Location**: `src/app/static/canvas_controller.mjs`
 
-**Current Coverage Gap**: 
+**Current Coverage Gap**:
 - Error handling in canvas operations
 - Edge cases in zoom/pan operations
 - Object selection edge cases
@@ -231,11 +231,11 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
 def new_user_id() -> str:
 def get_user(user_id: str) -> dict[str, Any] | None:
 def create_new_movie(
-    *, 
-    user_id: str, 
-    course_id: str | None = None, 
-    title: str | None = None, 
-    description: str | None = None, 
+    *,
+    user_id: str,
+    course_id: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
     orig_movie: str | None = None
 ) -> dict[str, Any]:
 ```

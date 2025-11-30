@@ -10,7 +10,6 @@ import time
 import threading
 import logging
 from os.path import abspath, dirname, join
-from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -77,7 +76,7 @@ def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
 @pytest.fixture(scope="function")
 def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
     """Fixture to provide a configured Chrome/Chromium WebDriver.
-    
+
     Also collects JavaScript coverage if available (when files are instrumented
     with babel-plugin-istanbul).
     """
@@ -95,14 +94,14 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
     try:
         driver = webdriver.Chrome(options=options)
         yield driver
-        
+
         # Collect JavaScript coverage if available
         if os.environ.get('COLLECT_JS_COVERAGE', '').lower() in ('1', 'true', 'yes'):
             coverage_data = extract_coverage_from_browser(driver)
             if coverage_data:
                 coverage_path = get_coverage_output_path()
                 save_browser_coverage(coverage_data, coverage_path)
-        
+
         driver.quit()
     except WebDriverException as e:
         pytest.skip(f"Chrome/Chromium not available: {e}")

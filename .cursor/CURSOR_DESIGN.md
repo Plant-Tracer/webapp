@@ -116,7 +116,7 @@ Both coverage files are uploaded to codecov.io in CI/CD.
 
 Two Lambda functions are planned but not yet working:
 
-1. **lambda-resize**: 
+1. **lambda-resize**:
    - Watches S3 for uploaded movies
    - Resizes images automatically
    - Located in `lambda-resize/`
