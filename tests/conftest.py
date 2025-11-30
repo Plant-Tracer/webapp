@@ -100,7 +100,20 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
             coverage_data = extract_coverage_from_browser(driver)
             if coverage_data:
                 coverage_path = get_coverage_output_path()
-                save_browser_coverage(coverage_data, coverage_path)
+                # Merge new coverage data with existing coverage file
+                import json
+                if os.path.exists(coverage_path):
+                    with open(coverage_path, "r", encoding="utf-8") as f:
+                        try:
+                            existing_coverage = json.load(f)
+                        except Exception:
+                            existing_coverage = []
+                else:
+                    existing_coverage = []
+                # Assume coverage_data and existing_coverage are lists of coverage objects
+                merged_coverage = existing_coverage + coverage_data if isinstance(coverage_data, list) else existing_coverage + [coverage_data]
+                with open(coverage_path, "w", encoding="utf-8") as f:
+                    json.dump(merged_coverage, f)
 
         driver.quit()
     except WebDriverException as e:
