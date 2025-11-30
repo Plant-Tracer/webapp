@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from tests.js_coverage_utils import (
+from .js_coverage_utils import (
     _merge_hit_counters,
     _merge_branch_counters,
     _merge_file_coverage,
