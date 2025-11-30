@@ -10,9 +10,10 @@ import os
 import traceback
 import logging
 
-from flask import Flask, request, render_template, jsonify, make_response
+from flask import Flask, request, render_template, jsonify, make_response, Response
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
+from typing import Any
 
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
@@ -35,11 +36,11 @@ CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
 ################################################################
 # Initialization Code
 
-def fix_boto_log_level():
+def fix_boto_log_level() -> None:
     """Do not run boto loggers at debug level"""
-    for name in logging.root.manager.loggerDict:
-        if name.startswith('boto'):
-            logging.getLogger(name).setLevel(logging.INFO)
+    logging.getLogger('boto').setLevel(logging.INFO)
+    logging.getLogger('boto3').setLevel(logging.INFO)
+    logging.getLogger('botocore').setLevel(logging.INFO)
 
 
 ################################################################
@@ -58,39 +59,39 @@ fix_boto_log_level()
 ### Error Handling. An exception automatically generates this response.
 ################################################################
 
-@app.errorhandler(404)
-def not_found_404(e):
-    return f"<h1>404 Not Found (404) </h1><pre>\n{e}\n</pre>", 404
-
 @app.errorhandler(NotFound)
-def not_found_NotFound(e):
-    return f"<h1>404 Not Found (NotFound)</h1><pre>\n{e}\n</pre>", 404
+def not_found(e: NotFound) -> tuple[str, int]:
+    """Handle 404 Not Found errors."""
+    return f"<h1>404 Not Found</h1><pre>\n{e}\n</pre>", 404
 
 @app.errorhandler(AuthError)
-def handle_auth_error(ex):
+def handle_auth_error(ex: AuthError) -> Response:
     """Raise AuthError('message') will result in a JSON response:
     {'message':message, 'error':True}
     as defined in auth.AuthError
     """
-    logger.info("handle_auth_error(%s)",ex)
+    logger.info("handle_auth_error(%s)", ex)
     response = jsonify(ex.to_dict())
     response.status_code = ex.status_code
     return response
 
 @app.errorhandler(InvalidAPI_Key)
-def handle_apikey_error(ex):
-    app.logger.error("InvalidAPI_Key: %s %s",ex,type(ex))
+def handle_apikey_error(ex: InvalidAPI_Key) -> tuple[str, int]:
+    """Handle invalid API key errors."""
+    app.logger.error("InvalidAPI_Key: %s %s", ex, type(ex))
     return "<h1>403 Invalid api_key</h1>", 403
 
 @app.errorhandler(Exception)
-def handle_exception(e):
+def handle_exception(e: Exception) -> Response | HTTPException | tuple[Response, int]:
+    """Handle unhandled exceptions."""
     if isinstance(e, HTTPException):
-        return e         # Let Flask handle it or route it to its specific handler
+        return e  # Let Flask handle it or route it to its specific handler
     logger.exception("Unhandled exception")
     return jsonify({"error": True, "message": "Internal Server Error"}), 500
 
 @app.errorhandler(InvalidUser_Email)
-def handle_email_error(e):
+def handle_email_error(e: InvalidUser_Email) -> tuple[str, int]:
+    """Handle invalid user email errors."""
     return f"<h1>Invalid User</h1><p>That email address does not exist in the database {e}</p>", 400
 
 
@@ -102,7 +103,7 @@ def handle_email_error(e):
 ## These mostly do forms or static content
 
 @app.route('/', methods=GET)
-def func_root():
+def func_root() -> str | tuple[str, int]:
     """/ - serve the home page"""
     try:
         return render_template('index.html', **page_dict())
@@ -111,19 +112,23 @@ def func_root():
 
 
 @app.route('/about', methods=GET)
-def func_about():
+def func_about() -> str:
+    """Serve the about page."""
     return render_template('about.html', **page_dict('About'))
 
 @app.route('/error', methods=GET)
-def func_error():
+def func_error() -> str:
+    """Serve the error page."""
     return render_template('error.html', **page_dict('Error', lookup=False))
 
 @app.route('/audit', methods=GET)
-def func_audit():
+def func_audit() -> str:
+    """Serve the audit page."""
     return render_template('audit.html', **page_dict("Audit", require_auth=True))
 
 @app.route('/analyze', methods=GET)
-def func_analyze():
+def func_analyze() -> str:
+    """Serve the analyze page."""
     return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
 
 ##
