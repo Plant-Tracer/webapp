@@ -12,6 +12,9 @@ parserOptions:
 
 overrides:
   - files: ["*.js"]
+  - files: ["scripts/*.js"]
+    env:
+      node: true
 
 rules:
   "no-unused-vars": ["error", { "args": "all", "argsIgnorePattern" : "^_" }]

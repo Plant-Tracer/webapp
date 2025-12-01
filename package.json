@@ -49,6 +49,12 @@
       "text",
       "clover"
     ],
+    "collectCoverageFrom": [
+      "src/app/static/**/*.js",
+      "src/app/static/**/*.mjs",
+      "!src/app/static/test/**",
+      "!src/app/static/unzipit*.mjs"
+    ],
     "transform": {
       "^.+\\.jsx?$": "babel-jest"
     },
