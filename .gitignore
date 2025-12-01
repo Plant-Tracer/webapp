@@ -62,6 +62,9 @@ coverage.xml
 cover/
 coverage/
 
+# JavaScript coverage instrumentation (generated during coverage collection)
+src/app/static-instrumented/
+
 # Translations
 *.mo
 *.pot

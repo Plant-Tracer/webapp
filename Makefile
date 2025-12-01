@@ -99,7 +99,6 @@ lint: $(REQ)
 
 pylint:
 	poetry run pylint  $(PYLINT_OPTS) src tests *.py
-#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" src tests
 
 ## Mypy static analysis
 mypy:
@@ -137,9 +136,7 @@ pytest: $(REQ)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
 
 pytest-coverage: $(REQ)
-	@echo "Instrumenting JavaScript files for browser coverage..."
-	@NODE_ENV=test node scripts/instrument-js.js || echo "Warning: Could not instrument JS files. Browser coverage may not be collected."
-	$(PT_VARS) COLLECT_JS_COVERAGE=true poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -220,10 +217,14 @@ instrument-js:
 	@echo "Instrumenting JavaScript files for browser coverage..."
 	@NODE_ENV=test node scripts/instrument-js.js
 
-merge-coverage:
-	@echo Merging Jest and browser coverage...
-	@poetry run python -c "from tests.js_coverage_utils import merge_coverage_files; from pathlib import Path; merge_coverage_files(Path('coverage/coverage-final.json'), Path('coverage/browser-coverage.json'), Path('coverage/merged-coverage.json'))"
-	@echo Coverage merged into coverage/merged-coverage.json
+browser-coverage-xml:
+	@echo Converting browser coverage to XML...
+	@if [ -f coverage/browser-coverage.json ]; then \
+		poetry run python -c "from tests.js_coverage_utils import convert_browser_coverage_to_xml; from pathlib import Path; convert_browser_coverage_to_xml(Path('coverage/browser-coverage.json'), Path('coverage/browser-coverage.xml'))"; \
+		echo Browser coverage converted to coverage/browser-coverage.xml; \
+	else \
+		echo No browser coverage found; \
+	fi
 
 jstest-debug:
 	NODE_PATH=src/app/static npm run test-debug
