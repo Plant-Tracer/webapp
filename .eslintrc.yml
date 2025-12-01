@@ -12,7 +12,7 @@ parserOptions:
 
 overrides:
   - files: ["*.js"]
-  - files: ["scripts/**/*.js"]
+  - files: ["scripts/*.js"]
     env:
       node: true
 

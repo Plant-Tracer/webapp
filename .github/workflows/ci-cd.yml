@@ -108,4 +108,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-          files: ./coverage.xml,./coverage/lcov.info,./coverage/browser-v8-coverage.lcov
+          files: |
+            ./coverage.xml
+            ./coverage/lcov.info
+            ./coverage/browser-v8-coverage.lcov
