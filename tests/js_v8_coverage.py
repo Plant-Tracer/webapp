@@ -14,7 +14,7 @@ Usage pattern (wired via pytest fixtures in ``conftest.py``):
   a consolidated JSON file under ``coverage/``.
 
 Collection is enabled only when the environment variable ``COLLECT_JS_COVERAGE``
- is set to a truthy value ("1", "true", "yes"). When disabled, all methods are
+is set to a truthy value ("1", "true", "yes"). When disabled, all methods are
 no-ops so test behavior is unchanged.
 """
 
@@ -41,7 +41,7 @@ class V8CoverageCollector:
     disabled rather than breaking tests.
     """
 
-    enabled: bool = field(default=False)
+    enabled: bool = field(init=False)
     _results: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:

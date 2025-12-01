@@ -10,6 +10,7 @@ import time
 import threading
 import logging
 from os.path import abspath, dirname, join
+from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -19,6 +20,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
 from app import flask_app
+from .js_v8_coverage import collector as v8_coverage_collector
 
 
 # Import fixtures so pytest can discover them
@@ -93,7 +95,15 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
 
     try:
         driver = webdriver.Chrome(options=options)
+        v8_coverage_collector.start(driver)
         yield driver
+        v8_coverage_collector.stop_and_record(driver)
         driver.quit()
     except WebDriverException as e:
         pytest.skip(f"Chrome/Chromium not available: {e}")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Write V8 coverage JSON at the end of the pytest session."""
+    output_path = Path(GIT_ROOT) / "coverage" / "browser-v8-coverage.json"
+    v8_coverage_collector.write_json(output_path)
