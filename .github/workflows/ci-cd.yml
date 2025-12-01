@@ -77,8 +77,29 @@ jobs:
 
       - name: Check with coverage
         if: runner.os == 'Linux'
+        env:
+          COLLECT_JS_COVERAGE: "1"
         run: |
           make pytest-coverage
+
+      - name: Run Jest coverage
+        if: runner.os == 'Linux'
+        run: |
+          make jscoverage
+
+      - name: Convert V8 coverage to LCOV
+        if: runner.os == 'Linux'
+        run: |
+          if [ -f coverage/browser-v8-coverage.json ]; then
+            node scripts/devtools-v8-to-lcov.js coverage/browser-v8-coverage.json coverage/browser-v8-coverage.lcov
+          fi
+
+      - name: List coverage files for debugging
+        if: runner.os == 'Linux'
+        run: |
+          echo "Coverage files generated:"
+          ls -la coverage/ || echo "No coverage directory"
+          ls -la coverage.xml || echo "No coverage.xml"
 
       - name: Upload coverage test to codecov.io
         if: runner.os == 'Linux'
@@ -87,7 +108,4 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-          files: |
-            ./coverage.xml
-            ./coverage/browser-v8-coverage.lcov
-            ./coverage/lcov.info
+          files: ./coverage.xml,./coverage/lcov.info
