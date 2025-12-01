@@ -115,14 +115,81 @@ def extract_coverage_from_browser(driver) -> dict[str, Any] | None:
 def save_browser_coverage(coverage_data: dict[str, Any], output_path: Path) -> None:
     """
     Save browser coverage data to file in Istanbul format.
+    
+    Merges with existing coverage if the file already exists, to accumulate
+    coverage across multiple tests.
 
     Args:
         coverage_data: Coverage data from browser
         output_path: Path to save coverage file
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing coverage if it exists
+    existing_coverage = {}
+    if output_path.exists():
+        try:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                existing_coverage = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            # If file is corrupted or can't be read, start fresh
+            existing_coverage = {}
+    
+    # Merge new coverage with existing
+    git_root = Path(__file__).parent.parent
+    merged = dict(existing_coverage)
+    
+    for file_path, file_coverage in coverage_data.items():
+        normalized_path = _normalize_path(file_path, git_root)
+        if normalized_path in merged:
+            merged[normalized_path] = _merge_file_coverage(merged[normalized_path], file_coverage)
+        else:
+            merged[normalized_path] = file_coverage
+    
+    # Save merged coverage
     with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(coverage_data, f, indent=2)
+        json.dump(merged, f, indent=2)
+
+
+def _normalize_path(path_str: str, git_root: Path) -> str:
+    """
+    Normalize a file path to be relative to git root with forward slashes.
+    
+    Handles various path formats:
+    - Absolute paths (e.g., /home/user/project/src/app/static/file.js)
+    - Relative paths (e.g., src/app/static/file.js)
+    - Paths with instrumented directory (e.g., src/app/static-instrumented/file.js -> src/app/static/file.js)
+    
+    Args:
+        path_str: File path (may be absolute or relative)
+        git_root: Git root directory
+        
+    Returns:
+        Normalized path relative to git root with forward slashes
+    """
+    # Convert to Path object to handle both absolute and relative paths
+    path_obj = Path(path_str)
+    
+    # If it's an absolute path, make it relative to git root
+    if path_obj.is_absolute():
+        try:
+            # Try to make it relative to git root
+            relative = path_obj.relative_to(git_root)
+        except ValueError:
+            # If it's not under git root, try to find a common parent
+            # or just use the original path
+            relative = path_obj
+    else:
+        relative = path_obj
+    
+    # Convert to string with forward slashes (works on all platforms)
+    normalized = str(relative).replace('\\', '/')
+    
+    # Replace static-instrumented with static to match source files
+    # This handles cases where browser coverage references instrumented files
+    normalized = normalized.replace('static-instrumented/', 'static/')
+    
+    return normalized
 
 
 def merge_coverage_files(
@@ -132,6 +199,8 @@ def merge_coverage_files(
 ) -> None:
     """
     Merge Jest and browser coverage files into single coverage report.
+    
+    Normalizes paths to ensure browser coverage paths match Jest coverage paths.
 
     Args:
         jest_coverage_path: Path to Jest coverage-final.json
@@ -139,23 +208,28 @@ def merge_coverage_files(
         output_path: Path to save merged coverage
     """
     merged = {}
+    git_root = Path(__file__).parent.parent
 
     # Load Jest coverage
     if jest_coverage_path.exists():
         with open(jest_coverage_path, 'r', encoding='utf-8') as f:
             jest_coverage = json.load(f)
-            merged.update(jest_coverage)
+            # Normalize Jest paths and add to merged
+            for file_path, file_coverage in jest_coverage.items():
+                normalized_path = _normalize_path(file_path, git_root)
+                merged[normalized_path] = file_coverage
 
     # Load and merge browser coverage
     if browser_coverage_path.exists():
         with open(browser_coverage_path, 'r', encoding='utf-8') as f:
             browser_coverage = json.load(f)
-            # Deep merge coverage data - combine hit counts for overlapping files
+            # Normalize browser coverage paths and merge
             for file_path, file_coverage in browser_coverage.items():
-                if file_path in merged:
-                    merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
+                normalized_path = _normalize_path(file_path, git_root)
+                if normalized_path in merged:
+                    merged[normalized_path] = _merge_file_coverage(merged[normalized_path], file_coverage)
                 else:
-                    merged[file_path] = file_coverage
+                    merged[normalized_path] = file_coverage
 
     # Save merged coverage
     output_path.parent.mkdir(parents=True, exist_ok=True)
