@@ -76,8 +76,13 @@ async function main() {
 
     const source = fs.readFileSync(localFile, "utf8");
 
+    // Use a path relative to the repository root so that it matches Jest coverage.
+    // This ensures Codecov can properly merge V8 browser coverage with Jest unit test coverage.
+    const repoRoot = path.join(__dirname, "..");
+    const relativePath = path.relative(repoRoot, localFile);
+
     // v8-to-istanbul expects a file path and the original source.
-    const converter = v8ToIstanbul(localFile, 0, { source });
+    const converter = v8ToIstanbul(relativePath, 0, { source });
     // load() parses the source and prepares for coverage application.
     // eslint-disable-next-line no-await-in-loop
     await converter.load();
