@@ -78,7 +78,7 @@ jobs:
       - name: Check with coverage
         if: runner.os == 'Linux'
         run: |
-          make coverage
+          make pytest-coverage
 
       - name: Upload coverage test to codecov.io
         if: runner.os == 'Linux'
@@ -87,4 +87,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-          files: ./coverage.xml
+          files: |
+            ./coverage.xml
+            ./coverage/browser-v8-coverage.lcov
+            ./coverage/lcov.info
