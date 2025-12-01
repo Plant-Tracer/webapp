@@ -116,8 +116,7 @@ def save_browser_coverage(coverage_data: dict[str, Any], output_path: Path) -> N
     """
     Save browser coverage data to file in Istanbul format.
     
-    Merges with existing coverage if the file already exists, to accumulate
-    coverage across multiple tests.
+    Accumulates coverage across multiple tests by merging with existing coverage.
 
     Args:
         coverage_data: Coverage data from browser
@@ -132,109 +131,156 @@ def save_browser_coverage(coverage_data: dict[str, Any], output_path: Path) -> N
             with open(output_path, 'r', encoding='utf-8') as f:
                 existing_coverage = json.load(f)
         except (json.JSONDecodeError, IOError):
-            # If file is corrupted or can't be read, start fresh
             existing_coverage = {}
     
     # Merge new coverage with existing
-    git_root = Path(__file__).parent.parent
     merged = dict(existing_coverage)
-    
     for file_path, file_coverage in coverage_data.items():
-        normalized_path = _normalize_path(file_path, git_root)
-        if normalized_path in merged:
-            merged[normalized_path] = _merge_file_coverage(merged[normalized_path], file_coverage)
+        if file_path in merged:
+            merged[file_path] = _merge_file_coverage(merged[file_path], file_coverage)
         else:
-            merged[normalized_path] = file_coverage
+            merged[file_path] = file_coverage
     
     # Save merged coverage
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(merged, f, indent=2)
 
 
-def _normalize_path(path_str: str, git_root: Path) -> str:
+def convert_browser_coverage_to_xml(json_path: Path, xml_path: Path) -> None:
     """
-    Normalize a file path to be relative to git root with forward slashes.
-    
-    Handles various path formats:
-    - Absolute paths (e.g., /home/user/project/src/app/static/file.js)
-    - Relative paths (e.g., src/app/static/file.js)
-    - Paths with instrumented directory (e.g., src/app/static-instrumented/file.js -> src/app/static/file.js)
+    Convert Istanbul coverage JSON to Clover XML format.
     
     Args:
-        path_str: File path (may be absolute or relative)
-        git_root: Git root directory
+        json_path: Path to browser coverage JSON file
+        xml_path: Path to save Clover XML file
+    """
+    import xml.etree.ElementTree as ET
+    from datetime import datetime
+    
+    if not json_path.exists():
+        return
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        coverage = json.load(f)
+    
+    timestamp = int(datetime.now().timestamp() * 1000)
+    
+    # Create root element
+    root = ET.Element('coverage')
+    root.set('generated', str(timestamp))
+    root.set('clover', '3.2.0')
+    
+    project = ET.SubElement(root, 'project')
+    project.set('timestamp', str(timestamp))
+    project.set('name', 'All files')
+    
+    # Calculate metrics
+    total_statements = 0
+    covered_statements = 0
+    total_conditionals = 0
+    covered_conditionals = 0
+    total_methods = 0
+    covered_methods = 0
+    
+    for file_path, file_coverage in coverage.items():
+        s = file_coverage.get('s', {})
+        f = file_coverage.get('f', {})
+        b = file_coverage.get('b', {})
         
-    Returns:
-        Normalized path relative to git root with forward slashes
-    """
-    # Convert to Path object to handle both absolute and relative paths
-    path_obj = Path(path_str)
+        total_statements += len(s)
+        covered_statements += sum(1 for count in s.values() if count > 0)
+        total_methods += len(f)
+        covered_methods += sum(1 for count in f.values() if count > 0)
+        
+        # Count branches (conditionals)
+        for branch_counts in b.values():
+            if isinstance(branch_counts, list):
+                total_conditionals += len(branch_counts)
+                covered_conditionals += sum(1 for count in branch_counts if count > 0)
     
-    # If it's an absolute path, make it relative to git root
-    if path_obj.is_absolute():
-        try:
-            # Try to make it relative to git root
-            relative = path_obj.relative_to(git_root)
-        except ValueError:
-            # If it's not under git root, try to find a common parent
-            # or just use the original path
-            relative = path_obj
-    else:
-        relative = path_obj
+    elements = total_statements + total_conditionals + total_methods
+    covered_elements = covered_statements + covered_conditionals + covered_methods
     
-    # Convert to string with forward slashes (works on all platforms)
-    normalized = str(relative).replace('\\', '/')
+    # Project metrics
+    metrics = ET.SubElement(project, 'metrics')
+    metrics.set('statements', str(total_statements))
+    metrics.set('coveredstatements', str(covered_statements))
+    metrics.set('conditionals', str(total_conditionals))
+    metrics.set('coveredconditionals', str(covered_conditionals))
+    metrics.set('methods', str(total_methods))
+    metrics.set('coveredmethods', str(covered_methods))
+    metrics.set('elements', str(elements))
+    metrics.set('coveredelements', str(covered_elements))
+    metrics.set('complexity', '0')
+    metrics.set('loc', str(total_statements))
+    metrics.set('ncloc', str(total_statements))
+    metrics.set('packages', '1')
+    metrics.set('files', str(len(coverage)))
+    metrics.set('classes', str(len(coverage)))
     
-    # Replace static-instrumented with static to match source files
-    # This handles cases where browser coverage references instrumented files
-    normalized = normalized.replace('static-instrumented/', 'static/')
+    # Add file coverage
+    for file_path, file_coverage in coverage.items():
+        file_elem = ET.SubElement(project, 'file')
+        file_name = Path(file_path).name
+        file_elem.set('name', file_name)
+        file_elem.set('path', file_path)
+        
+        s = file_coverage.get('s', {})
+        f = file_coverage.get('f', {})
+        b = file_coverage.get('b', {})
+        statement_map = file_coverage.get('statementMap', {})
+        
+        file_statements = len(s)
+        file_covered_statements = sum(1 for count in s.values() if count > 0)
+        file_methods = len(f)
+        file_covered_methods = sum(1 for count in f.values() if count > 0)
+        
+        file_conditionals = sum(len(branch_counts) if isinstance(branch_counts, list) else 0 for branch_counts in b.values())
+        file_covered_conditionals = sum(
+            sum(1 for count in (branch_counts if isinstance(branch_counts, list) else []) if count > 0)
+            for branch_counts in b.values()
+        )
+        
+        file_metrics = ET.SubElement(file_elem, 'metrics')
+        file_metrics.set('statements', str(file_statements))
+        file_metrics.set('coveredstatements', str(file_covered_statements))
+        file_metrics.set('conditionals', str(file_conditionals))
+        file_metrics.set('coveredconditionals', str(file_covered_conditionals))
+        file_metrics.set('methods', str(file_methods))
+        file_metrics.set('coveredmethods', str(file_covered_methods))
+        
+        # Add line coverage
+        for stmt_id, count in s.items():
+            if stmt_id in statement_map:
+                stmt_info = statement_map[stmt_id]
+                line_num = stmt_info.get('start', {}).get('line', 0)
+                if line_num > 0:
+                    line_elem = ET.SubElement(file_elem, 'line')
+                    line_elem.set('num', str(line_num))
+                    line_elem.set('count', str(count))
+                    line_elem.set('type', 'stmt')
+        
+        # Add branch coverage
+        branch_map = file_coverage.get('branchMap', {})
+        for branch_id, branch_counts in b.items():
+            if branch_id in branch_map:
+                branch_info = branch_map[branch_id]
+                line_num = branch_info.get('line', 0)
+                if line_num > 0 and isinstance(branch_counts, list):
+                    line_elem = ET.SubElement(file_elem, 'line')
+                    line_elem.set('num', str(line_num))
+                    line_elem.set('count', str(max(branch_counts) if branch_counts else 0))
+                    line_elem.set('type', 'cond')
+                    true_count = sum(1 for c in branch_counts if c > 0)
+                    false_count = len(branch_counts) - true_count
+                    line_elem.set('truecount', str(true_count))
+                    line_elem.set('falsecount', str(false_count))
     
-    return normalized
-
-
-def merge_coverage_files(
-    jest_coverage_path: Path,
-    browser_coverage_path: Path,
-    output_path: Path
-) -> None:
-    """
-    Merge Jest and browser coverage files into single coverage report.
-    
-    Normalizes paths to ensure browser coverage paths match Jest coverage paths.
-
-    Args:
-        jest_coverage_path: Path to Jest coverage-final.json
-        browser_coverage_path: Path to browser coverage file
-        output_path: Path to save merged coverage
-    """
-    merged = {}
-    git_root = Path(__file__).parent.parent
-
-    # Load Jest coverage
-    if jest_coverage_path.exists():
-        with open(jest_coverage_path, 'r', encoding='utf-8') as f:
-            jest_coverage = json.load(f)
-            # Normalize Jest paths and add to merged
-            for file_path, file_coverage in jest_coverage.items():
-                normalized_path = _normalize_path(file_path, git_root)
-                merged[normalized_path] = file_coverage
-
-    # Load and merge browser coverage
-    if browser_coverage_path.exists():
-        with open(browser_coverage_path, 'r', encoding='utf-8') as f:
-            browser_coverage = json.load(f)
-            # Normalize browser coverage paths and merge
-            for file_path, file_coverage in browser_coverage.items():
-                normalized_path = _normalize_path(file_path, git_root)
-                if normalized_path in merged:
-                    merged[normalized_path] = _merge_file_coverage(merged[normalized_path], file_coverage)
-                else:
-                    merged[normalized_path] = file_coverage
-
-    # Save merged coverage
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(merged, f, indent=2)
+    # Write XML
+    xml_path.parent.mkdir(parents=True, exist_ok=True)
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space='  ')
+    tree.write(xml_path, encoding='utf-8', xml_declaration=True)
 
 
 def get_coverage_output_path() -> Path:
