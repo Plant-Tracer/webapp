@@ -14,7 +14,7 @@ from .js_coverage_utils import (
 
 def test_merge_hit_counters_empty():
     """Test merging with empty dicts."""
-    assert _merge_hit_counters({}, {}) == {}
+    assert not _merge_hit_counters({}, {})
     assert _merge_hit_counters({"0": 1}, {}) == {"0": 1}
     assert _merge_hit_counters({}, {"0": 1}) == {"0": 1}
 
@@ -29,7 +29,7 @@ def test_merge_hit_counters_overlapping():
 
 def test_merge_branch_counters_empty():
     """Test merging with empty branch dicts."""
-    assert _merge_branch_counters({}, {}) == {}
+    assert not _merge_branch_counters({}, {})
     assert _merge_branch_counters({"0": [1, 0]}, {}) == {"0": [1, 0]}
     assert _merge_branch_counters({}, {"0": [1, 0]}) == {"0": [1, 0]}
 
