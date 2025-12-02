@@ -69,6 +69,31 @@ class V8CoverageCollector:
             # remainder of the session rather than failing tests.
             self.enabled = False
 
+    def take_snapshot(self, driver: WebDriver) -> None:
+        """Take a snapshot of coverage data without stopping collection.
+
+        This should be called BEFORE navigating to a new page, as navigation
+        destroys the current JavaScript context and loses coverage data.
+        Coverage collection continues after taking the snapshot.
+        """
+
+        if not self.enabled:
+            return
+
+        try:
+            result: Dict[str, Any] = driver.execute_cdp_cmd(
+                "Profiler.takePreciseCoverage", {}
+            )
+        except Exception:
+            # Best-effort: if we cannot retrieve coverage, skip quietly.
+            return
+
+        entries = result.get("result", [])
+        if not isinstance(entries, list):
+            return
+
+        self._results.extend(entries)
+
     def stop_and_record(self, driver: WebDriver) -> None:
         """Stop coverage collection for this driver and merge its results.
 
