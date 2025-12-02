@@ -66,17 +66,30 @@ async function main() {
     if (url.includes('planttracer.js')) {
       // eslint-disable-next-line no-console
       console.log(`Processing planttracer.js entry: ${functions.length} functions`);
-      // Log function names and their coverage counts
-      for (const fn of functions.slice(0, 5)) {
+      // Log ALL function names and their coverage counts - specifically look for upload_movie
+      // eslint-disable-next-line no-console
+      console.log('Functions with count > 0:');
+      for (const fn of functions) {
+        const fnName = fn.functionName || '(anonymous)';
+        const ranges = fn.ranges || [];
+        const totalCount = ranges.reduce((sum, r) => sum + (r.count || 0), 0);
+        if (totalCount > 0) {
+          // eslint-disable-next-line no-console
+          console.log(`  - ${fnName}: ${ranges.length} ranges, total count=${totalCount}`);
+        }
+      }
+      // Also check if upload_movie functions are present at all
+      const uploadFunctions = functions.filter(fn => 
+        (fn.functionName || '').includes('upload')
+      );
+      // eslint-disable-next-line no-console
+      console.log(`Upload-related functions found: ${uploadFunctions.length}`);
+      for (const fn of uploadFunctions) {
         const fnName = fn.functionName || '(anonymous)';
         const ranges = fn.ranges || [];
         const totalCount = ranges.reduce((sum, r) => sum + (r.count || 0), 0);
         // eslint-disable-next-line no-console
-        console.log(`  - ${fnName}: ${ranges.length} ranges, total count=${totalCount}`);
-      }
-      if (functions.length > 5) {
-        // eslint-disable-next-line no-console
-        console.log(`  ... and ${functions.length - 5} more functions`);
+        console.log(`  - ${fnName}: count=${totalCount}`);
       }
     }
     
