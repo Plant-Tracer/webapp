@@ -18,6 +18,7 @@ from app import odb_movie_data
 from app.constants import logger
 from .fixtures.local_aws import API_KEY
 from .selenium_utils import authenticate_browser
+from .js_v8_coverage import collector as v8_coverage_collector
 
 TEST_MOVIE_PATH = Path(__file__).resolve().parent / "data" / "2019-07-12 circumnutation.mp4"
 
@@ -89,6 +90,10 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     source_hash = hashlib.sha256(TEST_MOVIE_PATH.read_bytes()).hexdigest()
     uploaded_hash = hashlib.sha256(movie_bytes).hexdigest()
     assert uploaded_hash == source_hash, "Uploaded movie content does not match source file"
+
+    # Take V8 coverage snapshot BEFORE navigating away from /upload page
+    # This captures the upload_movie_post() function execution
+    v8_coverage_collector.take_snapshot(chrome_driver)
 
     # Confirm movie shows up in the UI list (client-side render)
     chrome_driver.get(f"{live_server}/list")

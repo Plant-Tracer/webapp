@@ -61,6 +61,38 @@ async function main() {
   for (const entry of entries) {
     const url = entry.url || "";
     const functions = Array.isArray(entry.functions) ? entry.functions : [];
+    
+    // Log entries that contain planttracer.js for debugging coverage issues
+    if (url.includes('planttracer.js')) {
+      // eslint-disable-next-line no-console
+      console.log(`Processing planttracer.js entry: ${functions.length} functions`);
+      // Log ALL function names and their coverage counts - specifically look for upload_movie
+      // eslint-disable-next-line no-console
+      console.log('Functions with count > 0:');
+      for (const fn of functions) {
+        const fnName = fn.functionName || '(anonymous)';
+        const ranges = fn.ranges || [];
+        const totalCount = ranges.reduce((sum, r) => sum + (r.count || 0), 0);
+        if (totalCount > 0) {
+          // eslint-disable-next-line no-console
+          console.log(`  - ${fnName}: ${ranges.length} ranges, total count=${totalCount}`);
+        }
+      }
+      // Also check if upload_movie functions are present at all
+      const uploadFunctions = functions.filter(fn => 
+        (fn.functionName || '').includes('upload')
+      );
+      // eslint-disable-next-line no-console
+      console.log(`Upload-related functions found: ${uploadFunctions.length}`);
+      for (const fn of uploadFunctions) {
+        const fnName = fn.functionName || '(anonymous)';
+        const ranges = fn.ranges || [];
+        const totalCount = ranges.reduce((sum, r) => sum + (r.count || 0), 0);
+        // eslint-disable-next-line no-console
+        console.log(`  - ${fnName}: count=${totalCount}`);
+      }
+    }
+    
     if (!url || functions.length === 0) {
       continue;
     }
@@ -76,8 +108,13 @@ async function main() {
 
     const source = fs.readFileSync(localFile, "utf8");
 
+    // Use a path relative to the repository root so that it matches Jest coverage.
+    // This ensures Codecov can properly merge V8 browser coverage with Jest unit test coverage.
+    const repoRoot = path.join(__dirname, "..");
+    const relativePath = path.relative(repoRoot, localFile);
+
     // v8-to-istanbul expects a file path and the original source.
-    const converter = v8ToIstanbul(localFile, 0, { source });
+    const converter = v8ToIstanbul(relativePath, 0, { source });
     // load() parses the source and prepares for coverage application.
     // eslint-disable-next-line no-await-in-loop
     await converter.load();

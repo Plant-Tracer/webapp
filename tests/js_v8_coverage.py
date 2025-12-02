@@ -69,20 +69,16 @@ class V8CoverageCollector:
             # remainder of the session rather than failing tests.
             self.enabled = False
 
-    def stop_and_record(self, driver: WebDriver) -> None:
-        """Stop coverage collection for this driver and merge its results.
+    def _record_coverage(self, driver: WebDriver) -> None:
+        """Retrieve and store V8 coverage data from the driver.
 
-        Should be called before the WebDriver is quit.
+        Internal helper to avoid code duplication between take_snapshot
+        and stop_and_record.
         """
-
-        if not self.enabled:
-            return
-
         try:
             result: Dict[str, Any] = driver.execute_cdp_cmd(
                 "Profiler.takePreciseCoverage", {}
             )
-            driver.execute_cdp_cmd("Profiler.stopPreciseCoverage", {})
         except Exception:
             # Best-effort: if we cannot retrieve coverage, skip quietly.
             return
@@ -92,6 +88,36 @@ class V8CoverageCollector:
             return
 
         self._results.extend(entries)
+
+    def take_snapshot(self, driver: WebDriver) -> None:
+        """Take a snapshot of coverage data without stopping collection.
+
+        This should be called BEFORE navigating to a new page, as navigation
+        destroys the current JavaScript context and loses coverage data.
+        Coverage collection continues after taking the snapshot.
+        """
+
+        if not self.enabled:
+            return
+
+        self._record_coverage(driver)
+
+    def stop_and_record(self, driver: WebDriver) -> None:
+        """Stop coverage collection for this driver and merge its results.
+
+        Should be called before the WebDriver is quit.
+        """
+
+        if not self.enabled:
+            return
+
+        self._record_coverage(driver)
+
+        try:
+            driver.execute_cdp_cmd("Profiler.stopPreciseCoverage", {})
+        except Exception:
+            # Best-effort: if we cannot stop coverage, skip quietly.
+            pass
 
     def write_json(self, output_path: Path) -> None:
         """Write consolidated V8 coverage JSON to ``output_path``.
