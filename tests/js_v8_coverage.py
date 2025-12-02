@@ -69,6 +69,26 @@ class V8CoverageCollector:
             # remainder of the session rather than failing tests.
             self.enabled = False
 
+    def _record_coverage(self, driver: WebDriver) -> None:
+        """Retrieve and store V8 coverage data from the driver.
+
+        Internal helper to avoid code duplication between take_snapshot
+        and stop_and_record.
+        """
+        try:
+            result: Dict[str, Any] = driver.execute_cdp_cmd(
+                "Profiler.takePreciseCoverage", {}
+            )
+        except Exception:
+            # Best-effort: if we cannot retrieve coverage, skip quietly.
+            return
+
+        entries = result.get("result", [])
+        if not isinstance(entries, list):
+            return
+
+        self._results.extend(entries)
+
     def take_snapshot(self, driver: WebDriver) -> None:
         """Take a snapshot of coverage data without stopping collection.
 
@@ -80,19 +100,7 @@ class V8CoverageCollector:
         if not self.enabled:
             return
 
-        try:
-            result: Dict[str, Any] = driver.execute_cdp_cmd(
-                "Profiler.takePreciseCoverage", {}
-            )
-        except Exception:
-            # Best-effort: if we cannot retrieve coverage, skip quietly.
-            return
-
-        entries = result.get("result", [])
-        if not isinstance(entries, list):
-            return
-
-        self._results.extend(entries)
+        self._record_coverage(driver)
 
     def stop_and_record(self, driver: WebDriver) -> None:
         """Stop coverage collection for this driver and merge its results.
@@ -103,20 +111,13 @@ class V8CoverageCollector:
         if not self.enabled:
             return
 
+        self._record_coverage(driver)
+
         try:
-            result: Dict[str, Any] = driver.execute_cdp_cmd(
-                "Profiler.takePreciseCoverage", {}
-            )
             driver.execute_cdp_cmd("Profiler.stopPreciseCoverage", {})
         except Exception:
-            # Best-effort: if we cannot retrieve coverage, skip quietly.
-            return
-
-        entries = result.get("result", [])
-        if not isinstance(entries, list):
-            return
-
-        self._results.extend(entries)
+            # Best-effort: if we cannot stop coverage, skip quietly.
+            pass
 
     def write_json(self, output_path: Path) -> None:
         """Write consolidated V8 coverage JSON to ``output_path``.
