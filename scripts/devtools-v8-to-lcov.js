@@ -61,6 +61,25 @@ async function main() {
   for (const entry of entries) {
     const url = entry.url || "";
     const functions = Array.isArray(entry.functions) ? entry.functions : [];
+    
+    // Log entries that contain planttracer.js for debugging coverage issues
+    if (url.includes('planttracer.js')) {
+      // eslint-disable-next-line no-console
+      console.log(`Processing planttracer.js entry: ${functions.length} functions`);
+      // Log function names and their coverage counts
+      for (const fn of functions.slice(0, 5)) {
+        const fnName = fn.functionName || '(anonymous)';
+        const ranges = fn.ranges || [];
+        const totalCount = ranges.reduce((sum, r) => sum + (r.count || 0), 0);
+        // eslint-disable-next-line no-console
+        console.log(`  - ${fnName}: ${ranges.length} ranges, total count=${totalCount}`);
+      }
+      if (functions.length > 5) {
+        // eslint-disable-next-line no-console
+        console.log(`  ... and ${functions.length - 5} more functions`);
+      }
+    }
+    
     if (!url || functions.length === 0) {
       continue;
     }
