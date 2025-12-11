@@ -4,10 +4,9 @@ Plant Tracer Web App Tutorial
 Welcome and Registration
 -------------------------
 - Go to `app.planttracer.com/register`.
-- Register for an account using your Course Key provided by your instructor.
-- Alternately, you can register for a demo course which is called "dev" (enter "dev" in the box labeled Course Key.
-- Enter your full name, email address, and Course Key.
-
+- Register for an account using your Name, Email Address, and Course Key.
+- If you are using Plant Tracer with a specific course or project, you can enter your course Keyey provided by your instructor or project leader.
+- Alternately, you can register for the Web course whose course key is 389f-4163
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer Registration
 
