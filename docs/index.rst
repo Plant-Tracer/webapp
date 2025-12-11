@@ -17,6 +17,7 @@ Welcome to Plant Tracer Web Application's documentation!
    DeveloperSetup
    DevSetupAmazonLinuxEC2
    DevSetupUbuntu
+   DeveloperSetup_Mac
    WindowsDevSetup
    Local Development and Github Actions
    EnvironmentVariables
