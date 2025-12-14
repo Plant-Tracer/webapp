@@ -19,7 +19,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
 from app import flask_app
-from .js_coverage_utils import extract_coverage_from_browser, get_coverage_output_path, save_browser_coverage
+
 
 # Import fixtures so pytest can discover them
 from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
@@ -94,13 +94,6 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
     try:
         driver = webdriver.Chrome(options=options)
         yield driver
-
-        # Collect JavaScript coverage if available
-        if os.environ.get('COLLECT_JS_COVERAGE', '').lower() in ('1', 'true', 'yes'):
-            coverage_data = extract_coverage_from_browser(driver)
-            if coverage_data:
-                save_browser_coverage(coverage_data, get_coverage_output_path())
-
         driver.quit()
     except WebDriverException as e:
         pytest.skip(f"Chrome/Chromium not available: {e}")
