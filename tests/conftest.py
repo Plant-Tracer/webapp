@@ -19,6 +19,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
 from app import flask_app
+from .js_v8_coverage import collector as js_coverage_collector
 
 
 # Import fixtures so pytest can discover them
@@ -93,7 +94,31 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
 
     try:
         driver = webdriver.Chrome(options=options)
+
+        # Start V8 coverage collection for this driver if enabled via
+        # COLLECT_JS_COVERAGE.
+        js_coverage_collector.start(driver)
+
         yield driver
+
+        # Capture and record coverage before quitting the driver.
+        js_coverage_collector.stop_and_record(driver)
         driver.quit()
     except WebDriverException as e:
         pytest.skip(f"Chrome/Chromium not available: {e}")
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:  # type: ignore[override]
+    """Pytest hook: write consolidated V8 coverage at end of test session.
+
+    When COLLECT_JS_COVERAGE is truthy, V8 coverage collected from all
+    Selenium-driven Chromium sessions is written to
+    ``coverage/browser-v8-coverage.json``.
+    """
+
+    del session, exitstatus  # unused but kept for signature compatibility
+
+    from pathlib import Path
+
+    output_path = Path("coverage") / "browser-v8-coverage.json"
+    js_coverage_collector.write_json(output_path)
