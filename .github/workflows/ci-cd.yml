@@ -1,7 +1,7 @@
-# See https://docs.github.com/en/actions/guides/building-and-testing-python
-# 2025-06-15 - slg - Complete rewrite to avoid MySQL and use DynamoDB and S3 local variants.
-#                    These are automatically configured with install-ubuntu or install-macos
-name: CI (pip)
+# Standard CI/CD. Runs on both Linux and Mac
+# On Linux, we also run lint and coverage.
+
+name: CI-CD
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['macos-latest', 'ubuntu-latest']   #
+        os: ['macos-latest', 'ubuntu-latest']
         python-version: [3.13]
     runs-on: ${{ matrix.os }}
     steps:
@@ -26,8 +26,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-
-
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -66,29 +64,21 @@ jobs:
         run: |
           make make-local-demo
 
-      - name: Lint with pylint - DISABLED
-        if: false
+      - name: Lint Python, JavaScript and HTML
+        if: runner.os == 'Linux'
         run: |
-          make pylint
-
-      - name: JavaScript and HTML eslint
-        run: |
+          make lint
           make eslint
 
-      - name: Normal pytest
+      - name: Check only
         if: runner.os != 'Linux'
         run: |
           make pytest
 
-      - name: Run pytest with coverage
+      - name: Check with coverage
         if: runner.os == 'Linux'
         run: |
-          make pytest-coverage
-
-      - name: JavaScript tests and coverage
-        if: runner.os == 'Linux'
-        run: |
-          make jscoverage
+          make coverage
 
       - name: Upload coverage test to codecov.io
         if: runner.os == 'Linux'
@@ -97,4 +87,4 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-          files: ./coverage.xml,./coverage/coverage-final.json
+          files: ./coverage.xml

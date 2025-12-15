@@ -67,11 +67,11 @@ def draw_cross_on_canvas(driver, canvas_element, x, y, size=10, color='red'):
 
     ctx.beginPath();
 
-    // Line 1: Top-Left to Bottom-Right (\)
+    // Line 1: Top-Left to Bottom-Right (backslash)
     ctx.moveTo(x - size, y - size);
     ctx.lineTo(x + size, y + size);
 
-    // Line 2: Top-Right to Bottom-Left (/)
+    // Line 2: Top-Right to Bottom-Left (forward slash)
     ctx.moveTo(x + size, y - size);
     ctx.lineTo(x - size, y + size);
 

@@ -46,6 +46,7 @@ DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
 
 APP_ETC=app/etc
 DBUTIL=src/dbutil.py
+.PHONY: dist distclean
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
@@ -66,9 +67,8 @@ distclean:
 
 
 ################################################################
-#
-# By default, PYLINT generates an error if your code does not rank 10.0.
-# This makes us tolerant of minor problems.
+# Main targets used by CI/CD system and developers
+.PHONY: all check coverage tags
 
 all:
 	@echo verify syntax and then restart
@@ -78,6 +78,11 @@ all:
 check:
 	make lint
 	make pytest
+	make jscoverage
+
+coverage:
+	make pytest-coverage
+	make jscoverage
 
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
@@ -94,7 +99,6 @@ lint: $(REQ)
 
 pylint:
 	poetry run pylint  $(PYLINT_OPTS) src tests *.py
-#	poetry run pylint $(PYLINT_OPTS) --init-hook="import sys;sys.path.append('tests');import conftest" src tests
 
 ## Mypy static analysis
 mypy:
@@ -133,7 +137,7 @@ pytest: $(REQ)
 
 pytest-coverage: $(REQ)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
-	@echo covreage report in htmlcov/
+	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
@@ -206,8 +210,21 @@ eslint:
 	(cd src/app/templates;make eslint)
 
 jscoverage:
-	NODE_PATH=src/app/static npm run coverage
+	NODE_ENV=test NODE_PATH=src/app/static npm run coverage
 	NODE_PATH=src/app/static npm test
+
+instrument-js:
+	@echo "Instrumenting JavaScript files for browser coverage..."
+	@NODE_ENV=test node scripts/instrument-js.js
+
+browser-coverage-xml:
+	@echo Converting browser coverage to XML...
+	@if [ -f coverage/browser-coverage.json ]; then \
+		poetry run python -c "from tests.js_coverage_utils import convert_browser_coverage_to_xml; from pathlib import Path; convert_browser_coverage_to_xml(Path('coverage/browser-coverage.json'), Path('coverage/browser-coverage.xml'))"; \
+		echo Browser coverage converted to coverage/browser-coverage.xml; \
+	else \
+		echo No browser coverage found; \
+	fi
 
 jstest-debug:
 	NODE_PATH=src/app/static npm run test-debug

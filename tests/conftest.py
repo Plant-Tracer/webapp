@@ -10,6 +10,7 @@ import time
 import threading
 import logging
 from os.path import abspath, dirname, join
+from typing import Generator
 
 import pytest
 from werkzeug.serving import make_server
@@ -18,6 +19,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
 from app import flask_app
+
 
 # Import fixtures so pytest can discover them
 from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
@@ -38,19 +40,19 @@ APP_DIR = join(SRC_DIR, "app")
 class ServerThread(threading.Thread):
     """Run Flask server in a background thread for testing."""
 
-    def __init__(self, app, port=8765):
+    def __init__(self, app, port: int = 8765) -> None:
         threading.Thread.__init__(self, daemon=True)
         self.server = make_server('127.0.0.1', port, app)
 
-    def run(self):
+    def run(self) -> None:
         self.server.serve_forever()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.server.shutdown()
 
 
 @pytest.fixture(scope="module")
-def live_server(local_ddb, local_s3):
+def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
     """Start a live Flask server for Selenium tests.
 
     Depends on local_ddb and local_s3 fixtures to ensure AWS services are available.
@@ -72,8 +74,12 @@ def live_server(local_ddb, local_s3):
 
 
 @pytest.fixture(scope="function")
-def chrome_driver():
-    """Fixture to provide a configured Chrome/Chromium WebDriver."""
+def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
+    """Fixture to provide a configured Chrome/Chromium WebDriver.
+
+    Also collects JavaScript coverage if available (when files are instrumented
+    with babel-plugin-istanbul).
+    """
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
