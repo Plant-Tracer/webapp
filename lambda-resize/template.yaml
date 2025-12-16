@@ -59,7 +59,7 @@ Resources:
       Runtime: python3.13
       PackageType: Zip
       CodeUri: src/
-      Handler: resize_app.resize.lambda_handler
+      Handler: resize_app.main.lambda_handler
       Timeout: 60
       MemorySize: 256
       Policies:
