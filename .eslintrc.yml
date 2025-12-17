@@ -1,6 +1,5 @@
 env:
-  browser: true,
-  jquery: true,
+  browser: true
   es2021: true
 
 extends: eslint:recommended
@@ -12,6 +11,13 @@ parserOptions:
 
 overrides:
   - files: ["*.js"]
+  - files: ["scripts/*.js"]
+    env:
+      node: true
 
 rules:
   "no-unused-vars": ["error", { "args": "all", "argsIgnorePattern" : "^_" }]
+
+globals:
+  $: readonly
+  $$: readonly
