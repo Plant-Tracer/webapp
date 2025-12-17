@@ -9,11 +9,11 @@ import io
 import zipfile
 from typing import Tuple, Optional
 import argparse
+from fractions import Fraction
 
 import av
 import numpy as np
 from PIL import Image, ImageOps  # pip install pillow
-from fractions import Fraction
 
 DEFAULT_JPEG_QUALITY = 70
 
@@ -38,7 +38,8 @@ def _rotation_degrees_from_frame(frame: av.video.frame.VideoFrame) -> int:
 
 
 def _apply_rotation(img: Image.Image, degrees: int) -> Image.Image:
-    if degrees % 360 == 0: return img
+    if degrees % 360 == 0:
+        return img
     # PIL rotates counter-clockwise for ROTATE_* transposes
     m = {90: Image.Transpose.ROTATE_270,
          180: Image.Transpose.ROTATE_180,
@@ -81,7 +82,7 @@ def _resize_image(img: Image.Image,
 
 # ---------- Main processing ----------
 
-# pylint: disable=too-many-positional-arguments, disable=too-many-locals
+# pylint: disable=too-many-positional-arguments, disable=too-many-locals, disable=too-many-arguments,disable=too-many-branches,disable=too-many-statements
 def video_to_zip_and_mp4(
     input_path: str,
     zip_path: str,
@@ -145,67 +146,65 @@ def video_to_zip_and_mp4(
     time_base = Fraction(1, fps)
 
     # Prepare ZIP
-    zf = zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6)
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
 
-    # Rewind to decode from start (post-seek)
-    if start_time is not None:
-        container.seek(int(start_time * av.time_base))
+        # Rewind to decode from start (post-seek)
+        if start_time is not None:
+            container.seek(int(start_time * av.time_base))
 
-    frame_index = 0
-    def process_image(img: Image.Image):
-        nonlocal frame_index
-        # For ZIP: choose per-frame orientation; portrait stays portrait
-        w, h = img.size
-        target_this = (480, 640) if h > w else (640, 480)
+        frame_index = 0
+        def process_image(img: Image.Image):
+            nonlocal frame_index
+            # For ZIP: choose per-frame orientation; portrait stays portrait
+            # w, h = img.size
+            # target_this = (480, 640) if h > w else (640, 480)
 
-        # For MP4: constant WxH; letterbox if needed
-        img_vid = _resize_image(img, target_wh=target_wh, mode=mode, pad_color=pad_color)
+            # For MP4: constant WxH; letterbox if needed
+            img_vid = _resize_image(img, target_wh=target_wh, mode=mode, pad_color=pad_color)
 
-        # Write JPEG into ZIP
-        bio = io.BytesIO()
-        img_vid.save(bio, format="JPEG", quality=jpeg_quality, optimize=True,
-                     progressive=False, subsampling=jpeg_subsampling)
-        bio.seek(0)
-        zf.writestr(f"frame_{frame_index:06d}.jpg", bio.read())
+            # Write JPEG into ZIP
+            bio = io.BytesIO()
+            img_vid.save(bio, format="JPEG", quality=jpeg_quality, optimize=True,
+                         progressive=False, subsampling=jpeg_subsampling)
+            bio.seek(0)
+            zf.writestr(f"frame_{frame_index:06d}.jpg", bio.read())
 
-        # Encode to MP4
-        arr = np.asarray(img_vid.convert("RGB"))
-        frame_rgb = av.VideoFrame.from_ndarray(arr, format="rgb24")
-        #frame_rgb.pict_type = "NONE"
-        frame_rgb.time_base = time_base
-        frame_rgb.pts = frame_index
-        # Reformat to yuv420p for encoder
-        frame_yuv = frame_rgb.reformat(format="yuv420p", width=target_wh[0], height=target_wh[1])
-        for pkt in stream.encode(frame_yuv):
+            # Encode to MP4
+            arr = np.asarray(img_vid.convert("RGB"))
+            frame_rgb = av.VideoFrame.from_ndarray(arr, format="rgb24")
+            #frame_rgb.pict_type = "NONE"
+            frame_rgb.time_base = time_base
+            frame_rgb.pts = frame_index
+            # Reformat to yuv420p for encoder
+            frame_yuv = frame_rgb.reformat(format="yuv420p", width=target_wh[0], height=target_wh[1])
+            for pkt in stream.encode(frame_yuv):
+                out.mux(pkt)
+
+            frame_index += 1
+
+        # Main decode loop
+        packets = 0
+        for packet in container.demux(vstream):
+            for frame in packet.decode():
+                if end_time is not None and frame.time is not None and frame.time > end_time:
+                    break
+                rot = _rotation_degrees_from_frame(frame)
+                img = _apply_rotation(frame.to_image(), rot)
+                process_image(img)
+                print(packets,frame_index)
+            packets += 1
+
+
+        # Flush encoder
+        for pkt in stream.encode(None):
             out.mux(pkt)
 
-        frame_index += 1
-
-    # Main decode loop
-    packets = 0
-    for packet in container.demux(vstream):
-        for frame in packet.decode():
-            if end_time is not None and frame.time is not None and frame.time > end_time:
-                break
-            rot = _rotation_degrees_from_frame(frame)
-            img = _apply_rotation(frame.to_image(), rot)
-            process_image(img)
-            print(packets,frame_index)
-        packets += 1
-
-
-    # Flush encoder
-    for pkt in stream.encode(None):
-        out.mux(pkt)
-
     # Close everything
-    zf.close()
     out.close()
     container.close()
 
 
 if __name__ == "__main__":
-    import argparse
     p = argparse.ArgumentParser("Downscale → ZIP(JPEGs) + MP4 (H.264) in one pass (PyAV; no shelling).")
     p.add_argument("input")
     p.add_argument("zip_out")

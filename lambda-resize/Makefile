@@ -1,7 +1,8 @@
 # ===== resize_app Makefile =====
 # lambda-resize is the minimal resize page.
-AWS_PROFILE         ?= planttracer
-AWS_REGION          ?= us-east-1
+PROFILE         ?= planttracer
+REGION          ?= us-east-1
+S3_BUCKET	?= planttracer2
 STACK           ?= resize-app
 STACK_STAGE     ?= resize-app-stage
 PYTHON          = python3.13
@@ -18,8 +19,8 @@ PRODUCTION_URL="https://app-resize.planttracer.com"
 STAGE_URL="https://app-resize-stage.planttracer.com"
 
 export PYTHONDONTWRITEBYTECODE=1
-export AWS_PROFILE
-export AWS_REGION
+export PROFILE
+export REGION
 
 .PHONY: install vend-app lint pytest test
 install: .venv/pyvenv.cfg
@@ -48,12 +49,12 @@ check: .venv/pyvenv.cfg
 	poetry run pytest -q --cov=.   --cov-report=term --cov-report=xml --junitxml=junit.xml -o junit_family=legacy --log-cli-level=DEBUG tests/
 
 # AWS Lambda Vend, Build and Deploy (VBD)
-prod-vbd: template.yaml samconfig.toml src/requirements.txt
+prod-vbd: template.yaml samconfig-prod.toml src/requirements.txt
 	make lint
 	make vend-app
-	sam validate --config-file samconfig.toml -t template.yaml --lint
-	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
-	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
+	sam validate --config-file samconfig-prod.toml -t template.yaml --lint
+	sam build --parallel --use-container --config-file samconfig-prod.toml -t template.yaml
+	sam deploy --config-file "$$(pwd)/samconfig-prod.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
 	curl --silent  https://app-resize.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
@@ -62,7 +63,7 @@ stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	sam validate --config-file samconfig-stage.toml -t template-stage.yaml --lint
 	sam build --parallel --use-container --config-file samconfig-stage.toml -t template-stage.yaml
 	sam deploy --config-file "$$(pwd)/samconfig-stage.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
-	curl --silent  https://stage.csci-e-11.org/ | head -3
+	curl --silent  https://app-resize-stage.planttracer.com/ | head -3
 
 # Show function names
 functions:
@@ -76,14 +77,12 @@ functions:
 # Tail logs
 prod-tail:
 	@echo "Tailing production logs..."
-	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) --profile $(PROFILE) \
-		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text)" \
-		--since 15m --follow --region $(REGION) --profile $(PROFILE)
+	sam logs --stack-name $(STACK) --name ResizeFunction --tail   --region $(REGION)   --profile $(PROFILE)
 
 # Tail stage logs (separate stack)
 stage-tail:
 	@echo "Tailing stage logs..."
-	@aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
+	aws logs tail "/aws/lambda/$$(aws cloudformation describe-stacks --stack-name $(STACK_STAGE) --region $(REGION) --profile $(PROFILE) \
 		--query 'Stacks[0].Outputs[?OutputKey==`ResizeFunction`].OutputValue' --output text)" \
 		--since 15m --follow --region $(REGION) --profile $(PROFILE)
 
@@ -147,3 +146,23 @@ run-proxy-local:
 run-proxy-app:
 	@echo useful for injecting into a proxy running
 	(cd src/sync; browser-sync start --proxy "localhost:5000" --files "*.html, *.css, *.js")
+
+
+#
+# Validate S3 rules
+#
+s3-install-rules:
+	aws s3api --profile $(PROFILE) put-bucket-notification-configuration \
+	    --bucket $(S3_BUCKET) \
+	    --notification-configuration '{ "EventBridgeConfiguration": {} }'
+
+s3-validate-rules-and-region:
+	aws s3api --profile $(PROFILE) get-bucket-notification-configuration --bucket $(S3_BUCKET) | \
+		grep EventBridgeConfiguration && echo "✅ EventBridge is ENABLED"
+	aws --profile=$(PROFILE) s3api get-bucket-location --bucket $(S3_BUCKET) | sed s/null/$(REGION)/ | grep $(REGION) && echo "✅ S3 bucket in correct region"
+
+show-rules:
+	aws --profile $(PROFILE) cloudformation describe-stack-resources \
+	  --stack-name resize-app --region $(REGION) \
+	  --query "StackResources[?ResourceType=='AWS::Events::Rule'].[LogicalResourceId,PhysicalResourceId]" \
+	  --output table

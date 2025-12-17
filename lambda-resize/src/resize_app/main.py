@@ -16,7 +16,6 @@ import uuid
 from typing import Any, Dict, Tuple, Optional
 
 from .common import LOGGER
-from .src.app import odb
 from .src.app.odb import DDBO
 
 __version__ = "0.1.0"
@@ -131,15 +130,17 @@ def write_log( message, *, time_t=None, course_id=None, log_user_id=None, ipaddr
                              'message':message})
 
 def api_ping(event, context):
-    write_log('ping')
+    #write_log('ping')
+    print("ping")
     return resp_json( 200,
                       { "error": False, "message": "ok", "path": sys.path,
-                        "event" : dict(event),
-                        "context": dict(context),
-                        "environ": dict(os.environ) } )
+                        "event" : str(event),
+                        "context": str(context),
+                        "environ": str(os.environ) } )
 
 def api_log():
-    logs = odb.get_logs(user_id=None)
+    #logs = odb.get_logs(user_id=None)
+    logs="no logs today"
     return resp_json( 400, {"logs":logs})
 
 ################################################################
@@ -149,7 +150,14 @@ def api_log():
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
 
+    print("lambda_handler event=",event,"context=",context)
+    for k,v in sorted(os.environ.items()):
+        print(f"{k} = {v}")
+
+
     method, path, payload = parse_event(event)
+
+    print("method=",method,"path=",path,"payload=",payload)
 
     with _with_request_log_level(payload):
         try:
