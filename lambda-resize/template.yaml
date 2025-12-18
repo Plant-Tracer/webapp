@@ -115,8 +115,8 @@ Resources:
       PackageType: Zip
       CodeUri: src/
       Handler: resize_app.main.lambda_handler
-      Timeout: 60
-      MemorySize: 256
+      Timeout: 300
+      MemorySize: 1024
       Policies:
         # 1. Access to the specific LambdaLogsTable (using the simple SAM policy template)
         - DynamoDBCrudPolicy:

@@ -84,9 +84,10 @@ def _resize_image(img: Image.Image,
 # ---------- Main processing ----------
 
 # pylint: disable=too-many-locals, disable=too-many-arguments,disable=too-many-branches,disable=too-many-statements
-def video_unpack_resize( *, infile_path: Path,
-                         zipfile_path: Path|None = None, # output
+def video_unpack_resize( *,
+                         infile_path: Path,
                          outfile_path: Path|None = None, # output
+                         zipfile_path: Path|None = None, # output
                          frame0_path: Path|None = None, # output
                          jpeg_quality: int = DEFAULT_JPEG_QUALITY,
                          jpeg_subsampling: str = "4:2:0",
@@ -102,6 +103,7 @@ def video_unpack_resize( *, infile_path: Path,
     One pass: decode -> rotate -> downscale -> write JPEGs to ZIP + frames to MP4 (H.264).
     Requires PyAV linked with libx264. No shelling to ffmpeg.
     """
+    print("video_unpack_resize",infile_path,outfile_path,zipfile_path,frame0_path)
     infile_container = av.open(infile_path)
     vstreams = [s for s in infile_container.streams if s.type == "video"]
     if not vstreams:
@@ -228,8 +230,9 @@ def video_unpack_resize( *, infile_path: Path,
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Downscale → ZIP(JPEGs) + MP4 (H.264) in one pass (PyAV; no shelling).")
     p.add_argument("infile")
-    p.add_argument("zipfile_out")
     p.add_argument("outfile")
+    p.add_argument("zipfile_out")
+    p.add_argument("frame0")
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--crf", type=int, default=20)
     p.add_argument("--preset", default="veryfast")
@@ -245,6 +248,7 @@ if __name__ == "__main__":
         infile_path = Path(args.infile),
         zipfile_path = Path(args.zipfile_out),
         outfile_path = Path(args.outfile),
+        frame0_path = Path(args.frame0),
         fps=args.fps, crf=args.crf, preset=args.preset,
         prefer_portrait_box=args.prefer_portrait, mode=args.mode,
         start_time=args.start, end_time=args.end

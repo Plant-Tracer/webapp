@@ -27,6 +27,7 @@ from .src.app.constants import MIME
 
 ZIP_TEMPLATE="{base}.zip"
 FRAME_TEMPLATE="{base}.mov_frame{frame_number:04}.jpeg"
+RESIZED_TEMPLATE="{base}.rmov"
 
 __version__ = "0.1.0"
 
@@ -194,6 +195,7 @@ def api_resize(bucket, s3key_mov)  -> Dict[str, Any]:
     s3key_base   = splitext(s3key_mov)[0]
     s3key_zipfile= ZIP_TEMPLATE.format(base=s3key_base)
     s3key_frame0 = FRAME_TEMPLATE.format(base=s3key_base,frame_number=0)
+    s3key_resized = RESIZED_TEMPLATE.format(base=s3key_base)
 
     start = time.time()
     try:
@@ -203,6 +205,7 @@ def api_resize(bucket, s3key_mov)  -> Dict[str, Any]:
         return resp_json(400, {'error':'NoSuchKey'})
 
     custom_metadata = {PLANTTRACER_HEADER:"YES"}
+    print("METADATA",r.get('Metadata'))
     if r.get('Metadata',{}).get(PLANTTRACER_HEADER):
         LOGGER.info("s3://%s/%s has %s metadata",bucket,s3key_mov,PLANTTRACER_HEADER)
         return resp_json(201, {'message':f'Already has {PLANTTRACER_HEADER} Metadata'})
@@ -234,10 +237,10 @@ def api_resize(bucket, s3key_mov)  -> Dict[str, Any]:
                             zipfile_path = zipfile_path)
 
         # Upload the artifacts
-        LOGGER.info("upload %s --> %s",outfile_path,s3key_mov)
+        LOGGER.info("upload %s --> %s",outfile_path,s3key_resized)
         s3_client.upload_file(Filename=str(outfile_path),
                               Bucket=bucket,
-                              Key=s3key_mov,
+                              Key=s3key_resized,
                               ExtraArgs = {
                                   "Metadata": custom_metadata,
                                   "ContentType":MIME.MP4
@@ -291,6 +294,11 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
     if event.get('source','')=='aws.s3' and event.get('detail-type','')=='Object Created':
         detail = event.get('detail',{})
+
+        request_id = detail.get('request-id','')
+        LOGGER.info("request_id=%s",request_id)
+        # Make sure this is not a duplicate request
+
         bucket = detail.get('bucket',{}).get('name')
         key = detail.get('object',{}).get('key')
         if (bucket is None) or (key is None):
