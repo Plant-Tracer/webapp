@@ -1,6 +1,20 @@
 Web app theory of design
 ========================
 
+Data Storage
+------------
+Data are stored in:
+
+* DynamoDB - All metadata
+* S3 - All movie data, including .mov, .zip and .jpeg files
+
+  MPEG4 movies:         `s3://{bucketname}/{course-name}/{movie_id}.mov
+  ZIP file of frames:   `s3://{bucketname}/{course-name}/{movie_id}.zip`
+  Frame 0:              `s3://{bucketname}/{course-name}/{movie_id}.mov_frame0000.jpeg`
+
+
+
+
 Authentication
 --------------
 

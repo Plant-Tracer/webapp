@@ -7,6 +7,7 @@ Pure Python: uses PyAV (libav*), Pillow; no subprocess calls to ffmpeg.
 
 import io
 import zipfile
+from pathlib import Path
 from typing import Tuple, Optional
 import argparse
 from fractions import Fraction
@@ -82,28 +83,27 @@ def _resize_image(img: Image.Image,
 
 # ---------- Main processing ----------
 
-# pylint: disable=too-many-positional-arguments, disable=too-many-locals, disable=too-many-arguments,disable=too-many-branches,disable=too-many-statements
-def video_to_zip_and_mp4(
-    input_path: str,
-    zip_path: str,
-    mp4_path: str,
-    jpeg_quality: int = DEFAULT_JPEG_QUALITY,
-    jpeg_subsampling: str = "4:2:0",
-    fps: int = 30,
-    prefer_portrait_box: bool = False,   # False => 640x480, True => 480x640
-    mode: str = "letterbox",             # encoder needs constant WxH; use letterbox
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None,
-    pad_color=(0,0,0),
-    crf: int = 20,
-    preset: str = "veryfast",
-):
+# pylint: disable=too-many-locals, disable=too-many-arguments,disable=too-many-branches,disable=too-many-statements
+def video_unpack_resize( *, infile_path: Path,
+                         zipfile_path: Path|None = None, # output
+                         outfile_path: Path|None = None, # output
+                         frame0_path: Path|None = None, # output
+                         jpeg_quality: int = DEFAULT_JPEG_QUALITY,
+                         jpeg_subsampling: str = "4:2:0",
+                         fps: int = 30,
+                         prefer_portrait_box: bool = False,   # False => 640x480, True => 480x640
+                         mode: str = "letterbox",             # encoder needs constant WxH; use letterbox
+                         start_time: Optional[float] = None,
+                         end_time: Optional[float] = None,
+                         pad_color=(0,0,0),
+                         crf: int = 20,
+                         preset: str = "veryfast" ):
     """
     One pass: decode -> rotate -> downscale -> write JPEGs to ZIP + frames to MP4 (H.264).
     Requires PyAV linked with libx264. No shelling to ffmpeg.
     """
-    container = av.open(input_path)
-    vstreams = [s for s in container.streams if s.type == "video"]
+    infile_container = av.open(infile_path)
+    vstreams = [s for s in infile_container.streams if s.type == "video"]
     if not vstreams:
         raise RuntimeError("No video stream found")
     vstream = vstreams[0]
@@ -116,10 +116,10 @@ def video_to_zip_and_mp4(
 
     # Optional seek
     if start_time is not None:
-        container.seek(int(start_time * av.time_base))
+        infile_container.seek(int(start_time * av.time_base))
 
     # Pre-read first frame to determine WxH for encoder
-    for packet in container.demux(vstream):
+    for packet in infile_container.demux(vstream):
         for frame in packet.decode():
             first_rot = _rotation_degrees_from_frame(frame)
             first_img = _apply_rotation(frame.to_image(), first_rot)
@@ -127,7 +127,7 @@ def video_to_zip_and_mp4(
         if first_img is not None:
             break
     if first_img is None:
-        container.close()
+        infile_container.close()
         raise RuntimeError("Could not decode first frame")
 
     # Pick target box based on preference and first-frame orientation
@@ -138,77 +138,98 @@ def video_to_zip_and_mp4(
         target_wh = (640, 480)
 
     # Prepare output MP4
-    out = av.open(mp4_path, mode="w")
-    stream = out.add_stream("libx264", rate=fps)  # requires libx264
-    stream.width, stream.height = target_wh
-    stream.pix_fmt = "yuv420p"
-    stream.options = {"crf": str(crf), "preset": preset, "profile": "baseline"}
+    if outfile_path is not None:
+        out = av.open(outfile_path, mode="w")
+        print("open ",outfile_path," for out")
+        stream = out.add_stream("libx264", rate=fps)  # requires libx264
+        stream.width, stream.height = target_wh
+        stream.pix_fmt = "yuv420p"
+        stream.options = {"crf": str(crf), "preset": preset, "profile": "baseline"}
+    else:
+        out = None
+        stream = None
+
     time_base = Fraction(1, fps)
 
     # Prepare ZIP
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+    if zipfile_path is not None:
+        # pylint: disable=consider-using-with
+        zf = zipfile.ZipFile(str(zipfile_path), "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6)
+    else:
+        zf = None
 
-        # Rewind to decode from start (post-seek)
-        if start_time is not None:
-            container.seek(int(start_time * av.time_base))
+    # Rewind to decode from start (post-seek)
+    if start_time is not None:
+        infile_container.seek(int(start_time * av.time_base))
 
-        frame_index = 0
-        def process_image(img: Image.Image):
-            nonlocal frame_index
-            # For ZIP: choose per-frame orientation; portrait stays portrait
-            # w, h = img.size
-            # target_this = (480, 640) if h > w else (640, 480)
+    frame_index = 0
+    def process_image(img: Image.Image):
+        nonlocal frame_index
 
-            # For MP4: constant WxH; letterbox if needed
-            img_vid = _resize_image(img, target_wh=target_wh, mode=mode, pad_color=pad_color)
+        # For ZIP: choose per-frame orientation; portrait stays portrait
+        # w, h = img.size; target_this = (480, 640) if h > w else (640, 480)
+        # For MP4: constant WxH; letterbox if needed
+        img_vid = _resize_image(img, target_wh=target_wh, mode=mode, pad_color=pad_color)
 
-            # Write JPEG into ZIP
-            bio = io.BytesIO()
-            img_vid.save(bio, format="JPEG", quality=jpeg_quality, optimize=True,
-                         progressive=False, subsampling=jpeg_subsampling)
-            bio.seek(0)
+        # Write JPEG into ZIP
+        bio = io.BytesIO()
+        img_vid.save(bio, format="JPEG", quality=jpeg_quality, optimize=True,
+                     progressive=False, subsampling=jpeg_subsampling)
+        bio.seek(0)
+        if zf is not None:
             zf.writestr(f"frame_{frame_index:06d}.jpg", bio.read())
 
-            # Encode to MP4
-            arr = np.asarray(img_vid.convert("RGB"))
-            frame_rgb = av.VideoFrame.from_ndarray(arr, format="rgb24")
-            #frame_rgb.pict_type = "NONE"
-            frame_rgb.time_base = time_base
-            frame_rgb.pts = frame_index
-            # Reformat to yuv420p for encoder
-            frame_yuv = frame_rgb.reformat(format="yuv420p", width=target_wh[0], height=target_wh[1])
-            for pkt in stream.encode(frame_yuv):
-                out.mux(pkt)
+        # Save frame0?
+        if (frame_index==0) and (frame0_path is not None):
+            bio.seek(0)
+            frame0_path.write_bytes(bio.read())
 
-            frame_index += 1
+        # Encode to MP4
+        arr = np.asarray(img_vid.convert("RGB"))
+        frame_rgb = av.VideoFrame.from_ndarray(arr, format="rgb24")
+        #frame_rgb.pict_type = "NONE"
+        frame_rgb.time_base = time_base
+        frame_rgb.pts = frame_index
+        # Reformat to yuv420p for encoder
+        frame_yuv = frame_rgb.reformat(format="yuv420p", width=target_wh[0], height=target_wh[1])
+        for pkt in stream.encode(frame_yuv):
+            out.mux(pkt)
 
-        # Main decode loop
-        packets = 0
-        for packet in container.demux(vstream):
+        frame_index += 1
+
+    # Main decode loop
+    def process_container():
+        for packet in infile_container.demux(vstream):
             for frame in packet.decode():
                 if end_time is not None and frame.time is not None and frame.time > end_time:
-                    break
+                    return
                 rot = _rotation_degrees_from_frame(frame)
                 img = _apply_rotation(frame.to_image(), rot)
                 process_image(img)
-                print(packets,frame_index)
-            packets += 1
+                # only looking for first frame?
+                if frame_index>0 and zf is None:
+                    return
 
 
-        # Flush encoder
+    process_container()
+
+    if zf is not None:
+        zf.close()
+
+    if (out is not None) and (stream is not None):
         for pkt in stream.encode(None):
             out.mux(pkt)
+        print("********** CLOSE out *************")
+        out.close()
 
-    # Close everything
-    out.close()
-    container.close()
+    infile_container.close()
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Downscale → ZIP(JPEGs) + MP4 (H.264) in one pass (PyAV; no shelling).")
-    p.add_argument("input")
-    p.add_argument("zip_out")
-    p.add_argument("mp4_out")
+    p.add_argument("infile")
+    p.add_argument("zipfile_out")
+    p.add_argument("outfile")
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--crf", type=int, default=20)
     p.add_argument("--preset", default="veryfast")
@@ -220,8 +241,10 @@ if __name__ == "__main__":
     p.add_argument("--end", type=float)
     args = p.parse_args()
 
-    video_to_zip_and_mp4(
-        args.input, args.zip_out, args.mp4_out,
+    video_unpack_resize(
+        infile_path = Path(args.infile),
+        zipfile_path = Path(args.zipfile_out),
+        outfile_path = Path(args.outfile),
         fps=args.fps, crf=args.crf, preset=args.preset,
         prefer_portrait_box=args.prefer_portrait, mode=args.mode,
         start_time=args.start, end_time=args.end

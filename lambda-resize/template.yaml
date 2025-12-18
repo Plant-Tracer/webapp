@@ -42,7 +42,7 @@ Globals:
       Variables:
         LOG_LEVEL: !Ref LogLevel
         DYNAMODB_TABLE_PREFIX: !Ref TablePrefix
-        LAMBDA_LOGS_TABLE_NAME: !Ref LambdaLogsTable
+        LAMBDA_LOGS_TABLE_NAME: !Ref LambdaLogsTableName
 
 Parameters:
   EnvironmentName:
@@ -53,6 +53,9 @@ Parameters:
   ImageBucketName:
     Type: String
     Default: planttracer2
+  LambdaLogsTableName:
+    Type: String
+    Default: resize-app-lambda-logs
   HostedZoneId:
     Type: String
     Description: Route53 Hosted Zone ID for planttracer.com (e.g., Z123ABC...)
@@ -117,7 +120,7 @@ Resources:
       Policies:
         # 1. Access to the specific LambdaLogsTable (using the simple SAM policy template)
         - DynamoDBCrudPolicy:
-            TableName: !Ref LambdaLogsTable
+            TableName: !Ref LambdaLogsTableName
 
         # 2. Access to the S3 bucket (using the simple SAM policy template)
         - S3CrudPolicy:
@@ -129,7 +132,6 @@ Resources:
             Sid: DynamoDBTables
             Effect: Allow
             Action:
-              # Note: I've added Batch and Scan actions here for completeness/robustness
               - dynamodb:DescribeTable
               - dynamodb:GetItem
               - dynamodb:PutItem
@@ -158,20 +160,26 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             PayloadFormatVersion: "2.0"
-        Heartbeat:
-          Type: Schedule
-          Properties:
-            Schedule: rate(5 minutes)
-            Input: '{"action":"heartbeat"}'
+        #Heartbeat:
+        #  Type: Schedule
+        #  Properties:
+        #    Schedule: rate(5 minutes)
+        #    Input: '{"action":"heartbeat"}'
         FileUpload:
           Type: EventBridgeRule
           Properties:
             Pattern:
               source: ["aws.s3"]
-              #detail-type: ["Object Created"]
+              detail-type: ["Object Created"]
               detail:
                 bucket:
                   name: [!Ref ImageBucketName]
+                object:
+                  key:
+                    - suffix: ".mp4"
+                    - suffix: ".mov"
+                    - suffix: ".MP4"
+                    - suffix: ".MOV"
 
 
   # LambdaLogs table holds the logs from lambda operations.
@@ -184,17 +192,17 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       TableName: !Sub "${AWS::StackName}-lambda-logs"
       AttributeDefinitions:
-        - AttributeName: sid
+        - AttributeName: log_id
           AttributeType: S
         - AttributeName: datetime
           AttributeType: S
       KeySchema:
-        - AttributeName: sid
+        - AttributeName: log_id
           KeyType: HASH
       GlobalSecondaryIndexes:
-        - IndexName: LogTime
+        - IndexName: LogTimev2
           KeySchema:
-            - AttributeName: sid
+            - AttributeName: log_id
               KeyType: HASH
             - AttributeName: datetime
               KeyType: RANGE

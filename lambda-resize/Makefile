@@ -55,7 +55,7 @@ prod-vbd: template.yaml samconfig-prod.toml src/requirements.txt
 	sam validate --config-file samconfig-prod.toml -t template.yaml --lint
 	sam build --parallel --use-container --config-file samconfig-prod.toml -t template.yaml
 	sam deploy --config-file "$$(pwd)/samconfig-prod.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
-	curl --silent  https://app-resize.planttracer.com/ | head -3
+	curl https://app-resize.planttracer.com/api/v1/ping
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	make lint
@@ -63,7 +63,7 @@ stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt
 	sam validate --config-file samconfig-stage.toml -t template-stage.yaml --lint
 	sam build --parallel --use-container --config-file samconfig-stage.toml -t template-stage.yaml
 	sam deploy --config-file "$$(pwd)/samconfig-stage.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
-	curl --silent  https://app-resize-stage.planttracer.com/ | head -3
+	curl https://app-resize-stage.planttracer.com/api/v1/ping
 
 # Show function names
 functions:
