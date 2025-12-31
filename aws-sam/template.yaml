@@ -391,7 +391,7 @@ Resources:
         - AttributeName: course_id
           KeyType: HASH
         - AttributeName: user_id
-          KeyType: HASH
+          KeyType: RANGE
 
   MoviesTable:
     Type: AWS::DynamoDB::Table
@@ -508,7 +508,7 @@ Resources:
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
         DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
-        CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
+        CertificateArn: !If [CreateAcmCert, !Ref LambdaCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
