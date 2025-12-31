@@ -52,8 +52,8 @@ Parameters:
     Description: "base domain in which the hostnames are created"
     Default: "planttracer.com"
 
-  KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
+  EC2KeyPairName:
+    Type: AWS::EC2::KeyPair::EC2KeyPairName
     Description: "EC2 KeyPair name for SSH access."
 
   ImageBucketName:
@@ -264,7 +264,7 @@ Resources:
     Properties:
       ImageId: !Ref UbuntuAmiId
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      KeyName: !Ref EC2KeyPairName
       IamInstanceProfile: !Ref Ec2InstanceProfile
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds: [!Ref InstanceSecurityGroup]
