@@ -246,14 +246,17 @@ Resources:
     Properties:
       Domain: vpc
 
-  DnsARecord:
+  VmDnsARecord:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${HostLabel}-vm.${BaseDomain}."
       Type: A
       TTL: 30
       ResourceRecords:
         - !Ref InstanceEip
+
+  # ApiDomainName is created automatically
 
   # --- EC2 instance ---
   AppInstance:
@@ -478,7 +481,7 @@ Resources:
           KeySchema:
             - AttributeName: course_id
               KeyType: "HASH"
-            - AttributeName: course_time
+            - AttributeName: time_t
               KeyType: "RANGE"
           Projection:
             ProjectionType: INCLUDE
