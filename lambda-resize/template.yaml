@@ -117,6 +117,7 @@ Resources:
       Handler: resize_app.main.lambda_handler
       Timeout: 300
       MemorySize: 1024
+      MaximumRetryAttempts: 0   # do not retry if the lambda fails
       Policies:
         # 1. Access to the specific LambdaLogsTable (using the simple SAM policy template)
         - DynamoDBCrudPolicy:

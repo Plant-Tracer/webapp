@@ -102,34 +102,6 @@ def api_heartbeat(event, context)  -> Dict[str, Any]:
     return resp_json( 200, { "now": time.time() } )
 
 
-################################################################
-## Parse Lambda Events and cookies
-def parse_http_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
-    """parse HTTP API v2 event.
-    :param event: AWS Lambda HTTP API v2 event to parse
-    :return (method,path,payload) - method - HTTP Method; path=HTTP Path; payload=JSON body if POST
-    """
-    stage = event.get("requestContext", {}).get("stage", "")
-    path = event.get("rawPath") or event.get("path") or "/"
-    if stage and path.startswith("/" + stage):
-        path = path[len(stage) + 1 :] or "/"
-    method = (
-        event.get("requestContext", {})
-        .get("http", {})
-        .get("method", event.get("httpMethod", "GET"))
-    )
-    body = event.get("body")
-    if event.get("isBase64Encoded"):
-        try:
-            body = base64.b64decode(body or "").decode("utf-8", "replace")
-        except binascii.Error:
-            body = None
-    try:
-        payload = json.loads(body) if body else {}
-    except json.JSONDecodeError:
-        payload = {}
-    return method, path, payload
-
 
 def write_log( message, *, course_id=None, log_user_id=None, ipaddr=None):
     log_id = str(uuid.uuid4())
@@ -273,41 +245,73 @@ def api_resize(bucket, s3key_mov)  -> Dict[str, Any]:
 
 
 
+def safe_dump_environment():
+    for k,v in sorted(os.environ.items()):
+        if k in ('AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'):
+            v = '********'
+        print(f"{k} = {v}")
+
 
 
 ################################################################
 ## main entry point from lambda system
+################################################################
+## Parse Lambda Events and cookies
+def parse_http_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
+    """parse HTTP API v2 event.
+    :param event: AWS Lambda HTTP API v2 event to parse
+    :return (method,path,payload) - method - HTTP Method; path=HTTP Path; payload=JSON body if POST
+    """
+    stage = event.get("requestContext", {}).get("stage", "")
+    path = event.get("rawPath") or event.get("path") or "/"
+    if stage and path.startswith("/" + stage):
+        path = path[len(stage) + 1 :] or "/"
+    method = (
+        event.get("requestContext", {})
+        .get("http", {})
+        .get("method", event.get("httpMethod", "GET"))
+    )
+    body = event.get("body")
+    if event.get("isBase64Encoded"):
+        try:
+            body = base64.b64decode(body or "").decode("utf-8", "replace")
+        except binascii.Error:
+            body = None
+    try:
+        payload = json.loads(body) if body else {}
+    except json.JSONDecodeError:
+        payload = {}
+    return method, path, payload
+
+def parse_s3_event(event):
+    if event.get('source','')=='aws.s3' and event.get('detail-type','')=='Object Created':
+        detail = event.get('detail',{})
+
+        request_id = detail.get('request-id','')
+
+        bucket = detail.get('bucket',{}).get('name')
+        key = detail.get('object',{}).get('key')
+        if (bucket is None) or (key is None):
+            LOGGER.error("bucket=%s key=%s event=%s",bucket,key,event)
+            return resp_json(200, {"error":True, 'bucket':bucket, 'key':key}) # 200 so we do not get retried
+        return request_id, bucket, key
+    return None, None, None
+
 
 # pylint: disable=too-many-return-statements, disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
 
     LOGGER.info("=======================================================================")
-    LOGGER.info("LOGGER.info")
-    LOGGER.debug("LOGGER.debug")
 
-    print("lambda_handler event=",event,"context=",context)
-    for k,v in sorted(os.environ.items()):
-        if k in ('AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'):
-            v = '********'
-        print(f"{k} = {v}")
-
-    if event.get('source','')=='aws.s3' and event.get('detail-type','')=='Object Created':
-        detail = event.get('detail',{})
-
-        request_id = detail.get('request-id','')
-        LOGGER.info("request_id=%s",request_id)
-        # Make sure this is not a duplicate request
-
-        bucket = detail.get('bucket',{}).get('name')
-        key = detail.get('object',{}).get('key')
-        if (bucket is None) or (key is None):
-            LOGGER.error("bucket=%s key=%s event=%s",bucket,key,event)
-            return resp_json(400, {"error":True, 'bucket':bucket, 'key':key})
+    # Check for upload
+    request_id, bucket, key = parse_s3_event(event)
+    if bucket is not None:
+        LOGGER.info("request_id=%s",request_id)         # Make sure this is not a duplicate request?
         return api_resize(bucket, key)
 
     method, path, payload = parse_http_event(event)
-    print("method=",method,"path=",path,"payload=",payload)
+
 
     with _with_request_log_level(payload):
         try:
