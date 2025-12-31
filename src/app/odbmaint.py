@@ -127,7 +127,7 @@ TABLE_CONFIGURATIONS = [
         COMMENT: "Tracks users registered in course",
         KeySchema: [
             {AttributeName: 'course_id', KeyType: HASH},
-            {AttributeName: 'user_id', KeyType: RANGE},
+            {AttributeName: 'user_id', KeyType: HASH}, # this was RANGE, should be HASH. Changed by slg on dec 30, 2025.
         ],
         AttributeDefinitions: [
             {AttributeName: 'course_id', AttributeType: S},
