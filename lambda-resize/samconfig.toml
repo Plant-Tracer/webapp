@@ -1,16 +1,14 @@
 version = 0.1
 
 [default.deploy.parameters]
-stack_name = "resize-app"
-region = "us-east-1"
-profile = "planttracer"
+stack_name = "slg-d1"
 resolve_s3 = true
-s3_prefix = "resize-app"
+s3_prefix = "slg-d1"
+profile = "planttracer"
 confirm_changeset = true
-capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
-disable_rollback = false
-# --- THIS IS THE FIXED LINE ---
-parameter_overrides = "UploadBucketName=\"planttracer-prod\" HostedZoneId=\"Z02875141U8JDG1N8N5BO\" CertificateArn=\"\" LogLevel=\"DEBUG\" TablePrefix=\"m1-\""
-#
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "HostedZoneId=\"Z02875141U8JDG1N8N5BO\" HostLabel=\"slg-d1\" BaseDomain=\"planttracer.com\" EC2KeyPairName=\"plantadmin\" ImageBucketName=\"planttracer-slg\" UbuntuAmiId=\"/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id\" InstanceType=\"t4g.small\" GitRepoUrl=\"https://github.com/Plant-Tracer/webapp.git\" GitBranch=\"main\" GitRunPath=\"./etc/bootstrap.sh\" TablePrefix=\"slg-d1-\" CertificateArn=\"\" LogLevel=\"DEBUG\""
 image_repositories = []
-template_file = ".aws-sam/build/template.yaml"
+
+[default.global.parameters]
+region = "us-east-2"
