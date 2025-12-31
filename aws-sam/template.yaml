@@ -67,7 +67,7 @@ Parameters:
 
   InstanceType:
     Type: String
-    Default: t3.micro
+    Default: t4g.small
     AllowedValues:
       - t3.nano
       - t3.micro
@@ -193,25 +193,45 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: "sts:AssumeRole"
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}users"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}unique_emails"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}api_keys"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}courses"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}course_users"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}movies_users"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}movie_frames"
-        - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}logs"
-        - S3CrudPolicy:
-            BucketName: !Ref ImageBucketName
+      - PolicyName: Ec2DdbAndS3Access
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:DescribeTable
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}users"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}users/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}unique_emails"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}unique_emails/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}api_keys"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}api_keys/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}courses"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}courses/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}movies"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}movies/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}movie_frames"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}movie_frames/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}logs"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}logs/index/*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
+                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
 
   Ec2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -227,10 +247,7 @@ Resources:
   DnsARecord:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId: !FindInMap [DnsConfig, Main, HostedZoneId]
-      Name: !Sub
-        - "${HostLabel}.${BaseDomain}."
-        - { BaseDomain: !FindInMap [DnsConfig, Main, BaseDomain] }
+      HostedZoneId: !Ref HostedZoneId
       Type: A
       TTL: 30
       ResourceRecords:
@@ -296,7 +313,7 @@ Resources:
             - AttributeName: email
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
 
   UniqueEmailsTable:
     Type: AWS::DynamoDB::Table
@@ -329,7 +346,7 @@ Resources:
             - AttributeName: user_id
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
 
   CoursesTable:
     Type: AWS::DynamoDB::Table
@@ -337,7 +354,7 @@ Resources:
       TableName: !Sub "${TablePrefix}courses"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: user_id
+        - AttributeName: course_id
           AttributeType: S
         - AttributeName: course_key
           AttributeType: S
@@ -350,13 +367,13 @@ Resources:
             - AttributeName: course_key
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
         - IndexName: course_id_idx
           KeySchema:
             - AttributeName: course_id
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
 
   CourseUsersTable:
     Type: AWS::DynamoDB::Table
@@ -373,7 +390,6 @@ Resources:
           KeyType: HASH
         - AttributeName: user_id
           KeyType: HASH
-
 
   MoviesTable:
     Type: AWS::DynamoDB::Table
@@ -396,13 +412,13 @@ Resources:
             - AttributeName: course_id
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
               KeyType: "HASH"
           Projection:
-            ProjectType: "ALL"
+            ProjectionType: "ALL"
 
   MovieFramesTable:
     Type: AWS::DynamoDB::Table
@@ -444,26 +460,27 @@ Resources:
           KeySchema:
             - AttributeName: ipaddr
               KeyType: "HASH"
-              Projection:
-                ProjectionType: INCLUDE
-                NonKeyAttributes:
-                  - log_id
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [log_id]
+
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
               KeyType: "HASH"
-              Projection:
-                ProjectionType: INCLUDE
-                NonKeyAttributes:
-                  - log_id
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [log_id]
+
         - IndexName: course_time_t_idx
           KeySchema:
+            - AttributeName: course_id
+              KeyType: "HASH"
             - AttributeName: course_time
               KeyType: "RANGE"
-              Projection:
-                ProjectionType: INCLUDE
-                NonKeyAttributes:
-                  - log_id
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [log_id]
 
 
 
@@ -474,10 +491,10 @@ Resources:
     Type: AWS::CertificateManager::Certificate
     Condition: CreateAcmCert
     Properties:
-      DomainName: !Sub "${HostLabel}-lambda.${BaseDomain"
+      DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
       ValidationMethod: DNS
       DomainValidationOptions:
-        - DomainName: !Sub "${HostLabel}-lambda.${BaseDomain"
+        - DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
           HostedZoneId: !Ref HostedZoneId
 
   HomeHttpApi:
@@ -488,7 +505,7 @@ Resources:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
-        DomainName: !Sub "${HostLabel}-lambda.${BaseDomain"
+        DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
         CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
         Route53:
           HostedZoneId: !Ref HostedZoneId
@@ -517,7 +534,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Sub "${TablePrefix}course_users"
         - DynamoDBCrudPolicy:
-            TableName: !Sub "${TablePrefix}movies_users"
+            TableName: !Sub "${TablePrefix}movies"
         - DynamoDBCrudPolicy:
             TableName: !Sub "${TablePrefix}movie_frames"
         - DynamoDBCrudPolicy:
@@ -546,12 +563,6 @@ Outputs:
   ApiId:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
-  CustomDomainUrl:
-    Description: Camer base URL
-    Value: "https://camera.planttracer.com/"
-  CameraFunction:
+  LambdaFunction:
     Description: Camera Lambda function name
-    Value: !Ref CameraFunction
-  HostedZoneId:
-    Description: Route53 Hosted Zone
-    Value: !Ref HostedZoneId
+    Value: !Ref LambdaFunction
