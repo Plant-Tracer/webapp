@@ -76,6 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--sendlink", help="Send link to the given email address, registering it if necessary.")
     parser.add_argument("--makelink", help="Make a link for the given email, registering it if necessary.")
     parser.add_argument('--planttracer_endpoint',help='https:// endpoint where planttracer app can be found')
+    parser.add_argument("--create_demos", help="Create the demo user and movies", action='store_true')
     parser.add_argument("--createdb", help='Create a new set of DynamoDB tables and install the demo user and movies.',action='store_true')
     parser.add_argument("--dropdb",  help='Drop an existing database.',action='store_true')
     parser.add_argument("--create_course",help="Create a course with --course_name, --course_id, "
@@ -130,6 +131,8 @@ if __name__ == "__main__":
 
     if args.createdb:
         odbmaint.create_tables()
+
+    if args.createdb or args.create_demos:
         populate_demo_user()
         populate_demo_movies()
 
@@ -188,7 +191,6 @@ if __name__ == "__main__":
         admin_id = odb.get_user_email(args.admin_email)['user_id']
         odb.remove_course_admin( admin_id = admin_id, course_id = args.course_id)
         sys.exit(0)
-
 
     if args.dump_movie:
         dump_movie(args.dump_movie)

@@ -83,11 +83,6 @@ Parameters:
     Default: main
     Description: "Git branch/tag to checkout."
 
-  GitRunPath:
-    Type: String
-    Default: "./etc/bootstrap.sh"
-    Description: "Path inside repo to execute (e.g., ./run.sh or python3 app.py)."
-
   TablePrefix:
     Type: String
     Description: PlantTracer table prefix
@@ -205,6 +200,7 @@ Resources:
                 - dynamodb:BatchGetItem
                 - dynamodb:BatchWriteItem
                 - dynamodb:DescribeTable
+                - dynamodb:CreateTable
               Resource:
                 # tables
                 - !GetAtt ApiKeysTable.Arn
@@ -256,7 +252,17 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "${HostLabel}-vm.${BaseDomain}."
+      Name: !Sub "${HostLabel}.${BaseDomain}."
+      Type: A
+      TTL: 30
+      ResourceRecords:
+        - !Ref InstanceEip
+
+  VmDemoDnsARecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${HostLabel}-demo.${BaseDomain}."
       Type: A
       TTL: 30
       ResourceRecords:
@@ -282,21 +288,35 @@ Resources:
         Fn::Base64: !Sub |
           #!/usr/bin/env bash
           set -euo pipefail
+
+          # Create the environment variables from the samconfig
+          touch /etc/environment.d/10-planttracer.conf
+          echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}"     >> /etc/environment.d/10-planttracer.conf
+          echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
+
+          # Install enough to get git working
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -y
-          apt-get install -y git ca-certificates curl
-          install -d -m 0755 /opt/gits
-          if [ ! -d /opt/gits/webapp/.git ]; then
-              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/gits/webapp
+          apt-get install -y git ca-certificates curl make python3-poetry
+          snap install --classic aws-cli
+
+          # Clone webapp into /opt/webapp and run the bootstrap program
+          install -d -m 0755 /opt/
+          if [ ! -d /opt/webapp/.git ]; then
+              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
           else
-              cd /opt/gits/webapp
+              cd /opt/webapp
               git fetch --all --prune
               git checkout "${GitBranch}"
               git pull --ff-only
           fi
-          cd /opt/gits/webapp
-          chmod +x "${GitRunPath}" || true
-          exec "${GitRunPath}"
+          cd /opt/webapp
+          sudo apt install -y pipx
+          pipx ensurepath
+          source $HOME/.profile # be sure to get the path with poetry
+          apt install
+          make install-ubuntu
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation
@@ -591,15 +611,17 @@ Outputs:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
   LambdaFunction:
-    Description: Camera Lambda function name
+    Description: PlantTracer Lambda function name
     Value: !Ref LambdaFunction
   VmElasticIp:
     Description: Elastic IP attached to the EC2 VM
     Value: !Ref InstanceEip
   VmDnsName:
     Description: DNS name for the EC2 VM
-    Value: !Sub "${HostLabel}-vm.${BaseDomain}"
-
+    Value: !Sub "${HostLabel}.${BaseDomain}"
+  VmDemoDnsName:
+    Description: DNS name for the EC2 VM Demo
+    Value: !Sub "${HostLabel}-demo.${BaseDomain}"
   LambdaDnsName:
     Description: DNS name for the Lambda HTTP API custom domain
     Value: !Sub "${HostLabel}-lambda.${BaseDomain}"
