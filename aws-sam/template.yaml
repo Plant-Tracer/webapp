@@ -200,7 +200,6 @@ Resources:
                 - dynamodb:BatchGetItem
                 - dynamodb:BatchWriteItem
                 - dynamodb:DescribeTable
-                - dynamodb:CreateTable
               Resource:
                 # tables
                 - !GetAtt ApiKeysTable.Arn
@@ -312,11 +311,7 @@ Resources:
               git pull --ff-only
           fi
           cd /opt/webapp
-          sudo apt install -y pipx
-          pipx ensurepath
-          source $HOME/.profile # be sure to get the path with poetry
-          apt install
-          make install-ubuntu
+          bash etc/bootstrap.bash
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation

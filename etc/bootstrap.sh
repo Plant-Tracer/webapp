@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo Setting up ubuntu 22.04 running in AWS for PlantTracer.
+
 """
 to-do:
 Reliability (EC2 bootstrap)
