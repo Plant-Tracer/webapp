@@ -13,7 +13,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.13"
+python = ">=3.12"
 boto3 = ">=1.39.14,<2.0.0"
 crossplane = "*"
 cryptography = "*"
@@ -93,7 +93,7 @@ max-args = 10
 max-public-methods = 20
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 venvPath = "./"
 venv = ".venv"
 include = ["."]
