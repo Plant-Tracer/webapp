@@ -12,8 +12,7 @@ import logging
 
 from gunicorn.app.wsgiapp import run
 
-
-from deploy.app import clogging
+from app import clogging
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,7 +38,7 @@ def main():
         "--log-level", args.loglevel,
         "--access-logfile", "-",
         "--error-logfile", "-",
-        "deploy.app.bottle_app:app"
+        "src.app.flask_app:app"
     ]
     print(" ".join(sys.argv))
     run()

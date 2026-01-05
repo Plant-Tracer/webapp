@@ -1,0 +1,8 @@
+#!/bin/bash
+# Git config overrides for Cursor AI commits
+# Usage: git -c user.signingkey=8DC054ABB5B6B662 -c user.email=simsong+cursor@acm.org commit -S ...
+
+# Note: Git doesn't support environment variables for signing keys.
+# Use -c flags in git commands instead:
+# git -c user.signingkey=8DC054ABB5B6B662 -c user.email=simsong+cursor@acm.org commit -S -m "message"
+

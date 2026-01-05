@@ -1,8 +1,0 @@
-pylint
-waitress
-gunicorn
-tabulate
-pytest
-localmail
-pydantic
-python-magic

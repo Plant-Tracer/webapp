@@ -16,8 +16,8 @@ import boto3
 
 from app.constants import C
 from app import odb
+from app import odb_movie_data
 from app import odbmaint
-from app import db_object
 
 from app.paths import ROOT_DIR,TEST_DATA_DIR
 from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
@@ -73,7 +73,7 @@ def local_ddb():
     os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
     os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
-    odbmaint.drop_tables(check=False) # make sure tables do not exist
+    odbmaint.drop_tables(silent_warnings=True)
     odbmaint.create_tables()
 
     ddbo = DDBO()               # it's a singleton
@@ -115,13 +115,17 @@ def new_course(local_ddb, local_s3):
                            course_name = course_name,
                            course_key = course_key)
 
+    # Create the user email, user_id and api_key
     user_email = new_email('user')
     user_id  = odb.register_email(email=user_email, user_name='Course User', course_id = course_id, admin=0)[USER_ID]
-    api_key = odb.make_new_api_key(email=user_email)
+    api_key  = odb.make_new_api_key(email=user_email)
 
+    # Create the admin email and user_id. No API_KEY for the admin at the moment
     admin_email = new_email('admin')
     admin_id = odb.register_email(email=admin_email, user_name='Course Admin', course_key=course_key, admin=1)[USER_ID]
 
+
+    logging.debug("new_course. user_id=%s api_key=%s admin_id=%s",user_id,api_key, admin_id)
 
     yield {'ddbo':local_ddb,
            COURSE_KEY:course_key,
@@ -129,10 +133,9 @@ def new_course(local_ddb, local_s3):
            COURSE_ID:course_id,
            ADMIN_EMAIL:admin_email,
            ADMIN_ID:admin_id,
-           USER_ID:user_id,
            USER_EMAIL:user_email,
-           API_KEY:api_key
-           }
+           USER_ID:user_id,
+           API_KEY:api_key }
 
     odb.remove_course_admin(course_id = course_id, admin_id = admin_id)
     odb.delete_user(user_id=user_id, purge_movies=True)
@@ -152,20 +155,20 @@ def new_movie(new_course):
 
     cfg = copy.copy(new_course)
     movie_title = f'test-movie title {str(uuid.uuid4())}'
-    movie_id = odb.create_new_movie(user_id = cfg[ADMIN_ID],
+    movie_id = odb.create_new_movie(user_id = cfg[USER_ID],
                                     course_id = cfg[COURSE_ID],
                                     title = movie_title,
                                     description = 'Description')
 
-    logger.debug("new_movie fixture: Opening %s",TEST_PLANTMOVIE_PATH)
+    logging.debug("new_movie fixture: movie_id=%s user_id=%s Opening %s",movie_id, cfg[USER_ID], TEST_PLANTMOVIE_PATH)
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
         movie_data   = f.read()
-        movie_data_sha256 = db_object.sha256(movie_data)
     assert len(movie_data) == os.path.getsize(TEST_PLANTMOVIE_PATH)
     assert len(movie_data) > 0
 
-    odb.set_movie_data(movie_id = movie_id, movie_data = movie_data)
+    odb_movie_data.set_movie_data(movie_id = movie_id, movie_data = movie_data)
     movie = odb.get_movie(movie_id = movie_id)
+    assert movie[USER_ID] == cfg[USER_ID]
     assert movie[DELETED] == 0
     assert movie[PUBLISHED] == 0
     assert movie[VERSION] == 1
@@ -175,5 +178,5 @@ def new_movie(new_course):
 
     yield cfg
 
-    odb.purge_movie(movie_id = movie_id)
-    odb.delete_movie(movie_id = movie_id)
+    odb_movie_data.purge_movie(movie_id = movie_id)
+    odb_movie_data.delete_movie(movie_id = movie_id)

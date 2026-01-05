@@ -11,6 +11,7 @@
     "@html-eslint/parser": "^0.24.0",
     "@testing-library/jest-dom": "^6.6.2",
     "babel-jest": "^29.7.0",
+    "babel-plugin-istanbul": "^6.1.1",
     "babel-preset-airbnb": "^5.0.0",
     "eslint": "^8.57.0",
     "eslint-config-jquery": "^3.0.2",
@@ -34,7 +35,7 @@
     ],
     "moduleDirectories": [
       "node_modules",
-      "deploy/app/static"
+      "src/app/static"
     ],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",

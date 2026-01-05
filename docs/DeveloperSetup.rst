@@ -75,7 +75,7 @@ Setup Steps
 
     .. code-block::
 
-       export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
+       export PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini
        make make-local-demo
 
 #. Run the self-tests:
@@ -98,12 +98,12 @@ Setup Steps
 
    .. code-block::
 
-    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
+    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
 
 #. The information for the new course will be output and look something like this:
 
    .. code-block::
-    
+
     creating course...
     2025-08-07 17:42:36,177  odb.py:376 WARNING: NOTE: create_user does not check to make sure user sbarber2+admin@gmail.com's course test exists
     Transaction succeeded: user inserted.
@@ -145,7 +145,7 @@ Running Locally Quick Start
 
    .. code-block::
 
-    export PLANTTRACER_CREDENTIALS=deploy/etc/credentials-localhost.ini
+    export PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini
     make run-local-debug # Ctrl-C to quit
 
 #. Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form "api_key-"+my_database_name. Here is an example:

@@ -4,21 +4,20 @@ Plant Tracer Web App Tutorial
 Welcome and Registration
 -------------------------
 - Go to `app.planttracer.com/register`.
-- Register for an account using your Course Key provided by your instructor.
-- Alternately, you can register for a demo course which is called "dev" (enter "dev" in the box labeled Course Key.
-- Enter your full name, email address, and Course Key.
-
+- Register for an account using your Name, Email Address, and Course Key.
+- If you are using Plant Tracer with a specific course or project, you can enter your course Keyey provided by your instructor or project leader.
+- Alternately, you can register for the Web course whose course key is 389f-4163
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer Registration
 
 - Look for an email from `admin@planttracer.com`. Click on the second link to view movies. The first link will allow you to upload movies.
-   
+
 .. image:: tutorial_images/admin_email_link.png
     :alt: email from Plant Tracer
 
 Viewing movies
 --------------
-- The second link in the email will bring you to the Welcome page. 
+- The second link in the email will bring you to the Welcome page.
 - Click on "Movies" in the menu bar at the top of the page to see a list of movies to analyze.
 
 .. image:: tutorial_images/welcome_page.png
@@ -33,7 +32,7 @@ Uploading Movies (optional)
 ---------------------------
 - Ensure that your video is of a size that works well with PlantTracer. You may have to resize it before uploading. The movement tracking algorithm(s) PlantTracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1000 frames per movie. Your movie file must be 256MB or less or you won't be able to upload it all. Eventually, PlantTracer will automatically resize (downsample) uploaded movies, but for now, the user must do this prior to upload. See :doc:`VideoResizing` for some ways to resize videos.
 - PlantTracer will accept videos in most well-known video file formats, but MP4 is probably best.
-- To upload your movie, select Upload from the menu bar at the top of the browser frame. 
+- To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
 - Choose a file to upload.
 
@@ -49,7 +48,7 @@ Tracking the Uploaded Movie
    :alt: Tracking uploaded movie on Plant Tracer
 
 - PlantTracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
-- PlantTracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame. 
+- PlantTracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
 - You may use the Marker Table to add and delete markers whose names have meaning for your motion analysis. There may be any number of markers. Markers may not be renamed, so if you want to rename a marker, delete it and add another with the name you want.
 - PlantTracer will attempt to track the motion related to every marker.
@@ -64,7 +63,7 @@ Tracking the Uploaded Movie
 - The Apex marker, and ruler markers need to be moved to the appropriate location.
 
 .. image:: tutorial_images/placed_markers.png
-   :alt: Tracking uploaded movie on Plant Tracer   
+   :alt: Tracking uploaded movie on Plant Tracer
 
 Viewing the trace of a Movie
 ----------------------------
