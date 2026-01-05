@@ -8,14 +8,14 @@ package and the other uses the selenium package directly.
 """
 
 import os
-import logging
-import functools
 
 import pytest
 
 # not needed for using pytest-selenium, just for using selenium directly
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+
+from app.constants import logger
 
 PLANTTRACER_TITLE = 'Plant Tracer'
 
@@ -28,7 +28,7 @@ def http_endpoint():
 @pytest.mark.skip(reason="temporarily disabled")
 def test_sitetitle_just_selenium(http_endpoint):
 
-    logging.info("http_endpoint %s", http_endpoint)
+    logger.info("http_endpoint %s", http_endpoint)
 
     options = Options()
     options.add_argument("--headless")
@@ -39,11 +39,13 @@ def test_sitetitle_just_selenium(http_endpoint):
     options.add_argument("--window-size=1920,1080")  # Specify window size
     # per https://pytest-selenium.readthedocs.io/en/latest/user_guide.html#quick-start
     if 'CHROME_PATH' in os.environ:
-        logging.info('CHROME_PATH=%s',os.environ['CHROME_PATH'])
+        logger.info('CHROME_PATH=%s',os.environ['CHROME_PATH'])
         options.binary_location = os.environ['CHROME_PATH']
 
     browser_driver = webdriver.Chrome(options = options) # TODO: externalize browser type, if possible
     browser_driver.get(http_endpoint)
+    print("browser_driver=%s",browser_driver,browser_driver.title,browser_driver.current_url,browser_driver.get_window_size,browser_driver.page_source)
+    print(dir(browser_driver))
     assert browser_driver.title == PLANTTRACER_TITLE
     browser_driver.close()
     browser_driver.quit()

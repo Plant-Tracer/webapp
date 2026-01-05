@@ -3,49 +3,45 @@ CLI for running standalone webserver.
 """
 
 ################################################################
-# Bottle App
+# Flask App
 ##
 
 import sys
-import os
 import argparse
 import logging
 
-from deploy.app import clogging
-from deploy.app.constants import C
-from deploy.app import db_object
+from gunicorn.app.wsgiapp import run
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Bottle App with Bottle's built-in server unless a command is given",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+from app import clogging
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--loginfo", help='print the loggers', action='store_true')
     parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--storelocal', help='Store new objects locally, not in S3', action='store_true')
-    parser.add_argument("--info", help='print info about the runtime environment', action='store_true')
+    parser.add_argument('--workers', type=int, default=2)
+
     clogging.add_argument(parser, loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    if C.PLANTTRACER_CREDENTIALS not in os.environ:
-        print(f"Please define {C.PLANTTRACER_CREDENTIALS} and restart",file=sys.stderr)
-        sys.exit(1)
-
-    if args.info:
+    if args.loginfo:
         for name in logging.root.manager.loggerDict: # pylint: disable=no-member
             print("Logger: ",name)
         sys.exit(0)
 
-    if args.storelocal:
-        db_object.STORE_LOCAL=True
+    sys.argv = [
+        "gunicorn",
+        "--bind", f"127.0.0.1:{args.port}",
+        "--workers", str(args.workers),
+        "--reload",                 # autoreload on code change
+        "--preload",
+        "--log-level", args.loglevel,
+        "--access-logfile", "-",
+        "--error-logfile", "-",
+        "src.app.flask_app:app"
+    ]
+    print(" ".join(sys.argv))
+    run()
 
-    # Now make sure that the credentials work
-    # We only do this with the standalone program
-    # the try/except is for when we run under a fixture in the pytest unit tests, which messes up ROOT_DIR
-    try:
-        from tests.dbreader_test import test_db_connection
-        test_db_connection()
-    except ModuleNotFoundError:
-        pass
-
-    cmd = f'gunicorn --bind 127.0.0.1:{args.port} --workers 2 --reload --log-level DEBUG deploy.app.bottle_app:app '
-    print(cmd)
-    os.system(cmd)
+if __name__ == "__main__":
+    main()

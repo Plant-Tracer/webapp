@@ -4,12 +4,15 @@ Configuration on mv1
 +------------------------+------------------+----------------------------------+----------+
 |Host                    | gunicorn port    | app dir                          | app name |
 +========================+==================+==================================+==========+
-|mv1.planttracer.com     | 8000             | /home/ec2-user/webapp/deploy/    | app.app  |
+|mv1.planttracer.com     | 8000             | /home/ubuntu/webapp/src/         | app.app  |
 +------------------------+------------------+----------------------------------+----------+
-|app.planttracer.com     | 8010             | /home/ec2-user/webapp/deploy/    | app.app  |
+|app.planttracer.com     | 8010             | /home/ubuntu/webapp/src/         | app.app  |
 +------------------------+------------------+----------------------------------+----------+
-|demo1.planttracer.com   | 8020             | /home/ec2-user/webapp/deploy/    | app.app  |
+|demo.planttracer.com    | 8020             | /home/ubuntu/webapp/src/         | app.app  |
 +------------------------+------------------+----------------------------------+----------+
-|dev-slg.planttracer.com | 8030             | /home/ec2-user/slg-dev/deploy/   | app.app  |
+|dev.planttracer.com     | 8030             | /home/ubuntu/dev/src/            | app.app  |
 +------------------------+------------------+----------------------------------+----------+
-
+|dev-slg.planttracer.com | 8040             | /home/ubuntu/dev-slg/src/        | app.app  |
++------------------------+------------------+----------------------------------+----------+
+|dev-seb.planttracer.com | 8050             | /home/ubuntu/dev-seb/src/        | app.app  |
++------------------------+------------------+----------------------------------+----------+

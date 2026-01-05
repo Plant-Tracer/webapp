@@ -1,65 +1,49 @@
 """
 Tests the DB object storage layer
 """
-
-
-import pytest
-import sys
-import os
-import logging
-import json
-import subprocess
 import uuid
-import xml.etree.ElementTree
 import hashlib
 
-from app.auth import get_dbreader,get_dbwriter
-from app.paths import STATIC_DIR,TEST_DATA_DIR
-from app.constants import C
-import app.dbfile as dbfile
-import app.db_object as db_object
+import boto3
+
+from app import s3_presigned
+from app import odb_movie_data
+from app import odb
+from app.constants import logger
+
+# Fixtures are imported in conftest.py
+
+s3client = boto3.client('s3')
 
 def test_object_name():
-    assert db_object.object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
-    assert db_object.object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
+    assert s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
+    assert s3_presigned.make_object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
-@pytest.fixture
-def SaveS3Bucket():
-    save = db_object.S3_BUCKET
-    db_object.S3_BUCKET = None
-    yield save
-    db_object.S3_BUCKET = save
-
-def test_make_urn(SaveS3Bucket):
-    logging.info("Saved S3 bucket=%s",SaveS3Bucket)
-    name = db_object.object_name(course_id=1, movie_id=2, ext='.txt')
-    a = db_object.make_urn(object_name=name, scheme=None)
+# pylint: disable=unused-argument
+def test_make_urn(local_s3):
+    name = s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.txt')
+    a = s3_presigned.make_urn(object_name=name)
     assert a.endswith(".txt")
 
-def test_write_read_delete_object(SaveS3Bucket):
-    logging.info("Saved S3 bucket=%s",SaveS3Bucket)
-    logging.debug("dbwriter: %s",get_dbwriter())
+# pylint: disable=unused-argument
+def test_write_read_delete_object(local_s3):
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()
     hasher.update(DATA)
-    DATA_SHA256 = hasher.hexdigest()
+    # DATA_SHA256 = hasher.hexdigest()
 
-    name = db_object.object_name(course_id=1, movie_id=3, ext='.txt')
-    urn  = db_object.make_urn(object_name=name, scheme=None)
-    db_object.write_object(urn=urn, object_data=DATA)
+    course_id = 'bogus'
+    movie_id = odb.new_movie_id()
+    name = s3_presigned.make_object_name(course_id=course_id, movie_id=movie_id, ext='.txt')
+    urn  = s3_presigned.make_urn(object_name=name)
+    try:
+        odb_movie_data.write_object(urn=urn, object_data=DATA)
+    except s3client.exceptions.NoSuchBucket as e:
+        logger.error("urn=%s error: %s",urn,e)
+        raise RuntimeError() from e
 
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * from object_store where sha256=%s", (DATA_SHA256,), asDicts=True, debug=True)
-    assert len(res)==1
-    assert res[0]['sha256']==DATA_SHA256
-    assert res[0]['data']==DATA
-
-    res = dbfile.DBMySQL.csfr( get_dbreader(), "SELECT * from objects where sha256=%s", (DATA_SHA256,), asDicts=True, debug=True)
-    assert len(res)==1
-    assert res[0]['sha256']==DATA_SHA256
-    assert res[0]['urn']==urn
-
-    obj_data = db_object.read_object(urn=urn)
+    obj_data = odb_movie_data.read_object(urn=urn)
     assert obj_data == DATA
 
-    db_object.delete_object(urn=urn)
-    assert db_object.read_object(urn=urn) is None
+    odb_movie_data.delete_object(urn=urn)
+    assert odb_movie_data.read_object(urn=urn) is None

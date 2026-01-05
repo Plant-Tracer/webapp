@@ -1,9 +1,10 @@
 import pytest
-import app.bottle_app as bottle_app
+import app.flask_app as flask_app
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def client():
-    app = bottle_app.app
+    """Redirects disallowed by default."""
+    app = flask_app.app
     app.config['TESTING'] = True
     with app.app_context():
         with app.test_client() as client:

@@ -51,7 +51,7 @@ describe('bulk_register_users_func', () => {
             method: 'POST',
             body: expect.any(FormData),
         }));
-        
+
         const formData = fetch.mock.calls[0][1].body;
         expect(formData.get("api_key")).toBe(api_key);
         expect(formData.get("course_id")).toBe(user_primary_course_id + "");

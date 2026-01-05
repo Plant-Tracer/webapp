@@ -18,19 +18,19 @@ Release History
    * - Oct2024
      - 0.9.3
      - October 8, 2024
-     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AOct2024>`_
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AOct2024>`__
    * - Dec2024
      - 0.9.4
      - December ??, 2024
-     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3ADec2024>`_
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3ADec2024>`__
    * - Mar2024
      - 0.9.5
      - March 22, 2025
-     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AMar2025>`_
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AMar2025>`__
    * - Apr2024
      - 0.9.6
      - April 30, 2025
-     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AApr2025>`_
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AApr2025>`__
 
 
 Release Notes
@@ -65,7 +65,7 @@ Release Notes
 *************
 
     * dbmaint: add --add_admin and --remove_admin commands
-    
+
 0.9.3 Summary
 *************
 
@@ -87,7 +87,6 @@ Release Notes
     * Copyright and Terms of Use: page cleanup
     * dbmaint: help documentation cleanup
     * Documentation: converted from Markup to ReStructuredText. Index created.
-    * Documentation: update and make more complete, including MySQL setup instructions
+    * Documentation: update and make more complete
     * Documentation: Installation steps updated
     * Documentation: Add ReleaseHistory page
-  

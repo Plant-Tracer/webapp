@@ -1,0 +1,53 @@
+<!-- -*- mode: html -*- -->
+{% extends 'base.html' %}
+
+{% block body %}
+
+<h2>Users</h2>
+
+{% if admin %}
+Below is a list of all of the users in all of the courses in which you
+are an admin.
+{% else %}
+Below is a list of all users registered on this system for your course
+{{ primary_course_name }}.
+{% endif %}
+
+<div id='your-users'></div>
+
+{% if admin %}
+<h2>Register</h2>
+
+<div id="bulk-register-users">
+  <form id="bulk_register_form" class="pure-form pure-form-aligned" action="javascript:void(0)">
+    <input id="br_course_id" type="hidden" name="course_id" value="{{user_primary_course_id}}">
+
+    <p>You can register students for your class by entering their email
+      addresses into the text box below.</p>
+
+    <p>Please put each email address on
+      its own line, or separate the email addresses with spaces, commas or
+      semicolons.</p>
+
+    <label for='email-addresses'>Email Addresses:</label>
+    <textarea id="br_email_addresses" name='email-addresses' rows=10 cols=50></textarea>
+
+    <div class='pure-controls'>
+      <input id='register-emails-button'
+             type='submit'
+             value='REGISTER'
+             class="pure-button pure-button-primary"
+             >
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<script type="text/javascript" charset="utf8" src="static/users.js"></script>
+<script>
+  $(document).ready(function() {
+  bulk_register_setup();
+  list_users();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+<!-- -*- mode: html -*- -->
+{% extends 'base.html' %}
+
+{% block body %}
+<h2> Welcome to PlantTracer </h2>
+
+<p>To log into the PlantTracer website, you need to click on the account
+  login link sent by this website. You get the link by registering for a new account by
+  clicking the link below. If you have already registered, please use
+  the second link below to resend it:</p>
+
+{% include 'register_resend.html' %}
+{% endblock %}

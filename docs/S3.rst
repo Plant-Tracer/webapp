@@ -1,0 +1,6 @@
+S3 and Plant Tracer
+===================
+
+Local Development and GitHub Actions
+------------------------------------
+For local development (and for running in GitHub Actions) the local S3 simulator minio is used. According to (this stackoverflow posting)[https://stackoverflow.com/questions/23991694/aws-s3-local-server-for-integration-testing], minio provides local persistance with the open source version, unlike localstack.

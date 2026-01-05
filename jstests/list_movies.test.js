@@ -22,12 +22,14 @@ beforeAll(() => {
 });
 
 describe('list_movies_data', () => {
+  let mockElements;
+
   beforeEach(() => {
     jest.clearAllMocks();
     // Assign global variables from globalData
     global.user_id = parseInt(globalData.user_id, 10);
     global.admin = globalData.admin === 'true';
-    global.user_demo = globalData.user_demo === 'false';
+    global.demo_mode = globalData.demo_mode === 'false';
     global.PLAY_LABEL = globalData.PLAY_LABEL;
     global.PLAY_TRACKED_LABEL = globalData.PLAY_TRACKED_LABEL;
     global.UNPUBLISH_BUTTON = globalData.UNPUBLISH_BUTTON;
@@ -36,6 +38,18 @@ describe('list_movies_data', () => {
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
     global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
+
+    // Mock document.querySelector to return mock elements with innerHTML setter
+    mockElements = {};
+    document.querySelector = jest.fn((selector) => {
+      if (!mockElements[selector]) {
+        mockElements[selector] = { innerHTML: '', style: {} };
+      }
+      return mockElements[selector];
+    });
+
+    // Mock document.querySelectorAll for hiding movie players
+    document.querySelectorAll = jest.fn(() => []);
   });
 
   test('should create the correct HTML for published movies', () => {
@@ -49,7 +63,7 @@ describe('list_movies_data', () => {
         width: 1280,
         height: 720,
         total_bytes: 2000000,
-        fps: 30,
+        fps: '30',
         total_frames: 3600,
         date_uploaded: 1627689600,
         deleted: 0,
@@ -57,23 +71,25 @@ describe('list_movies_data', () => {
       }
     ];
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const expectedPublishedHtml = expect.stringContaining("<table><tbody><tr><td><i>");
-    expect($.fn.html).toHaveBeenCalledWith(expectedPublishedHtml);
+    // Check that the published movies div was populated
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain("<table>");
+    expect(publishedHtml).toContain("Movie Title");
   });
 
   test('should handle an empty list of movies gracefully', () => {
     const movies = [];
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const expectedEmptyHtml = expect.stringContaining('<table><tbody><tr><td><i>No movies</i></td></tr></tbody></table>');
-    expect($.fn.html).toHaveBeenCalledWith(expectedEmptyHtml);
+    // Check that empty movies show the right message
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain("No movies");
+    expect(publishedHtml).toContain('<a href="/upload">Click here to upload a movie</a>');
   });
 
   test('should correctly classify and display course movies', () => {
@@ -96,36 +112,35 @@ describe('list_movies_data', () => {
       }
     ];
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const expectedCourseHtml = expect.stringContaining('<table>');
-    expect($.fn.html).toHaveBeenCalledWith(expectedCourseHtml);
+    // Check that course movies are shown in the right section
+    const courseHtml = mockElements['#course-movies'].innerHTML;
+    expect(courseHtml).toContain('<table>');
   });
 
   test('should display a link to upload movies for non-demo users', () => {
     const movies = [];
-    global.user_demo = false;
-    $.fn.html = jest.fn();
+    global.demo_mode = false;
     list_movies_data(movies);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const expectedUploadLinkHtml = expect.stringContaining('<table><tbody><tr><td><i>No movies</i></td></tr><tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr></tbody></table>');
-    expect($.fn.html).toHaveBeenCalledWith(expectedUploadLinkHtml);
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain('No movies');
+    expect(publishedHtml).toContain('<a href="/upload">Click here to upload a movie</a>');
   });
 
   test('should not display upload link for demo users', () => {
     const movies = [];
 
-    global.user_demo = true;
+    global.demo_mode = true;
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
-    expect($.fn.html).toHaveBeenCalledTimes(4);
+    expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const notExpectedUploadLinkHtml = expect.not.stringContaining('Click here to upload a movie');
-    expect($.fn.html).toHaveBeenCalledWith(notExpectedUploadLinkHtml);
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).not.toContain('Click here to upload a movie');
   });
 
   // Action Button Tests
@@ -140,14 +155,20 @@ describe('list_movies_data', () => {
         published: 0,
         deleted: 0,
         title: 'Unpublished Movie',
+        date_uploaded: 1627689600,
+        width: 1280,
+        height: 720,
+        total_bytes: 2000000,
+        fps: '30',
+        total_frames: 3600,
+        orig_movie: false,
       }
     ];
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
 
-    const expectedButtonHtml = expect.stringContaining(`<td> Status: Not published<br/>`);
-    expect($.fn.html).toHaveBeenCalledWith(expectedButtonHtml);
+    const unpublishedHtml = mockElements['#your-unpublished-movies'].innerHTML;
+    expect(unpublishedHtml).toContain('Status: Not published');
   });
 
   test('should display an unpublish button for published movies', () => {
@@ -158,13 +179,19 @@ describe('list_movies_data', () => {
         published: 1,
         deleted: 0,
         title: 'Published Movie',
+        date_uploaded: 1627689600,
+        width: 1280,
+        height: 720,
+        total_bytes: 2000000,
+        fps: '30',
+        total_frames: 3600,
+        orig_movie: false,
       }
     ];
 
-    $.fn.html = jest.fn();
     list_movies_data(movies);
 
-    const expectedButtonHtml = expect.stringContaining(`<td> Status: <b>Published</b>`);
-    expect($.fn.html).toHaveBeenCalledWith(expectedButtonHtml);
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain('Status: <b>Published</b>');
   });
 });

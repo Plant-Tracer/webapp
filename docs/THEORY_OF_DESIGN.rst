@@ -74,5 +74,5 @@ Upload a file
   3d - if the sha256 already exists, return to the client with 'movie_id' and 'upload_url' equal to '' and 'movie_url' being the final movie URL.
 
   3e - If the sha256 does not exist, return to the client with 'movie_id' and a 'upload_url' being a presigned s3 upload URL and 'movie_url' being the final movie URL.
-  
+
   Now, if the client has an upload_url, it starts the upload with a POST.
