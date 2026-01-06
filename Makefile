@@ -136,8 +136,15 @@ pytest: $(REQ)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
 
 pytest-coverage: $(REQ)
+	# Python coverage (writes coverage.xml and htmlcov/)
 	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
 	@echo coverage report in htmlcov/
+	# Ensure Node dependencies are available for JS tooling and coverage conversion
+	npm install
+	# Run tests again with Chromium V8 coverage enabled for browser-based JS
+	COLLECT_JS_COVERAGE=1 $(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
+	# Convert collected browser V8 coverage to LCOV for Codecov
+	make browser-v8-lcov
 
 # This doesn't work yet...
 pytest-selenium:
@@ -202,6 +209,7 @@ tracker-debug:
 
 ################################################################
 ### JavaScript
+##
 
 eslint:
 	if [ ! -d src/app/static ]; then echo no src/app/static ; exit 1 ; fi
@@ -213,21 +221,11 @@ jscoverage:
 	NODE_ENV=test NODE_PATH=src/app/static npm run coverage
 	NODE_PATH=src/app/static npm test
 
-instrument-js:
-	@echo "Instrumenting JavaScript files for browser coverage..."
-	@NODE_ENV=test node scripts/instrument-js.js
-
-browser-coverage-xml:
-	@echo Converting browser coverage to XML...
-	@if [ -f coverage/browser-coverage.json ]; then \
-		poetry run python -c "from tests.js_coverage_utils import convert_browser_coverage_to_xml; from pathlib import Path; convert_browser_coverage_to_xml(Path('coverage/browser-coverage.json'), Path('coverage/browser-coverage.xml'))"; \
-		echo Browser coverage converted to coverage/browser-coverage.xml; \
-	else \
-		echo No browser coverage found; \
-	fi
-
 jstest-debug:
 	NODE_PATH=src/app/static npm run test-debug
+
+browser-v8-lcov:
+	node scripts/devtools-v8-to-lcov.js coverage/browser-v8-coverage.json coverage/browser-v8-coverage.lcov
 
 
 ################################################################
