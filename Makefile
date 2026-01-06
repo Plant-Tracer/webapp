@@ -326,6 +326,7 @@ install-ubuntu:
 	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
 	sudo apt-get update
 	which pipx || sudo apt install -y pipx
+	pipx ensurepath
 	pipx install poetry --force
 	which aws || sudo snap  install aws-cli --classic
 	which chromium || sudo apt-get install -y chromium-browser chromium-chromedriver
@@ -338,6 +339,7 @@ install-ubuntu:
 	which java || sudo apt install -y openjdk-21-jre-headless
 	npm ci
 	make $(REQ)
+
 
 
 # Includes MacOS dependencies managed through Brew
@@ -354,7 +356,6 @@ install-macos:
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	make $(REQ)
-
 
 # Includes Windows dependencies
 # restart the shell after installs are done
