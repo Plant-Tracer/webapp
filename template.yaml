@@ -284,6 +284,12 @@ Resources:
       IamInstanceProfile: !Ref Ec2InstanceProfile
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds: [!Ref InstanceSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-app"
@@ -321,7 +327,9 @@ Resources:
           cd /opt/webapp
           pwd
           ls -l
-          bash etc/bootstrap.bash
+          df -h
+          bash etc/bootstrap.sh
+          df -h
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation
