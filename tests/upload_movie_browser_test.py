@@ -6,6 +6,7 @@ verifies the movie is stored in both S3 (MinIO) and DynamoDB.
 from pathlib import Path
 import uuid
 import hashlib
+import time
 
 import pytest
 from selenium.webdriver.common.by import By
@@ -71,9 +72,8 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         movie_id = wait.until(_wait_for_movie_id)
     except TimeoutException:
         pytest.fail("Movie ID was not displayed after upload completed")
-    
+
     # Wait a bit for async operations to complete and coverage to be updated
-    import time
     time.sleep(1)
 
     # Verify database entry
