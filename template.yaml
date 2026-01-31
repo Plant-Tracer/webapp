@@ -188,6 +188,8 @@ Resources:
               Service: ec2.amazonaws.com
             Action: "sts:AssumeRole"
 
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
       Policies:
       - PolicyName: Ec2DdbAndS3Access
         PolicyDocument:
