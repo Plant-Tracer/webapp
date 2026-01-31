@@ -119,3 +119,40 @@ s3.put_object(
     ContentType='application/octet-stream'
 )
 ```
+
+
+# Configuring your developer machine
+You will need to install the Session Manager Plugin for the AWS CLI.
+MacOS:
+```
+brew install --cask session-manager-plugin
+```
+
+Windows:
+```
+Start-BitsTransfer -Source "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/windows/SessionManagerPluginSetup.exe" -Destination "$env:USERPROFILE\Downloads\SessionManagerPluginSetup.exe"
+
+Start-Process "$env:USERPROFILE\Downloads\SessionManagerPluginSetup.exe" -ArgumentList "/install" -Wait
+```
+
+Linux:
+```
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+sudo dpkg -i session-manager-plugin.deb
+```
+## Accessing the server:
+```
+AWS_PROFILE=planttracer aws ssm start-session --target i-002f7d7909fd08e31
+AWS_PROFILE=planttracer aws ec2-instance-connect ssh --os-user ubuntu --instance-id i-002f7d7909fd08e31 --extra-args '-o IdentitiesOnly=yes'
+```
+
+## Bootstrap
+* `/var/lib/cloud/instance/user-data.txt` - contains original bootstrap program.
+
+Find logs in:
+* `/var/log/cloud-init.log`
+* `/var/log/cloud-init-output.log`
+
+# Local Variables:
+# fill-column: 150
+# End:

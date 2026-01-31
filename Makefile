@@ -413,7 +413,13 @@ sam-deploy:
 	sam logs --tail
 
 list-all-instances:
-	for p in default planttracer ; do for r in us-east-1 us-east-2 ; do echo "=== PROFILE $$p ZONE $$r ===" ; AWS_PROFILE=$$p AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done;done
+	do for r in us-east-1 us-east-2 ; do echo "=== ZONE $$r ===" ; AWS_PROFILE=$$p AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
+
+list-stacks:
+	aws cloudformation list-stacks \
+		--stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE \
+		--query 'StackSummaries[*].[StackName, StackStatus, CreationTime, Region]' \
+		--output table
 
 
 

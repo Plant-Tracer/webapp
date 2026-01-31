@@ -290,9 +290,12 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/usr/bin/env bash
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
           set -euo pipefail
 
+          # We only do what must be done from template.yaml. The rest is done from etc/bootstrap.sh
           # Create the environment variables from the samconfig
+          mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
           echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
           echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}"     >> /etc/environment.d/10-planttracer.conf
@@ -303,6 +306,7 @@ Resources:
           apt-get update -y
           apt-get install -y git ca-certificates curl make python3-poetry
           snap install --classic aws-cli
+          snap install --classic emacs
 
           # Clone webapp into /opt/webapp and run the bootstrap program
           install -d -m 0755 /opt/
@@ -315,6 +319,8 @@ Resources:
               git pull --ff-only
           fi
           cd /opt/webapp
+          pwd
+          ls -l
           bash etc/bootstrap.bash
 
   InstanceEipAssociation:
