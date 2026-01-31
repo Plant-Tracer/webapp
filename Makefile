@@ -12,40 +12,37 @@
 PYLINT_THRESHOLD := 10.0
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
+LOCAL_BUCKET:=planttracer-local
+LOCAL_HTTP_PORT=8080
+LOG_LEVEL ?= DEBUG		# default to debug unless changed
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
+MINIO_ENDPOINT=http://localhost:9100/
+DBUTIL=src/dbutil.py
 
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
 
-REQ := .venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio
-LOCAL_BUCKET=planttracer-local
-LOCAL_HTTP_PORT=8080
-LOG_LEVEL ?= DEBUG		# default to debug unless changed
+REQ := .venv/pyvenv.cfg
 
-DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
-MINIO_ENDPOINT=http://localhost:9100/
+# if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
+ifeq ($(AWS_REGION),)
+    $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
+    export AWS_REGION                ?= local
+endif
+ifeq ($(AWS_REGION),local)
+    REQ := $(REQ) bin/DynamoDBLocal.jar bin/minio
+    export AWS_ACCESS_KEY_ID         := minioadmin
+    export AWS_SECRET_ACCESS_KEY     := minioadmin
+    export AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
+    export AWS_ENDPOINT_URL_S3       := $(MINIO_ENDPOINT)
+    export PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
+endif
 
-AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
-AWS_ENDPOINT_URL_S3 := $(MINIO_ENDPOINT)
-AWS_ACCESS_KEY_ID=minioadmin
-AWS_SECRET_ACCESS_KEY=minioadmin
-AWS_DEFAULT_REGION=us-east-1
+ifeq ($(DYNAMODB_TABLE_PREFIX),)
+    $(warning DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
+    export DYNAMODB_TABLE_PREFIX=demo-
+endif
 
-# AWS_VARS are required for any command that uses AWS
-AWS_VARS := AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT)
-
-# PT_VARS are required for any command that uses planttracer but with dynamically-generated prefixes
-PT_VARS := $(AWS_VARS) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
-
-# DEMO_VARS are required for any command that requires a DYNAMODB_TABLE_PREFIX.
-# For example, if you are running a local server, or a local demo
-DEMO_VARS := DYNAMODB_TABLE_PREFIX=demo- $(PT_VARS)
-
-
-################################################################
-# Create the virtual enviornment for testing and CI/CD
-
-APP_ETC=app/etc
-DBUTIL=src/dbutil.py
 .PHONY: dist distclean
 
 .venv/pyvenv.cfg:
@@ -63,7 +60,6 @@ distclean:
 	/bin/rm -rf .venv */.venv */.aws-sam
 	/bin/rm -rf .*cache */.*cache
 	/bin/rm -rf _build
-
 
 ################################################################
 # Main targets used by CI/CD system and developers
@@ -132,21 +128,21 @@ flake:
 ## set LOG_LEVEL at start of CLI to change the  log level
 
 pytest: $(REQ)
-	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
+	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
 
 pytest-coverage: $(REQ)
-	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
-	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
+	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/test_trackpoint_drag.py
 #TEST1FUNCTION="-k test_trackpoint_drag_and_database_update"
 pytest1:
-	$(PT_VARS) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -170,18 +166,18 @@ delete-local:
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	$(DEMO_VARS) poetry run python $(DBUTIL) --createdb
-	$(DEMO_VARS) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+	poetry run python $(DBUTIL) --createdb
+	aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
 	@echo run bottle locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(DEMO_VARS) LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 
 debug-dev-api:
@@ -189,7 +185,7 @@ debug-dev-api:
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	$(DEMO_VARS) PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 tracker-debug:
 	@echo just test the tracker...
@@ -253,13 +249,13 @@ stop_local_dynamodb:  bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
-	$(PT_VARS) aws dynamodb list-tables
+	aws dynamodb list-tables
 
 dump-demo-tables:
 	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
 		echo $$tn:; \
-		$(PT_VARS) aws dynamodb describe-table --table-name $$tn ; \
-		$(PT_VARS) aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		aws dynamodb describe-table --table-name $$tn ; \
+		aws dynamodb scan --max-items 5 --table-name $$tn ; \
 		done
 
 

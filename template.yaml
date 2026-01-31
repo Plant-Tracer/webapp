@@ -290,6 +290,8 @@ Resources:
             VolumeSize: 30
             VolumeType: gp3
             DeleteOnTermination: true
+      CreditSpecification:
+        CPUCredits: unlimited   # charge if we burst, rather than throttling
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-app"
@@ -299,6 +301,8 @@ Resources:
           exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
           set -euo pipefail
 
+          lsblk
+          df -h
           # We only do what must be done from template.yaml. The rest is done from etc/bootstrap.sh
           # Create the environment variables from the samconfig
           mkdir -p /etc/environment.d
@@ -324,11 +328,9 @@ Resources:
               git checkout "${GitBranch}"
               git pull --ff-only
           fi
-          cd /opt/webapp
-          pwd
-          ls -l
-          df -h
-          bash etc/bootstrap.sh
+          # Set the permissions and run bootstrap as the ubuntu user
+          sudo chown -R ubuntu:ubuntu /opt/webapp
+          runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh'
           df -h
 
   InstanceEipAssociation:

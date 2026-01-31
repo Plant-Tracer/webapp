@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
+###
+### bootstrap.sh is run by the EC2 instance at startup.
+### See $ROOT/template.yaml for details
+###
+
 set -euo pipefail
-echo Setting up ubuntu 22.04 running in AWS for PlantTracer.
-"""
-to-do:
-Reliability (EC2 bootstrap)
-Make the app a systemd service instead of exec "${GitRunPath}" in user-data
-User-data is one-shot; you’ll want restart-on-failure and start-on-boot semantics
-In user-data, write a unit file and systemctl enable --now yourservice. Keep the git checkout/update logic, but run it from a controlled service/script.
-"""
+echo Setting up ubuntu 24.04 running in AWS for PlantTracer.
+export ROOT=/opt/webapp
+cd $ROOT
 
+## First we install a functioning release and make sure that we can test it
+## Note that the test will be done with the live Lambda database and S3
+## and not with DynamoDBLocal
 
-
-echo Hello World.
+make install-ubuntu
+source /etc/environment.d/10-planttracer.conf
+export LOG_LEVEL
+export DYNAMODB_TABLE_PREFIX
+export PLANTTRACER_S3_BUCKET
