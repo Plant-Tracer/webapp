@@ -9,7 +9,7 @@
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 
-PYLINT_THRESHOLD := 9.5
+PYLINT_THRESHOLD := 10.0
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 
@@ -52,7 +52,6 @@ DBUTIL=src/dbutil.py
 	@echo install .venv for the development environment
 	poetry config virtualenvs.in-project true
 	poetry install
-
 
 dist: pyproject.toml
 	@echo building the deloy wheel
@@ -406,10 +405,17 @@ install-aws-sam-tools:
 
 
 sam-deploy:
-	sam validate
+	sam validate --lint
+	poetry export --only main,lambda --format=requirements.txt \
+		--output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
 	sam logs --tail
+
+list-all-instances:
+	for p in default planttracer ; do for r in us-east-1 us-east-2 ; do echo "=== PROFILE $$p ZONE $$r ===" ; AWS_PROFILE=$$p AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done;done
+
+
 
 ################################################################
 ### Compile JavaScript to TypeScript
