@@ -72,7 +72,7 @@ def local_ddb():
         os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
     # If no prefix is specified, create a random test prefix
-    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') != '':
+    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') == '':
         os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
 
     # Wipe and recreate the tables if running locally

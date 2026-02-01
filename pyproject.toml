@@ -13,7 +13,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 boto3 = ">=1.39.14,<2.0.0"
 apig-wsgi = "^2.20.0"
 

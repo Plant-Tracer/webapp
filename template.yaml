@@ -207,23 +207,16 @@ Resources:
                 - dynamodb:BatchWriteItem
                 - dynamodb:DescribeTable
               Resource:
-                # tables
-                - !GetAtt CourseUsersTable.Arn
-                - !GetAtt CoursesTable.Arn
-                - !GetAtt LogsTable.Arn
-                - !GetAtt MovieFramesTable.Arn
-                - !GetAtt MoviesTable.Arn
-                - !GetAtt UniqueEmailsTable.Arn
-                - !GetAtt UsersTable.Arn
-
-                # indexes (only needed for tables that actually have GSIs)
-                - !Sub "${ApiKeysTable.Arn}/index/*"
-                - !Sub "${CoursesTable.Arn}/index/*"
-                - !Sub "${LogsTable.Arn}/index/*"
-                - !Sub "${MoviesTable.Arn}/index/*"
-                - !Sub "${UsersTable.Arn}/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
             - Effect: Allow
               Action:
+                - dynamodb:ListTables
+              Resource:
+                - "*"
+            - Effect: Allow
+              Action:
+                - s3:CreateBucket # if it does not exist
                 - s3:GetObject
                 - s3:PutObject
                 - s3:DeleteObject
@@ -328,7 +321,14 @@ Resources:
               git checkout "${GitBranch}"
               git pull --ff-only
           fi
-          # Set the permissions and run bootstrap as the ubuntu user
+
+          echo Create the bucket if it does not exist
+          snap install --classic aws-cli
+          export PATH=$PATH:/snap/bin
+          aws s3api head-bucket --bucket "${ImageBucketName}" 2>/dev/null \
+               || aws s3 mb "s3://${ImageBucketName}" || true
+
+          echo Set the permissions and run bootstrap as the ubuntu user
           sudo chown -R ubuntu:ubuntu /opt/webapp
           runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
           df -h
@@ -412,12 +412,6 @@ Resources:
         - IndexName: course_key_idx
           KeySchema:
             - AttributeName: course_key
-              KeyType: "HASH"
-          Projection:
-            ProjectionType: "ALL"
-        - IndexName: course_id_idx
-          KeySchema:
-            - AttributeName: course_id
               KeyType: "HASH"
           Projection:
             ProjectionType: "ALL"
@@ -508,16 +502,14 @@ Resources:
             - AttributeName: ipaddr
               KeyType: "HASH"
           Projection:
-            ProjectionType: INCLUDE
-            NonKeyAttributes: [log_id]
+            ProjectionType: "KEYS_ONLY" #
 
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
               KeyType: "HASH"
           Projection:
-            ProjectionType: INCLUDE
-            NonKeyAttributes: [log_id]
+            ProjectionType: "KEYS_ONLY" #
 
         - IndexName: course_time_t_idx
           KeySchema:
@@ -526,8 +518,7 @@ Resources:
             - AttributeName: time_t
               KeyType: "RANGE"
           Projection:
-            ProjectionType: INCLUDE
-            NonKeyAttributes: [log_id]
+            ProjectionType: "KEYS_ONLY" #
 
   ################################################################
   ### This is for the lambda that we created
@@ -557,11 +548,11 @@ Resources:
   LambdaFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: python3.13
+      BuildMethod: python3.12
       BuildProperties:
         RequirementsFile: ../requirements.txt   # relative to CodeUri (src/)
     Properties:
-      Runtime: python3.13
+      Runtime: python3.12
       Architectures: [arm64]
       PackageType: Zip
       CodeUri: lambda-resize/src/
@@ -587,22 +578,8 @@ Resources:
                 - dynamodb:BatchGetItem
                 - dynamodb:BatchWriteItem
               Resource:
-                # tables
-                - !GetAtt UsersTable.Arn
-                - !GetAtt UniqueEmailsTable.Arn
-                - !GetAtt ApiKeysTable.Arn
-                - !GetAtt CoursesTable.Arn
-                - !GetAtt CourseUsersTable.Arn
-                - !GetAtt MoviesTable.Arn
-                - !GetAtt MovieFramesTable.Arn
-                - !GetAtt LogsTable.Arn
-
-                # indexes (only needed for tables that actually have GSIs)
-                - !Sub "${UsersTable.Arn}/index/*"
-                - !Sub "${ApiKeysTable.Arn}/index/*"
-                - !Sub "${CoursesTable.Arn}/index/*"
-                - !Sub "${MoviesTable.Arn}/index/*"
-                - !Sub "${LogsTable.Arn}/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
 
       Events:
         AnyRoot:
