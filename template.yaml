@@ -330,7 +330,7 @@ Resources:
           fi
           # Set the permissions and run bootstrap as the ubuntu user
           sudo chown -R ubuntu:ubuntu /opt/webapp
-          runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh'
+          runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
           df -h
 
   InstanceEipAssociation:

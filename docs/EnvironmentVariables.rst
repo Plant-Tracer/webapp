@@ -26,7 +26,7 @@ Optional for using AWS
 ----------------------
 Region selection:
 
-`AWS_DEFAULT_REGION` - The AWS region you are using.
+`AWS_REGION` - The AWS region you are using.
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` and `$HOME/.aws/config` the webapp will use.
 
@@ -38,7 +38,7 @@ Optional for sending mail
 Optional for Local Development
 ------------------------------
 
-`AWS_DEFAULT_REGION` - The AWS region you are using.
+`AWS_REGION` - The AWS region you are using.
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` the webapp will use. Should be `minio` when using minio (assuming profile is installed)
 

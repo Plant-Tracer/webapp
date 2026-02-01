@@ -18,6 +18,7 @@ LOG_LEVEL ?= DEBUG		# default to debug unless changed
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
 MINIO_ENDPOINT=http://localhost:9100/
 DBUTIL=src/dbutil.py
+export DEBIAN_FRONTEND=noninteractive
 
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
@@ -317,23 +318,25 @@ make-local-bucket:
 
 ################################################################
 # Includes ubuntu dependencies
+# Note: on GitHub, install ffmpeg first with https://github.com/marketplace/actions/setup-ffmpeg
 install-ubuntu:
-	echo on GitHub, we use this action instead: https://github.com/marketplace/actions/setup-ffmpeg
+	@echo install-ubuntu
 	sudo apt-get update
-	which pipx || sudo apt install -y pipx
+	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
+	which pipx     || sudo apt-get install -y -qq pipx
+	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver
+	which curl     || sudo apt-get install -y -qq curl
+	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
+	which lsof     || sudo apt-get install -y -qq lsof
+	which node     || sudo apt-get install -y -qq nodejs
+	which npm      || sudo apt-get install -y -qq npm
+	which zip      || sudo apt-get install -y -qq zip
+	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
 	pipx ensurepath
 	pipx install poetry --force
-	which aws || sudo snap  install aws-cli --classic
-	which chromium || sudo apt-get install -y chromium-browser chromium-chromedriver
-	which curl || sudo apt install curl
-	which ffmpeg || sudo apt install -y ffmpeg
-	which lsof || sudo apt-get install -y lsof
-	which node || sudo apt install -y nodejs
-	which npm || sudo apt install -y npm
-	which zip || sudo apt install -y zip
-	which java || sudo apt install -y openjdk-21-jre-headless
 	npm ci
 	make $(REQ)
+	@echo install-ubuntu done
 
 
 

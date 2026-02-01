@@ -22,7 +22,7 @@ The DynamoDBLocal and Minio programs require that the following AWS  variables b
 |--------|-----|
 |`AWS_ACCESS_KEY_ID`|`minioadmin`|
 |`AWS_SECRET_ACCESS_KEY`|`minioadmin`|
-|`AWS_DEFAULT_REGION`|`us-east-1`|
+|`AWS_REGION`|`us-east-1`|
 |`AWS_ENDPOINT_URL_S3`|`http://localhost:9100/`|
 |`AWS_ENDPOINT_URL_DYNAMODB`|`http://localhost:8010/`|
 
@@ -237,7 +237,7 @@ Notice that below we set all of the environment variables first. You might want 
     AWS_ENDPOINT_URL_S3=http://localhost:9100/\
     AWS_ACCESS_KEY_ID=minioadmin \
     AWS_SECRET_ACCESS_KEY=minioadmin \
-    AWS_DEFAULT_REGION=us-east-1 \
+    AWS_REGION=local \
     PLANTTRACER_S3_BUCKET=planttracer-local \
     DYNAMODB_TABLE_PREFIX=dev- \
     LOG_LEVEL=DEBUG python dbutil.py --createdb
@@ -264,7 +264,7 @@ Now we can run the web app:
     AWS_ENDPOINT_URL_S3=http://localhost:9100/ \
     AWS_ACCESS_KEY_ID=minioadmin \
     AWS_SECRET_ACCESS_KEY=minioadmin \
-    AWS_DEFAULT_REGION=us-east-1 \
+    AWS_REGION=local \
     PLANTTRACER_S3_BUCKET=planttracer-local \
     DYNAMODB_TABLE_PREFIX=dev- \
     LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
@@ -293,7 +293,7 @@ Now connect to `http://127.0.0.1:8080`:
 Alternatively, we could run in demo mode:
 
 ```
-AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
 ```
 
 And now if we go to `http://127.0.0.1:8080` we see:
@@ -312,7 +312,7 @@ We will first use the `--report` option to see what is in the database:
 ```
 simsong@Seasons-2 ~ % cd gits/webapp
 simsong@Seasons-2 webapp % source venv/bin/activate
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
 2025-08-10 09:53:21,580  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-api_keys')
 2025-08-10 09:53:21,583  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-users')
 2025-08-10 09:53:21,586  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-movies')
@@ -347,7 +347,7 @@ https://github.com/Plant-Tracer/webapp/blob/e46ac75396755687c50d4dc87f2358e92060
 
 Let's try it:
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --create_course --course_id PLANT101 --course_name "Introduction to Plant Movement" --admin_email "simsong@gmail
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --create_course --course_id PLANT101 --course_name "Introduction to Plant Movement" --admin_email "simsong@gmail
 .com" --admin_name "Simson Garfinkel"
 creating course...
 2025-08-10 10:40:25,248  odb.py:376 WARNING: NOTE: create_user does not check to make sure user simsong@gmail.com's course PLANT101 exists
@@ -367,7 +367,7 @@ created PLANT101
 
 Now let's try the report:
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
 table               .item_count    count_table_items()
 ----------------  -------------  ---------------------
 dev-api_keys                  1                      1
@@ -387,7 +387,7 @@ Notice:
 To log in we will need a magic link that works with our existing endpoint (http://localhost:8080):
 
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
 
 *****
 ***** Login with http://localhost:8080/list?api_key=a71358e5d3c6f453cb363d0aa69ce5664
@@ -398,5 +398,3 @@ To log in we will need a magic link that works with our existing endpoint (http:
 And I should be able to log in with this:
 
 <img width="1191" height="985" alt="image" src="https://github.com/user-attachments/assets/a9309acc-090c-42a6-b1bf-73c23330a619" />
-
-

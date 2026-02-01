@@ -1,6 +1,6 @@
 """
 These fixtures set environment variables for running DynamoDB Local and minio
-
+If AWS_REGION is set to something other than 'local', we use the live DynamoDB instead.
 """
 
 import logging
@@ -60,14 +60,23 @@ def local_ddb():
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
 
-    os.environ[ C.AWS_DEFAULT_REGION ]    = 'local'
-    os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
-    os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
-    os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
-    os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
+    if os.environ.get(C.AWS_REGION,'local') == "local":
 
-    odbmaint.drop_tables(silent_warnings=True)
-    odbmaint.create_tables()
+        # Running locally.
+
+        os.environ[ C.AWS_REGION ]    = 'local'
+        os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
+        os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
+        os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
+
+    # If no prefix is specified, create a random test prefix
+    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') != '':
+        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
+
+    # Wipe and recreate the tables if running locally
+    if os.environ[ C.AWS_REGION ] == 'local':
+        odbmaint.drop_tables(silent_warnings=True)
+        odbmaint.create_tables()
 
     ddbo = DDBO()               # it's a singleton
     yield ddbo
@@ -76,24 +85,15 @@ def local_ddb():
 
 @pytest.fixture(scope="session")
 def local_s3():
-    """Create an empty S3 locally.
-    Starts the database if it is not running.
     """
-    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
+    We no longer create a bucket on demand.
+    However, if we are running locally, make sure that minio is running and set the endpoints
+    """
+    if os.environ.get( C.AWS_REGION, '') == 'local':
+        subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
+        os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
 
-    save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
-    save_endpoint = os.getenv(C.AWS_ENDPOINT_URL_S3)
-    os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_PLANTTRACER_S3_BUCKET
-    os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
-    yield save_bucket
-    if save_bucket:
-        os.environ[C.PLANTTRACER_S3_BUCKET] = save_bucket
-    else:
-        del os.environ[C.PLANTTRACER_S3_BUCKET]
-    if save_endpoint:
-        os.environ[C.AWS_ENDPOINT_URL_S3] = save_endpoint
-    else:
-        del os.environ[C.AWS_ENDPOINT_URL_S3]
+    yield os.environ[C.PLANTTRACER_S3_BUCKET]
 
 
 @pytest.fixture
