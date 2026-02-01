@@ -30,7 +30,7 @@ GET_POST = ['GET','POST']
 class C:
     """Constants"""
     # AWS variables (used by boto3)
-    AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
+    AWS_REGION = 'AWS_REGION'
     AWS_PROFILE = 'AWS_PROFILE'
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 

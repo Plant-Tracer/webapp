@@ -13,6 +13,8 @@ import random
 from os.path import join,dirname,abspath
 
 import boto3
+from botocore.exceptions import ClientError
+
 
 from app.constants import C
 from app import odb
@@ -92,6 +94,12 @@ def local_s3():
     if os.environ.get( C.AWS_REGION, '') == 'local':
         subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
         os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
+
+        # Create the bucket if it does not exist
+        try:
+            s3client.create_bucket(Bucket=os.environ[C.PLANTTRACER_S3_BUCKET])
+        except ClientError as e:
+            logging.warning(e)
 
     yield os.environ[C.PLANTTRACER_S3_BUCKET]
 

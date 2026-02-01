@@ -209,7 +209,7 @@ class DDBO:
 
     @classmethod
     def resource(cls):
-        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
+        region_name = os.environ.get(C.AWS_REGION, None)
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
         logger.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
