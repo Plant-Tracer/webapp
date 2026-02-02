@@ -1,9 +1,14 @@
 version = 0.1
+
 [default.deploy.parameters]
-stack_name = "planttracer-webapp2"
+stack_name = "slgtest-vm-1"
 resolve_s3 = true
-s3_prefix = "planttracer-webapp2"
-region = "us-east-1"
+s3_prefix = "slgtest-vm-1"
+profile = "plantadmin"
+confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-disable_rollback = true
-image_repositories = ["HandlerFunction=376778049323.dkr.ecr.us-east-1.amazonaws.com/planttracerwebapp206be55a7/handlerfunction8efd15bcrepo"]
+parameter_overrides = "HostedZoneId=\"Z02875141U8JDG1N8N5BO\" BaseDomain=\"planttracer.com\" HostLabel=\"slgtest-vm-1\" CertificateArn=\"\" EC2KeyPairName=\"plantadmin\" ImageBucketName=\"planttracer-slg\" UbuntuAmiId=\"/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id\" InstanceType=\"t4g.small\" GitRepoUrl=\"https://github.com/Plant-Tracer/webapp.git\" GitBranch=\"dev-sam\" TablePrefix=\"slgtest-vm-1-\" LogLevel=\"DEBUG\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"

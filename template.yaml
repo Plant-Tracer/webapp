@@ -1,86 +1,619 @@
+# -----------------------------------------------------------------------------
+# BUILD / DEPLOY (run from the directory containing this template.yaml)
 #
-# Read the docs:
-# https://aws.amazon.com/blogs/compute/using-container-image-support-for-aws-lambda-with-aws-sam/
+# 1) Configure AWS credentials/profile as usual.
+#
+# 2) Deploy (guided the first time):
+#      sam deploy --guided
+#
+#    Subsequent deploys:
+#      sam deploy
+#
+# Notes:
+# - This template creates networking (VPC + public subnet) for a quick start.
+#   If you already have a VPC/subnet, you can replace the VPC/Subnet resources
+#   with Parameters and wire them into the instance + security group.
+#
+# - DNS: Edit the DnsConfig mapping below to hard-code your HostedZoneId and base domain.
+# -----------------------------------------------------------------------------
+
+
+# Live:
+#   sam sync
+#
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  planttracer-webapp
-
-  SAM Template for planttracer-webapp. Uses docker.
+  Single EC2 instance + IAM access to DynamoDB + Route53 DNS A record to an Elastic IP.
+  (No load balancer.)
 
 Globals:
   Function:
-    Timeout: 15
-    MemorySize: 512
-  Api:
-    Cors:
-      AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
-      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-      AllowOrigin: "'*'"
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LogLevel
+        TABLE_PREFIX: !Ref TablePrefix
+
+Parameters:
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for planttracer.com (e.g., Z123ABC...)
+    Default: "Z02875141U8JDG1N8N5BO"
+
+  BaseDomain:
+    Type: String
+    Description: "base domain in which the hostnames are created"
+    Default: "planttracer.com"
+
+  HostLabel:
+    Type: String
+    Description: "Hostname label only (e.g., 'demo' -> demo.planttracer.com)."
+    AllowedPattern: "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$"
+
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: "(Optional) Existing ACM certificate ARN for camera.planttracer.com. Leave blank to auto-create."
+
+  EC2KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "EC2 KeyPair name for SSH access to server. Keypair must be uploaded to EC2"
+
+  ImageBucketName:
+    Type: String
+    Description: "S3 bucket were images are stored. Do not include s3://2"
+    Default: planttracer2
+
+  UbuntuAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: "Ubuntu 24.04 LTS (arm64) via SSM"
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues:
+      - t4g.nano
+      - t4g.micro
+      - t4g.small
+      - t4g.medium
+    Description: "Choose an instance type compatible with your AMI architecture."
+
+  GitRepoUrl:
+    Type: String
+    Description: "Git repository URL to clone on boot (e.g., https://github.com/Plant-Tracer/webapp.git)."
+    Default: "https://github.com/Plant-Tracer/webapp.git"
+
+  GitBranch:
+    Type: String
+    Default: main
+    Description: "Git branch/tag to checkout."
+
+  TablePrefix:
+    Type: String
+    Description: PlantTracer table prefix
+    Default: prefix1
+
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
+    Description: Default LOG_LEVEL environment value for the function
+
+Conditions:
+  CreateAcmCert: !Equals [!Ref CertificateArn, ""]
 
 Resources:
-  MyApi:
-    Type: AWS::Serverless::Api
+  # --- Minimal networking: VPC + one public subnet + IGW + route table ---
+  Vpc:
+    Type: AWS::EC2::VPC
     Properties:
-      StageName: Prod
-      BinaryMediaTypes:
-        - image/x-icon
-        - image/png
-        - image/jpeg
-        - audio/mpeg
-        - application/octet-stream
-      Cors:
-        AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
+      CidrBlock: 10.30.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpc"
 
-  HandlerFunction:
-    Type: AWS::Serverless::Function
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      PackageType: Image
-      Architectures:
-        - x86_64
-      Environment:
-        Variables:
-          AWS_LAMBDA: "YES"
-          DEBUG_DUMP_FILES: "NO"
-          DEMO_MODE: "YES"
-          ENCODE_BINARY_CONTENT: "YES"
-          LOG_LEVEL: INFO
-          PLANTTRACER_LOG_LEVEL: "WARNING"
-          PLANTTRACER_S3_BUCKET: "planttracer-dev"
-          PLANTTRACER_SMTP: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
-          POWERTOOLS_METRICS_NAMESPACE: Powertools
-          POWERTOOLS_SERVICE_NAME: FastAPI
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.30.10.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-subnet"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # --- Security Group: open 22/80/443 to the world (as requested) ---
+  # (NOT recommended for SSH in production --- remove ssh rule and use aws ssm start-session to access instance).
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Open inbound 22,80,443 from the world."
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # --- IAM: allow the instance to access the named DynamoDB table ---
+  Ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: "sts:AssumeRole"
+
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
       Policies:
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: "arn:aws:secretsmanager:us-east-1:376778049323:secret:planttracer_smtp-5TWQyf"
+      - PolicyName: Ec2DdbAndS3Access
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:DescribeTable
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+            - Effect: Allow
+              Action:
+                - dynamodb:ListTables
+              Resource:
+                - "*"
+            - Effect: Allow
+              Action:
+                - s3:CreateBucket # if it does not exist
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
+                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+
+  LambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
+      RetentionInDays: 30
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref Ec2Role]
+
+  # --- Stable public IP + DNS name ---
+  InstanceEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  VmDnsARecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${HostLabel}.${BaseDomain}."
+      Type: A
+      TTL: 30
+      ResourceRecords:
+        - !Ref InstanceEip
+
+  VmDemoDnsARecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${HostLabel}-demo.${BaseDomain}."
+      Type: A
+      TTL: 30
+      ResourceRecords:
+        - !Ref InstanceEip
+
+  # ApiDomainName is created automatically
+
+  # --- EC2 instance ---
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+      ImageId: !Ref UbuntuAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref EC2KeyPairName
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref InstanceSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      CreditSpecification:
+        CPUCredits: unlimited   # charge if we burst, rather than throttling
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          set -euo pipefail
+
+          lsblk
+          df -h
+          # We only do what must be done from template.yaml. The rest is done from etc/bootstrap.sh
+          # Create the environment variables from the samconfig
+          mkdir -p /etc/environment.d
+          touch /etc/environment.d/10-planttracer.conf
+          echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}"     >> /etc/environment.d/10-planttracer.conf
+          echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
+
+          # Install enough to get git working
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y git ca-certificates curl make python3-poetry
+          snap install --classic aws-cli
+          snap install --classic emacs
+
+          # Clone webapp into /opt/webapp and run the bootstrap program
+          install -d -m 0755 /opt/
+          if [ ! -d /opt/webapp/.git ]; then
+              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
+          else
+              cd /opt/webapp
+              git fetch --all --prune
+              git checkout "${GitBranch}"
+              git pull --ff-only
+          fi
+
+          echo Create the bucket if it does not exist
+          snap install --classic aws-cli
+          export PATH=$PATH:/snap/bin
+          aws s3api head-bucket --bucket "${ImageBucketName}" 2>/dev/null \
+               || aws s3 mb "s3://${ImageBucketName}" || true
+
+          echo Set the permissions and run bootstrap as the ubuntu user
+          sudo chown -R ubuntu:ubuntu /opt/webapp
+          runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
+          df -h
+
+  InstanceEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt InstanceEip.AllocationId
+      InstanceId: !Ref AppInstance
+
+  ################################################################
+  ### Create the DynamoDB tables
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}users"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email_idx
+          KeySchema:
+            - AttributeName: email
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+
+  UniqueEmailsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}unique_emails"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+
+  ApiKeysTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}api_keys"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: api_key
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: api_key
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user_id_idx
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+
+  CoursesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}courses"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: course_id
+          AttributeType: S
+        - AttributeName: course_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: course_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: course_key_idx
+          KeySchema:
+            - AttributeName: course_key
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+
+  CourseUsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}course_users"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: course_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: course_id
+          KeyType: HASH
+        - AttributeName: user_id
+          KeyType: RANGE
+
+  MoviesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}movies"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: movie_id
+          AttributeType: S
+        - AttributeName: course_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: movie_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: course_id_idx
+          KeySchema:
+            - AttributeName: course_id
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+        - IndexName: user_id_idx
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+
+  MovieFramesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}movie_frames"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: movie_id
+          AttributeType: S
+        - AttributeName: frame_number
+          AttributeType: N
+      KeySchema:
+        - AttributeName: movie_id
+          KeyType: HASH
+        - AttributeName: frame_number
+          KeyType: RANGE
+
+  LogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}logs"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: log_id
+          AttributeType: S
+        - AttributeName: ipaddr
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: course_id
+          AttributeType: S
+        - AttributeName: time_t
+          AttributeType: N
+      KeySchema:
+        - AttributeName: log_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ipaddr_idx
+          KeySchema:
+            - AttributeName: ipaddr
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "KEYS_ONLY" #
+
+        - IndexName: user_id_idx
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "KEYS_ONLY" #
+
+        - IndexName: course_time_t_idx
+          KeySchema:
+            - AttributeName: course_id
+              KeyType: "HASH"
+            - AttributeName: time_t
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "KEYS_ONLY" #
+
+  ################################################################
+  ### This is for the lambda that we created
+  LambdaCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateAcmCert
+    Properties:
+      DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
+          HostedZoneId: !Ref HostedZoneId
+
+  HomeHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: ['GET','POST','OPTIONS']
+      Domain:
+        DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
+        CertificateArn: !If [CreateAcmCert, !Ref LambdaCertificate, !Ref CertificateArn]
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+
+  LambdaFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
+      BuildProperties:
+        RequirementsFile: ../requirements.txt   # relative to CodeUri (src/)
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      PackageType: Zip
+      CodeUri: lambda-resize/src/
+      Handler: resize_app.resize.lambda_handler
+      Timeout: 60
+      MemorySize: 256
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref ImageBucketName
+
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoDBTablesRW
+              Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+              Resource:
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+
       Events:
-        RootPath:
-          Type: Api
+        AnyRoot:
+          Type: HttpApi
           Properties:
-            RestApiId: !Ref MyApi # Link to the explicitly defined API
+            ApiId: !Ref HomeHttpApi
             Path: /
             Method: ANY
-        ProxyPath:
-          Type: Api
+            PayloadFormatVersion: "2.0"
+        AnyProxy:
+          Type: HttpApi
           Properties:
-            RestApiId: !Ref MyApi # Link to the explicitly defined API
+            ApiId: !Ref HomeHttpApi
             Path: /{proxy+}
             Method: ANY
-    Metadata:
-      DockerTag: python3.11-v1  # which tag to use
-      DockerContext: ./src   # points to the folder containing the function code
-      Dockerfile: Dockerfile    # identifies dockerfile for creating image
+            PayloadFormatVersion: "2.0"
 
 Outputs:
-  ApiUrl:
-    Description: "URL of the API Gateway Endpoint"
-    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-    Export:
-      Name: ApiUrl
-
-  HandlerFunctionArn:
-    Description: "Mangum Handler Function ARN"
-    Value: !GetAtt HandlerFunction.Arn
+  # Production-specific outputs
+  ApiId:
+    Description: HTTP API ID
+    Value: !Ref HomeHttpApi
+  LambdaFunction:
+    Description: PlantTracer Lambda function name
+    Value: !Ref LambdaFunction
+  VmElasticIp:
+    Description: Elastic IP attached to the EC2 VM
+    Value: !Ref InstanceEip
+  VmDnsName:
+    Description: DNS name for the EC2 VM
+    Value: !Sub "${HostLabel}.${BaseDomain}"
+  VmDemoDnsName:
+    Description: DNS name for the EC2 VM Demo
+    Value: !Sub "${HostLabel}-demo.${BaseDomain}"
+  LambdaDnsName:
+    Description: DNS name for the Lambda HTTP API custom domain
+    Value: !Sub "${HostLabel}-lambda.${BaseDomain}"

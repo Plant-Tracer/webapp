@@ -30,7 +30,7 @@ GET_POST = ['GET','POST']
 class C:
     """Constants"""
     # AWS variables (used by boto3)
-    AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
+    AWS_REGION = 'AWS_REGION'
     AWS_PROFILE = 'AWS_PROFILE'
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
@@ -54,7 +54,6 @@ class C:
     # test values
     TEST_ACCESS_KEY_ID = 'minioadmin'
     TEST_SECRET_ACCESS_KEY = 'minioadmin'
-    TEST_PLANTTRACER_S3_BUCKET = 'planttracer-local'
     TEST_ENDPOINT_URL_S3 = 'http://localhost:9100'
     TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
 

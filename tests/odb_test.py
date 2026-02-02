@@ -12,14 +12,19 @@ from app.constants import logger
 
 # Fixtures are imported in conftest.py
 
+def rand8():
+    return str(uuid.uuid4())[0:8]
+
 MYDIR = os.path.dirname(__file__)
 
+randrun = rand8()
+
 TEST_ADMIN_ID = odb.new_user_id()
-TEST_ADMIN_EMAIL = 'new.user@example.com'
-TEST_COURSE_ID = 'test-course-' + str(uuid.uuid4())[0:4]
-TEST_COURSE_NAME = 'Introduction to Plant Tracer'
+TEST_ADMIN_EMAIL = f'new.admin-{randrun}@example.com'
+TEST_COURSE_ID = f'test-course-{randrun}'
+TEST_COURSE_NAME = f'Introduction to Plant Tracer {randrun}'
 TEST_MOVIE_ID = odb.new_movie_id()
-TEST_COURSE_KEY = 'k-' + str(uuid.uuid4())[0:4]
+TEST_COURSE_KEY = f'k-{randrun}'
 TEST_COURSE_MAX_ENROLLMENT = 30
 TEST_COURSE_DATA = {
     COURSE_ID: TEST_COURSE_ID,
@@ -30,8 +35,8 @@ TEST_COURSE_DATA = {
 }
 
 TEST_USER_ID = odb.new_user_id()
-TEST_USER_EMAIL = 'new.user@example.com'
-TEST_USER_NAME = 'Firstname Lastname'
+TEST_USER_EMAIL = f'new.user-{randrun}@example.com'
+TEST_USER_NAME = f'Firstname {randrun} Lastname'
 TEST_USER_DATA = {
     USER_ID: TEST_USER_ID,
     'email': TEST_USER_EMAIL,

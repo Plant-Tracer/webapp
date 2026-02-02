@@ -104,7 +104,7 @@ These variables are specific to Planttracer and _must_ be set:
 
 Planttracer also uses these AWS environment variables, which are set to the local host or AWS as appropriate.
 
-`AWS_DEFAULT_REGION`
+`AWS_REGION`
 
 `AWS_SECRET_ACCESS_KEY`
 

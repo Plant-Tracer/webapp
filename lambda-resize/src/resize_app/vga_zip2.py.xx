@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import io, zipfile
+import io
+import zipfile
 from fractions import Fraction
 from typing import Optional
 

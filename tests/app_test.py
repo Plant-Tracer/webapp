@@ -2,7 +2,6 @@
 Tests for the application
 """
 
-
 import os
 import subprocess
 import uuid
@@ -54,9 +53,8 @@ def test_static_path(client):
     # which will differ from the original, so we just check the file is served
     assert response.status_code == 200
     assert len(response.text) > 0
-    
+
     # If not in coverage mode, verify exact match
-    import os
     if os.environ.get('COLLECT_JS_COVERAGE', '').lower() not in ('1', 'true', 'yes'):
         with open(os.path.join(STATIC_DIR, PLANTTRACER_JS),'r') as f:
             assert f.read() == response.text
