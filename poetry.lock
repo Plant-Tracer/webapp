@@ -2041,19 +2041,6 @@ yaml = ["PyYAML (>=3.10)"]
 zookeeper = ["kazoo (>=2.8.0)"]
 
 [[package]]
-name = "legacy-cgi"
-version = "2.6.4"
-description = "Fork of the standard library cgi and cgitb modules removed in Python 3.13"
-optional = false
-python-versions = ">=3.8"
-groups = ["vm"]
-markers = "python_version >= \"3.13\""
-files = [
-    {file = "legacy_cgi-2.6.4-py3-none-any.whl", hash = "sha256:7e235ce58bf1e25d1fc9b2d299015e4e2cd37305eccafec1e6bac3fc04b878cd"},
-    {file = "legacy_cgi-2.6.4.tar.gz", hash = "sha256:abb9dfc7835772f7c9317977c63253fd22a7484b5c9bbcdca60a29dcce97c577"},
-]
-
-[[package]]
 name = "localmail"
 version = "0.5.0"
 description = "Test SMTP/IMAP server for local integration testing"
@@ -5558,9 +5545,6 @@ files = [
     {file = "webob-1.8.9.tar.gz", hash = "sha256:ad6078e2edb6766d1334ec3dee072ac6a7f95b1e32ce10def8ff7f0f02d56589"},
 ]
 
-[package.dependencies]
-legacy-cgi = {version = ">=2.6", markers = "python_version >= \"3.13\""}
-
 [package.extras]
 docs = ["Sphinx (>=1.7.5)", "pylons-sphinx-themes"]
 testing = ["coverage", "pytest (>=3.1.0)", "pytest-cov", "pytest-xdist"]
@@ -5916,5 +5900,5 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "^3.12"
-content-hash = "d8796349589cf7a0d990733de3a002de65689634610a3c163b01361158ff0f9d"
+python-versions = ">=3.12,<3.13"
+content-hash = "912615178c29249fcdf814a1915353fef7914c66d89bb33f8b4bb134a0ebcdcb"

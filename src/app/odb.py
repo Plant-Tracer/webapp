@@ -394,7 +394,7 @@ class DDBO:
         except ClientError as e:
             # If any ConditionCheck fails, you’ll land here:
             logger.info("Transaction canceled: %s", e.response['Error']['Message'])
-            raise UserExists() from e
+            raise UserExists(email) from e
 
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email."""

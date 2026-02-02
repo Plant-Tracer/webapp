@@ -27,8 +27,6 @@ from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_I
 import dbutil
 
 
-DELETE_TEST_TABLES = True
-
 s3client = boto3.client('s3')
 
 TEST_USER_EMAIL  = 'test_user@company.com'       # from configure
@@ -76,13 +74,15 @@ def local_ddb():
         os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
 
     # Wipe and recreate the tables if running locally
+    created_test_tables = False
     if os.environ[ C.AWS_REGION ] == 'local':
         odbmaint.drop_tables(silent_warnings=True)
         odbmaint.create_tables()
+        created_test_tables = True
 
     ddbo = DDBO()               # it's a singleton
     yield ddbo
-    if DELETE_TEST_TABLES:
+    if created_test_tables:
         odbmaint.drop_tables()
 
 @pytest.fixture(scope="session")
