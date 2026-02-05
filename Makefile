@@ -404,7 +404,14 @@ install-aws-sam-tools:
 
 
 sam-deploy:
+	printenv | grep AWS
+ifeq ($(AWS_REGION),local)
+	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
+endif
+	@echo validate, build and deploy sam stack...
+	@echo
 	sam validate --lint
+	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 	poetry export --only main,lambda --format=requirements.txt \
 		--output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
@@ -412,7 +419,9 @@ sam-deploy:
 	sam logs --tail
 
 list-all-instances:
-	do for r in us-east-1 us-east-2 ; do echo "=== ZONE $$r ===" ; AWS_PROFILE=$$p AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
+	@echo && echo && echo
+	@unset AWS_ENDPOINT_URL_DYNAMODB AWS_SECRET_ACCESS_KEY AWS_ACCESS_KEY_ID AWS_ENDPOINT_URL_S3 && (printenv | grep AWS_) && \
+	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
 list-stacks:
 	aws cloudformation list-stacks \

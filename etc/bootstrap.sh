@@ -19,10 +19,28 @@ if [ -z "${AWS_REGION+x}" ]; then
     AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/placement/region)
     echo AWS_REGION=$AWS_REGION | sudo tee -a /etc/environment.d/10-planttracer.conf
 fi
+
 export AWS_REGION
-export LOG_LEVEL
+export DOMAIN
 export DYNAMODB_TABLE_PREFIX
+export HOSTNAME
+export LOG_LEVEL
 export PLANTTRACER_S3_BUCKET
+
+## Install nginx and the TLS certificate
+sudo hostnamectl hostname $HOSTNAME.$DOMAIN
+sudo apt -y install nginx
+sudo apt -y install certbot python3-certbot-nginx
+
+## Add the TLS certificate
+if [ ! -r /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
+    sudo certbot --non-interactive --nginx --expand --cert-name $HOSTNAME.$DOMAIN \
+         -d $HOST.$DOMAIN \
+         --email plantadmin@planttracer.com --no-eff-email --agree-tos
+fi
+
+# Patch nginx
+sudo python3 $ROOT/etc/patcher.py /etc/nginx/sites-available/default $ROOT/etc/nginx-patch $HOSTNAME.$DOMAIN --flag planttracer-nginx-patch --count 8
 
 ## First we install a functioning release and make sure that we can test it
 ## Note that the test will be done with the live Lambda database and S3

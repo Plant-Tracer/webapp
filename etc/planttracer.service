@@ -1,0 +1,30 @@
+### Planttracer service for EC2 deployments using AWS SAM stack.
+### Installed by bootstrap
+### Logs go to journald
+
+### Note - --reload has been removed due to performance issues
+### use `sudo systemctl restart planttracer` to restart
+
+[Unit]
+Description=Planttracer to serve Flask application
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=10
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/webapp
+Environment="PATH=/opt/webapp/.venv/bin"
+Environment="PYTHONPATH=/opt/webapp/src"
+EnvironmentFile=/etc/environment.d/10-planttracer.conf
+ExecStart=/bin/sh -c 'exec /opt/webapp/.venv/bin/gunicorn -w $(($(nproc) *2 + 1)) -b 127.0.0.1:5100 \
+                          --access-logfile - \
+                          --error-logfile -  \
+                          app.flask_app:app'
+
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+[Install]
+WantedBy=multi-user.target

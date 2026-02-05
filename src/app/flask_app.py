@@ -13,6 +13,7 @@ import logging
 from flask import Flask, request, render_template, jsonify, make_response, Response
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 # Bottle creates a large number of no-member errors, so we just remove the warning
@@ -55,7 +56,13 @@ if os.environ.get('COLLECT_JS_COVERAGE', '').lower() in ('1', 'true', 'yes'):
         logger.info("Using instrumented static files from static-instrumented/ for JS coverage")
 
 app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
+
+# Tell Flask to trust the X-Forwarded headers from Nginx
+# x_for=1 (IP), x_proto=1 (HTTP/HTTPS), x_host=1 (Host header)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 app.register_blueprint(api_bp, url_prefix='/api')
+
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)
 fix_boto_log_level()

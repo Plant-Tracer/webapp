@@ -92,7 +92,7 @@ Parameters:
 
   TablePrefix:
     Type: String
-    Description: PlantTracer table prefix
+    Description: PlantTracer table prefix (without -); also used for hostname
     Default: prefix1
 
   LogLevel:
@@ -301,7 +301,9 @@ Resources:
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
           echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
-          echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}"     >> /etc/environment.d/10-planttracer.conf
+          echo "HOSTNAME=${TablePrefix}"                  >> /etc/environment.d/10-planttracer.conf
+          ehco "DOMAIN=planttracer.com"                   >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}-"    >> /etc/environment.d/10-planttracer.conf
           echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
 
           # Install enough to get git working
@@ -313,14 +315,7 @@ Resources:
 
           # Clone webapp into /opt/webapp and run the bootstrap program
           install -d -m 0755 /opt/
-          if [ ! -d /opt/webapp/.git ]; then
-              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
-          else
-              cd /opt/webapp
-              git fetch --all --prune
-              git checkout "${GitBranch}"
-              git pull --ff-only
-          fi
+          git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
 
           echo Create the bucket if it does not exist
           snap install --classic aws-cli
@@ -344,7 +339,7 @@ Resources:
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}users"
+      TableName: !Sub "${TablePrefix}-users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: user_id
@@ -365,7 +360,7 @@ Resources:
   UniqueEmailsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}unique_emails"
+      TableName: !Sub "${TablePrefix}-unique_emails"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: email
@@ -377,7 +372,7 @@ Resources:
   ApiKeysTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}api_keys"
+      TableName: !Sub "${TablePrefix}-api_keys"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: api_key
@@ -398,7 +393,7 @@ Resources:
   CoursesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}courses"
+      TableName: !Sub "${TablePrefix}-courses"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -419,7 +414,7 @@ Resources:
   CourseUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}course_users"
+      TableName: !Sub "${TablePrefix}-course_users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -435,7 +430,7 @@ Resources:
   MoviesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}movies"
+      TableName: !Sub "${TablePrefix}-movies"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -464,7 +459,7 @@ Resources:
   MovieFramesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}movie_frames"
+      TableName: !Sub "${TablePrefix}-movie_frames"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -480,7 +475,7 @@ Resources:
   LogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}logs"
+      TableName: !Sub "${TablePrefix}-logs"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: log_id

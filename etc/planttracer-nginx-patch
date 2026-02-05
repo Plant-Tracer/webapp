@@ -1,0 +1,29 @@
+# planttracer-nginx-patch
+
+location / {
+    proxy_pass http://127.0.0.1:5100;
+    proxy_http_version 1.1;
+
+    # Important: This tells Nginx to use the error_page directive
+    # instead of passing the backend's error (or lack thereof) to the user.
+    proxy_intercept_errors on;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+}
+
+# 1. Define which errors to intercept and where to send them
+error_page 502 503 504 /maintenance.html;
+
+# 2. Define the internal location for the error page
+location = /maintenance.html {
+    root /opt/webapp/etc;
+    internal;
+}
