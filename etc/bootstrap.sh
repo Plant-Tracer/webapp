@@ -30,17 +30,33 @@ export PLANTTRACER_S3_BUCKET
 ## Install nginx and the TLS certificate
 sudo hostnamectl hostname $HOSTNAME.$DOMAIN
 sudo apt -y install nginx
-sudo apt -y install certbot python3-certbot-nginx
+
+## Install certbot
+sudo snap install core; sudo snap refresh core
+sudo snap install --classic certbot
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+
+# Create the Nginx reload hook
+sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy/
+sudo cp $ROOT/etc/reload-server.sh /etc/letsencrypt/renewal-hooks/deploy/
 
 ## Add the TLS certificate
-if [ ! -r /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
-    sudo certbot --non-interactive --nginx --expand --cert-name $HOSTNAME.$DOMAIN \
+if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
+    sudo certbot --nginx --non-interactive --nginx --expand --cert-name $HOSTNAME.$DOMAIN \
          -d $HOST.$DOMAIN \
          --email plantadmin@planttracer.com --no-eff-email --agree-tos
 fi
 
 # Patch nginx
 sudo python3 $ROOT/etc/patcher.py /etc/nginx/sites-available/default $ROOT/etc/nginx-patch $HOSTNAME.$DOMAIN --flag planttracer-nginx-patch --count 8
+
+if ! nginx -t; then
+    echo "CRITICAL: patcher.py broke the nginx config!"
+    sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
+    sudo systemctl reload nginx
+else
+    sudo systemctl reload nginx
+fi
 
 ## First we install a functioning release and make sure that we can test it
 ## Note that the test will be done with the live Lambda database and S3

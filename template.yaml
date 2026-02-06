@@ -53,8 +53,8 @@ Parameters:
 
   CertificateArn:
     Type: String
-    Default: ""
-    Description: "(Optional) Existing ACM certificate ARN for camera.planttracer.com. Leave blank to auto-create."
+    Default: "arn:aws:acm:us-east-1:343218180669:certificate/66c18f6a-49b3-4be7-a232-a371cbfef29b"
+    Description: "wildcard certificate; leave blank to create a certificate on the fly."
 
   EC2KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
@@ -89,11 +89,6 @@ Parameters:
     Type: String
     Default: main
     Description: "Git branch/tag to checkout."
-
-  TablePrefix:
-    Type: String
-    Description: PlantTracer table prefix (without -); also used for hostname
-    Default: prefix1
 
   LogLevel:
     Type: String
@@ -207,8 +202,8 @@ Resources:
                 - dynamodb:BatchWriteItem
                 - dynamodb:DescribeTable
               Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
             - Effect: Allow
               Action:
                 - dynamodb:ListTables
@@ -301,9 +296,9 @@ Resources:
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
           echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
-          echo "HOSTNAME=${TablePrefix}"                  >> /etc/environment.d/10-planttracer.conf
-          ehco "DOMAIN=planttracer.com"                   >> /etc/environment.d/10-planttracer.conf
-          echo "DYNAMODB_TABLE_PREFIX=${TablePrefix}-"    >> /etc/environment.d/10-planttracer.conf
+          echo "HOSTNAME=${HostLabel}"                  >> /etc/environment.d/10-planttracer.conf
+          echo "DOMAIN=${BaseDomain}"                   >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=${HostLabel}-"    >> /etc/environment.d/10-planttracer.conf
           echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
 
           # Install enough to get git working
@@ -339,7 +334,7 @@ Resources:
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-users"
+      TableName: !Sub "${HostLabel}-users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: user_id
@@ -360,7 +355,7 @@ Resources:
   UniqueEmailsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-unique_emails"
+      TableName: !Sub "${HostLabel}-unique_emails"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: email
@@ -372,7 +367,7 @@ Resources:
   ApiKeysTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-api_keys"
+      TableName: !Sub "${HostLabel}-api_keys"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: api_key
@@ -393,7 +388,7 @@ Resources:
   CoursesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-courses"
+      TableName: !Sub "${HostLabel}-courses"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -414,7 +409,7 @@ Resources:
   CourseUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-course_users"
+      TableName: !Sub "${HostLabel}-course_users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -430,7 +425,7 @@ Resources:
   MoviesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-movies"
+      TableName: !Sub "${HostLabel}-movies"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -459,7 +454,7 @@ Resources:
   MovieFramesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-movie_frames"
+      TableName: !Sub "${HostLabel}-movie_frames"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -475,7 +470,7 @@ Resources:
   LogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${TablePrefix}-logs"
+      TableName: !Sub "${HostLabel}-logs"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: log_id
@@ -529,6 +524,7 @@ Resources:
 
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
+    DependsOn: !If [CreateAcmCert, LambdaCertificate, !Ref "AWS::NoValue"]
     Properties:
       StageName: prod
       CorsConfiguration:
@@ -536,7 +532,7 @@ Resources:
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
         DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
-        CertificateArn: !If [CreateAcmCert, !Ref LambdaCertificate, !Ref CertificateArn]
+        CertificateArn: !If [CreateAcmCert, !Ref LambdaCertificate, !Ref "AWS::NoValue"]
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
@@ -573,8 +569,8 @@ Resources:
                 - dynamodb:BatchGetItem
                 - dynamodb:BatchWriteItem
               Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
+                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
 
       Events:
         AnyRoot:

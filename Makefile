@@ -416,7 +416,7 @@ endif
 		--output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
-	sam logs --tail
+
 
 list-all-instances:
 	@echo && echo && echo
