@@ -43,7 +43,8 @@ sudo cp $ROOT/etc/reload-server.sh /etc/letsencrypt/renewal-hooks/deploy/
 ## Add the TLS certificate
 if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
     sudo certbot --nginx --non-interactive --nginx --expand --cert-name $HOSTNAME.$DOMAIN \
-         -d $HOST.$DOMAIN \
+         -d $HOSTNAME.$DOMAIN \
+         -d $HOSTNAME-demo.$DOMAIN \
          --email plantadmin@planttracer.com --no-eff-email --agree-tos
 fi
 

@@ -33,7 +33,7 @@ Globals:
     Environment:
       Variables:
         LOG_LEVEL: !Ref LogLevel
-        TABLE_PREFIX: !Ref TablePrefix
+        TABLE_PREFIX: !Ref HostLabel
 
 Parameters:
   HostedZoneId:
@@ -51,7 +51,7 @@ Parameters:
     Description: "Hostname label only (e.g., 'demo' -> demo.planttracer.com)."
     AllowedPattern: "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$"
 
-  CertificateArn:
+  WildcardCertificateArn:
     Type: String
     Default: "arn:aws:acm:us-east-1:343218180669:certificate/66c18f6a-49b3-4be7-a232-a371cbfef29b"
     Description: "wildcard certificate; leave blank to create a certificate on the fly."
@@ -95,9 +95,6 @@ Parameters:
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the function
-
-Conditions:
-  CreateAcmCert: !Equals [!Ref CertificateArn, ""]
 
 Resources:
   # --- Minimal networking: VPC + one public subnet + IGW + route table ---
@@ -239,6 +236,7 @@ Resources:
     Properties:
       Domain: vpc
 
+  # Create DNS record for the VM's primary name
   VmDnsARecord:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -249,6 +247,7 @@ Resources:
       ResourceRecords:
         - !Ref InstanceEip
 
+  # Create DNS record for the VM-demo name.
   VmDemoDnsARecord:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -510,21 +509,8 @@ Resources:
           Projection:
             ProjectionType: "KEYS_ONLY" #
 
-  ################################################################
-  ### This is for the lambda that we created
-  LambdaCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: CreateAcmCert
-    Properties:
-      DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
-          HostedZoneId: !Ref HostedZoneId
-
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
-    DependsOn: !If [CreateAcmCert, LambdaCertificate, !Ref "AWS::NoValue"]
     Properties:
       StageName: prod
       CorsConfiguration:
@@ -532,7 +518,7 @@ Resources:
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
         DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
-        CertificateArn: !If [CreateAcmCert, !Ref LambdaCertificate, !Ref "AWS::NoValue"]
+        CertificateArn: !Ref WildcardCertificateArn
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
@@ -593,18 +579,15 @@ Outputs:
   ApiId:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
-  LambdaFunction:
-    Description: PlantTracer Lambda function name
-    Value: !Ref LambdaFunction
   VmElasticIp:
     Description: Elastic IP attached to the EC2 VM
     Value: !Ref InstanceEip
   VmDnsName:
     Description: DNS name for the EC2 VM
     Value: !Sub "${HostLabel}.${BaseDomain}"
-  VmDemoDnsName:
-    Description: DNS name for the EC2 VM Demo
-    Value: !Sub "${HostLabel}-demo.${BaseDomain}"
   LambdaDnsName:
     Description: DNS name for the Lambda HTTP API custom domain
     Value: !Sub "${HostLabel}-lambda.${BaseDomain}"
+  LambdaFunction:
+    Description: PlantTracer Lambda function name
+    Value: !Ref LambdaFunction
