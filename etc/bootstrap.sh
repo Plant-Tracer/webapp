@@ -49,15 +49,25 @@ if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
 fi
 
 # Patch nginx
-sudo python3 $ROOT/etc/patcher.py /etc/nginx/sites-available/default $ROOT/etc/nginx-patch $HOSTNAME.$DOMAIN --flag planttracer-nginx-patch --count 8
+# main domain - port 5000
+# demo domain - port 5100
+DEFAULT=/etc/nginx/sites-available/default
+echo adding $HOSTNAME.$DOMAIN to $DEFAULT
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME.$DOMAIN \
+     --flag planttracer-nginx-patch --count 8
+
+echo Creating $ROOT/etc/planttracer-nginx-patch.5100
+/bin/rm -f $ROOT/etc/planttracer-nginx-patch.5100
+sed s/5000/5100/ planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
+echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
+     --flag planttracer-nginx-patch.5100 --count 8
 
 if ! nginx -t; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
-    sudo systemctl reload nginx
-else
-    sudo systemctl reload nginx
 fi
+sudo systemctl reload nginx
 
 ## First we install a functioning release and make sure that we can test it
 ## Note that the test will be done with the live Lambda database and S3

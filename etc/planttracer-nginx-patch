@@ -1,7 +1,7 @@
 # planttracer-nginx-patch
 
 location / {
-    proxy_pass http://127.0.0.1:5100;
+    proxy_pass http://127.0.0.1:5000;
     proxy_http_version 1.1;
 
     # Important: This tells Nginx to use the error_page directive

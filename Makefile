@@ -15,8 +15,8 @@ JS_FILES := $(TS_FILES:.ts=.js)
 LOCAL_BUCKET:=planttracer-local
 LOCAL_HTTP_PORT=8080
 LOG_LEVEL ?= DEBUG		# default to debug unless changed
-DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
-MINIO_ENDPOINT=http://localhost:9100/
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
+MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
 export DEBIAN_FRONTEND=noninteractive
 
