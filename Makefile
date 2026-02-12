@@ -324,6 +324,8 @@ install-ubuntu:
 	sudo apt-get update
 	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
 	which pipx     || sudo apt-get install -y -qq pipx
+	pipx ensurepath
+	pipx install poetry --force
 	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver
 	which curl     || sudo apt-get install -y -qq curl
 	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
@@ -332,8 +334,6 @@ install-ubuntu:
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
-	pipx ensurepath
-	pipx install poetry --force
 	npm ci
 	make $(REQ)
 	@echo install-ubuntu done
