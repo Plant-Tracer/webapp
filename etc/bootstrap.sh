@@ -34,7 +34,9 @@ sudo apt -y install nginx
 ## Install certbot
 sudo snap install core; sudo snap refresh core
 sudo snap install --classic certbot
-sudo ln -s /snap/bin/certbot /usr/bin/certbot
+if [ ! -e /usr/bin/certbot]; then
+    sudo ln -s /snap/bin/certbot /usr/bin/certbot
+fi
 
 # Create the Nginx reload hook
 sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy/
