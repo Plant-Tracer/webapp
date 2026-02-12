@@ -403,20 +403,25 @@ install-aws-sam-tools:
 	make $(REQ)
 
 
-sam-deploy:
+sam-build:
 	printenv | grep AWS
+	sam validate --lint
+	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
+	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/requirements.txt --without-hashes
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+
+sam-deploy:
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
-	@echo validate, build and deploy sam stack...
-	@echo
-	sam validate --lint
-	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --only main,lambda --format=requirements.txt \
-		--output lambda-resize/requirements.txt --without-hashes
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
-	@echo 'use "sam delete" to delete this stack.'
+
+sam-deploy-guided:
+ifeq ($(AWS_REGION),local)
+	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
+endif
+	sam deploy --guided
 
 
 list-all-instances:
