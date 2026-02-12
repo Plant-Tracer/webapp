@@ -416,6 +416,7 @@ endif
 		--output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
 	sam deploy --no-confirm-changeset
+	@echo 'use "sam delete" to delete this stack.'
 
 
 list-all-instances:
