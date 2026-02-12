@@ -60,7 +60,7 @@ sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HO
 
 echo Creating $ROOT/etc/planttracer-nginx-patch.5100
 /bin/rm -f $ROOT/etc/planttracer-nginx-patch.5100
-sed s/5000/5100/ planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
+sed s/5000/5100/ $ROOT/etc/planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
 echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
 sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
      --flag planttracer-nginx-patch.5100 --count 8
