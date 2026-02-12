@@ -69,7 +69,9 @@ if ! nginx -t; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
 fi
+
 sudo systemctl reload nginx
+
 
 ## First we install a functioning release and make sure that we can test it
 ## Note that the test will be done with the live Lambda database and S3
