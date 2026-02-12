@@ -72,9 +72,16 @@ fi
 
 sudo systemctl reload nginx
 
+sudo cp $ROOT/etc/planttracer.service /etc/systemd/system/planttracer.service
+sudo systemctl daemon-reload
+
 
 ## First we install a functioning release and make sure that we can test it
 ## Note that the test will be done with the live Lambda database and S3
 ## and not with DynamoDBLocal
 
 make install-ubuntu
+
+## Start up the plantracer service
+sudo systemctl start planttracer.service
+sudo systemctl enable planttracer.service
