@@ -80,7 +80,7 @@ coverage:
 	make pytest-coverage
 	make jscoverage
 
-tags:
+ptags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
 
 ################################################################
@@ -405,6 +405,7 @@ install-aws-sam-tools:
 
 sam-build:
 	printenv | grep AWS
+	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
