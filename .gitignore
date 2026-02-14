@@ -205,3 +205,6 @@ sam-installation
 TAGS
 bin/
 *.whl
+samconfig.toml
+.envrc
+.env

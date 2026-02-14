@@ -44,6 +44,15 @@
                 "arn:aws:iam::*:role/PlantTracer*",
                 "arn:aws:iam::*:instance-profile/PlantTracer*"
             ]
-        }
+        },
+      {
+        "Sid": "SSMSessionManager",
+        "Effect": "Allow",
+        "Action": "ssm:StartSession",
+        "Resource": [
+          "arn:aws:ec2:*:*:instance/*",
+          "arn:aws:ssm:*:*:document/SSM-SessionManagerRunShell"
+        ]
+      }
     ]
 }

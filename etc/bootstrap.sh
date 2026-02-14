@@ -27,6 +27,13 @@ export HOSTNAME
 export LOG_LEVEL
 export PLANTTRACER_S3_BUCKET
 
+# Make $HOME/.bashrc add environment.d
+if ! grep planttracer $HOME/.bashrc ; then
+    echo '# source planttracer
+        . "/etc/environment.d/10-planttracer.conf" && export $(cut -d= -f1 "/etc/environment.d/10-planttracer.conf" | grep -v "^#")
+        ' >> ~/.bashrc
+fi
+
 ## Install nginx and the TLS certificate
 sudo hostnamectl hostname $HOSTNAME.$DOMAIN
 sudo apt -y install nginx

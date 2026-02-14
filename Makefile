@@ -441,7 +441,7 @@ sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
-	aws sts get-caller-identity
+	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
 sam-deploy-guided: $(REQ)
@@ -460,6 +460,27 @@ endif
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
+
+STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+sam-delete:
+	@echo "Deleting stack: $(STACK_NAME)..."
+	sam delete --stack-name $(STACK_NAME)
+	@echo "Waiting for deletion to complete..."
+	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
+	@echo "Stack $(STACK_NAME) deleted successfully."
+
+# Clever SSH via SSM (No SSH keys or port 22 required)
+ssh:
+	@INSTANCE_ID=$$(aws ec2 describe-instances \
+		--filters "Name=tag:Name,Values=PlantTracer-$(STACK_NAME)-app" "Name=instance-state-name,Values=running" \
+		--query "Reservations[].Instances[].InstanceId" \
+		--output text); \
+	if [ -z "$$INSTANCE_ID" ]; then \
+		echo "Error: No running instance found for stack $(STACK_NAME)"; \
+		exit 1; \
+	fi; \
+	echo "Connecting to $$INSTANCE_ID..."; \
+	aws ssm start-session --target $$INSTANCE_ID
 
 list-all-instances:
 	@echo && echo && echo
