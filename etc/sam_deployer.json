@@ -34,7 +34,11 @@
                 "iam:AddRoleToInstanceProfile",
                 "iam:RemoveRoleFromInstanceProfile",
                 "iam:DeleteInstanceProfile",
-                "iam:GetRolePolicy"
+                "iam:GetRolePolicy",
+                "iam:GetInstanceProfile",
+                "iam:ListInstanceProfiles",
+                "iam:ListRoles",
+                "iam:ListAttachedRolePolicies"
             ],
             "Resource": [
                 "arn:aws:iam::*:role/PlantTracer*",
