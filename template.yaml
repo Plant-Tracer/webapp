@@ -8,19 +8,7 @@
 #
 #    Subsequent deploys:
 #      sam deploy
-#
-# Notes:
-# - This template creates networking (VPC + public subnet) for a quick start.
-#   If you already have a VPC/subnet, you can replace the VPC/Subnet resources
-#   with Parameters and wire them into the instance + security group.
-#
-# - DNS: Edit the DnsConfig mapping below to hard-code your HostedZoneId and base domain.
 # -----------------------------------------------------------------------------
-
-
-# Live:
-#   sam sync
-#
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
@@ -62,7 +50,7 @@ Parameters:
 
   ImageBucketName:
     Type: String
-    Description: "S3 bucket were images are stored. Do not include s3://2"
+    Description: "S3 bucket where images are stored. Do not include s3://"
     Default: planttracer2
 
   UbuntuAmiId:
@@ -147,8 +135,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
-  # --- Security Group: open 22/80/443 to the world (as requested) ---
-  # (NOT recommended for SSH in production --- remove ssh rule and use aws ssm start-session to access instance).
+  # --- Security Group: open 22/80/443 to the world ---
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -168,55 +155,7 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
 
-  # --- IAM: allow the instance to access the named DynamoDB table ---
-  Ec2Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: "sts:AssumeRole"
-
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-      Policies:
-      - PolicyName: Ec2DdbAndS3Access
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:UpdateItem
-                - dynamodb:DeleteItem
-                - dynamodb:Query
-                - dynamodb:Scan
-                - dynamodb:BatchGetItem
-                - dynamodb:BatchWriteItem
-                - dynamodb:DescribeTable
-              Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
-            - Effect: Allow
-              Action:
-                - dynamodb:ListTables
-              Resource:
-                - "*"
-            - Effect: Allow
-              Action:
-                - s3:CreateBucket # if it does not exist
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
-                - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
-
+  # --- Logs ---
   LambdaFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -224,11 +163,6 @@ Resources:
       RetentionInDays: 30
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-
-  Ec2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles: [!Ref Ec2Role]
 
   # --- Stable public IP + DNS name ---
   InstanceEip:
@@ -258,8 +192,6 @@ Resources:
       ResourceRecords:
         - !Ref InstanceEip
 
-  # ApiDomainName is created automatically
-
   # --- EC2 instance ---
   AppInstance:
     Type: AWS::EC2::Instance
@@ -278,7 +210,7 @@ Resources:
             VolumeType: gp3
             DeleteOnTermination: true
       CreditSpecification:
-        CPUCredits: unlimited   # charge if we burst, rather than throttling
+        CPUCredits: unlimited
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-app"
@@ -290,8 +222,7 @@ Resources:
 
           lsblk
           df -h
-          # We only do what must be done from template.yaml. The rest is done from etc/bootstrap.sh
-          # Create the environment variables from the samconfig
+          # Create the environment variables
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
           echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
@@ -300,24 +231,23 @@ Resources:
           echo "DYNAMODB_TABLE_PREFIX=${HostLabel}-"    >> /etc/environment.d/10-planttracer.conf
           echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
 
-          # Install enough to get git working
+          # Install essentials
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -y
           apt-get install -y git ca-certificates curl make python3-poetry
           snap install --classic aws-cli
           snap install --classic emacs
 
-          # Clone webapp into /opt/webapp and run the bootstrap program
+          # Clone webapp
           install -d -m 0755 /opt/
           git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
 
           echo Create the bucket if it does not exist
-          snap install --classic aws-cli
           export PATH=$PATH:/snap/bin
           aws s3api head-bucket --bucket "${ImageBucketName}" 2>/dev/null \
                || aws s3 mb "s3://${ImageBucketName}" || true
 
-          echo Set the permissions and run bootstrap as the ubuntu user
+          echo Set permissions and run bootstrap
           sudo chown -R ubuntu:ubuntu /opt/webapp
           runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
           df -h
@@ -491,15 +421,13 @@ Resources:
             - AttributeName: ipaddr
               KeyType: "HASH"
           Projection:
-            ProjectionType: "KEYS_ONLY" #
-
+            ProjectionType: "KEYS_ONLY" 
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
               KeyType: "HASH"
           Projection:
-            ProjectionType: "KEYS_ONLY" #
-
+            ProjectionType: "KEYS_ONLY"
         - IndexName: course_time_t_idx
           KeySchema:
             - AttributeName: course_id
@@ -507,7 +435,7 @@ Resources:
             - AttributeName: time_t
               KeyType: "RANGE"
           Projection:
-            ProjectionType: "KEYS_ONLY" #
+            ProjectionType: "KEYS_ONLY"
 
   HomeHttpApi:
     Type: AWS::Serverless::HttpApi
@@ -522,13 +450,109 @@ Resources:
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
+  # --- IAM: EC2 Role with hardcoded prefix ---
+  Ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role" 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Policies:
+        - PolicyName: Ec2DdbAndS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DescribeTable
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
+              - Effect: Allow
+                Action: ["dynamodb:ListTables"]
+                Resource: ["*"]
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+
+  # --- Instance Profile with hardcoded prefix ---
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "PlantTracer-${AWS::StackName}-InstanceProfile"
+      Roles: [!Ref Ec2Role]
+
+  # --- Lambda Role with hardcoded prefix ---
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "PlantTracer-${AWS::StackName}-LambdaRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaS3AndDdbAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
+
   LambdaFunction:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: python3.12
       BuildProperties:
-        RequirementsFile: ../requirements.txt   # relative to CodeUri (src/)
+        RequirementsFile: ../requirements.txt
     Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.12
       Architectures: [arm64]
       PackageType: Zip
@@ -536,28 +560,6 @@ Resources:
       Handler: resize_app.resize.lambda_handler
       Timeout: 60
       MemorySize: 256
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref ImageBucketName
-
-        - Version: "2012-10-17"
-          Statement:
-            - Sid: DynamoDBTablesRW
-              Effect: Allow
-              Action:
-                - dynamodb:DescribeTable
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:DeleteItem
-                - dynamodb:UpdateItem
-                - dynamodb:Query
-                - dynamodb:Scan
-                - dynamodb:BatchGetItem
-                - dynamodb:BatchWriteItem
-              Resource:
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
-                - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
-
       Events:
         AnyRoot:
           Type: HttpApi
@@ -575,7 +577,6 @@ Resources:
             PayloadFormatVersion: "2.0"
 
 Outputs:
-  # Production-specific outputs
   ApiId:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi

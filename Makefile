@@ -403,7 +403,7 @@ install-aws-sam-tools:
 	make $(REQ)
 
 
-sam-build:
+sam-build: $(REQ)
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
@@ -412,16 +412,18 @@ sam-build:
 	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
 
-sam-deploy:
+sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	aws sts get-caller-identity
 	sam deploy --no-confirm-changeset
 
-sam-deploy-guided:
+sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	aws sts get-caller-identity
 	sam deploy --guided
 
 
