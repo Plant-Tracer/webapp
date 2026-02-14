@@ -1,0 +1,45 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ServiceManagement",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:*",
+                "ec2:*",
+                "s3:*",
+                "dynamodb:*",
+                "lambda:*",
+                "apigateway:*",
+                "route53:*",
+                "logs:*",
+                "ssm:GetParameter*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ScopedIAMPermissions",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:TagRole",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PassRole",
+                "iam:CreateInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:GetRolePolicy"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:role/PlantTracer*",
+                "arn:aws:iam::*:instance-profile/PlantTracer*"
+            ]
+        }
+    ]
+}

@@ -403,6 +403,31 @@ install-aws-sam-tools:
 	make $(REQ)
 
 
+# Debug target to see exactly what permissions your current SSO role has
+check-iam:
+	@echo "Checking current caller identity..."
+	@ROLE_ARN=$$(aws sts get-caller-identity --query Arn --output text); \
+	echo "Current ARN: $$ROLE_ARN"; \
+	if echo "$$ROLE_ARN" | grep -q "assumed-role"; then \
+		ROLE_NAME=$$(echo "$$ROLE_ARN" | cut -d/ -f2); \
+		echo "Detected SSO Role Name: $$ROLE_NAME"; \
+		echo ""; \
+		echo "=== Attached Managed Policies ==="; \
+		aws iam list-attached-role-policies --role-name "$$ROLE_NAME" --output table --no-cli-pager; \
+		echo ""; \
+		echo "=== Inline Policy Names ==="; \
+		INLINE_POLICIES=$$(aws iam list-role-policies --role-name "$$ROLE_NAME" --query 'PolicyNames' --output text); \
+		echo "Found: $$INLINE_POLICIES"; \
+		for policy in $$INLINE_POLICIES; do \
+			echo ""; \
+			echo "--- Content of Inline Policy: $$policy ---"; \
+			aws iam get-role-policy --role-name "$$ROLE_NAME" --policy-name "$$policy" --query 'PolicyDocument' --output json --no-cli-pager; \
+		done; \
+	else \
+		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
+	fi
+
+
 sam-build: $(REQ)
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
@@ -417,14 +442,23 @@ ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
 	aws sts get-caller-identity
-	sam deploy --no-confirm-changeset
+	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
-	aws sts get-caller-identity
-	sam deploy --guided
+	aws sts get-caller-identity --no-cli-pager
+	@echo ===============================
+	@echo use one of these keypairs:
+	aws ec2 describe-key-pairs --output json | jq -r '.KeyPairs.[].KeyName'
+	@echo ===============================
+	@echo use one of these S3 buckets:
+	aws s3 ls
+	@echo ===============================
+	@echo use one of these git branches:
+	git branch -v
+	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
 
 list-all-instances:
