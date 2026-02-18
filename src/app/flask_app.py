@@ -59,7 +59,8 @@ app = Flask(__name__, static_folder=static_folder, static_url_path='/static')
 
 # Tell Flask to trust the X-Forwarded headers from Nginx
 # x_for=1 (IP), x_proto=1 (HTTP/HTTPS), x_host=1 (Host header)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+if os.environ.get('DISABLE_PROXYFIX', '').lower() not in ('1', 'true', 'yes'):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 app.register_blueprint(api_bp, url_prefix='/api')
 
