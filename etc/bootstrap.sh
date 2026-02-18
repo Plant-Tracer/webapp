@@ -90,7 +90,10 @@ sudo systemctl daemon-reload
 sudo apt-get update
 sudo apt-get install -y python3-pip pipx
 pipx ensurepath
-export PATH="$PATH:$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+
+## Remove system poetry if present
+sudo apt-get remove --purge -y poetry || true
 
 ## Install Poetry and ensure it is >= 1.8.0
 # We use the absolute path to ensure the script doesn't rely on the current PATH
