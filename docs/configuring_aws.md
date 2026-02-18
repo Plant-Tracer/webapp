@@ -1,16 +1,14 @@
-Configuring AWS
-===============
+# Configuring AWS
 
 Type these commands to configure
 
-.. code-block ::
-
+```bash
 sudo dnf install git emacs
+```
 
 
 
-Planttracer.com setup
-=====================
+## Planttracer.com setup
 
 Rather than have a new certificate created each time we created a
 lambda, and then destroyed afterwards, we created an ACM certificate for *.planttracer.com:
