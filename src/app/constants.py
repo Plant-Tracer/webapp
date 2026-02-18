@@ -54,8 +54,8 @@ class C:
     # test values
     TEST_ACCESS_KEY_ID = 'minioadmin'
     TEST_SECRET_ACCESS_KEY = 'minioadmin'
-    TEST_ENDPOINT_URL_S3 = 'http://localhost:9100'
-    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
+    TEST_ENDPOINT_URL_S3 = 'http://localhost:9000'
+    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8000'
 
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024

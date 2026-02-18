@@ -35,13 +35,13 @@ if ! grep planttracer $HOME/.bashrc ; then
 fi
 
 ## Install nginx and the TLS certificate
-sudo hostnamectl hostname $HOSTNAME.$DOMAIN
+sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
 
 ## Install certbot
 sudo snap install core; sudo snap refresh core
 sudo snap install --classic certbot
-if [ ! -e /usr/bin/certbot]; then
+if [ ! -e /usr/bin/certbot ]; then
     sudo ln -s /snap/bin/certbot /usr/bin/certbot
 fi
 
