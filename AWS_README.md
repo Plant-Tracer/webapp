@@ -24,8 +24,7 @@ launch with:
 ```
 AWS_PROFILE=plantadmin AWS_REGION=us-east-1 make sam-deploy-guided
 ```
-Note that currnetly this only supports launching from the root plantadmin account,  but Simson now understands how to use the AWS Identity Management
-Center so we can create scoped identities that are more limited in what they can do.
+Note: do not deploy using the AWS account root user. Configure and use a least-privilege IAM role or an AWS IAM Identity Center–provisioned identity (referenced by the `AWS_PROFILE` above) with only the permissions required to deploy this stack.
 
 You must have docker or finch installed and running (I'm recommending finch).
 
