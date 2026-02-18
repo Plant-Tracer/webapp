@@ -87,6 +87,18 @@ sudo systemctl daemon-reload
 ## Note that the test will be done with the live Lambda database and S3
 ## and not with DynamoDBLocal
 
+sudo apt-get update
+sudo apt-get install -y python3-pip pipx
+pipx ensurepath
+export PATH="$PATH:$HOME/.local/bin"
+
+## Install Poetry and ensure it is >= 1.8.0
+# We use the absolute path to ensure the script doesn't rely on the current PATH
+pipx install poetry --force || pipx upgrade poetry
+
+## Verify Poetry version (should be 1.8.x or higher)
+poetry --version
+
 make install-ubuntu
 
 ## Start up the plantracer service

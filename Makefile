@@ -319,13 +319,11 @@ make-local-bucket:
 ################################################################
 # Includes ubuntu dependencies
 # Note: on GitHub, install ffmpeg first with https://github.com/marketplace/actions/setup-ffmpeg
+# Note: installing pipx and poetry may have problems here. It's better to install outside of the Makefile
 install-ubuntu:
 	@echo install-ubuntu
 	sudo apt-get update
 	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
-	which pipx     || sudo apt-get install -y -qq pipx
-	pipx ensurepath
-	pipx install poetry --force
 	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver
 	which curl     || sudo apt-get install -y -qq curl
 	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
