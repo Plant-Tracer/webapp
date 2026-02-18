@@ -42,9 +42,9 @@ Optional for Local Development
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` the webapp will use. Should be `minio` when using minio (assuming profile is installed)
 
-`AWS_ENDPOINT_URL_DYNAMODB` - For local development, this must be set to the localhost and the port on which **DynamoDBlocal** is listening. It is typically `http://localhost:8010`.
+`AWS_ENDPOINT_URL_DYNAMODB` - For local development, this must be set to the localhost and the port on which **DynamoDBlocal** is listening. It is typically `http://localhost:8000`.
 
-`AWS_ENDPOINT_URL_S3` - For local development, this must be set to the localhost and the port on which **minIO** is listening. It is typically `http://localhost:9100`.
+`AWS_ENDPOINT_URL_S3` - For local development, this must be set to the localhost and the port on which **minIO** is listening. It is typically `http://localhost:9000`.
 
 
 For local usage:
