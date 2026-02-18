@@ -18,6 +18,16 @@ Environment variables that you should know about/set:
 |`STACK`       | The name of the stack that you are deploying to. Must be unique in your AWS account |
 |`STACK_STAGE` | This is legacy, when we actually had a staging stack. Now you stage by just deploying to a different stack name |
 |`DYNAMODB_TABLE_PREFIX` | The prefix for your DynamoDB Table Names. Must be unique in your AWS account.|
+
+launch with:
+
+```
+AWS_PROFILE=plantadmin AWS_REGION=us-east-1 make sam-deploy-guided
+```
+Note: do not deploy using the AWS account root user. Configure and use a least-privilege IAM role or an AWS IAM Identity Center–provisioned identity (referenced by the `AWS_PROFILE` above) with only the permissions required to deploy this stack.
+
+You must have docker or finch installed and running (I'm recommending finch).
+
 # Core Functionality
 AWS SAM template that uses cloud formations to:
 - Create a new VM
