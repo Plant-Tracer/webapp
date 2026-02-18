@@ -105,5 +105,6 @@ poetry --version
 make install-ubuntu
 
 ## Start up the plantracer service
+sudo systemctl daemon-reload
 sudo systemctl start planttracer.service
 sudo systemctl enable planttracer.service
