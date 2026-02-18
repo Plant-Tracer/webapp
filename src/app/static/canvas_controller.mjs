@@ -2,6 +2,7 @@
 /* jshint esversion: 8 */
 /* eslint-env es6 */
 /* eslint parserOptions: { "sourceType": "module" } */
+import { $ } from "./utils.js";
 
 // code for /analyze
 

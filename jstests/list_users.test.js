@@ -1,7 +1,3 @@
-const $ = require('jquery');
-global.$ = $;
-
-
 const module = require('planttracer');
 const list_users = module.list_users;
 

@@ -2,10 +2,6 @@
  * @jest-environment jsdom
  */
 
-
-const $ = require('jquery');
-global.$ = $;
-
 const module = require('planttracer')
 const purge_movie = module.purge_movie
 

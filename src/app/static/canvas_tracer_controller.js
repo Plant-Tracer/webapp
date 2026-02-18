@@ -22,6 +22,7 @@ const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
 
+import { $ } from "./utils.js";
 import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
