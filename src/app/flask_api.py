@@ -511,7 +511,7 @@ def api_get_movie_metadata():
     tracking_completed = movie_metadata.get('status','') == C.TRACKING_COMPLETED
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
-        frame_count = C.MAX_FRAMES
+        frame_count = C.MAX_MOVIE_FRAMES
     if frame_start is not None:
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)

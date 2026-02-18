@@ -24,19 +24,26 @@ from pydantic import ValidationError
 from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
 from .constants import C,logger
 
-# tables
+# DynamoDB tables
 API_KEYS = 'api_keys'
-USERS  = 'users'
-UNIQUE_EMAILS = 'unique_emails'
-MOVIES = 'movies'
-FRAMES = 'movie_frames'
-COURSES = 'courses'
-COURSE_USERS = 'course_users'
+USERS  = 'users'                # all user content. PK={user_id}
+UNIQUE_EMAILS = 'unique_emails' # solely used to insure that a new email is not in use. PK={email}
+MOVIES = 'movies'               # all movies. PK={movie_id}
+MOVIE_FRAMES = 'movie_frames'   # currently, PK={movie_id * frame_number}. This table needs to go away
+COURSES = 'courses'             # currently PK={coure_id}, index={course_key}. Master list of course info (except registrations)
+COURSE_USERS = 'course_users'   # PK={course_id}{user_id} - who is registered for each course
 LOGS = 'logs'
+
+# course_users should move to courses.
+# movie_frames should go away
+
+################################################################
+
 ROOT_USER_ID = 'u0'                # the root user
 
+
 # attributes
-#SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
+# SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
 # apikeys table
 API_KEY = 'api_key'
@@ -71,13 +78,13 @@ CREATED = 'created'
 EMAIL = 'email'
 NAME = 'name'
 
-# movie_frames table
+# movie_frames table - currently stores metadata.
+# Needs to be move dinto movies table
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
 USER_ID = 'user_id'
-
 PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
@@ -235,7 +242,7 @@ class DDBO:
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
         self.movies    = self.dynamodb.Table( table_prefix + MOVIES )
-        self.movie_frames    = self.dynamodb.Table( table_prefix + FRAMES )
+        self.movie_frames    = self.dynamodb.Table( table_prefix + MOVIE_FRAMES )
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
         self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
