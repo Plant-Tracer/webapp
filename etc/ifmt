@@ -10,6 +10,6 @@ jq -r '
         .Architecture,
         .InstanceType,
         .NetworkInterfaces[0].Association.PublicIp,
-        .Tag
+        (.Tags[]? | select(.Key=="Name") | .Value) // ""
     ]) | @tsv
 ' $1 | column -t
