@@ -208,3 +208,4 @@ bin/
 samconfig.toml
 .envrc
 .env
+.op
