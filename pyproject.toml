@@ -17,6 +17,9 @@ python = ">=3.12,<3.13"
 boto3 = ">=1.39.14,<2.0.0"
 apig-wsgi = "^2.20.0"
 
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.8"
+
 [tool.poetry.group.vm.dependencies]
 crossplane = "*"
 cryptography = "*"
@@ -64,6 +67,7 @@ pytest-mock = "^3.15.1"
 pytest-env = "^1.2.0"
 service_identity = "*"
 filetype = "^1.2.0"
+cfn-lint = "^1.43.4"
 
 
 [build-system]

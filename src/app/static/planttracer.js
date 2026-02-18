@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
 /*global admin */
+import { $ } from "./utils.js";
 /*global user_id */
 /*global user_primary_course_id */
 /*global planttracer_endpoint */
@@ -679,6 +680,14 @@ window.helpers = {
     analyze_clicked,
     row_pencil_clicked,
     action_button_clicked};
+// Expose page-ready functions so inline scripts in list.html and upload.html can call them
+window.list_ready_function = list_ready_function;
+window.upload_ready_function = upload_ready_function;
+window.check_upload_metadata = check_upload_metadata;
+// Expose handlers used by onclick in upload.html
+window.upload_movie = upload_movie;
+window.purge_movie = purge_movie;
+window.rotate_movie = rotate_movie;
 
 // Wire up whatever happens to be present
 // audit, list and upload are wired with their own ready functions

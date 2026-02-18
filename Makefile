@@ -15,8 +15,8 @@ JS_FILES := $(TS_FILES:.ts=.js)
 LOCAL_BUCKET:=planttracer-local
 LOCAL_HTTP_PORT=8080
 LOG_LEVEL ?= DEBUG		# default to debug unless changed
-DYNAMODB_LOCAL_ENDPOINT=http://localhost:8010/
-MINIO_ENDPOINT=http://localhost:9100/
+DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
+MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
 export DEBIAN_FRONTEND=noninteractive
 
@@ -80,7 +80,7 @@ coverage:
 	make pytest-coverage
 	make jscoverage
 
-tags:
+ptags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
 
 ################################################################
@@ -319,11 +319,11 @@ make-local-bucket:
 ################################################################
 # Includes ubuntu dependencies
 # Note: on GitHub, install ffmpeg first with https://github.com/marketplace/actions/setup-ffmpeg
+# Note: installing pipx and poetry may have problems here. It's better to install outside of the Makefile
 install-ubuntu:
 	@echo install-ubuntu
 	sudo apt-get update
 	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
-	which pipx     || sudo apt-get install -y -qq pipx
 	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver
 	which curl     || sudo apt-get install -y -qq curl
 	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
@@ -332,8 +332,6 @@ install-ubuntu:
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
-	pipx ensurepath
-	pipx install poetry --force
 	npm ci
 	make $(REQ)
 	@echo install-ubuntu done
@@ -403,16 +401,89 @@ install-aws-sam-tools:
 	make $(REQ)
 
 
-sam-deploy:
+# Debug target to see exactly what permissions your current SSO role has
+check-iam:
+	@echo "Checking current caller identity..."
+	@ROLE_ARN=$$(aws sts get-caller-identity --query Arn --output text); \
+	echo "Current ARN: $$ROLE_ARN"; \
+	if echo "$$ROLE_ARN" | grep -q "assumed-role"; then \
+		ROLE_NAME=$$(echo "$$ROLE_ARN" | cut -d/ -f2); \
+		echo "Detected SSO Role Name: $$ROLE_NAME"; \
+		echo ""; \
+		echo "=== Attached Managed Policies ==="; \
+		aws iam list-attached-role-policies --role-name "$$ROLE_NAME" --output table --no-cli-pager; \
+		echo ""; \
+		echo "=== Inline Policy Names ==="; \
+		INLINE_POLICIES=$$(aws iam list-role-policies --role-name "$$ROLE_NAME" --query 'PolicyNames' --output text); \
+		echo "Found: $$INLINE_POLICIES"; \
+		for policy in $$INLINE_POLICIES; do \
+			echo ""; \
+			echo "--- Content of Inline Policy: $$policy ---"; \
+			aws iam get-role-policy --role-name "$$ROLE_NAME" --policy-name "$$policy" --query 'PolicyDocument' --output json --no-cli-pager; \
+		done; \
+	else \
+		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
+	fi
+
+
+sam-build: $(REQ)
+	printenv | grep AWS
+	finch vm start || echo AWS finch is already running
 	sam validate --lint
-	poetry export --only main,lambda --format=requirements.txt \
-		--output lambda-resize/requirements.txt --without-hashes
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build
-	sam deploy --no-confirm-changeset
-	sam logs --tail
+	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
+	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/requirements.txt --without-hashes
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+
+sam-deploy: $(REQ)
+ifeq ($(AWS_REGION),local)
+	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
+endif
+	aws sts get-caller-identity --no-cli-pager
+	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+
+sam-deploy-guided: $(REQ)
+ifeq ($(AWS_REGION),local)
+	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
+endif
+	aws sts get-caller-identity --no-cli-pager
+	@echo ===============================
+	@echo use one of these keypairs:
+	aws ec2 describe-key-pairs --output json | jq -r '.KeyPairs.[].KeyName'
+	@echo ===============================
+	@echo use one of these S3 buckets:
+	aws s3 ls
+	@echo ===============================
+	@echo use one of these git branches:
+	git branch -v
+	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+
+
+STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+sam-delete:
+	@echo "Deleting stack: $(STACK_NAME)..."
+	sam delete --stack-name $(STACK_NAME)
+	@echo "Waiting for deletion to complete..."
+	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
+	@echo "Stack $(STACK_NAME) deleted successfully."
+
+# Clever SSH via SSM (No SSH keys or port 22 required)
+ssh:
+	@INSTANCE_ID=$$(aws ec2 describe-instances \
+		--filters "Name=tag:Name,Values=PlantTracer-$(STACK_NAME)-app" "Name=instance-state-name,Values=running" \
+		--query "Reservations[].Instances[].InstanceId" \
+		--output text); \
+	if [ -z "$$INSTANCE_ID" ]; then \
+		echo "Error: No running instance found for stack $(STACK_NAME)"; \
+		exit 1; \
+	fi; \
+	echo "Connecting to $$INSTANCE_ID..."; \
+	aws ssm start-session --target $$INSTANCE_ID
 
 list-all-instances:
-	do for r in us-east-1 us-east-2 ; do echo "=== ZONE $$r ===" ; AWS_PROFILE=$$p AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
+	@echo && echo && echo
+	@unset AWS_ENDPOINT_URL_DYNAMODB AWS_SECRET_ACCESS_KEY AWS_ACCESS_KEY_ID AWS_ENDPOINT_URL_S3 && (printenv | grep AWS_) && \
+	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
 list-stacks:
 	aws cloudformation list-stacks \

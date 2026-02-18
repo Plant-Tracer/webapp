@@ -65,6 +65,10 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     chrome_driver.find_element(By.ID, "movie-description").send_keys(description)
     chrome_driver.find_element(By.ID, "movie-file").send_keys(str(TEST_MOVIE_PATH))
 
+    # Trigger validation; Selenium send_keys may not reliably fire onchange/onkeydown
+    chrome_driver.execute_script(
+        "if (typeof window.check_upload_metadata === 'function') window.check_upload_metadata();"
+    )
     wait.until(EC.element_to_be_clickable((By.ID, "upload-button")))
     chrome_driver.find_element(By.ID, "upload-button").click()
 
