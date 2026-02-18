@@ -312,7 +312,7 @@ We will first use the `--report` option to see what is in the database:
 ```
 simsong@Seasons-2 ~ % cd gits/webapp
 simsong@Seasons-2 webapp % source venv/bin/activate
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
 2025-08-10 09:53:21,580  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-api_keys')
 2025-08-10 09:53:21,583  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-users')
 2025-08-10 09:53:21,586  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-movies')
