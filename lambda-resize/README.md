@@ -1,4 +1,33 @@
-This directory is for lambda-resize
+This directory is for aws-sam.
+
+Key files:
+- `template.yaml` - this is the AWS SAM template that does the magic
+- `samconfig.yaml` - This records the parameters and other functions
+  that change with a deployment.  It does not need to be put into
+  version control.
+- `Makefile` - contains a bunch of targets for people who can't
+  remember the AWS `sam` commands.
+
+
+Environment variables that you should know about/set:
+
+|Variable|Meaning|
+|--------------|-------------|
+|`AWS_PROFILE` | The profile that you are using (in $HOME/.aws/config) |
+|`AWS_REGION`  | The region you are deploying to. Set to `local` for testing locally with minio and dynamoDBLocal|
+|`STACK`       | The name of the stack that you are deploying to. Must be unique in your AWS account |
+|`STACK_STAGE` | This is legacy, when we actually had a staging stack. Now you stage by just deploying to a different stack name |
+|`DYNAMODB_TABLE_PREFIX` | The prefix for your DynamoDB Table Names. Must be unique in your AWS account.|
+# Core Functionality
+AWS SAM template that uses cloud formations to:
+- Create a new VM
+- Create the necessary DynamoDB tables all with the given prefix.
+- Create a lambda function that watches the S3 bucket in the /uploads
+  prefix, resizes as necessary, and moves the object to the correct location.
+
+## The created VM
+
+## The Created Lambda Function
 
 Core functionality:
 - Watches AWS S3. When a movie is uploaded:
@@ -22,6 +51,8 @@ Resize code base:
 - HTTP access point
 - ../src/app/* vended into app/src as necessary
 
+
+# Data Management
 
 Movies:
 ------

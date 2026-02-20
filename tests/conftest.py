@@ -30,6 +30,11 @@ from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unus
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('selenium').setLevel(logging.WARNING)
 
+# Cursor (Electron) injects env vars that confuse Chrome when launched as a child process.
+# Strip them before Selenium starts Chrome to avoid crashes under Cursor.
+for var in ("ELECTRON_RUN_AS_NODE", "ELECTRON_NO_ATTACH_CONSOLE", "NODE_OPTIONS"):
+    os.environ.pop(var, None)
+
 
 
 MY_DIR = dirname(abspath(__file__))

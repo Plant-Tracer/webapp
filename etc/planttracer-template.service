@@ -12,7 +12,7 @@ Environment="PLANTTRACER_CREDENTIALS={base}/deploy/etc/credentials-{name}.ini"
 Environment="PLANTTRACER_S3_BUCKET=planttracer-prod"
 Environment="{demovar}={demoval}"
 Environment="DYNAMODB_TABLE_PREFIX=m1-"
-Environment="AWS_DEFAULT_REGION=us-east-1"
+Environment="AWS_REGION=us-east-1"
 ExecStart={base}/venv/bin/gunicorn -w 2 -b 127.0.0.1:{port} \
 			  --access-logfile /home/ubuntu/logs/planttracer-{name}-access.log \
 			  --error-logfile /home/ubuntu/logs/planttracer-{name}-error.log \

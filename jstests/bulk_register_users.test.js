@@ -2,9 +2,7 @@
  * @jest-environment jsdom
  */
 
-const $ = require('jquery');
-global.$ = $;
-
+const { $ } = require('utils');
 const module = require('users')
 const bulk_register_users_func = module.bulk_register_users
 

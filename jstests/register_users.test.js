@@ -2,10 +2,7 @@
  * @jest-environment jsdom
  */
 
-
-const $ = require('jquery');
-global.$ = $;
-
+const { $ } = require('utils');
 const module = require('planttracer')
 const register_func = module.register_func
 

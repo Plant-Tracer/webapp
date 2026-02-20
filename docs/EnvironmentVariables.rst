@@ -1,5 +1,5 @@
 Environment Variables
-=========
+=====================
 
 See https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html. Also:
 
@@ -26,7 +26,7 @@ Optional for using AWS
 ----------------------
 Region selection:
 
-`AWS_DEFAULT_REGION` - The AWS region you are using.
+`AWS_REGION` - The AWS region you are using.
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` and `$HOME/.aws/config` the webapp will use.
 
@@ -38,13 +38,13 @@ Optional for sending mail
 Optional for Local Development
 ------------------------------
 
-`AWS_DEFAULT_REGION` - The AWS region you are using.
+`AWS_REGION` - The AWS region you are using.
 
 `AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` the webapp will use. Should be `minio` when using minio (assuming profile is installed)
 
-`AWS_ENDPOINT_URL_DYNAMODB` - For local development, this must be set to the localhost and the port on which **DynamoDBlocal** is listening. It is typically `http://localhost:8010`.
+`AWS_ENDPOINT_URL_DYNAMODB` - For local development, this must be set to the localhost and the port on which **DynamoDBlocal** is listening. It is typically `http://localhost:8000`.
 
-`AWS_ENDPOINT_URL_S3` - For local development, this must be set to the localhost and the port on which **minIO** is listening. It is typically `http://localhost:9100`.
+`AWS_ENDPOINT_URL_S3` - For local development, this must be set to the localhost and the port on which **minIO** is listening. It is typically `http://localhost:9000`.
 
 
 For local usage:

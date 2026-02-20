@@ -1,0 +1,8 @@
+course_users should go away. the courses table should have another entry for each user
+course#user#user_id
+course#admin#user_id
+
+get rid of api_keys table by adding that information to the user table
+user#apikey#key1
+
+make the keys user_id-apikey

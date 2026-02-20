@@ -1,0 +1,15 @@
+#!/bin/bash
+# format the output of describe-instances into something a bit more useful
+jq -r '
+    [ "InstanceId", "State", "LaunchTime", "AZ", "Arch", "Type" ,"PublicIP", "Tag" ], # Header Row
+    (.Reservations[] | .Instances[] | [
+        .InstanceId,
+        .State.Name,
+        .LaunchTime,
+        .Placement.AvailabilityZone,
+        .Architecture,
+        .InstanceType,
+        .NetworkInterfaces[0].Association.PublicIp,
+        (.Tags[]? | select(.Key=="Name") | .Value) // ""
+    ]) | @tsv
+' $1 | column -t

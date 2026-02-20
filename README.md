@@ -1,4 +1,4 @@
-[![CI (pip)](https://github.com/Plant-Tracer/webapp/actions/workflows/continuous-integration-pip.yml/badge.svg)](https://github.com/Plant-Tracer/webapp/actions/workflows/continuous-integration-pip.yml)
+[![CI (pip)](https://github.com/Plant-Tracer/webapp/actions/workflows/continuous-integration-pip.yml/badge.svg)](https://github.com/Plant-Tracer/webapp/actions/workflows/ci-cd.yml)
 [![codecov](https://codecov.io/gh/Plant-Tracer/webapp/graph/badge.svg?token=YRMITDBBJ1)](https://codecov.io/gh/Plant-Tracer/webapp)
 <a href="https://scan.coverity.com/projects/plant-tracer-webapp">
   <img alt="Coverity Scan Build Status"
@@ -104,7 +104,7 @@ These variables are specific to Planttracer and _must_ be set:
 
 Planttracer also uses these AWS environment variables, which are set to the local host or AWS as appropriate.
 
-`AWS_DEFAULT_REGION`
+`AWS_REGION`
 
 `AWS_SECRET_ACCESS_KEY`
 

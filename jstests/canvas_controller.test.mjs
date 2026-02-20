@@ -4,20 +4,18 @@
  */
 
 import { jest } from '@jest/globals';
-import $ from 'jquery';
-global.$ = $;
 
 import { CanvasController, CanvasItem, Marker, WebImage, Line, Text } from 'canvas_controller.mjs';
 const CanvasText = Text;
 
 beforeAll(() => {
-  document.body.innerHTML = '<!doctype html><html><body><canvas id="test-canvas" width="100" height="100"></canvas></body></html>';
+  document.body.innerHTML = '<canvas id="test-canvas" width="100" height="100"></canvas>';
 });
 
 describe('CanvasController', () => {
   let controller;
   beforeEach(() => {
-    controller = new CanvasController('#test-canvas', '100');
+    controller = new CanvasController('#test-canvas', null);
   });
 
   test('constructor with valid selector and PointerEvent present', () => {
@@ -156,7 +154,7 @@ describe('CanvasController', () => {
 describe('CanvasController event handlers', () => {
   let controller;
   beforeEach(() => {
-    controller = new CanvasController('#test-canvas', '100');
+    controller = new CanvasController('#test-canvas', null);
     // Add a marker for selection/movement
     const marker = new Marker(50, 50, 10, 'red', 'black', 'test-marker');
     controller.add_object(marker);

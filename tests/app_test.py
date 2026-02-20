@@ -2,7 +2,6 @@
 Tests for the application
 """
 
-
 import os
 import subprocess
 import uuid

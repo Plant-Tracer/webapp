@@ -10,9 +10,7 @@ numpy>=1.26
 """
 
 import io
-import math
 import zipfile
-from pathlib import Path
 from typing import Tuple, Optional
 
 import av  # pip install av

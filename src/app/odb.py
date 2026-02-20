@@ -209,7 +209,7 @@ class DDBO:
 
     @classmethod
     def resource(cls):
-        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
+        region_name = os.environ.get(C.AWS_REGION, None)
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
         logger.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
@@ -394,7 +394,7 @@ class DDBO:
         except ClientError as e:
             # If any ConditionCheck fails, you’ll land here:
             logger.info("Transaction canceled: %s", e.response['Error']['Message'])
-            raise UserExists() from e
+            raise UserExists(email) from e
 
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email."""
