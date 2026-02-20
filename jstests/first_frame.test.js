@@ -2,10 +2,6 @@
  * @jest-environment jsdom
  */
 
-
-const $ = require('jquery');
-global.$ = $;
-
 const module = require('planttracer')
 const first_frame_url = module.first_frame_url
 

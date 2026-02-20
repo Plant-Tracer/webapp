@@ -66,9 +66,10 @@
 </div>
 
 
-<script>
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
   $(document).ready(function() {
-  upload_ready_function();
+    upload_ready_function();
   });
 </script>
 {% endblock %}

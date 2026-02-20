@@ -51,9 +51,9 @@ check: .venv/pyvenv.cfg
 prod-vbd: template.yaml samconfig.toml src/requirements.txt
 	make lint
 	make vend-app
-	sam validate --config-file samconfig.toml -t template.yaml --lint
-	sam build --parallel --use-container --config-file samconfig.toml -t template.yaml
-	sam deploy --config-file "$$(pwd)/samconfig.toml" --no-confirm-changeset -t .aws-sam/build/template.yaml
+	sam validate --lint
+	sam build --parallel --use-container
+	sam deploy --no-confirm-changeset
 	curl --silent  https://app-resize.planttracer.com/ | head -3
 
 stage-vbd: template-stage.yaml samconfig-stage.toml src/requirements.txt

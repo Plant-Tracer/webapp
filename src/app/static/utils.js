@@ -357,14 +357,6 @@ $.post = function(url, data) {
     };
 };
 
-// Make $ available globally
-if (typeof window !== 'undefined') {
-    window.$ = $;
-    window.$$ = $$;
-}
-
-// Export for Node.js environments
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { $, $$, DOMWrapper };
-}
+// Export for ES modules (babel transpiles to module.exports for Node/Jest)
+export { $, $$, DOMWrapper };
 

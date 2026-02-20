@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "None" means us-east-1
+aws s3api get-bucket-location --bucket $1 --profile=planttracer --format help

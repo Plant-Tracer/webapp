@@ -3,14 +3,10 @@ import '@testing-library/jest-dom';
 import 'jest-fetch-mock';
 import { jest } from '@jest/globals';
 
-const $ = require('jquery');
-global.$ = $;
-
 const module = require('planttracer');
 const set_property = module.set_property
 
 // Mock dependencies
-global.$ = require('jquery');
 fetchMock.enableMocks();
 
 

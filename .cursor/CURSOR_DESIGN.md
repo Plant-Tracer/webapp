@@ -34,12 +34,12 @@ The Plant Tracer webapp is a Flask-based web application for uploading, managing
 **Critical Design Decision**: We do NOT mock AWS services. Instead, we use real local implementations:
 
 - **DynamoDBLocal**: Amazon's official DynamoDB emulator (`bin/DynamoDBLocal.jar`)
-  - Runs on `http://localhost:8010/`
+  - Runs on `http://localhost:8000/`
   - Used in both local development and GitHub Actions CI/CD
   - Started via `bin/local_dynamodb_control.bash`
 
 - **Minio**: Full-featured S3-compatible object storage (`bin/minio`)
-  - Runs on `http://localhost:9100/`
+  - Runs on `http://localhost:9000/`
   - Used in both local development and GitHub Actions CI/CD
   - Started via `bin/local_minio_control.bash`
 

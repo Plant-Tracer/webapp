@@ -1,7 +1,6 @@
 {
   "dependencies": {
     "crypto-js": "^4.2.0",
-    "jquery": "^3.7.1",
     "jslint": "^0.12.1"
   },
   "devDependencies": {
@@ -14,7 +13,6 @@
     "babel-plugin-istanbul": "^6.1.1",
     "babel-preset-airbnb": "^5.0.0",
     "eslint": "^8.57.0",
-    "eslint-config-jquery": "^3.0.2",
     "eslint-formatter-friendly": "^7.0.0",
     "jest": "^29.7.0",
     "jest-canvas-mock": "^2.5.2",
@@ -29,27 +27,13 @@
     "coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --collectCoverage --"
   },
   "jest": {
-    "setupFiles": [
-      "<rootDir>/jstests/setupTests.js",
-      "jest-canvas-mock"
-    ],
-    "moduleDirectories": [
-      "node_modules",
-      "src/app/static"
-    ],
+    "setupFiles": ["<rootDir>/jstests/setupTests.js", "jest-canvas-mock"],
+    "moduleDirectories": ["node_modules", "src/app/static"],
+    "modulePathIgnorePatterns": ["<rootDir>/.venv", "<rootDir>/lambda-resize/.venv"],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",
-    "coverageReporters": [
-      "json",
-      "lcov",
-      "text",
-      "clover"
-    ],
-    "transform": {
-      "^.+\\.jsx?$": "babel-jest"
-    },
-    "testMatch": [
-      "**/?(*.)+(spec|test).(mjs|js)"
-    ]
+    "coverageReporters": ["json", "lcov", "text", "clover"],
+    "transform": {"^.+\\.jsx?$": "babel-jest"},
+    "testMatch": ["**/?(*.)+(spec|test).(mjs|js)"]
   }
 }
