@@ -510,6 +510,14 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - ses:VerifyEmailIdentity
+                  - ses:ListIdentities
+                  - ses:GetSendQuota
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
 
   # --- Instance Profile with hardcoded prefix ---
   Ec2InstanceProfile:
