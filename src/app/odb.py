@@ -81,7 +81,6 @@ USER_ID = 'user_id'
 PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
-EMAIL_TEMPLATE_FNAME = 'email.txt'
 CHECK_MX = False            # True doesn't work
 
 ################################################################
@@ -329,6 +328,16 @@ class DDBO:
             logger.error("table=%s error=%s",self.api_keys.name, e)
             raise ValueError(self.api_keys.name) from e
 
+    def get_first_api_key_for_user(self, user_id):
+        """Return one api_key for the user, or None if they have none."""
+        response = self.api_keys.query(
+            IndexName='user_id_idx',
+            KeyConditionExpression=Key(USER_ID).eq(user_id),
+            ProjectionExpression=API_KEY,
+            Limit=1,
+        )
+        items = response.get('Items', [])
+        return items[0][API_KEY] if items else None
 
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
@@ -369,7 +378,14 @@ class DDBO:
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
         logger.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
-        logger.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
+        primary_course_id = user.get(PRIMARY_COURSE_ID)
+        if primary_course_id is not None:
+            try:
+                self.get_course(primary_course_id)
+            except InvalidCourse_Id:
+                raise ValueError(
+                    f"Course {primary_course_id} does not exist; cannot create user for {email}"
+                ) from None
 
         try:
             self.dynamodb.meta.client.transact_write_items(
@@ -1022,6 +1038,12 @@ def get_user(user_id):
 
 def get_user_email(email):
     return DDBO().get_user_email(email)
+
+
+def get_first_api_key_for_user(user_id):
+    """Return one api_key for the user, or None if they have none."""
+    return DDBO().get_first_api_key_for_user(user_id)
+
 
 #########################
 ### Course Management ###

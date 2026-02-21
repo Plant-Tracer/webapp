@@ -13,7 +13,7 @@ from app import odb
 from app import odbmaint
 from app import mailer
 from app.paths import TEST_DATA_DIR
-from app.odb import DDBO,InvalidCourse_Id,ExistingCourse_Id,USER_ID
+from app.odb import DDBO, InvalidCourse_Id, USER_ID
 from app.odb_movie_data import set_movie_data
 from app.constants import C
 
@@ -81,6 +81,7 @@ if __name__ == "__main__":
     parser.add_argument("--dropdb",  help='Drop an existing database.',action='store_true')
     parser.add_argument("--create_course",help="Create a course with --course_name, --course_id, "
                         "and optional --max_enrollment, and register --admin_email --admin_name as the administrator",action='store_true')
+    parser.add_argument("--send-email",help="With --create_course: after ensuring course exists, send verification email to admin with magic link",action='store_true')
     parser.add_argument("--delete_course",help="Delete the course specified by --course_id", action='store_true')
     parser.add_argument("--admin_email",help="Specify the email address of the course administrator")
     parser.add_argument("--admin_name",help="Specify the name of the course administrator")
@@ -143,20 +144,41 @@ if __name__ == "__main__":
         missing = [name for name in ['course_id','course_name','admin_email','admin_name'] if getattr(args, name) is None]
         if missing:
             parser.error(f"--create_course requires --course_name, --course_id, --admin_email and --admin_name. Missing: {','.join('--' + m for m in missing)}")
-        print("creating course...")
-        course_key = str(uuid.uuid4())[9:18]
+        course_id = args.course_id
         try:
-            odbmaint.create_course(course_id = args.course_id,
-                                   course_key = course_key,
-                                   course_name = args.course_name,
-                                   admin_email = args.admin_email,
-                                   admin_name = args.admin_name,
-                                   max_enrollment = args.max_enrollment,
-                                   ok_if_exists = False)
-            print(f"created {args.course_id}")
-        except ExistingCourse_Id:
-            print(f" course {args.course_id} already exists")
-        print(json.dumps(odb.lookup_course_by_id(course_id=args.course_id), indent=4, default=str))
+            odb.lookup_course_by_id(course_id=course_id)
+            print(f"course {course_id} already exists")
+        except InvalidCourse_Id:
+            print("creating course...")
+            course_key = str(uuid.uuid4())[9:18]
+            odbmaint.create_course(course_id=course_id,
+                                   course_key=course_key,
+                                   course_name=args.course_name,
+                                   admin_email=args.admin_email,
+                                   admin_name=args.admin_name,
+                                   max_enrollment=args.max_enrollment,
+                                   ok_if_exists=False)
+            print(f"created {course_id}")
+        print(json.dumps(odb.lookup_course_by_id(course_id=course_id), indent=4, default=str))
+
+        if args.send_email:
+            for var in ('HOSTNAME', 'DOMAIN'):
+                if not os.environ.get(var):
+                    parser.error(f"--send-email requires {var} in environment (e.g. from /etc/environment.d/10-planttracer.conf)")
+            planttracer_endpoint = f"https://{os.environ['HOSTNAME']}.{os.environ['DOMAIN']}"
+            course = odb.lookup_course_by_id(course_id=course_id)
+            admin = odb.get_user_email(args.admin_email)
+            api_key = odb.get_first_api_key_for_user(admin[USER_ID])
+            if api_key is None:
+                api_key = odb.make_new_api_key(email=args.admin_email)
+            mailer.send_course_created_email(
+                to_addr=args.admin_email,
+                course_name=course.get('course_name', course_id),
+                course_id=course_id,
+                planttracer_endpoint=planttracer_endpoint,
+                api_key=api_key,
+            )
+            print(f"verification email sent to {args.admin_email}")
 
     if args.delete_course:
         if not args.course_id:

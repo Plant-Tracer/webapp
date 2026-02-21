@@ -78,10 +78,18 @@ Parameters:
     Default: main
     Description: "Git branch/tag to checkout."
 
-  CourseEmail:
+  AdminEmail:
     Type: String
     Default: plantadmin@planttracer.com
     Description: "Email address for course administrator of first course"
+
+  CourseId:
+    Type: String
+    Description: "Course ID for the first course (e.g. Course1)"
+
+  AdminName:
+    Type: String
+    Description: "Display name of the course administrator"
 
   CourseName:
     Type: String
@@ -237,13 +245,17 @@ Resources:
           # Create the environment variables
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
-          echo "LOG_LEVEL=${LogLevel}"                  >> /etc/environment.d/10-planttracer.conf
-          echo "HOSTNAME=${HostLabel}"                  >> /etc/environment.d/10-planttracer.conf
-          echo "DOMAIN=${BaseDomain}"                   >> /etc/environment.d/10-planttracer.conf
-          echo "COURSE_EMAIL=${CourseEmail}"            >> /etc/environment.d/10-planttracer.conf
-          echo "COURSE_NAME=\"${CourseName}\""          >> /etc/environment.d/10-planttracer.conf
-          echo "DYNAMODB_TABLE_PREFIX=${HostLabel}-"    >> /etc/environment.d/10-planttracer.conf
-          echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
+          echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "HOSTNAME=\"${HostLabel}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
+          echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=\"${HostLabel}-\""   >> /etc/environment.d/10-planttracer.conf
+          echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
+          # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
+          echo "SERVER_EMAIL=\"admin@planttracer.com\""    >> /etc/environment.d/10-planttracer.conf
 
           # Install essentials
           export DEBIAN_FRONTEND=noninteractive
@@ -455,6 +467,9 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: prod
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM
       CorsConfiguration:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
@@ -590,6 +605,8 @@ Resources:
             Path: /
             Method: ANY
             PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
         AnyProxy:
           Type: HttpApi
           Properties:
@@ -597,6 +614,8 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   ApiId:

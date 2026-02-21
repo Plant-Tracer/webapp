@@ -1,9 +1,11 @@
 #!/usr/bin/env python36
 
-"""This program implements an autoresponder. It's in the mailstats repository
-because the responder does analysis of mail files."""
+"""Mailer: send email via SMTP (when credentials configured) or AWS SES.
+SES is used when no SMTP credentials are present; region is taken from
+AWS_REGION (single-region deployment)."""
 
 import sys
+import uuid
 import smtplib
 import imaplib
 import os
@@ -12,11 +14,13 @@ import configparser
 from email.parser import BytesParser
 from email import policy
 
+import boto3
+from botocore.exceptions import ClientError
 from jinja2.nativetypes import NativeEnvironment
 
 from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
-from .constants import C,logger
+from .constants import C, logger
 
 
 # pylint: disable=invalid-name
@@ -42,93 +46,160 @@ class InvalidMailerConfiguration(Exception):
         return "InvalidMailerConfiguration: "+self.msg
 
 class NoMailerConfiguration(Exception):
-    """ No mailer configured"""
+    """No mailer configured (no SMTP credentials and SES not available)."""
+
+
+def get_server_email():
+    """Return the From address for outgoing mail (env SERVER_EMAIL or default)."""
+    return os.environ.get(C.SERVER_EMAIL, 'admin@planttracer.com')
+
 
 def get_smtp_config():
-    """Get the smtp config from the [smtp] section of a credentials file.
-    If the file specifies a AWS secret, get that.
+    """Get the SMTP config from credentials file, ARN, or JSON env.
+    Returns None if no SMTP credentials are configured (caller may use SES).
     """
     logger.debug("get_smtp_config")
     if C.SMTPCONFIG_ARN in os.environ:
-        return get_aws_secret_for_arn( os.environ[C.SMTPCONFIG_ARN] )
+        return get_aws_secret_for_arn(os.environ[C.SMTPCONFIG_ARN])
 
     if C.SMTPCONFIG_JSON in os.environ:
         cp = configparser.ConfigParser()
         cp.add_section('smtp')
-        for (k,v) in json.loads(os.environ[C.SMTPCONFIG_JSON]).items():
-            cp.set('smtp',k,v)
+        for (k, v) in json.loads(os.environ[C.SMTPCONFIG_JSON]).items():
+            cp.set('smtp', k, v)
         return cp['smtp']
 
-    cp = configparser.ConfigParser()
     if C.PLANTTRACER_CREDENTIALS not in os.environ:
-        raise ValueError(f"{C.PLANTTRACER_CREDENTIALS} not set")
+        return None
+    cp = configparser.ConfigParser()
     cp.read(os.environ[C.PLANTTRACER_CREDENTIALS])
+    if 'smtp' not in cp:
+        return None
     ret = cp['smtp']
     for key in SMTP_ATTRIBS:
-        assert key in ret
+        if key not in ret:
+            return None
     return ret
+
+
+def _send_via_ses(*, from_addr: str, to_addrs: list, msg: str):
+    """Send raw MIME message via AWS SES. Uses AWS_REGION (single-region)."""
+    region = os.environ.get(C.AWS_REGION, 'us-east-1')
+    client = boto3.client('ses', region_name=region)
+    raw = msg.encode('utf-8')
+    logger.info("sending mail to %s via SES (region=%s)", ",".join(to_addrs), region)
+    client.send_raw_email(
+        Source=from_addr,
+        Destinations=to_addrs,
+        RawMessage={'Data': raw},
+    )
 
 
 def send_message(*,
                  from_addr: str,
-                 to_addrs: [str],
+                 to_addrs: list,
                  msg: str,
                  dry_run: bool = False,
-                 smtp_config: dict):
-    # Validate types
+                 smtp_config: dict = None):
+    """Send an email. Uses SMTP if smtp_config is provided, otherwise SES."""
     assert isinstance(from_addr, str)
     for to_addr in to_addrs:
         assert isinstance(to_addr, str)
 
     if dry_run:
         print(
-            f"==== Will not send this message: ====\n{msg}\n====================\n", file=sys.stderr)
+            f"==== Will not send this message: ====\n{msg}\n====================\n",
+            file=sys.stderr)
         return
 
-    port = smtp_config.get(SMTP_PORT,  SMTP_PORT_DEFAULT)
-    debug = SMTP_DEBUG or smtp_config.get('SMTP_DEBUG','')[0:1]=='Y'
+    if smtp_config:
+        port = smtp_config.get(SMTP_PORT, SMTP_PORT_DEFAULT)
+        debug = SMTP_DEBUG or smtp_config.get('SMTP_DEBUG', '')[0:1] == 'Y'
+        with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
+            logger.info("sending mail to %s with SMTP", ",".join(to_addrs))
+            if debug:
+                smtp.set_debuglevel(1)
+            smtp.ehlo()
+            if SMTP_NO_TLS not in smtp_config:
+                smtp.starttls()
+            smtp.ehlo()
+            smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
+            smtp.sendmail(from_addr, to_addrs, msg.encode('utf-8'))
+    else:
+        try:
+            _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg)
+        except ClientError as e:
+            raise InvalidMailerConfiguration(str(e)) from e
 
-    with smtplib.SMTP(smtp_config[SMTP_HOST], port) as smtp:
-        logger.info("sending mail to %s with SMTP", ",".join(to_addrs))
-        if debug:
-            smtp.set_debuglevel(1)
-        smtp.ehlo()
-        if SMTP_NO_TLS not in smtp_config:
-            smtp.starttls()
-        smtp.ehlo()
-        smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
-        smtp.sendmail(from_addr, to_addrs, msg.encode('utf8'))
+
+def _render_mime_template(template_name: str, **kwargs):
+    """Render a MIME template (Jinja2) with a unique boundary."""
+    path = os.path.join(TEMPLATE_DIR, template_name)
+    with open(path, 'r', encoding='utf-8') as f:
+        env = NativeEnvironment().from_string(f.read())
+    kwargs.setdefault('boundary', 'bound_' + uuid.uuid4().hex)
+    return env.render(**kwargs)
+
 
 def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
-    """Creates a new api key and sends it to email. Won't resend if it has been sent in MIN_SEND_INTERVAL"""
+    """Send login/magic-link email. Uses SMTP if configured, else SES."""
 
     logger.warning("TK: Insert delay for MIN_SEND_INTERVAL")
 
     to_addrs = [email]
-    with open(os.path.join(TEMPLATE_DIR, C.EMAIL_TEMPLATE_FNAME), "r") as f:
-        msg_env = NativeEnvironment().from_string(f.read())
+    from_addr = get_server_email()
+    msg = _render_mime_template(
+        C.LOGIN_EMAIL_TEMPLATE_FNAME,
+        to_addrs=",".join([email]),
+        from_addr=from_addr,
+        planttracer_endpoint=planttracer_endpoint,
+        api_key=new_api_key,
+    )
 
-    logger.info("sending new link to %s",email)
-    msg = msg_env.render(to_addrs=",".join([email]),
-                         from_addr=C.PROJECT_EMAIL,
-                         planttracer_endpoint=planttracer_endpoint,
-                         api_key=new_api_key)
-
+    smtp_config = get_smtp_config()
+    if smtp_config:
+        smtp_config['SMTP_DEBUG'] = 'YES' if (SMTP_DEBUG or debug) else ''
     dry_run = False
     try:
-        smtp_config = get_smtp_config()
-        smtp_config['SMTP_DEBUG'] = 'YES' if (SMTP_DEBUG or debug) else ''
-    except KeyError as e:
-        raise NoMailerConfiguration() from e
-    try:
-        send_message(from_addr=C.PROJECT_EMAIL,
-                            to_addrs=to_addrs,
-                            smtp_config=smtp_config,
-                            dry_run=dry_run,
-                            msg=msg)
+        send_message(
+            from_addr=from_addr,
+            to_addrs=to_addrs,
+            smtp_config=smtp_config,
+            dry_run=dry_run,
+            msg=msg,
+        )
     except smtplib.SMTPAuthenticationError as e:
         raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
     return new_api_key
+
+
+def send_course_created_email(*,
+                              to_addr: str,
+                              course_name: str,
+                              course_id: str,
+                              planttracer_endpoint: str,
+                              api_key: str,
+                              from_addr: str = None):
+    """Send course-created verification email with magic link. Uses SMTP or SES."""
+    if from_addr is None:
+        from_addr = get_server_email()
+    msg = _render_mime_template(
+        C.COURSE_CREATED_EMAIL_TEMPLATE_FNAME,
+        to_addrs=to_addr,
+        from_addr=from_addr,
+        course_name=course_name,
+        course_id=course_id,
+        planttracer_endpoint=planttracer_endpoint,
+        api_key=api_key,
+    )
+    smtp_config = get_smtp_config()
+    send_message(
+        from_addr=from_addr,
+        to_addrs=[to_addr],
+        smtp_config=smtp_config,
+        dry_run=False,
+        msg=msg,
+    )
 
 IMAP_HOST = 'IMAP_HOST'
 IMAP_PORT = 'IMAP_PORT'
