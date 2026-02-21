@@ -26,6 +26,11 @@ export DYNAMODB_TABLE_PREFIX
 export HOSTNAME
 export LOG_LEVEL
 export PLANTTRACER_S3_BUCKET
+export ADMIN_EMAIL
+export COURSE_ID
+export ADMIN_NAME
+export COURSE_NAME
+export SERVER_EMAIL
 
 # Make $HOME/.bashrc add environment.d
 if ! grep planttracer $HOME/.bashrc ; then
@@ -104,7 +109,17 @@ poetry --version
 
 make install-ubuntu
 
-## Start up the plantracer service
+## Create course if not present and send verification email to admin (idempotent)
+if [ -n "${COURSE_ID:-}" ] && [ -n "${ADMIN_EMAIL:-}" ]; then
+    poetry run python src/dbutil.py --create_course \
+        --course_id "$COURSE_ID" \
+        --course_name "$COURSE_NAME" \
+        --admin_email "$ADMIN_EMAIL" \
+        --admin_name "$ADMIN_NAME" \
+        --send-email
+fi
+
+## Start up the planttracer service
 sudo systemctl daemon-reload
 sudo systemctl start planttracer.service
 sudo systemctl enable planttracer.service

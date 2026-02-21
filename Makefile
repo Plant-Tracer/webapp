@@ -73,12 +73,12 @@ all:
 
 check:
 	make lint
-	make pytest
+	AWS_REGION=local make pytest
 	make jscoverage
 
 coverage:
-	make pytest-coverage
-	make jscoverage
+	AWS_REGION=local make pytest-coverage
+	AWS_REGION=local make jscoverage
 
 ptags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
@@ -369,6 +369,15 @@ install-windows: .venv/pyvenv.cfg
 
 
 ################################################################
+### Development server: run gunicorn with --reload (patches service file)
+gunicorn-reload:
+	@echo Patching planttracer.service to add gunicorn --reload...
+	sudo sed -i 's|\(ExecStart=.*/gunicorn\) \(-[wb]\)|\1 --reload \2|' /etc/systemd/system/planttracer.service || true
+	sudo systemctl daemon-reload
+	sudo systemctl restart planttracer.service
+	@echo planttracer.service restarted with --reload.
+
+################################################################
 ### Cleanup
 
 clean:
@@ -481,8 +490,6 @@ ssh:
 	aws ssm start-session --target $$INSTANCE_ID
 
 list-all-instances:
-	@echo && echo && echo
-	@unset AWS_ENDPOINT_URL_DYNAMODB AWS_SECRET_ACCESS_KEY AWS_ACCESS_KEY_ID AWS_ENDPOINT_URL_S3 && (printenv | grep AWS_) && \
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
 list-stacks:
