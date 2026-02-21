@@ -78,11 +78,23 @@ Parameters:
     Default: main
     Description: "Git branch/tag to checkout."
 
+  CourseEmail:
+    Type: String
+    Default: plantadmin@planttracer.com
+    Description: "Email address for course administrator of first course"
+
+  CourseName:
+    Type: String
+    Default: "Plant motion 101"
+    Description: "Name of first course"
+
   LogLevel:
     Type: String
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the function
+
+
 
 Resources:
   # --- Minimal networking: VPC + one public subnet + IGW + route table ---
@@ -225,9 +237,11 @@ Resources:
           # Create the environment variables
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
-          echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
+          echo "LOG_LEVEL=${LogLevel}"                  >> /etc/environment.d/10-planttracer.conf
           echo "HOSTNAME=${HostLabel}"                  >> /etc/environment.d/10-planttracer.conf
           echo "DOMAIN=${BaseDomain}"                   >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_EMAIL=${CourseEmail}"            >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_NAME=\"${CourseName}\""          >> /etc/environment.d/10-planttracer.conf
           echo "DYNAMODB_TABLE_PREFIX=${HostLabel}-"    >> /etc/environment.d/10-planttracer.conf
           echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
 
@@ -421,7 +435,7 @@ Resources:
             - AttributeName: ipaddr
               KeyType: "HASH"
           Projection:
-            ProjectionType: "KEYS_ONLY" 
+            ProjectionType: "KEYS_ONLY"
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
@@ -454,7 +468,7 @@ Resources:
   Ec2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role" 
+      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -496,6 +510,14 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - ses:VerifyEmailIdentity
+                  - ses:ListIdentities
+                  - ses:GetSendQuota
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
 
   # --- Instance Profile with hardcoded prefix ---
   Ec2InstanceProfile:
