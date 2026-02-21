@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Developer Setup on Amazon Linux 2023 on AWS EC2 &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Setting Up Plant-Tracer webapp on Ubuntu 24.04" href="DevSetupUbuntu.html" />
+    <link rel="prev" title="Developer Setup" href="DeveloperSetup.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="developer-setup-on-amazon-linux-2023-on-aws-ec2">
+<h1>Developer Setup on Amazon Linux 2023 on AWS EC2<a class="headerlink" href="#developer-setup-on-amazon-linux-2023-on-aws-ec2" title="Link to this heading">¶</a></h1>
+<p>Written for Amazon Linux release 2023.6.20250203 (Amazon Linux)</p>
+<p>Once the fresh Amazon Linux 2023 EC2 instance has been created and started, connect to it as ec2-user and follow the instructions in this file.</p>
+<p>For more complete instructions, Simson Garfinkel has generously provided us with lab notes from one of his Harvard Extension courses.</p>
+<p>See <cite>CSCI E-11 Spring 2025 Lab #1 &lt;https://docs.google.com/document/d/1bSqXSuKfL3TWN_RDS-hhkt9NVz8eRDuSaLUcGVvCeGg/edit?tab=t.0&gt;</cite> to create an AWS account, and to startup and configure an EC2 instance, and to install git.</p>
+<p>See <cite>CSCI E-11 Spring 2025 Lab #3 &lt;https://docs.google.com/document/d/1R_HqlwB-O1QHPdMWNxx9ZjYSsL4CDSmpvTK4fE8Xmyk/edit?tab=t.0#heading=h.rv7641iuwu2&gt;</cite> to further configure the EC2 VM, install Apache Server, create and install an SSL certificate, and create an empty webapp.</p>
+<p>These two labs have information that form the foundation of how Plant-Tracer/webapp is currently deployed on EC2, and thus we can follow the lab instructions to set up an EC2 instance to use for either development or deployment. Of course, skip the few steps that are specific to the goals and infrastructure of that course, such as – in Lab 1, Steps 15 and 16 that concern doing an aws s3 cp command, and the end part about finding an access hack.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">dnf</span> <span class="o">-</span><span class="n">y</span> <span class="n">install</span> <span class="n">make</span>
+</pre></div>
+</div>
+</section>
+<section id="lab-1-summary-and-modifications">
+<h2>Lab 1 Summary and Modifications<a class="headerlink" href="#lab-1-summary-and-modifications" title="Link to this heading">¶</a></h2>
+<p>To summarize the instance setup described in Lab #1, once the EC2 instance is running and we have ssh’d into the instance, do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">yum</span> <span class="o">-</span><span class="n">y</span> <span class="n">install</span> <span class="n">git</span>
+<span class="n">sudo</span> <span class="n">yum</span> <span class="o">-</span><span class="n">y</span> <span class="n">install</span> <span class="n">emacs</span> <span class="c1"># optional</span>
+<span class="c1"># edit /etc/systemd/journald.conf so that MaxRetentionSec=6month</span>
+<span class="n">sudo</span> <span class="n">systemctl</span> <span class="n">restart</span> <span class="n">systemd</span><span class="o">-</span><span class="n">journald</span>
+</pre></div>
+</div>
+</section>
+<section id="lab-3-summary-and-modifications">
+<h2>Lab 3 Summary and Modifications<a class="headerlink" href="#lab-3-summary-and-modifications" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p>Modify your instance’s Security Group to allow inbound HTTP and HTTPS IPv4 traffic from anywhere (0.0.0.0).</p></li>
+<li><p>Set the hostname to something, perhaps to dev-youruserid.planttracer.com:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">hostnamectl</span> <span class="n">hostname</span> <span class="n">dev</span><span class="o">-</span><span class="n">youruserid</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+</pre></div>
+</div>
+</li>
+<li><p>If you wish for this hostname to actually be routed on the public Internet, contact a Plant-Tracer AWS administrator at <a class="reference external" href="mailto:plantadmin&#37;&#52;&#48;planttracer&#46;com">plantadmin<span>&#64;</span>planttracer<span>&#46;</span>com</a> and ask to configure your sub-domain for routing. This, however, would require a stable IP address, likely through the AWS Elastic IP service if you are going to be starting and stopping your instance. Elastic IP addresses cost money, at this writing (Feb 2025), about US $3.50/month.</p></li>
+<li><p>Lab 3 beyond this point is optional for PlantTracer/webapp developers who are only working on app functionality, as developers may run their developer webapp servers without a secure proxy. But if HTTPS: access to the developer server is needed, proceed further. If not, continue with the Setup Steps section, as github setup will be needed for all developers.</p></li>
+<li><p>Optional: Install Apache HTTP Server</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">dnf</span> <span class="o">-</span><span class="n">y</span> <span class="n">install</span> <span class="n">httpd</span> <span class="n">mod_ssl</span> <span class="n">sqlite</span> <span class="c1">#we aren&#39;t using sqlite, maybe don&#39;t install that?</span>
+<span class="n">sudo</span> <span class="n">systemctl</span> <span class="n">enable</span> <span class="n">httpd</span><span class="o">.</span><span class="n">service</span>
+<span class="n">sudo</span> <span class="n">systemctl</span> <span class="n">start</span> <span class="n">httpd</span><span class="o">.</span><span class="n">service</span>
+<span class="n">sudo</span> <span class="n">systemctl</span> <span class="n">status</span> <span class="n">httpd</span><span class="o">.</span><span class="n">service</span>
+</pre></div>
+</div>
+<ul>
+<li><p>Test Apache HTTP Server by browsing to <a class="reference external" href="http://your-instances-public-IPv4-address">http://your-instances-public-IPv4-address</a>. Should see “It Works!” page.</p></li>
+<li><p>Install a Let’s Encrypt certificate:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">mkdir</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">ec2</span><span class="o">-</span><span class="n">user</span><span class="o">/</span><span class="n">www</span>
+<span class="n">sudo</span> <span class="n">chown</span> <span class="n">ec2</span><span class="o">-</span><span class="n">user</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">ec2</span><span class="o">-</span><span class="n">user</span><span class="o">/</span><span class="n">www</span>
+</pre></div>
+</div>
+</li>
+<li><p>Our AWS account admin has to enter your subdomain dev-youruserid.planttracer.com into Route 53.</p></li>
+<li><p>Create /etc/httpd/conf.d/your-userid.conf with contents:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">VirtualHost</span> <span class="o">*</span><span class="p">:</span><span class="mi">80</span><span class="o">&gt;</span>
+    <span class="n">ServerName</span> <span class="n">dev</span><span class="o">-</span><span class="n">youruserid</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+    <span class="n">DocumentRoot</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">ec2</span><span class="o">-</span><span class="n">user</span><span class="o">/</span><span class="n">www</span>
+<span class="o">&lt;/</span><span class="n">VirtualHost</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+</li>
+<li><p>Next:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">systemctl</span> <span class="n">restart</span> <span class="n">httpd</span><span class="o">.</span><span class="n">service</span>
+</pre></div>
+</div>
+</li>
+<li><p>Follow the <cite>EFF Certbot tutorial for Apache on pip &lt;https://certbot.eff.org/instructions?ws=apache&amp;os=pip&amp;tab=standard&gt;</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">dnf</span> <span class="n">install</span> <span class="n">python3</span> <span class="n">augeas</span><span class="o">-</span><span class="n">libs</span>
+<span class="n">sudo</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">venv</span> <span class="o">/</span><span class="n">opt</span><span class="o">/</span><span class="n">certbot</span><span class="o">/</span>
+<span class="n">sudo</span> <span class="o">/</span><span class="n">opt</span><span class="o">/</span><span class="n">certbot</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">upgrade</span> <span class="n">pip</span>
+<span class="n">sudo</span> <span class="o">/</span><span class="n">opt</span><span class="o">/</span><span class="n">certbot</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pip</span> <span class="n">install</span> <span class="n">certbot</span> <span class="n">certbot</span><span class="o">-</span><span class="n">apache</span>
+<span class="n">sudo</span> <span class="n">ln</span> <span class="o">-</span><span class="n">s</span> <span class="o">/</span><span class="n">opt</span><span class="o">/</span><span class="n">certbot</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">certbot</span> <span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">certbot</span>
+<span class="n">sudo</span> <span class="n">certbot</span> <span class="o">--</span><span class="n">apache</span>
+</pre></div>
+</div>
+</li>
+<li><p>ToDo – Got this message:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Certbot</span> <span class="n">failed</span> <span class="n">to</span> <span class="n">authenticate</span> <span class="n">some</span> <span class="n">domains</span> <span class="p">(</span><span class="n">authenticator</span><span class="p">:</span> <span class="n">apache</span><span class="p">)</span><span class="o">.</span> <span class="n">The</span> <span class="n">Certificate</span> <span class="n">Authority</span> <span class="n">reported</span> <span class="n">these</span> <span class="n">problems</span><span class="p">:</span>
+<span class="n">Domain</span><span class="p">:</span> <span class="n">dev</span><span class="o">-</span><span class="n">seb</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+<span class="n">Type</span><span class="p">:</span>   <span class="n">dns</span>
+<span class="n">Detail</span><span class="p">:</span> <span class="n">DNS</span> <span class="n">problem</span><span class="p">:</span> <span class="n">NXDOMAIN</span> <span class="n">looking</span> <span class="n">up</span> <span class="n">A</span> <span class="k">for</span> <span class="n">dev</span><span class="o">-</span><span class="n">seb</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span> <span class="o">-</span> <span class="n">check</span> <span class="n">that</span> <span class="n">a</span> <span class="n">DNS</span> <span class="n">record</span> <span class="n">exists</span> <span class="k">for</span> <span class="n">this</span> <span class="n">domain</span><span class="p">;</span> <span class="n">DNS</span> <span class="n">problem</span><span class="p">:</span> <span class="n">NXDOMAIN</span> <span class="n">looking</span> <span class="n">up</span> <span class="n">AAAA</span> <span class="k">for</span> <span class="n">dev</span><span class="o">-</span><span class="n">seb</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span> <span class="o">-</span> <span class="n">check</span> <span class="n">that</span> <span class="n">a</span> <span class="n">DNS</span> <span class="n">record</span> <span class="n">exists</span> <span class="k">for</span> <span class="n">this</span> <span class="n">domain</span>
+
+<span class="n">Hint</span><span class="p">:</span> <span class="n">The</span> <span class="n">Certificate</span> <span class="n">Authority</span> <span class="n">failed</span> <span class="n">to</span> <span class="n">verify</span> <span class="n">the</span> <span class="n">temporary</span> <span class="n">Apache</span> <span class="n">configuration</span> <span class="n">changes</span> <span class="n">made</span> <span class="n">by</span> <span class="n">Certbot</span><span class="o">.</span> <span class="n">Ensure</span> <span class="n">that</span> <span class="n">the</span> <span class="n">listed</span> <span class="n">domains</span> <span class="n">point</span> <span class="n">to</span> <span class="n">this</span> <span class="n">Apache</span> <span class="n">server</span> <span class="ow">and</span> <span class="n">that</span> <span class="n">it</span> <span class="ow">is</span> <span class="n">accessible</span> <span class="kn">from</span><span class="w"> </span><span class="nn">the</span> <span class="n">internet</span><span class="o">.</span>
+
+<span class="n">Some</span> <span class="n">challenges</span> <span class="n">have</span> <span class="n">failed</span><span class="o">.</span>
+</pre></div>
+</div>
+</li>
+<li><p>Ignoring, oh wait, the machine is not responding.</p></li>
+<li><p>Setup instructions to be completed in a later release.</p></li>
+</ul>
+</section>
+<section id="setup-steps-specifics">
+<h2>Setup Steps Specifics<a class="headerlink" href="#setup-steps-specifics" title="Link to this heading">¶</a></h2>
+<p>Install gh for dnf version 4:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># DNF4 installation commands</span>
+<span class="n">sudo</span> <span class="n">dnf</span> <span class="n">install</span> <span class="s1">&#39;dnf-command(config-manager)&#39;</span>
+<span class="n">sudo</span> <span class="n">dnf</span> <span class="n">config</span><span class="o">-</span><span class="n">manager</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">repo</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">cli</span><span class="o">.</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">packages</span><span class="o">/</span><span class="n">rpm</span><span class="o">/</span><span class="n">gh</span><span class="o">-</span><span class="n">cli</span><span class="o">.</span><span class="n">repo</span>
+<span class="n">sudo</span> <span class="n">dnf</span> <span class="n">install</span> <span class="n">gh</span> <span class="o">--</span><span class="n">repo</span> <span class="n">gh</span><span class="o">-</span><span class="n">cli</span> <span class="o">-</span><span class="n">y</span>
+</pre></div>
+</div>
+<p>gh auth login</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Developer Setup on Amazon Linux 2023 on AWS EC2</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#lab-1-summary-and-modifications">Lab 1 Summary and Modifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#lab-3-summary-and-modifications">Lab 3 Summary and Modifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#setup-steps-specifics">Setup Steps Specifics</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="DeveloperSetup.html" title="previous chapter">Developer Setup</a></li>
+      <li>Next: <a href="DevSetupUbuntu.html" title="next chapter">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/DevSetupAmazonLinuxEC2.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

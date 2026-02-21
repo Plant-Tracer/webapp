@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Environment Variables &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="DynamoDB and Plant Tracer" href="DynamoDB.html" />
+    <link rel="prev" title="Local Development and GitHub Actions" href="Local%20Development%20and%20Github%20Actions.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="environment-variables">
+<h1>Environment Variables<a class="headerlink" href="#environment-variables" title="Link to this heading">¶</a></h1>
+<p>See <a class="reference external" href="https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html">https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html</a>. Also:</p>
+<section id="required">
+<h2>Required<a class="headerlink" href="#required" title="Link to this heading">¶</a></h2>
+<p><cite>DYNAMODB_TABLE_PREFIX</cite> - The prefix to add to all DynamoDB tables.</p>
+<ul class="simple">
+<li><p>This is required because the table namespace is top-level within an AWS account; unlike SQL, there is no higher-level <em>DATABASE</em> namespace.</p></li>
+<li><p>For testing, a random prefix is created, tables are created with this prefix, and the tables are deleted if the tests conclude successfully.</p></li>
+</ul>
+</section>
+<section id="optional-for-demo-mode">
+<h2>Optional for Demo Mode<a class="headerlink" href="#optional-for-demo-mode" title="Link to this heading">¶</a></h2>
+<p><cite>DEMO_COURSE_ID</cite> - Run in demo mode with this course. The Makefile creates a demo course called <cite>demo</cite>.</p>
+<p><cite>DEMO_DYNAMODB_PREFIX</cite> - Use tables with this prefix. The Makefile creates tables with a prefix <cite>demo</cite>.</p>
+<p><cite>DEMO_USER_EMAIL</cite> - Identifies the demo user. The Makefile creates a user with the email <cite>demo&#64;planttracer.com</cite>.</p>
+</section>
+<section id="optional-for-using-aws">
+<h2>Optional for using AWS<a class="headerlink" href="#optional-for-using-aws" title="Link to this heading">¶</a></h2>
+<p>Region selection:</p>
+<p><cite>AWS_REGION</cite> - The AWS region you are using.</p>
+<p><cite>AWS_PROFILE</cite> - Which profile in the <cite>$HOME/.aws/credentials</cite> and <cite>$HOME/.aws/config</cite> the webapp will use.</p>
+</section>
+<section id="optional-for-sending-mail">
+<h2>Optional for sending mail<a class="headerlink" href="#optional-for-sending-mail" title="Link to this heading">¶</a></h2>
+<p><cite>PLANTTRACER_CREDENTIALS</cite> - A configuration file that has email credentials</p>
+</section>
+<section id="optional-for-local-development">
+<h2>Optional for Local Development<a class="headerlink" href="#optional-for-local-development" title="Link to this heading">¶</a></h2>
+<p><cite>AWS_REGION</cite> - The AWS region you are using.</p>
+<p><cite>AWS_PROFILE</cite> - Which profile in the <cite>$HOME/.aws/credentials</cite> the webapp will use. Should be <cite>minio</cite> when using minio (assuming profile is installed)</p>
+<p><cite>AWS_ENDPOINT_URL_DYNAMODB</cite> - For local development, this must be set to the localhost and the port on which <strong>DynamoDBlocal</strong> is listening. It is typically <cite>http://localhost:8000</cite>.</p>
+<p><cite>AWS_ENDPOINT_URL_S3</cite> - For local development, this must be set to the localhost and the port on which <strong>minIO</strong> is listening. It is typically <cite>http://localhost:9000</cite>.</p>
+<p>For local usage:</p>
+<ul class="simple">
+<li><p>Minio - If you are using minio, either <cite>AWS_PROFILE</cite> should be <cite>minio</cite> (and the minio profile should be installed) or both <cite>AWS_ACCESS_KEY_ID</cite> and <cite>AWS_SECRET_KEY</cite> should be <cite>minioadmin</cite>.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Environment Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#required">Required</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-for-demo-mode">Optional for Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-for-using-aws">Optional for using AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-for-sending-mail">Optional for sending mail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-for-local-development">Optional for Local Development</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="Local%20Development%20and%20Github%20Actions.html" title="previous chapter">Local Development and GitHub Actions</a></li>
+      <li>Next: <a href="DynamoDB.html" title="next chapter">DynamoDB and Plant Tracer</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/EnvironmentVariables.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

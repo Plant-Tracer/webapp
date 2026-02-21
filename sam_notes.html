@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Notes on Deploying to SAM &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Configuration on mv1" href="mv1.html" />
+    <link rel="prev" title="Configuring AWS" href="configuring_aws.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="notes-on-deploying-to-sam">
+<h1>Notes on Deploying to SAM<a class="headerlink" href="#notes-on-deploying-to-sam" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html">https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html</a></p></li>
+<li><p><a class="reference external" href="https://github.com/tzelleke/aws-sam-fastapi">https://github.com/tzelleke/aws-sam-fastapi</a></p></li>
+</ul>
+<p><cite>sam build</cite> takes what’s in the requirements.txt file, installs it into the directory <cite>.aws-sam/build/HandlerFunction</cite>, makes it into a
+ZIP file, and uploads the ZIP file to S3.  The ZIP file needs to be unzipped when the lambda does a cold-start.</p>
+<section id="docker">
+<h2>Docker<a class="headerlink" href="#docker" title="Link to this heading">¶</a></h2>
+<p>Normal SAM is limited to 512MiB. The only way around this is by using Docker containers.</p>
+<p>I had no problem building and deploying a Lambda function with a Docker Container from EC2. However, from my mac, I could not build the container, even when Docker was installed.</p>
+<p>I was able to run x86 AWS Linux on my M1 Mac using Docker:</p>
+<p>Dockerfile:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">FROM</span> <span class="n">amazonlinux</span><span class="p">:</span><span class="n">latest</span>
+
+<span class="n">RUN</span> <span class="n">yum</span> <span class="n">install</span> <span class="o">-</span><span class="n">y</span> <span class="n">shadow</span><span class="o">-</span><span class="n">utils</span> <span class="n">sudo</span> <span class="o">&amp;&amp;</span> \
+    <span class="n">useradd</span> <span class="o">-</span><span class="n">m</span> <span class="n">ec2</span><span class="o">-</span><span class="n">user</span> <span class="o">&amp;&amp;</span> \
+    <span class="n">echo</span> <span class="s2">&quot;ec2-user ALL=(ALL) NOPASSWD:ALL&quot;</span> <span class="o">&gt;&gt;</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">sudoers</span>
+
+<span class="n">USER</span> <span class="n">ec2</span><span class="o">-</span><span class="n">user</span>
+<span class="n">WORKDIR</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">ec2</span><span class="o">-</span><span class="n">user</span>
+</pre></div>
+</div>
+<p>Makefile:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">build</span><span class="p">:</span>
+  <span class="n">echo</span> <span class="n">build</span> <span class="n">an</span> <span class="n">x86</span> <span class="n">aws</span> <span class="n">linux</span> <span class="n">container</span> <span class="k">with</span> <span class="n">an</span> <span class="n">ec2</span><span class="o">-</span><span class="n">user</span> <span class="n">account</span>
+  <span class="n">docker</span> <span class="n">build</span> <span class="o">-</span><span class="n">t</span> <span class="n">amazonlinux</span><span class="o">-</span><span class="n">ec2</span> <span class="o">.</span>
+  <span class="n">docker</span> <span class="n">run</span> <span class="o">--</span><span class="n">platform</span> <span class="n">linux</span><span class="o">/</span><span class="n">amd64</span> <span class="o">-</span><span class="n">it</span> <span class="n">amazonlinux</span><span class="o">-</span><span class="n">ec2</span> <span class="n">bash</span>
+</pre></div>
+</div>
+<p>I haven’t yet tried running SAM inside the docker container</p>
+<p>— To make things somewhat faster, it’s preferable to create a Layer which has the big files in it (opencv, numpy, etc).</p>
+<p>The layer is defined in the template.yaml file. Here it is in the directory <cite>layer/</cite>. Inside that is <cite>layer/python/requirements.txt</cite> which contains the referenced python files to be installed in the layer by <cite>sam build</cite>.  Ideally the layer doesn’t change much, so it doesn’t need to be uploaded much.</p>
+</section>
+<section id="virtual-environment">
+<h2>Virtual Environment<a class="headerlink" href="#virtual-environment" title="Link to this heading">¶</a></h2>
+<p>For local debugging, we install the files in both <cite>requirements.txt</cite>
+and <cite>layer/python/requirements.txt</cite> into the virtual environment. The deployed runtime doesn’t use a virtual environment.</p>
+</section>
+<section id="size">
+<h2>Size<a class="headerlink" href="#size" title="Link to this heading">¶</a></h2>
+<p>We are limited to 256MiB on lambda functions. One way around this is by using Docker containers. But another way is to delay the loading of ffmpeg to the times that we need it, and not having it always load.</p>
+</section>
+<section id="commands-to-try">
+<h2>Commands to try:<a class="headerlink" href="#commands-to-try" title="Link to this heading">¶</a></h2>
+<p><cite>sam sync –stack-name planttracer-webapp</cite>
+* Sends changes to the server</p>
+<p><cite>sam logs planttracer-app –tail</cite>
+* Watches for logfile changes</p>
+<p><cite>sam logs planttracer-app -s”5min ago”</cite>
+* Prints all logs from last 5 minutes</p>
+<p><cite>sam validate &amp;&amp; sam build &amp;&amp; sam deploy –no-confirm-changeset</cite>
+* validates, builds, and deploys without asking questions</p>
+<p><cite>sam sync –stack-name planttracer-webapp –watch</cite>
+* Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.</p>
+</section>
+<section id="set-up">
+<h2>Set Up<a class="headerlink" href="#set-up" title="Link to this heading">¶</a></h2>
+<p>Request a certificate for simson-dev.planttracer.com:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aws</span> <span class="n">acm</span> <span class="n">request</span><span class="o">-</span><span class="n">certificate</span>
+  <span class="o">--</span><span class="n">domain</span><span class="o">-</span><span class="n">name</span> <span class="n">simson</span><span class="o">-</span><span class="n">dev</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+  <span class="o">--</span><span class="n">validation</span><span class="o">-</span><span class="n">method</span> <span class="n">DNS</span>
+  <span class="o">--</span><span class="n">region</span> <span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span>
+  <span class="o">--</span><span class="n">idempotency</span><span class="o">-</span><span class="n">token</span> <span class="n">simson</span><span class="o">-</span><span class="n">cert</span>
+  <span class="o">--</span><span class="n">domain</span><span class="o">-</span><span class="n">validation</span><span class="o">-</span><span class="n">options</span> <span class="n">DomainName</span><span class="o">=</span><span class="n">simson</span><span class="o">-</span><span class="n">dev</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span><span class="p">,</span><span class="n">ValidationDomain</span><span class="o">=</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+</pre></div>
+</div>
+<p>After requesting the certificate, retrieve the validation DNS records:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aws</span> <span class="n">acm</span> <span class="n">describe</span><span class="o">-</span><span class="n">certificate</span> \
+  <span class="o">--</span><span class="n">certificate</span><span class="o">-</span><span class="n">arn</span> <span class="n">arn</span><span class="p">:</span><span class="n">aws</span><span class="p">:</span><span class="n">acm</span><span class="p">:</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">ACCOUNT_ID</span><span class="p">:</span><span class="n">certificate</span><span class="o">/</span><span class="n">CERTIFICATE_ID</span> \
+  <span class="o">--</span><span class="n">region</span> <span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Afterwards, create the Route 53 DNS Record:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aws</span> <span class="n">route53</span> <span class="n">change</span><span class="o">-</span><span class="n">resource</span><span class="o">-</span><span class="n">record</span><span class="o">-</span><span class="n">sets</span> \
+  <span class="o">--</span><span class="n">hosted</span><span class="o">-</span><span class="n">zone</span><span class="o">-</span><span class="nb">id</span> <span class="n">HOSTED_ZONE_ID</span> \
+  <span class="o">--</span><span class="n">change</span><span class="o">-</span><span class="n">batch</span> <span class="s1">&#39;{</span>
+    <span class="s2">&quot;Changes&quot;</span><span class="p">:</span> <span class="p">[</span>
+      <span class="p">{</span>
+        <span class="s2">&quot;Action&quot;</span><span class="p">:</span> <span class="s2">&quot;UPSERT&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ResourceRecordSet&quot;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="s2">&quot;CNAME_NAME_FROM_PREVIOUS_STEP&quot;</span><span class="p">,</span>
+          <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="s2">&quot;CNAME&quot;</span><span class="p">,</span>
+          <span class="s2">&quot;TTL&quot;</span><span class="p">:</span> <span class="mi">300</span><span class="p">,</span>
+          <span class="s2">&quot;ResourceRecords&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span>
+              <span class="s2">&quot;Value&quot;</span><span class="p">:</span> <span class="s2">&quot;CNAME_VALUE_FROM_PREVIOUS_STEP&quot;</span>
+            <span class="p">}</span>
+          <span class="p">]</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+    <span class="p">]</span>
+  <span class="p">}</span><span class="s1">&#39;</span>
+</pre></div>
+</div>
+<p>Finally, verify the certificate validation:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aws</span> <span class="n">acm</span> <span class="n">describe</span><span class="o">-</span><span class="n">certificate</span> \
+  <span class="o">--</span><span class="n">certificate</span><span class="o">-</span><span class="n">arn</span> <span class="n">arn</span><span class="p">:</span><span class="n">aws</span><span class="p">:</span><span class="n">acm</span><span class="p">:</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">ACCOUNT_ID</span><span class="p">:</span><span class="n">certificate</span><span class="o">/</span><span class="n">CERTIFICATE_ID</span> \
+  <span class="o">--</span><span class="n">region</span> <span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Once the certificate is validated, you  can use its ARN in your <cite>template.yaml</cite> file under CertificateArn:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Resources</span><span class="p">:</span>
+  <span class="n">CustomDomainName</span><span class="p">:</span>
+    <span class="n">Type</span><span class="p">:</span> <span class="n">AWS</span><span class="p">::</span><span class="n">ApiGatewayV2</span><span class="p">::</span><span class="n">DomainName</span>
+    <span class="n">Properties</span><span class="p">:</span>
+      <span class="n">DomainName</span><span class="p">:</span> <span class="n">simson</span><span class="o">-</span><span class="n">dev</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span>
+      <span class="n">DomainNameConfigurations</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">CertificateArn</span><span class="p">:</span> <span class="n">arn</span><span class="p">:</span><span class="n">aws</span><span class="p">:</span><span class="n">acm</span><span class="p">:</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">ACCOUNT_ID</span><span class="p">:</span><span class="n">certificate</span><span class="o">/</span><span class="n">CERTIFICATE_ID</span>
+          <span class="n">EndpointType</span><span class="p">:</span> <span class="n">REGIONAL</span>
+</pre></div>
+</div>
+<p>Then you can bind the custom domain to the API gateway using the CLI:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">aws</span> <span class="n">apigatewayv2</span> <span class="n">create</span><span class="o">-</span><span class="n">api</span><span class="o">-</span><span class="n">mapping</span> \
+  <span class="o">--</span><span class="n">domain</span><span class="o">-</span><span class="n">name</span> <span class="n">simson</span><span class="o">-</span><span class="n">dev</span><span class="o">.</span><span class="n">planttracer</span><span class="o">.</span><span class="n">com</span> \
+  <span class="o">--</span><span class="n">api</span><span class="o">-</span><span class="nb">id</span> <span class="n">API_ID</span> \
+  <span class="o">--</span><span class="n">stage</span><span class="o">-</span><span class="n">name</span> <span class="n">Prod</span>
+</pre></div>
+</div>
+<p>Reference: <a class="reference external" href="https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576">https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576</a></p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>More info about Globals:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst">https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst</a></p></li>
+<li><p>More info about Function Resource:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction">https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction</a></p></li>
+<li><p>More info about API Event Source. See:
+<a class="reference external" href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api">https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api</a></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Notes on Deploying to SAM</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#docker">Docker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#virtual-environment">Virtual Environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#size">Size</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#commands-to-try">Commands to try:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#set-up">Set Up</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="configuring_aws.html" title="previous chapter">Configuring AWS</a></li>
+      <li>Next: <a href="mv1.html" title="next chapter">Configuration on mv1</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/sam_notes.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Developer Setup Mac &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Windows Developer Setup Notes" href="WindowsDevSetup.html" />
+    <link rel="prev" title="Setting Up Plant-Tracer webapp on Ubuntu 24.04" href="DevSetupUbuntu.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="developer-setup-mac">
+<h1>Developer Setup Mac<a class="headerlink" href="#developer-setup-mac" title="Link to this heading">¶</a></h1>
+<p>This tutorial takes a new macOS install and gets you to running PlantTracer locally and on Amazon.</p>
+<p>It makes use of the following services, which you will install:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Service</p></th>
+<th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DynamoDBLocal.jar</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:8000/</span></code></p></td>
+<td><p>AWS DynamoDB Emulator</p></td>
+</tr>
+<tr class="row-odd"><td><p>Minio</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:9000/</span></code></p></td>
+<td><p>AWS S3 Emulator</p></td>
+</tr>
+</tbody>
+</table>
+<p>The following environment variables must be set to run Java programs on your Mac with homebrew (we install these below in your ~/.zshrc file):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PATH</span></code></p></td>
+<td><p>Must include <code class="docutils literal notranslate"><span class="pre">/opt/homebrew/opt/openjdk/bin</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CPPFLAGS</span></code></p></td>
+<td><p>Must include <code class="docutils literal notranslate"><span class="pre">-I/opt/homebrew/opt/openjdk/include</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The DynamoDBLocal and Minio programs require that the following AWS  variables be set. They can be set on the command line as environment variables (as is done in the <code class="docutils literal notranslate"><span class="pre">Makefile</span></code>), they can be set in your <code class="docutils literal notranslate"><span class="pre">~/.zshrc</span></code> file, or they can be in your <code class="docutils literal notranslate"><span class="pre">~/.aws/credentials</span></code> and <code class="docutils literal notranslate"><span class="pre">~/.aws/config</span></code> files:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AWS_ACCESS_KEY_ID</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">minioadmin</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AWS_SECRET_ACCESS_KEY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">minioadmin</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AWS_REGION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">us-east-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AWS_ENDPOINT_URL_S3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:9000/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AWS_ENDPOINT_URL_DYNAMODB</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:8000/</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>You will also want to set these variables:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Value for <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">pytest</span></code> in Github actions`</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">PLANTTRACER_S3_BUCKET</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">planttracer-local</span></code></p></td>
+<td><p>Bucket where videos are stored</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DYNAMODB_TABLE_PREFIX</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">demo-</span></code></p></td>
+<td><p>Prefix for all DynamoDB tables</p></td>
+</tr>
+</tbody>
+</table>
+<p>You may optionally set these variables:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Value set for <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">pytest</span></code> in Github actions</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DEMO_COURSE_ID</span></code></p></td>
+<td><p>not set</p></td>
+<td><p>If set, Plant Tracer runs in <a class="reference internal" href="demo_mode.html"><span class="std std-doc">demo mode</span></a> and <code class="docutils literal notranslate"><span class="pre">DEMO_COURSE_ID</span></code> specifies the course that is viewed.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LOG_LEVEL</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DEBUG</span></code></p></td>
+<td><p>If set, all logging is at this log level</p></td>
+</tr>
+</tbody>
+</table>
+<p>Note that there are multiple ways that a single service can be sliced or partitioned:</p>
+<ul class="simple">
+<li><p>A single server might have multiple Plant Tracer web app instances listening on different ports.</p></li>
+<li><p>Each web app instance can store in its own S3 bucket. Alternatively, you can use the same S3 bucket for multiple web app instances, because each movie is stored with a UUID in the form <code class="docutils literal notranslate"><span class="pre">s3://{PLANTTRACER_S3_BUCKET/{COURSE_ID}/{MovieID/</span></code>.</p></li>
+<li><p>Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing with <code class="docutils literal notranslate"><span class="pre">pytest</span></code>, tables are created with the randomized prefix <code class="docutils literal notranslate"><span class="pre">test-????</span></code> where <code class="docutils literal notranslate"><span class="pre">????</span></code> is a randomly hexadecimal string.</p></li>
+<li><p>Within each web app instance, there can be one or more courses, each with its own course identifier (name).</p></li>
+</ul>
+<p>Note that any course can be come a demo course. What makes it a demo course is that the web app instance has the <code class="docutils literal notranslate"><span class="pre">DEMO_COURSE_ID</span></code> environment variable set. This allows the same course to be accessed for non-demo purposes and demo purposes. When you access a web app instance that has the <code class="docutils literal notranslate"><span class="pre">DEMO_COURSE_ID</span></code> environment variable set, you are automatically authenticated as the demo user and can only access that user’s movies and public movies.</p>
+</section>
+<section id="mac-configuration">
+<h1>Mac Configuration<a class="headerlink" href="#mac-configuration" title="Link to this heading">¶</a></h1>
+<section id="prep-your-mac">
+<h2>Prep your mac<a class="headerlink" href="#prep-your-mac" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Install developer tools.</p></li>
+</ol>
+<p>From a clean install, open the Terminal window and type <code class="docutils literal notranslate"><span class="pre">make</span></code>. You should get an error message:
+<img width="949" height="455" alt="image" src="https://github.com/user-attachments/assets/a51cd276-7eae-4de8-8ba7-cea15ebe3bb6" /></p>
+<ul class="simple">
+<li><p>After a few moments, you’ll see this window. Click <strong>Install</strong>:
+<img width="573" height="307" alt="image" src="https://github.com/user-attachments/assets/21294734-0324-4b83-9a4a-1c4185dfa7aa" /></p></li>
+</ul>
+<p>Agree to the license agreement.</p>
+<ol class="arabic simple" start="2">
+<li><p>Install <code class="docutils literal notranslate"><span class="pre">brew</span></code> from https://brew.sh/</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">bash</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;</span>
+</pre></div>
+</div>
+<img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/53738f7e-3168-4041-a211-f6d1058ae0bd" />
+...
+<img width="1110" height="553" alt="image" src="https://github.com/user-attachments/assets/03ccb527-14ba-4d0c-84d9-48bd337f93a1" />
+<p>(You will need to enter your password and type <strong>RETURN/ENTER</strong>.)</p>
+<p>Follow the instructions and type:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">echo</span> <span class="o">&gt;&gt;</span> <span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">simsong</span><span class="o">/.</span><span class="n">zprofile</span>
+<span class="n">echo</span> <span class="s1">&#39;eval &quot;$(/opt/homebrew/bin/brew shellenv)&quot;&#39;</span> <span class="o">&gt;&gt;</span> <span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">simsong</span><span class="o">/.</span><span class="n">zprofile</span>
+<span class="nb">eval</span> <span class="s2">&quot;$(/opt/homebrew/bin/brew shellenv)&quot;</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Install OpenJDK (you need it for DynamoDBLocal)</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">install</span> <span class="n">openjdk</span>
+<span class="n">echo</span> <span class="s1">&#39;export PATH=&quot;/opt/homebrew/opt/openjdk/bin:$PATH&quot;&#39;</span> <span class="o">&gt;&gt;</span> <span class="o">~/.</span><span class="n">zshrc</span>
+<span class="n">echo</span> <span class="s1">&#39;export CPPFLAGS=&quot;-I/opt/homebrew/opt/openjdk/include&quot;&#39;</span> <span class="o">&gt;&gt;</span> <span class="o">~/.</span><span class="n">zshrc</span>
+<span class="n">source</span> <span class="o">~/.</span><span class="n">zshrc</span>
+</pre></div>
+</div>
+</section>
+<section id="download-and-install-the-required-software">
+<h2>Download and install the required software<a class="headerlink" href="#download-and-install-the-required-software" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Download the git repo.</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">%</span> <span class="n">git</span> <span class="n">clone</span> <span class="o">--</span><span class="n">recursive</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">Plant</span><span class="o">-</span><span class="n">Tracer</span><span class="o">/</span><span class="n">webapp</span><span class="o">.</span><span class="n">git</span>
+<span class="n">Cloning</span> <span class="n">into</span> <span class="s1">&#39;webapp&#39;</span><span class="o">...</span>
+<span class="n">remote</span><span class="p">:</span> <span class="n">Enumerating</span> <span class="n">objects</span><span class="p">:</span> <span class="mi">10477</span><span class="p">,</span> <span class="n">done</span><span class="o">.</span>
+<span class="n">remote</span><span class="p">:</span> <span class="n">Counting</span> <span class="n">objects</span><span class="p">:</span> <span class="mi">100</span><span class="o">%</span> <span class="p">(</span><span class="mi">1404</span><span class="o">/</span><span class="mi">1404</span><span class="p">),</span> <span class="n">done</span><span class="o">.</span>
+<span class="n">remote</span><span class="p">:</span> <span class="n">Compressing</span> <span class="n">objects</span><span class="p">:</span> <span class="mi">100</span><span class="o">%</span> <span class="p">(</span><span class="mi">577</span><span class="o">/</span><span class="mi">577</span><span class="p">),</span> <span class="n">done</span><span class="o">.</span>
+<span class="n">remote</span><span class="p">:</span> <span class="n">Total</span> <span class="mi">10477</span> <span class="p">(</span><span class="n">delta</span> <span class="mi">866</span><span class="p">),</span> <span class="n">reused</span> <span class="mi">827</span> <span class="p">(</span><span class="n">delta</span> <span class="mi">827</span><span class="p">),</span> <span class="n">pack</span><span class="o">-</span><span class="n">reused</span> <span class="mi">9073</span> <span class="p">(</span><span class="kn">from</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Receiving</span> <span class="n">objects</span><span class="p">:</span> <span class="mi">100</span><span class="o">%</span> <span class="p">(</span><span class="mi">10477</span><span class="o">/</span><span class="mi">10477</span><span class="p">),</span> <span class="mf">106.38</span> <span class="n">MiB</span> <span class="o">|</span> <span class="mf">48.78</span> <span class="n">MiB</span><span class="o">/</span><span class="n">s</span><span class="p">,</span> <span class="n">done</span><span class="o">.</span>
+<span class="n">Resolving</span> <span class="n">deltas</span><span class="p">:</span> <span class="mi">100</span><span class="o">%</span> <span class="p">(</span><span class="mi">7355</span><span class="o">/</span><span class="mi">7355</span><span class="p">),</span> <span class="n">done</span><span class="o">.</span>
+<span class="o">%</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Use the macOS installer built into the Makefile to install additional software</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">webapp</span>
+<span class="n">make</span> <span class="n">install</span><span class="o">-</span><span class="n">macos</span>
+</pre></div>
+</div>
+</section>
+<section id="each-time-you-reboot">
+<h2>Each time you reboot<a class="headerlink" href="#each-time-you-reboot" title="Link to this heading">¶</a></h2>
+<p>Now you must start the servers. You will also need to do this every time you reboot and want to develop.</p>
+<ol class="arabic simple">
+<li><p>Start the local servers</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">start_local_dynamodb</span>
+<span class="n">make</span> <span class="n">start_local_minio</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>(First time through), make the local S3 bucket and verify it is there:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">make</span><span class="o">-</span><span class="n">local</span><span class="o">-</span><span class="n">bucket</span>
+<span class="n">make</span> <span class="nb">list</span><span class="o">-</span><span class="n">local</span><span class="o">-</span><span class="n">buckets</span>
+</pre></div>
+</div>
+</section>
+<section id="validate-the-release">
+<h2>Validate the release<a class="headerlink" href="#validate-the-release" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Check to make sure the commit that you checked out is valid:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">pylint</span>
+<span class="n">make</span> <span class="n">pytest</span>
+</pre></div>
+</div>
+<p>If these do not work, speak with a maintainer, as the build is broken.</p>
+</section>
+</section>
+<section id="developing-locally">
+<h1>Developing locally<a class="headerlink" href="#developing-locally" title="Link to this heading">¶</a></h1>
+<p>At this point you have checked out the git repo and verified that <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">pylint</span></code> and <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">pytest</span></code> run without error. This means:</p>
+<ul class="simple">
+<li><p>You have all the necessary software installed.</p></li>
+<li><p>DynamoDBlocal works</p></li>
+<li><p>Minio works.</p></li>
+</ul>
+<p>Plant Tracer’s webapp runs within a python virtual environment. You should <code class="docutils literal notranslate"><span class="pre">cd</span></code> into the top-level directory and activate the virtual environment in your command line shell, so that when you type <code class="docutils literal notranslate"><span class="pre">python</span></code> you run the correct python interpreter:</p>
+<p>Note that our virtual environment is currently stored in the <code class="docutils literal notranslate"><span class="pre">venv</span></code> directory, although it is increasingly trendy to store the venv in <code class="docutils literal notranslate"><span class="pre">.venv</span></code> and we will be making this change at some point.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">~/</span><span class="n">gits</span><span class="o">/</span><span class="n">webapp</span>          <span class="c1"># or wherever you have it installed</span>
+<span class="n">source</span> <span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+<span class="n">python</span> <span class="o">--</span><span class="n">version</span>          <span class="c1"># Verify you get the correct python</span>
+</pre></div>
+</div>
+<p>When you run <code class="docutils literal notranslate"><span class="pre">pytest</span></code>, a directory called <code class="docutils literal notranslate"><span class="pre">var/</span></code> was created which contains the following files:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">%</span> <span class="n">ls</span> <span class="o">-</span><span class="n">l</span> <span class="n">var</span>
+<span class="n">total</span> <span class="mi">22672</span>
+<span class="o">-</span><span class="n">rw</span><span class="o">-</span><span class="n">r</span><span class="o">--</span><span class="n">r</span><span class="o">--@</span> <span class="mi">1</span> <span class="n">simsong</span>  <span class="n">staff</span>         <span class="mi">6</span> <span class="n">Jul</span> <span class="mi">12</span> <span class="mi">13</span><span class="p">:</span><span class="mi">40</span> <span class="n">dynamodb_local</span><span class="o">.</span><span class="n">pid</span>
+<span class="o">-</span><span class="n">rw</span><span class="o">-</span><span class="n">r</span><span class="o">--</span><span class="n">r</span><span class="o">--@</span> <span class="mi">1</span> <span class="n">simsong</span>  <span class="n">staff</span>         <span class="mi">6</span> <span class="n">Jul</span> <span class="mi">12</span> <span class="mi">13</span><span class="p">:</span><span class="mi">40</span> <span class="n">minio</span><span class="o">.</span><span class="n">pid</span>
+<span class="n">drwxr</span><span class="o">-</span><span class="n">xr</span><span class="o">-</span><span class="n">x</span><span class="o">@</span> <span class="mi">3</span> <span class="n">simsong</span>  <span class="n">staff</span>        <span class="mi">96</span> <span class="n">Jul</span> <span class="mi">12</span> <span class="mi">13</span><span class="p">:</span><span class="mi">40</span> <span class="n">planttracer</span><span class="o">-</span><span class="n">local</span>
+<span class="o">-</span><span class="n">rw</span><span class="o">-</span><span class="n">r</span><span class="o">--</span><span class="n">r</span><span class="o">--@</span> <span class="mi">1</span> <span class="n">simsong</span>  <span class="n">staff</span>  <span class="mi">10772480</span> <span class="n">Jul</span> <span class="mi">12</span> <span class="mi">13</span><span class="p">:</span><span class="mi">40</span> <span class="n">shared</span><span class="o">-</span><span class="n">local</span><span class="o">-</span><span class="n">instance</span><span class="o">.</span><span class="n">db</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dynamodb_local.pid</span></code> — File containing the PID of the DynamoDBlocal process</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">minio.pid</span></code> — File containing the PID of the minio process</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">planttracer-local</span></code> — Directory containing the objects in the <code class="docutils literal notranslate"><span class="pre">s3://planttracer-local/</span></code> Minio S3 bucket.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">shared-local-instance.db</span></code> — SQLite 3.x database containing all of the objects in the DynamoDBlocal tables.</p></li>
+</ul>
+<p>The bucket allows you to see how individual objects are stored in S3:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">find</span> <span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="o">-</span><span class="nb">type</span> <span class="n">f</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m0fa68c59</span><span class="o">-</span><span class="mi">39</span><span class="n">ad</span><span class="o">-</span><span class="mi">4166</span><span class="o">-</span><span class="mi">8</span><span class="n">a07</span><span class="o">-</span><span class="mi">7656</span><span class="n">b73ed74f_mp4</span><span class="o">.</span><span class="n">zip</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m0fa68c59</span><span class="o">-</span><span class="mi">39</span><span class="n">ad</span><span class="o">-</span><span class="mi">4166</span><span class="o">-</span><span class="mi">8</span><span class="n">a07</span><span class="o">-</span><span class="mi">7656</span><span class="n">b73ed74f_mp4</span><span class="o">.</span><span class="n">zip</span><span class="o">/</span><span class="mi">0</span><span class="n">fa25410</span><span class="o">-</span><span class="mi">05</span><span class="n">dd</span><span class="o">-</span><span class="mi">4</span><span class="n">f14</span><span class="o">-</span><span class="mi">9</span><span class="n">eb5</span><span class="o">-</span><span class="n">bb3367f05b1f</span><span class="o">/</span><span class="n">part</span><span class="mf">.1</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m5dbcd625</span><span class="o">-</span><span class="mi">06</span><span class="n">bb</span><span class="o">-</span><span class="mi">4875</span><span class="o">-</span><span class="n">ae82</span><span class="o">-</span><span class="n">b218edfcb023</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="mi">8</span><span class="n">b6ab206</span><span class="o">-</span><span class="n">c2b0</span><span class="o">-</span><span class="mi">4278</span><span class="o">-</span><span class="n">a931</span><span class="o">-</span><span class="n">b87bf49db6fd</span><span class="o">/</span><span class="n">part</span><span class="mf">.1</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m5dbcd625</span><span class="o">-</span><span class="mi">06</span><span class="n">bb</span><span class="o">-</span><span class="mi">4875</span><span class="o">-</span><span class="n">ae82</span><span class="o">-</span><span class="n">b218edfcb023</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">mf97f7149</span><span class="o">-</span><span class="mi">00</span><span class="n">d5</span><span class="o">-</span><span class="mf">487e-8</span><span class="n">e75</span><span class="o">-</span><span class="n">df9b958a75ab</span><span class="o">/</span><span class="mf">000000.</span><span class="n">jpg</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">mf97f7149</span><span class="o">-</span><span class="mi">00</span><span class="n">d5</span><span class="o">-</span><span class="mf">487e-8</span><span class="n">e75</span><span class="o">-</span><span class="n">df9b958a75ab</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">mf97f7149</span><span class="o">-</span><span class="mi">00</span><span class="n">d5</span><span class="o">-</span><span class="mf">487e-8</span><span class="n">e75</span><span class="o">-</span><span class="n">df9b958a75ab</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="mi">6588491</span><span class="n">e</span><span class="o">-</span><span class="n">e797</span><span class="o">-</span><span class="mi">4</span><span class="n">f0d</span><span class="o">-</span><span class="n">a16c</span><span class="o">-</span><span class="mi">0</span><span class="n">aa65f742e52</span><span class="o">/</span><span class="n">part</span><span class="mf">.1</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">mae9499f2</span><span class="o">-</span><span class="n">e9f2</span><span class="o">-</span><span class="mi">4856</span><span class="o">-</span><span class="n">a353</span><span class="o">-</span><span class="n">ba26b04270ba</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">mae9499f2</span><span class="o">-</span><span class="n">e9f2</span><span class="o">-</span><span class="mi">4856</span><span class="o">-</span><span class="n">a353</span><span class="o">-</span><span class="n">ba26b04270ba</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="mi">931</span><span class="n">fdf84</span><span class="o">-</span><span class="n">c442</span><span class="o">-</span><span class="mi">4896</span><span class="o">-</span><span class="mi">8454</span><span class="o">-</span><span class="n">d21a3d94927d</span><span class="o">/</span><span class="n">part</span><span class="mf">.1</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m0fa68c59</span><span class="o">-</span><span class="mi">39</span><span class="n">ad</span><span class="o">-</span><span class="mi">4166</span><span class="o">-</span><span class="mi">8</span><span class="n">a07</span><span class="o">-</span><span class="mi">7656</span><span class="n">b73ed74f</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="mi">6922</span><span class="n">ff10</span><span class="o">-</span><span class="mi">85</span><span class="n">d9</span><span class="o">-</span><span class="mf">4e6</span><span class="n">b</span><span class="o">-</span><span class="n">a223</span><span class="o">-</span><span class="n">b0b33daa8595</span><span class="o">/</span><span class="n">part</span><span class="mf">.1</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m0fa68c59</span><span class="o">-</span><span class="mi">39</span><span class="n">ad</span><span class="o">-</span><span class="mi">4166</span><span class="o">-</span><span class="mi">8</span><span class="n">a07</span><span class="o">-</span><span class="mi">7656</span><span class="n">b73ed74f</span><span class="o">.</span><span class="n">mov</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="n">var</span><span class="o">/</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span><span class="o">/</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span><span class="o">/</span><span class="n">m0fa68c59</span><span class="o">-</span><span class="mi">39</span><span class="n">ad</span><span class="o">-</span><span class="mi">4166</span><span class="o">-</span><span class="mi">8</span><span class="n">a07</span><span class="o">-</span><span class="mi">7656</span><span class="n">b73ed74f</span><span class="o">/</span><span class="mf">000000.</span><span class="n">jpg</span><span class="o">/</span><span class="n">xl</span><span class="o">.</span><span class="n">meta</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span>
+</pre></div>
+</div>
+<p>There are two Makefile targets that you have to manage this:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">delete-local</span></code> - Just deletes the local directory and doesn’t recreate anything</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">wipe-local</span></code> - Wipes the <code class="docutils literal notranslate"><span class="pre">var/</span></code> directory and recreates the local bucket.</p></li>
+</ul>
+<section id="getting-started">
+<h2>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading">¶</a></h2>
+<p>If you have reboot your computer, it’s likely that none the databases are running.  To get going, you should do this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">start_local_dynamodb</span>
+<span class="n">make</span> <span class="n">start_local_minio</span>
+</pre></div>
+</div>
+<p>Here’s what it looks like when it runs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">make</span> <span class="n">start_local_dynamodb</span>
+<span class="n">bash</span> <span class="nb">bin</span><span class="o">/</span><span class="n">local_dynamodb_control</span><span class="o">.</span><span class="n">bash</span> <span class="n">start</span>
+<span class="n">Starting</span> <span class="n">DynamoDB</span> <span class="n">Local</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">DynamoDBLocal</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">DynamoDBLocal</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">...</span>
+<span class="n">DynamoDB</span> <span class="n">Local</span> <span class="ow">is</span> <span class="n">ready</span><span class="o">.</span>
+<span class="n">DynamoDB</span> <span class="n">Local</span> <span class="n">started</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">background</span> <span class="p">(</span><span class="n">PID</span><span class="p">:</span> <span class="mi">12336</span><span class="p">)</span><span class="o">.</span>
+<span class="n">DynamoDB</span> <span class="n">Local</span> <span class="n">endpoint</span><span class="p">:</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">make</span> <span class="n">start_local_minio</span>
+<span class="n">bash</span> <span class="nb">bin</span><span class="o">/</span><span class="n">local_minio_control</span><span class="o">.</span><span class="n">bash</span> <span class="n">start</span>
+<span class="n">Starting</span> <span class="n">Minio</span> <span class="o">...</span>
+<span class="n">Minio</span> <span class="n">Local</span> <span class="n">started</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">background</span> <span class="p">(</span><span class="n">PID</span><span class="p">:</span> <span class="mi">12428</span><span class="p">)</span><span class="o">.</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">MinIO</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">MinIO</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">MinIO</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">MinIO</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="o">...</span>
+  <span class="n">Waiting</span> <span class="k">for</span> <span class="n">MinIO</span> <span class="n">to</span> <span class="n">be</span> <span class="n">ready</span> <span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="o">...</span>
+<span class="n">MinIO</span> <span class="ow">is</span> <span class="n">ready</span><span class="o">.</span>
+<span class="o">%</span>
+</pre></div>
+</div>
+<p>You can now create a web app instance within the DyanmoDBlocal and the Minio instances. This will:</p>
+<ul class="simple">
+<li><p>Create all of the tables with a specific prefix (that you will specify)</p></li>
+<li><p>Create a demo user with the email <code class="docutils literal notranslate"><span class="pre">demo&#64;planttracer.com</span></code> (created by <code class="docutils literal notranslate"><span class="pre">odbmaint.create_course()</span></code>)</p></li>
+<li><p>Create an admin user for the course with the email <code class="docutils literal notranslate"><span class="pre">admin&#64;planttracer.com</span></code> (also created by <code class="docutils literal notranslate"><span class="pre">odbmaint.create_course()</span></code>)</p></li>
+<li><p>Created a demo course with the CourseId <code class="docutils literal notranslate"><span class="pre">demo-course</span></code></p></li>
+<li><p>Create the demo movies (created by <code class="docutils literal notranslate"><span class="pre">dbutil.populate_demo_movies()</span></code>)</p></li>
+</ul>
+<p>Notice that below we set all of the environment variables first. You might want to do this in a file that your <code class="docutils literal notranslate"><span class="pre">source</span></code>. _We do not recommend that you put this in your <code class="docutils literal notranslate"><span class="pre">~/.bashrc</span></code> or <code class="docutils literal notranslate"><span class="pre">~/.zshrc</span></code> files, becuase setting these variables will cause problems if you need to use Amazon Web Services for something else.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span>\
+    <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span>\
+    <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> \
+    <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> \
+    <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">local</span> \
+    <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> \
+    <span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">dev</span><span class="o">-</span> \
+    <span class="n">LOG_LEVEL</span><span class="o">=</span><span class="n">DEBUG</span> <span class="n">python</span> <span class="n">dbutil</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">createdb</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">16</span><span class="p">,</span><span class="mi">090</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">376</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">NOTE</span><span class="p">:</span> <span class="n">create_user</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">check</span> <span class="n">to</span> <span class="n">make</span> <span class="n">sure</span> <span class="n">user</span> <span class="n">admin</span><span class="nd">@planttracer</span><span class="o">.</span><span class="n">com</span><span class="s1">&#39;s course demo-course exists</span>
+<span class="n">Transaction</span> <span class="n">succeeded</span><span class="p">:</span> <span class="n">user</span> <span class="n">inserted</span><span class="o">.</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">16</span><span class="p">,</span><span class="mi">131</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">376</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">NOTE</span><span class="p">:</span> <span class="n">create_user</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">check</span> <span class="n">to</span> <span class="n">make</span> <span class="n">sure</span> <span class="n">user</span> <span class="n">demo</span><span class="nd">@planttracer</span><span class="o">.</span><span class="n">com</span><span class="s1">&#39;s course demo-course exists</span>
+<span class="n">Transaction</span> <span class="n">succeeded</span><span class="p">:</span> <span class="n">user</span> <span class="n">inserted</span><span class="o">.</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">16</span><span class="p">,</span><span class="mi">154</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">1302</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">INEFFICIENT</span> <span class="n">CALL</span><span class="o">.</span> <span class="n">Just</span> <span class="k">return</span> <span class="n">movie_id</span><span class="o">.</span><span class="n">course_id</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">16</span><span class="p">,</span><span class="mi">309</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">1302</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">INEFFICIENT</span> <span class="n">CALL</span><span class="o">.</span> <span class="n">Just</span> <span class="k">return</span> <span class="n">movie_id</span><span class="o">.</span><span class="n">course_id</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span>
+</pre></div>
+</div>
+<p>Notice that the admin user’s email is assumed to be <code class="docutils literal notranslate"><span class="pre">admin&#64;planttracer.com</span></code> and the demo user’s email is <code class="docutils literal notranslate"><span class="pre">demo&#64;planttracer.com</span></code>.</p>
+<p>That <code class="docutils literal notranslate"><span class="pre">WARNING:</span> <span class="pre">INEFFICIENT</span> <span class="pre">CALL</span></code> is a note to the developer that this code could be cleaned up at some point in the future.</p>
+<p>(We could have just run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">make-local-demo</span></code>, but here we expand so that you can see all of the variables.)</p>
+<p>Now we can run the web app:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ \
+    AWS_ENDPOINT_URL_S3=http://localhost:9000/ \
+    AWS_ACCESS_KEY_ID=minioadmin \
+    AWS_SECRET_ACCESS_KEY=minioadmin \
+    AWS_REGION=local \
+    PLANTTRACER_S3_BUCKET=planttracer-local \
+    DYNAMODB_TABLE_PREFIX=dev- \
+    LOG_LEVEL=DEBUG venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
+2025-08-10 09:49:33,073  bottle_app.py:59 INFO: new Flask(__name__=webapp.deploy.app.bottle_app) log_level=DEBUG
+2025-08-10 09:49:33,073  db_object.py:72 DEBUG: make_urn urn=s3://planttracer-local/
+2025-08-10 09:49:33,073  bottle_app.py:60 INFO: make_urn(&#39;&#39;)=s3://planttracer-local/
+ * Serving Flask app &#39;deploy.app.bottle_app:app&#39;
+ * Debug mode: on
+2025-08-10 09:49:33,126  _internal.py:97 INFO: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:8080
+2025-08-10 09:49:33,127  _internal.py:97 INFO: Press CTRL+C to quit
+2025-08-10 09:49:33,127  _internal.py:97 INFO:  * Restarting with stat
+2025-08-10 09:49:33,375  bottle_app.py:59 INFO: new Flask(__name__=webapp.deploy.app.bottle_app) log_level=DEBUG
+2025-08-10 09:49:33,375  db_object.py:72 DEBUG: make_urn urn=s3://planttracer-local/
+2025-08-10 09:49:33,375  bottle_app.py:60 INFO: make_urn(&#39;&#39;)=s3://planttracer-local/
+2025-08-10 09:49:33,393  _internal.py:97 WARNING:  * Debugger is active!
+2025-08-10 09:49:33,402  _internal.py:97 INFO:  * Debugger PIN: 594-409-847
+</pre></div>
+</div>
+<p>(Once again, you could just do a <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run-local-debug</span></code>.)</p>
+<p>Now connect to <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8080</span></code>:</p>
+<img width="1024" height="677" alt="image" src="https://github.com/user-attachments/assets/57585fc5-1db7-4f09-926f-bcf7476f2819" />
+<p>Alternatively, we could run in demo mode:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span> <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span> <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span> <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">dev</span><span class="o">-</span> <span class="n">LOG_LEVEL</span><span class="o">=</span><span class="n">DEBUG</span> <span class="n">DEMO_COURSE_ID</span><span class="o">=</span><span class="n">demo</span><span class="o">-</span><span class="n">course</span> <span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">flask</span> <span class="o">--</span><span class="n">debug</span> <span class="o">--</span><span class="n">app</span> <span class="n">deploy</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">bottle_app</span><span class="p">:</span><span class="n">app</span> <span class="n">run</span> <span class="o">--</span><span class="n">port</span> <span class="mi">8080</span> <span class="o">--</span><span class="k">with</span><span class="o">-</span><span class="n">threads</span>
+</pre></div>
+</div>
+<p>And now if we go to <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8080</span></code> we see:
+<img width="1053" height="630" alt="image" src="https://github.com/user-attachments/assets/7a608a60-18e1-4c52-8e2c-105f98a0eb5a" /></p>
+<p>Click on the link and you see:
+<img width="1053" height="630" alt="image" src="https://github.com/user-attachments/assets/0bc90c71-873a-49e2-b71c-0bf86528633b" /></p>
+</section>
+<section id="creating-a-course-and-a-user">
+<h2>Creating a course and a user<a class="headerlink" href="#creating-a-course-and-a-user" title="Link to this heading">¶</a></h2>
+<p>While the application is running, open another window.</p>
+<p>We will first use the <code class="docutils literal notranslate"><span class="pre">--report</span></code> option to see what is in the database:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="o">~</span> <span class="o">%</span> <span class="n">cd</span> <span class="n">gits</span><span class="o">/</span><span class="n">webapp</span>
+<span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">source</span> <span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span> <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span> <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span> <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">dev</span><span class="o">-</span> <span class="n">LOG_LEVEL</span><span class="o">=</span><span class="n">INFO</span> <span class="n">python</span> <span class="n">dbutil</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">report</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">580</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-api_keys&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">583</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-users&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">586</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-movies&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">588</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-movie_frames&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">592</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-courses&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">594</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-course_users&#39;</span><span class="p">)</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">09</span><span class="p">:</span><span class="mi">53</span><span class="p">:</span><span class="mi">21</span><span class="p">,</span><span class="mi">596</span>  <span class="n">odbmaint</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">347</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">scan</span> <span class="n">table</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">Table</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;dev-logs&#39;</span><span class="p">)</span>
+<span class="n">table</span>               <span class="o">.</span><span class="n">item_count</span>    <span class="n">count_table_items</span><span class="p">()</span>
+<span class="o">----------------</span>  <span class="o">-------------</span>  <span class="o">---------------------</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">api_keys</span>                  <span class="mi">1</span>                      <span class="mi">1</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">users</span>                     <span class="mi">2</span>                      <span class="mi">2</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">movies</span>                    <span class="mi">2</span>                      <span class="mi">2</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">movie_frames</span>              <span class="mi">0</span>                      <span class="mi">0</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">courses</span>                   <span class="mi">1</span>                      <span class="mi">1</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">course_users</span>              <span class="mi">2</span>                      <span class="mi">2</span>
+<span class="n">dev</span><span class="o">-</span><span class="n">logs</span>                      <span class="mi">0</span>                      <span class="mi">0</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span>
+</pre></div>
+</div>
+<p>Notice that our code automatically generates a WARNING of every table scan operaiton, as these operaitons are typically expensive in DynamoDB. This is just for development purposes.  (The report option will be expanded over time.)</p>
+<p>Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the <code class="docutils literal notranslate"><span class="pre">--makelink</span></code> option for the admin user.</p>
+<p>Courses can be created the with <code class="docutils literal notranslate"><span class="pre">dbutil</span> <span class="pre">--create_course</span></code> command. Please review the source code in <code class="docutils literal notranslate"><span class="pre">dbutil.py</span></code>. You will see that this option requires the following arguments:</p>
+<p>https://github.com/Plant-Tracer/webapp/blob/e46ac75396755687c50d4dc87f2358e9206031e1/dbutil.py#L127-L144</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--course_id</span></code> – a brief name of the course (e.g. <code class="docutils literal notranslate"><span class="pre">PLANT101</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--course_name</span></code> — a longer name, (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;Introduction</span> <span class="pre">to</span> <span class="pre">Plant</span> <span class="pre">Movement&quot;</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--admin_email</span></code> — The admin’s email</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--admin_name</span></code>  — The admin’s name</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--max_enrollment</span></code> — The maximum number of studnets (defaults to 50)</p></li>
+</ul>
+<p>Let’s try it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span> <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span> <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span> <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">dev</span><span class="o">-</span> <span class="n">LOG_LEVEL</span><span class="o">=</span><span class="n">INFO</span> <span class="n">python</span> <span class="n">dbutil</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">create_course</span> <span class="o">--</span><span class="n">course_id</span> <span class="n">PLANT101</span> <span class="o">--</span><span class="n">course_name</span> <span class="s2">&quot;Introduction to Plant Movement&quot;</span> <span class="o">--</span><span class="n">admin_email</span> <span class="s2">&quot;simsong@gmail</span>
+<span class="o">.</span><span class="n">com</span><span class="s2">&quot; --admin_name &quot;</span><span class="n">Simson</span> <span class="n">Garfinkel</span><span class="s2">&quot;</span>
+<span class="n">creating</span> <span class="n">course</span><span class="o">...</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">10</span> <span class="mi">10</span><span class="p">:</span><span class="mi">40</span><span class="p">:</span><span class="mi">25</span><span class="p">,</span><span class="mi">248</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">376</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">NOTE</span><span class="p">:</span> <span class="n">create_user</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">check</span> <span class="n">to</span> <span class="n">make</span> <span class="n">sure</span> <span class="n">user</span> <span class="n">simsong</span><span class="nd">@gmail</span><span class="o">.</span><span class="n">com</span><span class="s1">&#39;s course PLANT101 exists</span>
+<span class="n">Transaction</span> <span class="n">succeeded</span><span class="p">:</span> <span class="n">user</span> <span class="n">inserted</span><span class="o">.</span>
+<span class="n">created</span> <span class="n">PLANT101</span>
+<span class="p">{</span>
+    <span class="s2">&quot;admins_for_course&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;u2a66cd2e-b18e-474c-b902-248530dd8612&quot;</span>
+    <span class="p">],</span>
+    <span class="s2">&quot;course_id&quot;</span><span class="p">:</span> <span class="s2">&quot;PLANT101&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max_enrollment&quot;</span><span class="p">:</span> <span class="s2">&quot;50&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;course_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Introduction to Plant Movement&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;course_key&quot;</span><span class="p">:</span> <span class="s2">&quot;8f61-414e&quot;</span>
+<span class="p">}</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span>
+</pre></div>
+</div>
+<p>Now let’s try the report:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span> <span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span> <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span> <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span> <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">dev</span><span class="o">-</span> <span class="n">LOG_LEVEL</span><span class="o">=</span><span class="n">INFO</span> <span class="n">python</span> <span class="n">dbutil</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">report</span>
+<span class="p">(</span><span class="n">venv</span><span class="p">)</span> <span class="n">simsong</span><span class="nd">@Seasons</span><span class="o">-</span><span class="mi">2</span> <span class="n">webapp</span> <span class="o">%</span>
+</pre></div>
+</div>
+<p>Notice:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dev-users</span></code> has gone from 2 to 3</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dev-courses</span></code> has gone from 1 to 2</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dev-course_users</span></code> has gone from 2 to 3</p></li>
+</ul>
+<p>To log in we will need a magic link that works with our existing endpoint (http://localhost:8080):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
+
+*****
+***** Login with http://localhost:8080/list?api_key=a71358e5d3c6f453cb363d0aa69ce5664
+*****
+(venv) simsong@Seasons-2 webapp %
+</pre></div>
+</div>
+<p>And I should be able to log in with this:</p>
+<img width="1191" height="985" alt="image" src="https://github.com/user-attachments/assets/a9309acc-090c-42a6-b1bf-73c23330a619" />
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#mac-configuration">Mac Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#prep-your-mac">Prep your mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#download-and-install-the-required-software">Download and install the required software</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#each-time-you-reboot">Each time you reboot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validate-the-release">Validate the release</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#developing-locally">Developing locally</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#getting-started">Getting started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#creating-a-course-and-a-user">Creating a course and a user</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="DevSetupUbuntu.html" title="previous chapter">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+      <li>Next: <a href="WindowsDevSetup.html" title="next chapter">Windows Developer Setup Notes</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/DeveloperSetup_Mac.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
