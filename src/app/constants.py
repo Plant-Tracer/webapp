@@ -70,8 +70,8 @@ class C:
     DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
 
     # Other
-    LOGIN_EMAIL_TEMPLATE_FNAME = 'login_email.html'
-    COURSE_CREATED_EMAIL_TEMPLATE_FNAME = 'course_created_email.html'
+    LOGIN_EMAIL_TEMPLATE_FNAME = 'email_login.html'
+    COURSE_CREATED_EMAIL_TEMPLATE_FNAME = 'email_course_created.html'
     MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
