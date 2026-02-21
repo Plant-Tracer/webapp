@@ -110,7 +110,7 @@ poetry --version
 make install-ubuntu
 
 ## Create course if not present and send verification email to admin (idempotent)
-if [ -n "${COURSE_ID:-}" ] && [ -n "${ADMIN_EMAIL:-}" ]; then
+if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
     poetry run python src/dbutil.py --create_course \
         --course_id "$COURSE_ID" \
         --course_name "$COURSE_NAME" \
