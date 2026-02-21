@@ -1,0 +1,29 @@
+Subject: Plant Tracer: Course ready – {{ course_name }}
+From: {{ from_addr }}
+To: {{ to_addrs }}
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="{{ boundary }}"
+
+--{{ boundary }}
+Content-Type: text/plain; charset=UTF-8
+
+Your Plant Tracer course "{{ course_name }}" ({{ course_id }}) has been created.
+
+Log in to manage your course and students:
+
+{{ planttracer_endpoint }}/list?api_key={{ api_key }}
+
+--{{ boundary }}
+Content-Type: text/html; charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Plant Tracer: Course ready</title></head>
+<body>
+<p>Your Plant Tracer course <strong>{{ course_name }}</strong> ({{ course_id }}) has been created.</p>
+<p>Log in to manage your course and students:</p>
+<p><a href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}">{{ planttracer_endpoint }}/list?api_key={{ api_key }}</a></p>
+</body>
+</html>
+
+--{{ boundary }}--

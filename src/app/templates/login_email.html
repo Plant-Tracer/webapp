@@ -1,0 +1,37 @@
+Subject: Plant Tracer Login Information
+From: {{ from_addr }}
+To: {{ to_addrs }}
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="{{ boundary }}"
+
+--{{ boundary }}
+Content-Type: text/plain; charset=UTF-8
+
+Hi! Welcome to Plant Tracer.
+
+You are receiving this email because someone (probably you) entered your email address {{ to_addrs }} at the Plant Tracer website ({{ planttracer_endpoint }}).
+
+Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.
+
+Upload a new movie: {{ planttracer_endpoint }}/upload?api_key={{ api_key }}
+
+List or edit your movies, or edit your profile: {{ planttracer_endpoint }}/list?api_key={{ api_key }}
+
+--{{ boundary }}
+Content-Type: text/html; charset=UTF-8
+
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Plant Tracer Login Information</title></head>
+<body>
+<p>Hi! Welcome to Plant Tracer.</p>
+<p>You are receiving this email because someone (probably you) entered your email address {{ to_addrs }} at the Plant Tracer website (<a href="{{ planttracer_endpoint }}">{{ planttracer_endpoint }}</a>).</p>
+<p>Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.</p>
+<ul>
+<li>Upload a new movie: <a href="{{ planttracer_endpoint }}/upload?api_key={{ api_key }}">{{ planttracer_endpoint }}/upload?api_key={{ api_key }}</a></li>
+<li>List or edit your movies, or edit your profile: <a href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}">{{ planttracer_endpoint }}/list?api_key={{ api_key }}</a></li>
+</ul>
+</body>
+</html>
+
+--{{ boundary }}--
