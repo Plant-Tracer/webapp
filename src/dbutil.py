@@ -31,11 +31,14 @@ Plant Tracer DynamoDB Database Maintenance Program.
 """
 
 def populate_demo_user():
+    # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
+    admin_email = os.environ.get('ADMIN_EMAIL') or DEFAULT_ADMIN_EMAIL
+    admin_name = os.environ.get('ADMIN_NAME') or DEFAULT_ADMIN_NAME
     odbmaint.create_course(course_id  = DEMO_COURSE_ID,
                            course_name = DEMO_COURSE_NAME,
                            course_key = str(uuid.uuid4())[0:8],
-                           admin_email = DEFAULT_ADMIN_EMAIL,
-                           admin_name  = DEFAULT_ADMIN_NAME,
+                           admin_email = admin_email,
+                           admin_name  = admin_name,
                            max_enrollment = 2,
                            ok_if_exists = True)
 

@@ -474,8 +474,9 @@ endif
 
 STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 # Hostname for the VM (from samconfig.toml parameter_overrides: HostLabel + BaseDomain)
-SAM_HOST_LABEL := $(shell grep parameter_overrides samconfig.toml 2>/dev/null | sed -n 's/.*HostLabel=\\"\\([^"]*\\)\\".*/\1/p')
-SAM_BASE_DOMAIN := $(shell grep parameter_overrides samconfig.toml 2>/dev/null | sed -n 's/.*BaseDomain=\\"\\([^"]*\\)\\".*/\1/p')
+# Use Python to avoid sed portability issues (macOS BSD sed vs GNU sed).
+SAM_HOST_LABEL := $(shell python3 -c "import re; f=open('samconfig.toml'); line=[l for l in f if 'parameter_overrides' in l]; m=re.search(r'HostLabel=\\\\\"([^\\\"]+)\\\\\"', line[0]) if line else None; print(m.group(1) if m else '')" 2>/dev/null)
+SAM_BASE_DOMAIN := $(shell python3 -c "import re; f=open('samconfig.toml'); line=[l for l in f if 'parameter_overrides' in l]; m=re.search(r'BaseDomain=\\\\\"([^\\\"]+)\\\\\"', line[0]) if line else None; print(m.group(1) if m else '')" 2>/dev/null)
 VM_HOSTNAME := $(SAM_HOST_LABEL).$(SAM_BASE_DOMAIN)
 
 sam-delete:

@@ -138,3 +138,5 @@ poetry run python src/dbutil.py --create_demos
 sudo systemctl daemon-reload
 sudo systemctl start planttracer.service
 sudo systemctl enable planttracer.service
+
+echo "Bootstrap complete. Web server running at https://$HOSTNAME.$DOMAIN and https://$HOSTNAME-demo.$DOMAIN"
