@@ -122,6 +122,15 @@ poetry --version
 
 make install-ubuntu
 
+## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
+## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
+poetry run python src/dbutil.py --create_demos
+
+## Apply CORS to the S3 bucket so the browser can fetch movie zip URLs from the app origin (e.g. simson2.planttracer.com).
+if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
+    poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+fi
+
 ## Create course if not present and send verification email to admin (idempotent)
 if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
     poetry run python src/dbutil.py --create_course \
@@ -131,10 +140,6 @@ if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-
         --admin_name "$ADMIN_NAME" \
         --send-email
 fi
-
-## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
-## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
-poetry run python src/dbutil.py --create_demos
 
 ## Start up the planttracer service
 sudo systemctl daemon-reload

@@ -600,6 +600,22 @@ def api_ver():
     current_app.logger.error("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
 
+
+@api_bp.route('/config-check', methods=GET_POST)
+def api_config_check():
+    """Return DynamoDB and S3 CORS check results as JSON (no auth required)."""
+    from . import config_check
+    origin = f"{request.scheme}://{request.host}"
+    d_ok, d_msg = config_check.check_dynamodb()
+    c_ok, c_msg = config_check.check_s3_cors(origin)
+    return jsonify({
+        'dynamodb_ok': d_ok,
+        'dynamodb_message': d_msg,
+        'cors_ok': c_ok,
+        'cors_message': c_msg,
+    })
+
+
 ################################################################
 ##
 ## For debug
