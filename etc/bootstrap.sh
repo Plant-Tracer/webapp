@@ -130,7 +130,7 @@ if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-
         --send-email
 fi
 
-## Create demo course, demo user (demo@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
+## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
 ## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
 poetry run python src/dbutil.py --create_demos
 

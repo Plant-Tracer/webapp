@@ -939,12 +939,16 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
         logger.debug("user=%s",user)
-        ddbo.update_table(ddbo.users, user_id,
-                          {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
-                           PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
-                           ENABLED: 1,
-                           COURSES: list(set(user[ COURSES ] + [course_id])),
-                           ADMIN_FOR_COURSES: admin_for_courses})
+        # Do not overwrite primary course when adding user to the demo course (so verification-link login stays on main course).
+        update_payload = {
+            ENABLED: 1,
+            COURSES: list(set(user[COURSES] + [course_id])),
+            ADMIN_FOR_COURSES: admin_for_courses,
+        }
+        if course_id != "demo-course":
+            update_payload[PRIMARY_COURSE_ID] = course[COURSE_ID]
+            update_payload[PRIMARY_COURSE_NAME] = course[COURSE_NAME]
+        ddbo.update_table(ddbo.users, user[USER_ID], update_payload)
 
         user_id = user[ USER_ID ]
 

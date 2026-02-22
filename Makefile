@@ -172,7 +172,7 @@ make-local-demo:
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:

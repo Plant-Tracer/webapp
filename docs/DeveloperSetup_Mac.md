@@ -225,7 +225,7 @@ MinIO is ready.
 
 You can now create a web app instance within the DyanmoDBlocal and the Minio instances. This will:
 * Create all of the tables with a specific prefix (that you will specify)
-* Create a demo user with the email `demo@planttracer.com` (created by `odbmaint.create_course()`)
+* Create a demo user with the email `demouser@planttracer.com` (created by `odbmaint.create_course()`)
 * Create an admin user for the course with the email `admin@planttracer.com` (also created by `odbmaint.create_course()`)
 * Created a demo course with the CourseId `demo-course`
 * Create the demo movies (created by `dbutil.populate_demo_movies()`)
@@ -243,14 +243,14 @@ Notice that below we set all of the environment variables first. You might want 
     LOG_LEVEL=DEBUG python dbutil.py --createdb
 2025-08-10 09:43:16,090  odb.py:376 WARNING: NOTE: create_user does not check to make sure user admin@planttracer.com's course demo-course exists
 Transaction succeeded: user inserted.
-2025-08-10 09:43:16,131  odb.py:376 WARNING: NOTE: create_user does not check to make sure user demo@planttracer.com's course demo-course exists
+2025-08-10 09:43:16,131  odb.py:376 WARNING: NOTE: create_user does not check to make sure user demouser@planttracer.com's course demo-course exists
 Transaction succeeded: user inserted.
 2025-08-10 09:43:16,154  odb.py:1302 WARNING: INEFFICIENT CALL. Just return movie_id.course_id
 2025-08-10 09:43:16,309  odb.py:1302 WARNING: INEFFICIENT CALL. Just return movie_id.course_id
 (venv) simsong@Seasons-2 webapp %
 ```
 
-Notice that the admin user's email is assumed to be `admin@planttracer.com` and the demo user's email is `demo@planttracer.com`.
+Notice that the admin user's email is assumed to be `admin@planttracer.com` and the demo user's email is `demouser@planttracer.com`.
 
 That `WARNING: INEFFICIENT CALL` is a note to the developer that this code could be cleaned up at some point in the future.
 
