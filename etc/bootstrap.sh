@@ -44,8 +44,10 @@ if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; the
     sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
 
 # PlantTracer dev hints:
-echo "  Webserver log:  journalctl -u planttracer.service -f"
-echo "  Auto-reload:    cd /opt/webapp && make gunicorn-reload"
+echo "  View webserver log:  journalctl -u planttracer.service -f"
+echo "  Enable gunicorn auto-reload:    cd /opt/webapp && make gunicorn-reload"
+echo "tail /var/log/user-data.log"
+tail /var/log/user-data.log
 BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
