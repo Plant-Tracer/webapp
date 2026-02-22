@@ -684,10 +684,15 @@ window.helpers = {
 window.list_ready_function = list_ready_function;
 window.upload_ready_function = upload_ready_function;
 window.check_upload_metadata = check_upload_metadata;
-// Expose handlers used by onclick in upload.html
+// Expose handlers used by onclick in list.html and upload.html (must be on window for inline handlers)
 window.upload_movie = upload_movie;
 window.purge_movie = purge_movie;
 window.rotate_movie = rotate_movie;
+window.play_clicked = play_clicked;
+window.analyze_clicked = analyze_clicked;
+window.row_pencil_clicked = row_pencil_clicked;
+window.action_button_clicked = action_button_clicked;
+window.hide_clicked = hide_clicked;
 
 // Wire up whatever happens to be present
 // audit, list and upload are wired with their own ready functions

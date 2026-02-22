@@ -21,7 +21,7 @@ DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
 DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
 DEMO_MOVIE_DESCRIPTION = 'A demo movie'
-DEMO_USER_EMAIL = 'demo@planttracer.com'
+DEMO_USER_EMAIL = 'demouser@planttracer.com'
 DEMO_USER_NAME = 'Demo User'
 DEFAULT_ADMIN_EMAIL = 'admin@planttracer.com'
 DEFAULT_ADMIN_NAME = 'Plant Tracer Admin'
@@ -31,11 +31,14 @@ Plant Tracer DynamoDB Database Maintenance Program.
 """
 
 def populate_demo_user():
+    # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
+    admin_email = os.environ.get('ADMIN_EMAIL') or DEFAULT_ADMIN_EMAIL
+    admin_name = os.environ.get('ADMIN_NAME') or DEFAULT_ADMIN_NAME
     odbmaint.create_course(course_id  = DEMO_COURSE_ID,
                            course_name = DEMO_COURSE_NAME,
                            course_key = str(uuid.uuid4())[0:8],
-                           admin_email = DEFAULT_ADMIN_EMAIL,
-                           admin_name  = DEFAULT_ADMIN_NAME,
+                           admin_email = admin_email,
+                           admin_name  = admin_name,
                            max_enrollment = 2,
                            ok_if_exists = True)
 
@@ -46,6 +49,9 @@ def populate_demo_user():
 def populate_demo_movies():
     def is_movie_fn(fn):
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
+
+    if not os.path.isdir(TEST_DATA_DIR):
+        return  # e.g. on EC2 when tests/data or demo movies are not present
 
     # Add the demo movies
     demo_user = odb.get_user_email(DEMO_USER_EMAIL)
