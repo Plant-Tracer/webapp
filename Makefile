@@ -450,6 +450,8 @@ ifeq ($(AWS_REGION),local)
 endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+	@echo Removing old SSH host key for $(VM_HOSTNAME)...
+	ssh-keygen -R $(VM_HOSTNAME) || true
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -466,9 +468,16 @@ endif
 	@echo use one of these git branches:
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+	@echo Removing old SSH host key for $(VM_HOSTNAME)...
+	ssh-keygen -R $(VM_HOSTNAME) || true
 
 
 STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+# Hostname for the VM (from samconfig.toml parameter_overrides: HostLabel + BaseDomain)
+SAM_HOST_LABEL := $(shell grep parameter_overrides samconfig.toml 2>/dev/null | sed -n 's/.*HostLabel=\\"\\([^"]*\\)\\".*/\1/p')
+SAM_BASE_DOMAIN := $(shell grep parameter_overrides samconfig.toml 2>/dev/null | sed -n 's/.*BaseDomain=\\"\\([^"]*\\)\\".*/\1/p')
+VM_HOSTNAME := $(SAM_HOST_LABEL).$(SAM_BASE_DOMAIN)
+
 sam-delete:
 	@echo "Deleting stack: $(STACK_NAME)..."
 	sam delete --stack-name $(STACK_NAME)

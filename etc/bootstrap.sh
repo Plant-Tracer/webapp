@@ -39,6 +39,17 @@ if ! grep planttracer $HOME/.bashrc ; then
         ' >> ~/.bashrc
 fi
 
+# Developer hints in .bash_profile (shown on login)
+if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
+    sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
+
+# PlantTracer dev hints:
+echo "  Webserver log:  journalctl -u planttracer.service -f"
+echo "  Auto-reload:    cd /opt/webapp && make gunicorn-reload"
+BASHPROFILE
+    sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
+fi
+
 ## Install nginx and the TLS certificate
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx

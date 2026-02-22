@@ -10,7 +10,7 @@ import os
 import traceback
 import logging
 
-from flask import Flask, request, render_template, jsonify, make_response, Response
+from flask import Flask, request, render_template, jsonify, make_response, Response, redirect
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -91,10 +91,12 @@ def handle_auth_error(ex: AuthError) -> Response:
     return response
 
 @app.errorhandler(InvalidAPI_Key)
-def handle_apikey_error(ex: InvalidAPI_Key) -> tuple[str, int]:
-    """Handle invalid API key errors."""
+def handle_apikey_error(ex: InvalidAPI_Key) -> Response:
+    """Handle invalid API key: clear cookie and redirect to logout page."""
     app.logger.error("InvalidAPI_Key: %s %s", ex, type(ex))
-    return "<h1>403 Invalid api_key</h1>", 403
+    resp = make_response(redirect('/logout'))
+    resp.set_cookie(cookie_name(), '', expires=0, path='/')
+    return resp
 
 @app.errorhandler(Exception)
 def handle_exception(e: Exception) -> HTTPException | tuple[Response, int]:
