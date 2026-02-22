@@ -7,6 +7,7 @@ Main Flask application for planttracer.
 
 import sys
 import os
+import time
 import traceback
 import logging
 
@@ -157,7 +158,6 @@ def _config_error_page_context(error_title: str, error_message: str):
 
 def _run_config_checks():
     """Run DynamoDB and S3 CORS checks; return (dynamodb_ok, dynamodb_msg, cors_ok, cors_msg)."""
-    import time
     now = time.monotonic()
     cached = _CONFIG_CHECK_CACHE.get("result")
     if cached is not None and (now - _CONFIG_CHECK_CACHE.get("ts", 0)) < _CONFIG_CHECK_TTL:
@@ -181,7 +181,7 @@ def _before_request_config_check():
     if path in ("/ping", "/ver", "/health"):
         return None
     try:
-        d_ok, d_msg, c_ok, c_msg = _run_config_checks()
+        d_ok, _, c_ok, _ = _run_config_checks()
         if not d_ok:
             return redirect("/config-error?reason=dynamodb")
         if not c_ok:

@@ -20,6 +20,7 @@ from zipfile import ZipFile
 from flask import Blueprint, request, make_response, redirect, current_app, jsonify
 from validate_email_address import validate_email
 
+from . import config_check
 from . import odb
 from . import mailer
 from . import tracker
@@ -604,7 +605,6 @@ def api_ver():
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():
     """Return DynamoDB and S3 CORS check results as JSON (no auth required)."""
-    from . import config_check
     origin = f"{request.scheme}://{request.host}"
     d_ok, d_msg = config_check.check_dynamodb()
     c_ok, c_msg = config_check.check_s3_cors(origin)
