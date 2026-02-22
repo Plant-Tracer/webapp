@@ -1,4 +1,4 @@
-# Makefile for Planttracer web application
+# Makefile for Planttracer web application.
 # - Local development
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
