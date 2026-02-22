@@ -47,6 +47,9 @@ def populate_demo_movies():
     def is_movie_fn(fn):
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
+    if not os.path.isdir(TEST_DATA_DIR):
+        return  # e.g. on EC2 when tests/data or demo movies are not present
+
     # Add the demo movies
     demo_user = odb.get_user_email(DEMO_USER_EMAIL)
     for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
