@@ -7,10 +7,11 @@ Main Flask application for planttracer.
 
 import sys
 import os
+import time
 import traceback
 import logging
 
-from flask import Flask, request, render_template, jsonify, make_response, Response
+from flask import Flask, request, render_template, jsonify, make_response, Response, redirect
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -21,10 +22,11 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from . import apikey
 
 from .flask_api import api_bp
-from .constants import __version__,GET,GET_POST,C,log_level,logger
+from .constants import __version__, GET, GET_POST, C, log_level, logger
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
-from .odb import InvalidAPI_Key,InvalidUser_Email
+from .odb import InvalidAPI_Key, InvalidUser_Email
+from . import config_check
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
@@ -91,10 +93,12 @@ def handle_auth_error(ex: AuthError) -> Response:
     return response
 
 @app.errorhandler(InvalidAPI_Key)
-def handle_apikey_error(ex: InvalidAPI_Key) -> tuple[str, int]:
-    """Handle invalid API key errors."""
+def handle_apikey_error(ex: InvalidAPI_Key) -> Response:
+    """Handle invalid API key: clear cookie and redirect to logout page."""
     app.logger.error("InvalidAPI_Key: %s %s", ex, type(ex))
-    return "<h1>403 Invalid api_key</h1>", 403
+    resp = make_response(redirect('/logout'))
+    resp.set_cookie(cookie_name(), '', expires=0, path='/')
+    return resp
 
 @app.errorhandler(Exception)
 def handle_exception(e: Exception) -> HTTPException | tuple[Response, int]:
@@ -108,6 +112,120 @@ def handle_exception(e: Exception) -> HTTPException | tuple[Response, int]:
 def handle_email_error(e: InvalidUser_Email) -> tuple[str, int]:
     """Handle invalid user email errors."""
     return f"<h1>Invalid User</h1><p>That email address does not exist in the database {e}</p>", 400
+
+
+################################################################
+# Configuration error page (no DB access — use minimal context)
+################################################################
+
+# Cache for config check results; avoid hitting S3/DynamoDB on every request
+_CONFIG_CHECK_CACHE = {}
+_CONFIG_CHECK_TTL = 60  # seconds
+
+
+def _config_error_page_context(error_title: str, error_message: str):
+    """Build template context for config_error.html without touching the DB."""
+    ret = {
+        C.API_BASE: apikey.api_base,
+        C.STATIC_BASE: apikey.static_base,
+        'favicon_base64': apikey.favicon_base64(),
+        'api_key': None,
+        'user_id': None,
+        'user_name': None,
+        'user_email': None,
+        'logged_in': 0,
+        'demo_mode': apikey.in_demo_mode(),
+        'admin': 0,
+        'user_primary_course_id': None,
+        'primary_course_name': None,
+        'title': 'Plant Tracer Configuration Error',
+        'hostname': request.host,
+        'movie_id': 0,
+        'MAX_FILE_UPLOAD': C.MAX_FILE_UPLOAD,
+        'version': __version__,
+        'git_head_time': apikey.git_head_time(),
+        'git_last_commit': apikey.git_last_commit(),
+        'git_branch': apikey.git_branch(),
+        'message': error_message,
+        'error_title': error_title,
+        'error_message': error_message,
+    }
+    for (k, v) in list(ret.items()):
+        if v is None:
+            ret[k] = "null"
+    return ret
+
+
+def _run_config_checks():
+    """Run DynamoDB and S3 CORS checks; return (dynamodb_ok, dynamodb_msg, cors_ok, cors_msg)."""
+    now = time.monotonic()
+    cached = _CONFIG_CHECK_CACHE.get("result")
+    if cached is not None and (now - _CONFIG_CHECK_CACHE.get("ts", 0)) < _CONFIG_CHECK_TTL:
+        return cached
+    d_ok, d_msg = config_check.check_dynamodb()
+    origin = f"{request.scheme}://{request.host}"
+    c_ok, c_msg = config_check.check_s3_cors(origin)
+    _CONFIG_CHECK_CACHE["result"] = (d_ok, d_msg, c_ok, c_msg)
+    _CONFIG_CHECK_CACHE["ts"] = now
+    _CONFIG_CHECK_CACHE["d_msg"] = d_msg
+    _CONFIG_CHECK_CACHE["c_msg"] = c_msg
+    return (d_ok, d_msg, c_ok, c_msg)
+
+
+@app.before_request
+def _before_request_config_check():
+    """If DynamoDB or S3 CORS is broken, redirect to the configuration error page."""
+    path = request.path
+    if path == "/config-error" or path.startswith("/static/") or path.startswith("/api/"):
+        return None
+    if path in ("/ping", "/ver", "/health"):
+        return None
+    try:
+        d_ok, _, c_ok, _ = _run_config_checks()
+        if not d_ok:
+            return redirect("/config-error?reason=dynamodb")
+        if not c_ok:
+            return redirect("/config-error?reason=cors")
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Do not block the app if the check itself fails (e.g. import error)
+        pass
+    return None
+
+
+@app.route('/config-error', methods=GET)
+def func_config_error():
+    """Serve the configuration error page (e.g. CORS or DynamoDB misconfigured)."""
+    reason = request.args.get("reason", "unknown").lower()
+    custom_message = request.args.get("message", "").strip()
+    if reason == "dynamodb":
+        error_title = "Database unreachable"
+        error_message = (
+            "The application cannot reach the DynamoDB database. "
+            "Check AWS credentials, network, and DYNAMODB_TABLE_PREFIX."
+        )
+        last_msg = _CONFIG_CHECK_CACHE.get("d_msg")
+        if last_msg:
+            error_message += f" Details: {last_msg}"
+        if custom_message:
+            error_message += f" {custom_message}"
+    elif reason == "cors":
+        error_title = "S3 CORS misconfigured"
+        error_message = (
+            "The S3 bucket CORS policy does not allow this site to load movie data. "
+            "Run on the server: poetry run python -m app.s3_presigned <bucket>"
+        )
+        last_msg = _CONFIG_CHECK_CACHE.get("c_msg")
+        if last_msg:
+            error_message += f" Details: {last_msg}"
+        if custom_message:
+            error_message += f" {custom_message}"
+    else:
+        error_title = "Configuration error"
+        error_message = custom_message or "A configuration problem prevents this app from running correctly."
+    return render_template(
+        "config_error.html",
+        **_config_error_page_context(error_title, error_message),
+    )
 
 
 ################################################################

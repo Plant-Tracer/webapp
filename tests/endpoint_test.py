@@ -19,8 +19,8 @@ from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
 from app.constants import __version__,logger
 
 # Fixtures are imported in conftest.py
-from .fixtures import local_aws
-from .fixtures.local_aws import ADMIN_EMAIL
+from app.odb import API_KEY, COURSE_ID, USER_ID
+from .constants import ADMIN_EMAIL
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
@@ -46,7 +46,7 @@ def test_add(client):
 
 
 def test_api_key(client, new_course):
-    api_key = new_course[local_aws.API_KEY]
+    api_key = new_course[API_KEY]
     logger.debug("api_key=%s",api_key)
     r = client.post('/api/check-api_key', data={'api_key': api_key})
     assert r.status_code == 200
@@ -58,8 +58,8 @@ def test_api_key(client, new_course):
     assert r.json['error'] is True
 
 def test_api_get_logs(client, new_course):
-    api_key = new_course[local_aws.API_KEY]
-    user_id = new_course[local_aws.USER_ID]
+    api_key = new_course[API_KEY]
+    user_id = new_course[USER_ID]
 
     r = client.post('/api/get-logs',
                     data={'api_key': api_key, 'log_user_id' : user_id})
@@ -78,7 +78,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     """
     #ddbo = DDBO()
     email_address = 'testuser@example.com'
-    course_id = new_course[local_aws.COURSE_ID]
+    course_id = new_course[COURSE_ID]
     #admin_user = ddbo.get_user(user_id=new_course[ADMIN_ID])
     api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
     assert is_api_key(api_key)

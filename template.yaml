@@ -226,7 +226,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 30
+            VolumeSize: 20
             VolumeType: gp3
             DeleteOnTermination: true
       CreditSpecification:
@@ -276,7 +276,7 @@ Resources:
           echo Set permissions and run bootstrap
           sudo chown -R ubuntu:ubuntu /opt/webapp
           runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
-          df -h
+          echo "User data finished executing."
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation
@@ -518,6 +518,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
+                  - s3:GetBucketCORS
+                  - s3:PutBucketCORS
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject

@@ -21,7 +21,7 @@ DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
 DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
 DEMO_MOVIE_DESCRIPTION = 'A demo movie'
-DEMO_USER_EMAIL = 'demo@planttracer.com'
+DEMO_USER_EMAIL = 'demouser@planttracer.com'
 DEMO_USER_NAME = 'Demo User'
 DEFAULT_ADMIN_EMAIL = 'admin@planttracer.com'
 DEFAULT_ADMIN_NAME = 'Plant Tracer Admin'
@@ -31,11 +31,14 @@ Plant Tracer DynamoDB Database Maintenance Program.
 """
 
 def populate_demo_user():
+    # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
+    admin_email = os.environ.get('ADMIN_EMAIL') or DEFAULT_ADMIN_EMAIL
+    admin_name = os.environ.get('ADMIN_NAME') or DEFAULT_ADMIN_NAME
     odbmaint.create_course(course_id  = DEMO_COURSE_ID,
                            course_name = DEMO_COURSE_NAME,
                            course_key = str(uuid.uuid4())[0:8],
-                           admin_email = DEFAULT_ADMIN_EMAIL,
-                           admin_name  = DEFAULT_ADMIN_NAME,
+                           admin_email = admin_email,
+                           admin_name  = admin_name,
                            max_enrollment = 2,
                            ok_if_exists = True)
 
@@ -43,19 +46,43 @@ def populate_demo_user():
     odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
     odb.make_new_api_key(email=DEMO_USER_EMAIL, demo_user=True)        # Give the demo user an API key
 
+def _apply_trackpoints_json(movie_id, trackpoints_path, demo_user_id):
+    """Load a trackpoints JSON file (frames keyed by frame number, each with 'markers') and apply via put_frame_trackpoints."""
+    with open(trackpoints_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    frames = data.get('frames') or data
+    for frame_key, frame_data in sorted(frames.items(), key=lambda p: int(p[0])):
+        frame_number = int(frame_key)
+        markers = frame_data.get('markers') or frame_data.get('trackpoints') or []
+        # put_frame_trackpoints expects list of {x, y, label}
+        trackpoints = [{'x': m['x'], 'y': m['y'], 'label': m['label']} for m in markers]
+        if trackpoints:
+            odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
+    odb.set_metadata(user_id=demo_user_id, set_movie_id=movie_id, prop='status', value=C.TRACKING_COMPLETED)
+
+
 def populate_demo_movies():
     def is_movie_fn(fn):
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
+    if not os.path.isdir(TEST_DATA_DIR):
+        return  # e.g. on EC2 when tests/data or demo movies are not present
+
     # Add the demo movies
     demo_user = odb.get_user_email(DEMO_USER_EMAIL)
-    for (ct,fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)],1):
+    demo_user_id = demo_user[USER_ID]
+    for (ct, fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)], 1):
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
-            movie_id = odb.create_new_movie(user_id=demo_user[USER_ID],
-                                            course_id = DEMO_COURSE_ID,
+            movie_id = odb.create_new_movie(user_id=demo_user_id,
+                                            course_id=DEMO_COURSE_ID,
                                             title=DEMO_MOVIE_TITLE.format(ct=ct),
                                             description=DEMO_MOVIE_DESCRIPTION)
-            set_movie_data(movie_id=movie_id, movie_data = f.read())
+            set_movie_data(movie_id=movie_id, movie_data=f.read())
+        # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.
+        base, _ = os.path.splitext(fn)
+        trackpoints_path = os.path.join(TEST_DATA_DIR, base + '_trackpoints.json')
+        if os.path.isfile(trackpoints_path):
+            _apply_trackpoints_json(movie_id, trackpoints_path, demo_user_id)
 
 
 

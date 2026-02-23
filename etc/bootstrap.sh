@@ -39,6 +39,19 @@ if ! grep planttracer $HOME/.bashrc ; then
         ' >> ~/.bashrc
 fi
 
+# Developer hints in .bash_profile (shown on login)
+if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
+    sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
+
+# PlantTracer dev hints:
+echo "  View webserver log:  journalctl -u planttracer.service -f"
+echo "  Enable gunicorn auto-reload:    cd /opt/webapp && make gunicorn-reload"
+echo "tail /var/log/user-data.log"
+tail /var/log/user-data.log
+BASHPROFILE
+    sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
+fi
+
 ## Install nginx and the TLS certificate
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
@@ -109,6 +122,15 @@ poetry --version
 
 make install-ubuntu
 
+## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
+## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
+poetry run python src/dbutil.py --create_demos
+
+## Apply CORS to the S3 bucket so the browser can fetch movie zip URLs from the app origin (e.g. simson2.planttracer.com).
+if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
+    poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+fi
+
 ## Create course if not present and send verification email to admin (idempotent)
 if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
     poetry run python src/dbutil.py --create_course \
@@ -123,3 +145,5 @@ fi
 sudo systemctl daemon-reload
 sudo systemctl start planttracer.service
 sudo systemctl enable planttracer.service
+
+echo "Bootstrap complete. Web server running at https://$HOSTNAME.$DOMAIN and https://$HOSTNAME-demo.$DOMAIN"

@@ -20,7 +20,7 @@ Optional for Demo Mode
 
 `DEMO_DYNAMODB_PREFIX` - Use tables with this prefix. The Makefile creates tables with a prefix `demo`.
 
-`DEMO_USER_EMAIL` - Identifies the demo user. The Makefile creates a user with the email `demo@planttracer.com`.
+`DEMO_USER_EMAIL` - Identifies the demo user. The Makefile creates a user with the email `demouser@planttracer.com`.
 
 Optional for using AWS
 ----------------------
