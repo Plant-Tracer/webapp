@@ -7,8 +7,6 @@ hits the real Flask app (main Plant Tracer index), not an arbitrary URL.
 
 import sys
 
-import pytest
-
 from app.constants import logger
 
 PLANTTRACER_TITLE = 'Plant Tracer'

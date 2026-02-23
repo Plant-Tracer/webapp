@@ -22,31 +22,32 @@ from app import odb
 from app import odb_movie_data
 from app import odbmaint
 
-from app.paths import ROOT_DIR,TEST_DATA_DIR
-from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
+from app.paths import ROOT_DIR, TEST_DATA_DIR
+from app.odb import DDBO, VERSION, API_KEY, COURSE_KEY, COURSE_ID, COURSE_NAME, USER_ID, MOVIE_ID, DELETED, PUBLISHED
+
+from ..constants import (
+    ADMIN_EMAIL,
+    MOVIE_TITLE,
+    TEST_PLANTMOVIE_PATH,
+    TEST_PLANTMOVIE_ROTATED_PATH,
+    TEST_CIRCUMNUTATION_PATH,
+)
 
 import dbutil
 
 
 s3client = boto3.client('s3')
 
-TEST_USER_EMAIL  = 'test_user@company.com'       # from configure
-TEST_USER_NAME   = 'Test User Name'
-TEST_DEMO_EMAIL  = 'test_demo@company.com'        # completely bogus
-TEST_ADMIN_EMAIL = 'test_admin@company.com'     # configuration
-TEST_ADMIN_NAME  = 'Test Admin Name'
+TEST_USER_EMAIL = 'test_user@company.com'
+TEST_USER_NAME = 'Test User Name'
+TEST_DEMO_EMAIL = 'test_demo@company.com'
+TEST_ADMIN_EMAIL = 'test_admin@company.com'
+TEST_ADMIN_NAME = 'Test Admin Name'
 
-# additional keys for scaffolding dictionary
-ADMIN_EMAIL = 'admin_email'
+# Additional keys for scaffolding dictionary (not shared elsewhere)
 DEMO_EMAIL = 'demo_mail'
 ADMIN_ID = 'admin_id'
-MOVIE_TITLE = 'movie_title'
 USER_EMAIL = 'user_email'
-
-
-TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
-TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
-TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 
 def new_email(info):
     return TEST_USER_EMAIL.replace('@', '-' + info + '-'+str(uuid.uuid4())[0:4]+'@')
