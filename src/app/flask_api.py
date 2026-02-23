@@ -24,7 +24,8 @@ from . import config_check
 from . import odb
 from . import mailer
 from . import tracker
-from .apikey import get_user_api_key,get_user_dict,in_demo_mode
+from . import apikey
+from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
@@ -48,8 +49,10 @@ class InvalidFrameNumber(Exception):
 ### Handle invalid apikey exceptions
 @api_bp.errorhandler(InvalidAPI_Key)
 def invalid_api_key(ex):
-    logger.info("invalid_api_key(%s)",ex)
-    return E.INVALID_API_KEY, 403
+    logger.info("invalid_api_key(%s)", ex)
+    resp = make_response(jsonify(E.INVALID_API_KEY), 403)
+    resp.set_cookie(apikey.cookie_name(), '', expires=0, path='/')
+    return resp
 
 @api_bp.errorhandler(UnauthorizedUser)
 def unauthorized_user(ex):
