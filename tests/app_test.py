@@ -6,7 +6,6 @@ import os
 import subprocess
 import uuid
 
-import pytest
 import html5validate
 
 from app.paths import STATIC_DIR
