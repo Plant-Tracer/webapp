@@ -77,7 +77,7 @@ echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
 sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
      --flag planttracer-nginx-patch.5100 --count 8
 
-if ! nginx -t; then
+if ! /usr/sbin/nginx -t; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
 fi
