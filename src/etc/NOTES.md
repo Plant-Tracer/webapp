@@ -1,4 +1,7 @@
-ffmpeg downloaded from https://johnvansickle.com/ffmpeg/
+ffmpeg static binaries (for environments without system ffmpeg, e.g. Lambda):
+- src/etc/ffmpeg-6.1-amd64-static (x86_64)
+- src/etc/ffmpeg-6.1-arm64-static (aarch64/arm64)
+Do not fetch from external sites. Obtain from a trusted source or build from source; store in repo via LFS if needed. On VMs, the app prefers system ffmpeg (/usr/bin/ffmpeg, etc.) when present. For Lambda: if a function needs ffmpeg, bundle only the static binary matching that function's architecture (e.g. arm64 for current lambda-resize template); lambda-resize itself uses PyAV only and does not ship ffmpeg.
 
 add database comments for each table.
 

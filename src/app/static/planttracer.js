@@ -245,6 +245,7 @@ async function get_movie_metadata(movie_id){
 async function rotate_movie() {
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
+    $('#rotate_status').text(' ... Rotating...');
     const m0 = await get_movie_metadata(movie_id);
     console.log("Initial metadata:",m0);
     let formData = new FormData();
@@ -253,6 +254,7 @@ async function rotate_movie() {
     formData.append('action', 'rotate90cw');
     const r = await fetch(`${API_BASE}api/edit-movie`, { method:"POST", body:formData});
     console.log("r=",r);
+    $('#rotate_status').text('');
     if (!r.ok) {
         console.log('could not rotate. r=',r);
         return;

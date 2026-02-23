@@ -3,8 +3,9 @@ Should this be moved to constants?
 """
 
 import os
-from os.path import dirname, abspath, join
+import platform
 import shutil
+from os.path import dirname, abspath, join
 
 from .constants import C
 
@@ -25,7 +26,27 @@ TEST_DATA_DIR   = join(ROOT_DIR, 'tests', 'data')
 
 STANDALONE_PATH = join(ROOT_DIR, 'standalone.py')
 TEST_MOVIE_FILENAME = join(TEST_DATA_DIR,'2019-07-31 plantmovie-rotated.mov')
-AWS_LAMBDA_LINUX_STATIC_FFMPEG       = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
+
+# Static ffmpeg binaries for environments without system ffmpeg (e.g. Lambda).
+# Use the one matching host architecture; do not run amd64 on arm64 or vice versa.
+AWS_LAMBDA_LINUX_STATIC_FFMPEG_AMD64 = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
+AWS_LAMBDA_LINUX_STATIC_FFMPEG_ARM64 = join(ETC_DIR, 'ffmpeg-6.1-arm64-static')
+
+# System paths to try when PATH is minimal (e.g. systemd only has venv/bin).
+_SYSTEM_FFMPEG_CANDIDATES = ('/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg')
+
+
+def _static_ffmpeg_for_machine():
+    """Path to static ffmpeg for current machine, or None if not present."""
+    machine = platform.machine().lower()
+    if machine in ('x86_64', 'amd64'):
+        path = AWS_LAMBDA_LINUX_STATIC_FFMPEG_AMD64
+    elif machine in ('aarch64', 'arm64'):
+        path = AWS_LAMBDA_LINUX_STATIC_FFMPEG_ARM64
+    else:
+        return None
+    return path if os.path.exists(path) else None
+
 
 def ffmpeg_path():
     if C.FFMPEG_PATH in os.environ:
@@ -35,6 +56,10 @@ def ffmpeg_path():
     pth = shutil.which('ffmpeg')
     if pth:
         return pth
-    if os.path.exists(AWS_LAMBDA_LINUX_STATIC_FFMPEG):
-        return AWS_LAMBDA_LINUX_STATIC_FFMPEG
+    for pth in _SYSTEM_FFMPEG_CANDIDATES:
+        if os.path.exists(pth):
+            return pth
+    pth = _static_ffmpeg_for_machine()
+    if pth:
+        return pth
     raise FileNotFoundError("ffmpeg")
