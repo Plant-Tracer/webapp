@@ -346,7 +346,7 @@ def test_movie_extract2(client, new_movie):
         assert is_jpeg(r.content)
 
 
-@pytest.mark.skip(reason='logging disabled')
+@pytest.mark.skip(reason='logging disabled on move to DynamoDB')
 def test_log_search_movie(new_movie):
     cfg        = copy.copy(new_movie)
     #api_key    = cfg[API_KEY]

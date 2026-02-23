@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError
 
 
 from app.constants import C
+from app.s3_presigned import CORS_CONFIGURATION, s3_client
 from app import odb
 from app import odb_movie_data
 from app import odbmaint
@@ -88,18 +89,36 @@ def local_ddb():
 @pytest.fixture(scope="session")
 def local_s3():
     """
-    We no longer create a bucket on demand.
-    However, if we are running locally, make sure that minio is running and set the endpoints
+    When running locally: start MinIO, ensure the bucket exists (create if not),
+    and apply CORS so the app's config check and browser fetches succeed.
     """
-    if os.environ.get( C.AWS_REGION, '') == 'local':
-        subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
+    if os.environ.get(C.AWS_REGION, '') == 'local':
+        subprocess.call([os.path.join(ROOT_DIR, 'bin/local_minio_control.bash'), 'start'])
         os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
+        if not os.environ.get(C.PLANTTRACER_S3_BUCKET):
+            os.environ[C.PLANTTRACER_S3_BUCKET] = 'planttracer-local'
 
-        # Create the bucket if it does not exist
+        bucket = os.environ[C.PLANTTRACER_S3_BUCKET]
+        client = s3_client()  # uses local endpoint from env
         try:
-            s3client.create_bucket(Bucket=os.environ[C.PLANTTRACER_S3_BUCKET])
+            client.head_bucket(Bucket=bucket)
         except ClientError as e:
-            logging.warning(e)
+            if e.response.get('Error', {}).get('Code') == '404':
+                client.create_bucket(Bucket=bucket)
+            else:
+                logging.warning("head_bucket failed: %s", e)
+
+        try:
+            client.put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
+        except ClientError as e:
+            logging.warning("Could not set S3 CORS (non-fatal): %s", e)
+    else:
+        bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
+        if bucket:
+            try:
+                s3_client().put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
+            except ClientError as e:
+                logging.warning("Could not set S3 CORS (non-fatal): %s", e)
 
     yield os.environ[C.PLANTTRACER_S3_BUCKET]
 

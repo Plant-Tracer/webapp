@@ -36,12 +36,24 @@ def check_dynamodb():
         return (False, f"DynamoDB unreachable: {e}")
 
 
+def _is_local_s3():
+    """True if using local S3 (e.g. MinIO). MinIO does not implement CORS, so we skip the check."""
+    if os.environ.get(C.AWS_REGION) == "local":
+        return True
+    endpoint = os.environ.get(C.AWS_ENDPOINT_URL_S3) or ""
+    return "localhost" in endpoint or "127.0.0.1" in endpoint
+
+
 def check_s3_cors(app_origin: str):
     """
     Verify the S3 bucket has a CORS configuration that allows GET requests
     from the given origin (e.g. 'https://simson2.planttracer.com').
     Returns (True, "") if ok, (False, message) on failure.
+    Skips the check when using local S3 (MinIO), which does not implement CORS.
     """
+    if _is_local_s3():
+        return (True, "")
+
     bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
     if not bucket or bucket.startswith("s3:"):
         return (False, "PLANTTRACER_S3_BUCKET is not set or invalid")
