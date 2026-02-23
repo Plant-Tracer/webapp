@@ -9,6 +9,8 @@ import os
 from botocore.exceptions import ClientError
 
 from .constants import C
+from .odb import DDBO
+from .s3_presigned import s3_client
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,6 @@ def check_dynamodb():
     Returns (True, "") if ok, (False, message) on failure.
     """
     try:
-        from .odb import DDBO
         ddbo = DDBO()
         # Minimal read: scan users table with limit 1 (no auth needed)
         resp = ddbo.users.scan(Limit=1)
@@ -45,20 +46,23 @@ def check_s3_cors(app_origin: str):
     if not bucket or bucket.startswith("s3:"):
         return (False, "PLANTTRACER_S3_BUCKET is not set or invalid")
 
+    err_msg = None
     try:
-        from .s3_presigned import s3_client
-        client = s3_client()
-        cors = client.get_bucket_cors(Bucket=bucket)
+        cors = s3_client().get_bucket_cors(Bucket=bucket)
     except ClientError as e:
         code = e.response.get("Error", {}).get("Code", "")
         msg = e.response.get("Error", {}).get("Message", str(e))
         if code == "NoSuchCORSConfiguration":
-            return (False, "S3 bucket has no CORS configuration. Run: python -m app.s3_presigned " + bucket)
-        logger.warning("S3 CORS check failed: %s %s", code, msg)
-        return (False, f"S3 CORS error: {code} — {msg}")
+            err_msg = "S3 bucket has no CORS configuration. Run: python -m app.s3_presigned " + bucket
+        else:
+            logger.warning("S3 CORS check failed: %s %s", code, msg)
+            err_msg = f"S3 CORS error: {code} — {msg}"
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.warning("S3 CORS check failed: %s", e)
-        return (False, f"S3 unreachable: {e}")
+        err_msg = f"S3 unreachable: {e}"
+
+    if err_msg is not None:
+        return (False, err_msg)
 
     rules = cors.get("CORSRules") or []
     origin_ok = False
@@ -74,7 +78,9 @@ def check_s3_cors(app_origin: str):
             return (True, "")
 
     if not get_ok:
-        return (False, "S3 CORS does not allow GET. Run: python -m app.s3_presigned " + bucket)
-    if not origin_ok:
-        return (False, f"S3 CORS does not allow origin {app_origin!r}. Run: python -m app.s3_presigned " + bucket)
-    return (True, "")
+        msg = "S3 CORS does not allow GET. Run: python -m app.s3_presigned " + bucket
+    elif not origin_ok:
+        msg = f"S3 CORS does not allow origin {app_origin!r}. Run: python -m app.s3_presigned " + bucket
+    else:
+        msg = ""
+    return (not msg, msg or "")
