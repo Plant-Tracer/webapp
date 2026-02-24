@@ -106,13 +106,34 @@ class CanvasController {
             this.c.addEventListener('touchend', () => { this.touchend_handler(); }, { passive: false });
         }
 
-        // Catch the zoom change event
+        // Catch the zoom change event; also save to localStorage if setup_zoom_storage() was called
         if (zoom_selector) {
             this.zoom_selector = zoom_selector;
+            this._zoom_storage_key = null;
             $(this.zoom_selector).on('change', (_) => {
-                const new_zoom = $(this.zoom_selector).val() / 100.0;
-                this.set_zoom(new_zoom);
+                const selectEl = document.querySelector(this.zoom_selector);
+                if (!selectEl) return;
+                this.set_zoom(selectEl.value / 100.0);
+                if (this._zoom_storage_key) {
+                    localStorage.setItem(this._zoom_storage_key, selectEl.value);
+                }
             });
+        }
+    }
+
+    // Restore zoom from localStorage on load and save it on change.
+    // Call after the zoom_selector is set (i.e., after super() in subclass constructors).
+    // storage_key should be unique per context (e.g. 'analysis_zoom_<movie_id>').
+    setup_zoom_storage(storage_key) {
+        if (!this.zoom_selector) return;
+        this._zoom_storage_key = storage_key;
+        const selectEl = document.querySelector(this.zoom_selector);
+        if (!selectEl) return;
+        const allowedValues = Array.from(selectEl.options).map(opt => opt.value);
+        const saved = localStorage.getItem(storage_key);
+        if (saved && allowedValues.includes(saved)) {
+            selectEl.value = saved;
+            this.set_zoom(parseInt(saved, 10) / 100);
         }
     }
 
