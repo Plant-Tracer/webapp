@@ -50,7 +50,11 @@ function getCookie(name) {
 }
 
 function setCookie(name, value, maxAgeSec) {
-    document.cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSec;
+    let cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSec + '; SameSite=Lax';
+    if (window.location && window.location.protocol === 'https:') {
+        cookie += '; Secure';
+    }
+    document.cookie = cookie;
 }
 
 function get_ruler_size(str) {
@@ -111,19 +115,22 @@ class TracerController extends MovieController {
         // Remember zoom per movie (movie_id is a GUID); restore from cookie on load, save on change.
         if (this.movie_id && this.zoom_selector) {
             const zoomSelect = $(this.zoom_selector);
-            const allowedZoomValues = zoomSelect.find('option').map(function() { return $(this).val(); }).get();
-            const cookieName = 'analysis_zoom_' + this.movie_id;
-            const saved = getCookie(cookieName);
-            if (saved && allowedZoomValues.includes(saved)) {
-                zoomSelect.val(saved);
-                this.set_zoom(parseInt(saved, 10) / 100);
-            }
-            zoomSelect.on('change', () => {
-                const val = zoomSelect.val();
-                if (allowedZoomValues.includes(val)) {
-                    setCookie(cookieName, val, ZOOM_COOKIE_MAX_AGE_SEC);
+            const zoomElement = zoomSelect.get(0);
+            if (zoomElement) {
+                const allowedZoomValues = Array.from(zoomElement.options).map((option) => option.value);
+                const cookieName = 'analysis_zoom_' + this.movie_id;
+                const saved = getCookie(cookieName);
+                if (saved && allowedZoomValues.includes(saved)) {
+                    zoomSelect.val(saved);
+                    this.set_zoom(parseInt(saved, 10) / 100);
                 }
-            });
+                zoomSelect.on('change', () => {
+                    const val = zoomSelect.val();
+                    if (allowedZoomValues.includes(val)) {
+                        setCookie(cookieName, val, ZOOM_COOKIE_MAX_AGE_SEC);
+                    }
+                });
+            }
         }
     }
 
