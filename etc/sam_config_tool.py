@@ -4,6 +4,7 @@ General-purpose tool for template.yaml and samconfig.toml.
 Parses SAM config and runs commands: ssh-clean (ssh-keygen -R hostname), ssh (SSH to VM), ssm-start-session (AWS SSM session).
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -126,23 +127,30 @@ def _get_instance_id(config_path: str) -> tuple[str, str]:
 
 
 def cmd_ssh(config_path: str, identity_file: str | None = None) -> None:
-    """Run SSH to the stack's VM (hostname from config)."""
+    """Run SSH to the stack's VM (hostname from config). Replaces process so ~^Z works."""
     _stack, _region, hostname, _ = load_sam_config(config_path)
     cmd = ["ssh"]
     if identity_file:
         cmd.extend(["-i", str(Path(identity_file).expanduser())])
     cmd.append(f"ubuntu@{hostname}")
-    subprocess.run(cmd, check=True)
+    print("Running:", " ".join(cmd), flush=True)
+    os.execvp("ssh", cmd)
 
 
 def cmd_ssm_start_session(config_path: str) -> None:
-    """Start AWS SSM session to the stack's EC2 instance."""
+    """Start AWS SSM session to the stack's EC2 instance. Replaces process for TTY."""
     target, region = _get_instance_id(config_path)
-    print(f"Connecting to {target}...", flush=True)
-    subprocess.run(
-        ["aws", "ssm", "start-session", "--target", target, "--region", region],
-        check=True,
-    )
+    cmd = [
+        "aws",
+        "ssm",
+        "start-session",
+        "--target",
+        target,
+        "--region",
+        region,
+    ]
+    print("Running:", " ".join(cmd), flush=True)
+    os.execvp("aws", cmd)
 
 
 def main() -> None:
