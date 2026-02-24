@@ -42,20 +42,6 @@ setOptions({
 
 const DISABLED='disabled';
 
-const ZOOM_COOKIE_MAX_AGE_SEC = 31536000; // 1 year
-
-function getCookie(name) {
-    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1') + '=([^;]*)'));
-    return match ? decodeURIComponent(match[1]) : null;
-}
-
-function setCookie(name, value, maxAgeSec) {
-    let cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSec + '; SameSite=Lax';
-    if (window.location && window.location.protocol === 'https:') {
-        cookie += '; Secure';
-    }
-    document.cookie = cookie;
-}
 
 function get_ruler_size(str) {
     const match = str.match(/^Ruler\s*(\d+)mm$/);
@@ -112,12 +98,12 @@ class TracerController extends MovieController {
         }
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
 
-        // Remember zoom per movie (movie_id is a GUID); restore from cookie on load, save on change.
+        // Remember zoom per movie (movie_id is a GUID); restore from localStorage on load, save on change.
         if (this.movie_id && this.zoom_selector) {
             const zoomSelect = $(this.zoom_selector);
             const allowedZoomValues = zoomSelect.find('option').map(function() { return $(this).val(); }).get();
-            const cookieName = 'analysis_zoom_' + this.movie_id;
-            const saved = getCookie(cookieName);
+            const storageKey = 'analysis_zoom_' + this.movie_id;
+            const saved = localStorage.getItem(storageKey);
             if (saved && allowedZoomValues.includes(saved)) {
                 zoomSelect.val(saved);
                 this.set_zoom(parseInt(saved, 10) / 100);
@@ -125,7 +111,7 @@ class TracerController extends MovieController {
             zoomSelect.on('change', () => {
                 const val = zoomSelect.val();
                 if (allowedZoomValues.includes(val)) {
-                    setCookie(cookieName, val, ZOOM_COOKIE_MAX_AGE_SEC);
+                    localStorage.setItem(storageKey, val);
                 }
             });
         }
