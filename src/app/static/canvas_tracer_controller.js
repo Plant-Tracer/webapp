@@ -99,22 +99,7 @@ class TracerController extends MovieController {
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
 
         // Remember zoom per movie (movie_id is a GUID); restore from localStorage on load, save on change.
-        if (this.movie_id && this.zoom_selector) {
-            const zoomSelect = $(this.zoom_selector);
-            const allowedZoomValues = Array.from(zoomSelect.element.querySelectorAll('option')).map(o => o.value);
-            const storageKey = 'analysis_zoom_' + this.movie_id;
-            const saved = localStorage.getItem(storageKey);
-            if (saved && allowedZoomValues.includes(saved)) {
-                zoomSelect.val(saved);
-                this.set_zoom(parseInt(saved, 10) / 100);
-            }
-            zoomSelect.on('change', () => {
-                const val = zoomSelect.val();
-                if (allowedZoomValues.includes(val)) {
-                    localStorage.setItem(storageKey, val);
-                }
-            });
-        }
+        this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
 
