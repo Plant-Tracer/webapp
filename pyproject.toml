@@ -10,6 +10,7 @@ license = "GPL"
 readme = "README.md"
 packages = [
     { include = "app", from = "src" },
+    { include = "sam_config_tool.py", from = "etc" },
 ]
 
 [tool.poetry.dependencies]
@@ -74,8 +75,8 @@ cfn-lint = "^1.43.4"
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-#[tool.poetry.scripts]
-#app = "deploy.app.__main__:main" # Example if you restore this
+[tool.poetry.scripts]
+sam-config-tool = "sam_config_tool:main"
 
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.

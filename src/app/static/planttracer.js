@@ -243,11 +243,11 @@ async function get_movie_metadata(movie_id){
 //
 // Ask the server to rotate the movie
 async function rotate_movie() {
-    const link = $('#rotate_movie_link');
-    if (link.hasClass('rotate-pending')) {
+    const linkEl = $('#rotate_movie_link').get(0);
+    if (!linkEl || linkEl.classList.contains('rotate-pending')) {
         return;
     }
-    link.addClass('rotate-pending');
+    linkEl.classList.add('rotate-pending');
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
     $('#rotate_status').text(' ... Rotating...');
@@ -261,7 +261,7 @@ async function rotate_movie() {
     console.log("r=",r);
     if (!r.ok) {
         console.log('could not rotate. r=',r);
-        link.removeClass('rotate-pending');
+        linkEl.classList.remove('rotate-pending');
         $('#rotate_status').text('');
         return;
     }
@@ -269,11 +269,11 @@ async function rotate_movie() {
     console.log("New metadata:",m1);
     $('#image-preview').attr('src', first_frame_url(movie_id));
     function reenable_rotate() {
-        link.removeClass('rotate-pending');
+        linkEl.classList.remove('rotate-pending');
         $('#rotate_status').text('');
     }
-    $('#image-preview').one('load', reenable_rotate);
-    $('#image-preview').one('error', reenable_rotate);
+    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
+    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
 }
 
 function purge_movie() {

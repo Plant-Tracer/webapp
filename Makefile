@@ -450,8 +450,7 @@ ifeq ($(AWS_REGION),local)
 endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	@echo Removing old SSH host key for $(VM_HOSTNAME)...
-	ssh-keygen -R $(VM_HOSTNAME) || true
+	poetry run sam-config-tool $(SAM_CONFIG) ssh-clean
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -468,16 +467,11 @@ endif
 	@echo use one of these git branches:
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	@echo Removing old SSH host key for $(VM_HOSTNAME)...
-	ssh-keygen -R $(VM_HOSTNAME) || true
+	poetry run sam-config-tool $(SAM_CONFIG) ssh-clean
 
 
-STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-# Hostname for the VM (from samconfig.toml parameter_overrides: HostLabel + BaseDomain)
-# Use Python to avoid sed portability issues (macOS BSD sed vs GNU sed).
-SAM_HOST_LABEL := $(shell python3 -c "import re; f=open('samconfig.toml'); line=[l for l in f if 'parameter_overrides' in l]; m=re.search(r'HostLabel=\\\\\"([^\\\"]+)\\\\\"', line[0]) if line else None; print(m.group(1) if m else '')" 2>/dev/null)
-SAM_BASE_DOMAIN := $(shell python3 -c "import re; f=open('samconfig.toml'); line=[l for l in f if 'parameter_overrides' in l]; m=re.search(r'BaseDomain=\\\\\"([^\\\"]+)\\\\\"', line[0]) if line else None; print(m.group(1) if m else '')" 2>/dev/null)
-VM_HOSTNAME := $(SAM_HOST_LABEL).$(SAM_BASE_DOMAIN)
+SAM_CONFIG ?= samconfig.toml
+STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 
 sam-delete:
 	@echo "Deleting stack: $(STACK_NAME)..."
@@ -488,16 +482,7 @@ sam-delete:
 
 # Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
-	@INSTANCE_ID=$$(aws ec2 describe-instances \
-		--filters "Name=tag:Name,Values=PlantTracer-$(STACK_NAME)-app" "Name=instance-state-name,Values=running" \
-		--query "Reservations[].Instances[].InstanceId" \
-		--output text); \
-	if [ -z "$$INSTANCE_ID" ]; then \
-		echo "Error: No running instance found for stack $(STACK_NAME)"; \
-		exit 1; \
-	fi; \
-	echo "Connecting to $$INSTANCE_ID..."; \
-	aws ssm start-session --target $$INSTANCE_ID
+	poetry run sam-config-tool $(SAM_CONFIG) ssh
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
