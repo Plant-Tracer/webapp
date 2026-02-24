@@ -50,7 +50,11 @@ function getCookie(name) {
 }
 
 function setCookie(name, value, maxAgeSec) {
-    document.cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSec;
+    let cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSec + '; SameSite=Lax';
+    if (window.location && window.location.protocol === 'https:') {
+        cookie += '; Secure';
+    }
+    document.cookie = cookie;
 }
 
 function get_ruler_size(str) {
