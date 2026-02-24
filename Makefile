@@ -450,7 +450,7 @@ ifeq ($(AWS_REGION),local)
 endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool $(SAM_CONFIG) ssh-clean
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -467,7 +467,7 @@ endif
 	@echo use one of these git branches:
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool $(SAM_CONFIG) ssh-clean
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
 
 
 SAM_CONFIG ?= samconfig.toml
@@ -482,7 +482,7 @@ sam-delete:
 
 # Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
-	poetry run sam-config-tool $(SAM_CONFIG) ssh
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done

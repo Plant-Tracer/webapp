@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 General-purpose tool for template.yaml and samconfig.toml.
-Parses SAM config and runs commands: ssh-clean (ssh-keygen -R hostname), ssh / ssm-start-session (SSM session).
+Parses SAM config and runs commands: ssh-clean (ssh-keygen -R hostname), ssh (SSH to VM), ssm-start-session (AWS SSM session).
 """
 import argparse
 import re
@@ -90,8 +90,8 @@ def cmd_ssh_clean(config_path: str) -> None:
         print(result.stderr or result.stdout, file=sys.stderr, end="")
 
 
-def cmd_ssh(config_path: str) -> None:
-    """Start SSM session to the stack's EC2 instance."""
+def _get_instance_id(config_path: str) -> tuple[str, str]:
+    """Resolve stack's running EC2 instance id and region from config. Returns (instance_id, region)."""
     stack_name, region, _hostname, _ = load_sam_config(config_path)
     result = subprocess.run(
         [
@@ -101,7 +101,7 @@ def cmd_ssh(config_path: str) -> None:
             "--region",
             region,
             "--filters",
-            f"Name=tag:Name,Values=PlantTracer-{stack_name}-app",
+            f"Name=tag:Name,Values={stack_name}-app",
             "Name=instance-state-name,Values=running",
             "--query",
             "Reservations[].Instances[].InstanceId",
@@ -122,7 +122,22 @@ def cmd_ssh(config_path: str) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    target = instance_id[0]
+    return (instance_id[0], region)
+
+
+def cmd_ssh(config_path: str, identity_file: str | None = None) -> None:
+    """Run SSH to the stack's VM (hostname from config)."""
+    _stack, _region, hostname, _ = load_sam_config(config_path)
+    cmd = ["ssh"]
+    if identity_file:
+        cmd.extend(["-i", str(Path(identity_file).expanduser())])
+    cmd.append(f"ubuntu@{hostname}")
+    subprocess.run(cmd, check=True)
+
+
+def cmd_ssm_start_session(config_path: str) -> None:
+    """Start AWS SSM session to the stack's EC2 instance."""
+    target, region = _get_instance_id(config_path)
     print(f"Connecting to {target}...", flush=True)
     subprocess.run(
         ["aws", "ssm", "start-session", "--target", target, "--region", region],
@@ -135,21 +150,31 @@ def main() -> None:
         description="General-purpose tool for template.yaml and samconfig.toml",
     )
     parser.add_argument(
-        "config",
-        metavar="samconfig.toml",
-        help="Path to samconfig.toml",
+        "--samconfig",
+        metavar="FILE",
+        default="samconfig.toml",
+        help="Path to samconfig.toml (default: samconfig.toml)",
+    )
+    parser.add_argument(
+        "-i",
+        "--identity",
+        metavar="FILE",
+        dest="identity_file",
+        help="SSH identity (private key) file, e.g. ~/.ssh/plantadmin.pem",
     )
     parser.add_argument(
         "command",
         choices=["ssh-clean", "ssh", "ssm-start-session"],
-        help="ssh-clean: run ssh-keygen -R hostname; ssh / ssm-start-session: start SSM session to VM",
+        help="ssh-clean: ssh-keygen -R hostname; ssh: SSH to VM; ssm-start-session: AWS SSM session",
     )
     args = parser.parse_args()
 
     if args.command == "ssh-clean":
-        cmd_ssh_clean(args.config)
-    elif args.command in ("ssh", "ssm-start-session"):
-        cmd_ssh(args.config)
+        cmd_ssh_clean(args.samconfig)
+    elif args.command == "ssh":
+        cmd_ssh(args.samconfig, identity_file=getattr(args, "identity_file", None))
+    elif args.command == "ssm-start-session":
+        cmd_ssm_start_session(args.samconfig)
     else:
         parser.error(f"Unknown command: {args.command}")
 
