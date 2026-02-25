@@ -243,6 +243,11 @@ async function get_movie_metadata(movie_id){
 //
 // Ask the server to rotate the movie
 async function rotate_movie() {
+    const linkEl = $('#rotate_movie_link').get(0);
+    if (!linkEl || linkEl.classList.contains('rotate-pending')) {
+        return;
+    }
+    linkEl.classList.add('rotate-pending');
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
     $('#rotate_status').text(' ... Rotating...');
@@ -254,14 +259,21 @@ async function rotate_movie() {
     formData.append('action', 'rotate90cw');
     const r = await fetch(`${API_BASE}api/edit-movie`, { method:"POST", body:formData});
     console.log("r=",r);
-    $('#rotate_status').text('');
     if (!r.ok) {
         console.log('could not rotate. r=',r);
+        linkEl.classList.remove('rotate-pending');
+        $('#rotate_status').text('');
         return;
     }
     const m1 = get_movie_metadata(movie_id);
     console.log("New metadata:",m1);
     $('#image-preview').attr('src', first_frame_url(movie_id));
+    function reenable_rotate() {
+        linkEl.classList.remove('rotate-pending');
+        $('#rotate_status').text('');
+    }
+    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
+    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
 }
 
 function purge_movie() {
