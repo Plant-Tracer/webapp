@@ -26,12 +26,30 @@ export DYNAMODB_TABLE_PREFIX
 export HOSTNAME
 export LOG_LEVEL
 export PLANTTRACER_S3_BUCKET
+export ADMIN_EMAIL
+export COURSE_ID
+export ADMIN_NAME
+export COURSE_NAME
+export SERVER_EMAIL
 
 # Make $HOME/.bashrc add environment.d
 if ! grep planttracer $HOME/.bashrc ; then
     echo '# source planttracer
         . "/etc/environment.d/10-planttracer.conf" && export $(cut -d= -f1 "/etc/environment.d/10-planttracer.conf" | grep -v "^#")
         ' >> ~/.bashrc
+fi
+
+# Developer hints in .bash_profile (shown on login)
+if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
+    sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
+
+# PlantTracer dev hints:
+echo "  View webserver log:  journalctl -u planttracer.service -f"
+echo "  Enable gunicorn auto-reload:    cd /opt/webapp && make gunicorn-reload"
+echo "tail /var/log/user-data.log"
+tail /var/log/user-data.log
+BASHPROFILE
+    sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
 
 ## Install nginx and the TLS certificate
@@ -72,7 +90,7 @@ echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
 sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
      --flag planttracer-nginx-patch.5100 --count 8
 
-if ! nginx -t; then
+if ! /usr/sbin/nginx -t; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
 fi
@@ -104,7 +122,28 @@ poetry --version
 
 make install-ubuntu
 
-## Start up the plantracer service
+## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
+## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
+poetry run python src/dbutil.py --create_demos
+
+## Apply CORS to the S3 bucket so the browser can fetch movie zip URLs from the app origin (e.g. simson2.planttracer.com).
+if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
+    poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+fi
+
+## Create course if not present and send verification email to admin (idempotent)
+if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
+    poetry run python src/dbutil.py --create_course \
+        --course_id "$COURSE_ID" \
+        --course_name "$COURSE_NAME" \
+        --admin_email "$ADMIN_EMAIL" \
+        --admin_name "$ADMIN_NAME" \
+        --send-email
+fi
+
+## Start up the planttracer service
 sudo systemctl daemon-reload
 sudo systemctl start planttracer.service
 sudo systemctl enable planttracer.service
+
+echo "Bootstrap complete. Web server running at https://$HOSTNAME.$DOMAIN and https://$HOSTNAME-demo.$DOMAIN"

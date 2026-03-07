@@ -20,10 +20,12 @@ from zipfile import ZipFile
 from flask import Blueprint, request, make_response, redirect, current_app, jsonify
 from validate_email_address import validate_email
 
+from . import config_check
 from . import odb
 from . import mailer
 from . import tracker
-from .apikey import get_user_api_key,get_user_dict,in_demo_mode
+from . import apikey
+from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
@@ -47,8 +49,10 @@ class InvalidFrameNumber(Exception):
 ### Handle invalid apikey exceptions
 @api_bp.errorhandler(InvalidAPI_Key)
 def invalid_api_key(ex):
-    logger.info("invalid_api_key(%s)",ex)
-    return E.INVALID_API_KEY, 403
+    logger.info("invalid_api_key(%s)", ex)
+    resp = make_response(jsonify(E.INVALID_API_KEY), 403)
+    resp.set_cookie(apikey.cookie_name(), '', expires=0, path='/')
+    return resp
 
 @api_bp.errorhandler(UnauthorizedUser)
 def unauthorized_user(ex):
@@ -599,6 +603,21 @@ def api_ver():
     """
     current_app.logger.error("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
+
+
+@api_bp.route('/config-check', methods=GET_POST)
+def api_config_check():
+    """Return DynamoDB and S3 CORS check results as JSON (no auth required)."""
+    origin = f"{request.scheme}://{request.host}"
+    d_ok, d_msg = config_check.check_dynamodb()
+    c_ok, c_msg = config_check.check_s3_cors(origin)
+    return jsonify({
+        'dynamodb_ok': d_ok,
+        'dynamodb_message': d_msg,
+        'cors_ok': c_ok,
+        'cors_message': c_msg,
+    })
+
 
 ################################################################
 ##

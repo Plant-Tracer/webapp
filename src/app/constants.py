@@ -35,7 +35,8 @@ class C:
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
-    PROJECT_EMAIL = 'admin@planttracer.com'
+    # SERVER_EMAIL: sender address for all outgoing email (env var name; value default admin@planttracer.com, configured in SES)
+    SERVER_EMAIL = 'SERVER_EMAIL'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
@@ -69,7 +70,8 @@ class C:
     DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
 
     # Other
-    EMAIL_TEMPLATE_FNAME = 'email.txt'
+    LOGIN_EMAIL_TEMPLATE_FNAME = 'email_login.html'
+    COURSE_CREATED_EMAIL_TEMPLATE_FNAME = 'email_course_created.html'
     MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'

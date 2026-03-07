@@ -30,10 +30,20 @@ from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unus
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('selenium').setLevel(logging.WARNING)
 
-# Cursor (Electron) injects env vars that confuse Chrome when launched as a child process.
-# Strip them before Selenium starts Chrome to avoid crashes under Cursor.
-for var in ("ELECTRON_RUN_AS_NODE", "ELECTRON_NO_ATTACH_CONSOLE", "NODE_OPTIONS"):
+# Cursor/Electron inject env vars that can make Chrome crash when launched as a subprocess (e.g. Selenium).
+# Strip them so browser tests don't take down Chrome or the IDE.
+for var in (
+    "ELECTRON_RUN_AS_NODE",
+    "ELECTRON_NO_ATTACH_CONSOLE",
+    "NODE_OPTIONS",
+    "CHROME_HEADLESS",
+    "CHROME_NO_SANDBOX",
+    "CHROME_DEVEL_SANDBOX",
+):
     os.environ.pop(var, None)
+for key in list(os.environ):
+    if key.startswith("VSCODE_") or key.startswith("ELECTRON_"):
+        os.environ.pop(key, None)
 
 
 

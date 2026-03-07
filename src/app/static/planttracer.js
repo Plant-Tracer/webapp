@@ -243,8 +243,14 @@ async function get_movie_metadata(movie_id){
 //
 // Ask the server to rotate the movie
 async function rotate_movie() {
+    const linkEl = $('#rotate_movie_link').get(0);
+    if (!linkEl || linkEl.classList.contains('rotate-pending')) {
+        return;
+    }
+    linkEl.classList.add('rotate-pending');
     const movie_id = window.movie_id;
     console.log("rotate_movie. movie_id=",movie_id);
+    $('#rotate_status').text(' ... Rotating...');
     const m0 = await get_movie_metadata(movie_id);
     console.log("Initial metadata:",m0);
     let formData = new FormData();
@@ -255,11 +261,19 @@ async function rotate_movie() {
     console.log("r=",r);
     if (!r.ok) {
         console.log('could not rotate. r=',r);
+        linkEl.classList.remove('rotate-pending');
+        $('#rotate_status').text('');
         return;
     }
     const m1 = get_movie_metadata(movie_id);
     console.log("New metadata:",m1);
     $('#image-preview').attr('src', first_frame_url(movie_id));
+    function reenable_rotate() {
+        linkEl.classList.remove('rotate-pending');
+        $('#rotate_status').text('');
+    }
+    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
+    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
 }
 
 function purge_movie() {
@@ -684,10 +698,15 @@ window.helpers = {
 window.list_ready_function = list_ready_function;
 window.upload_ready_function = upload_ready_function;
 window.check_upload_metadata = check_upload_metadata;
-// Expose handlers used by onclick in upload.html
+// Expose handlers used by onclick in list.html and upload.html (must be on window for inline handlers)
 window.upload_movie = upload_movie;
 window.purge_movie = purge_movie;
 window.rotate_movie = rotate_movie;
+window.play_clicked = play_clicked;
+window.analyze_clicked = analyze_clicked;
+window.row_pencil_clicked = row_pencil_clicked;
+window.action_button_clicked = action_button_clicked;
+window.hide_clicked = hide_clicked;
 
 // Wire up whatever happens to be present
 // audit, list and upload are wired with their own ready functions

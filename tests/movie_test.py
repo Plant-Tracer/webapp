@@ -25,7 +25,7 @@ from app.s3_presigned import s3_client
 from app.constants import logger
 
 # Get constants from fixtures (fixtures themselves are in conftest.py)
-from .fixtures.local_aws import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
 
 
 
@@ -346,7 +346,7 @@ def test_movie_extract2(client, new_movie):
         assert is_jpeg(r.content)
 
 
-@pytest.mark.skip(reason='logging disabled')
+@pytest.mark.skip(reason='logging disabled on move to DynamoDB')
 def test_log_search_movie(new_movie):
     cfg        = copy.copy(new_movie)
     #api_key    = cfg[API_KEY]

@@ -12,7 +12,7 @@ from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KE
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 # Fixtures are imported in conftest.py
-from .fixtures.local_aws import ADMIN_EMAIL
+from .constants import ADMIN_EMAIL
 
 
 

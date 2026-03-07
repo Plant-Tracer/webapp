@@ -16,7 +16,7 @@ from app import odb
 from app import mailer
 from app.constants import logger
 
-from .fixtures.local_aws import COURSE_KEY
+from app.odb import COURSE_KEY
 
 
 MSG = """to: {{ to_addrs }}

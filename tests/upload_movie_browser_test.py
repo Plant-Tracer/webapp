@@ -17,7 +17,7 @@ from selenium.common.exceptions import TimeoutException
 from app import odb
 from app import odb_movie_data
 from app.constants import logger
-from .fixtures.local_aws import API_KEY
+from app.odb import API_KEY
 from .selenium_utils import authenticate_browser
 
 TEST_MOVIE_PATH = Path(__file__).resolve().parent / "data" / "2019-07-12 circumnutation.mp4"

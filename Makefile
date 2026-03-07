@@ -1,4 +1,4 @@
-# Makefile for Planttracer web application
+# Makefile for Planttracer web application.
 # - Local development
 # - Creates CI/CD environment in GitHub
 # - Manages deployemnt to AWS Linux
@@ -73,12 +73,12 @@ all:
 
 check:
 	make lint
-	make pytest
+	AWS_REGION=local make pytest
 	make jscoverage
 
 coverage:
-	make pytest-coverage
-	make jscoverage
+	AWS_REGION=local make pytest-coverage
+	AWS_REGION=local make jscoverage
 
 ptags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
@@ -172,7 +172,7 @@ make-local-demo:
 
 run-local-debug:
 	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demo@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 
 run-local-demo-debug:
@@ -369,6 +369,15 @@ install-windows: .venv/pyvenv.cfg
 
 
 ################################################################
+### Development server: run gunicorn with --reload (patches service file)
+gunicorn-reload:
+	@echo Patching planttracer.service to add gunicorn --reload...
+	sudo sed -i 's|\(ExecStart=.*/gunicorn\) \(-[wb]\)|\1 --reload \2|' /etc/systemd/system/planttracer.service || true
+	sudo systemctl daemon-reload
+	sudo systemctl restart planttracer.service
+	@echo planttracer.service restarted with --reload.
+
+################################################################
 ### Cleanup
 
 clean:
@@ -441,6 +450,7 @@ ifeq ($(AWS_REGION),local)
 endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -457,9 +467,12 @@ endif
 	@echo use one of these git branches:
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
 
 
-STACK_NAME := $(shell grep "stack_name" samconfig.toml 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+SAM_CONFIG ?= samconfig.toml
+STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+
 sam-delete:
 	@echo "Deleting stack: $(STACK_NAME)..."
 	sam delete --stack-name $(STACK_NAME)
@@ -469,20 +482,9 @@ sam-delete:
 
 # Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
-	@INSTANCE_ID=$$(aws ec2 describe-instances \
-		--filters "Name=tag:Name,Values=PlantTracer-$(STACK_NAME)-app" "Name=instance-state-name,Values=running" \
-		--query "Reservations[].Instances[].InstanceId" \
-		--output text); \
-	if [ -z "$$INSTANCE_ID" ]; then \
-		echo "Error: No running instance found for stack $(STACK_NAME)"; \
-		exit 1; \
-	fi; \
-	echo "Connecting to $$INSTANCE_ID..."; \
-	aws ssm start-session --target $$INSTANCE_ID
+	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
 
 list-all-instances:
-	@echo && echo && echo
-	@unset AWS_ENDPOINT_URL_DYNAMODB AWS_SECRET_ACCESS_KEY AWS_ACCESS_KEY_ID AWS_ENDPOINT_URL_S3 && (printenv | grep AWS_) && \
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
 list-stacks:

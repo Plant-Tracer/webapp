@@ -1,51 +1,28 @@
 """
-Test functions to verify the title of the Plant Tracer webapp home/index page
+Test functions to verify the title of the Plant Tracer webapp home/index page.
 
-This module also serves to illustrate how to use Selenium and Pytest together.
-
-The two tests here test the same thing, but one uses the pytest-selenium
-package and the other uses the selenium package directly.
+Uses the live_server and chrome_driver fixtures from conftest so the test
+hits the real Flask app (main Plant Tracer index), not an arbitrary URL.
 """
 
-import os
-
-import pytest
-
-# not needed for using pytest-selenium, just for using selenium directly
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import sys
 
 from app.constants import logger
 
 PLANTTRACER_TITLE = 'Plant Tracer'
 
-@pytest.fixture
-def http_endpoint():
-    yield "http://localhost:8000"
 
-
-# test function illustrating the use of selenium package directly
-@pytest.mark.skip(reason="temporarily disabled")
-def test_sitetitle_just_selenium(http_endpoint):
-
-    logger.info("http_endpoint %s", http_endpoint)
-
-    options = Options()
-    options.add_argument("--headless")
-    #
-    # Following added per ChatGPT-4:
-    options.add_argument("--no-sandbox")  # This option is often necessary in Docker or CI environments
-    options.add_argument("--disable-gpu")  # This option is recommended for headless mode
-    options.add_argument("--window-size=1920,1080")  # Specify window size
-    # per https://pytest-selenium.readthedocs.io/en/latest/user_guide.html#quick-start
-    if 'CHROME_PATH' in os.environ:
-        logger.info('CHROME_PATH=%s',os.environ['CHROME_PATH'])
-        options.binary_location = os.environ['CHROME_PATH']
-
-    browser_driver = webdriver.Chrome(options = options) # TODO: externalize browser type, if possible
-    browser_driver.get(http_endpoint)
-    print("browser_driver=%s",browser_driver,browser_driver.title,browser_driver.current_url,browser_driver.get_window_size,browser_driver.page_source)
-    print(dir(browser_driver))
-    assert browser_driver.title == PLANTTRACER_TITLE
-    browser_driver.close()
-    browser_driver.quit()
+def test_sitetitle_just_selenium(chrome_driver, live_server):
+    """Load the Plant Tracer root page and assert its title."""
+    logger.info("live_server %s", live_server)
+    chrome_driver.get(live_server)
+    if chrome_driver.title != PLANTTRACER_TITLE:
+        print("\n--- Page dump (title mismatch) ---", file=sys.stderr)
+        print(f"Current URL: {chrome_driver.current_url}", file=sys.stderr)
+        print(f"Page title: {chrome_driver.title!r}", file=sys.stderr)
+        src = chrome_driver.page_source or ""
+        print(f"Page source (first 3000 chars):\n{src[:3000]}", file=sys.stderr)
+        print("--- end page dump ---\n", file=sys.stderr)
+    assert chrome_driver.title == PLANTTRACER_TITLE, (
+        f"expected title {PLANTTRACER_TITLE!r}, got {chrome_driver.title!r} at {chrome_driver.current_url}"
+    )

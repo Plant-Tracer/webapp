@@ -42,6 +42,7 @@ setOptions({
 
 const DISABLED='disabled';
 
+
 function get_ruler_size(str) {
     const match = str.match(/^Ruler\s*(\d+)mm$/);
     return match ? parseInt(match[1], 10) : null;
@@ -96,6 +97,9 @@ class TracerController extends MovieController {
             this.download_button.show();
         }
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
+
+        // Remember zoom per movie (movie_id is a GUID); restore from localStorage on load, save on change.
+        this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
 
@@ -396,7 +400,7 @@ class TracerController extends MovieController {
     rotate_button_pressed() {
         // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
         this.rotate_button.prop(DISABLED,true);
-        $('#firsth2').html(`Asking server to rotate movie 90º counter-clockwise. Please stand by...`);
+        $('#firsth2').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,

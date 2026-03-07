@@ -78,11 +78,31 @@ Parameters:
     Default: main
     Description: "Git branch/tag to checkout."
 
+  AdminEmail:
+    Type: String
+    Default: plantadmin@planttracer.com
+    Description: "Email address for course administrator of first course"
+
+  CourseId:
+    Type: String
+    Description: "Course ID for the first course (e.g. Course1)"
+
+  AdminName:
+    Type: String
+    Description: "Display name of the course administrator"
+
+  CourseName:
+    Type: String
+    Default: "Plant motion 101"
+    Description: "Name of first course"
+
   LogLevel:
     Type: String
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the function
+
+
 
 Resources:
   # --- Minimal networking: VPC + one public subnet + IGW + route table ---
@@ -206,7 +226,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 30
+            VolumeSize: 20
             VolumeType: gp3
             DeleteOnTermination: true
       CreditSpecification:
@@ -225,11 +245,17 @@ Resources:
           # Create the environment variables
           mkdir -p /etc/environment.d
           touch /etc/environment.d/10-planttracer.conf
-          echo "LOG_LEVEL=${LogLevel}"                    >> /etc/environment.d/10-planttracer.conf
-          echo "HOSTNAME=${HostLabel}"                  >> /etc/environment.d/10-planttracer.conf
-          echo "DOMAIN=${BaseDomain}"                   >> /etc/environment.d/10-planttracer.conf
-          echo "DYNAMODB_TABLE_PREFIX=${HostLabel}-"    >> /etc/environment.d/10-planttracer.conf
-          echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
+          echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "HOSTNAME=\"${HostLabel}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
+          echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
+          echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
+          echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
+          echo "DYNAMODB_TABLE_PREFIX=\"${HostLabel}-\""   >> /etc/environment.d/10-planttracer.conf
+          echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
+          # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
+          echo "SERVER_EMAIL=\"admin@planttracer.com\""    >> /etc/environment.d/10-planttracer.conf
 
           # Install essentials
           export DEBIAN_FRONTEND=noninteractive
@@ -250,7 +276,7 @@ Resources:
           echo Set permissions and run bootstrap
           sudo chown -R ubuntu:ubuntu /opt/webapp
           runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
-          df -h
+          echo "User data finished executing."
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation
@@ -421,7 +447,7 @@ Resources:
             - AttributeName: ipaddr
               KeyType: "HASH"
           Projection:
-            ProjectionType: "KEYS_ONLY" 
+            ProjectionType: "KEYS_ONLY"
         - IndexName: user_id_idx
           KeySchema:
             - AttributeName: user_id
@@ -441,6 +467,9 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: prod
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM
       CorsConfiguration:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
@@ -454,7 +483,7 @@ Resources:
   Ec2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role" 
+      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -489,6 +518,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
+                  - s3:GetBucketCORS
+                  - s3:PutBucketCORS
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
@@ -496,6 +527,14 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - ses:VerifyEmailIdentity
+                  - ses:ListIdentities
+                  - ses:GetSendQuota
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
 
   # --- Instance Profile with hardcoded prefix ---
   Ec2InstanceProfile:
@@ -568,6 +607,8 @@ Resources:
             Path: /
             Method: ANY
             PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
         AnyProxy:
           Type: HttpApi
           Properties:
@@ -575,6 +616,8 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   ApiId:
