@@ -443,3 +443,81 @@ def test_new_movie_api(client, new_course):
     logger.debug("new_movie fixture: Purge the movie that we have deleted")
     odb_movie_data.purge_movie(movie_id=movie_id)
     logger.debug("new_movie fixture: done")
+
+
+def test_new_movie_attribution_paths(client, new_course, local_s3):
+    """Test the three attribution paths: no research use, research anonymous, research with attribution."""
+    cfg = copy.copy(new_course)
+    api_key = cfg[API_KEY]
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data = f.read()
+    movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
+    base_data = {
+        "api_key": api_key,
+        "title": f"attribution-test-{uuid.uuid4()}",
+        "description": "test description",
+        "movie_data_sha256": movie_data_sha256,
+    }
+
+    # Path 1: May not be used in research (no research use)
+    resp1 = client.post("/api/new-movie", data={**base_data, "title": f"path1-{uuid.uuid4()}"})
+    res1 = resp1.get_json()
+    assert res1["error"] is False
+    movie_id1 = res1["movie_id"]
+    movie1 = odb.get_movie(movie_id=movie_id1)
+    assert movie1["research_use"] == 0
+    assert movie1["credit_by_name"] == 0
+    assert movie1.get("attribution_name") is None
+    pp1 = res1["presigned_post"]
+    assert pp1["fields"].get("x-amz-meta-research-use") == "0"
+    assert pp1["fields"].get("x-amz-meta-credit-by-name") == "0"
+    assert pp1["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id1})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id1)
+
+    # Path 2: May be used in research but anonymously
+    resp2 = client.post(
+        "/api/new-movie",
+        data={**base_data, "title": f"path2-{uuid.uuid4()}", "research_use": "1"},
+    )
+    res2 = resp2.get_json()
+    assert res2["error"] is False
+    movie_id2 = res2["movie_id"]
+    movie2 = odb.get_movie(movie_id=movie_id2)
+    assert movie2["research_use"] == 1
+    assert movie2["credit_by_name"] == 0
+    assert movie2.get("attribution_name") is None
+    pp2 = res2["presigned_post"]
+    assert pp2["fields"].get("x-amz-meta-research-use") == "1"
+    assert pp2["fields"].get("x-amz-meta-credit-by-name") == "0"
+    assert pp2["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id2})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id2)
+
+    # Path 3: May be used in research with attribution to "Alyssa P. Hacker"
+    resp3 = client.post(
+        "/api/new-movie",
+        data={
+            **base_data,
+            "title": f"path3-{uuid.uuid4()}",
+            "research_use": "1",
+            "credit_by_name": "1",
+            "attribution_name": "Alyssa P. Hacker",
+        },
+    )
+    res3 = resp3.get_json()
+    assert res3["error"] is False
+    movie_id3 = res3["movie_id"]
+    movie3 = odb.get_movie(movie_id=movie_id3)
+    assert movie3["research_use"] == 1
+    assert movie3["credit_by_name"] == 1
+    assert movie3.get("attribution_name") == "Alyssa P. Hacker"
+    pp3 = res3["presigned_post"]
+    assert pp3["fields"].get("x-amz-meta-research-use") == "1"
+    assert pp3["fields"].get("x-amz-meta-credit-by-name") == "1"
+    assert pp3["fields"].get("x-amz-meta-attribution-name") == "Alyssa P. Hacker"
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id3})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id3)

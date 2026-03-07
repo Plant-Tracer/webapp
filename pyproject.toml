@@ -49,6 +49,7 @@ html5validate = "^0.0.2"
 Pillow = "^11.0.0"
 
 [tool.poetry.group.dev.dependencies]
+setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
 boto3-stubs = {extras = ["essential"], version = "*"}
 codecov = "*"
 myst-parser = "*"
@@ -69,6 +70,7 @@ pytest-env = "^1.2.0"
 service_identity = "*"
 filetype = "^1.2.0"
 cfn-lint = "^1.43.4"
+botocore = {extras = ["crt"], version = "^1.42.63"}
 
 
 [build-system]
