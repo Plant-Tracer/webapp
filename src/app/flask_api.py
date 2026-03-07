@@ -29,7 +29,14 @@ from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
-from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
+from .s3_presigned import (
+    make_object_name,
+    make_urn,
+    make_signed_url,
+    make_presigned_post,
+    object_exists,
+    UPLOAD_STAGING_PREFIX,
+)
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
 
@@ -266,7 +273,9 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
     :return: dict['movie_id'] - The movie_id that is allocated
-             dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
+             dict['presigned_post'] - the post to use for uploading the movie (staging prefix uploads/).
+             lambda-resize moves the object to the final key and updates DynamoDB; the client may need to
+             poll or wait briefly before the movie is available at movie_data_urn.
     """
     # pylint: disable=unsupported-membership-test
     logger.info("api_new_movie")
@@ -298,8 +307,11 @@ def api_new_movie():
                              ext=C.MOVIE_EXTENSION)
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
+    # Upload to staging prefix so lambda-resize is triggered; it moves to final key and updates DynamoDB.
+    staging_object_name = UPLOAD_STAGING_PREFIX + oname
+    staging_urn = make_urn(object_name=staging_object_name)
     ret['presigned_post'] = make_presigned_post(
-        urn=movie_data_urn,
+        urn=staging_urn,
         mime_type='video/mp4',
         sha256=movie_data_sha256,
         research_use=str(research_use),

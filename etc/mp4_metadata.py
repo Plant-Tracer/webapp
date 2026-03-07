@@ -5,50 +5,33 @@ Uses only Python (mutagen); no external OS tools.
 
 Running without set options prints the file's tags.
 Use one of --set-research-prohibited, --set-research-credit, or --set-research-anonymous to set the comment.
+
+Shared logic lives in src/app/mp4_metadata_lib.py (used by CLI and lambda-resize).
 """
 import argparse
+import os
 import sys
 
-from mutagen.mp4 import MP4, MP4Tags
+# Allow importing app when run as script from repo root or etc/
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SRC = os.path.join(_ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
-COMMENT_ATOM = "\xa9cmt"
-
-RESEARCH_PROHIBITED = "research use prohibited"
-RESEARCH_ANONYMOUS = "research use allowed (no credit required)"
-
-
-def _research_credit(name: str) -> str:
-    return f"research use allowed; credit {name}"
-
-
-def get_comment(path: str) -> str | None:
-    """Read the comment tag from an MP4/MOV file. Returns None if missing or on error."""
-    try:
-        mp4 = MP4(path)
-        if mp4.tags is None:
-            return None
-        values = mp4.tags.get(COMMENT_ATOM, [])
-        if not values:
-            return None
-        part = values[0]
-        return part if isinstance(part, str) else str(part)
-    except Exception:  # pylint: disable=broad-exception-caught
-        return None
-
-
-def set_comment(path: str, comment: str) -> None:
-    """Set the comment tag and save the file."""
-    mp4 = MP4(path)
-    if mp4.tags is None:
-        mp4.add_tags()
-    assert isinstance(mp4.tags, MP4Tags)
-    mp4.tags[COMMENT_ATOM] = [comment]
-    mp4.save()
+from app.mp4_metadata_lib import (
+    RESEARCH_ANONYMOUS,
+    RESEARCH_PROHIBITED,
+    get_comment,
+    research_credit,
+    set_comment,
+)
 
 
 def print_tags(path: str) -> None:
     """Print all tags; emphasize comment if present."""
     try:
+        from mutagen.mp4 import MP4
+
         mp4 = MP4(path)
     except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error opening {path}: {e}", file=sys.stderr)
@@ -116,7 +99,7 @@ def main() -> None:
         print(f"Set comment: {RESEARCH_PROHIBITED}")
         return
     if args.set_research_credit is not None:
-        comment = _research_credit(args.set_research_credit)
+        comment = research_credit(args.set_research_credit)
         set_comment(path, comment)
         print(f"Set comment: {comment}")
         return

@@ -21,6 +21,9 @@ from .constants import C
 MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
 FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
 
+# Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
+UPLOAD_STAGING_PREFIX = "uploads/"
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]

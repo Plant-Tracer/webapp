@@ -31,6 +31,7 @@ export COURSE_ID
 export ADMIN_NAME
 export COURSE_NAME
 export SERVER_EMAIL
+export LAMBDA_RESIZE_ARN
 
 # Make $HOME/.bashrc add environment.d
 if ! grep planttracer $HOME/.bashrc ; then
@@ -129,6 +130,11 @@ poetry run python src/dbutil.py --create_demos
 ## Apply CORS to the S3 bucket so the browser can fetch movie zip URLs from the app origin (e.g. simson2.planttracer.com).
 if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
     poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+fi
+
+## Idempotently add S3 -> Lambda trigger for prefix uploads/ (if already present, leave as-is).
+if [ -n "${PLANTTRACER_S3_BUCKET:-}" ] && [ -n "${LAMBDA_RESIZE_ARN:-}" ]; then
+    poetry run python etc/s3_upload_trigger.py || true
 fi
 
 ## Create course if not present and send verification email to admin (idempotent)

@@ -45,8 +45,9 @@ html5validate = "^0.0.2"
 
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda function
-# (e.g., Pillow for resizing)
+# (e.g., Pillow for resizing; mutagen for MP4 metadata in lambda-resize)
 Pillow = "^11.0.0"
+mutagen = "*"
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
