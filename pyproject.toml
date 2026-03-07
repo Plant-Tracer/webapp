@@ -99,6 +99,7 @@ disable = [
     "fixme",
     "trailing-whitespace",      # AI does this
     "too-many-positional-arguments",
+    "too-many-return-statements",
 ]
 
 [tool.pylint.design]
@@ -106,7 +107,7 @@ max-args = 10
 max-public-methods = 20
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 venvPath = "./"
 venv = ".venv"
 include = ["."]

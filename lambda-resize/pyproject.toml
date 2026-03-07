@@ -51,7 +51,7 @@ indent = 4
 
 [tool.pylint]
 # Specify the Python version Pylint should assume for syntax checking.
-py-version = "3.13"
+py-version = "3.12"
 ignore-paths = [
     "src/home_app/e11/.*"
 ]
@@ -68,7 +68,8 @@ disable = [
     "line-too-long",
     "unspecified-encoding",
     "too-few-public-methods",
-    "invalid-name"
+    "invalid-name",
+    "too-many-return-statements"
 ]
 
 [tool.pylint.design]
@@ -79,7 +80,7 @@ max-args = 10
 max-public-methods = 20
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
 include = ["src"]

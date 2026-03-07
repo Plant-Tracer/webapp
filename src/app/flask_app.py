@@ -3,7 +3,6 @@ Main Flask application for planttracer.
 """
 
 # pylint: disable=too-many-lines
-# pylint: disable=too-many-return-statements
 
 import sys
 import os

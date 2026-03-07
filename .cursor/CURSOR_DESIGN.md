@@ -76,7 +76,7 @@ Both coverage files are uploaded to codecov.io in CI/CD.
 ### Type Annotations
 
 **Preference**: Use type annotations when possible. The project uses:
-- Python 3.13+ type hints
+- Python 3.12 (matches Ubuntu 24.04; see `pyproject.toml`)
 - Pyright for type checking (configured in `pyproject.toml`)
 - Type checking mode: `basic` (not strict)
 
@@ -136,7 +136,7 @@ These are separate from the main Flask app and have their own deployment pipelin
 2. **Type annotations are preferred** but not strictly required
 3. **JavaScript coverage from Chromium tests is missing** - this needs to be fixed
 4. **Tests should be self-contained** - fixtures handle all setup
-5. **jQuery has been completely eliminated** - replaced with custom lightweight `$` utility in `utils.js`
+5. **jQuery has been completely eliminated** - replaced with custom lightweight `$` and `$$` utilities in `utils.js` (see `.cursor/rules/utils-not-jquery.mdc` for the allowed API)
 6. **Local services run on fixed ports** - see `Makefile` for endpoints
 
 ## Environment Variables
