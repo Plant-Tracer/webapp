@@ -50,6 +50,7 @@ Pillow = "^11.0.0"
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
+mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
 boto3-stubs = {extras = ["essential"], version = "*"}
 codecov = "*"
 myst-parser = "*"
