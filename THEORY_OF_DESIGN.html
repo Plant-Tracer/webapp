@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Web app theory of design &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Gallery of Plant Videos" href="gallery.html" />
+    <link rel="prev" title="Installation" href="Installation.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="web-app-theory-of-design">
+<h1>Web app theory of design<a class="headerlink" href="#web-app-theory-of-design" title="Link to this heading">¶</a></h1>
+<section id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Link to this heading">¶</a></h2>
+<p>Users are authenticated with an <cite>api_key</cite>:</p>
+<ul class="simple">
+<li><p>Generated server-side with <cite>to_base64(rand())</cite> and stored in the users table.</p></li>
+<li><p>New ones can be requested by entering an email address on a web form. The key and several URLs with the key embedded are sent to the email address.</p></li>
+<li><p>Generating a new api_key kills the old one.</p></li>
+<li><p>api_keys expire after 6 months.</p></li>
+<li><p>api_keys are embedded in HTML pages using the template system, making the key accessible to JavaScript running on the page. The global variable is <cite>pt_api_key</cite>.</p></li>
+</ul>
+</section>
+<section id="use-stories">
+<h2>Use Stories<a class="headerlink" href="#use-stories" title="Link to this heading">¶</a></h2>
+<section id="upload-a-file">
+<h3>Upload a file<a class="headerlink" href="#upload-a-file" title="Link to this heading">¶</a></h3>
+<p>1 - User goes to <a class="reference external" href="https://app.digitalcorpora.org/">https://app.digitalcorpora.org/</a> and enters their email address into a text field. This sends them a new API key and a set of URLs. One of the URL is <cite>upload a plant movie</cite>. Another is <cite>view uploaded movies.</cite></p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Requies the ability to send mail from the server that won’t be trapped by anti-spam.</p></li>
+<li><p>Eventually, we will also be able to log in with Google and then see the page with the URLs.</p></li>
+</ul>
+</div></blockquote>
+<p>2 - User clicks the <cite>upload a plant movie</cite> url. This brings the user to another page that has a HTML FORM Upload with the api_key as one of the parameters. This should work for uploading any movie under 10MB. It won’t give a nice progress bar unless we use a clever JavaScript uploader.</p>
+</section>
+<section id="view-edit-delete-upload-files">
+<h3>View/Edit/Delete upload files<a class="headerlink" href="#view-edit-delete-upload-files" title="Link to this heading">¶</a></h3>
+<p>1 - User clicks on link with embedded API key</p>
+<dl>
+<dt>2 - Web page is generated server-side with template engine.</dt><dd><blockquote>
+<div><ul class="simple">
+<li><p>Upload new movie link</p></li>
+<li><p>pop-up with the section that the student is in.</p></li>
+<li><p>Section showing movies, with a note if it is ‘playable’ or ‘needs review’</p></li>
+<li><p>Section showing deleted movies, with days until movie is purged.</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>To delete a movie, click a check that says “delete.” This moves the movie to the “deleted” section. Movies in the deleted section can’t be played and are automatically deleted in 7 days, but they can be undelted as well.</p></li>
+<li><p>Movie metadata is in text fields. To change it, just change the text. Making a change to the text enables a “save” button at the end of the line. If you try to navigate away from the page without saving, you get a warning. (JavaScript)</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="faculty-interface">
+<h3>Faculty interface<a class="headerlink" href="#faculty-interface" title="Link to this heading">¶</a></h3>
+<blockquote>
+<div><ul class="simple">
+<li><p>Each faculty member can be in any number of sections</p></li>
+<li><p>Shows all students assigned to each of their section, and all unassigned students.</p></li>
+<li><p>Allows students to be moved between sections and unassigned.</p></li>
+<li><p>Shows all uploaded movies for each section and allows them to be publisehd or unpublished.</p></li>
+</ul>
+</div></blockquote>
+</section>
+</section>
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
+<section id="id1">
+<h3>Upload a file<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<p>1 - User goes to app.digitalcorpora.org/upload</p>
+<p>2 - User fills out form with movie title, description, and chooses movie.</p>
+<p>3 - Form ‘onchange’ fires.</p>
+<blockquote>
+<div><p>3a - JavaScript hashes movie.</p>
+<p>3b - /api/movie-upload-start gets api_key, title, description, sha256, movie length</p>
+<p>3c - bottle_app.movie_upload_start() calls db.create_movie which creats the movie entry with this sha256.</p>
+<p>3d - if the sha256 already exists, return to the client with ‘movie_id’ and ‘upload_url’ equal to ‘’ and ‘movie_url’ being the final movie URL.</p>
+<p>3e - If the sha256 does not exist, return to the client with ‘movie_id’ and a ‘upload_url’ being a presigned s3 upload URL and ‘movie_url’ being the final movie URL.</p>
+<p>Now, if the client has an upload_url, it starts the upload with a POST.</p>
+</div></blockquote>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Web app theory of design</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#authentication">Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#use-stories">Use Stories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="Installation.html" title="previous chapter">Installation</a></li>
+      <li>Next: <a href="gallery.html" title="next chapter">Gallery of Plant Videos</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/THEORY_OF_DESIGN.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

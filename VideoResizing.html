@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Resizing Video Files &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Plant-Tracer/webapp Releases" href="ReleaseHistory.html" />
+    <link rel="prev" title="Plant Tracer Web App Tutorial" href="UserTutorial.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="resizing-video-files">
+<h1>Resizing Video Files<a class="headerlink" href="#resizing-video-files" title="Link to this heading">¶</a></h1>
+<section id="why-resize-my-video">
+<h2>Why resize my video?<a class="headerlink" href="#why-resize-my-video" title="Link to this heading">¶</a></h2>
+<p>PlantTracer attempts to track the movement of anything in a movie that the user designates with a Marker. It does this by examining the pixels surrounding the marker’s position in the next frame and identifying pixels with a similar shape and color nearby. So at one level, the higher the resolution of the video, the more pixels will have to be examined, and the slower the analysis. Since PlantTracer is intended to track the motion of parts of plants, very fine detail is not needed, and indeed a bit of fuzziness is generally beneficial as it tends to smooth out color areas.</p>
+<p>Modern digital cameras tend to produce videos with much higher resolution than PlantTracer needs. Standard Definition (480p) is more than enough, and the current iPhone default (1080p) is way more than PlantTracer needs.</p>
+<p>PlantTracer puts a limit on the size of the uploaded movies in part to save on storage space and costs, and also to keep down the processing time needed to analyze an image.</p>
+<p>One day, we hope that PlantTracer will automatically resize videos upon upload. But until that day, we ask users to make sure their videos are of a size that PlantTracer can easily handle.</p>
+</section>
+<section id="planttracer-video-size-limits-and-guidelines">
+<h2>PlantTracer video size limits and guidelines<a class="headerlink" href="#planttracer-video-size-limits-and-guidelines" title="Link to this heading">¶</a></h2>
+<p>File size: The size of all uploaded video files must be 256 megabytes or less. Files larger than this will be rejected.</p>
+<p>Image size: PlantTracer prefers videos in standard definition (480p) and recommends selecting that option when recording or exporting your video. As a general guideline, ensure that the largest dimension of your video is 640 pixels. As an example, a typical 480p video is 640 pixels wide by 480 pixels high. It is important to preserve the aspect ratio of the video when resizing it so that distance calculations remain accurate as items move in both the x and y dimensions of the video.</p>
+<p>Movie length and cropping: PlantTracer recommends that movie files have no more than 1000 frames. Some videos have a header or trailer section (often with the recording tool’s logo, etc.) that it would be good to crop off prior to uploading, as PlantTracer does not have the ability to crop the movie after uploading. In any case, crop or otherwise edit the movie to remove sections where movement tracking is not intended or desired.</p>
+</section>
+<section id="how-to-resize-a-video">
+<h2>How to Resize a Video<a class="headerlink" href="#how-to-resize-a-video" title="Link to this heading">¶</a></h2>
+<section id="lapse-it">
+<h3>Lapse-It<a class="headerlink" href="#lapse-it" title="Link to this heading">¶</a></h3>
+<p><cite>Lapse-It &lt;http://www.lapseit.com/&gt;</cite> is a time-lapse video recording smart phone app that has a free version that produces videos suitable for use with PlantTracer.</p>
+<p>Lapse-It free version adds a Lapse-It trailer to each video that needs to be removed prior to uploading and tracking.</p>
+<section id="steps-to-export-a-resized-video-using-lapse-it">
+<h4>Steps to Export a Resized Video Using Lapse-It<a class="headerlink" href="#steps-to-export-a-resized-video-using-lapse-it" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Open Lapse-It</strong>
+- Launch the Lapse-It app on your device.</p></li>
+<li><p><strong>Select the Video</strong>
+- Choose the recorded time-lapse video you want to export.</p></li>
+<li><p><strong>Adjust the Resolution</strong>
+- Tap on <strong>Render</strong>.
+- In the resolution settings, select a preset that ensures neither width nor height exceeds <strong>640 pixels</strong>. If a custom resolution option is available, set the maximum dimension to <strong>640 pixels</strong>.</p></li>
+<li><p><strong>Export the Video</strong>
+- Confirm the settings and tap <strong>Render</strong>.
+- Wait for the process to complete, then save or share the exported video.</p></li>
+</ol>
+</section>
+</section>
+<section id="ffmpeg">
+<h3>ffmpeg<a class="headerlink" href="#ffmpeg" title="Link to this heading">¶</a></h3>
+<p><cite>ffmpeg &lt;https://www.ffmpeg.org/&gt;</cite> is an open-source command line tool (and library) for image and movie manipulation. ffmpeg is available for Linux, MacOS, and Windows platforms.</p>
+<p>Here is a sample command that will resize a video to have at most 640 pixels in either dimension, while maintaining the video’s aspect ratio.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ffmpeg</span> <span class="o">-</span><span class="n">i</span> <span class="nb">input</span><span class="o">.</span><span class="n">mp4</span> <span class="o">-</span><span class="n">vf</span> <span class="s2">&quot;scale=&#39;if(gt(iw,ih),640,-1)&#39;:&#39;if(gt(iw,ih),-1,640)&#39;&quot;</span> <span class="o">-</span><span class="n">c</span><span class="p">:</span><span class="n">v</span> <span class="n">libx264</span> <span class="o">-</span><span class="n">crf</span> <span class="mi">23</span> <span class="o">-</span><span class="n">preset</span> <span class="n">medium</span> <span class="o">-</span><span class="n">an</span> <span class="n">output</span><span class="o">.</span><span class="n">mp4</span>
+</pre></div>
+</div>
+<section id="explanation">
+<h4>Explanation<a class="headerlink" href="#explanation" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">-i</span> <span class="pre">input.mp4</span></code> → Specifies the input video file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-vf</span> <span class="pre">&quot;scale='if(gt(iw,ih),640,-1)':'if(gt(iw,ih),-1,640)'&quot;</span></code> → Resizes the video while maintaining aspect ratio:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">iw</span></code> = input width,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ih</span></code> = input height.</p></li>
+<li><p>If the width (<code class="docutils literal notranslate"><span class="pre">iw</span></code>) is greater than the height (<code class="docutils literal notranslate"><span class="pre">ih</span></code>), the width is set to <strong>640</strong>, and the height is automatically scaled (<code class="docutils literal notranslate"><span class="pre">-1</span></code>).</p></li>
+<li><p>Otherwise, the height is set to <strong>640</strong>, and the width is automatically scaled (<code class="docutils literal notranslate"><span class="pre">-1</span></code>).</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-c:v</span> <span class="pre">libx264</span></code> → Uses <strong>H.264</strong> encoding for video.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-crf</span> <span class="pre">23</span></code> → Controls quality (<strong>lower CRF = better quality</strong>, default is <strong>23</strong>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-preset</span> <span class="pre">medium</span></code> → Balances encoding speed and compression.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-an</span></code> → Removes the audio stream.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">output.mp4</span></code> → The final resized video.</p></li>
+</ul>
+</section>
+</section>
+<section id="macos">
+<h3>MacOS<a class="headerlink" href="#macos" title="Link to this heading">¶</a></h3>
+<p>QuickTime Player comes installed by default with MacOS and can be used to trim portions of a video and then export it in set of specified resolutions.</p>
+<section id="steps-to-resize-video-using-quicktime-player">
+<h4>Steps to Resize Video Using QuickTime Player<a class="headerlink" href="#steps-to-resize-video-using-quicktime-player" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Open QuickTime Player</strong>
+- Locate your video file and open it with <strong>QuickTime Player</strong>.</p></li>
+<li><p><strong>Export the Video with a Smaller Resolution</strong>
+- Click on <strong>File</strong> &gt; <strong>Export As</strong>.
+- Choose a resolution that ensures no dimension exceeds <strong>640 pixels</strong> (e.g., <strong>480p</strong> or manually adjust if available).</p></li>
+<li><p><strong>Save the Resized Video</strong>
+- Choose a destination folder.
+- Click <strong>Save</strong>, and QuickTime will process the resized video.</p></li>
+</ol>
+</section>
+</section>
+<section id="windows">
+<h3>Windows<a class="headerlink" href="#windows" title="Link to this heading">¶</a></h3>
+<p>Windows has a built-in video editor called ClipChamp. Prior to the existence of ClipChamp, there was a program called Video Editor that may be present on Windows 10 systems.</p>
+<section id="steps-to-resize-video-using-clipchamp">
+<h4>Steps to Resize Video Using Clipchamp<a class="headerlink" href="#steps-to-resize-video-using-clipchamp" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Open Clipchamp</strong>
+- Press <code class="docutils literal notranslate"><span class="pre">Win</span> <span class="pre">+</span> <span class="pre">S</span></code> and search for <strong>Clipchamp</strong>, then open it.</p></li>
+<li><p><strong>Import the Video</strong>
+- Click <strong>Create a new video</strong>.
+- Drag and drop your video file into the media library.</p></li>
+<li><p><strong>Resize the Video</strong>
+- Click on the video in the timeline.
+- Go to the <strong>Transform</strong> or <strong>Resize</strong> section.
+- Select <strong>“Fit”</strong> to maintain the aspect ratio.
+- Manually adjust the resolution so that neither width nor height exceeds <strong>640 pixels</strong>.</p></li>
+<li><p><strong>Export the Resized Video</strong>
+- Click <strong>Export</strong> at the top right.
+- Choose a resolution that ensures no dimension exceeds 640 pixels.
+- Click <strong>Export</strong>, and save your resized video.</p></li>
+</ol>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Resizing Video Files</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#why-resize-my-video">Why resize my video?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#planttracer-video-size-limits-and-guidelines">PlantTracer video size limits and guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-resize-a-video">How to Resize a Video</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="UserTutorial.html" title="previous chapter">Plant Tracer Web App Tutorial</a></li>
+      <li>Next: <a href="ReleaseHistory.html" title="next chapter">Plant-Tracer/webapp Releases</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/VideoResizing.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

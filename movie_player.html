@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Design of the movie player &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Bibliography" href="resources.html" />
+    <link rel="prev" title="Gallery Learning Plan" href="gallery_learning_plan.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="design-of-the-movie-player">
+<h1>Design of the movie player<a class="headerlink" href="#design-of-the-movie-player" title="Link to this heading">¶</a></h1>
+<section id="api-calls-on-that-the-javascript-movie-player-can-use">
+<h2>API calls on that the JavaScript movie player can use<a class="headerlink" href="#api-calls-on-that-the-javascript-movie-player-can-use" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p>get-frame - returns the frame as JPEG</p>
+<p>Gets an individual frame. Returns a JPEG of the frame that is
+fetched from S3 (if the frame is available) or from the movie (by
+single-framing through the movie if the frame is not available).</p>
+<p>If it has to single frame through the movie, it saves the frame.</p>
+<p>Status: Implemented</p>
+</li>
+<li><p>edit-movie</p>
+<p>If movie is rotated, all of the frames and trackpoints have to be
+deleted. This should be done automatically on the server.</p>
+<p>Status: Implemented</p>
+</li>
+<li><p>get-movie-metadata</p>
+<p>Gets information about individual frames. Parameters:</p>
+<p>frame_start - starting frame to get;</p>
+<p>frame_count - count of frames to get; 0 for no frames</p>
+<p>what - comma-delimited string - ‘trackpoints’, ‘annotations’, ‘urls’</p>
+<p>Returns JSON dictionary:</p>
+<p>[‘metadata’] - movie metadata (same as get-metadata)</p>
+<p>[‘frames’] - annotations, trackpoints, or URLS.</p>
+<p>[‘frames’][‘10’]      (where ‘10’ is a frame number) - per-frame dictionary.</p>
+<p>[‘frames’][‘10’][‘trackpoints’] - array of the trackpoints for that frame</p>
+<p>[‘frames’][‘10’][‘annotations’] - array of the annotations for that frame</p>
+<p>[‘frames’][‘10’][‘frame_url’] - signed URL for the frame</p>
+</li>
+</ul>
+</section>
+<section id="client-side">
+<h2>Client Side<a class="headerlink" href="#client-side" title="Link to this heading">¶</a></h2>
+<section id="tunable-constants">
+<h3>Tunable Constants<a class="headerlink" href="#tunable-constants" title="Link to this heading">¶</a></h3>
+<p>FRAME_BATCH_SIZE - number of frames that get loaded at once</p>
+<p>FRAME_LOW_WATER_MARK - When this close to last</p>
+</section>
+<section id="state-variables">
+<h3>State Variables<a class="headerlink" href="#state-variables" title="Link to this heading">¶</a></h3>
+<p>api_key - user’s API key</p>
+<p>movie_id - movie being tracked</p>
+<p>total_frames - Total number of frames, which go from from 0 to (total_frames-1)</p>
+<p>last_tracked_frame - last frame that was tracked. Typically 0 or total_frames-1. (Frame 0 is manually tracked.)</p>
+<p>current_frame  - current frame of movie displayed</p>
+<p>tracking - true if server is currently tracking frames and player is waiting for tracking to be done.</p>
+<p>playing - true if player is currently playing a movie.</p>
+<p>frames[] - dictionary that matches what was returned above</p>
+<blockquote>
+<div><p>‘url’ is the URL to load for the frame</p>
+<p>‘jpeg’ is a JPEG for the frame, or null if it hasn’t loaded yet.</p>
+</div></blockquote>
+<p>fps - frames for per second for playback</p>
+</section>
+</section>
+<section id="class-hierarchy">
+<h2>Class Hierarchy<a class="headerlink" href="#class-hierarchy" title="Link to this heading">¶</a></h2>
+<p>CanvasController.</p>
+<ul class="simple">
+<li><p>native (w,h)</p></li>
+<li><p>zoomed (w,h) (the &lt;canvas&gt; is actually resized.)</p></li>
+<li><p>future: put in a scroller.</p></li>
+<li><p>HTML objects it owns:</p>
+<ul>
+<li><p>&lt;canvas&gt; where things get drawn</p></li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<div><ul class="simple">
+<li><p>&lt;div&gt; where canvas marker inventory is displayed</p></li>
+<li><p>zoom pull-down</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>Functions:</p>
+<ul>
+<li><p>display list with draggable objects.</p></li>
+<li><p>Zoom with objects that can be zoomable or not zoomable</p></li>
+<li><p>Button to create new objects</p></li>
+</ul>
+</li>
+</ul>
+<p>CanvasItem - root class for things that goes on the CanvasController:</p>
+<ul class="simple">
+<li><p>(x,y) (w,h) rectangle</p></li>
+<li><p>draw method (in canvas coordinates; zooming is invisible to items.)</p></li>
+<li><p>Hit detection</p></li>
+</ul>
+<p>MarkerItem(CanvasItem)- Markers/Trackpoints</p>
+<p>ImageItem(CanvasItem) - draws an image (does not load it.)</p>
+<p>MovieController</p>
+<ul class="simple">
+<li><p>Subclass of CanvasController.</p></li>
+<li><p>Loaded with URLs of every frame.</p></li>
+<li><p>Outlets for movement buttons:</p>
+<ul>
+<li><p>Forward</p></li>
+<li><p>Backward</p></li>
+<li><p>Play</p></li>
+<li><p>Start</p></li>
+<li><p>Jump Forward 10 sec</p></li>
+<li><p>Jump Backward 10 sec</p></li>
+<li><p>Frame counter</p></li>
+</ul>
+</li>
+<li><p>Implements load logic.</p></li>
+</ul>
+<p>TrackerController</p>
+<ul class="simple">
+<li><p>Owns a Canvas Controller (not a subclass of it)</p></li>
+<li><p>Callback when Trackers are moved</p></li>
+<li><p>On end of drag, sends new trackpoints to server - but this does not retrack the movie or delete other trackpoints.</p></li>
+</ul>
+<p>Invariants:</p>
+<ul class="simple">
+<li><p>(playing == false &amp;&amp; tracking == false) or (playing==true and tracking==false) or (tracking==true and playing==false)</p></li>
+<li><p>0 &lt;= last_tracked_frame &lt; total_frames</p></li>
+<li><p>total_frames &gt; 0</p></li>
+<li><p>0 &lt;= current_frame &lt; total_frames</p></li>
+</ul>
+</section>
+<section id="user-stories">
+<h2>User Stories<a class="headerlink" href="#user-stories" title="Link to this heading">¶</a></h2>
+<p>Initial Page Loads:</p>
+<ul class="simple">
+<li><p>MoviePlayer gets first frame and trackpoints to display (give user immediate freedback).</p></li>
+<li><p>MoviePlayer requests background load of first FRAME_BATCH_SIZE frames.</p></li>
+</ul>
+<p>Movie playing:</p>
+<ul class="simple">
+<li><p>When player gets to LAST_FRAME_LOADED-BUFFER, it requests the next N frames. (with an async load request.)</p></li>
+<li><p>If we get to frame N and frame N+1 isn’t loaded, we do a request to load just it and a request to do the next FRAME_BATCH_SIZE.</p></li>
+<li><p>checkbox to ‘show trails’ which causes track trails to be display from 0..current_frame</p></li>
+</ul>
+<p>Moving track points:</p>
+<ul class="simple">
+<li><p>Whenever a track point is moved, the ‘retrack from here to end’ is displayed.</p></li>
+<li><p>When ‘track from here’ button is clicked, all other buttons are disabled until track  ing is finished.</p></li>
+</ul>
+<p>When tracking:</p>
+<ul class="simple">
+<li><p>All buttons are disabled.</p></li>
+<li><p>Track status displays. When the last frame is tracked, buttons are re-enabled.</p></li>
+</ul>
+<p>Download buttons:</p>
+<ul class="simple">
+<li><p>Original movie</p></li>
+<li><p>Tracked movie (Do we need this?)</p></li>
+<li><p>GIF showing the tracking <a class="reference external" href="https://stackoverflow.com/questions/753190/programmatically-generate-video-or-animated-gif-in-python">https://stackoverflow.com/questions/753190/programmatically-generate-video-or-animated-gif-in-python</a></p></li>
+<li><p>Download trackpoints</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Design of the movie player</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#api-calls-on-that-the-javascript-movie-player-can-use">API calls on that the JavaScript movie player can use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#client-side">Client Side</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#class-hierarchy">Class Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#user-stories">User Stories</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="gallery_learning_plan.html" title="previous chapter">Gallery Learning Plan</a></li>
+      <li>Next: <a href="resources.html" title="next chapter">Bibliography</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/movie_player.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
