@@ -10,11 +10,18 @@ license = "GPL"
 readme = "README.md"
 packages = [
     { include = "app", from = "src" },
+    { include = "sam_config_tool.py", from = "etc" },
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.13"
+python = ">=3.12,<3.13"
 boto3 = ">=1.39.14,<2.0.0"
+apig-wsgi = "^2.20.0"
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.8"
+
+[tool.poetry.group.vm.dependencies]
 crossplane = "*"
 cryptography = "*"
 dnspython = ">=2.7.0,<3.0.0"
@@ -33,9 +40,13 @@ python-magic = "*"
 requests = ">=2.32.4,<3.0.0"
 tabulate = "*"
 validate_email_address = "*"
-apig-wsgi = "^2.20.0"
 html5lib = "^1.1"
 html5validate = "^0.0.2"
+
+[tool.poetry.group.lambda.dependencies]
+# Dependencies only needed for the Lambda function
+# (e.g., Pillow for resizing)
+Pillow = "^11.0.0"
 
 [tool.poetry.group.dev.dependencies]
 boto3-stubs = {extras = ["essential"], version = "*"}
@@ -57,14 +68,15 @@ pytest-mock = "^3.15.1"
 pytest-env = "^1.2.0"
 service_identity = "*"
 filetype = "^1.2.0"
+cfn-lint = "^1.43.4"
 
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-#[tool.poetry.scripts]
-#app = "deploy.app.__main__:main" # Example if you restore this
+[tool.poetry.scripts]
+sam-config-tool = "sam_config_tool:main"
 
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.
@@ -85,6 +97,7 @@ disable = [
     "too-many-branches",
     "too-many-statements",
     "fixme",
+    "trailing-whitespace",      # AI does this
     "too-many-positional-arguments",
 ]
 

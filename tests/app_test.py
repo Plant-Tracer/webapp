@@ -2,12 +2,10 @@
 Tests for the application
 """
 
-
 import os
 import subprocess
 import uuid
 
-import pytest
 import html5validate
 
 from app.paths import STATIC_DIR
@@ -54,9 +52,8 @@ def test_static_path(client):
     # which will differ from the original, so we just check the file is served
     assert response.status_code == 200
     assert len(response.text) > 0
-    
+
     # If not in coverage mode, verify exact match
-    import os
     if os.environ.get('COLLECT_JS_COVERAGE', '').lower() not in ('1', 'true', 'yes'):
         with open(os.path.join(STATIC_DIR, PLANTTRACER_JS),'r') as f:
             assert f.read() == response.text
@@ -68,21 +65,24 @@ def test_static_path(client):
 #
 # Test various error conditions
 
-@pytest.mark.skip(reason='authentication not yet working')
-def test_error(client):
+def test_error(client, local_ddb, local_s3):
     """Make sure authentication errors result in the session being expired and the cookie being cleared."""
-    response = client.post('/api/list-movies',
-                           data = {'api_key':'invalid'})
+    response = client.post('/api/list-movies', data={'api_key': 'invalid'})
 
+    assert response.status_code == 403
     cookie_name = apikey.cookie_name()
     set_cookie_header = response.headers.get('Set-Cookie')
-    assert set_cookie_header == f'Set-Cookie: {cookie_name}=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=-1; Path=/'
+    assert set_cookie_header is not None, "Expected Set-Cookie header to clear api_key"
+    assert cookie_name in set_cookie_header
+    # Empty value (clearing cookie): either quoted "" or bare ;
+    assert '""' in set_cookie_header or "''" in set_cookie_header or f"{cookie_name}=;" in set_cookie_header
+    assert "expires=" in set_cookie_header.lower() or "max-age=" in set_cookie_header.lower()
 
-# make sure we get no api_key with a bad request
-@pytest.mark.skip(reason='authentication not yet working')
-def test_null_api_key(mocker):
-    mocker.patch("flask.request.values.get", return_value=None)
-    assert apikey.get_user_api_key() is None
+# make sure we get no api_key when nothing in request
+def test_null_api_key(client):
+    """get_user_api_key() returns None when no api_key in cookie or query (needs request context)."""
+    with client.application.test_request_context():
+        assert apikey.get_user_api_key() is None
 
 
 ################################################################

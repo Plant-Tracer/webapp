@@ -16,26 +16,24 @@ I had no problem building and deploying a Lambda function with a Docker Containe
 
 I was able to run x86 AWS Linux on my M1 Mac using Docker:
 
-Dockerfile:
+Dockerfile::
 
-```
-FROM amazonlinux:latest
+  FROM amazonlinux:latest
 
-RUN yum install -y shadow-utils sudo && \
-    useradd -m ec2-user && \
-    echo "ec2-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+  RUN yum install -y shadow-utils sudo && \
+      useradd -m ec2-user && \
+      echo "ec2-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-USER ec2-user
-WORKDIR /home/ec2-user
-```
+  USER ec2-user
+  WORKDIR /home/ec2-user
 
-Makefile:
-```
-build:
-	echo build an x86 aws linux container with an ec2-user account
-	docker build -t amazonlinux-ec2 .
-	docker run --platform linux/amd64 -it amazonlinux-ec2 bash
-```
+Makefile::
+
+  build:
+    echo build an x86 aws linux container with an ec2-user account
+    docker build -t amazonlinux-ec2 .
+    docker run --platform linux/amd64 -it amazonlinux-ec2 bash
+
 
 I haven't yet tried running SAM inside the docker container
 
@@ -73,82 +71,79 @@ Commands to try:
 * Deploys watching your local file system; changes are reflected on the live system, but do not persist after you ^c. In testing, a change in the local file system was reflected in less than 5 seconds on the server.
 
 
-Set Up:
+Set Up
 ------
 
-Request a certificate for simson-dev.planttracer.com:
+Request a certificate for simson-dev.planttracer.com::
 
-```
-aws acm request-certificate
-  --domain-name simson-dev.planttracer.com
-  --validation-method DNS
-  --region us-east-1
-  --idempotency-token simson-cert
-  --domain-validation-options DomainName=simson-dev.planttracer.com,ValidationDomain=planttracer.com
-```
+  aws acm request-certificate
+    --domain-name simson-dev.planttracer.com
+    --validation-method DNS
+    --region us-east-1
+    --idempotency-token simson-cert
+    --domain-validation-options DomainName=simson-dev.planttracer.com,ValidationDomain=planttracer.com
 
-After requesting the certificate, retrieve the validation DNS records:
-```
-aws acm describe-certificate \
-  --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
-  --region us-east-1
-```
+After requesting the certificate, retrieve the validation DNS records::
 
-Afterwards, create the Route 53 DNS Record:
-```
-aws route53 change-resource-record-sets \
-  --hosted-zone-id HOSTED_ZONE_ID \
-  --change-batch '{
-    "Changes": [
-      {
-        "Action": "UPSERT",
-        "ResourceRecordSet": {
-          "Name": "CNAME_NAME_FROM_PREVIOUS_STEP",
-          "Type": "CNAME",
-          "TTL": 300,
-          "ResourceRecords": [
-            {
-              "Value": "CNAME_VALUE_FROM_PREVIOUS_STEP"
-            }
-          ]
+  aws acm describe-certificate \
+    --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
+    --region us-east-1
+
+
+Afterwards, create the Route 53 DNS Record::
+
+  aws route53 change-resource-record-sets \
+    --hosted-zone-id HOSTED_ZONE_ID \
+    --change-batch '{
+      "Changes": [
+        {
+          "Action": "UPSERT",
+          "ResourceRecordSet": {
+            "Name": "CNAME_NAME_FROM_PREVIOUS_STEP",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+              {
+                "Value": "CNAME_VALUE_FROM_PREVIOUS_STEP"
+              }
+            ]
+          }
         }
-      }
-    ]
-  }'
-```
+      ]
+    }'
 
-Finally, verify the certificate validation:
-```
-aws acm describe-certificate \
-  --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
-  --region us-east-1
-```
+Finally, verify the certificate validation::
+
+  aws acm describe-certificate \
+    --certificate-arn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
+    --region us-east-1
 
 
-Once the certificate is validated, you  can use its ARN in your `template.yaml` file under CertificateArn:
-```
-Resources:
-  CustomDomainName:
-    Type: AWS::ApiGatewayV2::DomainName
-    Properties:
-      DomainName: simson-dev.planttracer.com
-      DomainNameConfigurations:
-        - CertificateArn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
-          EndpointType: REGIONAL
-```
 
-Then you can bind the custom domain to the API gateway using the CLI:
-```
-aws apigatewayv2 create-api-mapping \
-  --domain-name simson-dev.planttracer.com \
-  --api-id API_ID \
-  --stage-name Prod
-```
+Once the certificate is validated, you  can use its ARN in your `template.yaml` file under CertificateArn::
+
+  Resources:
+    CustomDomainName:
+      Type: AWS::ApiGatewayV2::DomainName
+      Properties:
+        DomainName: simson-dev.planttracer.com
+        DomainNameConfigurations:
+          - CertificateArn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+            EndpointType: REGIONAL
+
+Then you can bind the custom domain to the API gateway using the CLI::
+
+  aws apigatewayv2 create-api-mapping \
+    --domain-name simson-dev.planttracer.com \
+    --api-id API_ID \
+    --stage-name Prod
+
 
 Reference: https://chatgpt.com/share/674b3c8d-5b00-8010-8473-5aef2e609576
 
-References:
------------
+References
+----------
+
 * More info about Globals:
   https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 

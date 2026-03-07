@@ -1,0 +1,10 @@
+---
+description: Do not modify source code unless the user explicitly requests it
+alwaysApply: true
+---
+
+# No Source Code Changes Unless Requested
+
+- **Do not edit, add, or remove source code** (including app code, config that affects behavior, or templates) unless the user explicitly asks for a code change, fix, or feature.
+- When answering questions, explaining behavior, or suggesting fixes: describe what to do or what’s wrong; do not apply changes to the codebase unless the user has asked you to make changes.
+- It is fine to read and search the codebase to answer questions or to propose edits in your reply (e.g. “you could change X to Y”) without actually editing files.

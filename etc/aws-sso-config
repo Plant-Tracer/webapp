@@ -1,0 +1,7 @@
+[profile planttracer]
+region = us-east-1
+cli_pager =
+[notes]
+issuer_url=https://identitycenter.amazonaws.com/ssoins-7223d1668ebc2162
+aws_dual_stack_portal=https://identitycenter.amazonaws.com/ssoins-7223d1668ebc2162
+ipv4_portal=https://d-9067d6d121.awsapps.com/start

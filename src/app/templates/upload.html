@@ -46,6 +46,9 @@
   <div id='upload_message'></div>
 </div>
 
+<style>
+  #rotate_movie_link.rotate-pending { pointer-events: none; cursor: not-allowed; opacity: 0.6; }
+</style>
 <!-- uploaded image shows here -->
 <div style='display:none' id='upload-preview'>
   <p>Movie <i><span id='uploaded_movie_title'></span></i> (<span id='movie_id'></span>) successfully uploaded.</p>
@@ -58,7 +61,7 @@
     <li><a href='javascript:;' id='delete_movie_link' onclick='purge_movie()'>
         Delete the movie (if you uploaded the wrong movie)</a></li>
     <li><a href='javascript:;' id='rotate_movie_link' onclick='rotate_movie()'>
-        Rotate the movie 90º</a></li>
+        Rotate the movie 90º clockwise (repeat as necessary)</a><span id='rotate_status'></span></li>
     <li><a href='' id='track_movie_link' >Track the uploaded movie</a></li>
     <li><a href='list'>List all uploaded movies</a></li>
     <li><a href='upload'>Upload another movie</a></li>
@@ -66,9 +69,10 @@
 </div>
 
 
-<script>
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
   $(document).ready(function() {
-  upload_ready_function();
+    upload_ready_function();
   });
 </script>
 {% endblock %}

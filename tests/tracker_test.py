@@ -14,7 +14,7 @@ from app import tracker
 from app.constants import logger
 
 # Get the fixtures from conftest.py - they are auto-discovered by pytest
-from .fixtures.local_aws import TEST_CIRCUMNUTATION_PATH,TEST_PLANTMOVIE_PATH
+from .constants import TEST_CIRCUMNUTATION_PATH, TEST_PLANTMOVIE_PATH
 
 # Actual labels for the circumnutation movie
 TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},

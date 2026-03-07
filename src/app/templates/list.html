@@ -105,10 +105,10 @@
   <div class='mtable' id='your-deleted-movies'></div>
 </div>
 
-<script>
-  "use strict";
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
   $(document).ready(function() {
-  list_ready_function();
+    list_ready_function();
   });
 </script>
 {% endblock %}

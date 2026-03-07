@@ -98,7 +98,7 @@ Setup Steps
 
    .. code-block::
 
-    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9100/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8010/ AWS_DEFAULT_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
+    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
 
 #. The information for the new course will be output and look something like this:
 

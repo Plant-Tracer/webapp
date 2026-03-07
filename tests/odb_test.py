@@ -12,14 +12,19 @@ from app.constants import logger
 
 # Fixtures are imported in conftest.py
 
+def rand8():
+    return str(uuid.uuid4())[0:8]
+
 MYDIR = os.path.dirname(__file__)
 
+randrun = rand8()
+
 TEST_ADMIN_ID = odb.new_user_id()
-TEST_ADMIN_EMAIL = 'new.user@example.com'
-TEST_COURSE_ID = 'test-course-' + str(uuid.uuid4())[0:4]
-TEST_COURSE_NAME = 'Introduction to Plant Tracer'
+TEST_ADMIN_EMAIL = f'new.admin-{randrun}@example.com'
+TEST_COURSE_ID = f'test-course-{randrun}'
+TEST_COURSE_NAME = f'Introduction to Plant Tracer {randrun}'
 TEST_MOVIE_ID = odb.new_movie_id()
-TEST_COURSE_KEY = 'k-' + str(uuid.uuid4())[0:4]
+TEST_COURSE_KEY = f'k-{randrun}'
 TEST_COURSE_MAX_ENROLLMENT = 30
 TEST_COURSE_DATA = {
     COURSE_ID: TEST_COURSE_ID,
@@ -30,8 +35,8 @@ TEST_COURSE_DATA = {
 }
 
 TEST_USER_ID = odb.new_user_id()
-TEST_USER_EMAIL = 'new.user@example.com'
-TEST_USER_NAME = 'Firstname Lastname'
+TEST_USER_EMAIL = f'new.user-{randrun}@example.com'
+TEST_USER_NAME = f'Firstname {randrun} Lastname'
 TEST_USER_DATA = {
     USER_ID: TEST_USER_ID,
     'email': TEST_USER_EMAIL,
@@ -103,11 +108,18 @@ def test_odb(local_ddb):
         logger.error("exception=%s %s",type(e),e)
         raise
 
-    # Register the user into the course
+    # Register the user into the course (adds user to course; updates user's courses list)
     odb.register_email(TEST_USER_EMAIL, TEST_USER_NAME, course_id=TEST_COURSE_ID)
 
-    assert ddbo.get_user(TEST_USER_ID) == TEST_USER_DATA
-    assert ddbo.get_user_email(TEST_USER_EMAIL) == TEST_USER_DATA
+    actual_user = ddbo.get_user(TEST_USER_ID)
+    expected_user = {**TEST_USER_DATA, 'courses': [TEST_COURSE_ID]}
+    if actual_user != expected_user:
+        print("\n--- ddbo.get_user(TEST_USER_ID) ---")
+        print(json.dumps(actual_user, indent=2, default=str))
+        print("\n--- expected (TEST_USER_DATA with courses after register_email) ---")
+        print(json.dumps(expected_user, indent=2, default=str))
+    assert actual_user == expected_user
+    assert ddbo.get_user_email(TEST_USER_EMAIL) == expected_user
 
     # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)
@@ -136,7 +148,14 @@ def test_odb(local_ddb):
     api_key = odb.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
     user = odb.validate_api_key(api_key)
-    assert user == TEST_USER_DATA
+    # normalize DynamoDB Decimals for comparison; user has courses after register_email
+    user_normalized = {k: (int(v) if isinstance(v, Decimal) else v) for k, v in user.items()}
+    if user_normalized != expected_user:
+        print("\n--- odb.validate_api_key(api_key) (normalized) ---")
+        print(json.dumps(user_normalized, indent=2, default=str))
+        print("\n--- expected_user ---")
+        print(json.dumps(expected_user, indent=2, default=str))
+    assert user_normalized == expected_user
     a2   = ddbo.get_api_key_dict(api_key)
     assert a2['enabled'] == 1
     assert a2['use_count'] == 1

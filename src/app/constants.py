@@ -30,12 +30,13 @@ GET_POST = ['GET','POST']
 class C:
     """Constants"""
     # AWS variables (used by boto3)
-    AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION'
+    AWS_REGION = 'AWS_REGION'
     AWS_PROFILE = 'AWS_PROFILE'
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
-    PROJECT_EMAIL = 'admin@planttracer.com'
+    # SERVER_EMAIL: sender address for all outgoing email (env var name; value default admin@planttracer.com, configured in SES)
+    SERVER_EMAIL = 'SERVER_EMAIL'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
@@ -54,9 +55,8 @@ class C:
     # test values
     TEST_ACCESS_KEY_ID = 'minioadmin'
     TEST_SECRET_ACCESS_KEY = 'minioadmin'
-    TEST_PLANTTRACER_S3_BUCKET = 'planttracer-local'
-    TEST_ENDPOINT_URL_S3 = 'http://localhost:9100'
-    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8010'
+    TEST_ENDPOINT_URL_S3 = 'http://localhost:9000'
+    TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8000'
 
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
@@ -70,7 +70,8 @@ class C:
     DEMO_MODE_API_KEY  = 'a123456789012345678901234567890bc'
 
     # Other
-    EMAIL_TEMPLATE_FNAME = 'email.txt'
+    LOGIN_EMAIL_TEMPLATE_FNAME = 'email_login.html'
+    COURSE_CREATED_EMAIL_TEMPLATE_FNAME = 'email_course_created.html'
     MAX_FUNC_RETURN_LOG = 4096      # do not log func_return larger than this
     FAVICON = 'icon.png'
     API_BASE='API_BASE'

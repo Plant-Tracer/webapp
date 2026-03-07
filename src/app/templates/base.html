@@ -14,8 +14,8 @@
           integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" >  <!-- possibly remove -->
 
-    <script type="text/javascript" charset="utf8" src="static/utils.js"></script>
-    <script type="text/javascript" charset="utf8" src="static/planttracer.js"></script>
+    <script type="module" src="{{ url_for('static', filename='utils.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='planttracer.js') }}"></script>
 
     <script>
       // These variables will be substituted by the template engine
@@ -148,19 +148,16 @@
         </small></p>
       </div>
     </div>
-    <script>
-      "use strict";
-      // demo mode: show the 'demo' CSS class and hide the 'nodemo'
-      // not demo mode: hide the 'demo' CSS class and show the 'nodemo'
-      // if we are in demo mode.
+    <script type="module">
+      import { $ } from "{{ url_for('static', filename='utils.js') }}";
       $(document).ready(function() {
-      if (demo_mode) {
-      $('.demo').show();
-      $('.nodemo').hide();
-      } else {
-      $('.demo').hide();
-      $('.nodemo').show();
-      }
+        if (demo_mode) {
+          $('.demo').show();
+          $('.nodemo').hide();
+        } else {
+          $('.demo').hide();
+          $('.nodemo').show();
+        }
       });
     </script>
   </body>

@@ -7,6 +7,7 @@ Welcome and Registration
 - Register for an account using your Name, Email Address, and Course Key.
 - If you are using Plant Tracer with a specific course or project, you can enter your course Keyey provided by your instructor or project leader.
 - Alternately, you can register for the Web course whose course key is 389f-4163
+
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer Registration
 

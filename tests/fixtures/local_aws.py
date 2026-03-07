@@ -1,6 +1,6 @@
 """
 These fixtures set environment variables for running DynamoDB Local and minio
-
+If AWS_REGION is set to something other than 'local', we use the live DynamoDB instead.
 """
 
 import logging
@@ -13,39 +13,41 @@ import random
 from os.path import join,dirname,abspath
 
 import boto3
+from botocore.exceptions import ClientError
+
 
 from app.constants import C
+from app.s3_presigned import CORS_CONFIGURATION, s3_client
 from app import odb
 from app import odb_movie_data
 from app import odbmaint
 
-from app.paths import ROOT_DIR,TEST_DATA_DIR
-from app.odb import DDBO,VERSION,API_KEY,COURSE_KEY,COURSE_ID,COURSE_NAME,USER_ID,MOVIE_ID,DELETED,PUBLISHED
+from app.paths import ROOT_DIR, TEST_DATA_DIR
+from app.odb import DDBO, VERSION, API_KEY, COURSE_KEY, COURSE_ID, COURSE_NAME, USER_ID, MOVIE_ID, DELETED, PUBLISHED
+
+from ..constants import (
+    ADMIN_EMAIL,
+    MOVIE_TITLE,
+    TEST_PLANTMOVIE_PATH,
+    TEST_PLANTMOVIE_ROTATED_PATH,
+    TEST_CIRCUMNUTATION_PATH,
+)
 
 import dbutil
 
 
-DELETE_TEST_TABLES = True
-
 s3client = boto3.client('s3')
 
-TEST_USER_EMAIL  = 'test_user@company.com'       # from configure
-TEST_USER_NAME   = 'Test User Name'
-TEST_DEMO_EMAIL  = 'test_demo@company.com'        # completely bogus
-TEST_ADMIN_EMAIL = 'test_admin@company.com'     # configuration
-TEST_ADMIN_NAME  = 'Test Admin Name'
+TEST_USER_EMAIL = 'test_user@company.com'
+TEST_USER_NAME = 'Test User Name'
+TEST_DEMO_EMAIL = 'test_demo@company.com'
+TEST_ADMIN_EMAIL = 'test_admin@company.com'
+TEST_ADMIN_NAME = 'Test Admin Name'
 
-# additional keys for scaffolding dictionary
-ADMIN_EMAIL = 'admin_email'
+# Additional keys for scaffolding dictionary (not shared elsewhere)
 DEMO_EMAIL = 'demo_mail'
 ADMIN_ID = 'admin_id'
-MOVIE_TITLE = 'movie_title'
 USER_EMAIL = 'user_email'
-
-
-TEST_PLANTMOVIE_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie.mov")
-TEST_PLANTMOVIE_ROTATED_PATH = os.path.join(TEST_DATA_DIR, "2019-07-31 plantmovie-rotated.mov")
-TEST_CIRCUMNUTATION_PATH = os.path.join(TEST_DATA_DIR,'2019-07-12 circumnutation.mp4')
 
 def new_email(info):
     return TEST_USER_EMAIL.replace('@', '-' + info + '-'+str(uuid.uuid4())[0:4]+'@')
@@ -60,40 +62,66 @@ def local_ddb():
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
 
-    os.environ[ C.AWS_DEFAULT_REGION ]    = 'local'
-    os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
-    os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
-    os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
-    os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
+    if os.environ.get(C.AWS_REGION,'local') == "local":
 
-    odbmaint.drop_tables(silent_warnings=True)
-    odbmaint.create_tables()
+        # Running locally.
+
+        os.environ[ C.AWS_REGION ]    = 'local'
+        os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
+        os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
+        os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
+
+    # If no prefix is specified, create a random test prefix
+    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') == '':
+        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
+
+    # Wipe and recreate the tables if running locally
+    created_test_tables = False
+    if os.environ[ C.AWS_REGION ] == 'local':
+        odbmaint.drop_tables(silent_warnings=True)
+        odbmaint.create_tables()
+        created_test_tables = True
 
     ddbo = DDBO()               # it's a singleton
     yield ddbo
-    if DELETE_TEST_TABLES:
+    if created_test_tables:
         odbmaint.drop_tables()
 
 @pytest.fixture(scope="session")
 def local_s3():
-    """Create an empty S3 locally.
-    Starts the database if it is not running.
     """
-    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_minio_control.bash'),'start'])
+    When running locally: start MinIO, ensure the bucket exists (create if not),
+    and apply CORS so the app's config check and browser fetches succeed.
+    """
+    if os.environ.get(C.AWS_REGION, '') == 'local':
+        subprocess.call([os.path.join(ROOT_DIR, 'bin/local_minio_control.bash'), 'start'])
+        os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
+        if not os.environ.get(C.PLANTTRACER_S3_BUCKET):
+            os.environ[C.PLANTTRACER_S3_BUCKET] = 'planttracer-local'
 
-    save_bucket = os.getenv(C.PLANTTRACER_S3_BUCKET)
-    save_endpoint = os.getenv(C.AWS_ENDPOINT_URL_S3)
-    os.environ[C.PLANTTRACER_S3_BUCKET] = C.TEST_PLANTTRACER_S3_BUCKET
-    os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
-    yield save_bucket
-    if save_bucket:
-        os.environ[C.PLANTTRACER_S3_BUCKET] = save_bucket
+        bucket = os.environ[C.PLANTTRACER_S3_BUCKET]
+        client = s3_client()  # uses local endpoint from env
+        try:
+            client.head_bucket(Bucket=bucket)
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') == '404':
+                client.create_bucket(Bucket=bucket)
+            else:
+                logging.warning("head_bucket failed: %s", e)
+
+        try:
+            client.put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
+        except ClientError as e:
+            logging.warning("Could not set S3 CORS (non-fatal): %s", e)
     else:
-        del os.environ[C.PLANTTRACER_S3_BUCKET]
-    if save_endpoint:
-        os.environ[C.AWS_ENDPOINT_URL_S3] = save_endpoint
-    else:
-        del os.environ[C.AWS_ENDPOINT_URL_S3]
+        bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
+        if bucket:
+            try:
+                s3_client().put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
+            except ClientError as e:
+                logging.warning("Could not set S3 CORS (non-fatal): %s", e)
+
+    yield os.environ[C.PLANTTRACER_S3_BUCKET]
 
 
 @pytest.fixture

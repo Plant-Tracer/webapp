@@ -81,7 +81,6 @@ USER_ID = 'user_id'
 PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
-EMAIL_TEMPLATE_FNAME = 'email.txt'
 CHECK_MX = False            # True doesn't work
 
 ################################################################
@@ -209,7 +208,7 @@ class DDBO:
 
     @classmethod
     def resource(cls):
-        region_name = os.environ.get(C.AWS_DEFAULT_REGION, None)
+        region_name = os.environ.get(C.AWS_REGION, None)
         endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_DYNAMODB)
         logger.info("region_name=%s endpoint_url=%s",region_name,endpoint_url)
         return boto3.resource( 'dynamodb', region_name=region_name, endpoint_url=endpoint_url)
@@ -329,6 +328,16 @@ class DDBO:
             logger.error("table=%s error=%s",self.api_keys.name, e)
             raise ValueError(self.api_keys.name) from e
 
+    def get_first_api_key_for_user(self, user_id):
+        """Return one api_key for the user, or None if they have none."""
+        response = self.api_keys.query(
+            IndexName='user_id_idx',
+            KeyConditionExpression=Key(USER_ID).eq(user_id),
+            ProjectionExpression=API_KEY,
+            Limit=1,
+        )
+        items = response.get('Items', [])
+        return items[0][API_KEY] if items else None
 
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
@@ -369,7 +378,14 @@ class DDBO:
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
         logger.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
-        logger.warning("NOTE: create_user does not check to make sure user %s's course %s exists",email,user[PRIMARY_COURSE_ID])
+        primary_course_id = user.get(PRIMARY_COURSE_ID)
+        if primary_course_id is not None:
+            try:
+                self.get_course(primary_course_id)
+            except InvalidCourse_Id:
+                raise ValueError(
+                    f"Course {primary_course_id} does not exist; cannot create user for {email}"
+                ) from None
 
         try:
             self.dynamodb.meta.client.transact_write_items(
@@ -394,7 +410,7 @@ class DDBO:
         except ClientError as e:
             # If any ConditionCheck fails, you’ll land here:
             logger.info("Transaction canceled: %s", e.response['Error']['Message'])
-            raise UserExists() from e
+            raise UserExists(email) from e
 
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email."""
@@ -923,12 +939,16 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
         logger.debug("user=%s",user)
-        ddbo.update_table(ddbo.users, user_id,
-                          {PRIMARY_COURSE_ID:  course[ COURSE_ID ],
-                           PRIMARY_COURSE_NAME:course[ COURSE_NAME ],
-                           ENABLED: 1,
-                           COURSES: list(set(user[ COURSES ] + [course_id])),
-                           ADMIN_FOR_COURSES: admin_for_courses})
+        # Do not overwrite primary course when adding user to the demo course (so verification-link login stays on main course).
+        update_payload = {
+            ENABLED: 1,
+            COURSES: list(set(user[COURSES] + [course_id])),
+            ADMIN_FOR_COURSES: admin_for_courses,
+        }
+        if course_id != "demo-course":
+            update_payload[PRIMARY_COURSE_ID] = course[COURSE_ID]
+            update_payload[PRIMARY_COURSE_NAME] = course[COURSE_NAME]
+        ddbo.update_table(ddbo.users, user[USER_ID], update_payload)
 
         user_id = user[ USER_ID ]
 
@@ -1022,6 +1042,12 @@ def get_user(user_id):
 
 def get_user_email(email):
     return DDBO().get_user_email(email)
+
+
+def get_first_api_key_for_user(user_id):
+    """Return one api_key for the user, or None if they have none."""
+    return DDBO().get_first_api_key_for_user(user_id)
+
 
 #########################
 ### Course Management ###

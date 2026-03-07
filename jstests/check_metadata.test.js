@@ -2,12 +2,31 @@
  * @jest-environment jsdom
  */
 
+global.check_metadata_mockVal = jest.fn();
+global.check_metadata_mockProp = jest.fn();
+jest.mock('utils', () => {
+    const noop = () => {};
+    const noopChain = { html: noop, val: noop, prop: noop, click: noop, show: noop, hide: noop, on: noop };
+    return {
+    $: jest.fn((selector) => {
+        if (selector && selector.nodeType === 9) {
+            return { ready: (cb) => cb() };
+        }
+        if (['#movie-title', '#movie-description', '#movie-file'].includes(selector)) {
+            return { val: global.check_metadata_mockVal };
+        }
+        if (selector === '#upload-button') {
+            return { prop: global.check_metadata_mockProp };
+        }
+        return noopChain;
+    }),
+    $$: jest.fn(),
+    DOMWrapper: jest.fn(),
+};
+});
 
-const $ = require('jquery');
-global.$ = $;
-
-const module = require('planttracer')
-const check_upload_metadata = module.check_upload_metadata
+const module = require('planttracer');
+const check_upload_metadata = module.check_upload_metadata;
 
 global.Audio = function() {
   this.play = jest.fn();
@@ -17,24 +36,10 @@ describe('check_upload_metadata', () => {
     let mockVal, mockProp;
 
     beforeEach(() => {
-        // Mock the jQuery selector function
-        mockVal = jest.fn(); // Mock for val()
-        mockProp = jest.fn(); // Mock for prop()
-
-        global.$ = jest.fn((selector) => {
-            if (selector === '#movie-title') {
-                return { val: mockVal };
-            }
-            if (selector === '#movie-description') {
-                return { val: mockVal };
-            }
-            if (selector === '#movie-file') {
-                return { val: mockVal };
-            }
-            if (selector === '#upload-button') {
-                return { prop: mockProp };
-            }
-        });
+        mockVal = global.check_metadata_mockVal;
+        mockProp = global.check_metadata_mockProp;
+        mockVal.mockClear();
+        mockProp.mockClear();
     });
 
     test('disables upload button if title is too short', () => {

@@ -43,11 +43,12 @@ Below is a list of all users registered on this system for your course
 </div>
 {% endif %}
 
-<script type="text/javascript" charset="utf8" src="static/users.js"></script>
-<script>
+<script type="module" src="{{ url_for('static', filename='users.js') }}"></script>
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
   $(document).ready(function() {
-  bulk_register_setup();
-  list_users();
+    bulk_register_setup();
+    list_users();
   });
 </script>
 {% endblock %}
