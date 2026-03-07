@@ -1,0 +1,226 @@
+# HOW TO DEPLOY WITH SAM (creates samconfig.toml on first guided deploy):
+#   sam build
+#   sam deploy --guided
+#
+# This template is parameterized for 'prod' and 'stage' environments.
+# The environment is controlled by the 'EnvironmentName' parameter,
+# which should be set in your samconfig.toml file.
+#
+# Example (samconfig-stage.toml):
+#   [default.deploy.parameters]
+#   stack_name = "home-app-stage"
+#   EnvironmentName = "stage"
+#   ...
+#
+# Example (samconfig-prod.toml for prod):
+#   [default.deploy.parameters]
+#   stack_name = "home-app"
+#   EnvironmentName = "prod"
+#   ...
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: MP4 resizer and zip extractor
+
+Mappings:
+  EnvConfig:
+    prod:
+      DomainName: "app-resize.planttracer.com"
+      StageName: "prod"
+      Description: "MP4 resizer and zip extractor"
+      CustomDomainUrl: "https://app-resize.planttracer.com/"
+    stage:
+      DomainName: "app-resize-stage.planttracer.com"
+      StageName: "stage"
+      Description: "MP4 resizer and zip extractor"
+      CustomDomainUrl: "https://app-resize-stage.planttracer.com/"
+
+Globals:
+  Function:
+    Architectures: [ arm64 ]
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LogLevel
+        DYNAMODB_TABLE_PREFIX: !Ref TablePrefix
+        LAMBDA_LOGS_TABLE_NAME: !Ref LambdaLogsTableName
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: stage
+    AllowedValues: [prod, stage]
+    Description: The deployment environment (prod or stage).
+  ImageBucketName:
+    Type: String
+    Default: planttracer2
+  LambdaLogsTableName:
+    Type: String
+    Default: resize-app-lambda-logs
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for planttracer.com (e.g., Z123ABC...)
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: "(Optional) Existing ACM certificate ARN for camera.planttracer.com. Leave blank to auto-create."
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
+    Description: Default LOG_LEVEL environment value for the function
+  TablePrefix:
+    Type: String
+    Description: PlantTracer table prefix
+  DeploymentTimestamp:
+    Type: String
+    Description: UTC timestamp of when the application was deployed.
+    Default: 'Not Set'
+
+Conditions:
+  CreateAcmCert: !Equals [!Ref CertificateArn, ""]
+
+Resources:
+  HomeCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateAcmCert
+    Properties:
+      DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
+          HostedZoneId: !Ref HostedZoneId
+
+  HomeHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !FindInMap [EnvConfig, !Ref EnvironmentName, StageName]
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: ['GET','POST','OPTIONS']
+      Domain:
+        DomainName: !FindInMap [EnvConfig, !Ref EnvironmentName, DomainName]
+        CertificateArn: !If [CreateAcmCert, !Ref HomeCertificate, !Ref CertificateArn]
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+
+  # Lambda function — JSON-only API (no Flask)
+  ResizeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.13
+      BuildProperties:
+        RequirementsFile: requirements.txt   # relative to CodeUri (src/)
+    Properties:
+      Runtime: python3.13
+      PackageType: Zip
+      CodeUri: src/
+      Handler: resize_app.main.lambda_handler
+      Timeout: 300
+      MemorySize: 1024
+      MaximumRetryAttempts: 0   # do not retry if the lambda fails
+      Policies:
+        # 1. Access to the specific LambdaLogsTable (using the simple SAM policy template)
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LambdaLogsTableName
+
+        # 2. Access to the S3 bucket (using the simple SAM policy template)
+        - S3CrudPolicy:
+            BucketName: !Ref ImageBucketName
+
+        # 3. Custom policy for wildcard access to OTHER DynamoDB tables
+        #    (MUST be kept as a custom statement)
+        - Statement:
+            Sid: DynamoDBTables
+            Effect: Allow
+            Action:
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:DeleteItem
+              - dynamodb:UpdateItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+            Resource:
+              - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*"
+              - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TablePrefix}*/index/*"
+
+      Events:
+        AnyRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HomeHttpApi
+            Path: /
+            Method: ANY
+            PayloadFormatVersion: "2.0"
+        AnyProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HomeHttpApi
+            Path: /{proxy+}
+            Method: ANY
+            PayloadFormatVersion: "2.0"
+        #Heartbeat:
+        #  Type: Schedule
+        #  Properties:
+        #    Schedule: rate(5 minutes)
+        #    Input: '{"action":"heartbeat"}'
+        FileUpload:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source: ["aws.s3"]
+              detail-type: ["Object Created"]
+              detail:
+                bucket:
+                  name: [!Ref ImageBucketName]
+                object:
+                  key:
+                    - suffix: ".mp4"
+                    - suffix: ".mov"
+                    - suffix: ".MP4"
+                    - suffix: ".MOV"
+
+
+  # LambdaLogs table holds the logs from lambda operations.
+  # It's a "Resource", so it's created and owned by the Lambda.
+  LambdaLogsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TableName: !Sub "${AWS::StackName}-lambda-logs"
+      AttributeDefinitions:
+        - AttributeName: log_id
+          AttributeType: S
+        - AttributeName: datetime
+          AttributeType: S
+      KeySchema:
+        - AttributeName: log_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: LogTimev2
+          KeySchema:
+            - AttributeName: log_id
+              KeyType: HASH
+            - AttributeName: datetime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  # Production-specific outputs
+  ApiId:
+    Description: HTTP API ID
+    Value: !Ref HomeHttpApi
+  CustomDomainUrl:
+    Description: Camera base URL
+    Value: !FindInMap [EnvConfig, !Ref EnvironmentName, CustomDomainUrl]
+  CameraFunction:
+    Description: Resize Lambda function name
+    Value: !Ref ResizeFunction
+  HostedZoneId:
+    Description: Route53 Hosted Zone
+    Value: !Ref HostedZoneId

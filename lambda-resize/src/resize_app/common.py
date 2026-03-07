@@ -23,7 +23,7 @@ def _configure_root_once():
     level = getattr(logging, level_name, logging.INFO)
 
     # Configure a dedicated app logger; avoid touching the root logger.
-    app_logger = logging.getLogger("e11")
+    app_logger = logging.getLogger("resize")
     app_logger.setLevel(level)
 
     if not app_logger.handlers:
@@ -40,9 +40,9 @@ def _configure_root_once():
 
 
 def get_logger(name: str | None = None) -> logging.Logger:
-    """Get a logger under the 'e11' namespace (e.g., e11.grader)."""
+    """Get a logger under the 'resize' namespace (e.g., resize)."""
     _configure_root_once()
-    return logging.getLogger("e11" + ("" if not name else f".{name}"))
+    return logging.getLogger("resize" + ("" if not name else f".{name}"))
 
 
 LOGGER = get_logger("grader")
