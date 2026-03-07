@@ -105,7 +105,7 @@ function check_upload_metadata()
 }
 
 function sync_attribution_ui() {
-    if ($('#research-use-checkbox').get(0) === undefined) {
+    if ($('#research-use-checkbox').get(0) == null) {
         return;
     }
     const researchChecked = $('#research-use-checkbox').prop('checked');
