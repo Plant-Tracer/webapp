@@ -2506,7 +2506,7 @@ version = "1.47.0"
 description = "read and write audio tags for many formats"
 optional = false
 python-versions = ">=3.7"
-groups = ["dev"]
+groups = ["dev", "lambda"]
 files = [
     {file = "mutagen-1.47.0-py3-none-any.whl", hash = "sha256:edd96f50c5907a9539d8e5bba7245f62c9f520aef333d13392a79a4f70aca719"},
     {file = "mutagen-1.47.0.tar.gz", hash = "sha256:719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99"},
@@ -6095,4 +6095,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "e72e2923973be208b2192945bd5992bab07dd56a9e09c2f46e7d4f090137307a"
+content-hash = "f9450528f9876dd3cfa1274d738180f3407e3ab96a193a13bf3f5d5b472025da"

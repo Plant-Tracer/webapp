@@ -212,10 +212,9 @@ Resources:
       ResourceRecords:
         - !Ref InstanceEip
 
-  # --- EC2 instance (depends on Lambda so LAMBDA_RESIZE_ARN is available in UserData) ---
+  # --- EC2 instance ---
   AppInstance:
     Type: AWS::EC2::Instance
-    DependsOn: LambdaFunction
     Properties:
       MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
       ImageId: !Ref UbuntuAmiId

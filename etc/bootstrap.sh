@@ -3,6 +3,9 @@
 ### bootstrap.sh is run by the EC2 instance at startup.
 ### See $ROOT/template.yaml for details
 ###
+### Idempotent: safe to run again after 'git pull'. Ensures poetry.lock is
+### current before install so pyproject.toml changes don't break the build.
+###
 
 set -euo pipefail
 echo Setting up ubuntu 24.04 running in AWS for PlantTracer.
@@ -120,6 +123,9 @@ pipx install poetry --force || pipx upgrade poetry
 
 ## Verify Poetry version (should be 1.8.x or higher)
 poetry --version
+
+## Ensure lock file matches pyproject.toml (e.g. after git pull)
+poetry lock
 
 make install-ubuntu
 
