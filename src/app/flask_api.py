@@ -207,7 +207,6 @@ def api_send_link():
         return E.INVALID_MAILER_CONFIGURATION
     return {'error': False, 'message': 'If you have an account, a link was sent. If you do not receive a link within 60 seconds, you may need to <a href="/register">register</a> your email address.'}
 
-#pylint: disable=too-many-return-statements
 @api_bp.route('/bulk-register', methods=POST)
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""

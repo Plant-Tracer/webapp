@@ -145,7 +145,7 @@ def api_log():
 ################################################################
 ## main entry point from lambda system
 
-# pylint: disable=too-many-return-statements, disable=too-many-branches, disable=unused-argument
+# pylint: disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
     """called by lambda"""
 

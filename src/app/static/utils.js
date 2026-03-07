@@ -111,6 +111,67 @@ class DOMCollection {
         return this;
     }
 
+    get(index) {
+        if (index === undefined) {
+            return this.elements[0] || null;
+        }
+        return this.elements[index] || null;
+    }
+
+    hasClass(className) {
+        return this.elements[0] ? this.elements[0].classList.contains(className) : false;
+    }
+
+    addClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.add(className);
+        });
+        return this;
+    }
+
+    removeClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.remove(className);
+        });
+        return this;
+    }
+
+    toggleClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.toggle(className);
+        });
+        return this;
+    }
+
+    one(event, handler) {
+        this.elements.forEach(el => {
+            if (el) el.addEventListener(event, handler, { once: true });
+        });
+        return this;
+    }
+
+    find(selector) {
+        const found = [];
+        this.elements.forEach(el => {
+            if (el) {
+                const matches = el.querySelectorAll(selector);
+                found.push(...matches);
+            }
+        });
+        return new DOMCollection(found);
+    }
+
+    parent() {
+        const parents = this.elements.map(el => el && el.parentElement).filter(Boolean);
+        return new DOMCollection(parents);
+    }
+
+    children() {
+        const childLists = this.elements.map(el => el ? Array.from(el.children) : []);
+        const flat = childLists.flat();
+        return new DOMCollection(flat);
+    }
+
     get length() {
         return this.elements.length;
     }
@@ -296,6 +357,45 @@ class DOMWrapper {
             this.element.style[property] = value;
         }
         return this;
+    }
+
+    hasClass(className) {
+        return this.element ? this.element.classList.contains(className) : false;
+    }
+
+    addClass(className) {
+        if (this.element) this.element.classList.add(className);
+        return this;
+    }
+
+    removeClass(className) {
+        if (this.element) this.element.classList.remove(className);
+        return this;
+    }
+
+    toggleClass(className) {
+        if (this.element) this.element.classList.toggle(className);
+        return this;
+    }
+
+    one(event, handler) {
+        if (this.element) this.element.addEventListener(event, handler, { once: true });
+        return this;
+    }
+
+    find(selector) {
+        if (!this.element) return new DOMCollection([]);
+        return new DOMCollection(this.element.querySelectorAll(selector));
+    }
+
+    parent() {
+        if (!this.element || !this.element.parentElement) return new DOMCollection([]);
+        return new DOMCollection([this.element.parentElement]);
+    }
+
+    children() {
+        if (!this.element) return new DOMCollection([]);
+        return new DOMCollection(this.element.children);
     }
 }
 
