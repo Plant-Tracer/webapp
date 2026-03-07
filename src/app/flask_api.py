@@ -277,23 +277,34 @@ def api_new_movie():
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
         return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
 
-    ret = {'error':False}
+    ret = {'error': False}
 
-    # This is where the movie_id is assigned
-    ret[ MOVIE_ID ] = odb.create_new_movie(user_id=user_id,
-                                           course_id=user['primary_course_id'],
-                                           title=request.values.get('title'),
-                                           description=request.values.get('description') )
+    research_use = 1 if get('research_use') == '1' else 0
+    credit_by_name = 1 if get('credit_by_name') == '1' else 0
+    attribution_name = (request.values.get('attribution_name') or '').strip() or None
+    if credit_by_name == 0:
+        attribution_name = None
 
-    # Get the object name and create the upload URL
-    oname= make_object_name( course_id = odb.course_id_for_movie_id( ret[ MOVIE_ID ]),
-                                        movie_id = ret[ MOVIE_ID ],
-                                        ext=C.MOVIE_EXTENSION)
-    movie_data_urn        = make_urn( object_name = oname)
-    odb.set_movie_data_urn(movie_id=ret[ MOVIE_ID ], movie_data_urn=movie_data_urn)
-    ret['presigned_post'] = make_presigned_post(urn=movie_data_urn,
-                                                          mime_type='video/mp4',
-                                                          sha256=movie_data_sha256)
+    ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
+                                         course_id=user['primary_course_id'],
+                                         title=request.values.get('title'),
+                                         description=request.values.get('description'),
+                                         research_use=research_use,
+                                         credit_by_name=credit_by_name,
+                                         attribution_name=attribution_name)
+
+    oname = make_object_name(course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
+                             movie_id=ret[MOVIE_ID],
+                             ext=C.MOVIE_EXTENSION)
+    movie_data_urn = make_urn(object_name=oname)
+    odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
+    ret['presigned_post'] = make_presigned_post(
+        urn=movie_data_urn,
+        mime_type='video/mp4',
+        sha256=movie_data_sha256,
+        research_use=str(research_use),
+        credit_by_name=str(credit_by_name),
+        attribution_name=attribution_name or '')
     return ret
 
 @api_bp.route('/get-movie-data', methods=GET_POST)

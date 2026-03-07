@@ -118,11 +118,16 @@ class Movie(BaseModel):
 
     version: Annotated[int | None, Field(ge=0)] = None
 
+    # Research use and attribution (see docs/MOVIE_METADATA)
+    research_use: Annotated[int, Field(ge=0, le=1)] = 0
+    credit_by_name: Annotated[int, Field(ge=0, le=1)] = 0
+    attribution_name: str | None = None
+
 
 def fix_movie_prop_value(prop, value):
     if value is None:
         return None
-    if prop in ["published", "deleted", "version", "last_frame_tracked"]:
+    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name"]:
         return int(value)
     if prop in ["fps"]:
         return str(value)
