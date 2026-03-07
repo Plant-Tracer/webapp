@@ -129,6 +129,9 @@ poetry lock
 
 make install-ubuntu
 
+## Ensure venv has all deps (Make may skip poetry install if .venv exists; re-run so second bootstrap or git pull leaves venv in sync)
+poetry install
+
 ## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
 ## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
 poetry run python src/dbutil.py --create_demos
