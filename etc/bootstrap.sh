@@ -72,13 +72,6 @@ poetry self add poetry-plugin-export
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
 
-## Restore NGINX distribution configuration if we are runnng the second time
-DEFAULT=/etc/nginx/sites-available/default
-if [ -r $DEFAULT.dist ]; then
-   sudo cp $DEFAULT.dist $DEFAULT
-fi
-sudo cp -f $DEFAULT $DEFAULT.dist
-
 ## Install certbot
 sudo snap install core; sudo snap refresh core
 sudo snap install --classic certbot
@@ -90,31 +83,41 @@ fi
 sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy/
 sudo cp $ROOT/etc/reload-server.sh /etc/letsencrypt/renewal-hooks/deploy/
 
-## Add the TLS certificate
-if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
+## Add the TLS certificate if it does not exist
+LETS_ENCRYPT_CONF=/etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN.conf
+if [ -x  ]; then
+    echo $LETS_ENCRYPT_CONF exists.
+else
     sudo certbot --nginx --non-interactive --nginx --expand --cert-name $HOSTNAME.$DOMAIN \
          -d $HOSTNAME.$DOMAIN \
          -d $HOSTNAME-demo.$DOMAIN \
          --email plantadmin@planttracer.com --no-eff-email --agree-tos
 fi
 
+## Restore certbot-created version of the config file if it does not exist
+DEFAULT=/etc/nginx/sites-available/default
+if [ -r $DEFAULT.certbot ]; then
+   sudo cp $DEFAULT.certbot $DEFAULT
+fi
+echo backing up $DEFAULT
+sudo /bin/cp -f $DEFAULT $DEFAULT.certbot
+ls -l ${DEFAULT}*
 
-# Patch nginx
+
+# Patch the certbot-created version of the nginx config file
 # main domain - port 5000
 # demo domain - port 5100
 # Target "server_name" so we match the default server block (server_name _;) and replace
 # the default location with our proxy. --count 4 removes the 4 lines after server_name
 # (location / { try_files } }) so the server block's closing } is kept.
 echo adding $HOSTNAME.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch 'server_name' \
-     --flag planttracer-nginx-patch --count 4
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch 'server_name' --flag planttracer-nginx-patch --count 4
 
 echo Creating $ROOT/etc/planttracer-nginx-patch.5100
 /bin/rm -f $ROOT/etc/planttracer-nginx-patch.5100
 sed s/5000/5100/ $ROOT/etc/planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
 echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch.5100 "$HOSTNAME-demo.$DOMAIN" \
-     --flag planttracer-nginx-patch.5100 --count 4
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch.5100 "$HOSTNAME-demo.$DOMAIN" --flag planttracer-nginx-patch.5100 --count 4
 
 # Run nginx -t with sudo (avoids "user" directive warning) and filter that warning from output
 nginx_test_out=$(sudo /usr/sbin/nginx -t 2>&1)
@@ -126,12 +129,14 @@ if [ "$nginx_exit" -ne 0 ]; then
     exit 1
 fi
 
+echo reload nginx
 sudo systemctl reload nginx
 
 sudo cp $ROOT/etc/planttracer.service /etc/systemd/system/planttracer.service
 sudo systemctl daemon-reload
 
 
+echo installing planttracer
 ## Create venv and install app deps (pyproject.toml and lock already validated above).
 make install-ubuntu
 
