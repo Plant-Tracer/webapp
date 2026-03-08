@@ -282,6 +282,8 @@ def api_new_movie():
     research_use = 1 if get('research_use') == '1' else 0
     credit_by_name = 1 if get('credit_by_name') == '1' else 0
     attribution_name = (request.values.get('attribution_name') or '').strip() or None
+    if attribution_name is not None:
+        attribution_name = attribution_name[:256]
     if credit_by_name == 0:
         attribution_name = None
 
