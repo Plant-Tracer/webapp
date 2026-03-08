@@ -311,11 +311,14 @@ def api_new_movie():
                              ext=C.MOVIE_EXTENSION)
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-    # Upload to staging prefix so lambda-resize is triggered; it moves to final key and updates DynamoDB.
-    staging_object_name = UPLOAD_STAGING_PREFIX + oname
-    staging_urn = make_urn(object_name=staging_object_name)
+    # When Lambda is configured, upload to staging prefix so lambda-resize moves to final key.
+    # When not (e.g. local/test), upload directly to final key so get_movie_data() finds the object.
+    if os.environ.get("LAMBDA_RESIZE_ARN"):
+        upload_urn = make_urn(object_name=UPLOAD_STAGING_PREFIX + oname)
+    else:
+        upload_urn = movie_data_urn
     ret['presigned_post'] = make_presigned_post(
-        urn=staging_urn,
+        urn=upload_urn,
         mime_type='video/mp4',
         sha256=movie_data_sha256,
         research_use=str(research_use),
