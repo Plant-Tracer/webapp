@@ -89,6 +89,8 @@ build-backend = "poetry.core.masonry.api"
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.
 py-version = "3.12"
+recursive = true
+source-roots = ["src"]
 
 [tool.pylint.messages_control]
 # Disable specific messages by their symbolic name or message ID.
