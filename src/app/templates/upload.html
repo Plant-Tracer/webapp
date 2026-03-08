@@ -37,6 +37,23 @@
         <span class="pure-form-message-inline">required</span>
       </div>
       <div class='pure-control-group'>
+        <label>
+          <input type='checkbox' id='research-use-checkbox' name='research_use' value='1' onchange='sync_attribution_ui()'>
+          The uploaded movie may be used in academic research.
+        </label>
+      </div>
+      <div class='pure-control-group' id='attribution-group' style='display:none'>
+        <label>
+          <input type='checkbox' id='credit-by-name-checkbox' name='credit_by_name' value='1' onchange='sync_attribution_ui()'>
+          I would like credit by name for the use of this video in research.
+        </label>
+        <span class="pure-form-message-inline">If unchecked, video will be used anonymously.</span>
+      </div>
+      <div class='pure-control-group' id='attribution-name-group' style='display:none'>
+        <label for='attribution-name'>Name for attribution:</label>
+        <input type='text' id='attribution-name' name='attribution_name' placeholder='In the text' disabled>
+      </div>
+      <div class='pure-control-group'>
         <label for='submit-button'>Click to upload:</label>
         <input id='upload-button' type='button' value='upload' onclick='upload_movie()' >
       </div>
