@@ -56,9 +56,7 @@ BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
 
-## Validate project and install Poetry FIRST. If pyproject.toml is invalid or poetry
-## version is incompatible, we exit here and never touch nginx/certbot/service.
-## This prevents a broken app (e.g. 203/EXEC) when the project config is invalid.
+## Install and upgrade Poetry with the poetry-plugin-exporter
 sudo apt-get update
 sudo apt-get install -y python3-pip pipx
 pipx ensurepath
@@ -66,6 +64,9 @@ export PATH="$HOME/.local/bin:$PATH"
 sudo apt-get remove --purge -y poetry || true
 pipx install poetry --force || pipx upgrade poetry
 poetry --version
+poetry self add poetry-plugin-export
+
+## Validatre and lock the file
 echo "Validating pyproject.toml and generating lock file..."
 poetry check || { echo "FATAL: poetry check failed (invalid pyproject.toml or incompatible Poetry version). Fix the project or upgrade Poetry."; exit 1; }
 poetry lock || { echo "FATAL: poetry lock failed. Fix pyproject.toml and dependencies."; exit 1; }

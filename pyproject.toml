@@ -1,13 +1,20 @@
-[tool.poetry]
+[project]
 name = "webapp"
 version = "1.1.0"
 description = "PlantTracer webapp"
-authors = [
-    "Simson Garfinkel <simsong@acm.org>",
-    "Steve Barber <sbarber2@gmail.com>"
-]
-license = "GPL"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [
+    { name = "Simson Garfinkel", email = "simsong@acm.org" },
+    { name = "Steve Barber", email = "sbarber2@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dynamic = ["dependencies"]
+
+[project.scripts]
+sam-config-tool = "sam_config_tool:main"
+
+[tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
@@ -78,9 +85,6 @@ botocore = {extras = ["crt"], version = "^1.42.63"}
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-sam-config-tool = "sam_config_tool:main"
 
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.
