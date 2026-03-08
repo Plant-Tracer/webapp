@@ -16,7 +16,7 @@ const DELETE_BUTTON='DELETE';
 const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
-const UPLOAD_TIMEOUT_SECONDS = 20;
+const UPLOAD_TIMEOUT_SECONDS = 600;  // 10 minutes for large files on slow connections
 
 // sounds for buttons
 var SOUNDS = [];
@@ -199,13 +199,35 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
         console.log("[DEBUG]", JSON.stringify({hypothesisId:"H1",location:"planttracer.js:form_built",message:"Form built file last",data:{fieldOrder,fileIsLast:true},timestamp:Date.now()}));
         // #endregion
 
-        const ctrl = new AbortController();    // timeout
-        setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
-        const r = await fetch(pp.url, {
-            method: "POST",
-            body: s3FormData,
-            signal: ctrl.signal,
-        });
+        const ctrl = new AbortController();
+        const startTime = Date.now();
+        const timeoutId = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS * 1000);
+        const formatTime = (sec) => {
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${s.toString().padStart(2, "0")}`;
+        };
+        const updateTimer = () => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const remaining = Math.max(0, UPLOAD_TIMEOUT_SECONDS - elapsed);
+            $('#upload_message').html(
+                `Uploading… Elapsed: ${formatTime(elapsed)}, Time left: ${formatTime(remaining)}`
+            );
+        };
+        updateTimer();
+        const intervalId = setInterval(updateTimer, 1000);
+
+        let r;
+        try {
+            r = await fetch(pp.url, {
+                method: "POST",
+                body: s3FormData,
+                signal: ctrl.signal,
+            });
+        } finally {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
+        }
         // #region agent log
         console.log("[DEBUG]", JSON.stringify({hypothesisId:"H3",location:"planttracer.js:after_fetch",message:"S3 response",data:{ok:r.ok,status:r.status,statusText:r.statusText,redirected:r.redirected,url:r.url},timestamp:Date.now()}));
         // #endregion
