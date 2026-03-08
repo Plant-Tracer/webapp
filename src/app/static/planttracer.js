@@ -197,14 +197,18 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
         const r = await fetch(pp.url, {
             method: "POST",
             body: s3FormData,
+            signal: ctrl.signal,
         });
         if (!r.ok) {
             $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             return;
         }
-    } catch(e) {
-        $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
-        console.log("error: ",e);
+    } catch (e) {
+        const msg = (e.name === 'AbortError')
+            ? `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`
+            : `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
+        $('#upload_message').html(msg);
+        console.log("error: ", e);
         return;
     }
     // Movie was uploaded! Clear the form and show the first frame

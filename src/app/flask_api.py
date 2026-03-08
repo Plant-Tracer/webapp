@@ -279,6 +279,10 @@ def api_new_movie():
     """
     # pylint: disable=unsupported-membership-test
     logger.info("api_new_movie")
+    origin = f"{request.scheme}://{request.host}"
+    upload_ok, upload_msg = config_check.check_s3_upload_readiness(origin)
+    if not upload_ok:
+        return jsonify({'error': True, 'message': upload_msg}), 503
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
@@ -629,15 +633,18 @@ def api_ver():
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():
-    """Return DynamoDB and S3 CORS check results as JSON (no auth required)."""
+    """Return DynamoDB, S3 CORS, and S3 bucket region check results as JSON (no auth required)."""
     origin = f"{request.scheme}://{request.host}"
     d_ok, d_msg = config_check.check_dynamodb()
     c_ok, c_msg = config_check.check_s3_cors(origin)
+    r_ok, r_msg = config_check.check_s3_bucket_region()
     return jsonify({
         'dynamodb_ok': d_ok,
         'dynamodb_message': d_msg,
         'cors_ok': c_ok,
         'cors_message': c_msg,
+        'bucket_region_ok': r_ok,
+        'bucket_region_message': r_msg,
     })
 
 
