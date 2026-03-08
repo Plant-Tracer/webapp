@@ -123,11 +123,14 @@ if ! run_section 6 "nginx config (patch, reload, systemd unit)"; then
   fi
   sudo cp -f "$DEFAULT" "$DEFAULT.certbot"
   echo "Adding $HOSTNAME.$DOMAIN to $DEFAULT"
-  sudo python3 "$ROOT/etc/patcher.py" "$DEFAULT" "$ROOT/etc/planttracer-nginx-patch" 'server_name' --flag planttracer-nginx-patch --count 4
+  # Landmark: delete from after server_name up to and including first line that is only "}" (closing the location block)
+  sudo python3 "$ROOT/etc/patcher.py" "$DEFAULT" "$ROOT/etc/planttracer-nginx-patch" 'server_name' \
+    --flag planttracer-nginx-patch --delete-to '^\s*}\s*$' --save "$VAR"
   rm -f "$ROOT/etc/planttracer-nginx-patch.5100"
   sed 's/5000/5100/' "$ROOT/etc/planttracer-nginx-patch" > "$ROOT/etc/planttracer-nginx-patch.5100"
   echo "Adding $HOSTNAME-demo.$DOMAIN to $DEFAULT"
-  sudo python3 "$ROOT/etc/patcher.py" "$DEFAULT" "$ROOT/etc/planttracer-nginx-patch.5100" "$HOSTNAME-demo.$DOMAIN" --flag planttracer-nginx-patch.5100 --count 4
+  sudo python3 "$ROOT/etc/patcher.py" "$DEFAULT" "$ROOT/etc/planttracer-nginx-patch.5100" "$HOSTNAME-demo.$DOMAIN" \
+    --flag planttracer-nginx-patch.5100 --delete-to '^\s*}\s*$' --save "$VAR"
   nginx_test_out=$(sudo /usr/sbin/nginx -t 2>&1) || true
   nginx_exit=$?
   echo "$nginx_test_out" | grep -v 'the "user" directive' 1>&2 || true
