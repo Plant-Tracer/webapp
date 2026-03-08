@@ -1,13 +1,20 @@
-[tool.poetry]
+[project]
 name = "webapp"
 version = "1.1.0"
 description = "PlantTracer webapp"
-authors = [
-    "Simson Garfinkel <simsong@acm.org>",
-    "Steve Barber <sbarber2@gmail.com>"
-]
-license = "GPL"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [
+    { name = "Simson Garfinkel", email = "simsong@acm.org" },
+    { name = "Steve Barber", email = "sbarber2@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dynamic = ["dependencies"]
+
+[project.scripts]
+sam-config-tool = "sam_config_tool:main"
+
+[tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
@@ -45,10 +52,13 @@ html5validate = "^0.0.2"
 
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda function
-# (e.g., Pillow for resizing)
+# (e.g., Pillow for resizing; mutagen for MP4 metadata in lambda-resize)
 Pillow = "^11.0.0"
+mutagen = "*"
 
 [tool.poetry.group.dev.dependencies]
+setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
+mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
 boto3-stubs = {extras = ["essential"], version = "*"}
 codecov = "*"
 myst-parser = "*"
@@ -69,14 +79,12 @@ pytest-env = "^1.2.0"
 service_identity = "*"
 filetype = "^1.2.0"
 cfn-lint = "^1.43.4"
+botocore = {extras = ["crt"], version = "^1.42.63"}
 
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-sam-config-tool = "sam_config_tool:main"
 
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.

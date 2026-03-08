@@ -21,6 +21,9 @@ from .constants import C
 MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
 FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
 
+# Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
+UPLOAD_STAGING_PREFIX = "uploads/"
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
@@ -92,20 +95,37 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
             ExpiresIn=expires)
     raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None, expires=3600):
-    """Returns a dictionary with 'url' and 'fields'"""
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
+                        research_use='0', credit_by_name='0', attribution_name=''):
+    """Returns a dictionary with 'url' and 'fields'.
+    research_use, credit_by_name, attribution_name are included in the signature and set as S3 object metadata.
+    """
     logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
-                 urn,maxsize,mime_type,sha256,expires)
+                 urn, maxsize, mime_type, sha256, expires)
     o = urllib.parse.urlparse(urn)
-    if o.scheme==C.SCHEME_S3:
+    if o.scheme == C.SCHEME_S3:
+        meta_research = 'x-amz-meta-research-use'
+        meta_credit = 'x-amz-meta-credit-by-name'
+        meta_attribution = 'x-amz-meta-attribution-name'
+        attribution_safe = (attribution_name or '')[:256]
+        fields = {
+            'Content-Type': mime_type,
+            meta_research: research_use,
+            meta_credit: credit_by_name,
+            meta_attribution: attribution_safe,
+        }
+        conditions = [
+            {"Content-Type": mime_type},
+            ["content-length-range", 1, maxsize],
+            {meta_research: research_use},
+            {meta_credit: credit_by_name},
+            {meta_attribution: attribution_safe},
+        ]
         return s3_client().generate_presigned_post(
             Bucket=o.netloc,
             Key=o.path[1:],
-            Conditions=[
-                {"Content-Type": mime_type}, # Explicitly allow Content-Type header
-                ["content-length-range", 1, maxsize], # Example condition: limit size between 1 and 10 MB
-            ],
-            Fields= { 'Content-Type':mime_type },
+            Conditions=conditions,
+            Fields=fields,
             ExpiresIn=expires)
     raise RuntimeError(f"Unknown scheme: {o.scheme}")
 

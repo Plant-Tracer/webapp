@@ -3,6 +3,9 @@
 ### bootstrap.sh is run by the EC2 instance at startup.
 ### See $ROOT/template.yaml for details
 ###
+### Idempotent: safe to run again after 'git pull'. Ensures poetry.lock is
+### current before install so pyproject.toml changes don't break the build.
+###
 
 set -euo pipefail
 echo Setting up ubuntu 24.04 running in AWS for PlantTracer.
@@ -31,6 +34,7 @@ export COURSE_ID
 export ADMIN_NAME
 export COURSE_NAME
 export SERVER_EMAIL
+export LAMBDA_RESIZE_ARN
 
 # Make $HOME/.bashrc add environment.d
 if ! grep planttracer $HOME/.bashrc ; then
@@ -52,9 +56,28 @@ BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
 
+## Install pipx
+sudo apt-get update
+sudo apt-get install -y python3-pip pipx
+pipx ensurepath
+export PATH="$HOME/.local/bin:$PATH"
+
+## Remove system poetry and install poetry through pipx
+sudo apt-get remove --purge -y poetry || true
+pipx install poetry --force || pipx upgrade poetry
+poetry --version
+poetry self add poetry-plugin-export
+
 ## Install nginx and the TLS certificate
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
+
+## Restore NGINX distribution configuration if we are runnng the second time
+DEFAULT=/etc/nginx/sites-available/default
+if [ -r $DEFAULT.dist ]; then
+   sudo cp $DEFAULT.dist $DEFAULT
+fi
+sudo cp -f $DEFAULT $DEFAULT.dist
 
 ## Install certbot
 sudo snap install core; sudo snap refresh core
@@ -75,24 +98,32 @@ if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
          --email plantadmin@planttracer.com --no-eff-email --agree-tos
 fi
 
+
 # Patch nginx
 # main domain - port 5000
 # demo domain - port 5100
-DEFAULT=/etc/nginx/sites-available/default
+# Target "server_name" so we match the default server block (server_name _;) and replace
+# the default location with our proxy. --count 4 removes the 4 lines after server_name
+# (location / { try_files } }) so the server block's closing } is kept.
 echo adding $HOSTNAME.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME.$DOMAIN \
-     --flag planttracer-nginx-patch --count 8
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch 'server_name' \
+     --flag planttracer-nginx-patch --count 4
 
 echo Creating $ROOT/etc/planttracer-nginx-patch.5100
 /bin/rm -f $ROOT/etc/planttracer-nginx-patch.5100
 sed s/5000/5100/ $ROOT/etc/planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
 echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
-     --flag planttracer-nginx-patch.5100 --count 8
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch.5100 "$HOSTNAME-demo.$DOMAIN" \
+     --flag planttracer-nginx-patch.5100 --count 4
 
-if ! /usr/sbin/nginx -t; then
+# Run nginx -t with sudo (avoids "user" directive warning) and filter that warning from output
+nginx_test_out=$(sudo /usr/sbin/nginx -t 2>&1)
+nginx_exit=$?
+echo "$nginx_test_out" | grep -v 'the "user" directive' 1>&2 || true
+if [ "$nginx_exit" -ne 0 ]; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
+    exit 1
 fi
 
 sudo systemctl reload nginx
@@ -101,26 +132,11 @@ sudo cp $ROOT/etc/planttracer.service /etc/systemd/system/planttracer.service
 sudo systemctl daemon-reload
 
 
-## First we install a functioning release and make sure that we can test it
-## Note that the test will be done with the live Lambda database and S3
-## and not with DynamoDBLocal
-
-sudo apt-get update
-sudo apt-get install -y python3-pip pipx
-pipx ensurepath
-export PATH="$HOME/.local/bin:$PATH"
-
-## Remove system poetry if present
-sudo apt-get remove --purge -y poetry || true
-
-## Install Poetry and ensure it is >= 1.8.0
-# We use the absolute path to ensure the script doesn't rely on the current PATH
-pipx install poetry --force || pipx upgrade poetry
-
-## Verify Poetry version (should be 1.8.x or higher)
-poetry --version
-
+## Create venv and install app deps (pyproject.toml and lock already validated above).
 make install-ubuntu
+
+## Ensure venv has all deps (Make may skip poetry install if .venv exists; re-run so second bootstrap or git pull leaves venv in sync)
+poetry install
 
 ## Create demo course, demo user (demouser@planttracer.com), and demo movies for the demo host (HOSTNAME-demo.$DOMAIN, port 5100).
 ## Idempotent: course/user creation tolerates existing; movies are added from tests/data if present.
@@ -129,6 +145,11 @@ poetry run python src/dbutil.py --create_demos
 ## Apply CORS to the S3 bucket so the browser can fetch movie zip URLs from the app origin (e.g. simson2.planttracer.com).
 if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
     poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+fi
+
+## Idempotently add S3 -> Lambda trigger for prefix uploads/ (if already present, leave as-is).
+if [ -n "${PLANTTRACER_S3_BUCKET:-}" ] && [ -n "${LAMBDA_RESIZE_ARN:-}" ]; then
+    poetry run python etc/s3_upload_trigger.py || true
 fi
 
 ## Create course if not present and send verification email to admin (idempotent)

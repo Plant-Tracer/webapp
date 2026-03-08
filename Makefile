@@ -332,6 +332,7 @@ install-ubuntu:
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
+	@# npm deprecation warnings (WARN deprecated) from transitive deps can be ignored
 	npm ci
 	make $(REQ)
 	@echo install-ubuntu done
@@ -436,6 +437,8 @@ check-iam:
 
 
 sam-build: $(REQ)
+	poetry check
+	poetry lock
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint

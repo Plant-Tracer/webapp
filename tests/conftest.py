@@ -107,7 +107,7 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
         options.binary_location = os.environ['CHROME_PATH']
 
     try:
-        driver = webdriver.Chrome(options=options)
+        driver = webdriver.Chrome(options=options)  # pylint: disable=not-callable
         yield driver
         driver.quit()
     except WebDriverException as e:

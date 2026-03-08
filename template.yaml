@@ -50,7 +50,7 @@ Parameters:
 
   ImageBucketName:
     Type: String
-    Description: "S3 bucket where images are stored. Do not include s3://"
+    Description: "Existing S3 bucket for videos; must outlive the stack (long-term archive). Do not include s3://"
     Default: planttracer2
 
   UbuntuAmiId:
@@ -235,48 +235,50 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-app"
       UserData:
-        Fn::Base64: !Sub |
-          #!/usr/bin/env bash
-          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-          set -euo pipefail
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/usr/bin/env bash
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+              set -euo pipefail
 
-          lsblk
-          df -h
-          # Create the environment variables
-          mkdir -p /etc/environment.d
-          touch /etc/environment.d/10-planttracer.conf
-          echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
-          echo "HOSTNAME=\"${HostLabel}\""                 >> /etc/environment.d/10-planttracer.conf
-          echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
-          echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
-          echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
-          echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
-          echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
-          echo "DYNAMODB_TABLE_PREFIX=\"${HostLabel}-\""   >> /etc/environment.d/10-planttracer.conf
-          echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
-          # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
-          echo "SERVER_EMAIL=\"admin@planttracer.com\""    >> /etc/environment.d/10-planttracer.conf
+              lsblk
+              df -h
+              # Create the environment variables
+              mkdir -p /etc/environment.d
+              touch /etc/environment.d/10-planttracer.conf
+              echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
+              echo "HOSTNAME=\"${HostLabel}\""                 >> /etc/environment.d/10-planttracer.conf
+              echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
+              echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
+              echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
+              echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
+              echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
+              echo "DYNAMODB_TABLE_PREFIX=\"${HostLabel}-\""   >> /etc/environment.d/10-planttracer.conf
+              echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
+              echo "LAMBDA_RESIZE_ARN=\"${LambdaResizeArn}\""   >> /etc/environment.d/10-planttracer.conf
+              # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
+              echo "SERVER_EMAIL=\"admin@planttracer.com\""    >> /etc/environment.d/10-planttracer.conf
 
-          # Install essentials
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -y
-          apt-get install -y git ca-certificates curl make python3-poetry
-          snap install --classic aws-cli
-          snap install --classic emacs
+              # Install essentials
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -y
+              apt-get install -y git ca-certificates curl make python3-poetry
+              snap install --classic aws-cli
+              snap install --classic emacs
 
-          # Clone webapp
-          install -d -m 0755 /opt/
-          git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
+              # Clone webapp
+              install -d -m 0755 /opt/
+              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
 
-          echo Create the bucket if it does not exist
-          export PATH=$PATH:/snap/bin
-          aws s3api head-bucket --bucket "${ImageBucketName}" 2>/dev/null \
-               || aws s3 mb "s3://${ImageBucketName}" || true
+              # Bucket ${ImageBucketName} must already exist (long-term archive); bootstrap adds S3->Lambda trigger idempotently
+              export PATH=$PATH:/snap/bin
 
-          echo Set permissions and run bootstrap
-          sudo chown -R ubuntu:ubuntu /opt/webapp
-          runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
-          echo "User data finished executing."
+              echo Set permissions and run bootstrap
+              sudo chown -R ubuntu:ubuntu /opt/webapp
+              runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
+              echo "User data finished executing."
+            - LambdaResizeArn: !GetAtt LambdaFunction.Arn
 
   InstanceEipAssociation:
     Type: AWS::EC2::EIPAssociation
@@ -517,13 +519,15 @@ Resources:
                 Resource: ["*"]
               - Effect: Allow
                 Action:
-                  - s3:CreateBucket
                   - s3:GetBucketCORS
                   - s3:PutBucketCORS
+                  - s3:GetBucketLocation
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
                   - s3:ListBucket
+                  - s3:GetBucketNotificationConfiguration
+                  - s3:PutBucketNotificationConfiguration
                 Resource:
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
@@ -599,6 +603,10 @@ Resources:
       Handler: resize_app.resize.lambda_handler
       Timeout: 60
       MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_PREFIX: !Ref HostLabel
+          PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
       Events:
         AnyRoot:
           Type: HttpApi
@@ -618,6 +626,15 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
+
+  # Allow S3 (existing bucket) to invoke Lambda for uploads/; bootstrap configures notification idempotently
+  LambdaS3InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
 
 Outputs:
   ApiId:

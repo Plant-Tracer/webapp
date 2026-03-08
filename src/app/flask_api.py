@@ -29,7 +29,14 @@ from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
 from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
-from .s3_presigned import make_object_name,make_urn,make_signed_url,make_presigned_post,object_exists
+from .s3_presigned import (
+    make_object_name,
+    make_urn,
+    make_signed_url,
+    make_presigned_post,
+    object_exists,
+    UPLOAD_STAGING_PREFIX,
+)
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
 
@@ -266,10 +273,16 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
     :return: dict['movie_id'] - The movie_id that is allocated
-             dict['presigned_post'] - the post to use for uploading the movie. Sends it directly to S3, or to the handler below.
+             dict['presigned_post'] - the post to use for uploading the movie (staging prefix uploads/).
+             lambda-resize moves the object to the final key and updates DynamoDB; the client may need to
+             poll or wait briefly before the movie is available at movie_data_urn.
     """
     # pylint: disable=unsupported-membership-test
     logger.info("api_new_movie")
+    origin = f"{request.scheme}://{request.host}"
+    upload_ok, upload_msg = config_check.check_s3_upload_readiness(origin)
+    if not upload_ok:
+        return jsonify({'error': True, 'message': upload_msg}), 503
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
@@ -277,23 +290,40 @@ def api_new_movie():
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
         return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
 
-    ret = {'error':False}
+    ret = {'error': False}
 
-    # This is where the movie_id is assigned
-    ret[ MOVIE_ID ] = odb.create_new_movie(user_id=user_id,
-                                           course_id=user['primary_course_id'],
-                                           title=request.values.get('title'),
-                                           description=request.values.get('description') )
+    research_use = 1 if get('research_use') == '1' else 0
+    credit_by_name = 1 if get('credit_by_name') == '1' else 0
+    attribution_name = (request.values.get('attribution_name') or '').strip() or None
+    if credit_by_name == 0:
+        attribution_name = None
 
-    # Get the object name and create the upload URL
-    oname= make_object_name( course_id = odb.course_id_for_movie_id( ret[ MOVIE_ID ]),
-                                        movie_id = ret[ MOVIE_ID ],
-                                        ext=C.MOVIE_EXTENSION)
-    movie_data_urn        = make_urn( object_name = oname)
-    odb.set_movie_data_urn(movie_id=ret[ MOVIE_ID ], movie_data_urn=movie_data_urn)
-    ret['presigned_post'] = make_presigned_post(urn=movie_data_urn,
-                                                          mime_type='video/mp4',
-                                                          sha256=movie_data_sha256)
+    ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
+                                         course_id=user['primary_course_id'],
+                                         title=request.values.get('title'),
+                                         description=request.values.get('description'),
+                                         research_use=research_use,
+                                         credit_by_name=credit_by_name,
+                                         attribution_name=attribution_name)
+
+    oname = make_object_name(course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
+                             movie_id=ret[MOVIE_ID],
+                             ext=C.MOVIE_EXTENSION)
+    movie_data_urn = make_urn(object_name=oname)
+    odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
+    # When Lambda is configured, upload to staging prefix so lambda-resize moves to final key.
+    # When not (e.g. local/test), upload directly to final key so get_movie_data() finds the object.
+    if os.environ.get("LAMBDA_RESIZE_ARN"):
+        upload_urn = make_urn(object_name=UPLOAD_STAGING_PREFIX + oname)
+    else:
+        upload_urn = movie_data_urn
+    ret['presigned_post'] = make_presigned_post(
+        urn=upload_urn,
+        mime_type='video/mp4',
+        sha256=movie_data_sha256,
+        research_use=str(research_use),
+        credit_by_name=str(credit_by_name),
+        attribution_name=attribution_name or '')
     return ret
 
 @api_bp.route('/get-movie-data', methods=GET_POST)
@@ -606,15 +636,18 @@ def api_ver():
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():
-    """Return DynamoDB and S3 CORS check results as JSON (no auth required)."""
+    """Return DynamoDB, S3 CORS, and S3 bucket region check results as JSON (no auth required)."""
     origin = f"{request.scheme}://{request.host}"
     d_ok, d_msg = config_check.check_dynamodb()
     c_ok, c_msg = config_check.check_s3_cors(origin)
+    r_ok, r_msg = config_check.check_s3_bucket_region()
     return jsonify({
         'dynamodb_ok': d_ok,
         'dynamodb_message': d_msg,
         'cors_ok': c_ok,
         'cors_message': c_msg,
+        'bucket_region_ok': r_ok,
+        'bucket_region_message': r_msg,
     })
 
 

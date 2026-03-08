@@ -104,6 +104,31 @@ function check_upload_metadata()
     $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
 }
 
+function sync_attribution_ui() {
+    if ($('#research-use-checkbox').get(0) === undefined) {
+        return;
+    }
+    const researchChecked = $('#research-use-checkbox').prop('checked');
+    if (researchChecked) {
+        $('#attribution-group').show();
+        $('#attribution-name-group').show();
+        const creditChecked = $('#credit-by-name-checkbox').prop('checked');
+        const nameInput = $('#attribution-name');
+        if (creditChecked) {
+            nameInput.prop('disabled', false);
+            nameInput.attr('placeholder', '');
+        } else {
+            nameInput.prop('disabled', true);
+            nameInput.attr('placeholder', 'In the text');
+        }
+    } else {
+        $('#attribution-group').hide();
+        $('#attribution-name-group').hide();
+        $('#credit-by-name-checkbox').prop('checked', false);
+        $('#attribution-name').val('').prop('disabled', true).attr('placeholder', 'In the text');
+    }
+}
+
 // This is an async function, which uses async functions.
 // You get the results with
 //        var sha256 = await computeSHA256(file);
@@ -135,16 +160,19 @@ function first_frame_url(movie_id)
  *
  * Presigned post is provided by the /api/new-movie call (see below)
  */
-async function upload_movie_post(movie_title, description, movieFile)
+async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name)
 {
     // Get a new movie_id
     const movie_data_sha256 = await computeSHA256(movieFile);
-    let formData = new FormData();
-    formData.append("api_key",     api_key);   // on the upload form
+    const formData = new FormData();
+    formData.append("api_key",     api_key);
     formData.append("title",       movie_title);
     formData.append("description", description);
     formData.append("movie_data_sha256",  movie_data_sha256);
     formData.append("movie_data_length",  movieFile.size);
+    formData.append("research_use", research_use ? "1" : "0");
+    formData.append("credit_by_name", credit_by_name ? "1" : "0");
+    formData.append("attribution_name", attribution_name || "");
     const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
     const obj = await r.json();
     console.log('new-movie obj=',obj);
@@ -155,27 +183,32 @@ async function upload_movie_post(movie_title, description, movieFile)
     const movie_id = window.movie_id = obj.movie_id;
 
     // The new movie_id came with the presigned post to upload the form data.
+    // pp.fields includes signed x-amz-meta-* so metadata is set on the S3 object.
     try {
         const pp = obj.presigned_post;
-        const formData = new FormData();
+        const s3FormData = new FormData();
         for (const field in pp.fields) {
-            formData.append(field, pp.fields[field]);
+            s3FormData.append(field, pp.fields[field]);
         }
-        formData.append("file", movieFile); // order matters!
+        s3FormData.append("file", movieFile); // order matters!
 
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
         const r = await fetch(pp.url, {
             method: "POST",
-            body: formData,
+            body: s3FormData,
+            signal: ctrl.signal,
         });
         if (!r.ok) {
             $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             return;
         }
-    } catch(e) {
-        $('#upload_message').html(`Timeout uploading movie -- timeout is currently ${UPLOAD_TIMEOUT_SECONDS} seconds`);
-        console.log("error: ",e);
+    } catch (e) {
+        const msg = (e.name === 'AbortError')
+            ? `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`
+            : `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
+        $('#upload_message').html(msg);
+        console.log("error: ", e);
         return;
     }
     // Movie was uploaded! Clear the form and show the first frame
@@ -184,6 +217,10 @@ async function upload_movie_post(movie_title, description, movieFile)
     $('#movie-title').val('');
     $('#movie-description').val('');
     $('#movie-file').val('');
+    $('#research-use-checkbox').prop('checked', false);
+    $('#credit-by-name-checkbox').prop('checked', false);
+    $('#attribution-name').val('');
+    sync_attribution_ui();
 
     const track_movie = `/analyze?movie_id=${movie_id}`;
     $('#uploaded_movie_title').text(movie_title);
@@ -204,6 +241,9 @@ function upload_movie()
     const description = $('#movie-description').val();
     const movieFileInput = $('#movie-file');
     const movieFile = movieFileInput.prop('files')[0];
+    const research_use = $('#research-use-checkbox').prop('checked');
+    const credit_by_name = $('#credit-by-name-checkbox').prop('checked');
+    const attribution_name = research_use && credit_by_name ? ($('#attribution-name').val() || '').trim() : '';
 
     if (movie_title.length < 3) {
         $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -226,7 +266,7 @@ function upload_movie()
     }
     $('#upload_message').html(`Uploading movie ...`);
 
-    upload_movie_post(movie_title, description, movieFile);
+    upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name);
 }
 
 async function get_movie_metadata(movie_id){
@@ -282,6 +322,7 @@ function purge_movie() {
 
 function upload_ready_function() {
     check_upload_metadata();    // disable the upload button
+    sync_attribution_ui();      // show/hide attribution fields based on research checkbox
 }
 
 ////////////////////////////////////////////////////////////////
@@ -698,6 +739,7 @@ window.helpers = {
 window.list_ready_function = list_ready_function;
 window.upload_ready_function = upload_ready_function;
 window.check_upload_metadata = check_upload_metadata;
+window.sync_attribution_ui = sync_attribution_ui;
 // Expose handlers used by onclick in list.html and upload.html (must be on window for inline handlers)
 window.upload_movie = upload_movie;
 window.purge_movie = purge_movie;

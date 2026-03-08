@@ -80,7 +80,6 @@ def cmd_ssh_clean(config_path: str) -> None:
     _stack, _region, hostname, _ = load_sam_config(config_path)
     if not hostname:
         return
-    print(f"Removing old SSH host key for {hostname}...", flush=True)
     result = subprocess.run(
         ["ssh-keygen", "-R", hostname],
         capture_output=True,
@@ -88,7 +87,11 @@ def cmd_ssh_clean(config_path: str) -> None:
         check=False,
     )
     if result.returncode != 0 and "not found" not in (result.stderr or "").lower():
+        print("No previous key in .ssh/known_hosts:")
         print(result.stderr or result.stdout, file=sys.stderr, end="")
+    print(f"Removed old SSH host key for {hostname}...", flush=True)
+    print("")
+    print(f"Access with ssh ubuntu@{hostname}")
 
 
 def _get_instance_id(config_path: str) -> tuple[str, str]:
