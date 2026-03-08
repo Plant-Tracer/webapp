@@ -21,7 +21,7 @@ Globals:
     Environment:
       Variables:
         LOG_LEVEL: !Ref LogLevel
-        TABLE_PREFIX: !Ref HostLabel
+        TABLE_PREFIX: !Ref AWS::StackName
 
 Parameters:
   HostedZoneId:
@@ -33,11 +33,6 @@ Parameters:
     Type: String
     Description: "base domain in which the hostnames are created"
     Default: "planttracer.com"
-
-  HostLabel:
-    Type: String
-    Description: "Hostname label only (e.g., 'demo' -> demo.planttracer.com)."
-    AllowedPattern: "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$"
 
   WildcardCertificateArn:
     Type: String
@@ -195,7 +190,7 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "${HostLabel}.${BaseDomain}."
+      Name: !Sub "${AWS::StackName}.${BaseDomain}."
       Type: A
       TTL: 30
       ResourceRecords:
@@ -206,7 +201,7 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "${HostLabel}-demo.${BaseDomain}."
+      Name: !Sub "${AWS::StackName}-demo.${BaseDomain}."
       Type: A
       TTL: 30
       ResourceRecords:
@@ -248,13 +243,13 @@ Resources:
               mkdir -p /etc/environment.d
               touch /etc/environment.d/10-planttracer.conf
               echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
-              echo "HOSTNAME=\"${HostLabel}\""                 >> /etc/environment.d/10-planttracer.conf
+              echo "HOSTNAME=\"${AWS::StackName}\""           >> /etc/environment.d/10-planttracer.conf
               echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
               echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
               echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
               echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
               echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
-              echo "DYNAMODB_TABLE_PREFIX=\"${HostLabel}-\""   >> /etc/environment.d/10-planttracer.conf
+              echo "DYNAMODB_TABLE_PREFIX=\"${AWS::StackName}-\"" >> /etc/environment.d/10-planttracer.conf
               echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
               echo "LAMBDA_RESIZE_ARN=\"${LambdaResizeArn}\""   >> /etc/environment.d/10-planttracer.conf
               # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
@@ -291,7 +286,7 @@ Resources:
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-users"
+      TableName: !Sub "${AWS::StackName}-users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: user_id
@@ -312,7 +307,7 @@ Resources:
   UniqueEmailsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-unique_emails"
+      TableName: !Sub "${AWS::StackName}-unique_emails"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: email
@@ -324,7 +319,7 @@ Resources:
   ApiKeysTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-api_keys"
+      TableName: !Sub "${AWS::StackName}-api_keys"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: api_key
@@ -345,7 +340,7 @@ Resources:
   CoursesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-courses"
+      TableName: !Sub "${AWS::StackName}-courses"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -366,7 +361,7 @@ Resources:
   CourseUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-course_users"
+      TableName: !Sub "${AWS::StackName}-course_users"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: course_id
@@ -382,7 +377,7 @@ Resources:
   MoviesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-movies"
+      TableName: !Sub "${AWS::StackName}-movies"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -411,7 +406,7 @@ Resources:
   MovieFramesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-movie_frames"
+      TableName: !Sub "${AWS::StackName}-movie_frames"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: movie_id
@@ -427,7 +422,7 @@ Resources:
   LogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${HostLabel}-logs"
+      TableName: !Sub "${AWS::StackName}-logs"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: log_id
@@ -476,7 +471,7 @@ Resources:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
       Domain:
-        DomainName: !Sub "${HostLabel}-lambda.${BaseDomain}"
+        DomainName: !Sub "${AWS::StackName}-lambda.${BaseDomain}"
         CertificateArn: !Ref WildcardCertificateArn
         Route53:
           HostedZoneId: !Ref HostedZoneId
@@ -512,8 +507,8 @@ Resources:
                   - dynamodb:BatchWriteItem
                   - dynamodb:DescribeTable
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*/index/*"
               - Effect: Allow
                 Action: ["dynamodb:ListTables"]
                 Resource: ["*"]
@@ -585,8 +580,8 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*"
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HostLabel}*/index/*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*/index/*"
 
   LambdaFunction:
     Type: AWS::Serverless::Function
@@ -605,7 +600,7 @@ Resources:
       MemorySize: 256
       Environment:
         Variables:
-          DYNAMODB_TABLE_PREFIX: !Ref HostLabel
+          DYNAMODB_TABLE_PREFIX: !Ref AWS::StackName
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
       Events:
         AnyRoot:
@@ -645,10 +640,10 @@ Outputs:
     Value: !Ref InstanceEip
   VmDnsName:
     Description: DNS name for the EC2 VM
-    Value: !Sub "${HostLabel}.${BaseDomain}"
+    Value: !Sub "${AWS::StackName}.${BaseDomain}"
   LambdaDnsName:
     Description: DNS name for the Lambda HTTP API custom domain
-    Value: !Sub "${HostLabel}-lambda.${BaseDomain}"
+    Value: !Sub "${AWS::StackName}-lambda.${BaseDomain}"
   LambdaFunction:
     Description: PlantTracer Lambda function name
     Value: !Ref LambdaFunction
