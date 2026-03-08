@@ -56,6 +56,20 @@ BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
 
+## Validate project and install Poetry FIRST. If pyproject.toml is invalid or poetry
+## version is incompatible, we exit here and never touch nginx/certbot/service.
+## This prevents a broken app (e.g. 203/EXEC) when the project config is invalid.
+sudo apt-get update
+sudo apt-get install -y python3-pip pipx
+pipx ensurepath
+export PATH="$HOME/.local/bin:$PATH"
+sudo apt-get remove --purge -y poetry || true
+pipx install poetry --force || pipx upgrade poetry
+poetry --version
+echo "Validating pyproject.toml and generating lock file..."
+poetry check || { echo "FATAL: poetry check failed (invalid pyproject.toml or incompatible Poetry version). Fix the project or upgrade Poetry."; exit 1; }
+poetry lock || { echo "FATAL: poetry lock failed. Fix pyproject.toml and dependencies."; exit 1; }
+
 ## Install nginx and the TLS certificate
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
@@ -82,21 +96,29 @@ fi
 # Patch nginx
 # main domain - port 5000
 # demo domain - port 5100
+# Target "server_name" so we match the default server block (server_name _;) and replace
+# the default location with our proxy. --count 4 removes the 4 lines after server_name
+# (location / { try_files } }) so the server block's closing } is kept.
 DEFAULT=/etc/nginx/sites-available/default
 echo adding $HOSTNAME.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME.$DOMAIN \
-     --flag planttracer-nginx-patch --count 8
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch 'server_name' \
+     --flag planttracer-nginx-patch --count 4
 
 echo Creating $ROOT/etc/planttracer-nginx-patch.5100
 /bin/rm -f $ROOT/etc/planttracer-nginx-patch.5100
 sed s/5000/5100/ $ROOT/etc/planttracer-nginx-patch > $ROOT/etc/planttracer-nginx-patch.5100
 echo adding $HOSTNAME-demo.$DOMAIN to $DEFAULT
-sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch $HOSTNAME-demo.$DOMAIN \
-     --flag planttracer-nginx-patch.5100 --count 8
+sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch.5100 "$HOSTNAME-demo.$DOMAIN" \
+     --flag planttracer-nginx-patch.5100 --count 4
 
-if ! /usr/sbin/nginx -t; then
+# Run nginx -t with sudo (avoids "user" directive warning) and filter that warning from output
+nginx_test_out=$(sudo /usr/sbin/nginx -t 2>&1)
+nginx_exit=$?
+echo "$nginx_test_out" | grep -v 'the "user" directive' 1>&2 || true
+if [ "$nginx_exit" -ne 0 ]; then
     echo "CRITICAL: patcher.py broke the nginx config!"
     sudo mv /etc/nginx/sites-available/default.old /etc/nginx/sites-available/default
+    exit 1
 fi
 
 sudo systemctl reload nginx
@@ -105,28 +127,7 @@ sudo cp $ROOT/etc/planttracer.service /etc/systemd/system/planttracer.service
 sudo systemctl daemon-reload
 
 
-## First we install a functioning release and make sure that we can test it
-## Note that the test will be done with the live Lambda database and S3
-## and not with DynamoDBLocal
-
-sudo apt-get update
-sudo apt-get install -y python3-pip pipx
-pipx ensurepath
-export PATH="$HOME/.local/bin:$PATH"
-
-## Remove system poetry if present
-sudo apt-get remove --purge -y poetry || true
-
-## Install Poetry and ensure it is >= 1.8.0
-# We use the absolute path to ensure the script doesn't rely on the current PATH
-pipx install poetry --force || pipx upgrade poetry
-
-## Verify Poetry version (should be 1.8.x or higher)
-poetry --version
-
-## Ensure lock file matches pyproject.toml (e.g. after git pull)
-poetry lock
-
+## Create venv and install app deps (pyproject.toml and lock already validated above).
 make install-ubuntu
 
 ## Ensure venv has all deps (Make may skip poetry install if .venv exists; re-run so second bootstrap or git pull leaves venv in sync)
