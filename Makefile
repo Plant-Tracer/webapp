@@ -437,6 +437,8 @@ check-iam:
 
 
 sam-build: $(REQ)
+	poetry check
+	poetry lock
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint

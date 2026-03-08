@@ -56,24 +56,28 @@ BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
 fi
 
-## Install and upgrade Poetry with the poetry-plugin-exporter
+## Install pipx
 sudo apt-get update
 sudo apt-get install -y python3-pip pipx
 pipx ensurepath
 export PATH="$HOME/.local/bin:$PATH"
+
+## Remove system poetry and install poetry through pipx
 sudo apt-get remove --purge -y poetry || true
 pipx install poetry --force || pipx upgrade poetry
 poetry --version
 poetry self add poetry-plugin-export
 
-## Validatre and lock the file
-echo "Validating pyproject.toml and generating lock file..."
-poetry check || { echo "FATAL: poetry check failed (invalid pyproject.toml or incompatible Poetry version). Fix the project or upgrade Poetry."; exit 1; }
-poetry lock || { echo "FATAL: poetry lock failed. Fix pyproject.toml and dependencies."; exit 1; }
-
 ## Install nginx and the TLS certificate
 sudo hostnamectl set-hostname "$HOSTNAME.$DOMAIN"
 sudo apt -y install nginx
+
+## Restore NGINX distribution configuration if we are runnng the second time
+DEFAULT=/etc/nginx/sites-available/default
+if [ -r $DEFAULT.dist ]; then
+   sudo cp $DEFAULT.dist $DEFAULT
+fi
+sudo cp -f $DEFAULT $DEFAULT.dist
 
 ## Install certbot
 sudo snap install core; sudo snap refresh core
@@ -94,13 +98,13 @@ if [ ! -d /etc/letsencrypt/renewal/$HOSTNAME.$DOMAIN ]; then
          --email plantadmin@planttracer.com --no-eff-email --agree-tos
 fi
 
+
 # Patch nginx
 # main domain - port 5000
 # demo domain - port 5100
 # Target "server_name" so we match the default server block (server_name _;) and replace
 # the default location with our proxy. --count 4 removes the 4 lines after server_name
 # (location / { try_files } }) so the server block's closing } is kept.
-DEFAULT=/etc/nginx/sites-available/default
 echo adding $HOSTNAME.$DOMAIN to $DEFAULT
 sudo python3 $ROOT/etc/patcher.py $DEFAULT $ROOT/etc/planttracer-nginx-patch 'server_name' \
      --flag planttracer-nginx-patch --count 4
