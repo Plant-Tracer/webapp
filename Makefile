@@ -477,8 +477,10 @@ SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 
 sam-delete:
+	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
+	sleep 10
 	@echo "Deleting stack: $(STACK_NAME)..."
-	sam delete --stack-name $(STACK_NAME)
+	sam delete --stack-name $(STACK_NAME) --no-prompts
 	@echo "Waiting for deletion to complete..."
 	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
 	@echo "Stack $(STACK_NAME) deleted successfully."

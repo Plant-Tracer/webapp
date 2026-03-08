@@ -186,11 +186,18 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
     // pp.fields includes signed x-amz-meta-* so metadata is set on the S3 object.
     try {
         const pp = obj.presigned_post;
+        // #region agent log
+        const fieldOrder = Object.keys(pp.fields);
+        console.log("[DEBUG]", JSON.stringify({hypothesisId:"H2_H3_H4_H5",location:"planttracer.js:presigned_post",message:"S3 POST params",data:{urlHost:pp.url ? new URL(pp.url).host : null,fieldOrder,fieldCount:fieldOrder.length,fileType:movieFile && movieFile.type,fileName:movieFile && movieFile.name,fileSize:movieFile && movieFile.size},timestamp:Date.now()}));
+        // #endregion
         const s3FormData = new FormData();
         for (const field in pp.fields) {
             s3FormData.append(field, pp.fields[field]);
         }
         s3FormData.append("file", movieFile); // order matters!
+        // #region agent log
+        console.log("[DEBUG]", JSON.stringify({hypothesisId:"H1",location:"planttracer.js:form_built",message:"Form built file last",data:{fieldOrder,fileIsLast:true},timestamp:Date.now()}));
+        // #endregion
 
         const ctrl = new AbortController();    // timeout
         setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS*1000);
@@ -199,11 +206,17 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
             body: s3FormData,
             signal: ctrl.signal,
         });
+        // #region agent log
+        console.log("[DEBUG]", JSON.stringify({hypothesisId:"H3",location:"planttracer.js:after_fetch",message:"S3 response",data:{ok:r.ok,status:r.status,statusText:r.statusText,redirected:r.redirected,url:r.url},timestamp:Date.now()}));
+        // #endregion
         if (!r.ok) {
             $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             return;
         }
     } catch (e) {
+        // #region agent log
+        console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
+        // #endregion
         const msg = (e.name === 'AbortError')
             ? `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`
             : `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
