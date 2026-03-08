@@ -14,6 +14,7 @@ import urllib.parse
 import hashlib
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from .constants import C
@@ -29,16 +30,30 @@ logger = logging.getLogger(__name__)
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
 
-def s3_client():
+def s3_client(region_name=None, endpoint_url=None):
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
+    if region_name is None:
+        region_name = os.environ.get(C.AWS_REGION, None)
+    if endpoint_url is None:
+        endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
 
-    region_name = os.environ.get(C.AWS_REGION, None)
-    endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
+    logger.info("s3_client region=%s endpoint_url=%s ", region_name, endpoint_url)
 
-    logger.info("s3_client region=%s endpoint_url=%s ",region_name,endpoint_url)
+    return boto3.Session().client('s3', region_name=region_name, endpoint_url=endpoint_url)
 
-    return boto3.Session().client( 's3', region_name = region_name, endpoint_url=endpoint_url)
+
+def _get_bucket_region(bucket):
+    """Return the bucket's region (e.g. 'us-east-1'). Skips when using local S3."""
+    if os.environ.get(C.AWS_REGION) == "local":
+        return None
+    if os.environ.get(C.AWS_ENDPOINT_URL_S3):
+        return None
+    try:
+        loc = s3_client().get_bucket_location(Bucket=bucket)
+        return (loc.get("LocationConstraint") or "").strip() or "us-east-1"
+    except ClientError:
+        return None
 
 CORS_CONFIGURATION = {
     'CORSRules': [{
@@ -99,11 +114,25 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
                         research_use='0', credit_by_name='0', attribution_name=''):
     """Returns a dictionary with 'url' and 'fields'.
     research_use, credit_by_name, attribution_name are included in the signature and set as S3 object metadata.
+    Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
+    reset in the browser when POST body is not re-sent on redirect).
     """
     logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
                  urn, maxsize, mime_type, sha256, expires)
     o = urllib.parse.urlparse(urn)
     if o.scheme == C.SCHEME_S3:
+        bucket = o.netloc
+        region = _get_bucket_region(bucket)
+        if region:
+            endpoint_url = f"https://s3.{region}.amazonaws.com"
+            client = boto3.Session().client(
+                's3',
+                region_name=region,
+                endpoint_url=endpoint_url,
+                config=Config(s3={'addressing_style': 'virtual'})
+            )
+        else:
+            client = s3_client()
         meta_research = 'x-amz-meta-research-use'
         meta_credit = 'x-amz-meta-credit-by-name'
         meta_attribution = 'x-amz-meta-attribution-name'
@@ -121,8 +150,8 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
             {meta_credit: credit_by_name},
             {meta_attribution: attribution_safe},
         ]
-        return s3_client().generate_presigned_post(
-            Bucket=o.netloc,
+        return client.generate_presigned_post(
+            Bucket=bucket,
             Key=o.path[1:],
             Conditions=conditions,
             Fields=fields,
