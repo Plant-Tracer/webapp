@@ -588,7 +588,8 @@ Resources:
     Metadata:
       BuildMethod: python3.12
       BuildProperties:
-        RequirementsFile: ../requirements.txt
+        # Must be inside CodeUri so --use-container mount can see it.
+        RequirementsFile: requirements.txt
     Properties:
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.12
