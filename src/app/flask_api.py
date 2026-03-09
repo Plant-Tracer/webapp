@@ -347,6 +347,22 @@ def api_get_movie_data():
                                   zipfile = get('format')=='zip',
                                   get_urn = True)
 
+    if not data_urn:
+        return make_response(
+            jsonify({"error": True, "message": "Movie not ready (no URN)."}),
+            503,
+        )
+    if not object_exists(data_urn):
+        resp = make_response(
+            jsonify({
+                "error": True,
+                "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
+            }),
+            503,
+        )
+        resp.headers["Retry-After"] = "5"
+        return resp
+
     # This is used for testing redirect response in the test program
     if get_bool('redirect_inline'):
         return "#REDIRECT " + data_urn
@@ -433,7 +449,19 @@ def api_get_frame():
         urn = None
 
     if urn is None:
-        # the frame is not in the database, so we need to make it.
+        # the frame is not in the database, so we need to make it from the movie.
+        # If movie object is not at final key yet (Lambda still processing), return 503 so client can retry.
+        movie_data = get_movie_data(movie_id=movie_id)
+        if movie_data is None:
+            resp = make_response(
+                jsonify({
+                    "error": True,
+                    "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
+                }),
+                503,
+            )
+            resp.headers["Retry-After"] = "5"
+            return resp
         logger.debug('getframe 5')
         try:
             frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)

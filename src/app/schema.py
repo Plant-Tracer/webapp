@@ -127,7 +127,8 @@ class Movie(BaseModel):
 def fix_movie_prop_value(prop, value):
     if value is None:
         return None
-    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name"]:
+    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name",
+                "date_uploaded", "total_bytes", "total_frames", "width", "height"]:
         return int(value)
     if prop in ["fps"]:
         return str(value)

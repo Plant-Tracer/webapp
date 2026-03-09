@@ -454,6 +454,7 @@ endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	$(MAKE) sam-status
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -471,10 +472,29 @@ endif
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
-
+	$(MAKE) sam-status
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+
+# After deploy: verify Lambda status URL returns 200
+sam-status:
+	@echo "Checking Lambda status..."
+	@sleep 5; \
+	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
+	URL="https://$$DNS/status"; \
+	RESP=$$(curl -sf "$$URL" 2>/dev/null) || RESP=""; \
+	if echo "$$RESP" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda status: operational ($$URL)"; \
+	else \
+	  echo "Lambda status: FAIL or unreachable ($$URL)"; echo "  response: $$RESP"; exit 1; \
+	fi
+
+# Tail Lambda CloudWatch logs (requires STACK_NAME from samconfig)
+sam-logs:
+	@FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+	echo "Tailing /aws/lambda/$$FUNC ..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --since 15m --follow
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

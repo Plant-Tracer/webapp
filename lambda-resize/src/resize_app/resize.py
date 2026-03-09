@@ -38,6 +38,9 @@ __version__ = "0.1.0"
 # Must match s3_presigned.UPLOAD_STAGING_PREFIX in main app
 UPLOAD_STAGING_PREFIX = "uploads/"
 
+# Special log_id for status ping; status API reads this to confirm Lambda received a set-status upload
+LOG_ID_STATUS_PING = "lambda-status-ping"
+
 ################################################################
 ## S3 upload processing: move from staging to final key, update DynamoDB, set MP4 metadata
 ################################################################
@@ -59,7 +62,7 @@ def _comment_from_metadata(meta: Dict[str, str]) -> str:
     return research_credit(attribution)
 
 
-def _process_upload_record(bucket: str, key: str) -> None:  # pylint: disable=too-many-locals
+def _process_upload_record(bucket: str, key: str) -> None:  # pylint: disable=too-many-locals,too-many-statements
     """
     Process one S3 object in the staging prefix: validate, apply MP4 metadata if video,
     copy to final key, update DynamoDB, delete staging object, log.
@@ -78,6 +81,30 @@ def _process_upload_record(bucket: str, key: str) -> None:  # pylint: disable=to
     base, ext = os.path.splitext(filename)
     if not base or not ext:
         write_log(f"lambda-resize invalid filename: {key}", course_id=course_id)
+        return
+
+    # JSON upload with action "set-status": write first 64 chars of message to logs and return (bootstrap ping test)
+    if course_id == "_bootstrap" and ext.lower() == ".json":
+        s3 = _s3_client()
+        try:
+            body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+            payload = json.loads(body.decode("utf-8", "replace"))
+            if (payload.get("action") or "").strip().lower() == "set-status":
+                message = (payload.get("message") or "")[:64]
+                ddbo = DDBO()
+                ddbo.logs.put_item(
+                    Item={
+                        "log_id": LOG_ID_STATUS_PING,
+                        "time_t": int(time.time()),
+                        "message": message,
+                    }
+                )
+                s3.delete_object(Bucket=bucket, Key=key)
+                LOGGER.info("set-status processed key=%s message=%s", key, message)
+                return
+        except (json.JSONDecodeError, KeyError, Exception) as e:  # pylint: disable=broad-exception-caught
+            LOGGER.warning("_bootstrap JSON handling failed: %s %s", key, e)
+        # Not a valid set-status JSON; do not treat as movie
         return
 
     movie_id = base
@@ -289,6 +316,19 @@ def api_log():
     logs = odb.get_logs(user_id=None)
     return resp_json( 400, {"logs":logs})
 
+
+def api_status() -> Dict[str, Any]:
+    """Return 200 with status_message if a set-status upload was received (for bootstrap ping test)."""
+    try:
+        ddbo = DDBO()
+        r = ddbo.logs.get_item(Key={"log_id": LOG_ID_STATUS_PING})
+        item = r.get("Item")
+        status_message = (item.get("message") or "") if item else None
+        return resp_json(200, {"status": "ok", "status_message": status_message})
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.exception("api_status failed: %s", e)
+        return resp_json(500, {"status": "error", "message": str(e)})
+
 ################################################################
 ## main entry point from lambda system
 
@@ -307,8 +347,14 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
             match (method, path, action):
                 ################################################################
+                # Status (GET; for bootstrap ping test)
+                case ("GET", "/status", _):
+                    return api_status()
+                case ("GET", "/prod/status", _):
+                    return api_status()
+
+                ################################################################
                 # JSON API Actions
-                #
                 case (_, "/api/v1", "ping"):
                     return api_ping(event,context)
 

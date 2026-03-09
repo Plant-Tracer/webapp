@@ -153,6 +153,31 @@ function first_frame_url(movie_id)
 }
 
 /*
+ * Set image preview src and retry on error (503 = movie still processing). Retries up to 3 times, 5s apart.
+ */
+function setFirstFrameWithRetry(movie_id) {
+    const img = $('#image-preview').get(0);
+    if (!img) return;
+    let retries = 0;
+    const maxRetries = 3;
+    const delayMs = 5000;
+    function setSrc() {
+        img.src = first_frame_url(movie_id);
+    }
+    img.onerror = function () {
+        retries += 1;
+        if (retries < maxRetries) {
+            img.alt = 'Processing… retrying in ' + (delayMs / 1000) + 's (' + retries + '/' + maxRetries + ')';
+            setTimeout(setSrc, delayMs);
+        } else {
+            img.alt = 'First frame not ready. Try refreshing in a moment.';
+        }
+    };
+    img.alt = '';
+    setSrc();
+}
+
+/*
  *
  * Uploads a movie using a presigned post. See:
  * https://aws.amazon.com/blogs/compute/uploading-to-amazon-s3-directly-from-a-web-or-mobile-application/
@@ -260,7 +285,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
     const track_movie = `/analyze?movie_id=${movie_id}`;
     $('#uploaded_movie_title').text(movie_title);
     $('#movie_id').text(movie_id);
-    $('#image-preview').attr('src', first_frame_url(movie_id));
+    setFirstFrameWithRetry(movie_id);
     $('#track_movie_link').attr('href', track_movie);
 
     // Clear the movie uploaded
@@ -588,8 +613,10 @@ function list_movies_data( movies ) {
                 return `<input type='button' x-movie_id='${movie_id}' x-property='${prop}' value='${kind}' x-value='${nval}' onclick='action_button_clicked(this)'>`;
             }
 
-            // Get the metadata for the movie
-            const movieDate = new Date(m.date_uploaded * 1000);
+            // Get the metadata for the movie (date_uploaded is seconds; 0/null = not set yet / processing)
+            const dateSec = m.date_uploaded && Number(m.date_uploaded);
+            const movieDate = dateSec ? new Date(dateSec * 1000) : null;
+            const up_down   = movieDate ? movieDate.toLocaleString().replace(' ','<br>').replace(',','') : '—';
             const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
             let playt = '';
             let analyze_label = 'analyze';
@@ -599,15 +626,17 @@ function list_movies_data( movies ) {
             }
             const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
 
-            const up_down   = movieDate.toLocaleString().replace(' ','<br>').replace(',','');
-
             const you_class = (m.user_id == user_id) ? "you" : "";
+            const frameStr = (m.width != null && m.height != null) ? `${m.width} x ${m.height}` : '—';
+            const kbytesStr = (m.total_bytes != null && m.total_bytes > 0) ? Math.floor(m.total_bytes / 1000) : '—';
+            const fpsStr = (m.fps != null) ? m.fps : '—';
+            const framesStr = (m.total_frames != null) ? m.total_frames : '—';
 
             let rows = `<tr class='${you_class}'>` +
                 `<td class='${you_class}'> ${m.user_name} </td> <td> ${up_down} </td>` + // #1, #2, #3
                 make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
-                `<td> frame: ${m.width} x ${m.height} Kbytes: ${Math.floor(m.total_bytes/1000)} ` +
-                `<br> fps: ${m.fps} frames: ${m.total_frames} </td> `;  // #6
+                `<td> frame: ${frameStr} Kbytes: ${kbytesStr} ` +
+                `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
             rows += "<td> Status: "; // #7
             if (m.deleted) {
