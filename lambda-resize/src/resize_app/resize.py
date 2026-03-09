@@ -15,6 +15,7 @@ import tempfile
 import time
 import urllib.parse
 import uuid
+from decimal import Decimal
 from typing import Any, Dict, Tuple, Optional
 
 import boto3
@@ -194,6 +195,13 @@ def handle_s3_event(event: Dict[str, Any]) -> Dict[str, Any]:
 
 # jinja2
 
+def _json_serial(obj: Any) -> Any:
+    """Default for json.dumps: DynamoDB returns numbers as Decimal."""
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None ) -> Dict[str, Any]:
     """End HTTP event processing with a JSON object"""
     LOGGER.debug("resp_json(status=%s) body=%s", status, body)
@@ -204,7 +212,7 @@ def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, st
             "Access-Control-Allow-Origin": "*",
             **(headers or {}),
         },
-        "body": json.dumps(body),
+        "body": json.dumps(body, default=_json_serial),
     }
 
 

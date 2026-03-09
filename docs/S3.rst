@@ -3,7 +3,7 @@ S3 and Plant Tracer
 
 We **always deploy to an existing S3 bucket**; the bucket is not created by the stack. The bucket must **outlive the stack** because it is the long-term archive of all student-uploaded videos. Stacks and DynamoDB may be torn down or migrated; the bucket is the durable store. For this reason, all metadata that must survive (research-use, attribution) is stored **in the MP4 file** as well as in DynamoDB (see :doc:`MOVIE_METADATA`).
 
-The S3 → Lambda trigger for the ``uploads/`` prefix is configured **idempotently** by ``etc/bootstrap.sh`` (via ``etc/s3_upload_trigger.py``). If the trigger is already present, it is left unchanged.
+The Lambda that processes uploads is invoked via its HTTP API; we no longer rely on S3 → Lambda bucket notifications or a special ``uploads/`` prefix. The bucket name is provided to both the VM and the Lambda via environment variables, and both read/write objects under ``course_id/movie_id/...`` keys.
 
 Local Development and GitHub Actions
 ------------------------------------

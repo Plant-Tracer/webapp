@@ -22,14 +22,12 @@ Environment variables that you should know about/set:
 AWS SAM template that uses cloud formations to:
 - Create a new VM
 - Create the necessary DynamoDB tables all with the given prefix.
-- Lambda is triggered by S3 `ObjectCreated` on the `uploads/` prefix. The
-  **bucket is always an existing bucket** (it outlives the stack as the
-  long-term archive of student videos). The S3 → Lambda trigger is added
-  **idempotently** by the main app's ``etc/bootstrap.sh`` (via
-  ``etc/s3_upload_trigger.py``); if already present, it is left unchanged.
-  The Lambda moves the object to the final key, writes research/attribution
-  metadata into the MP4 file (so the object remains self-describing when the
-  database is gone), updates DynamoDB, and logs to the logs table.
+- The **bucket is always an existing bucket** (it outlives the stack as the
+  long-term archive of student videos). The Lambda is invoked via its HTTP
+  API; it can move uploaded objects to their final keys as needed, write
+  research/attribution metadata into the MP4 file (so the object remains
+  self-describing when the database is gone), update DynamoDB, and log to
+  the logs table.
 
 ## The created VM
 

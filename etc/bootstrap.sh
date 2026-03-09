@@ -163,27 +163,6 @@ if ! run_section 9 "S3 (CORS, Lambda trigger)"; then
   if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
     poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
   fi
-  if [ -n "${PLANTTRACER_S3_BUCKET:-}" ] && [ -n "${LAMBDA_RESIZE_ARN:-}" ]; then
-    poetry run python etc/s3_upload_trigger.py || true
-    # Lambda bootstrap ping test: upload JSON with set-status, wait 5s, curl status and verify message
-    PING_MSG="bootstrap-ping-$(date +%s)"
-    echo "Lambda bootstrap ping test: uploading set-status message=$PING_MSG"
-    printf '%s\n' "{\"action\":\"set-status\",\"message\":\"$PING_MSG\"}" > /tmp/bootstrap-ping.json
-    if aws s3 cp /tmp/bootstrap-ping.json "s3://${PLANTTRACER_S3_BUCKET}/uploads/_bootstrap/ping.json" 2>/dev/null; then
-      echo "Lambda bootstrap ping test: waiting 5s for Lambda to process..."
-      sleep 5
-      STATUS_URL="https://${HOSTNAME}-lambda.${DOMAIN}/status"
-      STATUS_RESP="$(curl -sf "$STATUS_URL" 2>/dev/null || true)"
-      if echo "$STATUS_RESP" | grep -qF "$PING_MSG"; then
-        echo "Lambda bootstrap ping test: OK (Lambda received set-status and status API returned message)"
-      else
-        echo "Lambda bootstrap ping test: FAIL (status URL=$STATUS_URL response did not contain message)"
-        echo "  response: $STATUS_RESP"
-      fi
-    else
-      echo "Lambda bootstrap ping test: SKIP (failed to upload ping JSON to S3)"
-    fi
-  fi
   end_section 9
 fi
 
