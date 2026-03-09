@@ -436,6 +436,19 @@ check-iam:
 	fi
 
 
+# Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
+install-lambda-deps: $(REQ)
+	poetry install --with lambda
+
+# lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
+lambda-resize-lint:
+	$(MAKE) -C lambda-resize vend-app
+	poetry run ruff check lambda-resize/src
+	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
+
+lambda-resize-check: lambda-resize-lint
+	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
 sam-build: $(REQ)
 	poetry check
 	poetry lock
@@ -476,25 +489,38 @@ endif
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+SAM_LOGS_LIMIT ?= 100
 
-# After deploy: verify Lambda status URL returns 200
+# After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 sam-status:
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
 	URL="https://$$DNS/status"; \
-	RESP=$$(curl -sf "$$URL" 2>/dev/null) || RESP=""; \
-	if echo "$$RESP" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
+	CODE=$$(echo "$$RESP" | tail -1); \
+	BODY=$$(echo "$$RESP" | sed '$$d'); \
+	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 	  echo "Lambda status: operational ($$URL)"; \
 	else \
-	  echo "Lambda status: FAIL or unreachable ($$URL)"; echo "  response: $$RESP"; exit 1; \
+	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; exit 1; \
 	fi
 
-# Tail Lambda CloudWatch logs (requires STACK_NAME from samconfig)
+# Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 sam-logs:
 	@FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
-	echo "Tailing /aws/lambda/$$FUNC ..."; \
-	aws logs tail "/aws/lambda/$$FUNC" --since 15m --follow
+	if [ -z "$$FUNC" ]; then \
+	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	fi; \
+	if [ -z "$$FUNC" ]; then \
+	  for NESTED in $$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text 2>/dev/null); do \
+	    FUNC=$$(aws cloudformation describe-stack-resources --stack-name "$$NESTED" --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	    [ -n "$$FUNC" ] && break; \
+	  done; \
+	fi; \
+	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
+	echo "Last $(SAM_LOGS_LIMIT) log events for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --limit $(SAM_LOGS_LIMIT) --output text
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
