@@ -521,6 +521,8 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                   - s3:ListBucket
+                  - s3:GetBucketNotification
+                  - s3:PutBucketNotification
                   - s3:GetBucketNotificationConfiguration
                   - s3:PutBucketNotificationConfiguration
                 Resource:

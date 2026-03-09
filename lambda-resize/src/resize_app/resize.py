@@ -304,6 +304,35 @@ def write_log(message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=
         item["ipaddr"] = ipaddr
     ddbo.logs.put_item(Item=item)
 
+
+def _get_recent_logs(limit: int = 5) -> Dict[str, Any]:
+    """
+    Fetch recent log entries from the DynamoDB logs table, sorted by time_t descending.
+    This scans the table and sorts client-side; acceptable for small log volumes and status checks.
+    """
+    ddbo = DDBO()
+    items: list[Dict[str, Any]] = []
+    last_evaluated_key = None
+    scan_kwargs: Dict[str, Any] = {
+        "ProjectionExpression": "log_id, time_t, message, course_id, user_id, ipaddr",
+    }
+
+    while True:
+        if last_evaluated_key:
+            scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+        elif "ExclusiveStartKey" in scan_kwargs:
+            del scan_kwargs["ExclusiveStartKey"]
+        response = ddbo.logs.scan(**scan_kwargs)
+        items.extend(response.get("Items") or [])
+        last_evaluated_key = response.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            break
+
+    items.sort(key=lambda x: x.get("time_t", 0), reverse=True)
+    return {
+        "items": items[:limit],
+    }
+
 def api_ping(event, context):
     write_log('ping')
     return resp_json( 200,
@@ -318,13 +347,29 @@ def api_log():
 
 
 def api_status() -> Dict[str, Any]:
-    """Return 200 with status_message if a set-status upload was received (for bootstrap ping test)."""
+    """Return overall status plus recent DynamoDB log entries (for bootstrap and S3 watcher debug)."""
     try:
+        now = time.time()
+        status_version = time.strftime("%H%M%S", time.gmtime(now))
+
+        # Record this status check in both CloudWatch Logs and DynamoDB logs.
+        LOGGER.info("status check version=%s", status_version)
+        write_log(f"lambda-status version={status_version}", time_t=now)
+
         ddbo = DDBO()
         r = ddbo.logs.get_item(Key={"log_id": LOG_ID_STATUS_PING})
         item = r.get("Item")
         status_message = (item.get("message") or "") if item else None
-        return resp_json(200, {"status": "ok", "status_message": status_message})
+        recent = _get_recent_logs(limit=5)
+        return resp_json(
+            200,
+            {
+                "status": "ok",
+                "status_message": status_message,
+                "status_version": status_version,
+                "recent_logs": recent.get("items", []),
+            },
+        )
     except Exception as e:  # pylint: disable=broad-exception-caught
         LOGGER.exception("api_status failed: %s", e)
         return resp_json(500, {"status": "error", "message": str(e)})

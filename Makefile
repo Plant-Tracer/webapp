@@ -492,6 +492,8 @@ endif
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 SAM_LOGS_LIMIT ?= 100
+# Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
+SAM_LOGS_MINUTES ?= 15
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 sam-status:
@@ -502,11 +504,19 @@ sam-status:
 	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
 	CODE=$$(echo "$$RESP" | tail -1); \
 	BODY=$$(echo "$$RESP" | sed '$$d'); \
+	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
+	OK=1; \
 	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 	  echo "Lambda status: operational ($$URL)"; \
 	else \
-	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; exit 1; \
-	fi
+	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
+	  OK=0; \
+	fi; \
+	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
+	echo ""; \
+	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
+	if [ "$$OK" -ne 1 ]; then exit 1; fi
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 sam-logs:
@@ -521,8 +531,9 @@ sam-logs:
 	  done; \
 	fi; \
 	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
-	echo "Last $(SAM_LOGS_LIMIT) log events for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --limit $(SAM_LOGS_LIMIT) --output text
+	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000; \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
