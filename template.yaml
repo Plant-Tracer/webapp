@@ -624,7 +624,6 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
-      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
 
 Outputs:
   ApiId:
