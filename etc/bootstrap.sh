@@ -158,8 +158,8 @@ if ! run_section 8 "demos (dbutil --create_demos)"; then
   end_section 8
 fi
 
-# --- Section 9: S3 (CORS presigned, Lambda trigger) ---
-if ! run_section 9 "S3 (CORS, Lambda trigger)"; then
+# --- Section 9: S3 (CORS) ---
+if ! run_section 9 "S3 (CORS)"; then
   if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
     poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
   fi

@@ -273,9 +273,9 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
     :return: dict['movie_id'] - The movie_id that is allocated
-             dict['presigned_post'] - the post to use for uploading the movie (staging prefix uploads/).
-             lambda-resize moves the object to the final key and updates DynamoDB; the client may need to
-             poll or wait briefly before the movie is available at movie_data_urn.
+             dict['presigned_post'] - the post to use for uploading the movie (staging prefix when
+             LAMBDA_RESIZE_ARN is set; Phase 2 will upload directly to final key).
+             The client may need to poll or wait briefly before the movie is available at movie_data_urn.
     """
     # pylint: disable=unsupported-membership-test
     logger.info("api_new_movie")
@@ -313,8 +313,8 @@ def api_new_movie():
                              ext=C.MOVIE_EXTENSION)
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-    # When Lambda is configured, upload to staging prefix so lambda-resize moves to final key.
-    # When not (e.g. local/test), upload directly to final key so get_movie_data() finds the object.
+    # When Lambda is configured, upload to staging prefix so lambda-resize could move to final key
+    # (Phase 1: S3 events removed; Phase 2 will upload directly to final key and invoke Lambda via HTTP).
     if os.environ.get("LAMBDA_RESIZE_ARN"):
         upload_urn = make_urn(object_name=UPLOAD_STAGING_PREFIX + oname)
     else:

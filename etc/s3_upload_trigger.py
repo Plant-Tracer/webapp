@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: S3 → Lambda trigger for uploads/ has been removed (Phase 1). Lambda is
+invoked via HTTP API only. This script is no longer run from bootstrap.sh.
 Idempotently add S3 bucket notification so that objects created under prefix
 uploads/ invoke the lambda-resize Lambda. If the trigger is already present,
-leave the bucket notification unchanged. Intended to be run from bootstrap.sh.
-Uses boto3 (no extra deps beyond the app).
+leave the bucket notification unchanged. Uses boto3 (no extra deps beyond the app).
 """
 import os
 import sys

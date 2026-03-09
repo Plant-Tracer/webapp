@@ -266,7 +266,7 @@ Resources:
               install -d -m 0755 /opt/
               git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
 
-              # Bucket ${ImageBucketName} must already exist (long-term archive); bootstrap adds S3->Lambda trigger idempotently
+              # Bucket ${ImageBucketName} must already exist (long-term archive); bootstrap configures CORS only
               export PATH=$PATH:/snap/bin
 
               echo Set permissions and run bootstrap

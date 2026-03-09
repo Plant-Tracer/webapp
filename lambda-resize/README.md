@@ -34,8 +34,7 @@ AWS SAM template that uses cloud formations to:
 ## The Created Lambda Function
 
 Core functionality:
-- Watches AWS S3. When a movie is uploaded:
-  - Process (see below)
+- Invoked via HTTP API. When processing is requested (e.g. after upload), can process (see below).
 - Accepts resize requests with an S3 URL
   - Process
 - Process an AWS URL:
