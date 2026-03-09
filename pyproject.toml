@@ -118,6 +118,10 @@ disable = [
 max-args = 10
 max-public-methods = 20
 
+[tool.pylint.typecheck]
+# av is a C extension used by lambda-resize; allow it so E0401 is not raised.
+extension-pkg-allow-list = ["av"]
+
 [tool.pyright]
 pythonVersion = "3.12"
 venvPath = "./"
