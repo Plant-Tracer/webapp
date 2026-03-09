@@ -226,10 +226,12 @@ class DDBO:
             if 'FLASK_ENV' in os.environ:
                 raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
             table_prefix = ''
+        # Ensure one trailing dash so table names are prefix-base (e.g. simson2 -> simson2-api_keys)
+        self.table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
+        table_prefix = self.table_prefix
 
         # Set up the tables
         logger.info("table_prefix=%s",table_prefix)
-        self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )

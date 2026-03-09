@@ -451,6 +451,7 @@ lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 sam-build: $(REQ)
+	$(MAKE) -C lambda-resize vend-app
 	poetry check
 	poetry lock
 	printenv | grep AWS
