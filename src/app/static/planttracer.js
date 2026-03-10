@@ -154,38 +154,6 @@ function first_frame_url(movie_id)
 }
 
 /*
- * Set image preview src and retry on error (503 = movie still processing).
- * Phase 2: poll every 250ms, up to 10 attempts (~2.5s). On error we clear the
- * image src and show a text message so the page never shows a broken image icon.
- */
-function setFirstFrameWithRetry(movie_id) {
-    const img = $('#image-preview').get(0);
-    const statusEl = $('#image-preview-status');
-    if (!img) return;
-    let retries = 0;
-    const maxRetries = 10;
-    const delayMs = 250;
-    statusEl.hide().text('');
-    function setSrc() {
-        img.src = first_frame_url(movie_id);
-    }
-    img.onload = function () {
-        statusEl.hide().text('');
-    };
-    img.onerror = function () {
-        img.src = '';
-        retries += 1;
-        if (retries < maxRetries) {
-            statusEl.text('Processing… retrying in ' + (delayMs / 1000) + 's (' + retries + '/' + maxRetries + ')').show();
-            setTimeout(setSrc, delayMs);
-        } else {
-            statusEl.text('First frame not ready. There may be a problem with the processing service. Try refreshing in a moment.').show();
-        }
-    };
-    setSrc();
-}
-
-/*
  * Check Lambda status (GET LAMBDA_API_BASE + 'status'). Resolves with true if ok, false otherwise.
  * If LAMBDA_API_BASE is not set, resolves with true (skip check).
  */
