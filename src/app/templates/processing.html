@@ -35,8 +35,6 @@
     const formData = new FormData();
     formData.append('api_key', api_key || '');
     formData.append('movie_id', movie_id);
-    formData.append('frame_start', '0');
-    formData.append('frame_count', '0');
     fetch(`${API_BASE}api/get-movie-metadata`, { method: 'POST', body: formData })
       .then((r) => r.json())
       .then((resp) => {

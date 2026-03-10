@@ -470,6 +470,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins: ['*']
         AllowMethods: ['GET','POST','OPTIONS']
+        AllowHeaders: ['Content-Type']
       Domain:
         DomainName: !Sub "${AWS::StackName}-lambda.${BaseDomain}"
         CertificateArn: !Ref WildcardCertificateArn
