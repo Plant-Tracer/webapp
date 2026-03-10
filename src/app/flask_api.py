@@ -388,7 +388,9 @@ def api_get_frame_jpeg(*, movie_id, frame_number):
     """
     movie_data = get_movie_data(movie_id=movie_id)
     if movie_data is None:
-        raise odb.InvalidFrameAccess()
+        # No movie bytes yet (e.g. upload not fully processed) – treat as invalid frame
+        # access for this path so callers see a 400/503-style error, not a 500.
+        raise ValueError("no movie data for movie_id")
 
     return tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
 
