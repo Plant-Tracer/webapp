@@ -329,27 +329,9 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
         console.log("error: ", e);
         return;
     }
-    // Movie was uploaded! Clear the form and show the first frame
-
-    $('#upload_message').text('Movie uploaded.');
-    $('#movie-title').val('');
-    $('#movie-description').val('');
-    $('#movie-file').val('');
-    $('#research-use-checkbox').prop('checked', false);
-    $('#credit-by-name-checkbox').prop('checked', false);
-    $('#attribution-name').val('');
-    sync_attribution_ui();
-
-    const track_movie = `/analyze?movie_id=${movie_id}`;
-    $('#uploaded_movie_title').text(movie_title);
-    $('#movie_id').text(movie_id);
-    setFirstFrameWithRetry(movie_id);
-    $('#track_movie_link').attr('href', track_movie);
-
-    // Clear the movie uploaded
-    $('#upload-preview').show();
-    $('#upload-form').hide();
-    check_upload_metadata(); // disable the button
+    // Movie was uploaded! Redirect to processing page for this movie so the user
+    // sees clear processing status and can safely reload.
+    window.location = `/processing?movie_id=${movie_id}`;
 }
 
 /* Finally the function that is called when the upload_movie button is clicked */

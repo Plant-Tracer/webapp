@@ -350,6 +350,15 @@ def func_upload():
     apikey.add_cookie(response)
     return response
 
+@app.route('/processing', methods=GET)
+def func_processing():
+    """Show processing status for a specific movie_id (not linked from menus)."""
+    response = make_response(render_template('processing.html',
+                                         **page_dict('Processing',
+                                                     require_auth=True)))
+    apikey.add_cookie(response)
+    return response
+
 ################################################################
 ## debug/demo
 

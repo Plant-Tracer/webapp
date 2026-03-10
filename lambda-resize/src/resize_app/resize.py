@@ -375,6 +375,19 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                     return api_status()
 
                 ################################################################
+                # CORS preflight (OPTIONS)
+                case ("OPTIONS", "/api/v1", _):
+                    # Let browsers know JSON POSTs are allowed from any origin.
+                    return resp_json(
+                        204,
+                        {},
+                        headers={
+                            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type",
+                        },
+                    )
+
+                ################################################################
                 # JSON API Actions
                 case (_, "/api/v1", "ping"):
                     return api_ping(event,context)

@@ -69,7 +69,7 @@ def rotate_video_av(data: bytes, steps: int) -> bytes:
 
 
 def video_frames_to_zip_av(data: bytes, jpeg_quality: int = 60) -> bytes:
-    """Extract every video frame as JPEG into a zip. Returns zip file bytes."""
+    """Extract every video frame as (downscaled) JPEG into a zip. Returns zip file bytes."""
     inp = av.open(io.BytesIO(data))
     vstreams = [s for s in inp.streams if s.type == "video"]
     if not vstreams:
@@ -80,6 +80,10 @@ def video_frames_to_zip_av(data: bytes, jpeg_quality: int = 60) -> bytes:
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for frame_index, frame in enumerate(inp.decode(video=0)):
             img = frame.to_image()
+            # Downscale to a reasonable analysis size (roughly VGA) to keep zips small.
+            target_wh = (640, 480)
+            if img.size[0] > target_wh[0] or img.size[1] > target_wh[1]:
+                img.thumbnail(target_wh, Image.Resampling.LANCZOS)
             jpeg_io = io.BytesIO()
             img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
             jpeg_io.seek(0)

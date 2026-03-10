@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block body %}
+
+<h1>Processing Movie</h1>
+
+<p id="processing_movie_id"></p>
+<p id="processing_status">Checking processing status…</p>
+<p id="processing_hint">This page will update automatically; you can also reload it safely.</p>
+
+<p id="processing_analyze" style="display:none;">
+  <a id="processing_analyze_link" href="#">Processing complete – go to Analyze.</a>
+</p>
+
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
+
+  const params = new URLSearchParams(window.location.search);
+  const movie_id = params.get('movie_id');
+  const statusEl = $('#processing_status');
+  const idEl = $('#processing_movie_id');
+  const analyzeBlock = $('#processing_analyze');
+  const analyzeLink = $('#processing_analyze_link');
+
+  if (!movie_id) {
+    statusEl.text('No movie_id provided.');
+  } else {
+    idEl.text(`Movie ID: ${movie_id}`);
+    const analyzeUrl = `/analyze?movie_id=${movie_id}`;
+    analyzeLink.attr('href', analyzeUrl);
+  }
+
+  function pollStatus() {
+    if (!movie_id) return;
+    const formData = new FormData();
+    formData.append('api_key', api_key || '');
+    formData.append('movie_id', movie_id);
+    formData.append('frame_start', '0');
+    formData.append('frame_count', '0');
+    fetch(`${API_BASE}api/get-movie-metadata`, { method: 'POST', body: formData })
+      .then((r) => r.json())
+      .then((resp) => {
+        if (resp.error) {
+          statusEl.text(`Error: ${resp.message || 'unknown error'}`);
+          return;
+        }
+        const meta = resp.metadata || {};
+        const proc = meta.processing_state || '';
+        const hasZip = !!meta.movie_zipfile_url;
+        if (hasZip) {
+          statusEl.text(proc ? `Processing state: ${proc}` : 'Processing complete.');
+          analyzeBlock.show();
+        } else {
+          statusEl.text(proc ? `Processing state: ${proc} (zip not ready yet)…` : 'Processing… (zip not ready yet)…');
+          setTimeout(pollStatus, 2000);
+        }
+      })
+      .catch((e) => {
+        console.warn('processing poll failed', e);
+        statusEl.text('Error checking status. Retrying…');
+        setTimeout(pollStatus, 5000);
+      });
+  }
+
+  $(document).ready(function () {
+    pollStatus();
+  });
+</script>
+
+{% endblock %}
+

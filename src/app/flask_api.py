@@ -379,19 +379,18 @@ def set_movie_metadata(*,user_id=odb.ROOT_USER_ID, set_movie_id,movie_metadata):
 # Gets a single frame. Use cookie or API_KEY authenticaiton.
 # Note that you can also get single frames with a signed URL from get-movie-metadata
 #
-def api_get_frame_jpeg(*,movie_id, frame_number):
-    """Returns the JPEG for a given frame, or raises InvalidFrameAccess().
-    If we have to extract the frame, write it to the database
-    Used by get-frame below. Assumes that we have already verified access to the frame
+def api_get_frame_jpeg(*, movie_id, frame_number):
+    """Return a single frame as JPEG, or raise InvalidFrameAccess().
+
+    This path is performance-sensitive for large movies and MUST NOT recompute full
+    movie metadata (fps, width, height, total_frames, etc.) on each call. Full
+    metadata is computed and persisted via get-movie-metadata.
     """
-    movie_data = get_movie_data(movie_id = movie_id)
+    movie_data = get_movie_data(movie_id=movie_id)
     if movie_data is None:
         raise odb.InvalidFrameAccess()
 
-    ret = tracker.extract_frame(movie_data = movie_data, frame_number = frame_number, fmt = 'jpeg')
-    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-    set_movie_metadata(set_movie_id=movie_id, movie_metadata=movie_metadata)
-    return ret
+    return tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
 
 def api_get_frame_urn(*,frame_number,movie_id):
     """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
