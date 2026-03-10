@@ -25,6 +25,7 @@
   const idEl = $('#processing_movie_id');
   const actionsBlock = $('#processing_actions');
   const analyzeButton = $('#processing_analyze_button');
+  let buildZipStarted = false;
 
   if (!movie_id) {
     statusEl.text('No movie_id provided.');
@@ -60,6 +61,18 @@
         if (total > 0) {
           const pct = Math.floor((current / total) * 100);
           progressStr = ` – frames ${current}/${total} (${pct}%)`;
+        }
+
+        if (!hasZip && !buildZipStarted && typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+          buildZipStarted = true;
+          // Fire-and-forget request to Lambda to build the zip (no rotation).
+          fetch(LAMBDA_API_BASE + 'api/v1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'rotate-and-zip', movie_id, rotation_steps: 0 }),
+          }).catch((e) => {
+            console.warn('build-zip trigger failed', e);
+          });
         }
 
         if (hasZip) {

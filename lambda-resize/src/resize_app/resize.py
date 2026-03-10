@@ -190,23 +190,34 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
         LOGGER.warning("rotate_and_zip get_object failed: %s %s %s", bucket, key, e)
         return resp_json(503, {"error": True, "message": "failed to download movie from S3"})
 
-    try:
-        rotated = rotate_video_av(data, steps)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        LOGGER.exception("rotate_video_av failed: %s", e)
-        return resp_json(500, {"error": True, "message": "rotation failed"})
+    # If steps == 0, skip rotation and keep original bytes; otherwise rotate and overwrite movie.
+    if steps > 0:
+        try:
+            rotated = rotate_video_av(data, steps)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            LOGGER.exception("rotate_video_av failed: %s", e)
+            return resp_json(500, {"error": True, "message": "rotation failed"})
 
-    try:
-        s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
-        return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
+        try:
+            s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
+            return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
 
-    ddbo.update_table(
-        ddbo.movies,
-        movie_id,
-        {TOTAL_BYTES: len(rotated), "processing_state": "processing"},
-    )
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {TOTAL_BYTES: len(rotated), "processing_state": "processing"},
+        )
+        movie_bytes_for_zip = rotated
+    else:
+        # No rotation requested; use original bytes but still build zip.
+        movie_bytes_for_zip = data
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {"processing_state": "processing"},
+        )
 
     def _zip_progress(current: int, total: int) -> None:
         """Best-effort progress updates in DynamoDB; safe to fail silently."""
@@ -231,7 +242,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
             LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
 
     try:
-        zip_bytes = video_frames_to_zip_av(rotated, progress_cb=_zip_progress)
+        zip_bytes = video_frames_to_zip_av(movie_bytes_for_zip, progress_cb=_zip_progress)
     except Exception as e:  # pylint: disable=broad-exception-caught
         LOGGER.exception("video_frames_to_zip_av failed: %s", e)
         return resp_json(500, {"error": True, "message": "zip build failed"})

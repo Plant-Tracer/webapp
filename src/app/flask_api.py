@@ -817,6 +817,9 @@ class MovieTrackCallback:
     def done(self):
         logger.debug("DONE. Set TRACKING_COMPLETED")
         odb.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
+        # Also mark overall processing_state so the movie list reflects tracking completion.
+        ddbo = DDBO()
+        ddbo.update_table(ddbo.movies, self.movie_id, {"processing_state": "tracked"})
         if self.zipfile_name:
             logger.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
             os.unlink(self.zipfile_name)
@@ -895,6 +898,9 @@ def api_track_movie_queue():
         raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
 
     logger.debug("calling api_track_movie")
+    # Mark movie as actively tracking so the list/status reflects this state.
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, {"processing_state": "tracking"})
     api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
     logger.debug("return from api_track_movie")
     return jsonify({'error': False, 'message':'Tracking is completed'})

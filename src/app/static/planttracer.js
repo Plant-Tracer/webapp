@@ -680,10 +680,15 @@ function list_movies_data( movies ) {
                 `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
             rows += "<td> Status: "; // #7
-            // Phase 3: show processing_state (uploading, processing, ready, etc.)
-            const procState = m.processing_state || '';
-            if (procState) {
-                rows += `<span class='processing-state'>${procState}</span> `;
+            // Prefer tracking status when available; otherwise fall back to processing_state.
+            let statusLabel = '';
+            if (m.status) {
+                statusLabel = (m.status === 'TRACKING COMPLETED') ? 'tracked' : 'tracking';
+            } else if (m.processing_state) {
+                statusLabel = m.processing_state;
+            }
+            if (statusLabel) {
+                rows += `<span class='processing-state'>${statusLabel}</span> `;
             }
             if (m.deleted) {
                 rows += "<i>Deleted</i>";
