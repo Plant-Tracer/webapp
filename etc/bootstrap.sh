@@ -64,6 +64,12 @@ tail /var/log/user-data.log
 BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
   fi
+
+  touch $HOME/.bash_history
+  echo "tail -f /var/log/user-data.log" >> $HOME/.bash_history
+  echo "journalctl -u planttracer | cat " >> $HOME/.bash_history
+
+
   end_section 1
 fi
 
@@ -186,5 +192,6 @@ if ! run_section 11 "start planttracer service"; then
   sudo systemctl enable planttracer.service
   end_section 11
 fi
+
 
 echo "Bootstrap complete. Web server at https://$HOSTNAME.$DOMAIN and https://$HOSTNAME-demo.$DOMAIN"
