@@ -55,6 +55,11 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
+        // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
+        this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
+            ? movie_metadata.last_frame_tracked : -1;
+        this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
+            ? movie_metadata.total_frames : 0;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -92,7 +97,10 @@ class TracerController extends MovieController {
         this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
-        if (this.last_tracked_frame > 0 ){
+        // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
+        const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
+            this.last_tracked_frame >= this.total_frames - 1;
+        if (fullyTraced) {
             this.track_button.val( RETRACK_MOVIE );
             this.download_button.show();
         }
@@ -333,6 +341,22 @@ class TracerController extends MovieController {
         this.create_marker_table();
     }
 
+    /** Highest frame index the user may navigate to (last frame with trackpoints; 0 if none traced yet). */
+    getMaxViewableFrame() {
+        if (!this.frames || this.frames.length === 0) return 0;
+        if (this.last_tracked_frame < 0) return 0;
+        return Math.min(this.last_tracked_frame, this.frames.length - 1);
+    }
+
+    goto_frame(frame) {
+        const maxViewable = this.getMaxViewableFrame();
+        frame = parseInt(frame, 10);
+        if (!Number.isNaN(frame) && frame > maxViewable) {
+            frame = maxViewable;
+        }
+        super.goto_frame(frame);
+    }
+
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
@@ -341,6 +365,7 @@ class TracerController extends MovieController {
             return;
         }
         this.rotate_button.prop(DISABLED,false);
+        this.max_frame_index = this.getMaxViewableFrame();
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
