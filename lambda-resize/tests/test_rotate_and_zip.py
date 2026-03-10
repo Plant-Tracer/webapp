@@ -27,9 +27,15 @@ class _FakeS3:
         self.put_calls.append(kwargs)
 
 
+class _FakeLogs:
+    def put_item(self, **kwargs):  # pylint: disable=unused-argument
+        pass
+
+
 class _FakeDDBO:
     def __init__(self):
         self.movies = object()
+        self.logs = _FakeLogs()
         self.get_movie_calls = []
         self.update_calls = []
 
@@ -118,6 +124,9 @@ def test_rotate_and_zip_zero_steps_builds_zip_without_rotation(monkeypatch, fake
         "movie_zipfile_urn" in attrs for (_mid, attrs) in ddbo.update_calls
     ), "movie_zipfile_urn was not recorded in DDB for zero-rotation zip"
 
+    # Zip must be built with progress callback (proper zip path).
+    assert zip_args.get("progress_cb_is_none") is False, "zip should be built with progress_cb"
+
 
 def test_rotate_and_zip_one_step_rotates_and_builds_zip(monkeypatch, fake_env):
     """rotation_steps=1 should rotate and then build/upload a zip from the rotated bytes."""
@@ -167,4 +176,33 @@ def test_rotate_and_zip_one_step_rotates_and_builds_zip(monkeypatch, fake_env):
     assert any(
         "movie_zipfile_urn" in attrs for (_mid, attrs) in ddbo.update_calls
     ), "movie_zipfile_urn was not recorded in DDB for rotated zip"
+
+    # Zip must be built with progress callback (proper zip path).
+    assert zip_args.get("progress_cb_is_none") is False, "zip should be built with progress_cb"
+
+
+def test_zip_is_created_and_uploaded_with_expected_content(monkeypatch, fake_env):
+    """Regardless of rotation, a zip is created from the correct source and uploaded to S3."""
+    ddbo, s3 = fake_env
+    zip_body = b"fake-zip-content"
+
+    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5):
+        return zip_body
+
+    monkeypatch.setattr(resize, "video_frames_to_zip_av", fake_video_frames_to_zip_av)
+
+    payload = {
+        "movie_id": "m0000000-0000-0000-0000-000000000000",
+        "rotation_steps": 0,
+    }
+    resp = resize.api_rotate_and_zip(payload)
+
+    body = _decode_resp_body(resp)
+    assert body.get("error") is False
+
+    # Zip must have been uploaded with the exact bytes returned by video_frames_to_zip_av.
+    zip_puts = [c for c in s3.put_calls if c.get("ContentType") == "application/zip"]
+    assert len(zip_puts) == 1, "exactly one zip put_object expected"
+    assert zip_puts[0].get("Body") == zip_body
+    assert "movie_zipfile_urn" in str(ddbo.update_calls), "movie_zipfile_urn must be set in DDB"
 

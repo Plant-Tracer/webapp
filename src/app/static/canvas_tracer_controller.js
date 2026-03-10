@@ -452,8 +452,10 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((_name, i) => {
-        movie_frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
-                     'markers':metadata_frames[i].markers };
+        // When zip exists but no tracking has been done, metadata_frames may be empty or sparse.
+        const frameData = metadata_frames && metadata_frames[i];
+        const markers = (frameData && frameData.markers) ? frameData.markers : [...DEFAULT_MARKERS];
+        movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
@@ -474,8 +476,10 @@ function graph_data(cc, frames) {
     const frame_labels = [];
     const x_values_mm = [];
     const y_values_mm = [];
-    const x_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').x;
-    const y_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').y;
+    const firstMarkers = (frames[0] && frames[0].markers) || [];
+    const apex0 = firstMarkers.find(marker => marker.label === 'Apex');
+    const x_apex_0 = (apex0 && apex0.x != null) ? apex0.x : 0;
+    const y_apex_0 = (apex0 && apex0.y != null) ? apex0.y : 0;
     let pos_units = "pixels";
     let time_units = "frames";
 
@@ -484,8 +488,9 @@ function graph_data(cc, frames) {
     }
 
     frames.forEach((frame) => {
-        const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
-        const calculations = calc_scale(frame.markers);
+        const markers = frame.markers || [];
+        const apexMarker = markers.find(marker => marker.label === 'Apex');
+        const calculations = calc_scale(markers);
         const scale = calculations.scale;
         pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
 

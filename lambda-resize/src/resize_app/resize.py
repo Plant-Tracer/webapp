@@ -165,7 +165,8 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         steps = int(payload.get("rotation_steps", 1))
     except (TypeError, ValueError):
         steps = 1
-    steps = max(1, min(3, steps))
+    # Allow 0 = zip-only (no rotation); 1–3 = rotate then zip.
+    steps = max(0, min(3, steps))
 
     ddbo = DDBO()
     try:
