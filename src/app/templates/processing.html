@@ -10,7 +10,10 @@
 
 <p id="processing_actions" style="display:none;">
   <button id="processing_analyze_button" type="button">Analyze</button>
-  <button id="processing_list_button" type="button">List movies</button>
+</p>
+
+<p>
+  <a href="/list">List movies</a>
 </p>
 
 <script type="module">
@@ -22,7 +25,6 @@
   const idEl = $('#processing_movie_id');
   const actionsBlock = $('#processing_actions');
   const analyzeButton = $('#processing_analyze_button');
-  const listButton = $('#processing_list_button');
 
   if (!movie_id) {
     statusEl.text('No movie_id provided.');
@@ -31,9 +33,6 @@
     const analyzeUrl = `/analyze?movie_id=${movie_id}`;
     analyzeButton.click(() => {
       window.location.href = analyzeUrl;
-    });
-    listButton.click(() => {
-      window.location.href = '/list';
     });
   }
 
