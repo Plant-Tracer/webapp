@@ -623,8 +623,9 @@ function graph_data(cc, frames) {
 }
 
 /* Main function called when HTML page loads.
- * Gets metadata for the movie and all traced frames
- * Note - This assumes that we either have no frames or the zipfile with all frames. That's not a good assumption
+ * Gets metadata for the movie and all traced frames.
+ * If the zip is not ready yet (e.g. still building after rotate), we show the first frame and poll
+ * for the zip; when it appears we load it in the background so the user can keep placing markers.
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
@@ -649,8 +650,11 @@ function trace_movie(div_controller, movie_id, api_key) {
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
+            $('#firsth2').html('Waiting for processing to complete…');
             const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
+            // Zip may be building in background (e.g. after rotate). Poll until it appears or 60s.
+            poll_for_zip_and_load(div_controller, movie_id, api_key, 60);
             return;
         }
         if (demo_mode) {
@@ -660,6 +664,36 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
+}
+
+const ZIP_POLL_INTERVAL_MS = 2000;
+
+function poll_for_zip_and_load(div_controller, movie_id, api_key, max_seconds) {
+    const deadline = Date.now() + max_seconds * 1000;
+    const params = { api_key: api_key, movie_id: movie_id, frame_start: 0, frame_count: MAX_FRAMES };
+    function poll() {
+        if (Date.now() > deadline) {
+            $('#firsth2').html('Processing did not complete in time. Please come back later.');
+            return;
+        }
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
+            if (resp.error || !resp.metadata) {
+                setTimeout(poll, ZIP_POLL_INTERVAL_MS);
+                return;
+            }
+            if (resp.metadata.movie_zipfile_url) {
+                if (demo_mode) {
+                    $('#firsth2').html(`Movie is traced!</a>`);
+                } else {
+                    $('#firsth2').html(`Movie is traced! Check for errors and retrace as necessary.</a>`);
+                }
+                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+                return;
+            }
+            setTimeout(poll, ZIP_POLL_INTERVAL_MS);
+        });
+    }
+    setTimeout(poll, ZIP_POLL_INTERVAL_MS);
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };

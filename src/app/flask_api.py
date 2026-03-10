@@ -13,6 +13,7 @@ import base64
 import io
 import csv
 import os
+import threading
 import zipfile
 from collections import defaultdict
 from zipfile import ZipFile
@@ -35,7 +36,6 @@ from .s3_presigned import (
     make_signed_url,
     make_presigned_post,
     object_exists,
-    UPLOAD_STAGING_PREFIX,
 )
 from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
 
@@ -273,9 +273,8 @@ def api_new_movie():
     :param description: The movie's description
     :param movie_data_sha256: The movie's SHA256. The movie itself is uploaded with a presigned post that is reqturned.
     :return: dict['movie_id'] - The movie_id that is allocated
-             dict['presigned_post'] - the post to use for uploading the movie (staging prefix when
-             LAMBDA_RESIZE_ARN is set; Phase 2 will upload directly to final key).
-             The client may need to poll or wait briefly before the movie is available at movie_data_urn.
+             dict['presigned_post'] - the post to use for uploading the movie to the final S3 key.
+             After upload the client calls Lambda start-processing; then the movie is available at movie_data_urn.
     """
     # pylint: disable=unsupported-membership-test
     logger.info("api_new_movie")
@@ -313,12 +312,8 @@ def api_new_movie():
                              ext=C.MOVIE_EXTENSION)
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-    # When Lambda is configured, upload to staging prefix so lambda-resize could move to final key
-    # (Phase 1: S3 events removed; Phase 2 will upload directly to final key and invoke Lambda via HTTP).
-    if os.environ.get("LAMBDA_RESIZE_ARN"):
-        upload_urn = make_urn(object_name=UPLOAD_STAGING_PREFIX + oname)
-    else:
-        upload_urn = movie_data_urn
+    # Phase 2: always upload to final key; client calls Lambda start-processing after upload
+    upload_urn = movie_data_urn
     ret['presigned_post'] = make_presigned_post(
         urn=upload_urn,
         mime_type='video/mp4',
@@ -479,32 +474,96 @@ def api_get_frame():
 ################################################################
 ## Movie editing
 
+def _build_movie_zip_sync(movie_id, user_id):
+    """Extract all frames from the current movie to a zip, upload to storage, set movie_zipfile_urn.
+    Used after rotation so the analyze page can load the zip when ready (e.g. while user places markers).
+    """
+    path = None
+    zip_path = None
+    try:
+        movie_data = get_movie_data(movie_id=movie_id)
+        with tempfile.NamedTemporaryFile(suffix='.mp4', mode='wb', delete=False) as infile:
+            infile.write(movie_data)
+            infile.flush()
+            path = infile.name
+        zip_path = tempfile.mktemp(suffix='.zip')
+        with ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+            def zip_callback(*, frame_number, frame_data, frame_trackpoints):  # pylint: disable=unused-argument
+                jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+                zf.writestr(f"frame_{frame_number:04d}.jpg", jpeg)
+            dummy_trackpoints = [{'x': 0, 'y': 0, 'label': 'dummy', 'frame_number': 0}]
+            tracker.track_movie(moviefile_input=path, input_trackpoints=dummy_trackpoints, callback=zip_callback)
+        with open(zip_path, 'rb') as f:
+            zip_data = f.read()
+        oname = make_object_name(
+            course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id, ext=C.ZIP_MOVIE_EXTENSION
+        )
+        urn = make_urn(object_name=oname)
+        write_object(urn=urn, object_data=zip_data)
+        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn', value=urn)
+        logger.info("_build_movie_zip_sync done movie_id=%s", movie_id)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("_build_movie_zip_sync failed movie_id=%s", movie_id)
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
+        if zip_path and os.path.exists(zip_path):
+            os.unlink(zip_path)
+
+
 @api_bp.route('/edit-movie', methods=POST)
 def api_edit_movie():
-    """ edit a movie
+    """Edit a movie (rotate and optionally build zip).
+
     :param api_key: user authentication
-    :param movie_id: the id of the movie to delete
-    :param action: what to do. Must be one of 'rotate90cw'
+    :param movie_id: the movie to edit
+    :param action: must be 'rotate90cw'
+    :param rotation_steps: optional 1–3; total 90° rotations to apply. If omitted, 1 is used.
+        The client debounces multiple rotate clicks and sends one request with the total steps.
+        After rotating, a zip of all frames is built in the background so the analyze page can use it.
 
-    Note that set_movie_data() automatically updates the movie version number
-
+    set_movie_data() updates the movie version number. Zip creation runs in a background thread.
     """
     movie_id = get_movie_id()
-    user_id  = get_user_id(allow_demo=False)
+    user_id = get_user_id(allow_demo=False)
     odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
     action = get("action")
-    if action=='rotate90cw':
-        with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_input:
-            with tempfile.NamedTemporaryFile(suffix='.mp4') as movie_output:
-                movie_input.write( get_movie_data( movie_id = movie_id))
-                tracker.rotate_movie(movie_input.name, movie_output.name, transpose=1)
-                movie_output.seek(0)
-                movie_data = movie_output.read()
-                set_movie_data(movie_id=movie_id, movie_data=movie_data)
-                return {'error': False}
-    else:
+    if action != 'rotate90cw':
         return E.INVALID_EDIT_ACTION
+
+    steps = get_int('rotation_steps')
+    if steps is None:
+        steps = 1
+    steps = max(1, min(3, int(steps)))
+
+    movie_data = get_movie_data(movie_id=movie_id)
+    for _ in range(steps):
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as movie_input:
+            movie_input.write(movie_data)
+            movie_input.flush()
+            in_path = movie_input.name
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as movie_output:
+                out_path = movie_output.name
+            try:
+                tracker.rotate_movie(in_path, out_path, transpose=1)
+                with open(out_path, 'rb') as f:
+                    movie_data = f.read()
+            finally:
+                if os.path.exists(out_path):
+                    os.unlink(out_path)
+        finally:
+            if os.path.exists(in_path):
+                os.unlink(in_path)
+
+    set_movie_data(movie_id=movie_id, movie_data=movie_data)
+
+    # Build zip in background so the analyze page can use it when ready (e.g. while user places markers)
+    thread = threading.Thread(target=_build_movie_zip_sync, args=(movie_id, user_id), daemon=True)
+    thread.start()
+
+    return {'error': False}
 
 
 @api_bp.route('/delete-movie', methods=POST)

@@ -173,15 +173,24 @@ def test_api_edit_movie(new_movie, client):
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[VERSION] == 1  # because it was not updated
 
-    ### This one should be successful
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action' : 'rotate90cw'}
+    ### This one should be successful (rotation_steps omitted => 1 step)
+    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw'}
     resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is False,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 2,f"{movie}"  # because it was edited
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie[VERSION] == 2, f"{movie}"  # because it was edited
+
+    ### rotation_steps=2: two 90° rotations in one request
+    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw', 'rotation_steps': '2'}
+    resp = client.post('/api/edit-movie', data=data)
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie[VERSION] == 3, f"{movie}"
 
     # Now test the user access
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie_metadata=%s movie_metadata2=%s",movie_metadata,movie_metadata2)
-    # Make sure that the version number incremented
-    assert movie_metadata['version'] +1 == movie_metadata2['version'],f"{movie_metadata} / {movie_metadata2}"
+    logger.debug("movie_metadata=%s movie_metadata2=%s", movie_metadata, movie_metadata2)
+    # We did two edits (one rotate, one rotate with rotation_steps=2)
+    assert movie_metadata['version'] + 2 == movie_metadata2['version'], (
+        f"{movie_metadata} / {movie_metadata2}"
+    )

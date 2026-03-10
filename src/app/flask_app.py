@@ -331,6 +331,8 @@ def func_users():
 # These are the two links that might have an ?apikey=; if we got that, set the cookie
 @app.route('/list', methods=GET)
 def func_list():
+    # NOTE: This page should eventually be re-architected around server-side rendering
+    # with Jinja2; for now it relies on the existing JSON APIs and client-side rendering.
     response = make_response(render_template('list.html',
                                              **page_dict('List Movies',
                                                          require_auth=True)))

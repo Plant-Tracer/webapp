@@ -12,13 +12,18 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, Tuple, Optional
 
+import boto3
+
 from .common import LOGGER
+from .rotate_zip import rotate_video_av, video_frames_to_zip_av
 from .src.app import odb
-from .src.app.odb import DDBO
+from .src.app.constants import C
+from .src.app.odb import DDBO, DATE_UPLOADED, MOVIE_DATA_URN, TOTAL_BYTES
 
 __version__ = "0.1.0"
 
@@ -99,6 +104,136 @@ def api_resize(event, context, payload)  -> Dict[str, Any]:
     start = time.time()
     end = time.time()
     return resp_json(200, {'start':start, 'end':end})
+
+
+def _s3_client():
+    return boto3.client("s3", region_name=os.environ.get("AWS_REGION"))
+
+
+def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Called after the client uploads the movie to the final S3 key. Verify the object
+    exists, then set date_uploaded, total_bytes, and processing_state so the VM can
+    serve get-movie-data and get-frame. Phase 2: no first-frame or zip in Lambda yet.
+    """
+    movie_id = (payload.get("movie_id") or "").strip()
+    if not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "movie_id missing or invalid"})
+    ddbo = DDBO()
+    try:
+        movie = ddbo.get_movie(movie_id)
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(400, {"error": True, "message": "movie has no movie_data_urn"})
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    s3 = _s3_client()
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("start_processing head_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "object not found in S3; upload may not have completed"})
+    size = head.get("ContentLength", 0)
+    now = int(time.time())
+    ddbo.update_table(
+        ddbo.movies,
+        movie_id,
+        {
+            DATE_UPLOADED: now,
+            TOTAL_BYTES: size,
+            "processing_state": "ready",
+        },
+    )
+    write_log(f"start_processing movie_id={movie_id} size={size}", course_id=movie.get("course_id"))
+    LOGGER.info("start_processing movie_id=%s size=%s", movie_id, size)
+    return resp_json(200, {"error": False, "started": True, "movie_id": movie_id})
+
+
+def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Rotate movie by N×90° (N=1..3) and build frame zip. Uses PyAV + Pillow only (no ffmpeg).
+    Downloads movie from S3, rotates, uploads back, builds zip, uploads zip, updates DDB.
+    """
+    movie_id = (payload.get("movie_id") or "").strip()
+    if not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "movie_id missing or invalid"})
+    try:
+        steps = int(payload.get("rotation_steps", 1))
+    except (TypeError, ValueError):
+        steps = 1
+    steps = max(1, min(3, steps))
+
+    ddbo = DDBO()
+    try:
+        movie = ddbo.get_movie(movie_id)
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(400, {"error": True, "message": "movie has no movie_data_urn"})
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    course_id = movie.get("course_id") or ""
+    s3 = _s3_client()
+
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        data = obj["Body"].read()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("rotate_and_zip get_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "failed to download movie from S3"})
+
+    try:
+        rotated = rotate_video_av(data, steps)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.exception("rotate_video_av failed: %s", e)
+        return resp_json(500, {"error": True, "message": "rotation failed"})
+
+    try:
+        s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
+        return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
+
+    now = int(time.time())
+    ddbo.update_table(
+        ddbo.movies,
+        movie_id,
+        {DATE_UPLOADED: now, TOTAL_BYTES: len(rotated), "processing_state": "ready"},
+    )
+
+    try:
+        zip_bytes = video_frames_to_zip_av(rotated)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.exception("video_frames_to_zip_av failed: %s", e)
+        return resp_json(500, {"error": True, "message": "zip build failed"})
+
+    zip_key = f"{course_id}/{movie_id}{C.ZIP_MOVIE_EXTENSION}"
+    zip_urn = f"s3://{bucket}/{zip_key}"
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=zip_key,
+            Body=zip_bytes,
+            ContentType="application/zip",
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
+        return resp_json(503, {"error": True, "message": "failed to upload zip"})
+
+    ddbo.update_table(ddbo.movies, movie_id, {"movie_zipfile_urn": zip_urn})
+    write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
+    LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
+    return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
+
 
 ################################################################
 ## Parse Lambda Events and cookies
@@ -249,6 +384,10 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
                 case ("POST", "/api/v1", "resize-start"):
                     return api_resize(event, context, payload)
+                case ("POST", "/api/v1", "start-processing"):
+                    return api_start_processing(payload)
+                case ("POST", "/api/v1", "rotate-and-zip"):
+                    return api_rotate_and_zip(payload)
 
                 case (_, "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)

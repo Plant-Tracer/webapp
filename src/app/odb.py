@@ -1284,6 +1284,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     'research_use': research_use,
                     'credit_by_name': credit_by_name,
                     'attribution_name': attribution_name,
+                    'processing_state': 'uploading',
                     })
     return movie_id
 

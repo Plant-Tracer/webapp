@@ -6,6 +6,7 @@ import { $ } from "./utils.js";
 /*global user_primary_course_id */
 /*global planttracer_endpoint */
 /*global MAX_FILE_UPLOAD */
+/*global LAMBDA_API_BASE */
 
 
 
@@ -153,28 +154,73 @@ function first_frame_url(movie_id)
 }
 
 /*
- * Set image preview src and retry on error (503 = movie still processing). Retries up to 3 times, 5s apart.
+ * Set image preview src and retry on error (503 = movie still processing).
+ * Phase 2: poll every 250ms, up to 10 attempts (~2.5s). On error we clear the
+ * image src and show a text message so the page never shows a broken image icon.
  */
 function setFirstFrameWithRetry(movie_id) {
     const img = $('#image-preview').get(0);
+    const statusEl = $('#image-preview-status');
     if (!img) return;
     let retries = 0;
-    const maxRetries = 3;
-    const delayMs = 5000;
+    const maxRetries = 10;
+    const delayMs = 250;
+    statusEl.hide().text('');
     function setSrc() {
         img.src = first_frame_url(movie_id);
     }
+    img.onload = function () {
+        statusEl.hide().text('');
+    };
     img.onerror = function () {
+        img.src = '';
         retries += 1;
         if (retries < maxRetries) {
-            img.alt = 'Processing… retrying in ' + (delayMs / 1000) + 's (' + retries + '/' + maxRetries + ')';
+            statusEl.text('Processing… retrying in ' + (delayMs / 1000) + 's (' + retries + '/' + maxRetries + ')').show();
             setTimeout(setSrc, delayMs);
         } else {
-            img.alt = 'First frame not ready. Try refreshing in a moment.';
+            statusEl.text('First frame not ready. There may be a problem with the processing service. Try refreshing in a moment.').show();
         }
     };
-    img.alt = '';
     setSrc();
+}
+
+/*
+ * Check Lambda status (GET LAMBDA_API_BASE + 'status'). Resolves with true if ok, false otherwise.
+ * If LAMBDA_API_BASE is not set, resolves with true (skip check).
+ */
+async function checkLambdaStatus() {
+    if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) return true;
+    try {
+        const r = await fetch(LAMBDA_API_BASE + 'status', { method: 'GET' });
+        if (!r.ok) return false;
+        const data = await r.json();
+        return data && data.status === 'ok';
+    } catch (e) {
+        console.warn('Lambda status check failed', e);
+        return false;
+    }
+}
+
+/*
+ * Tell Lambda to start processing the uploaded movie (POST start-processing).
+ * If LAMBDA_API_BASE is not set, resolves without calling (local dev).
+ */
+async function startLambdaProcessing(movie_id) {
+    if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) return;
+    try {
+        const r = await fetch(LAMBDA_API_BASE + 'api/v1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start-processing', movie_id: movie_id })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || data.error) {
+            console.warn('start-processing failed', r.status, data);
+        }
+    } catch (e) {
+        console.warn('startLambdaProcessing failed', e);
+    }
 }
 
 /*
@@ -187,6 +233,14 @@ function setFirstFrameWithRetry(movie_id) {
  */
 async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name)
 {
+    // If Lambda is configured, ensure it is healthy before starting upload
+    if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+        const lambdaOk = await checkLambdaStatus();
+        if (!lambdaOk) {
+            $('#upload_message').html('Processing service is not available. Please try again in a moment.');
+            return;
+        }
+    }
     // Get a new movie_id
     const movie_data_sha256 = await computeSHA256(movieFile);
     const formData = new FormData();
@@ -260,6 +314,10 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
             $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
             return;
         }
+        // Phase 2: tell Lambda to start processing (sets date_uploaded etc. so get-frame works)
+        await startLambdaProcessing(movie_id);
+        // Brief delay so DynamoDB is updated before we poll for first frame
+        await new Promise(resolve => setTimeout(resolve, 250));
     } catch (e) {
         // #region agent log
         console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
@@ -329,7 +387,7 @@ function upload_movie()
     upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name);
 }
 
-async function get_movie_metadata(movie_id){
+async function _get_movie_metadata(movie_id){
     let formData = new FormData();
     formData.append("api_key",     api_key);   // on the upload form
     formData.append("movie_id",    movie_id);
@@ -341,39 +399,71 @@ async function get_movie_metadata(movie_id){
 
 
 //
-// Ask the server to rotate the movie
-async function rotate_movie() {
+// Rotate: debounce multiple clicks (~1s), then send one request with total rotation_steps (1–3).
+// Server rotates that many 90° steps and builds the zip in the background.
+const ROTATE_DEBOUNCE_MS = 1000;
+let rotate_pending_steps = 0;
+let rotate_debounce_timer = null;
+
+function rotate_movie() {
     const linkEl = $('#rotate_movie_link').get(0);
     if (!linkEl || linkEl.classList.contains('rotate-pending')) {
         return;
     }
-    linkEl.classList.add('rotate-pending');
-    const movie_id = window.movie_id;
-    console.log("rotate_movie. movie_id=",movie_id);
-    $('#rotate_status').text(' ... Rotating...');
-    const m0 = await get_movie_metadata(movie_id);
-    console.log("Initial metadata:",m0);
-    let formData = new FormData();
-    formData.append("api_key",     api_key);   // on the upload form
-    formData.append('movie_id', movie_id);
-    formData.append('action', 'rotate90cw');
-    const r = await fetch(`${API_BASE}api/edit-movie`, { method:"POST", body:formData});
-    console.log("r=",r);
-    if (!r.ok) {
-        console.log('could not rotate. r=',r);
-        linkEl.classList.remove('rotate-pending');
-        $('#rotate_status').text('');
+    if (rotate_pending_steps >= 3) {
         return;
     }
-    const m1 = get_movie_metadata(movie_id);
-    console.log("New metadata:",m1);
-    $('#image-preview').attr('src', first_frame_url(movie_id));
-    function reenable_rotate() {
-        linkEl.classList.remove('rotate-pending');
-        $('#rotate_status').text('');
+    rotate_pending_steps += 1;
+    const degrees = rotate_pending_steps * 90;
+    $('#rotate_status').text(` … ${degrees}° queued (wait ${ROTATE_DEBOUNCE_MS / 1000}s or click again)`);
+    if (rotate_debounce_timer) {
+        clearTimeout(rotate_debounce_timer);
     }
-    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
-    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
+    rotate_debounce_timer = setTimeout(() => apply_rotation_and_zip(), ROTATE_DEBOUNCE_MS);
+}
+
+async function apply_rotation_and_zip() {
+    rotate_debounce_timer = null;
+    const steps = rotate_pending_steps;
+    rotate_pending_steps = 0;
+    const linkEl = $('#rotate_movie_link').get(0);
+    if (!linkEl || steps < 1) return;
+    linkEl.classList.add('rotate-pending');
+    const movie_id = window.movie_id;
+    $('#rotate_status').text(' … Rotating and creating zip…');
+    let r;
+    try {
+        if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+            r = await fetch(LAMBDA_API_BASE + 'api/v1', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'rotate-and-zip', movie_id: movie_id, rotation_steps: steps })
+            });
+        } else {
+            const formData = new FormData();
+            formData.append('api_key', api_key);
+            formData.append('movie_id', movie_id);
+            formData.append('action', 'rotate90cw');
+            formData.append('rotation_steps', String(steps));
+            r = await fetch(`${API_BASE}api/edit-movie`, { method: 'POST', body: formData });
+        }
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            $('#rotate_status').text(' Rotation failed.' + (err.message ? ' ' + err.message : ''));
+            linkEl.classList.remove('rotate-pending');
+            return;
+        }
+        $('#image-preview').attr('src', first_frame_url(movie_id));
+        const reenable_rotate = () => {
+            linkEl.classList.remove('rotate-pending');
+            $('#rotate_status').text('');
+        };
+        $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
+        $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
+    } catch (_e) {
+        $('#rotate_status').text(' Request failed.');
+        linkEl.classList.remove('rotate-pending');
+    }
 }
 
 function purge_movie() {
@@ -536,6 +626,7 @@ function action_button_clicked( e ) {
 //                           #1          #2               #3               #4              #5                 #6                #7
 const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
+// Phase 3: list shows processing_state. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
     const PUBLISHED = 'published';
     const UNPUBLISHED = 'unpublished';
@@ -639,6 +730,11 @@ function list_movies_data( movies ) {
                 `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
             rows += "<td> Status: "; // #7
+            // Phase 3: show processing_state (uploading, processing, ready, etc.)
+            const procState = m.processing_state || '';
+            if (procState) {
+                rows += `<span class='processing-state'>${procState}</span> `;
+            }
             if (m.deleted) {
                 rows += "<i>Deleted</i>";
             } else {
