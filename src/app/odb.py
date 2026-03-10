@@ -1277,7 +1277,8 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     MOVIE_DATA_URN:None,
                     LAST_FRAME_TRACKED:None,
                     'created_at':int(time.time()),
-                    'date_uploaded':None,
+                    # date_uploaded now reflects when upload was initiated (presigned URL issued)
+                    'date_uploaded':int(time.time()),
                     TOTAL_FRAMES:None, # will be set later
                     TOTAL_BYTES:None,  # will be set later
                     VERSION:0,  # will be set to 1 with set_movie_data

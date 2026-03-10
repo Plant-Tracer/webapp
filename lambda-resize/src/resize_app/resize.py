@@ -139,14 +139,13 @@ def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
         LOGGER.warning("start_processing head_object failed: %s %s %s", bucket, key, e)
         return resp_json(503, {"error": True, "message": "object not found in S3; upload may not have completed"})
     size = head.get("ContentLength", 0)
-    now = int(time.time())
     ddbo.update_table(
         ddbo.movies,
         movie_id,
         {
-            DATE_UPLOADED: now,
+            # date_uploaded is set when upload starts; here we just record size and mark processing.
             TOTAL_BYTES: size,
-            "processing_state": "ready",
+            "processing_state": "processing",
         },
     )
     write_log(f"start_processing movie_id={movie_id} size={size}", course_id=movie.get("course_id"))
@@ -203,15 +202,36 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
         LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
 
-    now = int(time.time())
     ddbo.update_table(
         ddbo.movies,
         movie_id,
-        {DATE_UPLOADED: now, TOTAL_BYTES: len(rotated), "processing_state": "ready"},
+        {TOTAL_BYTES: len(rotated), "processing_state": "processing"},
     )
 
+    def _zip_progress(current: int, total: int) -> None:
+        """Best-effort progress updates in DynamoDB; safe to fail silently."""
+        # Only write every 5 frames (and always for the final frame) to avoid excessive writes.
+        if total <= 0:
+            return
+        if current % 5 != 0 and current != total:
+            return
+        try:
+            ddbo.update_table(
+                ddbo.movies,
+                movie_id,
+                {
+                    "zip_frame_processing": {
+                        "total": int(total),
+                        "current": int(current),
+                    },
+                    "processing_state": "processing-zip",
+                },
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
+
     try:
-        zip_bytes = video_frames_to_zip_av(rotated)
+        zip_bytes = video_frames_to_zip_av(rotated, progress_cb=_zip_progress)
     except Exception as e:  # pylint: disable=broad-exception-caught
         LOGGER.exception("video_frames_to_zip_av failed: %s", e)
         return resp_json(500, {"error": True, "message": "zip build failed"})
@@ -229,7 +249,18 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
         LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload zip"})
 
-    ddbo.update_table(ddbo.movies, movie_id, {"movie_zipfile_urn": zip_urn})
+    # Final state: zip finished, mark ready and set progress to 100%.
+    try:
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {
+                "movie_zipfile_urn": zip_urn,
+                "processing_state": "ready",
+            },
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
     write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
     LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
     return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})

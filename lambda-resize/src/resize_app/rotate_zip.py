@@ -68,17 +68,31 @@ def rotate_video_av(data: bytes, steps: int) -> bytes:
     return out_buf.getvalue()
 
 
-def video_frames_to_zip_av(data: bytes, jpeg_quality: int = 60) -> bytes:
-    """Extract every video frame as (downscaled) JPEG into a zip. Returns zip file bytes."""
+def video_frames_to_zip_av(
+    data: bytes,
+    jpeg_quality: int = 60,
+    progress_cb=None,
+    progress_every: int = 5,
+) -> bytes:
+    """
+    Extract every video frame as (downscaled) JPEG into a zip. Returns zip file bytes.
+
+    If progress_cb is provided, it will be called as progress_cb(current, total)
+    approximately every `progress_every` frames (and always on the final frame).
+    """
     inp = av.open(io.BytesIO(data))
     vstreams = [s for s in inp.streams if s.type == "video"]
     if not vstreams:
         inp.close()
         raise ValueError("No video stream")
 
+    # Decode once so we know the total frame count for progress reporting.
+    frames = list(inp.decode(video=0))
+    total = len(frames)
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for frame_index, frame in enumerate(inp.decode(video=0)):
+        for idx, frame in enumerate(frames, start=1):
             img = frame.to_image()
             # Downscale to a reasonable analysis size (roughly VGA) to keep zips small.
             target_wh = (640, 480)
@@ -87,6 +101,11 @@ def video_frames_to_zip_av(data: bytes, jpeg_quality: int = 60) -> bytes:
             jpeg_io = io.BytesIO()
             img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
             jpeg_io.seek(0)
-            zf.writestr(f"frame_{frame_index:04d}.jpg", jpeg_io.read())
+            zf.writestr(f"frame_{idx-1:04d}.jpg", jpeg_io.read())
+
+            if progress_cb and total > 0:
+                if idx % progress_every == 0 or idx == total:
+                    progress_cb(idx, total)
+
     inp.close()
     return buf.getvalue()

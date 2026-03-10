@@ -45,12 +45,29 @@
         const meta = resp.metadata || {};
         const proc = meta.processing_state || '';
         const hasZip = !!meta.movie_zipfile_url;
+
+        // Optional progress map from Lambda: { total: int, current: int }
+        const zfp = meta.zip_frame_processing || {};
+        const total = Number(zfp.total || 0);
+        const current = Number(zfp.current || 0);
+        let progressStr = '';
+        if (total > 0) {
+          const pct = Math.floor((current / total) * 100);
+          progressStr = ` – frames ${current}/${total} (${pct}%)`;
+        }
+
         if (hasZip) {
-          statusEl.text(proc ? `Processing state: ${proc}` : 'Processing complete.');
+          statusEl.text(
+            proc
+              ? `Processing state: ${proc}${progressStr ? ' ' + progressStr : ''}`
+              : 'Processing complete.',
+          );
           analyzeBlock.show();
         } else {
-          statusEl.text(proc ? `Processing state: ${proc} (zip not ready yet)…` : 'Processing… (zip not ready yet)…');
-          setTimeout(pollStatus, 2000);
+          const base =
+            proc || 'Processing';
+          statusEl.text(`${base} (zip not ready yet)…${progressStr}`);
+          setTimeout(pollStatus, 2500);
         }
       })
       .catch((e) => {
