@@ -375,15 +375,15 @@ def lambda_handler(event, context) -> Dict[str, Any]:
                     return api_status()
 
                 ################################################################
-                # CORS preflight (OPTIONS)
+                # CORS preflight (OPTIONS) – handled entirely in Lambda
                 case ("OPTIONS", "/api/v1", _):
-                    # Let browsers know JSON POSTs are allowed from any origin.
+                    # Very permissive CORS so the browser can always talk to Lambda.
                     return resp_json(
                         204,
                         {},
                         headers={
                             "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-                            "Access-Control-Allow-Headers": "Content-Type",
+                            "Access-Control-Allow-Headers": "*",
                         },
                     )
 
