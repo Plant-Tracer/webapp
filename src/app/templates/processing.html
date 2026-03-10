@@ -8,8 +8,9 @@
 <p id="processing_status">Checking processing status…</p>
 <p id="processing_hint">This page will update automatically; you can also reload it safely.</p>
 
-<p id="processing_analyze" style="display:none;">
-  <a id="processing_analyze_link" href="#">Processing complete – go to Analyze.</a>
+<p id="processing_actions" style="display:none;">
+  <button id="processing_analyze_button" type="button">Analyze</button>
+  <button id="processing_list_button" type="button">List movies</button>
 </p>
 
 <script type="module">
@@ -19,15 +20,21 @@
   const movie_id = params.get('movie_id');
   const statusEl = $('#processing_status');
   const idEl = $('#processing_movie_id');
-  const analyzeBlock = $('#processing_analyze');
-  const analyzeLink = $('#processing_analyze_link');
+  const actionsBlock = $('#processing_actions');
+  const analyzeButton = $('#processing_analyze_button');
+  const listButton = $('#processing_list_button');
 
   if (!movie_id) {
     statusEl.text('No movie_id provided.');
   } else {
     idEl.text(`Movie ID: ${movie_id}`);
     const analyzeUrl = `/analyze?movie_id=${movie_id}`;
-    analyzeLink.attr('href', analyzeUrl);
+    analyzeButton.click(() => {
+      window.location.href = analyzeUrl;
+    });
+    listButton.click(() => {
+      window.location.href = '/list';
+    });
   }
 
   function pollStatus() {
@@ -62,7 +69,7 @@
               ? `Processing state: ${proc}${progressStr ? ' ' + progressStr : ''}`
               : 'Processing complete.',
           );
-          analyzeBlock.show();
+          actionsBlock.show();
         } else {
           const base =
             proc || 'Processing';
