@@ -94,7 +94,11 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) src tests *.py
+	poetry run pylint  $(PYLINT_OPTS) \
+		src tests *.py \
+		lambda-resize/src/resize_app/resize.py \
+		lambda-resize/src/resize_app/rotate_zip.py \
+		lambda-resize/tests
 
 ## Mypy static analysis
 mypy:
@@ -129,10 +133,10 @@ flake:
 ## set LOG_LEVEL at start of CLI to change the  log level
 
 pytest: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...

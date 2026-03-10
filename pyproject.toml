@@ -110,8 +110,12 @@ disable = [
     "too-many-statements",
     "fixme",
     "trailing-whitespace",      # AI does this
+    "trailing-newlines",
     "too-many-positional-arguments",
     "too-many-return-statements",
+    "too-many-lines",
+    "too-few-public-methods",
+    "too-many-branches"
 ]
 
 [tool.pylint.design]

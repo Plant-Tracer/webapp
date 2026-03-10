@@ -23,7 +23,7 @@ from .common import LOGGER
 from .rotate_zip import rotate_video_av, video_frames_to_zip_av
 from .src.app import odb
 from .src.app.constants import C
-from .src.app.odb import DDBO, DATE_UPLOADED, MOVIE_DATA_URN, TOTAL_BYTES
+from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES
 
 __version__ = "0.1.0"
 
@@ -153,7 +153,7 @@ def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
     return resp_json(200, {"error": False, "started": True, "movie_id": movie_id})
 
 
-def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:
+def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: disable=too-many-branches
     """
     Rotate movie by N×90° (N=1..3) and build frame zip. Uses PyAV + Pillow only (no ffmpeg).
     Downloads movie from S3, rotates, uploads back, builds zip, uploads zip, updates DDB.
