@@ -487,10 +487,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
-    if (movie_frames.length > 0 ){
-        cc.track_button.val( RETRACK_MOVIE );
-        cc.download_button.show();
-    }
+    // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
         $('#analysis-results').show();
         graph_data(cc, movie_frames);
