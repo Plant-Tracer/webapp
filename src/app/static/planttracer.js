@@ -360,6 +360,8 @@ function upload_movie()
         $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
         return;
     }
+    // Disable the upload button immediately to prevent double-submits.
+    $('#upload-button').prop('disabled', true);
     $('#upload_message').html(`Uploading movie ...`);
 
     upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name);
