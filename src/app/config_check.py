@@ -121,30 +121,14 @@ def check_s3_cors(app_origin: str):
         return (False, err_msg)
 
     rules = cors.get("CORSRules") or []
-    origin_ok = False
-    get_ok = False
-    post_ok = False
     for rule in rules:
         origins = rule.get("AllowedOrigins") or []
         methods = rule.get("AllowedMethods") or []
-        if "*" in origins or app_origin in origins:
-            origin_ok = True
-        if "GET" in methods:
-            get_ok = True
-        if "POST" in methods:
-            post_ok = True
-        if origin_ok and get_ok and post_ok:
+        if ("*" in origins or app_origin in origins) and "GET" in methods and "POST" in methods:
             return (True, "")
 
-    if not post_ok:
-        msg = "S3 CORS does not allow POST (required for uploads). Run: python -m app.s3_presigned " + bucket
-    elif not get_ok:
-        msg = "S3 CORS does not allow GET. Run: python -m app.s3_presigned " + bucket
-    elif not origin_ok:
-        msg = f"S3 CORS does not allow origin {app_origin!r}. Run: python -m app.s3_presigned " + bucket
-    else:
-        msg = ""
-    return (not msg, msg or "")
+    msg = f"No S3 CORS rule allows origin {app_origin!r} with both GET and POST. Run: python -m app.s3_presigned " + bucket
+    return (False, msg)
 
 
 def check_s3_upload_readiness(app_origin: str):
