@@ -16,6 +16,8 @@ import os
 import threading
 import zipfile
 from collections import defaultdict
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 from zipfile import ZipFile
 
 from flask import Blueprint, request, make_response, redirect, current_app, jsonify
@@ -57,9 +59,12 @@ from .odb_movie_data import (
     create_new_movie_frame,
 )
 from . import mp4_metadata_lib
+from .apikey import get_lambda_api_base
 
 
 api_bp = Blueprint('api', __name__)
+
+LAMBDA_HEALTH_TIMEOUT = 10
 
 
 ### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
@@ -815,160 +820,77 @@ def api_add():
 ################################################################
 ################################################################
 ## Movie tracking
-## Tracking is requested from the client and run in a background lambda function.
+## Tracking is requested from the client; same code runs from Flask (VM) or Lambda via tracker.run_tracking.
 
 # pylint: disable=too-few-public-methods
-# pylint: disable=consider-using-with,too-many-instance-attributes
-class MovieTrackCallback:
-    """Service class to create a callback instance to update the movie status."""
-    def __init__(self, *, user_id, movie_id, research_comment: str = ""):
-        self.user_id = user_id
-        self.movie_id = movie_id
-        self.research_comment = research_comment or ""
-        self.movie_metadata = None
-        self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
-        self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, mode='w', compression=zipfile.ZIP_DEFLATED,compresslevel=9)
-        self.last_frame_tracked = -1
-        self.ziplen = 0
+class FlaskTrackingEnv(tracker.TrackingEnv):
+    """Environment adapter so tracker.run_tracking can use Flask/VM I/O (odb, S3, set_movie_metadata)."""
 
-    def notify(self, *, frame_number, frame_data, frame_trackpoints): # pylint: disable=unused-argument
-        """Update the status and write the frame to the database.
-        We only track frames 1..(total_frames-1).
-        If there are 296 frames, they are numbered 0 to 295.
-        We actually track frames 1 through 295. We add 1 to make the status look correct.
-        """
-        logger.debug("NOTIFY. self=%s self.ziplen=%s", self, self.ziplen)
+    def get_movie_data(self, movie_id):
+        return get_movie_data(movie_id=movie_id)
 
-        frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
-        if self.research_comment:
-            frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(frame_jpeg, self.research_comment, quality=60)
-        self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
-        self.ziplen += len(frame_jpeg)
-        logger.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s", frame_number, len(frame_jpeg), self.ziplen)
-        self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg", frame_jpeg)
+    def get_movie_metadata(self, movie_id):
+        return odb.get_movie_metadata(movie_id=movie_id)
 
-        # Update the trackpoints
-        odb.put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
+    def get_movie_trackpoints(self, movie_id):
+        return odb.get_movie_trackpoints(movie_id=movie_id)
 
-        # Update the movie status (for anyone monitoring)
-        total_frames = self.movie_metadata['total_frames']
-        message = f"Tracked frames {frame_number+1} of {total_frames}"
-        odb.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=message)
-        logger.debug("NOTIFY AFTER. self=%s self.ziplen=%s",self,self.ziplen)
+    def put_frame_trackpoints(self, *, movie_id, frame_number, trackpoints):
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
 
-    def close(self):
-        """Close the zipfile"""
-        self.movie_zipfile.close()
+    def set_metadata(self, *, user_id, movie_id, prop, value):
+        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=value)
 
-    @property
-    def zipfile_name(self):
-        return self.movie_zipfile_tf.name
+    def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
+        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
-    @property
-    def zipfile_data(self):
-        logger.debug("zipfile_data %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
-        with open(self.zipfile_name,'rb') as f:
-            return f.read()
+    def write_object(self, *, urn, data):
+        write_object(urn=urn, object_data=data)
 
-    def done(self):
-        logger.debug("DONE. Set TRACKING_COMPLETED")
-        odb.set_metadata(user_id=self.user_id, set_movie_id=self.movie_id, prop='status', value=C.TRACKING_COMPLETED)
-        # Also mark overall processing_state so the movie list reflects tracking completion.
+    def write_object_from_path(self, *, urn, path):
+        write_object_from_path(urn=urn, path=path)
+
+    def make_object_name(self, *, course_id, movie_id, ext, frame_number=None):
+        return make_object_name(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
+
+    def make_urn(self, *, object_name):
+        return make_urn(object_name=object_name)
+
+    def course_id_for_movie_id(self, movie_id):
+        return odb.course_id_for_movie_id(movie_id)
+
+    def update_movie(self, movie_id, updates):
+        key_map = {
+            tracker.KEY_LAST_FRAME_TRACKED: LAST_FRAME_TRACKED,
+            tracker.KEY_MOVIE_DATA_URN: MOVIE_DATA_URN,
+            tracker.KEY_PROCESSING_STATE: "processing_state",
+        }
+        mapped = {key_map.get(k, k): v for k, v in updates.items()}
         ddbo = DDBO()
-        ddbo.update_table(ddbo.movies, self.movie_id, {"processing_state": "tracked"})
-        if self.zipfile_name:
-            logger.debug("Unlinking %s length=%s",self.zipfile_name, os.path.getsize(self.zipfile_name))
-            os.unlink(self.zipfile_name)
+        ddbo.update_table(ddbo.movies, movie_id, mapped)
 
 
-##
-## Actual code that runs to track a movie.
-## Tracks to end. If rotation_steps or dimensions require it, rotates/scales to a new MP4 (temp file),
-## sets research-attribution comment on that file, uploads from file, updates movie_data_urn, then tracks.
-## Can be implemented as a background task
 def api_track_movie(*, user_id, movie_id, frame_start):
-    """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
-    If the movie has rotation_steps > 0 or exceeds analysis frame size, rotate/scale to a temp file,
-    set MP4 comment from DB metadata, upload from file, update movie_data_urn, then track from that file.
-    Extracts all frames into a zipfile; each ZIP JPEG gets the same comment. Writes zip to storage.
-    """
-    input_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
-    movie_record = odb.get_movie_metadata(movie_id=movie_id)
-    research_comment = mp4_metadata_lib.build_comment(
-        movie_record.get("research_use", 0) or 0,
-        movie_record.get("credit_by_name", 0) or 0,
-        movie_record.get("attribution_name"),
-    )
-    movie_data = get_movie_data(movie_id=movie_id)
-    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-    set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+    """Run tracking using shared tracker.run_tracking with Flask env (VM or Lambda)."""
+    env = FlaskTrackingEnv()
+    tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
 
-    rotation_steps = int(movie_record.get("rotation_steps") or 0)
-    rotation_steps = max(0, min(3, rotation_steps))
-    w = movie_metadata.get("width") or 0
-    h = movie_metadata.get("height") or 0
-    need_process = (
-        rotation_steps > 0
-        or w > C.ANALYSIS_FRAME_MAX_WIDTH
-        or h > C.ANALYSIS_FRAME_MAX_HEIGHT
-    )
 
-    in_path = None
-    out_path = None
-    moviefile_input = None
+@api_bp.route('/track/lambda-health', methods=GET_POST)
+def api_track_lambda_health():
+    """Probe Lambda /status; return 200 + {status:'ok'} if Lambda is up, 503 + {status:'unavailable'} otherwise."""
+    base = get_lambda_api_base()
+    if not base:
+        return jsonify({"status": "unavailable", "reason": "Lambda URL not configured"}), 503
     try:
-        with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as infile:
-            infile.write(movie_data)
-            infile.flush()
-            in_path = infile.name
-
-        if need_process:
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
-                out_path = out_tf.name
-            tracker.prepare_movie_for_tracking(
-                in_path,
-                out_path,
-                rotation_steps,
-                C.ANALYSIS_FRAME_MAX_WIDTH,
-                C.ANALYSIS_FRAME_MAX_HEIGHT,
-            )
-            mp4_metadata_lib.set_comment(out_path, research_comment)
-            processed_oname = make_object_name(
-                course_id=odb.course_id_for_movie_id(movie_id),
-                movie_id=movie_id,
-                ext=C.MOVIE_PROCESSED_EXTENSION,
-            )
-            processed_urn = make_urn(object_name=processed_oname)
-            write_object_from_path(processed_urn, out_path)
-            ddbo = DDBO()
-            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN: processed_urn})
-            moviefile_input = out_path
-        else:
-            moviefile_input = in_path
-
-        mtc = MovieTrackCallback(user_id=user_id, movie_id=movie_id, research_comment=research_comment)
-        mtc.movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
-        tracker.track_movie(
-            input_trackpoints=input_trackpoints,
-            frame_start=frame_start,
-            moviefile_input=moviefile_input,
-            callback=mtc.notify,
-        )
-        mtc.close()
-        ddbo = DDBO()
-        ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: mtc.last_frame_tracked})
-        oname = make_object_name(
-            course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id, ext=C.ZIP_MOVIE_EXTENSION
-        )
-        urn = make_urn(object_name=oname)
-        write_object(urn=urn, object_data=mtc.zipfile_data)
-        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop="movie_zipfile_urn", value=urn)
-        mtc.done()
-    finally:
-        if in_path and os.path.exists(in_path):
-            os.unlink(in_path)
-        if out_path and os.path.exists(out_path):
-            os.unlink(out_path)
+        with urlopen(base.rstrip("/") + "/status", timeout=LAMBDA_HEALTH_TIMEOUT) as resp:
+            data = json.loads(resp.read().decode())
+            if data.get("status") == "ok":
+                return jsonify({"status": "ok"})
+            return jsonify({"status": "unavailable", "reason": "unexpected response"}), 503
+    except (HTTPError, URLError, OSError, json.JSONDecodeError) as ex:
+        logger.debug("Lambda health check failed: %s", ex)
+        return jsonify({"status": "unavailable", "reason": str(ex)}), 503
 
 
 @api_bp.route('/track-movie-queue', methods=GET_POST)

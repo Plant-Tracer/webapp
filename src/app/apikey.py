@@ -36,6 +36,13 @@ def in_demo_mode():
 api_base    = os.getenv(C.PLANTTRACER_API_BASE,'')
 static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
 
+
+def get_lambda_api_base():
+    """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
+    hostname = os.environ.get("HOSTNAME", "").strip()
+    domain = os.environ.get("DOMAIN", "").strip()
+    return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+
 @functools.cache
 def git_head_time():
     try:
@@ -187,9 +194,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         movie_id = 0            # to avoid errors
 
     # Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and start-processing
-    hostname = os.environ.get("HOSTNAME", "").strip()
-    domain = os.environ.get("DOMAIN", "").strip()
-    lambda_api_base = f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+    lambda_api_base = get_lambda_api_base()
 
     ret= {
         C.API_BASE: api_base,

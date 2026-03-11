@@ -111,6 +111,28 @@ class TracerController extends MovieController {
         this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
+    /** If Lambda is configured, check /api/track/lambda-health before enabling Track; else enable. */
+    async enableTrackButtonIfAllowed() {
+        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
+            this.track_button.prop(DISABLED, false);
+            return;
+        }
+        try {
+            const r = await fetch(`${API_BASE}api/track/lambda-health`, { method: 'GET' });
+            const data = r.ok ? await r.json() : {};
+            if (data.status === 'ok') {
+                this.track_button.prop(DISABLED, false);
+                this.tracking_status.text('');
+            } else {
+                this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
+                this.track_button.prop(DISABLED, true);
+            }
+        } catch (_e) {
+            this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
+            this.track_button.prop(DISABLED, true);
+        }
+    }
+
 
     // on each change of input, validate the marker name
     marker_name_changed ( ) {
@@ -223,7 +245,7 @@ class TracerController extends MovieController {
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
         if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
-            this.track_button.prop(DISABLED,false); // enable the button if track point is moved
+            this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
         }
     }
 
@@ -301,9 +323,9 @@ class TracerController extends MovieController {
         $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
             if(data.error){
                 alert(data.message);
-                this.track_button.prop(DISABLED,false); // re-enable
                 this.tracking=false;
                 this.set_movie_control_buttons();
+                this.enableTrackButtonIfAllowed(); // re-enable when Lambda (if configured) is reachable
             } else {
                 console.log("no error");
             }
@@ -487,7 +509,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
-    cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
+    cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
         $('#analysis-results').show();

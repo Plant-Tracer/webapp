@@ -179,7 +179,7 @@ def _before_request_config_check():
     path = request.path
     if path == "/config-error" or path.startswith("/static/") or path.startswith("/api/"):
         return None
-    if path in ("/ping", "/ver", "/health"):
+    if path in ("/ping", "/ver", "/health", "/status"):
         return None
     try:
         d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
@@ -294,6 +294,12 @@ def func_logout():
 @app.route("/ping")
 def ping():
     return jsonify({"status": "ok", "message": "pong"})
+
+
+@app.route("/status")
+def status():
+    """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
+    return jsonify({"status": "ok"})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():

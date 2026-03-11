@@ -1,6 +1,7 @@
 """
 Implements blockmatching algorithm in OpenCV.
-Also implements support movie routines
+Also implements support movie routines.
+Shared entry point run_tracking(..., env) allows the same logic to run from Flask or Lambda.
 """
 
 # pylint: disable=no-member
@@ -10,12 +11,15 @@ import tempfile
 import subprocess
 import logging
 import os
+import zipfile
+from abc import ABC, abstractmethod
 from collections import defaultdict
 
 import cv2
 import numpy as np
 
 from . import paths
+from . import mp4_metadata_lib
 from .constants import C
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -344,6 +348,211 @@ def prepare_movie_for_tracking(
     )
     if rc != 0 or os.path.getsize(output_path) <= MIN_MOVIE_BYTES:
         raise RuntimeError("prepare_movie_for_tracking failed")
+
+
+# Key names used when calling env.update_movie(); env may map these to DB columns.
+KEY_LAST_FRAME_TRACKED = "last_frame_tracked"
+KEY_MOVIE_DATA_URN = "movie_data_urn"
+KEY_PROCESSING_STATE = "processing_state"
+
+
+class TrackingEnv(ABC):
+    """Abstract base for env adapters that connect the tracker to DB/S3 (Flask or Lambda)."""
+
+    @abstractmethod
+    def get_movie_data(self, movie_id):
+        """Return raw movie bytes for movie_id."""
+
+    @abstractmethod
+    def get_movie_metadata(self, movie_id):
+        """Return movie record dict (metadata) for movie_id."""
+
+    @abstractmethod
+    def get_movie_trackpoints(self, movie_id):
+        """Return list of trackpoint dicts (frame_number, x, y, label) for movie_id."""
+
+    @abstractmethod
+    def put_frame_trackpoints(self, *, movie_id, frame_number, trackpoints):
+        """Persist trackpoints for the given frame."""
+
+    @abstractmethod
+    def set_metadata(self, *, user_id, movie_id, prop, value):
+        """Set one metadata property on the movie."""
+
+    @abstractmethod
+    def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
+        """Set multiple movie metadata fields (e.g. fps, width, height, total_frames, total_bytes)."""
+
+    @abstractmethod
+    def write_object(self, *, urn, data):
+        """Write bytes to storage at urn."""
+
+    @abstractmethod
+    def write_object_from_path(self, *, urn, path):
+        """Upload file at path to storage at urn."""
+
+    @abstractmethod
+    def make_object_name(self, *, course_id, movie_id, ext, frame_number=None):
+        """Return object name (key) for the given course/movie and extension."""
+
+    @abstractmethod
+    def make_urn(self, *, object_name):
+        """Return full URN for the given object name."""
+
+    @abstractmethod
+    def course_id_for_movie_id(self, movie_id):
+        """Return course_id for the given movie_id."""
+
+    @abstractmethod
+    def update_movie(self, movie_id, updates):
+        """Update movie record with dict of attribute names to values (use KEY_* for known keys)."""
+
+
+# pylint: disable=too-many-instance-attributes
+class TrackingCallback:
+    """Callback used during track_movie that writes frames to a zip and persists via env."""
+
+    def __init__(self, *, env, user_id, movie_id, research_comment: str, total_frames: int):
+        self.env = env
+        self.user_id = user_id
+        self.movie_id = movie_id
+        self.research_comment = research_comment or ""
+        self.total_frames = total_frames
+        self.last_frame_tracked = -1
+        self._zip_tf = tempfile.NamedTemporaryFile(  # pylint: disable=consider-using-with
+            suffix=".zip", prefix=f"movie_{movie_id}", delete=False
+        )
+        self._zipfile = zipfile.ZipFile(  # pylint: disable=consider-using-with
+            self._zip_tf.name, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+        )
+
+    def notify(self, *, frame_number, frame_data, frame_trackpoints):
+        frame_jpeg = convert_frame_to_jpeg(frame_data, quality=60)
+        if self.research_comment:
+            frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(
+                frame_jpeg, self.research_comment, quality=60
+            )
+        self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
+        self._zipfile.writestr(f"frame_{frame_number:04}.jpg", frame_jpeg)
+        self.env.put_frame_trackpoints(
+            movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints
+        )
+        message = f"Tracked frames {frame_number + 1} of {self.total_frames}"
+        self.env.set_metadata(
+            user_id=self.user_id, movie_id=self.movie_id, prop="status", value=message
+        )
+
+    def close(self):
+        self._zipfile.close()
+
+    @property
+    def zipfile_data(self):
+        with open(self._zip_tf.name, "rb") as f:
+            return f.read()
+
+    def done(self):
+        self.env.set_metadata(
+            user_id=self.user_id,
+            movie_id=self.movie_id,
+            prop="status",
+            value=C.TRACKING_COMPLETED,
+        )
+        self.env.update_movie(self.movie_id, {KEY_PROCESSING_STATE: "tracked"})
+        if os.path.exists(self._zip_tf.name):
+            os.unlink(self._zip_tf.name)
+
+
+def run_tracking(*, user_id, movie_id, frame_start, env):
+    """Run full tracking pipeline using the given env for all I/O (DB, S3, metadata).
+
+    env must be a TrackingEnv implementation (e.g. FlaskTrackingEnv or LambdaTrackingEnv).
+    """
+    input_trackpoints = env.get_movie_trackpoints(movie_id=movie_id)
+    movie_record = env.get_movie_metadata(movie_id=movie_id)
+    research_comment = mp4_metadata_lib.build_comment(
+        movie_record.get("research_use", 0) or 0,
+        movie_record.get("credit_by_name", 0) or 0,
+        movie_record.get("attribution_name"),
+    )
+    movie_data = env.get_movie_data(movie_id=movie_id)
+    movie_metadata = extract_movie_metadata(movie_data=movie_data)
+    env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=movie_metadata)
+
+    rotation_steps = int(movie_record.get("rotation_steps") or 0)
+    rotation_steps = max(0, min(3, rotation_steps))
+    w = movie_metadata.get("width") or 0
+    h = movie_metadata.get("height") or 0
+    need_process = (
+        rotation_steps > 0
+        or w > C.ANALYSIS_FRAME_MAX_WIDTH
+        or h > C.ANALYSIS_FRAME_MAX_HEIGHT
+    )
+
+    in_path = None
+    out_path = None
+    moviefile_input = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as infile:
+            infile.write(movie_data)
+            infile.flush()
+            in_path = infile.name
+
+        if need_process:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
+                out_path = out_tf.name
+            prepare_movie_for_tracking(
+                in_path,
+                out_path,
+                rotation_steps,
+                C.ANALYSIS_FRAME_MAX_WIDTH,
+                C.ANALYSIS_FRAME_MAX_HEIGHT,
+            )
+            mp4_metadata_lib.set_comment(out_path, research_comment)
+            processed_oname = env.make_object_name(
+                course_id=env.course_id_for_movie_id(movie_id),
+                movie_id=movie_id,
+                ext=C.MOVIE_PROCESSED_EXTENSION,
+            )
+            processed_urn = env.make_urn(object_name=processed_oname)
+            env.write_object_from_path(urn=processed_urn, path=out_path)
+            env.update_movie(movie_id, {KEY_MOVIE_DATA_URN: processed_urn})
+            moviefile_input = out_path
+        else:
+            moviefile_input = in_path
+
+        total_frames = movie_metadata.get("total_frames") or 0
+        callback = TrackingCallback(
+            env=env,
+            user_id=user_id,
+            movie_id=movie_id,
+            research_comment=research_comment,
+            total_frames=total_frames,
+        )
+        track_movie(
+            input_trackpoints=input_trackpoints,
+            frame_start=frame_start,
+            moviefile_input=moviefile_input,
+            callback=callback.notify,
+        )
+        callback.close()
+        env.update_movie(movie_id, {KEY_LAST_FRAME_TRACKED: callback.last_frame_tracked})
+        zip_oname = env.make_object_name(
+            course_id=env.course_id_for_movie_id(movie_id),
+            movie_id=movie_id,
+            ext=C.ZIP_MOVIE_EXTENSION,
+        )
+        zip_urn = env.make_urn(object_name=zip_oname)
+        env.write_object(urn=zip_urn, data=callback.zipfile_data)
+        env.set_metadata(
+            user_id=user_id, movie_id=movie_id, prop="movie_zipfile_urn", value=zip_urn
+        )
+        callback.done()
+    finally:
+        if in_path and os.path.exists(in_path):
+            os.unlink(in_path)
+        if out_path and os.path.exists(out_path):
+            os.unlink(out_path)
+
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie
