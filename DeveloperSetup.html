@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Developer Setup &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Developer Setup on Amazon Linux 2023 on AWS EC2" href="DevSetupAmazonLinuxEC2.html" />
+    <link rel="prev" title="Demo Mode" href="demo_mode.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="developer-setup">
+<h1>Developer Setup<a class="headerlink" href="#developer-setup" title="Link to this heading">¶</a></h1>
+<section id="requirements-and-preparation">
+<h2>Requirements and Preparation<a class="headerlink" href="#requirements-and-preparation" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p>GitHub: In order to commit to the <cite>Plant-Tracer/webapp &lt;https://github.com/Plant-Tracer/webapp&gt;</cite> GitHub repository, you must first have a GitHub account. Then your GitHub account must be added as a member of the Plant-Tracer Organization. You may ask any of the Organization owners to do that, or send an email request to <a class="reference external" href="mailto:plantadmin&#37;&#52;&#48;planttracer&#46;com">plantadmin<span>&#64;</span>planttracer<span>&#46;</span>com</a>.</p></li>
+<li><p>While there are multiple ways to authenticate a login to  GitHub, it has proven to be convenient for development purposes to use a Personal Access Token for acccess via a command line. See <cite>&lt;https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens&gt;</cite> and <cite>&lt;https://github.com/settings/personal-access-tokens&gt;</cite> for more details. (Specific token settings not yet fully documented, but you want Read and Write access to Contents. Depending on your role and your own toolset, you may also want access to Actions, Discussions, Pages, and Pull Requests, but also consider whether all those permissions should exist in the same PAT.)</p></li>
+<li><p>Select your development platform. This will likely have to do with the machines that are available for your use. Plant-Tracer/webapp is being deployed on a Linux host, so that’s going to be the best place for runtime debugging. MacOS works well. Windows is not supported for either development or runtime. This file was developed on MacOS Sequoia but should be fine for Ubuntu and other Linuxes. See other doc files such as :doc: <cite>DevSetupUbuntu</cite> for more detail on setting up on that platforms.</p></li>
+<li><p>Install the following things on your development machine, in roughly the order presented, if they aren’t already there. How to do that is beyond the scope of this document.</p></li>
+<li><p>Chrome web browser. While you can use most web browsers with Plant-Tracer/webapp, only Google Chrome and Chromium are used for application testing. So when dealing with development issues, make sure that work on Chrome before getting concerned about other browsers.</p></li>
+<li><dl class="simple">
+<dt>Package installer. Have a package installer.</dt><dd><ul class="simple">
+<li><p>Homebrew. If installing on a MacOS machine, <a class="reference external" href="https://brew.sh">HomeBrew</a> must be installed prior to performing the steps below.</p></li>
+<li><p>Chocolatey. If installing on a Windows machine, the Chocolatey package manager is recommended.</p></li>
+<li><p>For Linux, use whatever is the favored package manager for that distro. For Ubuntu, it will be apt.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>Python3.11. Verify that typing ‘python’ gives you python3.11. If it doesn’t, make sure that your PATH is up-to-date.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>On ubuntu, sudo apt install python3.11-venv (if venv not available by default)</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>make</p></li>
+<li><p>git and gh</p></li>
+<li><p>Minio  (installed locally)</p></li>
+<li><p>DynamoDBLocal (installed locally)</p></li>
+</ul>
+</section>
+<section id="setup-steps">
+<h2>Setup Steps<a class="headerlink" href="#setup-steps" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><dl class="simple">
+<dt>Set your Git Hub name and username::</dt><dd><p>git config –global –edit</p>
+</dd>
+</dl>
+</li>
+<li><p>Authenticate to GitHub. This steps to do this differs per platform, but probably involves install the gh (GitHub) CLI. See the platform specific Dev setup instructions for details of how to install gh. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>gh auth login
+[ec2-user@dev-seb webapp]$ gh auth login
+? Where do you use GitHub? GitHub.com
+? What is your preferred protocol for Git operations on this host? HTTPS
+? Authenticate Git with your GitHub credentials? Yes
+?How would you like to authenticate GitHub CLI? Paste an authentication token
+? Tip: you can generate a Personal Access Token here https://github.com/settings/tokens
+? The minimum required scopes are &#39;repo&#39;, &#39;read:org&#39;, &#39;workflow&#39;.
+? Paste your authentication token: ***************************************************- gh - - gh config set -h github.com git_protocol https
+✓ Configured git protocol
+! Authentication credentials saved in plain text
+✓ Logged in as yourusername
+</pre></div>
+</div>
+</li>
+<li><p>Clone the Plant Tracer webapp into a directory that will be the local repository, for example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">Plant</span><span class="o">-</span><span class="n">Tracer</span><span class="o">/</span><span class="n">webapp</span><span class="o">.</span><span class="n">git</span> <span class="n">webapp</span>
+</pre></div>
+</div>
+</li>
+<li><p>Change to the local repository directory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">webapp</span>
+</pre></div>
+</div>
+</li>
+<li><p>Make a Python Virtual Environment (venv):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">venv</span>
+</pre></div>
+</div>
+</li>
+<li><p>Activate the venv:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">.</span> <span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+</li>
+<li><p>Install the prerequisites with make install-&lt;your-os&gt;, e.g.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">install</span><span class="o">-</span><span class="n">macos</span>
+</pre></div>
+</div>
+</li>
+<li><p>Create a new local database with demo course</p>
+<blockquote>
+<div><div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">PLANTTRACER_CREDENTIALS</span><span class="o">=</span><span class="n">src</span><span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">credentials</span><span class="o">-</span><span class="n">localhost</span><span class="o">.</span><span class="n">ini</span>
+<span class="n">make</span> <span class="n">make</span><span class="o">-</span><span class="n">local</span><span class="o">-</span><span class="n">demo</span>
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+<li><p>Run the self-tests:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">pytest</span>
+</pre></div>
+</div>
+</li>
+<li><p>Create your first course!:</p>
+<ul class="simple">
+<li><p>–course_name “My Course Name” is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.</p></li>
+<li><p>–course_id is a simple unique identfier for the course. (–course_name is more descriptive)</p></li>
+<li><p>–admin-email is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is <a class="reference external" href="mailto:joecool&#37;&#52;&#48;company&#46;com">joecool<span>&#64;</span>company<span>&#46;</span>com</a>, then an admin email address might be <a class="reference external" href="mailto:joecool+admin&#37;&#52;&#48;company&#46;com">joecool+admin<span>&#64;</span>company<span>&#46;</span>com</a></p></li>
+<li><p>–admin-name “Your Name” should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.</p></li>
+<li><p>Set up the environment as in the command below</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">DYNAMODB_TABLE_PREFIX</span><span class="o">=</span><span class="n">demo</span><span class="o">-</span> <span class="n">AWS_ACCESS_KEY_ID</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_SECRET_ACCESS_KEY</span><span class="o">=</span><span class="n">minioadmin</span> <span class="n">AWS_ENDPOINT_URL_S3</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">9000</span><span class="o">/</span> <span class="n">AWS_ENDPOINT_URL_DYNAMODB</span><span class="o">=</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span> <span class="n">AWS_REGION</span><span class="o">=</span><span class="n">us</span><span class="o">-</span><span class="n">east</span><span class="o">-</span><span class="mi">1</span> <span class="n">PLANTTRACER_S3_BUCKET</span><span class="o">=</span><span class="n">planttracer</span><span class="o">-</span><span class="n">local</span> <span class="n">PLANTTRACER_CREDENTIALS</span><span class="o">=</span><span class="n">src</span><span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">credentials</span><span class="o">-</span><span class="n">localhost</span><span class="o">.</span><span class="n">ini</span> <span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span> <span class="n">dbutil</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">create_course</span> <span class="o">--</span><span class="n">course_name</span> <span class="s2">&quot;Test Course&quot;</span> <span class="o">--</span><span class="n">course_id</span> <span class="s2">&quot;test&quot;</span> <span class="o">--</span><span class="n">admin_email</span> <span class="n">sbarber2</span><span class="o">+</span><span class="n">admin</span><span class="nd">@gmail</span><span class="o">.</span><span class="n">com</span> <span class="o">--</span><span class="n">admin_name</span> <span class="s2">&quot;Steve Admin Barber&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p>The information for the new course will be output and look something like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">creating</span> <span class="n">course</span><span class="o">...</span>
+<span class="mi">2025</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">07</span> <span class="mi">17</span><span class="p">:</span><span class="mi">42</span><span class="p">:</span><span class="mi">36</span><span class="p">,</span><span class="mi">177</span>  <span class="n">odb</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">376</span> <span class="n">WARNING</span><span class="p">:</span> <span class="n">NOTE</span><span class="p">:</span> <span class="n">create_user</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">check</span> <span class="n">to</span> <span class="n">make</span> <span class="n">sure</span> <span class="n">user</span> <span class="n">sbarber2</span><span class="o">+</span><span class="n">admin</span><span class="nd">@gmail</span><span class="o">.</span><span class="n">com</span><span class="s1">&#39;s course test exists</span>
+<span class="n">Transaction</span> <span class="n">succeeded</span><span class="p">:</span> <span class="n">user</span> <span class="n">inserted</span><span class="o">.</span>
+<span class="n">created</span> <span class="n">test</span>
+<span class="p">{</span>
+    <span class="s2">&quot;admins_for_course&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="s2">&quot;udcaba1d8-3f26-4a62-86bc-46f4144c2d4c&quot;</span>
+    <span class="p">],</span>
+    <span class="s2">&quot;course_id&quot;</span><span class="p">:</span> <span class="s2">&quot;test&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max_enrollment&quot;</span><span class="p">:</span> <span class="s2">&quot;50&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;course_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Test Course&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;course_key&quot;</span><span class="p">:</span> <span class="s2">&quot;2b32-4faf&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p>Note the course_key value: this value is what to give users in order that they can register for the course.</p></li>
+<li><p>In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">smtp</span><span class="p">]</span>
+<span class="n">SMTP_USERNAME</span><span class="o">=</span><span class="n">plantadmin</span><span class="nd">@mycompany</span><span class="o">.</span><span class="n">com</span>
+<span class="n">SMTP_PASSWORD</span><span class="o">=</span><span class="n">MyPassword</span>
+<span class="n">SMTP_PORT</span><span class="o">=</span><span class="mi">587</span>
+<span class="n">SMTP_HOST</span><span class="o">=</span><span class="n">smtp</span><span class="o">.</span><span class="n">mycompany</span><span class="o">.</span><span class="n">com</span>
+
+<span class="p">[</span><span class="n">imap</span><span class="p">]</span>
+<span class="n">IMAP_USERNAME</span><span class="o">=</span><span class="n">plantadmin</span><span class="nd">@mycompany</span><span class="o">.</span><span class="n">com</span>
+<span class="n">IMAP_PASSWORD</span><span class="o">=</span><span class="n">MyPassword</span>
+<span class="n">IMAP_HOST</span><span class="o">=</span><span class="n">imap</span><span class="o">.</span><span class="n">mycompany</span><span class="o">.</span><span class="n">com</span>
+<span class="n">IMAP_PORT</span><span class="o">=</span><span class="mi">993</span>
+</pre></div>
+</div>
+</li>
+<li><p>The demo course has also added demo movies to the database. To finish setting up demo mode, run the server in non-demo mode, track all the demo movies manually, and publish them.</p></li>
+</ol>
+</section>
+<section id="running-locally-quick-start">
+<h2>Running Locally Quick Start<a class="headerlink" href="#running-locally-quick-start" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p>Run Plant-Tracer/webapp locally using the database created above and the credentials file already specified in the PLANTTRACER_CREDENTIALS environment variable</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">PLANTTRACER_CREDENTIALS</span><span class="o">=</span><span class="n">src</span><span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">credentials</span><span class="o">-</span><span class="n">localhost</span><span class="o">.</span><span class="n">ini</span>
+<span class="n">make</span> <span class="n">run</span><span class="o">-</span><span class="n">local</span><span class="o">-</span><span class="n">debug</span> <span class="c1"># Ctrl-C to quit</span>
+</pre></div>
+</div>
+</li>
+<li><p>Sometimes, it is necessary to manually clear the cookies that Plant-Tracer/webapp creates in a browser. These cookies are of the form “api_key-“+my_database_name. Here is an example:</p></li>
+</ol>
+<img alt="_images/PlantTracerCookieExample.png" src="_images/PlantTracerCookieExample.png" />
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Developer Setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#requirements-and-preparation">Requirements and Preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#setup-steps">Setup Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#running-locally-quick-start">Running Locally Quick Start</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="demo_mode.html" title="previous chapter">Demo Mode</a></li>
+      <li>Next: <a href="DevSetupAmazonLinuxEC2.html" title="next chapter">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/DeveloperSetup.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

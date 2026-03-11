@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>PlantTracer Movie Processing Phases &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="planttracer-movie-processing-phases">
+<h1>PlantTracer Movie Processing Phases<a class="headerlink" href="#planttracer-movie-processing-phases" title="Link to this heading">¶</a></h1>
+<p>This note sketches the staged refactor of movie upload and processing.</p>
+<section id="phase-1-infra-bootstrap-events">
+<h2>Phase 1 – Infra / Bootstrap / Events<a class="headerlink" href="#phase-1-infra-bootstrap-events" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Remove the S3 → Lambda event architecture for the <code class="docutils literal notranslate"><span class="pre">uploads/</span></code> prefix:</p>
+<ul>
+<li><p>Delete the <code class="docutils literal notranslate"><span class="pre">LambdaS3InvokePermission</span></code> resource in <code class="docutils literal notranslate"><span class="pre">template.yaml</span></code> so S3 no longer invokes the Lambda directly.</p></li>
+<li><p>Stop configuring S3 bucket notifications in <code class="docutils literal notranslate"><span class="pre">etc/bootstrap.sh</span></code> (drop the call to <code class="docutils literal notranslate"><span class="pre">etc/s3_upload_trigger.py</span></code>).</p></li>
+<li><p>Remove the bootstrap S3-based ping that uploads <code class="docutils literal notranslate"><span class="pre">uploads/_bootstrap/ping.json</span></code> and instead rely on the Lambda HTTP <code class="docutils literal notranslate"><span class="pre">/status</span></code> endpoint for health checks.</p></li>
+</ul>
+</li>
+<li><p>Lambda remains reachable only via its HTTP API (AWS::Serverless::HttpApi); no behavior change for existing HTTP routes in this phase.</p></li>
+<li><p>Update docs and rules that describe the S3 → Lambda trigger so they reflect the HTTP-only model.</p></li>
+</ul>
+</section>
+<section id="phase-2-flask-javascript-orchestration">
+<h2>Phase 2 – Flask / JavaScript Orchestration<a class="headerlink" href="#phase-2-flask-javascript-orchestration" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Change the upload pipeline to:</p>
+<ul>
+<li><p>Have the browser call a status API to confirm the Lambda is healthy before starting an upload.</p></li>
+<li><p>Use the upload API to create the movie record and mark its status as <code class="docutils literal notranslate"><span class="pre">uploading</span></code>.</p></li>
+<li><p>Upload movies directly to their final S3 keys via presigned POST (no <code class="docutils literal notranslate"><span class="pre">uploads/</span></code> staging prefix).</p></li>
+<li><p>After a successful upload, have the browser call a new Lambda processing API to kick off processing.</p></li>
+</ul>
+</li>
+<li><p>On the server side (Flask):</p>
+<ul>
+<li><p>Simplify <code class="docutils literal notranslate"><span class="pre">/api/new-movie</span></code> to always presign the final key instead of choosing between staging and final based on environment.</p></li>
+<li><p>Add or expose movie-level processing state in the movies table (e.g., <code class="docutils literal notranslate"><span class="pre">processing_state</span></code>, <code class="docutils literal notranslate"><span class="pre">first_frame_urn</span></code>, <code class="docutils literal notranslate"><span class="pre">movie_zipfile_urn</span></code>).</p></li>
+<li><p>Move movie rotation from VM ffmpeg into a Lambda-driven API that queues rotation/processing commands.</p></li>
+</ul>
+</li>
+<li><p>In the browser:</p>
+<ul>
+<li><p>Wire the upload page to use the new status and start-processing APIs.</p></li>
+<li><p>After upload, initiate processing and poll for the first frame and zipfile readiness using the new state fields.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="phase-3-ui-refinements-and-status-display">
+<h2>Phase 3 – UI Refinements and Status Display<a class="headerlink" href="#phase-3-ui-refinements-and-status-display" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Make movie processing state visible and understandable in the UI:</p>
+<ul>
+<li><p>Extend the movie list to show upload / processing / rotation status for each movie (e.g., <code class="docutils literal notranslate"><span class="pre">uploading</span></code>, <code class="docutils literal notranslate"><span class="pre">processing</span></code>, <code class="docutils literal notranslate"><span class="pre">first-frame-ready</span></code>, <code class="docutils literal notranslate"><span class="pre">zip-ready</span></code>, <code class="docutils literal notranslate"><span class="pre">rotating</span></code>). <strong>Done:</strong> list shows <code class="docutils literal notranslate"><span class="pre">processing_state</span></code> in the Status column.</p></li>
+<li><p>Improve messaging on the analyze page when processing is still running (poll for up to 60 seconds, then ask the user to return later). <strong>Done:</strong> <code class="docutils literal notranslate"><span class="pre">#firsth2</span></code> shows “Waiting for processing to complete…” while polling; on timeout “Processing did not complete in time. Please come back later.”</p></li>
+<li><p>Clarify first-frame behavior after upload (250ms polling with a clear error if the Lambda is not responding). <strong>Done:</strong> 250ms × 10 attempts; clear error message and no broken image icon.</p></li>
+</ul>
+</li>
+<li><p>Note (in comments/docs and code): the movie list page should eventually be re-architected around server-side rendering with Jinja2; for now it continues to rely on the existing JSON APIs and client-side rendering. <strong>Done:</strong> comment in <code class="docutils literal notranslate"><span class="pre">flask_app.py</span></code> at <code class="docutils literal notranslate"><span class="pre">/list</span></code> and in <code class="docutils literal notranslate"><span class="pre">planttracer.js</span></code> at <code class="docutils literal notranslate"><span class="pre">list_movies_data</span></code>.</p></li>
+</ul>
+</section>
+<section id="rotation-and-zip-behavior-phase-2">
+<h2>Rotation and zip behavior (Phase 2)<a class="headerlink" href="#rotation-and-zip-behavior-phase-2" title="Link to this heading">¶</a></h2>
+<p>To avoid queuing multiple rotation requests when the user clicks “Rotate” several times, the client <strong>debounces</strong> rotate clicks: the user may click 1, 2, or 3 times (for 90°, 180°, or 270°); after about one second with no further click, the client sends a <strong>single</strong> request to <code class="docutils literal notranslate"><span class="pre">/api/edit-movie</span></code> with <code class="docutils literal notranslate"><span class="pre">action=rotate90cw</span></code> and <code class="docutils literal notranslate"><span class="pre">rotation_steps=1|2|3</span></code>. The server applies that many 90° rotations in one go, updates the stored movie, then starts building the frame zip in a <strong>background thread</strong>. The request returns as soon as rotation is done; zip creation continues in the background.</p>
+<p>The user can go to the Analyze page immediately. The first frame shown comes from the already-rotated movie (via the get-frame API). They can place markers (drag points) on that frame. The zip file is being created in the background; when it becomes available, the analyze page <strong>polls</strong> <code class="docutils literal notranslate"><span class="pre">get-movie-metadata</span></code> every 2 seconds. When <code class="docutils literal notranslate"><span class="pre">movie_zipfile_url</span></code> appears, the page loads the zip and switches to the full frame set so the user can scrub through all frames. If the zip does not appear within 60 seconds, the page shows “Zip still not ready. Please come back later.” This behavior is consistent with the existing test infrastructure (edit-movie tests; analyze flow uses the same APIs).</p>
+</section>
+<section id="rotation-in-lambda-no-ffmpeg">
+<h2>Rotation in Lambda (no ffmpeg)<a class="headerlink" href="#rotation-in-lambda-no-ffmpeg" title="Link to this heading">¶</a></h2>
+<p>Rotation and zip creation can run in the Lambda instead of the VM. The Lambda does <strong>not</strong> use the ffmpeg binary (which would add ~150MB to the deployment). It uses <strong>PyAV (av)</strong> and <strong>Pillow</strong> only: decode video with av, rotate each frame with Pillow, re-encode with av (mpeg4), and build the frame zip by encoding each frame as JPEG and writing to a zip. All dependencies are already in the Lambda group (<code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">group</span> <span class="pre">lambda</span></code>). The VM still supports rotation (ffmpeg) when the Lambda is not configured (e.g. local dev).</p>
+</section>
+<section id="lambda-only-code-and-testing">
+<h2>Lambda-only code and testing<a class="headerlink" href="#lambda-only-code-and-testing" title="Link to this heading">¶</a></h2>
+<p>The Lambda can depend on code and packages that the main Flask API does not (e.g. <code class="docutils literal notranslate"><span class="pre">resize_app/rotate_zip.py</span></code>, PyAV). The single <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> at repo root defines group <code class="docutils literal notranslate"><span class="pre">lambda</span></code> for Lambda-only deps; <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">install-lambda-deps</span></code> (or <code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">install</span> <span class="pre">--with</span> <span class="pre">lambda</span></code>) installs everything needed to build and run the Lambda. For testing: run the Lambda handler locally with mock HTTP events, or add a second Lambda later and ensure CI runs <code class="docutils literal notranslate"><span class="pre">install</span> <span class="pre">--with</span> <span class="pre">lambda</span></code> and any Lambda-specific tests. See <code class="docutils literal notranslate"><span class="pre">lambda-resize/Makefile</span></code> (vend-app, install) and the root Makefile targets for lambda-resize.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/ProcessingPhases.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

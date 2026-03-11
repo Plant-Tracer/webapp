@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Demo Mode &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Developer Setup" href="DeveloperSetup.html" />
+    <link rel="prev" title="Plant-Tracer/webapp Releases" href="ReleaseHistory.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="demo-mode">
+<h1>Demo Mode<a class="headerlink" href="#demo-mode" title="Link to this heading">¶</a></h1>
+<p>A PlantTracer database consists of several DyanmoDB tables with a given table prefix and an S3 bucket.</p>
+<p>When the database is created, a default course with the ID <cite>demo_course</cite> is created. There are two users: a default course admin and a default demo user. The demo course is then prepopulated with several demo movies from the test data.</p>
+<p>The demo user is identified with a special API key.</p>
+<p>Demo mode is enabled by sedding the environment variable <cite>DEMO_COURSE_ID</cite> to the course_id of the course that is the demo course. It need not be the demo course that is created as part of the default installation.</p>
+<section id="demo-mode-goals">
+<h2>Demo Mode Goals<a class="headerlink" href="#demo-mode-goals" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app</p></li>
+<li><p>Allow the anonymous demo user to experience plant movement tracking in the app without requiring the user to create an account in a course or to be aware of the movie lifecycle of upload, track, publish, delete</p></li>
+<li><p>Disallow the persistence of modifications to all webapp-managed data while in demo mode</p></li>
+</ul>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<p>Demo mode allows</p>
+<ul class="simple">
+<li><p>View the list of movies in a single table</p></li>
+<li><p>Play a movie without tracking</p></li>
+<li><p>Click on ‘analyze’ to show the user interface for playing a movie that has a stored trace</p></li>
+<li><p>Download a CSV representation of movie trace data</p></li>
+</ul>
+<p>Demo mode restrictions:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>No uploading of movies</p></li>
+<li><p>No deleting of movies</p></li>
+<li><p>No renaming of titles, descriptions</p></li>
+<li><p>No deleting or adding trackpoints</p></li>
+<li><p>No editing any text</p></li>
+<li><p>No re-tracking of movies</p></li>
+</ul>
+</div></blockquote>
+</section>
+<section id="required-in-the-database">
+<h2>Required in the database<a class="headerlink" href="#required-in-the-database" title="Link to this heading">¶</a></h2>
+<p>Every new database is created with a demo user and a few movies.</p>
+<ul class="simple">
+<li><p>The demo user has a perdefiend API key.</p></li>
+<li><p>When <cite>DEMO_COURSE_ID</cite> is set, the authentication routines always return the demo mode <cite>api_key</cite>. That is, there is no way to log in or log out.</p></li>
+</ul>
+<p>To edit the movies in the demo course, just run another instance that is attached to the same database and edit the movies in the demo course.</p>
+</section>
+<section id="implementation">
+<h2>Implementation<a class="headerlink" href="#implementation" title="Link to this heading">¶</a></h2>
+<p>Demo Mode uses the following environment variables:</p>
+<ul class="simple">
+<li><p><cite>DEMO_COURSE_ID</cite>       - The <cite>course_id</cite> of the demo course.  (Created as <cite>demo</cite> by the dbmaint.py script)</p></li>
+<li><p><cite>DEMO_DYNAMODB_PREFIX</cite> - The table prefix. (Created as <cite>demo-</cite> by the <cite>dbutil.py</cite> script)</p></li>
+</ul>
+<p>If we are in demo mode:</p>
+<ul class="simple">
+<li><p>We are always logged in, and always in Demo Mode.</p></li>
+<li><p>auth.get_user_api_key() always returns an API Key for demo mode.</p></li>
+<li><p><cite>demo_user</cite> JavaScript global variable set to <code class="docutils literal notranslate"><span class="pre">true</span></code> (if in demo mode)</p></li>
+<li><p><cite>demo_user</cite> Jinja2 variable will get set to <code class="docutils literal notranslate"><span class="pre">True</span></code> (otherwise it is <code class="docutils literal notranslate"><span class="pre">False</span></code>)</p></li>
+</ul>
+<p>Rendering control:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>CSS Class <code class="docutils literal notranslate"><span class="pre">demo</span></code> elements display only if in demo mode</p></li>
+<li><p>CSS Class <code class="docutils literal notranslate"><span class="pre">nodemo</span></code> elements display only if not in demo mode</p></li>
+</ul>
+</div></blockquote>
+<p>To make changes to the demo course:</p>
+<ul class="simple">
+<li><p>Create another user who is enrolled in <cite>DEMO_COURSE</cite> and another login with the same <cite>DEMO_PREFIX</cite></p></li>
+</ul>
+</section>
+<section id="troubleshooting-development-note">
+<h2>Troubleshooting/Development Note<a class="headerlink" href="#troubleshooting-development-note" title="Link to this heading">¶</a></h2>
+<p>Plant-Tracer webapp creates an api_key-&lt;database name&gt; cookie in order to tracker
+the login state of a session. Sometimes this cookie does not clear itself upon logout
+and it is necessary to manually delete the cookie, especially in order to have a valid
+demo mode enabled.</p>
+<p>Here is an example of such a cookie:</p>
+<img alt="_images/PlantTracerCookieExample.png" src="_images/PlantTracerCookieExample.png" />
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Demo Mode</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#demo-mode-goals">Demo Mode Goals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#required-in-the-database">Required in the database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#implementation">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting-development-note">Troubleshooting/Development Note</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l1"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="ReleaseHistory.html" title="previous chapter">Plant-Tracer/webapp Releases</a></li>
+      <li>Next: <a href="DeveloperSetup.html" title="next chapter">Developer Setup</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/demo_mode.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
