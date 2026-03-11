@@ -82,6 +82,10 @@
               : 'Processing complete.',
           );
           actionsBlock.show();
+          // Auto-redirect to analyze page when zip is ready (e.g. after rotate+zip from upload page).
+          const analyzeUrl = `/analyze?movie_id=${movie_id}`;
+          window.location.href = analyzeUrl;
+          return;
         } else {
           const base =
             proc || 'Processing';

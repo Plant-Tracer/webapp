@@ -29,7 +29,17 @@ from . import apikey
 from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
-from .odb import InvalidAPI_Key,InvalidMovie_Id,USER_ID,MOVIE_ID,COURSE_ID,LAST_FRAME_TRACKED,DDBO,UnauthorizedUser
+from .odb import (
+    InvalidAPI_Key,
+    InvalidMovie_Id,
+    USER_ID,
+    MOVIE_ID,
+    COURSE_ID,
+    LAST_FRAME_TRACKED,
+    MOVIE_DATA_URN,
+    DDBO,
+    UnauthorizedUser,
+)
 from .s3_presigned import (
     make_object_name,
     make_urn,
@@ -37,7 +47,16 @@ from .s3_presigned import (
     make_presigned_post,
     object_exists,
 )
-from .odb_movie_data import write_object,get_movie_data,set_movie_data,delete_movie,purge_movie_frames,create_new_movie_frame
+from .odb_movie_data import (
+    write_object,
+    write_object_from_path,
+    get_movie_data,
+    set_movie_data,
+    delete_movie,
+    purge_movie_frames,
+    create_new_movie_frame,
+)
+from . import mp4_metadata_lib
 
 
 api_bp = Blueprint('api', __name__)
@@ -420,27 +439,55 @@ def api_get_frame():
     :param api_key:   authentication
     :param movie_id:   movie_id
     :param frame_number: get the frame by frame_number (starting with 0)
+    :param size: if 'analysis', return frame resized to C.ANALYSIS_FRAME_MAX (no redirect, no cache).
 
     :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
       error - 404 - movie or frame does not exist
       no error - redirect to the signed URL
     """
     user_id      = get_user_id(allow_demo=True)
-    frame_number = get_int('frame_number',0)
+    frame_number = get_int('frame_number', 0)
     movie_id     = get_movie_id()
+    size_analysis = (request.values.get('size') or '').strip().lower() == 'analysis'
 
-    logger.debug('logger.debug /get-frame. user_id=%s frame_number=%s movie_id=%s',user_id,frame_number,movie_id)
+    logger.debug('logger.debug /get-frame. user_id=%s frame_number=%s movie_id=%s', user_id, frame_number, movie_id)
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    if frame_number<0:
+    if frame_number < 0:
         logger.error("invalid frame number %s",frame_number)
         return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
 
+    # When size=analysis, return frame resized to analysis size (no cache, no redirect).
+    if size_analysis:
+        movie_data = get_movie_data(movie_id=movie_id)
+        if movie_data is None:
+            resp = make_response(
+                jsonify({
+                    "error": True,
+                    "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
+                }),
+                503,
+            )
+            resp.headers["Retry-After"] = "5"
+            return resp
+        try:
+            frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
+        except ValueError:
+            return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
+        resized = tracker.resize_jpeg_to_fit(
+            frame_data,
+            C.ANALYSIS_FRAME_MAX_WIDTH,
+            C.ANALYSIS_FRAME_MAX_HEIGHT,
+        )
+        response = make_response(resized, 200)
+        response.headers['Content-Type'] = 'image/jpeg'
+        return response
+
     # See if there is a urn
     urn = odb.get_frame_urn(movie_id=movie[MOVIE_ID], frame_number=frame_number)
-    logger.debug("urn=%s",urn)
+    logger.debug("urn=%s", urn)
     if urn is not None and not object_exists(urn):
-        logger.warning("%s does not exist",urn)
+        logger.warning("%s does not exist", urn)
         purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
         urn = None
 
@@ -464,11 +511,11 @@ def api_get_frame():
             assert frame_data is not None
         except ValueError:
             return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
-        urn = create_new_movie_frame(movie_id = movie_id, frame_number = frame_number, frame_data=frame_data)
+        urn = create_new_movie_frame(movie_id=movie_id, frame_number=frame_number, frame_data=frame_data)
         assert urn is not None
 
     url = make_signed_url(urn=urn)
-    logger.debug("api_get_frame urn=%s url=%s",urn,url)
+    logger.debug("api_get_frame urn=%s url=%s", urn, url)
     return redirect(url)
 
 
@@ -478,10 +525,17 @@ def api_get_frame():
 def _build_movie_zip_sync(movie_id, user_id):
     """Extract all frames from the current movie to a zip, upload to storage, set movie_zipfile_urn.
     Used after rotation so the analyze page can load the zip when ready (e.g. while user places markers).
+    Each JPEG in the zip gets the research-attribution comment from the movie record.
     """
     path = None
     zip_path = None
     try:
+        movie_record = odb.get_movie_metadata(movie_id=movie_id)
+        research_comment = mp4_metadata_lib.build_comment(
+            movie_record.get("research_use", 0) or 0,
+            movie_record.get("credit_by_name", 0) or 0,
+            movie_record.get("attribution_name"),
+        )
         movie_data = get_movie_data(movie_id=movie_id)
         with tempfile.NamedTemporaryFile(suffix='.mp4', mode='wb', delete=False) as infile:
             infile.write(movie_data)
@@ -491,6 +545,8 @@ def _build_movie_zip_sync(movie_id, user_id):
         with ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
             def zip_callback(*, frame_number, frame_data, frame_trackpoints):  # pylint: disable=unused-argument
                 jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+                if research_comment:
+                    jpeg = mp4_metadata_lib.add_comment_to_jpeg(jpeg, research_comment, quality=60)
                 zf.writestr(f"frame_{frame_number:04d}.jpg", jpeg)
             dummy_trackpoints = [{'x': 0, 'y': 0, 'label': 'dummy', 'frame_number': 0}]
             tracker.track_movie(moviefile_input=path, input_trackpoints=dummy_trackpoints, callback=zip_callback)
@@ -762,12 +818,13 @@ def api_add():
 ## Tracking is requested from the client and run in a background lambda function.
 
 # pylint: disable=too-few-public-methods
-# pylint: disable=consider-using-with
+# pylint: disable=consider-using-with,too-many-instance-attributes
 class MovieTrackCallback:
-    """Service class to create a callback instance to update the movie status"""
-    def __init__(self, *, user_id, movie_id):
+    """Service class to create a callback instance to update the movie status."""
+    def __init__(self, *, user_id, movie_id, research_comment: str = ""):
         self.user_id = user_id
         self.movie_id = movie_id
+        self.research_comment = research_comment or ""
         self.movie_metadata = None
         self.movie_zipfile_tf = tempfile.NamedTemporaryFile(suffix='.zip',prefix=f'movie_{movie_id}',delete=False)
         self.movie_zipfile    = ZipFile(self.movie_zipfile_tf.name, mode='w', compression=zipfile.ZIP_DEFLATED,compresslevel=9)
@@ -780,16 +837,15 @@ class MovieTrackCallback:
         If there are 296 frames, they are numbered 0 to 295.
         We actually track frames 1 through 295. We add 1 to make the status look correct.
         """
-        # Write the frame data to the database if we do not have it
-        # Moving to an object-oriented API would make this a whole lot more efficient...
-
-        logger.debug("NOTIFY. self=%s self.ziplen=%s",self,self.ziplen)
+        logger.debug("NOTIFY. self=%s self.ziplen=%s", self, self.ziplen)
 
         frame_jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
+        if self.research_comment:
+            frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(frame_jpeg, self.research_comment, quality=60)
         self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
         self.ziplen += len(frame_jpeg)
-        logger.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s",frame_number,len(frame_jpeg),self.ziplen)
-        self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg",frame_jpeg)
+        logger.debug("appending frame %d len(frame_jpeg)=%s to zipfile  len=%s", frame_number, len(frame_jpeg), self.ziplen)
+        self.movie_zipfile.writestr(f"frame_{frame_number:04}.jpg", frame_jpeg)
 
         # Update the trackpoints
         odb.put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
@@ -827,47 +883,92 @@ class MovieTrackCallback:
 
 ##
 ## Actual code that runs to track a movie.
-## Tracks to end.
+## Tracks to end. If rotation_steps or dimensions require it, rotates/scales to a new MP4 (temp file),
+## sets research-attribution comment on that file, uploads from file, updates movie_data_urn, then tracks.
 ## Can be implemented as a background task
-def api_track_movie(*,user_id, movie_id, frame_start):
+def api_track_movie(*, user_id, movie_id, frame_start):
     """Generate trackpoints for a movie based on initial trackpoints stored in the database at frame_start.
-    Extracts all frames from a movie and stores them in a zipfile.
-    Stores new trackpoints and each frame in the database.
-    Writes the zipfile to storage (becuase we use it later).
-    Memory requirements: the entire movie & the entire zipfile (roughly 3x the movie in total)
+    If the movie has rotation_steps > 0 or exceeds analysis frame size, rotate/scale to a temp file,
+    set MP4 comment from DB metadata, upload from file, update movie_data_urn, then track from that file.
+    Extracts all frames into a zipfile; each ZIP JPEG gets the same comment. Writes zip to storage.
     """
-    # Get all the trackpoints for every frame for the movie we are tracking or retracking
     input_trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
+    movie_record = odb.get_movie_metadata(movie_id=movie_id)
+    research_comment = mp4_metadata_lib.build_comment(
+        movie_record.get("research_use", 0) or 0,
+        movie_record.get("credit_by_name", 0) or 0,
+        movie_record.get("attribution_name"),
+    )
+    movie_data = get_movie_data(movie_id=movie_id)
+    movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
+    set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
-    # Write the movie to a tempfile, because OpenCV has to read movies from files.
-    mtc = MovieTrackCallback(user_id = user_id, movie_id = movie_id)
-    with tempfile.NamedTemporaryFile(suffix='.mp4',mode='wb') as infile:
-        movie_data     = get_movie_data(movie_id=movie_id)
-        movie_metadata = tracker.extract_movie_metadata(movie_data=movie_data)
-        infile.write( movie_data  )
-        infile.flush()
+    rotation_steps = int(movie_record.get("rotation_steps") or 0)
+    rotation_steps = max(0, min(3, rotation_steps))
+    w = movie_metadata.get("width") or 0
+    h = movie_metadata.get("height") or 0
+    need_process = (
+        rotation_steps > 0
+        or w > C.ANALYSIS_FRAME_MAX_WIDTH
+        or h > C.ANALYSIS_FRAME_MAX_HEIGHT
+    )
 
-        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+    in_path = None
+    out_path = None
+    moviefile_input = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as infile:
+            infile.write(movie_data)
+            infile.flush()
+            in_path = infile.name
 
-        # Track (or retrack) the movie and create the tracked movie
-        # Each time the callback is called it will update the trackpoints for that frame
-        # and write the frame to the frame store.
-        #
+        if need_process:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
+                out_path = out_tf.name
+            tracker.prepare_movie_for_tracking(
+                in_path,
+                out_path,
+                rotation_steps,
+                C.ANALYSIS_FRAME_MAX_WIDTH,
+                C.ANALYSIS_FRAME_MAX_HEIGHT,
+            )
+            mp4_metadata_lib.set_comment(out_path, research_comment)
+            processed_oname = make_object_name(
+                course_id=odb.course_id_for_movie_id(movie_id),
+                movie_id=movie_id,
+                ext=C.MOVIE_PROCESSED_EXTENSION,
+            )
+            processed_urn = make_urn(object_name=processed_oname)
+            write_object_from_path(processed_urn, out_path)
+            ddbo = DDBO()
+            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN: processed_urn})
+            moviefile_input = out_path
+        else:
+            moviefile_input = in_path
+
+        mtc = MovieTrackCallback(user_id=user_id, movie_id=movie_id, research_comment=research_comment)
         mtc.movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
-        tracker.track_movie(input_trackpoints = input_trackpoints,
-                            frame_start       = frame_start,
-                            moviefile_input   = infile.name,
-                            callback = mtc.notify)
-    mtc.close()
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED:mtc.last_frame_tracked})
-
-    # Note: this puts the entire movie in memory. That may be an issue at some point
-    oname = make_object_name(course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id,ext=C.ZIP_MOVIE_EXTENSION)
-    urn = make_urn(object_name=oname)
-    write_object(urn=urn, object_data=mtc.zipfile_data)
-    odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn',value=urn)
-    mtc.done() # sets the status to tracking complete
+        tracker.track_movie(
+            input_trackpoints=input_trackpoints,
+            frame_start=frame_start,
+            moviefile_input=moviefile_input,
+            callback=mtc.notify,
+        )
+        mtc.close()
+        ddbo = DDBO()
+        ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: mtc.last_frame_tracked})
+        oname = make_object_name(
+            course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id, ext=C.ZIP_MOVIE_EXTENSION
+        )
+        urn = make_urn(object_name=oname)
+        write_object(urn=urn, object_data=mtc.zipfile_data)
+        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop="movie_zipfile_urn", value=urn)
+        mtc.done()
+    finally:
+        if in_path and os.path.exists(in_path):
+            os.unlink(in_path)
+        if out_path and os.path.exists(out_path):
+            os.unlink(out_path)
 
 
 @api_bp.route('/track-movie-queue', methods=GET_POST)

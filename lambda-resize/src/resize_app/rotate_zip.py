@@ -73,12 +73,14 @@ def video_frames_to_zip_av(
     jpeg_quality: int = 60,
     progress_cb=None,
     progress_every: int = 5,
+    target_wh=(640, 480),
 ) -> bytes:
     """
     Extract every video frame as (downscaled) JPEG into a zip. Returns zip file bytes.
 
     If progress_cb is provided, it will be called as progress_cb(current, total)
     approximately every `progress_every` frames (and always on the final frame).
+    target_wh: (width, height) to fit frames into (single place for analysis size when called from resize.py with C.ANALYSIS_FRAME_MAX_*).
     """
     inp = av.open(io.BytesIO(data))
     vstreams = [s for s in inp.streams if s.type == "video"]
@@ -94,8 +96,7 @@ def video_frames_to_zip_av(
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for idx, frame in enumerate(frames, start=1):
             img = frame.to_image()
-            # Downscale to a reasonable analysis size (roughly VGA) to keep zips small.
-            target_wh = (640, 480)
+            # Downscale to target_wh (analysis size) to keep zips small.
             if img.size[0] > target_wh[0] or img.size[1] > target_wh[1]:
                 img.thumbnail(target_wh, Image.Resampling.LANCZOS)
             jpeg_io = io.BytesIO()

@@ -1,5 +1,6 @@
-"""Tests for etc/mp4_metadata.py CLI (view and set research-attribution comment)."""
+"""Tests for etc/mp4_metadata.py CLI and app.mp4_metadata_lib (research-attribution comment)."""
 # pylint: disable=duplicate-code  # _get_comment mirrors CLI get_comment for assertions
+import io
 import os
 import shutil
 import subprocess
@@ -7,7 +8,9 @@ import sys
 
 import pytest
 from mutagen.mp4 import MP4
+from PIL import Image
 
+from app import mp4_metadata_lib
 from app.paths import ROOT_DIR
 
 from .constants import TEST_CIRCUMNUTATION_PATH
@@ -92,3 +95,38 @@ def test_mp4_metadata_set_research_anonymous(sample_mp4):
     expected = "research use allowed (no credit required)"
     assert expected in result.stdout
     assert _get_comment(sample_mp4) == expected
+
+
+# --- Tests for app.mp4_metadata_lib (build_comment, add_comment_to_jpeg) ---
+
+
+def test_build_comment_research_prohibited():
+    """build_comment(0, *, *) returns research use prohibited."""
+    assert mp4_metadata_lib.build_comment(0, 0, None) == mp4_metadata_lib.RESEARCH_PROHIBITED
+    assert mp4_metadata_lib.build_comment(0, 1, "Name") == mp4_metadata_lib.RESEARCH_PROHIBITED
+
+
+def test_build_comment_anonymous():
+    """build_comment(1, 0, *) returns anonymous research allowed."""
+    assert mp4_metadata_lib.build_comment(1, 0, None) == mp4_metadata_lib.RESEARCH_ANONYMOUS
+    assert mp4_metadata_lib.build_comment(1, 0, "Ignore") == mp4_metadata_lib.RESEARCH_ANONYMOUS
+
+
+def test_build_comment_credit():
+    """build_comment(1, 1, name) returns research credit string."""
+    got = mp4_metadata_lib.build_comment(1, 1, "Alyssa P. Hacker")
+    assert got == "research use allowed; credit Alyssa P. Hacker"
+
+
+def test_add_comment_to_jpeg_roundtrip():
+    """add_comment_to_jpeg adds a COM segment that can be read back with Pillow."""
+    # Minimal 1x1 RGB JPEG bytes (no comment)
+    img = Image.new("RGB", (1, 1), color=(128, 128, 128))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=60)
+    jpeg_bytes = buf.getvalue()
+    comment = "research use allowed; credit Test"
+    out = mp4_metadata_lib.add_comment_to_jpeg(jpeg_bytes, comment, quality=60)
+    assert len(out) > 0
+    img2 = Image.open(io.BytesIO(out))
+    assert img2.info.get("comment") == comment.encode("utf-8")

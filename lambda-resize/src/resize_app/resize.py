@@ -243,7 +243,11 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
 
     try:
-        zip_bytes = video_frames_to_zip_av(movie_bytes_for_zip, progress_cb=_zip_progress)
+        zip_bytes = video_frames_to_zip_av(
+            movie_bytes_for_zip,
+            progress_cb=_zip_progress,
+            target_wh=(C.ANALYSIS_FRAME_MAX_WIDTH, C.ANALYSIS_FRAME_MAX_HEIGHT),
+        )
     except Exception as e:  # pylint: disable=broad-exception-caught
         LOGGER.exception("video_frames_to_zip_av failed: %s", e)
         return resp_json(500, {"error": True, "message": "zip build failed"})

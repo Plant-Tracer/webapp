@@ -3,6 +3,7 @@
 //code for /analyze
 
 /* eslint-env es6 */
+/* global LAMBDA_API_BASE */
 
 /* jshint esversion: 8 */
 
@@ -678,9 +679,17 @@ function trace_movie(div_controller, movie_id, api_key) {
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
             $('#firsth2').html('Waiting for processing to complete…');
-            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
-            // Zip may be building in background (e.g. after rotate). Poll until it appears or 60s.
+            // Trigger zip build so shrinking and tracing can happen in parallel (no rotation case).
+            if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+                fetch(LAMBDA_API_BASE + 'api/v1', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'rotate-and-zip', movie_id, rotation_steps: 0 }),
+                }).catch(() => {});
+            }
+            // Zip may be building in background. Poll until it appears or 60s.
             poll_for_zip_and_load(div_controller, movie_id, api_key, 60);
             return;
         }

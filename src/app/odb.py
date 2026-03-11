@@ -1285,6 +1285,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     'research_use': research_use,
                     'credit_by_name': credit_by_name,
                     'attribution_name': attribution_name,
+                    'rotation_steps': 0,
                     'processing_state': 'uploading',
                     })
     return movie_id
@@ -1515,6 +1516,9 @@ SET_MOVIE_METADATA = {
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
+
+    # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
+    'rotation_steps': 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
 }
 
 @log

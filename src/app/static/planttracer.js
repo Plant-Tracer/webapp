@@ -297,9 +297,49 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
         console.log("error: ", e);
         return;
     }
-    // Movie was uploaded! Redirect to processing page for this movie so the user
-    // sees clear processing status and can safely reload.
-    window.location = `/processing?movie_id=${movie_id}`;
+    // Movie was uploaded. Show first frame and rotation on this page; user clicks "Process movie" to go to processing.
+    showUploadPreviewAfterUpload(movie_id, movie_title, description);
+}
+
+/**
+ * Show the upload preview (first frame, rotate, process button) after a successful upload.
+ * Does not redirect; user clicks "Process movie" to go to /processing.
+ */
+function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
+    $('#upload_message').html('');
+    $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
+    $('#movie_id').text(movie_id);
+    // No rotation yet: Analyze goes straight to analyze page. After rotate we switch this to processing.
+    $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+    $('#track_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+    $('#upload-preview').show();
+
+    const img = $('#image-preview').get(0);
+    const statusEl = $('#image-preview-status');
+    statusEl.show().text('Loading first frame…');
+
+    const maxAttempts = 12;
+    const delayMs = 500;
+    let attempt = 0;
+
+    function tryLoadFirstFrame() {
+        attempt += 1;
+        const url = first_frame_url(movie_id);
+        img.onerror = () => {
+            if (attempt < maxAttempts) {
+                statusEl.text(`First frame not ready (${attempt}/${maxAttempts})…`);
+                setTimeout(tryLoadFirstFrame, delayMs);
+            } else {
+                statusEl.text('First frame could not be loaded. You can still rotate or click Analyze.');
+            }
+        };
+        img.onload = () => {
+            statusEl.text('').hide();
+        };
+        img.src = url;
+    }
+
+    tryLoadFirstFrame();
 }
 
 /* Finally the function that is called when the upload_movie button is clicked */
@@ -403,6 +443,8 @@ async function apply_rotation_and_zip() {
             linkEl.classList.remove('rotate-pending');
             return;
         }
+        // After rotation, Analyze should go to processing page (rotate+zip), then auto-redirect to analyze.
+        $('#process_movie_link').attr('href', `/processing?movie_id=${movie_id}`);
         $('#image-preview').attr('src', first_frame_url(movie_id));
         const reenable_rotate = () => {
             linkEl.classList.remove('rotate-pending');
