@@ -25,6 +25,7 @@ install:
 	$(MAKE) vend-app
 
 vend-app: Makefile
+	mkdir -p src/resize_app/src/app
 	rsync --verbose --archive ../src/app/{odb,schema,constants,mp4_metadata_lib}.py src/resize_app/src/app/
 
 lint:
