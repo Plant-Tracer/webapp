@@ -348,7 +348,7 @@ install-ubuntu:
 install-macos:
 	brew update
 	which aws || brew install awscli
-	which chromium || brew install chromium --no-quarantine
+	which chromium || brew install chromium
 	which ffmpeg || brew install ffmpeg
 	which lsof || brew install lsof
 	which node || brew install node
