@@ -94,7 +94,7 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) \
+	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
 		src tests *.py \
 		lambda-resize/src/resize_app/resize.py \
 		lambda-resize/src/resize_app/rotate_zip.py \
