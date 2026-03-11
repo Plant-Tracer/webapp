@@ -175,20 +175,8 @@ async function checkLambdaStatus() {
  * If LAMBDA_API_BASE is not set, resolves without calling (local dev).
  */
 async function startLambdaProcessing(movie_id) {
-    if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) return;
-    try {
-        const r = await fetch(LAMBDA_API_BASE + 'api/v1', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'start-processing', movie_id: movie_id })
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok || data.error) {
-            console.warn('start-processing failed', r.status, data);
-        }
-    } catch (e) {
-        console.warn('startLambdaProcessing failed', e);
-    }
+    // Processing currently handled on the VM; Lambda control-plane API is disabled for now.
+    return;
 }
 
 /*
@@ -423,20 +411,12 @@ async function apply_rotation_and_zip() {
     $('#rotate_status').text(' … Rotating and creating zip…');
     let r;
     try {
-        if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
-            r = await fetch(LAMBDA_API_BASE + 'api/v1', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'rotate-and-zip', movie_id: movie_id, rotation_steps: steps })
-            });
-        } else {
-            const formData = new FormData();
-            formData.append('api_key', api_key);
-            formData.append('movie_id', movie_id);
-            formData.append('action', 'rotate90cw');
-            formData.append('rotation_steps', String(steps));
-            r = await fetch(`${API_BASE}api/edit-movie`, { method: 'POST', body: formData });
-        }
+        const formData = new FormData();
+        formData.append('api_key', api_key);
+        formData.append('movie_id', movie_id);
+        formData.append('action', 'rotate90cw');
+        formData.append('rotation_steps', String(steps));
+        r = await fetch(`${API_BASE}api/edit-movie`, { method: 'POST', body: formData });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
             $('#rotate_status').text(' Rotation failed.' + (err.message ? ' ' + err.message : ''));
