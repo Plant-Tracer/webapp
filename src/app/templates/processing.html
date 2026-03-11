@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block body %}
+
+<h1>Processing Movie</h1>
+
+<p id="processing_movie_id"></p>
+<p id="processing_status">Checking processing status…</p>
+<p id="processing_hint">This page will update automatically; you can also reload it safely.</p>
+
+<p id="processing_actions" style="display:none;">
+  <button id="processing_analyze_button" type="button">Analyze</button>
+</p>
+
+<p>
+  <a href="/list">List movies</a>
+</p>
+
+<script type="module">
+  import { $ } from "{{ url_for('static', filename='utils.js') }}";
+
+  const params = new URLSearchParams(window.location.search);
+  const movie_id = params.get('movie_id');
+  const statusEl = $('#processing_status');
+  const idEl = $('#processing_movie_id');
+  const actionsBlock = $('#processing_actions');
+  const analyzeButton = $('#processing_analyze_button');
+  let buildZipStarted = false;
+
+  if (!movie_id) {
+    statusEl.text('No movie_id provided.');
+  } else {
+    idEl.text(`Movie ID: ${movie_id}`);
+    const analyzeUrl = `/analyze?movie_id=${movie_id}`;
+    analyzeButton.click(() => {
+      window.location.href = analyzeUrl;
+    });
+  }
+
+  function pollStatus() {
+    if (!movie_id) return;
+    const formData = new FormData();
+    formData.append('api_key', api_key || '');
+    formData.append('movie_id', movie_id);
+    fetch(`${API_BASE}api/get-movie-metadata`, { method: 'POST', body: formData })
+      .then((r) => r.json())
+      .then((resp) => {
+        if (resp.error) {
+          statusEl.text(`Error: ${resp.message || 'unknown error'}`);
+          return;
+        }
+        const meta = resp.metadata || {};
+        const proc = meta.processing_state || '';
+        const hasZip = !!meta.movie_zipfile_url;
+
+        // Optional progress map from Lambda: { total: int, current: int }
+        const zfp = meta.zip_frame_processing || {};
+        const total = Number(zfp.total || 0);
+        const current = Number(zfp.current || 0);
+        let progressStr = '';
+        if (total > 0) {
+          const pct = Math.floor((current / total) * 100);
+          progressStr = ` – frames ${current}/${total} (${pct}%)`;
+        }
+
+        if (!hasZip && !buildZipStarted && typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+          buildZipStarted = true;
+          // Fire-and-forget request to Lambda to build the zip (no rotation).
+          fetch(LAMBDA_API_BASE + 'api/v1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'rotate-and-zip', movie_id, rotation_steps: 0 }),
+          }).catch((e) => {
+            console.warn('build-zip trigger failed', e);
+          });
+        }
+
+        if (hasZip) {
+          statusEl.text(
+            proc
+              ? `Processing state: ${proc}${progressStr ? ' ' + progressStr : ''}`
+              : 'Processing complete.',
+          );
+          actionsBlock.show();
+          // Auto-redirect to analyze page when zip is ready (e.g. after rotate+zip from upload page).
+          const analyzeUrl = `/analyze?movie_id=${movie_id}`;
+          window.location.href = analyzeUrl;
+          return;
+        } else {
+          const base =
+            proc || 'Processing';
+          statusEl.text(`${base} (zip not ready yet)…${progressStr}`);
+          setTimeout(pollStatus, 2500);
+        }
+      })
+      .catch((e) => {
+        console.warn('processing poll failed', e);
+        statusEl.text('Error checking status. Retrying…');
+        setTimeout(pollStatus, 5000);
+      });
+  }
+
+  $(document).ready(function () {
+    pollStatus();
+  });
+</script>
+
+{% endblock %}
+

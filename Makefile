@@ -94,7 +94,12 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) src tests *.py
+	$(MAKE) -C lambda-resize vend-app
+	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
+		src tests *.py \
+		lambda-resize/src/resize_app/resize.py \
+		lambda-resize/src/resize_app/rotate_zip.py \
+		lambda-resize/tests
 
 ## Mypy static analysis
 mypy:
@@ -129,10 +134,10 @@ flake:
 ## set LOG_LEVEL at start of CLI to change the  log level
 
 pytest: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -332,6 +337,7 @@ install-ubuntu:
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
+	@# npm deprecation warnings (WARN deprecated) from transitive deps can be ignored
 	npm ci
 	make $(REQ)
 	@echo install-ubuntu done
@@ -342,7 +348,7 @@ install-ubuntu:
 install-macos:
 	brew update
 	which aws || brew install awscli
-	which chromium || brew install chromium --no-quarantine
+	which chromium || brew install chromium
 	which ffmpeg || brew install ffmpeg
 	which lsof || brew install lsof
 	which node || brew install node
@@ -435,13 +441,45 @@ check-iam:
 	fi
 
 
+# Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
+install-lambda-deps: $(REQ)
+	poetry install --with lambda
+
+# lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
+# install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
+lambda-resize-lint: install-lambda-deps
+	$(MAKE) -C lambda-resize vend-app
+	poetry run ruff check lambda-resize/src
+	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
+
+lambda-resize-check: lambda-resize-lint
+	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
 sam-build: $(REQ)
+	@# Refuse to build if there are local changes or unpushed commits.
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
+	  exit 1; \
+	fi
+	@UPSTREAM=$$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true); \
+	if [ -z "$$UPSTREAM" ]; then \
+	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
+	  exit 1; \
+	fi; \
+	AHEAD=$$(git rev-list --count "$$UPSTREAM"..HEAD); \
+	if [ "$$AHEAD" -ne 0 ]; then \
+	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
+	  exit 1; \
+	fi
+	$(MAKE) -C lambda-resize vend-app
+	poetry check
+	poetry lock --check
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/requirements.txt --without-hashes
+	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
 
 sam-deploy: $(REQ)
@@ -451,6 +489,7 @@ endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	$(MAKE) sam-status
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -468,14 +507,59 @@ endif
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
-
+	$(MAKE) sam-status
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+SAM_LOGS_LIMIT ?= 100
+# Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
+SAM_LOGS_MINUTES ?= 15
+
+# After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
+sam-status:
+	@echo "Checking Lambda status..."
+	@sleep 5; \
+	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
+	URL="https://$$DNS/status"; \
+	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
+	CODE=$$(echo "$$RESP" | tail -1); \
+	BODY=$$(echo "$$RESP" | sed '$$d'); \
+	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
+	OK=1; \
+	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda status: operational ($$URL)"; \
+	else \
+	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
+	  OK=0; \
+	fi; \
+	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
+	echo ""; \
+	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
+	if [ "$$OK" -ne 1 ]; then exit 1; fi
+
+# Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
+sam-logs:
+	@FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+	if [ -z "$$FUNC" ]; then \
+	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	fi; \
+	if [ -z "$$FUNC" ]; then \
+	  for NESTED in $$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text 2>/dev/null); do \
+	    FUNC=$$(aws cloudformation describe-stack-resources --stack-name "$$NESTED" --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	    [ -n "$$FUNC" ] && break; \
+	  done; \
+	fi; \
+	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
+	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000; \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text
 
 sam-delete:
+	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
+	sleep 10
 	@echo "Deleting stack: $(STACK_NAME)..."
-	sam delete --stack-name $(STACK_NAME)
+	sam delete --stack-name $(STACK_NAME) --no-prompts
 	@echo "Waiting for deletion to complete..."
 	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
 	@echo "Stack $(STACK_NAME) deleted successfully."

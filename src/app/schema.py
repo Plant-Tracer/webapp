@@ -113,6 +113,9 @@ class Movie(BaseModel):
 
     movie_data_urn: str | None = None
     movie_zipfile_urn: str | None = None
+    first_frame_urn: str | None = None
+    processing_state: str | None = None  # e.g. uploading, processing, ready
+    zip_frame_processing: dict | None = None  # {"total": int, "current": int}
 
     last_frame_tracked: Annotated[int | None, Field(ge=0)] = None
 
@@ -123,11 +126,15 @@ class Movie(BaseModel):
     credit_by_name: Annotated[int, Field(ge=0, le=1)] = 0
     attribution_name: str | None = None
 
+    # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
+    rotation_steps: Annotated[int, Field(ge=0, le=3)] = 0
+
 
 def fix_movie_prop_value(prop, value):
     if value is None:
         return None
-    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name"]:
+    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name",
+                "date_uploaded", "total_bytes", "total_frames", "width", "height", "rotation_steps"]:
         return int(value)
     if prop in ["fps"]:
         return str(value)

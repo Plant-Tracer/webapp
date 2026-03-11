@@ -20,7 +20,7 @@ The Plant Tracer webapp is a Flask-based web application for uploading, managing
    - ES6 modules for modern JavaScript
 
 3. **Data Storage**:
-   - **Amazon S3**: Movies, frames, ZIP files
+   - **Amazon S3**: Movies, frames, ZIP files. We always deploy to an **existing** bucket; the bucket **outlives the stack** as the long-term archive of student videos. Because the bucket outlives DynamoDB, research/attribution metadata is stored **in the MP4 file** (see `.cursor/rules/s3-bucket-and-mp4-metadata.mdc` and `docs/MOVIE_METADATA.rst`).
    - **Amazon DynamoDB**: Course data, user accounts, movie metadata, annotations
 
 4. **Future Lambda Functions** (not yet working):

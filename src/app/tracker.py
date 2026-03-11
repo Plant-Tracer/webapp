@@ -119,7 +119,24 @@ def extract_movie_metadata(*, movie_data):
 
 def convert_frame_to_jpeg(img, quality=90):
     """Use CV2 to convert a frame to a jpeg"""
-    _,jpg_img = cv2.imencode('.jpg',img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    _, jpg_img = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    return jpg_img.tobytes()
+
+
+def resize_jpeg_to_fit(jpeg_bytes, max_width, max_height, quality=90):
+    """Resize JPEG bytes to fit inside (max_width, max_height), preserving aspect. Returns JPEG bytes."""
+    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return jpeg_bytes
+    h, w = img.shape[:2]
+    if w <= max_width and h <= max_height:
+        return jpeg_bytes
+    scale = min(max_width / w, max_height / h)
+    new_w = int(round(w * scale))
+    new_h = int(round(h * scale))
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+    _, jpg_img = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     return jpg_img.tobytes()
 
 def extract_frame(*, movie_data, frame_number, fmt):
@@ -281,6 +298,52 @@ def rotate_movie(movie_input, movie_output, transpose=1):
     subprocess.call([FFMPEG_PATH,'-hide_banner','-loglevel','error',
                      '-i',movie_input,'-vf',f'transpose={int(transpose)}','-c:a','copy','-y',movie_output])
     assert os.path.getsize(movie_output) > MIN_MOVIE_BYTES
+
+
+def prepare_movie_for_tracking(
+    input_path: str,
+    output_path: str,
+    rotation_steps: int,
+    max_width: int,
+    max_height: int,
+) -> None:
+    """Rotate and/or scale video to output_path. Uses temp file and ffmpeg; output_path must exist and be empty.
+    rotation_steps: 0–3 (90° CW each). Scale fits within (max_width, max_height).
+    """
+    if rotation_steps < 0 or rotation_steps > 3:
+        raise ValueError("rotation_steps must be 0–3")
+    if os.path.getsize(input_path) <= MIN_MOVIE_BYTES:
+        raise ValueError("input movie too small")
+    with open(output_path, "wb"):
+        pass
+    vf_parts = []
+    if rotation_steps == 1:
+        vf_parts.append("transpose=1")
+    elif rotation_steps == 2:
+        vf_parts.append("transpose=2,transpose=2")
+    elif rotation_steps == 3:
+        vf_parts.append("transpose=2")
+    # Fit inside (max_width, max_height) preserving aspect (ffmpeg scale filter)
+    vf_parts.append(f"scale={max_width}:{max_height}:force_original_aspect_ratio=decrease")
+    vf = ",".join(vf_parts)
+    rc = subprocess.call(
+        [
+            FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            input_path,
+            "-vf",
+            vf,
+            "-c:a",
+            "copy",
+            "-y",
+            output_path,
+        ]
+    )
+    if rc != 0 or os.path.getsize(output_path) <= MIN_MOVIE_BYTES:
+        raise RuntimeError("prepare_movie_for_tracking failed")
 
 if __name__ == "__main__":
     # the only requirement for calling track_movie() would be the "control points" and the movie

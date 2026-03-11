@@ -226,10 +226,12 @@ class DDBO:
             if 'FLASK_ENV' in os.environ:
                 raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
             table_prefix = ''
+        # Ensure one trailing dash so table names are prefix-base (e.g. simson2 -> simson2-api_keys)
+        self.table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
+        table_prefix = self.table_prefix
 
         # Set up the tables
         logger.info("table_prefix=%s",table_prefix)
-        self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
@@ -1275,13 +1277,16 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     MOVIE_DATA_URN:None,
                     LAST_FRAME_TRACKED:None,
                     'created_at':int(time.time()),
-                    'date_uploaded':None,
+                    # date_uploaded now reflects when upload was initiated (presigned URL issued)
+                    'date_uploaded':int(time.time()),
                     TOTAL_FRAMES:None, # will be set later
                     TOTAL_BYTES:None,  # will be set later
                     VERSION:0,  # will be set to 1 with set_movie_data
                     'research_use': research_use,
                     'credit_by_name': credit_by_name,
                     'attribution_name': attribution_name,
+                    'rotation_steps': 0,
+                    'processing_state': 'uploading',
                     })
     return movie_id
 
@@ -1511,6 +1516,9 @@ SET_MOVIE_METADATA = {
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
+
+    # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
+    'rotation_steps': 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
 }
 
 @log

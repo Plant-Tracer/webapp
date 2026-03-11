@@ -13,11 +13,16 @@ Students retain control over how their uploaded videos may be used in academic
 research and whether they receive credit by name. The system records these
 choices at upload time so that:
 
+**The S3 bucket outlives the stack** (it is the long-term archive of student
+videos; see :doc:`S3`). Therefore metadata must live **in the MP4 file** so
+that the object remains self-describing even if the DynamoDB database is gone.
+
 - Researchers can determine which videos may be used in studies and under
   what attribution (by name or anonymous).
-- Choices are stored both in the application database (DynamoDB) and as
-  object metadata on the uploaded file in S3, so that the same terms travel
-  with the data and can be audited later.
+- Choices are stored in the application database (DynamoDB), as S3 object
+  metadata (x-amz-meta-*), and **in the MP4 file** (comment atom), so that
+  the same terms travel with the data and remain valid even if the database
+  is removed or migrated.
 - The presigned S3 upload includes these metadata fields in the signature, so
   the client cannot change attribution or research-use after the server has
   issued the upload; the object stored in S3 matches what was consented to.

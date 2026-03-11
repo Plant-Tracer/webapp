@@ -74,6 +74,26 @@ def test_track_movie():
 
 def test_movie_rotate():
     with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
-        tracker.rotate_movie(TEST_PLANTMOVIE_PATH,tf.name)
+        tracker.rotate_movie(TEST_PLANTMOVIE_PATH, tf.name)
         # Not sure how to test that the movie got rotated.
         # Check width and height?
+
+
+def test_prepare_movie_for_tracking():
+    """prepare_movie_for_tracking with rotation_steps=0 scales to fit; output is valid."""
+    if not os.path.isfile(TEST_CIRCUMNUTATION_PATH):
+        pytest.skip(f"Test data not found: {TEST_CIRCUMNUTATION_PATH}")
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
+        out_path = out_tf.name
+    try:
+        tracker.prepare_movie_for_tracking(
+            TEST_CIRCUMNUTATION_PATH,
+            out_path,
+            rotation_steps=0,
+            max_width=320,
+            max_height=240,
+        )
+        assert os.path.getsize(out_path) > 100
+    finally:
+        if os.path.exists(out_path):
+            os.unlink(out_path)

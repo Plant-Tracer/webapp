@@ -186,9 +186,15 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
+    # Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and start-processing
+    hostname = os.environ.get("HOSTNAME", "").strip()
+    domain = os.environ.get("DOMAIN", "").strip()
+    lambda_api_base = f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+
     ret= {
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
+        'lambda_api_base': lambda_api_base,
         'favicon_base64':favicon_base64(),
         'api_key': api_key,     # the API key that is currently active
         'user_id': user_id,     # the user_id that is active

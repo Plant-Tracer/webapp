@@ -3,6 +3,7 @@
 //code for /analyze
 
 /* eslint-env es6 */
+/* global LAMBDA_API_BASE */
 
 /* jshint esversion: 8 */
 
@@ -55,6 +56,11 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
+        // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
+        this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
+            ? movie_metadata.last_frame_tracked : -1;
+        this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
+            ? movie_metadata.total_frames : 0;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -92,7 +98,10 @@ class TracerController extends MovieController {
         this.rotate_button.prop(DISABLED,false);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
-        if (this.last_tracked_frame > 0 ){
+        // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
+        const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
+            this.last_tracked_frame >= this.total_frames - 1;
+        if (fullyTraced) {
             this.track_button.val( RETRACK_MOVIE );
             this.download_button.show();
         }
@@ -333,6 +342,22 @@ class TracerController extends MovieController {
         this.create_marker_table();
     }
 
+    /** Highest frame index the user may navigate to (last frame with trackpoints; 0 if none traced yet). */
+    getMaxViewableFrame() {
+        if (!this.frames || this.frames.length === 0) return 0;
+        if (this.last_tracked_frame < 0) return 0;
+        return Math.min(this.last_tracked_frame, this.frames.length - 1);
+    }
+
+    goto_frame(frame) {
+        const maxViewable = this.getMaxViewableFrame();
+        frame = parseInt(frame, 10);
+        if (!Number.isNaN(frame) && frame > maxViewable) {
+            frame = maxViewable;
+        }
+        super.goto_frame(frame);
+    }
+
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
@@ -341,6 +366,7 @@ class TracerController extends MovieController {
             return;
         }
         this.rotate_button.prop(DISABLED,false);
+        this.max_frame_index = this.getMaxViewableFrame();
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
@@ -452,18 +478,17 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((_name, i) => {
-        movie_frames[i] = {'frame_url':URL.createObjectURL(blobs[i]),
-                     'markers':metadata_frames[i].markers };
+        // When zip exists but no tracking has been done, metadata_frames may be empty or sparse.
+        const frameData = metadata_frames && metadata_frames[i];
+        const markers = (frameData && frameData.markers) ? frameData.markers : [...DEFAULT_MARKERS];
+        movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
     cc.track_button.prop(DISABLED,false); // We have markers, so allow tracking from beginning.
-    if (movie_frames.length > 0 ){
-        cc.track_button.val( RETRACK_MOVIE );
-        cc.download_button.show();
-    }
+    // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
         $('#analysis-results').show();
         graph_data(cc, movie_frames);
@@ -474,8 +499,10 @@ function graph_data(cc, frames) {
     const frame_labels = [];
     const x_values_mm = [];
     const y_values_mm = [];
-    const x_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').x;
-    const y_apex_0 = frames[0].markers.find(marker => marker.label === 'Apex').y;
+    const firstMarkers = (frames[0] && frames[0].markers) || [];
+    const apex0 = firstMarkers.find(marker => marker.label === 'Apex');
+    const x_apex_0 = (apex0 && apex0.x != null) ? apex0.x : 0;
+    const y_apex_0 = (apex0 && apex0.y != null) ? apex0.y : 0;
     let pos_units = "pixels";
     let time_units = "frames";
 
@@ -484,8 +511,9 @@ function graph_data(cc, frames) {
     }
 
     frames.forEach((frame) => {
-        const apexMarker = frame.markers.find(marker => marker.label === 'Apex');
-        const calculations = calc_scale(frame.markers);
+        const markers = frame.markers || [];
+        const apexMarker = markers.find(marker => marker.label === 'Apex');
+        const calculations = calc_scale(markers);
         const scale = calculations.scale;
         pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
 
@@ -623,8 +651,9 @@ function graph_data(cc, frames) {
 }
 
 /* Main function called when HTML page loads.
- * Gets metadata for the movie and all traced frames
- * Note - This assumes that we either have no frames or the zipfile with all frames. That's not a good assumption
+ * Gets metadata for the movie and all traced frames.
+ * If the zip is not ready yet (e.g. still building after rotate), we show the first frame and poll
+ * for the zip; when it appears we load it in the background so the user can keep placing markers.
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
@@ -649,8 +678,19 @@ function trace_movie(div_controller, movie_id, api_key) {
         const height = resp.metadata.height;
         $(div_controller + ' canvas').prop('width',width).prop('height',height);
         if (!resp.metadata.movie_zipfile_url) {
-            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`;
+            $('#firsth2').html('Waiting for processing to complete…');
+            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
+            // Trigger zip build so shrinking and tracing can happen in parallel (no rotation case).
+            if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+                fetch(LAMBDA_API_BASE + 'api/v1', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'rotate-and-zip', movie_id, rotation_steps: 0 }),
+                }).catch(() => {});
+            }
+            // Zip may be building in background. Poll until it appears or 60s.
+            poll_for_zip_and_load(div_controller, movie_id, api_key, 60);
             return;
         }
         if (demo_mode) {
@@ -660,6 +700,36 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
     });
+}
+
+const ZIP_POLL_INTERVAL_MS = 2000;
+
+function poll_for_zip_and_load(div_controller, movie_id, api_key, max_seconds) {
+    const deadline = Date.now() + max_seconds * 1000;
+    const params = { api_key: api_key, movie_id: movie_id, frame_start: 0, frame_count: MAX_FRAMES };
+    function poll() {
+        if (Date.now() > deadline) {
+            $('#firsth2').html('Processing did not complete in time. Please come back later.');
+            return;
+        }
+        $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
+            if (resp.error || !resp.metadata) {
+                setTimeout(poll, ZIP_POLL_INTERVAL_MS);
+                return;
+            }
+            if (resp.metadata.movie_zipfile_url) {
+                if (demo_mode) {
+                    $('#firsth2').html(`Movie is traced!</a>`);
+                } else {
+                    $('#firsth2').html(`Movie is traced! Check for errors and retrace as necessary.</a>`);
+                }
+                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+                return;
+            }
+            setTimeout(poll, ZIP_POLL_INTERVAL_MS);
+        });
+    }
+    setTimeout(poll, ZIP_POLL_INTERVAL_MS);
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };

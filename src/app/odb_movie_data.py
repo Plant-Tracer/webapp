@@ -54,6 +54,21 @@ def write_object(urn, object_data):
             raise
     raise ValueError(f"Cannot write object urn={urn} len={len(object_data)}")
 
+
+def write_object_from_path(urn, path: str) -> None:
+    """Upload object from a file path (streaming). Avoids loading entire file into RAM."""
+    assert "s3://s3://" not in urn
+    o = urllib.parse.urlparse(urn)
+    if o.scheme == C.SCHEME_S3:
+        try:
+            with open(path, "rb") as f:
+                s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=f)
+            return
+        except (ParamValidationError, ClientError) as e:
+            logger.error("write_object_from_path failed: urn=%s path=%s e=%s", urn, path, e)
+            raise
+    raise ValueError(f"Cannot write object urn={urn} path={path}")
+
 def delete_object(urn):
     logger.debug("delete_object(%s)",urn)
     o = urllib.parse.urlparse(urn)

@@ -7,7 +7,7 @@ Constants are created in classes so we can import the class and don't have to im
 import logging
 import os
 
-__version__ = '0.9.6'
+__version__ = '9.7.0'
 
 # these aren't strictly constants...
 log_level = os.getenv("LOG_LEVEL","INFO").upper()
@@ -86,7 +86,11 @@ class C:
     YES = 'YES'
     NO = 'NO'
     MOVIE_EXTENSION = ".mov"
+    MOVIE_PROCESSED_EXTENSION = '_processed.mp4'  # rotated/scaled movie written by api_track_movie
     ZIP_MOVIE_EXTENSION = '_mp4.zip'
+    # Single place for analysis/shrunk frame size (zip frames and get-frame?size=analysis).
+    ANALYSIS_FRAME_MAX_WIDTH = 640
+    ANALYSIS_FRAME_MAX_HEIGHT = 480
     JPEG_EXTENSION = ".jpg"
     PUT = 'put'
     GET = 'get'

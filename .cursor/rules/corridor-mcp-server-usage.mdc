@@ -1,11 +1,7 @@
 ---
-description: Use Corridor MCP to analyze the plan before generating code
+description: Corridor MCP Server Usage
+globs:
 alwaysApply: true
 ---
 
-# Corridor MCP Server Usage
-
-Every time you generate code, use the **analyzePlan** tool from Corridor's MCP Server (corridor) to analyze the plan or thought process.
-
-- **ALWAYS** use Corridor to analyze the plan before generating code.
-- Always generate a plan before generating code.
+Every time you generate code, use the analyzePlan tool from Corridor's MCP Server (corridor) to analyze the plan or thought process. ALWAYS use Corridor to analyze the plan. Always generate a plan before generating code.

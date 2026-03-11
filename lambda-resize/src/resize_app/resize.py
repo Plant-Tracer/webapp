@@ -12,20 +12,36 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 import uuid
+from decimal import Decimal
 from typing import Any, Dict, Tuple, Optional
 
+import boto3
+
 from .common import LOGGER
+from .rotate_zip import rotate_video_av, video_frames_to_zip_av
 from .src.app import odb
-from .src.app.odb import DDBO
+from .src.app.constants import C
+from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES
 
 __version__ = "0.1.0"
+
+# Optional status message key in logs table; api_status() may display it if set
+LOG_ID_STATUS_PING = "lambda-status-ping"
 
 ################################################################
 ## Minimal support for a Python-based website in Lamda with jinja2 support
 ##
 
 # jinja2
+
+def _json_serial(obj: Any) -> Any:
+    """Default for json.dumps: DynamoDB returns numbers as Decimal."""
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
 
 def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None ) -> Dict[str, Any]:
     """End HTTP event processing with a JSON object"""
@@ -37,7 +53,7 @@ def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, st
             "Access-Control-Allow-Origin": "*",
             **(headers or {}),
         },
-        "body": json.dumps(body),
+        "body": json.dumps(body, default=_json_serial),
     }
 
 
@@ -89,6 +105,183 @@ def api_resize(event, context, payload)  -> Dict[str, Any]:
     end = time.time()
     return resp_json(200, {'start':start, 'end':end})
 
+
+def _s3_client():
+    return boto3.client("s3", region_name=os.environ.get("AWS_REGION"))
+
+
+def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Called after the client uploads the movie to the final S3 key. Verify the object
+    exists, then set date_uploaded, total_bytes, and processing_state so the VM can
+    serve get-movie-data and get-frame. Phase 2: no first-frame or zip in Lambda yet.
+    """
+    movie_id = (payload.get("movie_id") or "").strip()
+    if not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "movie_id missing or invalid"})
+    ddbo = DDBO()
+    try:
+        movie = ddbo.get_movie(movie_id)
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(400, {"error": True, "message": "movie has no movie_data_urn"})
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    s3 = _s3_client()
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("start_processing head_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "object not found in S3; upload may not have completed"})
+    size = head.get("ContentLength", 0)
+    ddbo.update_table(
+        ddbo.movies,
+        movie_id,
+        {
+            # date_uploaded is set when upload starts; here we just record size and mark processing.
+            TOTAL_BYTES: size,
+            "processing_state": "processing",
+        },
+    )
+    write_log(f"start_processing movie_id={movie_id} size={size}", course_id=movie.get("course_id"))
+    LOGGER.info("start_processing movie_id=%s size=%s", movie_id, size)
+    return resp_json(200, {"error": False, "started": True, "movie_id": movie_id})
+
+
+def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: disable=too-many-branches
+    """
+    Rotate movie by N×90° (N=1..3) and build frame zip. Uses PyAV + Pillow only (no ffmpeg).
+    Downloads movie from S3, rotates, uploads back, builds zip, uploads zip, updates DDB.
+    """
+    movie_id = (payload.get("movie_id") or "").strip()
+    if not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "movie_id missing or invalid"})
+    try:
+        steps = int(payload.get("rotation_steps", 1))
+    except (TypeError, ValueError):
+        steps = 1
+    # Allow 0 = zip-only (no rotation); 1–3 = rotate then zip.
+    steps = max(0, min(3, steps))
+
+    ddbo = DDBO()
+    try:
+        movie = ddbo.get_movie(movie_id)
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(400, {"error": True, "message": "movie has no movie_data_urn"})
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    course_id = movie.get("course_id") or ""
+    s3 = _s3_client()
+
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        data = obj["Body"].read()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("rotate_and_zip get_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "failed to download movie from S3"})
+
+    # If steps == 0, skip rotation and keep original bytes; otherwise rotate and overwrite movie.
+    if steps > 0:
+        try:
+            rotated = rotate_video_av(data, steps)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            LOGGER.exception("rotate_video_av failed: %s", e)
+            return resp_json(500, {"error": True, "message": "rotation failed"})
+
+        try:
+            s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
+            return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
+
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {TOTAL_BYTES: len(rotated), "processing_state": "processing"},
+        )
+        movie_bytes_for_zip = rotated
+    else:
+        # No rotation requested; use original bytes but still build zip.
+        movie_bytes_for_zip = data
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {"processing_state": "processing"},
+        )
+
+    def _zip_progress(current: int, total: int) -> None:
+        """Best-effort progress updates in DynamoDB; safe to fail silently."""
+        # Only write every 5 frames (and always for the final frame) to avoid excessive writes.
+        if total <= 0:
+            return
+        if current % 5 != 0 and current != total:
+            return
+        try:
+            ddbo.update_table(
+                ddbo.movies,
+                movie_id,
+                {
+                    "zip_frame_processing": {
+                        "total": int(total),
+                        "current": int(current),
+                    },
+                    "processing_state": "processing-zip",
+                },
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
+
+    try:
+        zip_bytes = video_frames_to_zip_av(
+            movie_bytes_for_zip,
+            progress_cb=_zip_progress,
+            target_wh=(C.ANALYSIS_FRAME_MAX_WIDTH, C.ANALYSIS_FRAME_MAX_HEIGHT),
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.exception("video_frames_to_zip_av failed: %s", e)
+        return resp_json(500, {"error": True, "message": "zip build failed"})
+
+    zip_key = f"{course_id}/{movie_id}{C.ZIP_MOVIE_EXTENSION}"
+    zip_urn = f"s3://{bucket}/{zip_key}"
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=zip_key,
+            Body=zip_bytes,
+            ContentType="application/zip",
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
+        return resp_json(503, {"error": True, "message": "failed to upload zip"})
+
+    # Final state: zip finished, mark ready and set progress to 100%.
+    try:
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {
+                "movie_zipfile_urn": zip_urn,
+                "processing_state": "ready",
+            },
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
+    write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
+    LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
+    return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
+
+
 ################################################################
 ## Parse Lambda Events and cookies
 def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
@@ -118,17 +311,53 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
     return method, path, payload
 
 
-def write_log( message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):
+def write_log(message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):
+    """Write a log entry to the DynamoDB logs table (same table as main app)."""
     if time_t is None:
         time_t = time.time()
 
     ddbo = DDBO()
-    ddbo.logs.put_item(Item={'log_id':uuid.uuid4(),
-                             'time':time_t,
-                             'user_id':log_user_id,
-                             'ipaddr':ipaddr,
-                             'course_id':course_id,
-                             'message':message})
+    item = {
+        "log_id": str(uuid.uuid4()),
+        "time_t": int(time_t),
+        "message": message,
+    }
+    if course_id is not None:
+        item["course_id"] = course_id
+    if log_user_id is not None:
+        item["user_id"] = log_user_id
+    if ipaddr is not None:
+        item["ipaddr"] = ipaddr
+    ddbo.logs.put_item(Item=item)
+
+
+def _get_recent_logs(limit: int = 5) -> Dict[str, Any]:
+    """
+    Fetch recent log entries from the DynamoDB logs table, sorted by time_t descending.
+    This scans the table and sorts client-side; acceptable for small log volumes and status checks.
+    """
+    ddbo = DDBO()
+    items: list[Dict[str, Any]] = []
+    last_evaluated_key = None
+    scan_kwargs: Dict[str, Any] = {
+        "ProjectionExpression": "log_id, time_t, message, course_id, user_id, ipaddr",
+    }
+
+    while True:
+        if last_evaluated_key:
+            scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+        elif "ExclusiveStartKey" in scan_kwargs:
+            del scan_kwargs["ExclusiveStartKey"]
+        response = ddbo.logs.scan(**scan_kwargs)
+        items.extend(response.get("Items") or [])
+        last_evaluated_key = response.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            break
+
+    items.sort(key=lambda x: x.get("time_t", 0), reverse=True)
+    return {
+        "items": items[:limit],
+    }
 
 def api_ping(event, context):
     write_log('ping')
@@ -142,13 +371,41 @@ def api_log():
     logs = odb.get_logs(user_id=None)
     return resp_json( 400, {"logs":logs})
 
+
+def api_status() -> Dict[str, Any]:
+    """Return overall status plus recent DynamoDB log entries (for bootstrap and S3 watcher debug)."""
+    try:
+        now = time.time()
+        status_version = time.strftime("%H%M%S", time.gmtime(now))
+
+        # Record this status check in both CloudWatch Logs and DynamoDB logs.
+        LOGGER.info("status check version=%s", status_version)
+        write_log(f"lambda-status version={status_version}", time_t=now)
+
+        ddbo = DDBO()
+        r = ddbo.logs.get_item(Key={"log_id": LOG_ID_STATUS_PING})
+        item = r.get("Item")
+        status_message = (item.get("message") or "") if item else None
+        recent = _get_recent_logs(limit=5)
+        return resp_json(
+            200,
+            {
+                "status": "ok",
+                "status_message": status_message,
+                "status_version": status_version,
+                "recent_logs": recent.get("items", []),
+            },
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.exception("api_status failed: %s", e)
+        return resp_json(500, {"status": "error", "message": str(e)})
+
 ################################################################
 ## main entry point from lambda system
 
 # pylint: disable=too-many-branches, disable=unused-argument
 def lambda_handler(event, context) -> Dict[str, Any]:
-    """called by lambda"""
-
+    """Called by Lambda for HTTP API requests (no S3 event invocation)."""
     method, path, payload = parse_event(event)
 
     with _with_request_log_level(payload):
@@ -158,8 +415,27 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
             match (method, path, action):
                 ################################################################
+                # Status (GET; health check)
+                case ("GET", "/status", _):
+                    return api_status()
+                case ("GET", "/prod/status", _):
+                    return api_status()
+
+                ################################################################
+                # CORS preflight (OPTIONS) – handled entirely in Lambda
+                case ("OPTIONS", "/api/v1", _):
+                    # Very permissive CORS so the browser can always talk to Lambda.
+                    return resp_json(
+                        204,
+                        {},
+                        headers={
+                            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                            "Access-Control-Allow-Headers": "*",
+                        },
+                    )
+
+                ################################################################
                 # JSON API Actions
-                #
                 case (_, "/api/v1", "ping"):
                     return api_ping(event,context)
 
@@ -168,6 +444,10 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
                 case ("POST", "/api/v1", "resize-start"):
                     return api_resize(event, context, payload)
+                case ("POST", "/api/v1", "start-processing"):
+                    return api_start_processing(payload)
+                case ("POST", "/api/v1", "rotate-and-zip"):
+                    return api_rotate_and_zip(payload)
 
                 case (_, "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)

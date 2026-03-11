@@ -1062,6 +1062,18 @@ files = [
 ]
 
 [[package]]
+name = "mutagen"
+version = "1.47.0"
+description = "read and write audio tags for many formats"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "mutagen-1.47.0-py3-none-any.whl", hash = "sha256:edd96f50c5907a9539d8e5bba7245f62c9f520aef333d13392a79a4f70aca719"},
+    {file = "mutagen-1.47.0.tar.gz", hash = "sha256:719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99"},
+]
+
+[[package]]
 name = "mypy-boto3-cloudformation"
 version = "1.42.3"
 description = "Type annotations for boto3 CloudFormation 1.42.3 service generated with mypy-boto3-builder 8.12.0"
@@ -2125,4 +2137,4 @@ test = ["pytest (>=6.0.0)", "setuptools (>=77)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "ce48bbf69a5dc050a9021e1b2c1261d0fa8d7c2c5258f674ee56ee71100e0b3a"
+content-hash = "8ca7a571a539be84c8f8ac9247a0b91c4ba7403530010ef31d9fc1c6223cd40a"

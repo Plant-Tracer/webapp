@@ -218,9 +218,13 @@ class MovieController extends CanvasController {
 
         $(this.div_selector + ' input.frame_number_field').prop('disabled',false);
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
+        // Subclasses (e.g. TracerController) may set max_frame_index to restrict navigation to last traced frame.
+        const maxFrame = (this.max_frame_index != null && this.max_frame_index >= 0)
+            ? this.max_frame_index
+            : (this.frames.length > 0 ? this.frames.length - 1 : 0);
         $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
-        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number==this.length-1);
-        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number==this.length-1);
+        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number >= maxFrame);
+        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number >= maxFrame);
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
     }
 }
