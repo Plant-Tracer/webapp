@@ -94,7 +94,8 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) \
+	$(MAKE) -C lambda-resize vend-app
+	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
 		src tests *.py \
 		lambda-resize/src/resize_app/resize.py \
 		lambda-resize/src/resize_app/rotate_zip.py \
@@ -347,7 +348,7 @@ install-ubuntu:
 install-macos:
 	brew update
 	which aws || brew install awscli
-	which chromium || brew install chromium --no-quarantine
+	which chromium || brew install chromium
 	which ffmpeg || brew install ffmpeg
 	which lsof || brew install lsof
 	which node || brew install node
@@ -472,7 +473,7 @@ sam-build: $(REQ)
 	fi
 	$(MAKE) -C lambda-resize vend-app
 	poetry check
-	poetry lock
+	poetry lock --check
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint

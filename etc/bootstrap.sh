@@ -26,7 +26,7 @@ run_section() {
     return 0
   fi
   echo "Section $n: $name"
-  date | tee "$g"
+  date
   return 1
 }
 end_section() {
