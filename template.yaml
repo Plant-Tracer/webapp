@@ -600,7 +600,7 @@ Resources:
       MemorySize: 256
       Environment:
         Variables:
-          DYNAMODB_TABLE_PREFIX: !Ref AWS::StackName
+          DYNAMODB_TABLE_PREFIX: !Sub "${AWS::StackName}-"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
       Events:
         AnyRoot:

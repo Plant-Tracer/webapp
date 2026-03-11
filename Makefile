@@ -472,7 +472,7 @@ sam-build: $(REQ)
 	fi
 	$(MAKE) -C lambda-resize vend-app
 	poetry check
-	poetry lock
+	poetry lock --check
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
