@@ -35,24 +35,34 @@ def rotate_video_av(data: bytes, steps: int) -> bytes:
     fps = in_codec.rate
     if fps is None or fps == 0:
         fps = 24
-    width, height = in_codec.width, in_codec.height
-    # After 90/270 rotation, width and height swap
-    if steps % 2 == 1:
-        width, height = height, width
 
     out_buf = io.BytesIO()
     out = av.open(out_buf, "w", format="mp4")
-    # mpeg4 is widely available in PyAV builds (no libx264 required)
-    out_stream = out.add_stream("mpeg4", rate=fps)
-    out_stream.width = width
-    out_stream.height = height
-    out_stream.pix_fmt = "yuv420p"
-    out_stream.time_base = Fraction(1, fps)
+    out_stream = None
 
     frame_index = 0
     for frame in inp.decode(video=0):
         img = frame.to_image()
         img = _rotate_pil_90_cw(img, steps)
+        # Ensure dimensions are even; many codecs (including mpeg4) require width/height divisible by 2.
+        w, h = img.size
+        if w % 2 != 0:
+            w -= 1
+        if h % 2 != 0:
+            h -= 1
+        if w <= 0 or h <= 0:
+            continue
+        if (w, h) != img.size:
+            img = img.crop((0, 0, w, h))
+
+        if out_stream is None:
+            # mpeg4 is widely available in PyAV builds (no libx264 required)
+            out_stream = out.add_stream("mpeg4", rate=fps)
+            out_stream.width = w
+            out_stream.height = h
+            out_stream.pix_fmt = "yuv420p"
+            out_stream.time_base = Fraction(1, fps)
+
         out_frame = av.VideoFrame.from_image(img)
         out_frame.pts = frame_index
         out_frame.time_base = out_stream.time_base

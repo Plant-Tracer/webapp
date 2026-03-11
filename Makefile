@@ -455,6 +455,21 @@ lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 sam-build: $(REQ)
+	@# Refuse to build if there are local changes or unpushed commits.
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
+	  exit 1; \
+	fi
+	@UPSTREAM=$$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true); \
+	if [ -z "$$UPSTREAM" ]; then \
+	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
+	  exit 1; \
+	fi; \
+	AHEAD=$$(git rev-list --count "$$UPSTREAM"..HEAD); \
+	if [ "$$AHEAD" -ne 0 ]; then \
+	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
+	  exit 1; \
+	fi
 	$(MAKE) -C lambda-resize vend-app
 	poetry check
 	poetry lock
