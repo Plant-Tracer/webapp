@@ -150,7 +150,9 @@ async function computeSHA256(file) {
  */
 function first_frame_url(movie_id)
 {
-  return `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
+  // Use size=analysis so the server resizes to the analysis max (e.g. 640x480)
+  // instead of returning the full original frame dimensions.
+  return `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis&t=${new Date().getTime()}`;
 }
 
 /*

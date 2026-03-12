@@ -410,8 +410,15 @@ def lambda_handler(event, context) -> Dict[str, Any]:
 
     with _with_request_log_level(payload):
         try:
-            LOGGER.info( "req method='%s' path='%s' action='%s'", method, path, payload.get("action") )
             action = (payload.get("action") or "").lower()
+            # Log every incoming action and its parameters to help debug API usage.
+            LOGGER.info(
+                "req method='%s' path='%s' action='%s' payload=%s",
+                method,
+                path,
+                action,
+                payload,
+            )
 
             match (method, path, action):
                 ################################################################

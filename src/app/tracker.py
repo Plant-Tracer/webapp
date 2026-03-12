@@ -476,9 +476,29 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         movie_record.get("credit_by_name", 0) or 0,
         movie_record.get("attribution_name"),
     )
+
+    # Prefer existing stored metadata (width/height/frames/bytes/fps); only recompute
+    # from movie bytes if critical fields are missing. This avoids a full rescan of
+    # large movies on every tracking run.
+    movie_metadata = {
+        "width": movie_record.get("width"),
+        "height": movie_record.get("height"),
+        "total_frames": movie_record.get("total_frames"),
+        "total_bytes": movie_record.get("total_bytes"),
+        "fps": movie_record.get("fps"),
+    }
+    need_metadata_extract = (
+        not movie_metadata["width"]
+        or not movie_metadata["height"]
+        or movie_metadata["total_frames"] is None
+        or movie_metadata["total_bytes"] is None
+        or movie_metadata["fps"] is None
+    )
+
     movie_data = env.get_movie_data(movie_id=movie_id)
-    movie_metadata = extract_movie_metadata(movie_data=movie_data)
-    env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=movie_metadata)
+    if need_metadata_extract:
+        movie_metadata = extract_movie_metadata(movie_data=movie_data)
+        env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=movie_metadata)
 
     rotation_steps = int(movie_record.get("rotation_steps") or 0)
     rotation_steps = max(0, min(3, rotation_steps))
