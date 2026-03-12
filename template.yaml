@@ -596,8 +596,8 @@ Resources:
       PackageType: Zip
       CodeUri: lambda-resize/src/
       Handler: resize_app.resize.lambda_handler
-      Timeout: 60
-      MemorySize: 256
+      Timeout: 900
+      MemorySize: 1024
       Environment:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Sub "${AWS::StackName}-"
