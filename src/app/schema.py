@@ -13,6 +13,8 @@ from pydantic import (
     ValidationError,
 )
 
+from .constants import C
+
 
 class User(BaseModel):
     """DynamoDB users table"""
@@ -133,10 +135,9 @@ class Movie(BaseModel):
 def fix_movie_prop_value(prop, value):
     if value is None:
         return None
-    if prop in ["published", "deleted", "version", "last_frame_tracked", "research_use", "credit_by_name",
-                "date_uploaded", "total_bytes", "total_frames", "width", "height", "rotation_steps"]:
+    if prop in C.MOVIE_PROPS_INT:
         return int(value)
-    if prop in ["fps"]:
+    if prop in C.MOVIE_PROPS_STR:
         return str(value)
     return value
 

@@ -30,17 +30,22 @@ from . import tracker
 from . import apikey
 from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C,E,POST,GET_POST,__version__,logger,log_level,printable80
+from .constants import C, E, POST, GET_POST, __version__, logger, log_level, printable80
 from .odb import (
     InvalidAPI_Key,
     InvalidMovie_Id,
     USER_ID,
     MOVIE_ID,
     COURSE_ID,
-    LAST_FRAME_TRACKED,
-    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+    MOVIE_ZIPFILE_URL,
+    MOVIE_METADATA_BULK_PROPS,
+    ORIG_MOVIE,
+    WIDTH,
+    HEIGHT,
     PROCESSING_STATE,
     PROCESSING_STATE_TRACKING,
+    STATUS,
     DDBO,
     UnauthorizedUser,
 )
@@ -392,9 +397,9 @@ def api_get_movie_data():
     return redirect(make_signed_url(urn=data_urn))
 
 
-def set_movie_metadata(*,user_id=odb.ROOT_USER_ID, set_movie_id,movie_metadata):
+def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata):
     """Update the movie metadata."""
-    for prop in ['fps','width','height','total_frames','total_bytes']:
+    for prop in MOVIE_METADATA_BULK_PROPS:
         if prop in movie_metadata:
             logger.warning("Setting %s in %s; it would be better to do all sets at once",prop, set_movie_id)
             odb.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
@@ -564,7 +569,7 @@ def _build_movie_zip_sync(movie_id, user_id):
         )
         urn = make_urn(object_name=oname)
         write_object(urn=urn, object_data=zip_data)
-        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop='movie_zipfile_urn', value=urn)
+        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=MOVIE_ZIPFILE_URN, value=urn)
         logger.info("_build_movie_zip_sync done movie_id=%s", movie_id)
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("_build_movie_zip_sync failed movie_id=%s", movie_id)
@@ -676,7 +681,7 @@ def api_get_movie_metadata():
     movie_metadata =  odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # If we do not have the movie width and height, get them and write them back to the database
-    if (not movie_metadata.get('width',None)) or (not movie_metadata.get('height',None)):
+    if (not movie_metadata.get(WIDTH, None)) or (not movie_metadata.get(HEIGHT, None)):
         movie_data     = get_movie_data(movie_id = movie_id)
 
         if movie_data is None:
@@ -687,14 +692,14 @@ def api_get_movie_metadata():
         set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
 
     # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
-    if movie_metadata.get('movie_zipfile_urn',None):
-        movie_metadata['movie_zipfile_url'] = make_signed_url(urn=movie_metadata['movie_zipfile_urn'])
+    if movie_metadata.get(MOVIE_ZIPFILE_URN, None):
+        movie_metadata[MOVIE_ZIPFILE_URL] = make_signed_url(urn=movie_metadata[MOVIE_ZIPFILE_URN])
 
-    ret = {'error':False, 'metadata':movie_metadata }
+    ret = {C.API_KEY_ERROR: False, C.API_KEY_METADATA: movie_metadata}
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
-    tracking_completed = movie_metadata.get('status','') == C.TRACKING_COMPLETED
+    tracking_completed = movie_metadata.get(STATUS, '') == C.TRACKING_COMPLETED
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
@@ -705,15 +710,15 @@ def api_get_movie_metadata():
             return make_response(E.FRAME_COUNT_GT_0, 400)
         #
         # Get the trackpoints and then group by frame_number for the response
-        ret['frames'] = defaultdict(dict)
+        ret[C.API_KEY_FRAMES] = defaultdict(dict)
         tpts = odb.get_movie_trackpoints(movie_id=movie_id,
                                          frame_start=frame_start,
                                          frame_count=frame_count)
         for tpt in tpts:
-            frame = ret['frames'][tpt['frame_number']]
-            if 'markers' not in frame:
-                frame['markers'] = []
-            frame['markers'].append(tpt)
+            frame = ret[C.API_KEY_FRAMES][tpt['frame_number']]
+            if C.API_KEY_MARKERS not in frame:
+                frame[C.API_KEY_MARKERS] = []
+            frame[C.API_KEY_MARKERS].append(tpt)
 
     logger.debug("get_movie_metadata returns: %s",ret)
     return jsonify(ret)
@@ -877,16 +882,16 @@ def api_track_lambda_health():
     """Probe Lambda /status; return 200 + {status:'ok'} if Lambda is up, 503 + {status:'unavailable'} otherwise."""
     base = get_lambda_api_base()
     if not base:
-        return jsonify({"status": "unavailable", "reason": "Lambda URL not configured"}), 503
+        return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: "Lambda URL not configured"}), 503
     try:
         with urlopen(base.rstrip("/") + "/status", timeout=LAMBDA_HEALTH_TIMEOUT) as resp:
             data = json.loads(resp.read().decode())
-            if data.get("status") == "ok":
-                return jsonify({"status": "ok"})
-            return jsonify({"status": "unavailable", "reason": "unexpected response"}), 503
+            if data.get(C.KEY_STATUS) == C.STATUS_OK:
+                return jsonify({C.KEY_STATUS: C.STATUS_OK})
+            return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: "unexpected response"}), 503
     except (HTTPError, URLError, OSError, json.JSONDecodeError) as ex:
         logger.debug("Lambda health check failed: %s", ex)
-        return jsonify({"status": "unavailable", "reason": str(ex)}), 503
+        return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: str(ex)}), 503
 
 
 @api_bp.route('/track-movie-queue', methods=GET_POST)
@@ -910,7 +915,7 @@ def api_track_movie_queue():
     # Make sure we are not tracking a movie that is not an original movie
     movie_row = odb.list_movies(user_id=user_id, movie_id=movie[MOVIE_ID])
     assert len(movie_row)==1
-    if movie_row[0]['orig_movie'] is not None:
+    if movie_row[0][ORIG_MOVIE] is not None:
         return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
 
     if run_async:
@@ -922,7 +927,7 @@ def api_track_movie_queue():
     ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKING})
     api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
     logger.debug("return from api_track_movie")
-    return jsonify({'error': False, 'message':'Tracking is completed'})
+    return jsonify({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: 'Tracking is completed'})
 
 
 ## /new-frame is being able to create our own time lapse movie

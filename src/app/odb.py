@@ -61,15 +61,29 @@ MOVIE_ID = 'movie_id'
 MOVIE_DATA_URN = 'movie_data_urn'
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
 TITLE = 'title'
-TOTAL_BYTES='total_bytes'
-TOTAL_FRAMES='total_frames'
-DATE_UPLOADED='date_uploaded'
+DESCRIPTION = 'description'
+STATUS = 'status'
+ORIG_MOVIE = 'orig_movie'
+TOTAL_BYTES = 'total_bytes'
+TOTAL_FRAMES = 'total_frames'
+DATE_UPLOADED = 'date_uploaded'
 VERSION = 'version'
 DELETED = 'deleted'
 PUBLISHED = 'published'
 CREATED = 'created'
+CREATED_AT = 'created_at'
 EMAIL = 'email'
 NAME = 'name'
+FPS = 'fps'
+WIDTH = 'width'
+HEIGHT = 'height'
+RESEARCH_USE = 'research_use'
+CREDIT_BY_NAME = 'credit_by_name'
+ATTRIBUTION_NAME = 'attribution_name'
+ROTATION_STEPS = 'rotation_steps'
+MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
+# Props that set_movie_metadata (flask_api) can set in bulk from extracted movie metadata
+MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
@@ -633,7 +647,7 @@ class DDBO:
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
-        assert 'movie_zipfile_url' not in moviedict
+        assert MOVIE_ZIPFILE_URL not in moviedict
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
@@ -1269,28 +1283,27 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     if course_id is None:
         course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
-    ddbo.put_movie({MOVIE_ID:movie_id,
+    ddbo.put_movie({MOVIE_ID: movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
                     USER_NAME: user[USER_NAME],
-                    TITLE:title,
-                    'description':description,
-                    'orig_movie':orig_movie,
+                    TITLE: title,
+                    DESCRIPTION: description,
+                    ORIG_MOVIE: orig_movie,
                     PUBLISHED: 0,
                     DELETED: 0,
-                    'movie_zipfile_urn':None,
-                    MOVIE_DATA_URN:None,
-                    LAST_FRAME_TRACKED:None,
-                    'created_at':int(time.time()),
-                    # date_uploaded now reflects when upload was initiated (presigned URL issued)
-                    'date_uploaded':int(time.time()),
-                    TOTAL_FRAMES:None, # will be set later
-                    TOTAL_BYTES:None,  # will be set later
-                    VERSION:0,  # will be set to 1 with set_movie_data
-                    'research_use': research_use,
-                    'credit_by_name': credit_by_name,
-                    'attribution_name': attribution_name,
-                    'rotation_steps': 0,
+                    MOVIE_ZIPFILE_URN: None,
+                    MOVIE_DATA_URN: None,
+                    LAST_FRAME_TRACKED: None,
+                    CREATED_AT: int(time.time()),
+                    DATE_UPLOADED: int(time.time()),
+                    TOTAL_FRAMES: None,
+                    TOTAL_BYTES: None,
+                    VERSION: 0,
+                    RESEARCH_USE: research_use,
+                    CREDIT_BY_NAME: credit_by_name,
+                    ATTRIBUTION_NAME: attribution_name,
+                    ROTATION_STEPS: 0,
                     PROCESSING_STATE: PROCESSING_STATE_UPLOADING,
                     })
     return movie_id
@@ -1487,11 +1500,11 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 
     # update the last frame tracked. This is way, way more expensive than it should be.
     movie = ddbo.get_movie(movie_id)
-    if movie['last_frame_tracked'] is None:
+    if movie[LAST_FRAME_TRACKED] is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
-        movie['last_frame_tracked'] = frame_number
+        movie[LAST_FRAME_TRACKED] = frame_number
     else:
-        movie['last_frame_tracked'] = max(movie['last_frame_tracked'],frame_number)
+        movie[LAST_FRAME_TRACKED] = max(movie[LAST_FRAME_TRACKED], frame_number)
     ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
 
 
@@ -1505,16 +1518,16 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 # We kept this, even thoguh we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
-    'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
-    'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
-    'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
-    'fps': 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
-    'width': 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
-    'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
-    'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
-    'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
-    'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
-    'movie_zipfile_urn':'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
+    TITLE: 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
+    DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
+    STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
+    HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_FRAMES: 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_BYTES: 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
+    VERSION: 'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_ZIPFILE_URN: 'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     DELETED: 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1523,7 +1536,7 @@ SET_MOVIE_METADATA = {
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 
     # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
-    'rotation_steps': 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
+    ROTATION_STEPS: 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
 }
 
 @log

@@ -14,7 +14,20 @@ from botocore.exceptions import ClientError,ParamValidationError
 
 from .s3_presigned import s3_client,make_urn,make_object_name
 from .constants import C,logger
-from .odb import DDBO,InvalidMovie_Id,is_movie_id,VERSION,course_id_for_movie_id,MOVIE_DATA_URN,DATE_UPLOADED,TOTAL_BYTES,TOTAL_FRAMES,FRAME_URN,DELETED
+from .odb import (
+    DDBO,
+    InvalidMovie_Id,
+    is_movie_id,
+    VERSION,
+    course_id_for_movie_id,
+    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+    DATE_UPLOADED,
+    TOTAL_BYTES,
+    TOTAL_FRAMES,
+    FRAME_URN,
+    DELETED,
+)
 
 def read_object(urn):
     o = urllib.parse.urlparse(urn)
@@ -92,7 +105,7 @@ def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
     movie = DDBO().get_movie(movie_id)
     try:
         if zipfile:
-            urn = movie['movie_zipfile_urn']
+            urn = movie[MOVIE_ZIPFILE_URN]
         else:
             urn = movie['movie_data_urn']
     except TypeError as e:
@@ -169,9 +182,9 @@ def purge_movie_zipfile(*,movie_id):
     logger.debug("purge_movie_data movie_id=%s",movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
-    if movie.get('movie_zipfile_urn',None) is not None:
-        delete_object(movie['movie_zipfile_urn'])
-        ddbo.update_table(ddbo.movies, movie_id, {'movie_zipfile_urn':None})
+    if movie.get(MOVIE_ZIPFILE_URN, None) is not None:
+        delete_object(movie[MOVIE_ZIPFILE_URN])
+        ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ZIPFILE_URN: None})
 
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""

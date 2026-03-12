@@ -104,6 +104,26 @@ class C:
     API_KEY_COOKIE_BASE = 'api_key'
     API_KEY_COOKIE_MAX_AGE = 60*60*24*180
 
+    # Lambda/health response
+    STATUS_OK = 'ok'
+    STATUS_UNAVAILABLE = 'unavailable'
+    KEY_STATUS = 'status'
+    KEY_REASON = 'reason'
+
+    # API response keys (JSON body)
+    API_KEY_ERROR = 'error'
+    API_KEY_MESSAGE = 'message'
+    API_KEY_METADATA = 'metadata'
+    API_KEY_FRAMES = 'frames'
+    API_KEY_MARKERS = 'markers'
+
+    # Movie metadata prop names for type coercion (schema.fix_movie_prop_value); single source of truth
+    MOVIE_PROPS_INT = (
+        'published', 'deleted', 'version', 'last_frame_tracked', 'research_use', 'credit_by_name',
+        'date_uploaded', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
+    )
+    MOVIE_PROPS_STR = ('fps',)
+
 class MIME:
     """MIME Types"""
     JPEG = 'image/jpeg'
@@ -114,32 +134,32 @@ class E:
     """Error constants"""
     def __init__(self):
         raise RuntimeError("Do not instantiate this class. It exists solely for its static constants.")
-    CALC_RESULTS_PARAM_INVALID = { 'error': True, 'message': 'All coordinates must be provided (not none) and time elapsed must be greater than zero.'}
-    NO_FILE_PARAMETER = {'error':True, 'message':'upload request a file parameter named "file".'}
-    INVALID_API_KEY = {'error': True, 'message': 'Invalid api_key'}
-    INVALID_COURSE_ACCESS = { 'error':True, 'message':'User is not authorized to manipulate course.'}
-    INVALID_COURSE_ID = {'error': True, 'message': 'There is no course for that course ID'}
-    INVALID_COURSE_KEY = {'error': True, 'message': 'There is no course for that course key.'}
-    INVALID_EMAIL = {'error': True, 'message': 'Invalid email address'}
-    INVALID_FRAME_NUMBER = { 'error': True, 'message': 'Invalid frame number'}
-    INVALID_FRAME_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie frame.'}
-    INVALID_FRAME_FORMAT = { 'error': True, 'message': 'Format must be "json" or "jpeg".'}
-    INVALID_MOVIE_ACCESS = { 'error': True, 'message': 'User does not have access to requested movie.'}
-    INVALID_MOVIE_FRAME = { 'error': True, 'message': 'Could not retrieve the movie frame.'}
-    INVALID_MOVIE_ID = {'error': True, 'message': 'movie_id is invalid or missing'}
-    NO_MOVIE_DATA = {'error': True, 'message': 'No data is available for that movie_id'}
-    INVALID_EDIT_ACTION = {'error' : True, 'message':'invalid movie edit action'}
-    INVALID_REQUEST_JPEG = {'error': True, 'message':'Invalid request when requesting JPEG'}
-    NO_EMAIL_REGISTER = {'error':True,'message':'could not register email addresses.'}
-    NO_REMAINING_REGISTRATIONS = { 'error': True, 'message': 'That course has no remaining registrations. Please contact your faculty member.'}
-    TRACK_FRAMES_SAME = {'error':True, 'message':'The frames references in api_get_frame are the same frame'}
-    FRAME1_IS_NONE = {'error':True, 'message':'Frame1 in track_frame is None'}
-    NO_TRACKPOINTS = {'error':True, 'message':'No trackpoints provided for tracking operation'}
-    INVALID_MAILER_CONFIGURATION = {'error':True, 'message':'Invalid mailer configuration. Please review error.log on server for more information'}
-    MUST_TRACK_ORIG_MOVIE = {'error':True, 'message':'Must track original movies'}
-    NO_MAILER_CONFIGURATION = {'error':True, 'message':'Email cannot be sent as no mailer has been configured.'}
-    FRAME_START_NO_FRAME_COUNT = {'error':True, 'message':'frame_start provided but frame_count is not provided'}
-    FRAME_COUNT_GT_0 = {'error':True, 'message':'frame_count must be greater than 0'}
+    CALC_RESULTS_PARAM_INVALID = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'All coordinates must be provided (not none) and time elapsed must be greater than zero.'}
+    NO_FILE_PARAMETER = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'upload request a file parameter named "file".'}
+    INVALID_API_KEY = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Invalid api_key'}
+    INVALID_COURSE_ACCESS = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'User is not authorized to manipulate course.'}
+    INVALID_COURSE_ID = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'There is no course for that course ID'}
+    INVALID_COURSE_KEY = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'There is no course for that course key.'}
+    INVALID_EMAIL = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Invalid email address'}
+    INVALID_FRAME_NUMBER = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Invalid frame number'}
+    INVALID_FRAME_ACCESS = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'User does not have access to requested movie frame.'}
+    INVALID_FRAME_FORMAT = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Format must be "json" or "jpeg".'}
+    INVALID_MOVIE_ACCESS = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'User does not have access to requested movie.'}
+    INVALID_MOVIE_FRAME = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Could not retrieve the movie frame.'}
+    INVALID_MOVIE_ID = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'movie_id is invalid or missing'}
+    NO_MOVIE_DATA = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'No data is available for that movie_id'}
+    INVALID_EDIT_ACTION = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'invalid movie edit action'}
+    INVALID_REQUEST_JPEG = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'Invalid request when requesting JPEG'}
+    NO_EMAIL_REGISTER = {C.API_KEY_ERROR: True,C.API_KEY_MESSAGE:'could not register email addresses.'}
+    NO_REMAINING_REGISTRATIONS = { C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'That course has no remaining registrations. Please contact your faculty member.'}
+    TRACK_FRAMES_SAME = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'The frames references in api_get_frame are the same frame'}
+    FRAME1_IS_NONE = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'Frame1 in track_frame is None'}
+    NO_TRACKPOINTS = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'No trackpoints provided for tracking operation'}
+    INVALID_MAILER_CONFIGURATION = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'Invalid mailer configuration. Please review error.log on server for more information'}
+    MUST_TRACK_ORIG_MOVIE = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'Must track original movies'}
+    NO_MAILER_CONFIGURATION = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'Email cannot be sent as no mailer has been configured.'}
+    FRAME_START_NO_FRAME_COUNT = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'frame_start provided but frame_count is not provided'}
+    FRAME_COUNT_GT_0 = {C.API_KEY_ERROR: True, C.API_KEY_MESSAGE:'frame_count must be greater than 0'}
 
 
 #pylint: enable=too-few-public-methods

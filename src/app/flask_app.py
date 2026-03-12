@@ -293,13 +293,13 @@ def func_logout():
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "ok", "message": "pong"})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK, C.API_KEY_MESSAGE: "pong"})
 
 
 @app.route("/status")
 def status():
     """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
-    return jsonify({"status": "ok"})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():

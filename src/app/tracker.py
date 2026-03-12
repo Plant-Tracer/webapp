@@ -21,7 +21,14 @@ import numpy as np
 from . import paths
 from . import mp4_metadata_lib
 from .constants import C
-from .odb import LAST_FRAME_TRACKED, MOVIE_DATA_URN, PROCESSING_STATE, PROCESSING_STATE_TRACKED
+from .odb import (
+    LAST_FRAME_TRACKED,
+    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+    PROCESSING_STATE,
+    PROCESSING_STATE_TRACKED,
+    STATUS,
+)
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -434,7 +441,7 @@ class TrackingCallback:
         )
         message = f"Tracked frames {frame_number + 1} of {self.total_frames}"
         self.env.set_metadata(
-            user_id=self.user_id, movie_id=self.movie_id, prop="status", value=message
+            user_id=self.user_id, movie_id=self.movie_id, prop=STATUS, value=message
         )
 
     def close(self):
@@ -449,7 +456,7 @@ class TrackingCallback:
         self.env.set_metadata(
             user_id=self.user_id,
             movie_id=self.movie_id,
-            prop="status",
+            prop=STATUS,
             value=C.TRACKING_COMPLETED,
         )
         self.env.update_movie(self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
@@ -539,7 +546,7 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         zip_urn = env.make_urn(object_name=zip_oname)
         env.write_object(urn=zip_urn, data=callback.zipfile_data)
         env.set_metadata(
-            user_id=user_id, movie_id=movie_id, prop="movie_zipfile_urn", value=zip_urn
+            user_id=user_id, movie_id=movie_id, prop=MOVIE_ZIPFILE_URN, value=zip_urn
         )
         callback.done()
     finally:
