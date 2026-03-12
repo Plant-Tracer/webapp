@@ -21,6 +21,7 @@ import numpy as np
 from . import paths
 from . import mp4_metadata_lib
 from .constants import C
+from .odb import LAST_FRAME_TRACKED, MOVIE_DATA_URN, PROCESSING_STATE, PROCESSING_STATE_TRACKED
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -350,12 +351,6 @@ def prepare_movie_for_tracking(
         raise RuntimeError("prepare_movie_for_tracking failed")
 
 
-# Key names used when calling env.update_movie(); env may map these to DB columns.
-KEY_LAST_FRAME_TRACKED = "last_frame_tracked"
-KEY_MOVIE_DATA_URN = "movie_data_urn"
-KEY_PROCESSING_STATE = "processing_state"
-
-
 class TrackingEnv(ABC):
     """Abstract base for env adapters that connect the tracker to DB/S3 (Flask or Lambda)."""
 
@@ -457,7 +452,7 @@ class TrackingCallback:
             prop="status",
             value=C.TRACKING_COMPLETED,
         )
-        self.env.update_movie(self.movie_id, {KEY_PROCESSING_STATE: "tracked"})
+        self.env.update_movie(self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
         if os.path.exists(self._zip_tf.name):
             os.unlink(self._zip_tf.name)
 
@@ -515,7 +510,7 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
             )
             processed_urn = env.make_urn(object_name=processed_oname)
             env.write_object_from_path(urn=processed_urn, path=out_path)
-            env.update_movie(movie_id, {KEY_MOVIE_DATA_URN: processed_urn})
+            env.update_movie(movie_id, {MOVIE_DATA_URN: processed_urn})
             moviefile_input = out_path
         else:
             moviefile_input = in_path
@@ -535,7 +530,7 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
             callback=callback.notify,
         )
         callback.close()
-        env.update_movie(movie_id, {KEY_LAST_FRAME_TRACKED: callback.last_frame_tracked})
+        env.update_movie(movie_id, {LAST_FRAME_TRACKED: callback.last_frame_tracked})
         zip_oname = env.make_object_name(
             course_id=env.course_id_for_movie_id(movie_id),
             movie_id=movie_id,

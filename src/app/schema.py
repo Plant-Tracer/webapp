@@ -114,7 +114,7 @@ class Movie(BaseModel):
     movie_data_urn: str | None = None
     movie_zipfile_urn: str | None = None
     first_frame_urn: str | None = None
-    processing_state: str | None = None  # e.g. uploading, processing, ready
+    processing_state: str | None = None  # values in odb: PROCESSING_STATE_UPLOADING, _TRACKING, _TRACKED
     zip_frame_processing: dict | None = None  # {"total": int, "current": int}
 
     last_frame_tracked: Annotated[int | None, Field(ge=0)] = None

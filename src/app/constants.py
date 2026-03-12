@@ -96,6 +96,9 @@ class C:
     GET = 'get'
     SCHEME_S3 = 's3'
     SCHEME_DB = 'db'
+    # S3 object key templates (course_id/movie_id{ext} and course_id/movie_id/frame_number{ext})
+    MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
+    FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
     SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'

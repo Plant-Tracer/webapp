@@ -1,6 +1,6 @@
 """
 Tracking env for a compact Lambda: DynamoDB and S3 via boto3 only.
-No Flask, no odb, no flask_api. Use this when the Lambda runs only tracking.
+No Flask, no flask_api. Imports table/attribute names from odb.
 """
 
 import os
@@ -11,19 +11,16 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from .constants import C
+from .odb import (
+    MOVIES,
+    FRAMES,
+    MOVIE_ID,
+    FRAME_NUMBER,
+    COURSE_ID,
+    LAST_FRAME_TRACKED,
+    MOVIE_DATA_URN,
+)
 from . import tracker
-
-# Table and attribute names (must match odb)
-MOVIES = "movies"
-FRAMES = "movie_frames"
-MOVIE_ID = "movie_id"
-FRAME_NUMBER = "frame_number"
-COURSE_ID = "course_id"
-LAST_FRAME_TRACKED = "last_frame_tracked"
-MOVIE_DATA_URN = "movie_data_urn"
-
-MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
-FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
 
 
 def _table_prefix():
@@ -179,8 +176,8 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
 
     def make_object_name(self, *, course_id, movie_id, ext, frame_number=None):
         if frame_number is None:
-            return MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
-        return FRAME_TEMPLATE.format(
+            return C.MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
+        return C.FRAME_TEMPLATE.format(
             course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext
         )
 
@@ -194,13 +191,7 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
         return item.get(COURSE_ID, "")
 
     def update_movie(self, movie_id, updates):
-        key_map = {
-            tracker.KEY_LAST_FRAME_TRACKED: LAST_FRAME_TRACKED,
-            tracker.KEY_MOVIE_DATA_URN: MOVIE_DATA_URN,
-            tracker.KEY_PROCESSING_STATE: "processing_state",
-        }
-        for env_key, val in updates.items():
-            attr = key_map.get(env_key, env_key)
+        for attr, val in updates.items():
             val = _fix_value(attr, val)
             self._movies.update_item(
                 Key={MOVIE_ID: movie_id},

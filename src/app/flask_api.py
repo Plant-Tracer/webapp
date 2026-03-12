@@ -39,6 +39,8 @@ from .odb import (
     COURSE_ID,
     LAST_FRAME_TRACKED,
     MOVIE_DATA_URN,
+    PROCESSING_STATE,
+    PROCESSING_STATE_TRACKING,
     DDBO,
     UnauthorizedUser,
 )
@@ -860,14 +862,8 @@ class FlaskTrackingEnv(tracker.TrackingEnv):
         return odb.course_id_for_movie_id(movie_id)
 
     def update_movie(self, movie_id, updates):
-        key_map = {
-            tracker.KEY_LAST_FRAME_TRACKED: LAST_FRAME_TRACKED,
-            tracker.KEY_MOVIE_DATA_URN: MOVIE_DATA_URN,
-            tracker.KEY_PROCESSING_STATE: "processing_state",
-        }
-        mapped = {key_map.get(k, k): v for k, v in updates.items()}
         ddbo = DDBO()
-        ddbo.update_table(ddbo.movies, movie_id, mapped)
+        ddbo.update_table(ddbo.movies, movie_id, updates)
 
 
 def api_track_movie(*, user_id, movie_id, frame_start):
@@ -923,7 +919,7 @@ def api_track_movie_queue():
     logger.debug("calling api_track_movie")
     # Mark movie as actively tracking so the list/status reflects this state.
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {"processing_state": "tracking"})
+    ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKING})
     api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
     logger.debug("return from api_track_movie")
     return jsonify({'error': False, 'message':'Tracking is completed'})

@@ -75,6 +75,11 @@ NAME = 'name'
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
+PROCESSING_STATE = 'processing_state'
+# Values for processing_state (single source of truth)
+PROCESSING_STATE_UPLOADING = 'uploading'
+PROCESSING_STATE_TRACKING = 'tracking'
+PROCESSING_STATE_TRACKED = 'tracked'
 
 USER_ID = 'user_id'
 
@@ -1286,7 +1291,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     'credit_by_name': credit_by_name,
                     'attribution_name': attribution_name,
                     'rotation_steps': 0,
-                    'processing_state': 'uploading',
+                    PROCESSING_STATE: PROCESSING_STATE_UPLOADING,
                     })
     return movie_id
 
