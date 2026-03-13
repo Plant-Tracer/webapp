@@ -984,7 +984,6 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     return {USER_ID:user_id}
 
 
-@log
 def unregister_from_course(*, course_id, user_id):
     """Remove user_id from course_id, but do not make other changes."""
     ddbo = DDBO()
@@ -996,7 +995,6 @@ def unregister_from_course(*, course_id, user_id):
         pass
     ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:user_id})
 
-@log
 def delete_user(*, user_id, purge_movies=False):
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
@@ -1057,7 +1055,6 @@ def make_new_api_key(*, email, demo_user=False):
     raise InvalidUser_Email(email)
 
 
-@log
 def get_user(user_id):
     return DDBO().get_user(user_id)
 
@@ -1074,15 +1071,12 @@ def get_first_api_key_for_user(user_id):
 ### Course Management ###
 #########################
 
-@log
 def lookup_course_by_id(*, course_id):
     return DDBO().get_course(course_id)
 
-@log
 def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
 
-@log
 def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT, ok_if_exists=False):
     """Create a new course
     """
@@ -1093,13 +1087,11 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
                         MAX_ENROLLMENT:max_enrollment},
                       ok_if_exists=ok_if_exists)
 
-@log
 def delete_course(*,course_id):
     """Delete a course.
     """
     DDBO().del_course(course_id)
 
-@log
 def add_course_admin(*, admin_id, course_id):
     """Promotes the user to be an administrator and makes them an administrator of a specific course.
     :param email: email address of the administrator
@@ -1126,7 +1118,6 @@ def add_course_admin(*, admin_id, course_id):
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
-@log
 def remove_course_admin(*, course_id, admin_id):
     """Removes email from the course admin list and takes them out of the course."""
     ddbo = DDBO()
@@ -1171,7 +1162,6 @@ def remove_course_admin(*, course_id, admin_id):
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 
-@log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
     logger.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
@@ -1181,13 +1171,11 @@ def check_course_admin(*, user_id, course_id):
     logger.debug("user=%s",user)
     return course_id in user[ ADMIN_FOR_COURSES ]
 
-@log
 def validate_course_key(*, course_key):
     if DDBO().get_course_by_course_key(course_key):
         return True
     return False
 
-@log
 def remaining_course_registrations(*,course_key):
     ddbo = DDBO()
     course = ddbo.get_course_by_course_key(course_key)
@@ -1197,7 +1185,6 @@ def remaining_course_registrations(*,course_key):
     enrolled = course_enrollments(course_id)
     return course['max_enrollment'] - len(enrolled)
 
-@log
 def course_enrollments(course_id):
     """Return a list of all those enrolled in the course (including staff)
     Gets all the movie frames"""
@@ -1220,7 +1207,6 @@ def course_enrollments(course_id):
 
 
 
-@log
 def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for a single movie.
     :param movie_id: the movie for which we need data.
@@ -1236,7 +1222,6 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     return movie
 
 
-@log
 def can_access_movie(*, user_id, movie_id):
     """
     Checks to see if the user is allowed to access the movie:
@@ -1261,7 +1246,6 @@ def can_access_movie(*, user_id, movie_id):
         return movie
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
-@log
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
                      research_use=0, credit_by_name=0, attribution_name=None):
     """
@@ -1384,7 +1368,6 @@ def movie_zipfile_urn_for_movie_id(movie_id):
 
 
 
-@log
 def get_frame_urn(*, movie_id, frame_number):
     """Get a frame_urn by movie_id and frame number.
     :param: movie_id - the movie_id wanted
@@ -1539,7 +1522,6 @@ SET_MOVIE_METADATA = {
     ROTATION_STEPS: 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
 }
 
-@log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """We tried doing this in a single statement and it failed
     :param user_id: - user doing the setting. 0 for root

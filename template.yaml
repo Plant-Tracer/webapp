@@ -595,7 +595,7 @@ Resources:
       Architectures: [arm64]
       PackageType: Zip
       CodeUri: lambda-resize/src/
-      Handler: resize_app.resize.lambda_handler
+      Handler: resize_app.main.lambda_handler
       Timeout: 900
       MemorySize: 1024
       Environment:

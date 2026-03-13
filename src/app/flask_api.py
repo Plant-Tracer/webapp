@@ -8,17 +8,13 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 import json
 import sys
 import smtplib
-import tempfile
 import base64
 import io
 import csv
 import os
-import threading
-import zipfile
 from collections import defaultdict
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
-from zipfile import ZipFile
+from urllib.request import Request, urlopen
 
 from flask import Blueprint, request, make_response, redirect, current_app, jsonify
 from validate_email_address import validate_email
@@ -41,6 +37,7 @@ from .odb import (
     MOVIE_ZIPFILE_URL,
     MOVIE_METADATA_BULK_PROPS,
     ORIG_MOVIE,
+    ROTATION_STEPS,
     WIDTH,
     HEIGHT,
     PROCESSING_STATE,
@@ -491,6 +488,13 @@ def api_get_frame():
             C.ANALYSIS_FRAME_MAX_WIDTH,
             C.ANALYSIS_FRAME_MAX_HEIGHT,
         )
+        # Update stored width/height from first frame when missing (so analyze page has dimensions).
+        if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
+            dims = tracker.get_jpeg_dimensions(resized)
+            if dims:
+                w, h = dims
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
         response = make_response(resized, 200)
         response.headers['Content-Type'] = 'image/jpeg'
         return response
@@ -523,6 +527,13 @@ def api_get_frame():
             assert frame_data is not None
         except ValueError:
             return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
+        # Update stored width/height from first frame when missing.
+        if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
+            dims = tracker.get_jpeg_dimensions(frame_data)
+            if dims:
+                w, h = dims
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
         urn = create_new_movie_frame(movie_id=movie_id, frame_number=frame_number, frame_data=frame_data)
         assert urn is not None
 
@@ -533,69 +544,17 @@ def api_get_frame():
 
 ################################################################
 ## Movie editing
-
-def _build_movie_zip_sync(movie_id, user_id):
-    """Extract all frames from the current movie to a zip, upload to storage, set movie_zipfile_urn.
-    Used after rotation so the analyze page can load the zip when ready (e.g. while user places markers).
-    Each JPEG in the zip gets the research-attribution comment from the movie record.
-    """
-    path = None
-    zip_path = None
-    try:
-        movie_record = odb.get_movie_metadata(movie_id=movie_id)
-        research_comment = mp4_metadata_lib.build_comment(
-            movie_record.get("research_use", 0) or 0,
-            movie_record.get("credit_by_name", 0) or 0,
-            movie_record.get("attribution_name"),
-        )
-        movie_data = get_movie_data(movie_id=movie_id)
-        with tempfile.NamedTemporaryFile(suffix='.mp4', mode='wb', delete=False) as infile:
-            infile.write(movie_data)
-            infile.flush()
-            path = infile.name
-        zip_path = tempfile.mktemp(suffix='.zip')
-        with ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-            def zip_callback(*, frame_number, frame_data, frame_trackpoints):  # pylint: disable=unused-argument
-                jpeg = tracker.convert_frame_to_jpeg(frame_data, quality=60)
-                if research_comment:
-                    jpeg = mp4_metadata_lib.add_comment_to_jpeg(jpeg, research_comment, quality=60)
-                zf.writestr(f"frame_{frame_number:04d}.jpg", jpeg)
-            dummy_trackpoints = [{'x': 0, 'y': 0, 'label': 'dummy', 'frame_number': 0}]
-            tracker.track_movie(moviefile_input=path, input_trackpoints=dummy_trackpoints, callback=zip_callback)
-        with open(zip_path, 'rb') as f:
-            zip_data = f.read()
-        oname = make_object_name(
-            course_id=odb.course_id_for_movie_id(movie_id), movie_id=movie_id, ext=C.ZIP_MOVIE_EXTENSION
-        )
-        urn = make_urn(object_name=oname)
-        write_object(urn=urn, object_data=zip_data)
-        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=MOVIE_ZIPFILE_URN, value=urn)
-        logger.info("_build_movie_zip_sync done movie_id=%s", movie_id)
-    except InvalidMovie_Id:
-        # Movie was deleted or no longer exists by the time the background zip builder ran.
-        # This is expected in some tests and cleanup paths; log at warning level without traceback.
-        logger.warning("_build_movie_zip_sync: movie_id %s no longer exists; skipping zip build", movie_id)
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("_build_movie_zip_sync failed movie_id=%s", movie_id)
-    finally:
-        if path and os.path.exists(path):
-            os.unlink(path)
-        if zip_path and os.path.exists(zip_path):
-            os.unlink(zip_path)
-
+## Rotation and zip are done only in Lambda (no full movie scan on VM).
 
 @api_bp.route('/edit-movie', methods=POST)
 def api_edit_movie():
-    """Edit a movie (rotate and optionally build zip).
+    """Request movie rotation (and zip). VM only updates rotation_steps and triggers Lambda.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
     :param action: must be 'rotate90cw'
-    :param rotation_steps: optional 1–3; total 90° rotations to apply. If omitted, 1 is used.
-        The client debounces multiple rotate clicks and sends one request with the total steps.
-        After rotating, a zip of all frames is built in the background so the analyze page can use it.
-
-    set_movie_data() updates the movie version number. Zip creation runs in a background thread.
+    :param rotation_steps: 1–3; total 90° rotations. Client debounces and sends one request.
+    Lambda performs rotate, zip, and metadata update (including width/height swap).
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
@@ -610,33 +569,29 @@ def api_edit_movie():
         steps = 1
     steps = max(1, min(3, int(steps)))
 
-    movie_data = get_movie_data(movie_id=movie_id)
-    for _ in range(steps):
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as movie_input:
-            movie_input.write(movie_data)
-            movie_input.flush()
-            in_path = movie_input.name
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, {ROTATION_STEPS: steps})
+
+    base = get_lambda_api_base()
+    if base:
         try:
-            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as movie_output:
-                out_path = movie_output.name
-            try:
-                tracker.rotate_movie(in_path, out_path, transpose=1)
-                with open(out_path, 'rb') as f:
-                    movie_data = f.read()
-            finally:
-                if os.path.exists(out_path):
-                    os.unlink(out_path)
-        finally:
-            if os.path.exists(in_path):
-                os.unlink(in_path)
+            data = json.dumps({
+                "action": "rotate-and-zip",
+                "movie_id": movie_id,
+                "rotation_steps": steps,
+            }).encode("utf-8")
+            req = Request(
+                base.rstrip("/") + "/api/v1",
+                data=data,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urlopen(req, timeout=10) as _r:
+                pass
+        except Exception as ex:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to trigger Lambda rotate-and-zip for movie_id=%s: %s", movie_id, ex)
 
-    set_movie_data(movie_id=movie_id, movie_data=movie_data)
-
-    # Build zip in background so the analyze page can use it when ready (e.g. while user places markers)
-    thread = threading.Thread(target=_build_movie_zip_sync, args=(movie_id, user_id), daemon=True)
-    thread.start()
-
-    return {'error': False}
+    return {"error": False}
 
 
 @api_bp.route('/delete-movie', methods=POST)
@@ -682,18 +637,10 @@ def api_get_movie_metadata():
 
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    movie_metadata =  odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
+    movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
-    # If we do not have the movie width and height, get them and write them back to the database
-    if (not movie_metadata.get(WIDTH, None)) or (not movie_metadata.get(HEIGHT, None)):
-        movie_data     = get_movie_data(movie_id = movie_id)
-
-        if movie_data is None:
-            return make_response(E.NO_MOVIE_DATA, 400)
-
-        # Write them back
-        movie_metadata = {**movie_metadata, **tracker.extract_movie_metadata(movie_data=movie_data)}
-        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
+    # Return only stored metadata; do not generate or write metadata here.
+    # Width/height are set when the first frame is served (get-frame) or by Lambda (rotate-and-zip).
 
     # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
     if movie_metadata.get(MOVIE_ZIPFILE_URN, None):

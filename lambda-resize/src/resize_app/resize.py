@@ -5,9 +5,6 @@ Generate the https://camera.planttracer.org/ home page.
 Runs the camera.
 """
 
-# at top of home_app/home.py (module import time)
-import base64
-import binascii
 import json
 import os
 import sys
@@ -15,7 +12,7 @@ import time
 import urllib.parse
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional
 
 import boto3
 
@@ -282,35 +279,6 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
     return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
 
 
-################################################################
-## Parse Lambda Events and cookies
-def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
-    """parse HTTP API v2 event.
-    :param event: AWS Lambda HTTP API v2 event to parse
-    :return (method,path,payload) - method - HTTP Method; path=HTTP Path; payload=JSON body if POST
-    """
-    stage = event.get("requestContext", {}).get("stage", "")
-    path = event.get("rawPath") or event.get("path") or "/"
-    if stage and path.startswith("/" + stage):
-        path = path[len(stage) + 1 :] or "/"
-    method = (
-        event.get("requestContext", {})
-        .get("http", {})
-        .get("method", event.get("httpMethod", "GET"))
-    )
-    body = event.get("body")
-    if event.get("isBase64Encoded"):
-        try:
-            body = base64.b64decode(body or "").decode("utf-8", "replace")
-        except binascii.Error:
-            body = None
-    try:
-        payload = json.loads(body) if body else {}
-    except json.JSONDecodeError:
-        payload = {}
-    return method, path, payload
-
-
 def write_log(message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):
     """Write a log entry to the DynamoDB logs table (same table as main app)."""
     if time_t is None:
@@ -400,78 +368,3 @@ def api_status() -> Dict[str, Any]:
         LOGGER.exception("api_status failed: %s", e)
         return resp_json(500, {"status": "error", "message": str(e)})
 
-################################################################
-## main entry point from lambda system
-
-# pylint: disable=too-many-branches, disable=unused-argument
-def lambda_handler(event, context) -> Dict[str, Any]:
-    """Called by Lambda for HTTP API requests (no S3 event invocation)."""
-    method, path, payload = parse_event(event)
-
-    with _with_request_log_level(payload):
-        try:
-            action = (payload.get("action") or "").lower()
-            # Log every incoming action and its parameters to help debug API usage.
-            LOGGER.info(
-                "req method='%s' path='%s' action='%s' payload=%s",
-                method,
-                path,
-                action,
-                payload,
-            )
-
-            match (method, path, action):
-                ################################################################
-                # Status (GET; health check)
-                case ("GET", "/status", _):
-                    return api_status()
-                case ("GET", "/prod/status", _):
-                    return api_status()
-
-                ################################################################
-                # CORS preflight (OPTIONS) – handled entirely in Lambda
-                case ("OPTIONS", "/api/v1", _):
-                    # Very permissive CORS so the browser can always talk to Lambda.
-                    return resp_json(
-                        204,
-                        {},
-                        headers={
-                            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-                            "Access-Control-Allow-Headers": "*",
-                        },
-                    )
-
-                ################################################################
-                # JSON API Actions
-                case (_, "/api/v1", "ping"):
-                    return api_ping(event,context)
-
-                case (_, '/api/v1/ping', _):
-                    return api_ping(event,context)
-
-                case ("POST", "/api/v1", "resize-start"):
-                    return api_resize(event, context, payload)
-                case ("POST", "/api/v1", "start-processing"):
-                    return api_start_processing(payload)
-                case ("POST", "/api/v1", "rotate-and-zip"):
-                    return api_rotate_and_zip(payload)
-
-                case (_, "/api/v1", "heartbeat"):
-                    return api_heartbeat(event, context)
-
-                case (_, "/api/v1", "log"):
-                    return api_log()
-
-                case (_, "/api/v1", _):
-                    return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
-
-                ################################################################
-                # error
-                case (_, _, _):
-                    return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            LOGGER.exception("Unhandled exception! e=%s", e)
-
-            # Return JSON for API requests
-            return resp_json(500, {"error": True, "message": str(e)})

@@ -109,30 +109,51 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
 
 
 def extract_movie_metadata(*, movie_data):
-    """Use OpenCV to get the movie metadata"""
-    with tempfile.NamedTemporaryFile(mode='ab') as tf:
+    """Use OpenCV to get movie metadata from stream properties (no full frame scan).
+    Width, height, fps and usually frame count come from container/stream metadata.
+    Only if frame count is missing do we fall back to counting frames."""
+    with tempfile.NamedTemporaryFile(mode='ab', suffix='.mp4') as tf:
         tf.write(movie_data)
         tf.flush()
         cap = cv2.VideoCapture(tf.name)
-        total_frames = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if len(frame)==0:
-                raise MovieCorruptError()
-
-            total_frames += 1
-    return {'total_frames':total_frames,
-            'total_bytes':len(movie_data),
-            'width':int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            'height':int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            'fps':cap.get(cv2.CAP_PROP_FPS)}
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if frame_count is not None and frame_count > 0:
+            total_frames = int(frame_count)
+        else:
+            total_frames = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if len(frame) == 0:
+                    raise MovieCorruptError()
+                total_frames += 1
+        cap.release()
+    return {
+        'total_frames': total_frames,
+        'total_bytes': len(movie_data),
+        'width': width,
+        'height': height,
+        'fps': fps,
+    }
 
 def convert_frame_to_jpeg(img, quality=90):
     """Use CV2 to convert a frame to a jpeg"""
     _, jpg_img = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     return jpg_img.tobytes()
+
+
+def get_jpeg_dimensions(jpeg_bytes):
+    """Return (width, height) of a JPEG image, or None if decode fails."""
+    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return None
+    h, w = img.shape[:2]
+    return (w, h)
 
 
 def resize_jpeg_to_fit(jpeg_bytes, max_width, max_height, quality=90):
