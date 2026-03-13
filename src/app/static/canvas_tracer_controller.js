@@ -323,16 +323,31 @@ class TracerController extends MovieController {
         this.tracking = true;   // we are tracking
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post(`${API_BASE}api/track-movie-queue`, params ).done( (data) => {
-            if(data.error){
-                alert(data.message);
-                this.tracking=false;
+        $.post(`${API_BASE}api/track-movie-queue`, params)
+            .done((data) => {
+                if (data.error) {
+                    alert(data.message);
+                    this.tracking = false;
+                    this.set_movie_control_buttons();
+                    this.enableTrackButtonIfAllowed();
+                } else {
+                    console.log("no error");
+                }
+            })
+            .fail((err) => {
+                this.tracking = false;
                 this.set_movie_control_buttons();
-                this.enableTrackButtonIfAllowed(); // re-enable when Lambda (if configured) is reachable
-            } else {
-                console.log("no error");
-            }
-        });
+                this.enableTrackButtonIfAllowed();
+                let msg = "Tracking request failed.";
+                if (err && err.responseText) {
+                    try {
+                        const body = JSON.parse(err.responseText);
+                        if (body && body.message) msg = body.message;
+                    } catch (_e) { /* use default */ }
+                }
+                this.tracking_status.text(msg);
+                alert(msg);
+            });
     }
 
     add_frame_objects( frame ){
@@ -390,7 +405,8 @@ class TracerController extends MovieController {
             this.rotate_button.prop(DISABLED, true);
             return;
         }
-        if (this.rotate_button.is(':visible')) {
+        const rotEl = this.rotate_button.get(0);
+        if (rotEl && rotEl.style.display !== 'none') {
             this.rotate_button.prop(DISABLED, false);
         }
         this.max_frame_index = this.getMaxViewableFrame();
