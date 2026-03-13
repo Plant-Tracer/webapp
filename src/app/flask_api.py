@@ -571,6 +571,10 @@ def _build_movie_zip_sync(movie_id, user_id):
         write_object(urn=urn, object_data=zip_data)
         odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=MOVIE_ZIPFILE_URN, value=urn)
         logger.info("_build_movie_zip_sync done movie_id=%s", movie_id)
+    except InvalidMovie_Id:
+        # Movie was deleted or no longer exists by the time the background zip builder ran.
+        # This is expected in some tests and cleanup paths; log at warning level without traceback.
+        logger.warning("_build_movie_zip_sync: movie_id %s no longer exists; skipping zip build", movie_id)
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("_build_movie_zip_sync failed movie_id=%s", movie_id)
     finally:

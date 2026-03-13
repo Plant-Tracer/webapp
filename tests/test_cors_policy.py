@@ -37,8 +37,8 @@ def test_s3_cors_configuration_is_fully_open():
     rule = rules[0]
     assert "*" in (rule.get("AllowedOrigins") or []), "S3 CORS must allow all origins (*)"
     assert "*" in (rule.get("AllowedHeaders") or []), "S3 CORS must allow all headers (*)"
-    methods = set(rule.get("AllowedMethods") or [])
-    for required in {"GET", "PUT", "POST", "DELETE"}:
+    methods = rule.get("AllowedMethods") or []
+    for required in ("GET", "PUT", "POST", "DELETE"):
         assert required in methods, f"S3 CORS must allow {required}"
 
 
