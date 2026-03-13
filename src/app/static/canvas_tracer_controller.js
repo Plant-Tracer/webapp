@@ -72,11 +72,13 @@ class TracerController extends MovieController {
         this.download_button = $("#download_button");
         this.download_button.hide(); // Hide the download link until we track or retrack
 
-        // Size the canvas and video player
-        $(this.div_selector + " canvas").attr('width',this.movie_metadata.width);
-        $(this.div_selector + " canvas").attr('height',this.movie_metadata.height);
-        $(this.div_selector + " video").attr('width',this.movie_metadata.width);
-        $(this.div_selector + " video").attr('height',this.movie_metadata.height);
+        // Size the canvas and video from metadata when present; else leave default until first frame loads.
+        const w = this.movie_metadata.width;
+        const h = this.movie_metadata.height;
+        if (w != null && h != null && w > 0 && h > 0) {
+            $(this.div_selector + " canvas").attr('width', w).attr('height', h);
+            $(this.div_selector + " video").attr('width', w).attr('height', h);
+        }
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
@@ -95,7 +97,8 @@ class TracerController extends MovieController {
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
         this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        this.rotate_button.prop(DISABLED,false);
+        this.rotate_button.hide();
+        this.rotate_button.prop(DISABLED, true);
         this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
@@ -384,10 +387,12 @@ class TracerController extends MovieController {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
             $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
-            this.rotate_button.prop(DISABLED,true);
+            this.rotate_button.prop(DISABLED, true);
             return;
         }
-        this.rotate_button.prop(DISABLED,false);
+        if (this.rotate_button.is(':visible')) {
+            this.rotate_button.prop(DISABLED, false);
+        }
         this.max_frame_index = this.getMaxViewableFrame();
         super.set_movie_control_buttons(); // otherwise run the super class
     }
@@ -446,21 +451,21 @@ class TracerController extends MovieController {
     }
 
     rotate_button_pressed() {
-        // Rotate button pressed. Rotate the  movie and then reload the page and clear the cache
-        this.rotate_button.prop(DISABLED,true);
+        // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
+        this.rotate_button.prop(DISABLED, true);
         $('#firsth2').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
             action: 'rotate90cw'};
-        $.post(`${API_BASE}api/edit-movie`, params ).done( (data) => {
-            if(data.error){
+        $.post(`${API_BASE}api/edit-movie`, params).done((data) => {
+            if (data.error) {
                 alert(data.message);
+                this.rotate_button.prop(DISABLED, false);
             } else {
                 location.reload(true);
             }
         });
-        location.reload(true);
     }
 
 }
@@ -471,7 +476,19 @@ class TracerController extends MovieController {
 var cc;                         // where we hold the controller
 function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, metadata_frames, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
-    cc.did_onload_callback = (_) => {
+    cc.did_onload_callback = (imgStack) => {
+        if (imgStack && imgStack.img && (cc.movie_metadata.width == null || cc.movie_metadata.height == null)) {
+            const nw = imgStack.img.naturalWidth;
+            const nh = imgStack.img.naturalHeight;
+            if (nw > 0 && nh > 0) {
+                cc.movie_metadata.width = nw;
+                cc.movie_metadata.height = nh;
+                $(cc.div_selector + ' canvas').attr('width', nw).attr('height', nh);
+                $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
+            }
+        }
+        cc.rotate_button.show();
+        cc.rotate_button.prop(DISABLED, false);
         if (demo_mode) {
             $('#firsth2').html('Movie cannot be traced in demo mode.');
         } else {
@@ -507,6 +524,20 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     });
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
+    cc.did_onload_callback = (imgStack) => {
+        if (imgStack && imgStack.img && (cc.movie_metadata.width == null || cc.movie_metadata.height == null)) {
+            const nw = imgStack.img.naturalWidth;
+            const nh = imgStack.img.naturalHeight;
+            if (nw > 0 && nh > 0) {
+                cc.movie_metadata.width = nw;
+                cc.movie_metadata.height = nh;
+                $(cc.div_selector + ' canvas').attr('width', nw).attr('height', nh);
+                $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
+            }
+        }
+        cc.rotate_button.show();
+        cc.rotate_button.prop(DISABLED, false);
+    };
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
     cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
@@ -698,7 +729,9 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         const width = resp.metadata.width;
         const height = resp.metadata.height;
-        $(div_controller + ' canvas').prop('width',width).prop('height',height);
+        if (width != null && height != null && width > 0 && height > 0) {
+            $(div_controller + ' canvas').prop('width', width).prop('height', height);
+        }
         if (!resp.metadata.movie_zipfile_url) {
             $('#firsth2').html('Waiting for processing to complete…');
             const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis`;

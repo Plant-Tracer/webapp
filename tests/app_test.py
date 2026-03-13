@@ -14,10 +14,10 @@ from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
+from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID, DDBO, PROCESSING_STATE
 
 # Fixtures are imported in conftest.py
-from app.constants import logger
+from app.constants import C, logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -144,53 +144,65 @@ def test_templates(client,new_course):
 
 
 def test_api_edit_movie(new_movie, client):
-    """verify that new_movie fixture is set up properly and that we can use edit-movie"""
+    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
+    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]
 
-    movie = odb.get_movie(movie_id = movie_id)
+    movie = odb.get_movie(movie_id=movie_id)
     movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie=%s movie_metadata=%s",movie,movie_metadata)
+    logger.debug("movie=%s movie_metadata=%s", movie, movie_metadata)
 
-    assert movie[VERSION] == 1  # because it had data assigned to it
+    assert movie[VERSION] == 1  # fixture had data assigned
     assert movie['user_id'] == new_movie[USER_ID]
 
     userdict = apikey.user_dict_for_api_key(new_movie[API_KEY])
-    assert userdict[USER_ID]==new_movie[USER_ID],f"userdict={userdict} new_movie={new_movie}"
+    assert userdict[USER_ID] == new_movie[USER_ID], f"userdict={userdict} new_movie={new_movie}"
 
-
-    ### This one should fail
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action' : 'bad-action'}
+    # Invalid action
+    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'bad-action'}
     resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 1  # because it was not updated
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation_steps', 0) == 0
 
-    ### This one should also
-    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'action' : 'rotate90cw'}
+    # Invalid api_key
+    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'action': 'rotate90cw'}
     resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 1  # because it was not updated
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
 
-    ### This one should be successful (rotation_steps omitted => 1 step)
+    # Success: rotation_steps omitted => 1 step
     data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw'}
     resp = client.post('/api/edit-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
     movie = odb.get_movie(movie_id=movie_id)
-    assert movie[VERSION] == 2, f"{movie}"  # because it was edited
+    assert movie.get('rotation_steps') == 1, f"{movie}"
 
-    ### rotation_steps=2: two 90° rotations in one request
+    # Success: rotation_steps=2
     data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw', 'rotation_steps': '2'}
     resp = client.post('/api/edit-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
     movie = odb.get_movie(movie_id=movie_id)
-    assert movie[VERSION] == 3, f"{movie}"
+    assert movie.get('rotation_steps') == 2, f"{movie}"
 
-    # Now test the user access
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie_metadata=%s movie_metadata2=%s", movie_metadata, movie_metadata2)
-    # We did two edits (one rotate, one rotate with rotation_steps=2)
-    assert movie_metadata['version'] + 2 == movie_metadata2['version'], (
-        f"{movie_metadata} / {movie_metadata2}"
+    logger.debug("movie_metadata2=%s", movie_metadata2)
+    assert movie_metadata2.get('rotation_steps') == 2
+
+
+def test_track_movie_queue_metadata_not_ready(client, new_movie):
+    """track-movie-queue returns 503 when movie has no width/height/fps/total_frames/total_bytes."""
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: "ready"})
+    resp = client.post(
+        "/api/track-movie-queue",
+        data={"api_key": api_key, "movie_id": movie_id, "frame_start": "0"},
     )
+    assert resp.status_code == 503
+    data = resp.get_json()
+    assert data is not None and data.get(C.API_KEY_ERROR) is True
+    assert "metadata" in (data.get(C.API_KEY_MESSAGE) or "").lower()
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get("processing_state") == "ready"

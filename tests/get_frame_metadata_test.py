@@ -8,11 +8,10 @@ def test_get_frame_does_not_extract_full_metadata_for_each_request(client, new_m
     """
     Regression test for large-movie get-frame timeouts.
 
-    The /api/get-frame endpoint should not call tracker.extract_movie_metadata just to
-    return a single frame; metadata extraction is expensive for large movies and is
-    handled elsewhere (e.g. get-movie-metadata). This test will fail on the old
-    implementation because api_get_frame_jpeg unconditionally calls
-    tracker.extract_movie_metadata.
+    The /api/get-frame endpoint should not call tracker.extract_movie_metadata to
+    return a single frame. Metadata (width/height) is set when serving the first
+    frame; full metadata is set by Lambda. get-movie-metadata only returns stored
+    metadata and does not extract.
     """
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]

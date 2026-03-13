@@ -23,7 +23,7 @@ API calls on that the JavaScript movie player can use
 
 - get-movie-metadata
 
-  Gets information about individual frames. Parameters:
+  Returns **stored** metadata only (no extraction or generation). Width/height are set when the first frame is served (get-frame) or by Lambda (rotate-and-zip). Full metadata (fps, total_frames, total_bytes) is set by Lambda. Parameters:
 
   frame_start - starting frame to get;
 

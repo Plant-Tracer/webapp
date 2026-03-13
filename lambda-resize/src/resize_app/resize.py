@@ -17,10 +17,11 @@ from typing import Any, Dict, Optional
 import boto3
 
 from .common import LOGGER
+from .movie_metadata import extract_movie_metadata
 from .rotate_zip import rotate_video_av, video_frames_to_zip_av
 from .src.app import odb
 from .src.app.constants import C
-from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES
+from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES, FPS, WIDTH, HEIGHT, TOTAL_FRAMES
 
 __version__ = "0.1.0"
 
@@ -262,16 +263,17 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload zip"})
 
-    # Final state: zip finished, mark ready and set progress to 100%.
+    # Final state: zip finished, mark ready, and write full metadata from the movie we used (rotated or not).
+    meta = extract_movie_metadata(movie_bytes_for_zip)
+    update_payload = {
+        "movie_zipfile_urn": zip_urn,
+        "processing_state": "ready",
+    }
+    for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+        if key in meta and meta[key] is not None:
+            update_payload[attr] = meta[key]
     try:
-        ddbo.update_table(
-            ddbo.movies,
-            movie_id,
-            {
-                "movie_zipfile_urn": zip_urn,
-                "processing_state": "ready",
-            },
-        )
+        ddbo.update_table(ddbo.movies, movie_id, update_payload)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
     write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)

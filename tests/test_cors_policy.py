@@ -15,7 +15,7 @@ from app.s3_presigned import CORS_CONFIGURATION
 
 def _import_lambda_resize_module():
     """
-    Import the Lambda resize module (resize_app.resize) from lambda-resize/src.
+    Import the Lambda resize module (resize_app.main) from lambda-resize/src.
 
     This avoids depending on it being installed as a package; we add its src
     directory to sys.path at runtime for the tests.
@@ -25,9 +25,9 @@ def _import_lambda_resize_module():
     if lambda_src.is_dir() and str(lambda_src) not in sys.path:
         sys.path.insert(0, str(lambda_src))
     # pylint: disable=import-error,import-outside-toplevel
-    from resize_app import resize  # type: ignore
+    from resize_app import main  # type: ignore
 
-    return resize
+    return main
 
 
 def test_s3_cors_configuration_is_fully_open():
@@ -44,8 +44,9 @@ def test_s3_cors_configuration_is_fully_open():
 
 def test_lambda_resp_json_includes_cors_header():
     """Lambda resp_json() helper should always include Access-Control-Allow-Origin: *."""
-    resize = _import_lambda_resize_module()
-    resp = resize.resp_json(200, {"ok": True})
+    # resp_json lives in resize_app.resize; import it directly for type checkers.
+    from resize_app.resize import resp_json  # type: ignore  # pylint: disable=import-error,import-outside-toplevel
+    resp = resp_json(200, {"ok": True})
     headers = resp.get("headers") or {}
     assert headers.get("Access-Control-Allow-Origin") == "*"
 

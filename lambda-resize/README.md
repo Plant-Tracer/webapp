@@ -35,7 +35,7 @@ AWS SAM template that uses cloud formations to:
 
 Core functionality:
 - Invoked via HTTP API. When processing is requested (e.g. after upload), can process (see below).
-- **Rotate-and-zip**: POST ``action=rotate-and-zip`` with ``movie_id`` and ``rotation_steps`` (1–3). Rotates the movie using PyAV + Pillow only (no ffmpeg binary; keeps deployment small), uploads the rotated movie back to S3, builds a zip of all frames, uploads the zip, and updates DynamoDB. The client calls this when the user triggers rotation (debounced) if ``LAMBDA_API_BASE`` is set; otherwise the VM handles rotation.
+- **Rotate-and-zip**: POST ``action=rotate-and-zip`` with ``movie_id`` and ``rotation_steps`` (1–3). Rotates the movie using PyAV + Pillow only (no ffmpeg binary; keeps deployment small), uploads the rotated movie back to S3, builds a zip of all frames, uploads the zip, and updates DynamoDB with full metadata (width, height, fps, total_frames, total_bytes; width/height are swapped for 90°/270°). The VM does not rotate or build zip; it only updates ``rotation_steps`` and triggers this Lambda.
 - Accepts resize requests with an S3 URL
   - Process
 - Process an AWS URL:

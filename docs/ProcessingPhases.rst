@@ -51,14 +51,16 @@ Phase 3 – UI Refinements and Status Display
 Rotation and zip behavior (Phase 2)
 -----------------------------------
 
-To avoid queuing multiple rotation requests when the user clicks "Rotate" several times, the client **debounces** rotate clicks: the user may click 1, 2, or 3 times (for 90°, 180°, or 270°); after about one second with no further click, the client sends a **single** request to ``/api/edit-movie`` with ``action=rotate90cw`` and ``rotation_steps=1|2|3``. The server applies that many 90° rotations in one go, updates the stored movie, then starts building the frame zip in a **background thread**. The request returns as soon as rotation is done; zip creation continues in the background.
+To avoid queuing multiple rotation requests when the user clicks "Rotate" several times, the client **debounces** rotate clicks: the user may click 1, 2, or 3 times (for 90°, 180°, or 270°); after about one second with no further click, the client sends a **single** request to ``/api/edit-movie`` with ``action=rotate90cw`` and ``rotation_steps=1|2|3``.
 
-The user can go to the Analyze page immediately. The first frame shown comes from the already-rotated movie (via the get-frame API). They can place markers (drag points) on that frame. The zip file is being created in the background; when it becomes available, the analyze page **polls** ``get-movie-metadata`` every 2 seconds. When ``movie_zipfile_url`` appears, the page loads the zip and switches to the full frame set so the user can scrub through all frames. If the zip does not appear within 60 seconds, the page shows "Zip still not ready. Please come back later." This behavior is consistent with the existing test infrastructure (edit-movie tests; analyze flow uses the same APIs).
+**VM (Option A):** The VM does **not** rotate the movie or build the zip. It only: (1) clears all tracking for the movie (trackpoints and last_frame_tracked), (2) updates the movie's ``rotation_steps`` in the DB, and (3) triggers the Lambda via HTTP POST to the rotate-and-zip API. The request returns immediately; Lambda performs rotation, zip build, and metadata write (width/height/fps/total_frames/total_bytes, with width/height swapped for 90°/270°) asynchronously.
+
+The user can go to the Analyze page immediately. The first frame shown comes from get-frame (which may still be the pre-rotate movie until Lambda finishes). When the zip is ready, the analyze page **polls** ``get-movie-metadata`` every 2 seconds. When ``movie_zipfile_url`` appears, the page loads the zip and switches to the full frame set. If the zip does not appear within 60 seconds, the page shows "Processing did not complete in time. Please come back later."
 
 Rotation in Lambda (no ffmpeg)
 ------------------------------
 
-Rotation and zip creation can run in the Lambda instead of the VM. The Lambda does **not** use the ffmpeg binary (which would add ~150MB to the deployment). It uses **PyAV (av)** and **Pillow** only: decode video with av, rotate each frame with Pillow, re-encode with av (mpeg4), and build the frame zip by encoding each frame as JPEG and writing to a zip. All dependencies are already in the Lambda group (``poetry group lambda``). The VM still supports rotation (ffmpeg) when the Lambda is not configured (e.g. local dev).
+Rotation and zip creation run **only** in the Lambda. The VM does not rotate or build zip. The Lambda does **not** use the ffmpeg binary (which would add ~150MB to the deployment). It uses **PyAV (av)** and **Pillow** only: decode video with av, rotate each frame with Pillow, re-encode with av (mpeg4), build the frame zip, and write full movie metadata (width, height, fps, total_frames, total_bytes) to DynamoDB. All dependencies are in the Lambda group (``poetry group lambda``).
 
 Lambda-only code and testing
 -----------------------------

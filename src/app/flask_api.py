@@ -11,7 +11,6 @@ import smtplib
 import base64
 import io
 import csv
-import os
 from collections import defaultdict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -45,6 +44,7 @@ from .odb import (
     STATUS,
     DDBO,
     UnauthorizedUser,
+    clear_movie_tracking,
 )
 from .s3_presigned import (
     make_object_name,
@@ -57,12 +57,10 @@ from .odb_movie_data import (
     write_object,
     write_object_from_path,
     get_movie_data,
-    set_movie_data,
     delete_movie,
     purge_movie_frames,
     create_new_movie_frame,
 )
-from . import mp4_metadata_lib
 from .apikey import get_lambda_api_base
 
 
@@ -569,6 +567,7 @@ def api_edit_movie():
         steps = 1
     steps = max(1, min(3, int(steps)))
 
+    clear_movie_tracking(movie_id)
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {ROTATION_STEPS: steps})
 
@@ -873,10 +872,16 @@ def api_track_movie_queue():
         raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
 
     logger.debug("calling api_track_movie")
-    # Mark movie as actively tracking so the list/status reflects this state.
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKING})
-    api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
+    try:
+        api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
+    except tracker.MetadataNotReadyError as ex:
+        ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: "ready"})
+        return make_response(
+            jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(ex)}),
+            503,
+        )
     logger.debug("return from api_track_movie")
     return jsonify({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: 'Tracking is completed'})
 

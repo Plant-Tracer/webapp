@@ -1491,6 +1491,27 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
     ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
 
 
+def clear_movie_tracking(movie_id):
+    """Remove all trackpoints and last_frame_tracked for a movie (e.g. after rotation).
+    Frames keep frame_number/urn; only trackpoints attribute is removed per frame.
+    """
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+    # Clear stored last_frame_tracked on the movie so next get_movie_metadata computes correctly.
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression='REMOVE last_frame_tracked',
+    )
+
+
 ################################################################
 ## Metadata
 ################################################################

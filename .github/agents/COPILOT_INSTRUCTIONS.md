@@ -50,6 +50,12 @@ grep -n "def method_name" src/app/odb.py
 grep -B 5 "def method_name" src/app/odb.py
 ```
 
+## Movie metadata and tracking
+
+- **Movie metadata** (width, height, fps, total_frames, total_bytes) is **never** generated on the VM for the full movie. It is set by: (1) serving the first frame (get-frame writes width/height when frame 0 is requested and they were missing), or (2) Lambda rotate-and-zip (writes all fields after processing).
+- **get-movie-metadata** returns only stored metadata; it does not extract or compute.
+- **run_tracking** (tracker.run_tracking) requires full metadata in the DB. If any of width, height, fps, total_frames, total_bytes is missing, it raises `tracker.MetadataNotReadyError`; the API returns 503. Tests that invoke tracking must set metadata on the movie first (e.g. via `tracker.extract_movie_metadata` + `ddbo.update_table`) or use a fixture that does.
+
 ## Testing Best Practices
 
 ### Fixtures

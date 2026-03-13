@@ -51,6 +51,11 @@ class ConversionError(RuntimeError):
 class MovieCorruptError(RuntimeError):
     """Special error"""
 
+
+class MetadataNotReadyError(RuntimeError):
+    """Movie metadata (width, height, fps, total_frames, total_bytes) is not yet in DB.
+    Set by first-frame serve or Lambda; VM does not do full movie scan."""
+
 def cv2_track_frame(*,frame_prev, frame_this, trackpoints):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
@@ -498,9 +503,7 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         movie_record.get("attribution_name"),
     )
 
-    # Prefer existing stored metadata (width/height/frames/bytes/fps); only recompute
-    # from movie bytes if critical fields are missing. This avoids a full rescan of
-    # large movies on every tracking run.
+    # Require full metadata in DB (set by first-frame serve or Lambda). VM does not scan the movie.
     movie_metadata = {
         "width": movie_record.get("width"),
         "height": movie_record.get("height"),
@@ -508,18 +511,19 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         "total_bytes": movie_record.get("total_bytes"),
         "fps": movie_record.get("fps"),
     }
-    need_metadata_extract = (
+    if (
         not movie_metadata["width"]
         or not movie_metadata["height"]
         or movie_metadata["total_frames"] is None
         or movie_metadata["total_bytes"] is None
         or movie_metadata["fps"] is None
-    )
+    ):
+        raise MetadataNotReadyError(
+            "Movie metadata not ready (width/height/fps/total_frames/total_bytes). "
+            "Open the analyze page to load the first frame, or wait for processing."
+        )
 
     movie_data = env.get_movie_data(movie_id=movie_id)
-    if need_metadata_extract:
-        movie_metadata = extract_movie_metadata(movie_data=movie_data)
-        env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=movie_metadata)
 
     rotation_steps = int(movie_record.get("rotation_steps") or 0)
     rotation_steps = max(0, min(3, rotation_steps))
