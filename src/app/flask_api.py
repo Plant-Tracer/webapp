@@ -8,14 +8,13 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 import json
 import sys
 import smtplib
-import base64
 import io
 import csv
 from collections import defaultdict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, request, make_response, redirect, current_app, jsonify
+from flask import Blueprint, request, make_response, current_app, jsonify
 from validate_email_address import validate_email
 
 from . import config_check
