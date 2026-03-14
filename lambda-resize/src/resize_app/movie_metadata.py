@@ -1,12 +1,14 @@
 """
 Extract movie metadata (width, height, fps, total_frames, total_bytes) from MP4 bytes.
 Used by Lambda rotate-and-zip so DB has full metadata after processing.
+Uses OpenCV (cv2) only; no PyAV dependency.
 """
 
 import io
+import tempfile
 from typing import Any, Dict
 
-import av
+import cv2
 
 
 def extract_movie_metadata(movie_bytes: bytes) -> Dict[str, Any]:
@@ -17,30 +19,32 @@ def extract_movie_metadata(movie_bytes: bytes) -> Dict[str, Any]:
              Missing values are omitted; caller can merge with existing DB state.
     """
     result = {"total_bytes": len(movie_bytes)}
-    inp = av.open(io.BytesIO(movie_bytes))
-    try:
-        vstreams = [s for s in inp.streams if s.type == "video"]
-        if not vstreams:
-            return result
-        stream = vstreams[0]
-        codec = stream.codec_context
-        w = getattr(stream, "width", None) or (codec and codec.width)
-        h = getattr(stream, "height", None) or (codec and codec.height)
-        if w is not None and w > 0:
-            result["width"] = int(w)
-        if h is not None and h > 0:
-            result["height"] = int(h)
-        fps = codec.rate if codec else getattr(stream, "average_rate", None)
-        if fps is not None:
-            try:
-                result["fps"] = str(float(fps))
-            except (TypeError, ValueError):
-                pass
-        total_frames = 0
-        for _ in inp.decode(video=0):
-            total_frames += 1
-        if total_frames > 0:
-            result["total_frames"] = total_frames
-    finally:
-        inp.close()
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as tf:
+        tf.write(movie_bytes)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+        try:
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            if w > 0:
+                result["width"] = w
+            if h > 0:
+                result["height"] = h
+            fps_val = cap.get(cv2.CAP_PROP_FPS)
+            if fps_val is not None and fps_val > 0:
+                result["fps"] = str(float(fps_val))
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if frame_count is not None and frame_count > 0:
+                result["total_frames"] = int(frame_count)
+            else:
+                total = 0
+                while True:
+                    ret, _ = cap.read()
+                    if not ret:
+                        break
+                    total += 1
+                if total > 0:
+                    result["total_frames"] = total
+        finally:
+            cap.release()
     return result

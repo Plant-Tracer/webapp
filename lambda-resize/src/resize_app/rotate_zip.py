@@ -1,13 +1,14 @@
 """
-Rotate video and build frame zip using PyAV + Pillow only (no ffmpeg binary).
+Rotate video and build frame zip using OpenCV (cv2) + Pillow only (no ffmpeg, no PyAV).
 Used by the Lambda rotate-and-zip API so we stay within deployment size limits.
 """
 
 import io
+import tempfile
 import zipfile
-from fractions import Fraction
 
-import av
+import cv2
+import numpy as np
 from PIL import Image
 
 # One 90° CW rotation in PIL terms (PIL rotates CCW, so 90 CW = 270 CCW)
@@ -21,61 +22,59 @@ def _rotate_pil_90_cw(img: Image.Image, steps: int) -> Image.Image:
     return img
 
 
+def _frame_bgr_to_pil(bgr: np.ndarray) -> Image.Image:
+    """Convert OpenCV BGR frame to PIL Image (RGB)."""
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return Image.fromarray(rgb)
+
+
+def _pil_to_frame_bgr(img: Image.Image) -> np.ndarray:
+    """Convert PIL Image to OpenCV BGR frame."""
+    rgb = np.array(img)
+    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+
 def rotate_video_av(data: bytes, steps: int) -> bytes:
     """Rotate video by steps × 90° clockwise. steps in 1..3. Returns new MP4 bytes."""
     if steps < 1 or steps > 3:
         raise ValueError("steps must be 1, 2, or 3")
-    inp = av.open(io.BytesIO(data))
-    vstreams = [s for s in inp.streams if s.type == "video"]
-    if not vstreams:
-        inp.close()
-        raise ValueError("No video stream")
-    in_stream = vstreams[0]
-    in_codec = in_stream.codec_context
-    fps = in_codec.rate
-    if fps is None or fps == 0:
-        fps = 24
-
-    out_buf = io.BytesIO()
-    out = av.open(out_buf, "w", format="mp4")
-    out_stream = None
-
-    frame_index = 0
-    for frame in inp.decode(video=0):
-        img = frame.to_image()
-        img = _rotate_pil_90_cw(img, steps)
-        # Ensure dimensions are even; many codecs (including mpeg4) require width/height divisible by 2.
-        w, h = img.size
-        if w % 2 != 0:
-            w -= 1
-        if h % 2 != 0:
-            h -= 1
-        if w <= 0 or h <= 0:
-            continue
-        if (w, h) != img.size:
-            img = img.crop((0, 0, w, h))
-
-        if out_stream is None:
-            # mpeg4 is widely available in PyAV builds (no libx264 required)
-            out_stream = out.add_stream("mpeg4", rate=fps)
-            out_stream.width = w
-            out_stream.height = h
-            out_stream.pix_fmt = "yuv420p"
-            out_stream.time_base = Fraction(1, fps)
-
-        out_frame = av.VideoFrame.from_image(img)
-        out_frame.pts = frame_index
-        out_frame.time_base = out_stream.time_base
-        for packet in out_stream.encode(out_frame):
-            out.mux(packet)
-        frame_index += 1
-
-    for packet in out_stream.encode():
-        out.mux(packet)
-
-    inp.close()
-    out.close()
-    return out_buf.getvalue()
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as inf:
+        inf.write(data)
+        inf.flush()
+        cap = cv2.VideoCapture(inf.name)
+        if not cap.isOpened():
+            raise ValueError("No video stream")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+        fps = max(1.0, float(fps))
+        out_w, out_h = None, None
+        writer = None
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as outf:
+            while True:
+                ret, frame = cap.read()
+                if not ret or frame is None or frame.size == 0:
+                    break
+                img = _frame_bgr_to_pil(frame)
+                img = _rotate_pil_90_cw(img, steps)
+                w, h = img.size
+                if w % 2 != 0:
+                    w -= 1
+                if h % 2 != 0:
+                    h -= 1
+                if w <= 0 or h <= 0:
+                    continue
+                if (w, h) != img.size:
+                    img = img.crop((0, 0, w, h))
+                if out_w is None:
+                    out_w, out_h = w, h
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    writer = cv2.VideoWriter(outf.name, fourcc, fps, (out_w, out_h))
+                writer.write(_pil_to_frame_bgr(img))
+            cap.release()
+            if writer is None:
+                raise ValueError("No video stream or no frames")
+            writer.release()
+            with open(outf.name, "rb") as f:
+                return f.read()
 
 
 def video_frames_to_zip_av(
@@ -92,57 +91,54 @@ def video_frames_to_zip_av(
     approximately every `progress_every` frames (and always on the final frame).
     target_wh: (width, height) to fit frames into (single place for analysis size when called from resize.py with C.ANALYSIS_FRAME_MAX_*).
     """
-    inp = av.open(io.BytesIO(data))
-    vstreams = [s for s in inp.streams if s.type == "video"]
-    if not vstreams:
-        inp.close()
-        raise ValueError("No video stream")
-
-    # Decode once so we know the total frame count for progress reporting.
-    frames = list(inp.decode(video=0))
-    total = len(frames)
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for idx, frame in enumerate(frames, start=1):
-            img = frame.to_image()
-            # Downscale to target_wh (analysis size) to keep zips small.
-            if img.size[0] > target_wh[0] or img.size[1] > target_wh[1]:
-                img.thumbnail(target_wh, Image.Resampling.LANCZOS)
-            jpeg_io = io.BytesIO()
-            img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
-            jpeg_io.seek(0)
-            zf.writestr(f"frame_{idx-1:04d}.jpg", jpeg_io.read())
-
-            if progress_cb and total > 0:
-                if idx % progress_every == 0 or idx == total:
-                    progress_cb(idx, total)
-
-    inp.close()
-    return buf.getvalue()
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as tf:
+        tf.write(data)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+        if not cap.isOpened():
+            raise ValueError("No video stream")
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+            idx = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    break
+                img = _frame_bgr_to_pil(frame)
+                if img.size[0] > target_wh[0] or img.size[1] > target_wh[1]:
+                    img.thumbnail(target_wh, Image.Resampling.LANCZOS)
+                jpeg_io = io.BytesIO()
+                img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
+                jpeg_io.seek(0)
+                zf.writestr(f"frame_{idx:04d}.jpg", jpeg_io.read())
+                idx += 1
+                if progress_cb and total > 0:
+                    if idx % progress_every == 0 or idx == total:
+                        progress_cb(idx, total)
+            if total <= 0 and progress_cb and idx > 0:
+                progress_cb(idx, idx)
+        cap.release()
+        return buf.getvalue()
 
 
 def extract_single_frame(movie_bytes: bytes, frame_number: int, jpeg_quality: int = 90) -> bytes:
     """Extract one frame from video bytes as JPEG. frame_number is 0-based."""
-    inp = av.open(io.BytesIO(movie_bytes))
-    vstreams = [s for s in inp.streams if s.type == "video"]
-    if not vstreams:
-        inp.close()
-        raise ValueError("No video stream")
-    jpeg_bytes = None
-    for i, frame in enumerate(inp.decode(video=0)):
-        if i == frame_number:
-            img = frame.to_image()
-            jpeg_io = io.BytesIO()
-            img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
-            jpeg_bytes = jpeg_io.getvalue()
-            break
-        if i > frame_number:
-            break
-    inp.close()
-    if jpeg_bytes is None:
-        raise ValueError(f"Frame {frame_number} not found")
-    return jpeg_bytes
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as tf:
+        tf.write(movie_bytes)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+        if not cap.isOpened():
+            raise ValueError("No video stream")
+        for _ in range(frame_number + 1):
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                cap.release()
+                raise ValueError(f"Frame {frame_number} not found")
+        # frame is the requested frame (we read frame_number+1 times, last read is frame_number)
+        _, jpeg_bytes = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+        cap.release()
+        return jpeg_bytes.tobytes()
 
 
 def resize_jpeg_to_fit(jpeg_bytes: bytes, max_width: int, max_height: int, quality: int = 90) -> bytes:

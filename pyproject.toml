@@ -50,11 +50,10 @@ html5validate = "^0.0.2"
 
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda / lambda-resize (single source of truth)
-# Pillow: resizing; mutagen: MP4 metadata; pydantic: vendored app/schema; av: resize_cli/video
+# Pillow: resizing/rotate_zip; mutagen: MP4 metadata; pydantic: vendored app/schema; opencv: video/frames/tracking
 Pillow = "^11.0.0"
 mutagen = "*"
 pydantic = "*"
-av = "^16.0.1"
 opencv-python-headless = "*"
 requests = ">=2.32.4,<3.0.0"
 
