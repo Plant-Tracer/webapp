@@ -14,10 +14,10 @@ from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID, DDBO, PROCESSING_STATE
+from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
 
 # Fixtures are imported in conftest.py
-from app.constants import C, logger
+from app.constants import logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -188,21 +188,3 @@ def test_api_edit_movie(new_movie, client):
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
     logger.debug("movie_metadata2=%s", movie_metadata2)
     assert movie_metadata2.get('rotation_steps') == 2
-
-
-def test_track_movie_queue_metadata_not_ready(client, new_movie):
-    """track-movie-queue returns 503 when movie has no width/height/fps/total_frames/total_bytes."""
-    api_key = new_movie[API_KEY]
-    movie_id = new_movie[MOVIE_ID]
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: "ready"})
-    resp = client.post(
-        "/api/track-movie-queue",
-        data={"api_key": api_key, "movie_id": movie_id, "frame_start": "0"},
-    )
-    assert resp.status_code == 503
-    data = resp.get_json()
-    assert data is not None and data.get(C.API_KEY_ERROR) is True
-    assert "metadata" in (data.get(C.API_KEY_MESSAGE) or "").lower()
-    movie = odb.get_movie(movie_id=movie_id)
-    assert movie.get("processing_state") == "ready"

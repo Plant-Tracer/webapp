@@ -16,10 +16,9 @@ from PIL import Image
 from app import odb
 from app import odb_movie_data
 from app import mp4_metadata_lib
-from app import tracker
 from app.constants import MIME, E, C
-from app.odb import API_KEY, MOVIE_ID, DDBO, WIDTH, HEIGHT, FPS, TOTAL_FRAMES, TOTAL_BYTES
-from app.odb_movie_data import read_object, create_new_movie_frame, get_movie_data
+from app.odb import API_KEY, MOVIE_ID
+from app.odb_movie_data import read_object, create_new_movie_frame
 
 # Fixtures are in conftest.py
 from app.constants import logger
@@ -134,17 +133,7 @@ def test_movie_tracking(client, new_movie):
     logger.debug("save trackpoints ret=%s",ret)
     assert ret['error'] is False
 
-    # run_tracking requires full metadata in DB (set by first-frame or Lambda). Set it from the movie file.
-    movie_data = get_movie_data(movie_id=movie_id)
-    meta = tracker.extract_movie_metadata(movie_data=movie_data)
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {
-        WIDTH: meta.get("width"),
-        HEIGHT: meta.get("height"),
-        FPS: str(meta["fps"]) if meta.get("fps") is not None else None,
-        TOTAL_FRAMES: meta.get("total_frames"),
-        TOTAL_BYTES: meta.get("total_bytes"),
-    })
+    # run_tracking extracts width/height/total_frames/fps/total_bytes from the movie when missing.
 
     # Now track with the tracking API.
     response = client.post('/api/track-movie-queue',

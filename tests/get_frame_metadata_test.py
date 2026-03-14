@@ -1,38 +1,13 @@
-import copy
+"""
+get-frame is implemented in lambda-resize (GET api/v1/frame).
+Flask no longer has /api/get-frame; requests to it return 404.
+"""
 
-from app import tracker
-from app.odb import API_KEY, MOVIE_ID
 
-
-def test_get_frame_does_not_extract_full_metadata_for_each_request(client, new_movie, monkeypatch):
-    """
-    Regression test for large-movie get-frame timeouts.
-
-    The /api/get-frame endpoint should not call tracker.extract_movie_metadata to
-    return a single frame. Metadata (width/height) is set when serving the first
-    frame; full metadata is set by Lambda. get-movie-metadata only returns stored
-    metadata and does not extract.
-    """
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    api_key = cfg[API_KEY]
-
-    called = {"count": 0}
-
-    def fake_extract_movie_metadata(*, movie_data):
-        # If this is ever called during /api/get-frame, we fail the test.
-        called["count"] += 1
-        raise RuntimeError("extract_movie_metadata should not be called from api_get_frame")
-
-    monkeypatch.setattr(tracker, "extract_movie_metadata", fake_extract_movie_metadata)
-
+def test_get_frame_route_removed_from_flask(client):
+    """Flask no longer serves get-frame; it was moved to lambda-resize."""
     resp = client.post(
         "/api/get-frame",
-        data={"api_key": api_key, "movie_id": str(movie_id), "frame_number": "0"},
+        data={"api_key": "any", "movie_id": "m0000000-0000-0000-0000-000000000000", "frame_number": "0"},
     )
-
-    # Desired behaviour: we successfully redirect to the JPEG object without
-    # recomputing full movie metadata.
-    assert resp.status_code == 302
-    assert resp.location is not None
-    assert called["count"] == 0
+    assert resp.status_code == 404

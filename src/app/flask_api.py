@@ -37,8 +37,6 @@ from .odb import (
     MOVIE_METADATA_BULK_PROPS,
     ORIG_MOVIE,
     ROTATION_STEPS,
-    WIDTH,
-    HEIGHT,
     PROCESSING_STATE,
     PROCESSING_STATE_TRACKING,
     STATUS,
@@ -56,9 +54,7 @@ from .s3_presigned import (
 from .odb_movie_data import (
     write_object,
     write_object_from_path,
-    get_movie_data,
     delete_movie,
-    purge_movie_frames,
     create_new_movie_frame,
 )
 from .apikey import get_lambda_api_base
@@ -69,10 +65,7 @@ api_bp = Blueprint('api', __name__)
 LAMBDA_HEALTH_TIMEOUT = 10
 
 
-### Set VALIDATE_FRAMES to True to force /api/get-frame to validate that each frame
-### exists in S3 before the URN is returned.
-
-VALIDATE_FRAMES=True
+VALIDATE_FRAMES = True
 
 class InvalidFrameNumber(Exception):
     """Invalid Frame Number Exception"""
@@ -364,7 +357,7 @@ def api_get_movie_data():
     movie    = odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id)
     assert movie_id == movie[MOVIE_ID]
 
-    data_urn = get_movie_data(movie_id=movie[MOVIE_ID],
+    data_urn = tracker.get_movie_data(movie_id=movie[MOVIE_ID],
                                   zipfile = get('format')=='zip',
                                   get_urn = True)
 
@@ -398,146 +391,6 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
         if prop in movie_metadata:
             logger.warning("Setting %s in %s; it would be better to do all sets at once",prop, set_movie_id)
             odb.set_metadata(user_id=user_id, set_movie_id=set_movie_id, prop=prop, value=movie_metadata[prop])
-
-
-################
-# get-frame api_bp.
-# Gets a single frame. Use cookie or API_KEY authenticaiton.
-# Note that you can also get single frames with a signed URL from get-movie-metadata
-#
-def api_get_frame_jpeg(*, movie_id, frame_number):
-    """Return a single frame as JPEG, or raise InvalidFrameAccess().
-
-    This path is performance-sensitive for large movies and MUST NOT recompute full
-    movie metadata (fps, width, height, total_frames, etc.) on each call. Full
-    metadata is computed and persisted via get-movie-metadata.
-    """
-    movie_data = get_movie_data(movie_id=movie_id)
-    if movie_data is None:
-        # No movie bytes yet (e.g. upload not fully processed) – treat as invalid frame
-        # access for this path so callers see a 400/503-style error, not a 500.
-        raise ValueError("no movie data for movie_id")
-
-    return tracker.extract_frame(movie_data=movie_data, frame_number=frame_number, fmt='jpeg')
-
-def api_get_frame_urn(*,frame_number,movie_id):
-    """Returns the URN for a frame in a movie. If the frame does not have URN, create one."""
-    urn = odb.get_frame_urn(frame_number=frame_number, movie_id=movie_id)
-    if urn is not None:
-        return urn
-    # Get the frame data so we can get it a URN
-    frame_data = api_get_frame_jpeg(frame_number=frame_number, movie_id=movie_id)
-    frame_urn = create_new_movie_frame(movie_id=movie_id,
-                                           frame_number=frame_number,
-                                           frame_data=frame_data)
-    assert frame_urn is not None
-    return frame_urn
-
-@api_bp.route('/get-frame', methods=GET_POST)
-def api_get_frame():
-    """
-    Gets a frame as a JPEG.
-    If not is not in the object store
-         - Grab it from the movie
-         - write to the object store.
-    Then:
-         - return with a redirect ot the object store.
-
-    :param api_key:   authentication
-    :param movie_id:   movie_id
-    :param frame_number: get the frame by frame_number (starting with 0)
-    :param size: if 'analysis', return frame resized to C.ANALYSIS_FRAME_MAX (no redirect, no cache).
-
-    :return: - either the image (as a JPEG) or a JSON object. With JSON, includes:
-      error - 404 - movie or frame does not exist
-      no error - redirect to the signed URL
-    """
-    user_id      = get_user_id(allow_demo=True)
-    frame_number = get_int('frame_number', 0)
-    movie_id     = get_movie_id()
-    size_analysis = (request.values.get('size') or '').strip().lower() == 'analysis'
-
-    logger.debug('logger.debug /get-frame. user_id=%s frame_number=%s movie_id=%s', user_id, frame_number, movie_id)
-    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
-
-    if frame_number < 0:
-        logger.error("invalid frame number %s",frame_number)
-        return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
-
-    # When size=analysis, return frame resized to analysis size (no cache, no redirect).
-    if size_analysis:
-        movie_data = get_movie_data(movie_id=movie_id)
-        if movie_data is None:
-            resp = make_response(
-                jsonify({
-                    "error": True,
-                    "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
-                }),
-                503,
-            )
-            resp.headers["Retry-After"] = "5"
-            return resp
-        try:
-            frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
-        except ValueError:
-            return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
-        resized = tracker.resize_jpeg_to_fit(
-            frame_data,
-            C.ANALYSIS_FRAME_MAX_WIDTH,
-            C.ANALYSIS_FRAME_MAX_HEIGHT,
-        )
-        # Update stored width/height from first frame when missing (so analyze page has dimensions).
-        if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
-            dims = tracker.get_jpeg_dimensions(resized)
-            if dims:
-                w, h = dims
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
-        response = make_response(resized, 200)
-        response.headers['Content-Type'] = 'image/jpeg'
-        return response
-
-    # See if there is a urn
-    urn = odb.get_frame_urn(movie_id=movie[MOVIE_ID], frame_number=frame_number)
-    logger.debug("urn=%s", urn)
-    if urn is not None and not object_exists(urn):
-        logger.warning("%s does not exist", urn)
-        purge_movie_frames(movie_id=movie_id, frame_numbers=[frame_number])
-        urn = None
-
-    if urn is None:
-        # the frame is not in the database, so we need to make it from the movie.
-        # If movie object is not at final key yet (Lambda still processing), return 503 so client can retry.
-        movie_data = get_movie_data(movie_id=movie_id)
-        if movie_data is None:
-            resp = make_response(
-                jsonify({
-                    "error": True,
-                    "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
-                }),
-                503,
-            )
-            resp.headers["Retry-After"] = "5"
-            return resp
-        logger.debug('getframe 5')
-        try:
-            frame_data = api_get_frame_jpeg(movie_id=movie_id, frame_number=frame_number)
-            assert frame_data is not None
-        except ValueError:
-            return make_response(jsonify(E.INVALID_FRAME_NUMBER), 400)
-        # Update stored width/height from first frame when missing.
-        if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
-            dims = tracker.get_jpeg_dimensions(frame_data)
-            if dims:
-                w, h = dims
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
-        urn = create_new_movie_frame(movie_id=movie_id, frame_number=frame_number, frame_data=frame_data)
-        assert urn is not None
-
-    url = make_signed_url(urn=urn)
-    logger.debug("api_get_frame urn=%s url=%s", urn, url)
-    return redirect(url)
 
 
 ################################################################
@@ -639,7 +492,7 @@ def api_get_movie_metadata():
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # Return only stored metadata; do not generate or write metadata here.
-    # Width/height are set when the first frame is served (get-frame) or by Lambda (rotate-and-zip).
+    # Width/height are set when the first frame is served (Lambda get-frame) or by Lambda (rotate-and-zip).
 
     # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
     if movie_metadata.get(MOVIE_ZIPFILE_URN, None):
@@ -781,10 +634,11 @@ def api_add():
 
 # pylint: disable=too-few-public-methods
 class FlaskTrackingEnv(tracker.TrackingEnv):
-    """Environment adapter so tracker.run_tracking can use Flask/VM I/O (odb, S3, set_movie_metadata)."""
+    """Environment adapter so tracker.run_tracking can use Flask/VM I/O (odb, S3, set_movie_metadata).
+    VM does not run tracking; this env is not used for tracking. get_movie_data is stubbed so the path is never used."""
 
     def get_movie_data(self, movie_id):
-        return get_movie_data(movie_id=movie_id)
+        raise NotImplementedError("VM does not run tracking; do not call get_movie_data on FlaskTrackingEnv")
 
     def get_movie_metadata(self, movie_id):
         return odb.get_movie_metadata(movie_id=movie_id)
@@ -871,19 +725,14 @@ def api_track_movie_queue():
     if run_async:
         raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
 
-    logger.debug("calling api_track_movie")
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKING})
-    try:
-        api_track_movie(user_id=user_id, movie_id=movie_id, frame_start=get_int('frame_start'))
-    except tracker.MetadataNotReadyError as ex:
-        ddbo.update_table(ddbo.movies, movie_id, {PROCESSING_STATE: "ready"})
-        return make_response(
-            jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(ex)}),
-            503,
-        )
-    logger.debug("return from api_track_movie")
-    return jsonify({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: 'Tracking is completed'})
+    # VM does not run tracking; client must use Lambda for tracking.
+    return make_response(
+        jsonify({
+            C.API_KEY_ERROR: True,
+            "message": "Tracking is not available on this server; use Lambda to run tracking.",
+        }),
+        501,
+    )
 
 
 ## /new-frame is being able to create our own time lapse movie

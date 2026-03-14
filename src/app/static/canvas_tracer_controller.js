@@ -114,7 +114,7 @@ class TracerController extends MovieController {
         this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
-    /** If Lambda is configured, check /api/track/lambda-health before enabling Track; else enable. */
+    /** If Lambda is configured, call Flask API at API_BASE api/track/lambda-health (which probes Lambda status); else enable Track. */
     async enableTrackButtonIfAllowed() {
         if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
             this.track_button.prop(DISABLED, false);
@@ -247,7 +247,7 @@ class TracerController extends MovieController {
     // Update the matrix location of the object the moved
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
-        if (this.frame_number==0 || this.frame_number < this.movie_metadata.total_frames) {
+        if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
             this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
         }
     }
@@ -405,8 +405,7 @@ class TracerController extends MovieController {
             this.rotate_button.prop(DISABLED, true);
             return;
         }
-        const rotEl = this.rotate_button.get(0);
-        if (rotEl && rotEl.style.display !== 'none') {
+        if (this.rotate_button.is(':visible')) {
             this.rotate_button.prop(DISABLED, false);
         }
         this.max_frame_index = this.getMaxViewableFrame();
@@ -750,7 +749,8 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         if (!resp.metadata.movie_zipfile_url) {
             $('#firsth2').html('Waiting for processing to complete…');
-            const frame0 = `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis`;
+            const frameBase = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
+            const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             // Trigger zip build so shrinking and tracing can happen in parallel (no rotation case).
             if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {

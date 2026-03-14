@@ -120,3 +120,39 @@ def video_frames_to_zip_av(
 
     inp.close()
     return buf.getvalue()
+
+
+def extract_single_frame(movie_bytes: bytes, frame_number: int, jpeg_quality: int = 90) -> bytes:
+    """Extract one frame from video bytes as JPEG. frame_number is 0-based."""
+    inp = av.open(io.BytesIO(movie_bytes))
+    vstreams = [s for s in inp.streams if s.type == "video"]
+    if not vstreams:
+        inp.close()
+        raise ValueError("No video stream")
+    jpeg_bytes = None
+    for i, frame in enumerate(inp.decode(video=0)):
+        if i == frame_number:
+            img = frame.to_image()
+            jpeg_io = io.BytesIO()
+            img.save(jpeg_io, format="JPEG", quality=jpeg_quality, optimize=True)
+            jpeg_bytes = jpeg_io.getvalue()
+            break
+        if i > frame_number:
+            break
+    inp.close()
+    if jpeg_bytes is None:
+        raise ValueError(f"Frame {frame_number} not found")
+    return jpeg_bytes
+
+
+def resize_jpeg_to_fit(jpeg_bytes: bytes, max_width: int, max_height: int, quality: int = 90) -> bytes:
+    """Resize JPEG bytes to fit inside (max_width, max_height), preserving aspect. Returns JPEG bytes."""
+    img = Image.open(io.BytesIO(jpeg_bytes))
+    img.load()
+    w, h = img.size
+    if w <= max_width and h <= max_height:
+        return jpeg_bytes
+    img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=quality, optimize=True)
+    return out.getvalue()

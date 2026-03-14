@@ -99,6 +99,7 @@ pylint:
 		src tests *.py \
 		lambda-resize/src/resize_app/resize.py \
 		lambda-resize/src/resize_app/rotate_zip.py \
+		lambda-resize/src/resize_app/tracker.py \
 		lambda-resize/tests
 
 ## Mypy static analysis
@@ -129,9 +130,9 @@ flake:
 ## Program development: dynamic analysis
 ##
 
-## These tests now use fixtures that automatically create in-memory configurations and DynamoDB databases.
-## No environment variables need to be set.
-## set LOG_LEVEL at start of CLI to change the  log level
+## These tests use fixtures that create DynamoDB Local and MinIO (when AWS_REGION=local, the default).
+## PYTHONPATH includes lambda-resize/src so app.tracker shim can load resize_app.tracker.
+## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests

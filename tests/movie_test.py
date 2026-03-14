@@ -14,7 +14,6 @@ import filetype
 import pytest
 
 from app import odb
-from app import flask_api
 from app import tracker
 from app import s3_presigned
 from app import odb_movie_data
@@ -255,47 +254,15 @@ def test_movie_extract1(client, new_movie):
     api_key = cfg[API_KEY]
     #user_id = cfg[USER_ID]
 
-    # Check for insufficient arguments
-    # Should produce http403
+    # get-frame was moved to lambda-resize; Flask no longer has this route.
     resp = client.post('/api/get-frame')
-    assert resp.status_code == 403
-    r = resp.get_json()
-    assert r == E.INVALID_API_KEY
+    assert resp.status_code == 404
 
-    # Check for invalid frame_number
-    logger.debug("test_movie_extract1: point1")
     resp = client.post('/api/get-frame',
-                           data = {'api_key': api_key,
-                                   'movie_id': str(movie_id),
-                                   'frame_number': '-1'})
-    assert resp.status_code == 400
-    r = resp.get_json()
-    assert r==E.INVALID_FRAME_NUMBER
-
-    # Check for getting by frame_number
-    # should produce a redirect.
-    # Getting data from the redirect should produce a JPEG...
-    logger.debug("test_movie_extract1: point2")
-    resp = client.post('/api/get-frame',
-                           data = {'api_key': api_key,
-                                   'movie_id': str(movie_id),
-                                   'frame_number': '0' })
-
-    assert resp.status_code == 302
-    # Follow the redirect manually
-    redirect_url = resp.headers['Location']
-    redirect_resp = requests.get(redirect_url,timeout=30)
-
-    # Get the data
-    data = redirect_resp.content
-    if data is None:
-        logger.error("resp=%s redirect_resp=%s",resp,redirect_resp)
-        assert data is not None
-    assert is_jpeg(data)
-
-    # Make sure that the URN was properly created
-    urn = flask_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
-    assert urn.startswith('s3:/')
+                           data={'api_key': api_key,
+                                 'movie_id': str(movie_id),
+                                 'frame_number': '-1'})
+    assert resp.status_code == 404
 
 def test_movie_extract2(client, new_movie):
     """Try extracting individual movie frames"""
@@ -325,25 +292,7 @@ def test_movie_extract2(client, new_movie):
                 f.write(frames[n])
         raise RuntimeError("did not get 3 different frames for frames[0], frames[1], frames[2]")
 
-    # Grab three frames with the API and see if they are different
-    def get_jpeg_frame_redirect(number):
-        resp = client.post('/api/get-frame',
-                               data = {'api_key': api_key,
-                                       'movie_id': str(movie_id),
-                                       'frame_number': str(number) })
-        assert resp.status_code==302
-        assert resp.location is not None
-        return resp.location
-
-    jpeg0_url = get_jpeg_frame_redirect(0)
-    jpeg1_url = get_jpeg_frame_redirect(1)
-    jpeg2_url = get_jpeg_frame_redirect(2)
-    assert jpeg0_url != jpeg1_url != jpeg2_url
-
-    # Now grab the data from each make sure that they are JPEGs.
-    for url in [jpeg0_url,jpeg1_url,jpeg2_url]:
-        r = requests.get(url,timeout=30)
-        assert is_jpeg(r.content)
+    # get-frame was moved to lambda-resize; frame extraction is tested via tracker above.
 
 
 @pytest.mark.skip(reason='logging disabled on move to DynamoDB')

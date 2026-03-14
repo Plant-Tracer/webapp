@@ -146,5 +146,5 @@ def test_upload_movie_data(client, api_key):
 # need /api/track-movie
 # need /api/new-movie-analysis
 # need /api/new-frame
-# need /api/get-frame
+# get-frame is in lambda-resize (api/v1/frame)
 # need /api/put-frame-analysis

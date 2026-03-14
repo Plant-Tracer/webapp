@@ -146,13 +146,13 @@ async function computeSHA256(file) {
 }
 
 /*
- * get the first frame with cache busting logic.
+ * Get the first frame URL from lambda-resize (get-frame API). Uses LAMBDA_API_BASE.
+ * Use size=analysis so the server resizes to the analysis max (e.g. 640x480).
  */
 function first_frame_url(movie_id)
 {
-  // Use size=analysis so the server resizes to the analysis max (e.g. 640x480)
-  // instead of returning the full original frame dimensions.
-  return `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&size=analysis&t=${new Date().getTime()}`;
+  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
+  return `${base}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis&t=${new Date().getTime()}`;
 }
 
 /*

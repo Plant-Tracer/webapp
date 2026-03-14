@@ -44,9 +44,6 @@ def handler(event, context=None):
         env = LambdaTrackingEnv()
         tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
         return {"statusCode": 200, "body": json.dumps({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: "Tracking completed"})}
-    except tracker.MetadataNotReadyError as e:
-        logger.warning("Metadata not ready: %s", e)
-        return {"statusCode": 503, "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)})}
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.exception("Tracking failed: %s", e)
         return {"statusCode": 500, "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)})}

@@ -5,6 +5,8 @@ Generate the https://camera.planttracer.org/ home page.
 Runs the camera.
 """
 
+import base64
+import io
 import json
 import os
 import sys
@@ -18,10 +20,25 @@ import boto3
 
 from .common import LOGGER
 from .movie_metadata import extract_movie_metadata
-from .rotate_zip import rotate_video_av, video_frames_to_zip_av
+from .rotate_zip import (
+    extract_single_frame,
+    resize_jpeg_to_fit,
+    rotate_video_av,
+    video_frames_to_zip_av,
+)
 from .src.app import odb
 from .src.app.constants import C
-from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES, FPS, WIDTH, HEIGHT, TOTAL_FRAMES
+from .src.app.odb import (
+    DDBO,
+    ENABLED,
+    MOVIE_DATA_URN,
+    TOTAL_BYTES,
+    FPS,
+    WIDTH,
+    HEIGHT,
+    TOTAL_FRAMES,
+    USER_ID,
+)
 
 __version__ = "0.1.0"
 
@@ -112,7 +129,7 @@ def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Called after the client uploads the movie to the final S3 key. Verify the object
     exists, then set date_uploaded, total_bytes, and processing_state so the VM can
-    serve get-movie-data and get-frame. Phase 2: no first-frame or zip in Lambda yet.
+    serve get-movie-data. get-frame is implemented in this Lambda (api/v1/frame).
     """
     movie_id = (payload.get("movie_id") or "").strip()
     if not odb.is_movie_id(movie_id):
@@ -279,6 +296,96 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
     write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
     LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
     return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
+
+
+def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    GET /api/v1/frame: return a single frame as JPEG. Query params: api_key, movie_id, frame_number, size (optional, 'analysis' = resize to analysis size).
+    Authenticates via api_key, fetches movie from S3, extracts frame with PyAV, optionally resizes and updates width/height for frame 0.
+    """
+    params = event.get("queryStringParameters") or event.get("query_params") or {}
+    api_key = (params.get("api_key") or "").strip()
+    movie_id = (params.get("movie_id") or "").strip()
+    try:
+        frame_number = int(params.get("frame_number", 0))
+    except (TypeError, ValueError):
+        frame_number = 0
+    size_val = (params.get("size") or "").strip().lower()
+    size_analysis = size_val == "analysis"
+
+    if not api_key or not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
+    if frame_number < 0:
+        return resp_json(400, {"error": True, "message": "invalid frame_number"})
+
+    ddbo = DDBO()
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None or not api_key_dict.get(ENABLED, True):
+        return resp_json(401, {"error": True, "message": "invalid or disabled api_key"})
+    user_id = api_key_dict.get(USER_ID)
+    if not user_id:
+        return resp_json(401, {"error": True, "message": "invalid api_key"})
+    try:
+        user = ddbo.get_user(user_id)
+        if not user.get(ENABLED, True):
+            return resp_json(401, {"error": True, "message": "user disabled"})
+    except Exception:  # pylint: disable=broad-exception-caught
+        return resp_json(401, {"error": True, "message": "user not found"})
+    try:
+        movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    except odb.UnauthorizedUser:
+        return resp_json(403, {"error": True, "message": "access denied"})
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(503, {"error": True, "message": "Movie still processing. Retry in a few seconds."})
+
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    s3 = _s3_client()
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        movie_bytes = obj["Body"].read()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("get_frame get_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "failed to load movie from S3"})
+
+    try:
+        jpeg_bytes = extract_single_frame(movie_bytes, frame_number)
+    except ValueError as e:
+        return resp_json(400, {"error": True, "message": str(e)})
+
+    if size_analysis:
+        jpeg_bytes = resize_jpeg_to_fit(
+            jpeg_bytes,
+            getattr(C, "ANALYSIS_FRAME_MAX_WIDTH", 640),
+            getattr(C, "ANALYSIS_FRAME_MAX_HEIGHT", 480),
+        )
+
+    # Update stored width/height from first frame when missing (so analyze page has dimensions).
+    if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
+        try:
+            from PIL import Image  # pylint: disable=import-outside-toplevel
+            img = Image.open(io.BytesIO(jpeg_bytes))
+            img.load()
+            w, h = img.size
+            if w and h:
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("get_frame set_metadata failed: %s", exc)
+
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "image/jpeg", "Access-Control-Allow-Origin": "*"},
+        "body": base64.b64encode(jpeg_bytes).decode("ascii"),
+        "isBase64Encoded": True,
+    }
 
 
 def write_log(message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):

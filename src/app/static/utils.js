@@ -122,6 +122,25 @@ class DOMCollection {
         return this.elements[0] ? this.elements[0].classList.contains(className) : false;
     }
 
+    /**
+     * Check state of the first element. Supports :visible and :hidden (jQuery-like).
+     * :visible = display is not 'none' and element has layout (offsetParent or dimensions).
+     * :hidden = opposite of :visible.
+     */
+    is(selector) {
+        const el = this.elements[0];
+        if (!el) return false;
+        if (selector === ':visible') {
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return el.offsetParent !== null || (el.offsetWidth > 0 && el.offsetHeight > 0);
+        }
+        if (selector === ':hidden') {
+            return !this.is(':visible');
+        }
+        return false;
+    }
+
     addClass(className) {
         this.elements.forEach(el => {
             if (el) el.classList.add(className);
@@ -361,6 +380,25 @@ class DOMWrapper {
 
     hasClass(className) {
         return this.element ? this.element.classList.contains(className) : false;
+    }
+
+    /**
+     * Check state of the element. Supports :visible and :hidden (jQuery-like).
+     * :visible = display is not 'none' and element has layout (offsetParent or dimensions).
+     * :hidden = opposite of :visible.
+     */
+    is(selector) {
+        if (!this.element) return false;
+        if (selector === ':visible') {
+            const style = window.getComputedStyle(this.element);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return this.element.offsetParent !== null ||
+                (this.element.offsetWidth > 0 && this.element.offsetHeight > 0);
+        }
+        if (selector === ':hidden') {
+            return !this.is(':visible');
+        }
+        return false;
     }
 
     addClass(className) {

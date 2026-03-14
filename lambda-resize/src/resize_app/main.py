@@ -38,6 +38,7 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Called by Lambda for HTTP API requests (no S3 event invocation)."""
     from .resize import (  # pylint: disable=import-outside-toplevel
+        api_get_frame,
         api_heartbeat,
         api_log,
         api_ping,
@@ -91,6 +92,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     return api_start_processing(payload)
                 case ("POST", "/api/v1", "rotate-and-zip"):
                     return api_rotate_and_zip(payload)
+
+                case ("GET", "/api/v1/frame", _):
+                    return api_get_frame(event)
 
                 case (_, "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)

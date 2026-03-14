@@ -7,7 +7,8 @@ alwaysApply: true
 
 - **Vendored app code**  
   - The Lambda package (`lambda-resize/src/resize_app`) should use a **vendored copy** of the main `app` package under `resize_app/src/app/`.  
-  - Use `make -C lambda-resize vend-app` to sync `odb.py`, `schema.py`, `constants.py`, `mp4_metadata_lib.py` into `resize_app/src/app/` before any Lambda-specific linting, testing, or builds.
+  - Use `make -C lambda-resize vend-app` to sync `odb.py`, `schema.py`, `constants.py`, `mp4_metadata_lib.py`, `paths.py`, `odb_movie_data.py`, `s3_presigned.py` into `resize_app/src/app/` before any Lambda-specific linting, testing, or builds.
+  - **tracker.py** lives in `lambda-resize/src/resize_app/tracker.py`. The main app’s `src/app/tracker.py` is a shim that re-exports from `resize_app.tracker`; ensure `PYTHONPATH` includes `lambda-resize/src` when running the app or tests.
 
 - **Imports in Lambda code**  
   - In Lambda modules under `lambda-resize/src/resize_app`, prefer imports rooted at the vendored package, e.g.:  
