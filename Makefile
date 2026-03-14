@@ -539,9 +539,10 @@ sam-status:
 	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
 	if [ "$$OK" -ne 1 ]; then exit 1; fi
 
-# Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
-sam-logs:
-	@FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+# Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
+# Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
+define SAM_LOGS_RESOLVE
+	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
 	if [ -z "$$FUNC" ]; then \
 	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
 	fi; \
@@ -552,9 +553,31 @@ sam-logs:
 	  done; \
 	fi; \
 	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
-	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000; \
+	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000
+endef
+
+# Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
+sam-logs:
+	@$(SAM_LOGS_RESOLVE); \
 	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
 	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text
+
+# Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
+# Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
+sam-logs-simple:
+	@$(SAM_LOGS_RESOLVE); \
+	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
+	  aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS); \
+	else \
+	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) $(SAM_LOGS_OPTIONS) \
+	    --query 'events[].[timestamp,message]' --output text | while IFS=$$'\t' read -r ts msg; do \
+	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
+	  done; \
+	fi
+
+# Stream Lambda logs (timestamp + message). Sets SAM_LOGS_TAIL=1 and invokes sam-logs-simple.
+sam-logs-simple-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

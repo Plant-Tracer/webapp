@@ -464,6 +464,7 @@ function play_clicked( e ) {
   console.log('play_clicked=',e,'movie_id=',movie_id);
   const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
   const url = base ? `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}` : '';
+  console.log('play_clicked: video URL=', url);
   const rowid = e.getAttribute('x-rowid');
   $(`#tr-${rowid}`).show();
   const td = $(`#td-${rowid}`);
@@ -476,8 +477,9 @@ function play_clicked( e ) {
   td.show();
   const video = $(`#video-${rowid}`);
   const vid = video.prop('id');
-  console.log('video=',video,"vid=",vid);
-  video.get(0).play();
+  const videoEl = video.get(0);
+  console.log('video=', video, 'vid=', vid, 'currentSrc=', videoEl ? videoEl.currentSrc : '(no element)');
+  videoEl.play();
 }
 
 function hide_clicked( e ) {

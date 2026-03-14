@@ -56,6 +56,7 @@ mutagen = "*"
 pydantic = "*"
 av = "^16.0.1"
 opencv-python-headless = "*"
+requests = ">=2.32.4,<3.0.0"
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
