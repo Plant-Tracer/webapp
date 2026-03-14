@@ -714,7 +714,8 @@ def api_track_movie_queue():
     run_async      = get_bool('run_async')
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    # Make sure we are not tracking a movie that is not an original movie
+    # Make sure the movie we are tracking is an original movie, and that
+    # we are not tracking a movie that is not an original movie
     movie_row = odb.list_movies(user_id=user_id, movie_id=movie[MOVIE_ID])
     assert len(movie_row)==1
     if movie_row[0][ORIG_MOVIE] is not None:

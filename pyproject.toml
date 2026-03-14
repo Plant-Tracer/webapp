@@ -94,6 +94,8 @@ py-version = "3.12"
 recursive = true
 # src for app package; lambda-resize/src so resize_app is importable (e.g. lambda-resize/tests, app.tracker shim).
 source-roots = ["src", "lambda-resize/src"]
+# Ensure lambda-resize/src is on sys.path so "from resize_app import ..." resolves when linting lambda-resize or app.tracker.
+init-hook = "import sys; sys.path.insert(0, 'lambda-resize/src')"
 
 [tool.pylint.messages_control]
 # Disable specific messages by their symbolic name or message ID.
