@@ -1,6 +1,6 @@
 """
-Tracking env for a compact Lambda: DynamoDB and S3 via boto3 only.
-No Flask, no flask_api. Imports table/attribute names from odb.
+Tracking env for Lambda: DynamoDB and S3 via boto3 only.
+No Flask. Uses vendored app for table/attribute names (odb, constants).
 """
 
 import os
@@ -10,8 +10,8 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from .constants import C
-from .odb import (
+from .src.app.constants import C
+from .src.app.odb import (
     MOVIES,
     FRAMES,
     MOVIE_ID,

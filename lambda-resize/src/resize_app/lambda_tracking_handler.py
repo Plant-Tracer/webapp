@@ -1,12 +1,12 @@
 """
-Minimal Lambda entry point for tracking only. No Flask.
+Lambda entry point for tracking only. No Flask.
 Invoke with payload: {"user_id": "...", "movie_id": "...", "frame_start": 0}.
 """
 
 import json
 import logging
 
-from .constants import C
+from .src.app.constants import C
 from .lambda_tracking_env import LambdaTrackingEnv
 from . import tracker
 
@@ -30,7 +30,7 @@ def _parse_event(event):
 
 def handler(event, context=None):
     """
-    Lambda handler for running tracking. No Flask/odb loaded.
+    Lambda handler for running tracking.
     Event: {"user_id": str, "movie_id": str, "frame_start": int (optional, default 0)}
     or API Gateway: {"body": "{\"user_id\":\"...\",\"movie_id\":\"...\",\"frame_start\":0}"}
     """

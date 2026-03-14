@@ -298,7 +298,7 @@ class TracerController extends MovieController {
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
-     * It calls the api/track-movie-quque on the server, queuing movie tracking (which takes a while).
+     * Requests tracking via the Lambda API (POST LAMBDA_API_BASE + 'api/v1' with action 'track-movie').
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
@@ -308,43 +308,52 @@ class TracerController extends MovieController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end() {
-        // Ask the server to track from this frame to the end of the movie.
-        // If successfull, set up a status worker to poll
-        this.tracking_status.text("Asking server to track movie...");
-        this.track_button.prop(DISABLED,true); // disable it until tracking is finished
-
-        const params = {
-            api_key: this.api_key,
-            movie_id: this.movie_id,
-            frame_start: this.frame_number };
-
-        // post is non-blocking, but running locally on bottle the tracking happens
-        // before the post returns.
-        this.tracking = true;   // we are tracking
+        // Ask the Lambda API to track from this frame to the end of the movie.
+        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
+            this.tracking_status.text("Tracking unavailable (Lambda URL not configured).");
+            return;
+        }
+        this.tracking_status.text("Asking Lambda to track movie...");
+        this.track_button.prop(DISABLED, true);
+        this.tracking = true;
         this.poll_for_track_end();
         this.set_movie_control_buttons();
-        $.post(`${API_BASE}api/track-movie-queue`, params)
-            .done((data) => {
-                if (data.error) {
-                    alert(data.message);
+
+        const url = LAMBDA_API_BASE.replace(/\/$/, '') + '/api/v1';
+        const body = JSON.stringify({
+            action: 'track-movie',
+            api_key: this.api_key,
+            movie_id: this.movie_id,
+            frame_start: this.frame_number
+        });
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body
+        })
+            .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
+            .then(({ status, data }) => {
+                if (status !== 200) {
+                    const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
                     this.tracking = false;
                     this.set_movie_control_buttons();
                     this.enableTrackButtonIfAllowed();
-                } else {
-                    console.log("no error");
+                    this.tracking_status.text(msg);
+                    alert(msg);
+                    return;
+                }
+                if (data && data.error) {
+                    alert(data.message || 'Tracking failed.');
+                    this.tracking = false;
+                    this.set_movie_control_buttons();
+                    this.enableTrackButtonIfAllowed();
                 }
             })
-            .fail((err) => {
+            .catch((err) => {
                 this.tracking = false;
                 this.set_movie_control_buttons();
                 this.enableTrackButtonIfAllowed();
-                let msg = "Tracking request failed.";
-                if (err && err.responseText) {
-                    try {
-                        const body = JSON.parse(err.responseText);
-                        if (body && body.message) msg = body.message;
-                    } catch (_e) { /* use default */ }
-                }
+                const msg = err && err.message ? err.message : "Tracking request failed.";
                 this.tracking_status.text(msg);
                 alert(msg);
             });

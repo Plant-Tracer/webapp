@@ -13,13 +13,14 @@ import copy
 import filetype
 from PIL import Image
 
+from resize_app.lambda_tracking_handler import handler as lambda_tracking_handler
+
 from app import odb
 from app import odb_movie_data
 from app import mp4_metadata_lib
 from app.constants import MIME, E, C
 from app.odb import API_KEY, MOVIE_ID, USER_ID
 from app.odb_movie_data import read_object, create_new_movie_frame
-from app.lambda_tracking_handler import handler as lambda_tracking_handler
 
 # Fixtures are in conftest.py
 from app.constants import logger

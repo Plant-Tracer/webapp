@@ -18,8 +18,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
-# Set FFMPEG_PATH before importing flask_app so resize_app.tracker (loaded via app.tracker shim)
-# uses the main app's ffmpeg when paths.ffmpeg_path() is called.
+# Set FFMPEG_PATH before importing flask_app (and for tests that use resize_app.tracker).
 from app.constants import C
 from app.paths import ffmpeg_path
 os.environ.setdefault(C.FFMPEG_PATH, ffmpeg_path())

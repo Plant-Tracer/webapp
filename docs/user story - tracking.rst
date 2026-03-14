@@ -17,8 +17,7 @@ User Story
    - [ ] `frame_start` is set to 0.
    - [ ] A text field with the frame number is shown.
    - [ ] A new button `goto frame N` is available.  We use frame number.
-   - [ ] Requires update to get-frame API that gets frame N from the movie
-   - [ ] Requires update to get-frame implementation to use Quicktime API to stream through the movie and choose the Nth frame.
+   - [ ] get-frame (Lambda GET api/v1/frame) returns frame N from the movie; no VM frame extraction.
 
 #. User identifies four points:
 
@@ -33,7 +32,7 @@ User Story
 
    - [ ] `analyze.js` sends the trackpoints to the server with the `/api/put-frame-analysis` API call.
    - [ ] `analyze.js` displays `tracking...` to the user.
-   - [ ] `analyze.js` runs the API call `/api/track-movie` which initiates server-side tracking from frame n=0.
+   - [ ] The client requests tracking via the **Lambda API** (POST ``api/v1`` with ``action=track-movie``, ``api_key``, ``movie_id``, ``frame_start``). Tracking runs in lambda-resize only.
 
      * :param: api_key
      * :param: movie_id
@@ -44,18 +43,13 @@ User Story
        - [ ] error True - Message - No plant trackpoints detected
        - [ ] error False - Plant tracked. `analyze.js` proceeds to step 6.
 
-#. The `track-movie` API call did the following:
+#. The track-movie request (Lambda API) does the following (in **lambda-resize**, not on the VM):
 
-   - [ ]  Runs `tracker.track_movie_from_db` which:
+   - [ ]  Lambda runs the tracking pipeline which:
 
-     - [ ] Creates a temporary file on the server file system for the movie (because OpenCV will not track from memory)
-     - [ ] Copies frames 0..(N-1) original movie to output file, rendering the points and the frame number with what's already in the database.
-     - [ ] Tracks from frames N to the end, starting with the provided trackpoints.
-     - [ ] The tracked points are written into the database table `movie_frame_trackpoints` for each frame.
-     - In both cases, rendering includes the points and the frame number.
-     - [ ] Write the new rendered tracked movie to the database with the title `{old-title} TRACKED`
-     - [ ] If a previous 'tracked movie' is in the database, delete it.
-     - [ ] Return OK to caller.
+     - [ ] Reads the movie from S3, applies rotation if needed, and runs optical-flow tracking from the given frame.
+     - [ ] Writes trackpoints to DynamoDB per frame and builds the frame zip; writes the zip to S3 and sets ``movie_zipfile_urn`` and metadata (width, height, fps, total_frames, etc.) in DynamoDB.
+     - [ ] The VM (Flask) does not run tracking; the client calls the Lambda API and then polls ``get-movie-metadata`` until tracking is complete.
 
 #. When the tracking is done:
 
@@ -96,8 +90,7 @@ Note
 Agenda
 ------
 
-- [ ] Implement /api/track-movie
-- [ ] Remove tracking code from get-frame and implement get-frame N code.
+- [x] Tracking: client calls Lambda API (POST api/v1 action=track-movie). get-frame is in lambda-resize (GET api/v1/frame).
 - [ ] Implement updates to analyze.js for frame 0
 - [ ] Implement updates to analyze.js for frame N
 - [ ] Implement download of CSV file

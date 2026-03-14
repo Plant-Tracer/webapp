@@ -462,7 +462,8 @@ function upload_ready_function() {
 function play_clicked( e ) {
   const movie_id = e.getAttribute('x-movie_id');
   console.log('play_clicked=',e,'movie_id=',movie_id);
-  const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
+  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
+  const url = base ? `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}` : '';
   const rowid = e.getAttribute('x-rowid');
   $(`#tr-${rowid}`).show();
   const td = $(`#td-${rowid}`);

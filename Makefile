@@ -131,7 +131,7 @@ flake:
 ##
 
 ## These tests use fixtures that create DynamoDB Local and MinIO (when AWS_REGION=local, the default).
-## PYTHONPATH includes lambda-resize/src so app.tracker shim can load resize_app.tracker.
+## PYTHONPATH includes lambda-resize/src so tests that use resize_app (tracker, lambda_tracking_handler) can load it.
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)

@@ -1,7 +1,8 @@
 """
 Replicate what gunicorn does when the planttracer service starts: load the app
 using the same PYTHONPATH and module:callable as in etc/planttracer.service.
-The test fails if that load fails (e.g. ModuleNotFoundError: resize_app.src on the VM).
+The test fails if that load fails OR if the app imports resize_app (the VM must
+not depend on lambda-resize; on deploy resize_app.src is missing so gunicorn fails).
 
 Run with: pytest tests/test_flask_app_import.py -v
 """
@@ -62,7 +63,8 @@ def test_gunicorn_app_load_same_as_planttracer_service():
     """
     Load the app the same way gunicorn does when planttracer.service starts:
     PYTHONPATH and module:callable from etc/planttracer.service. The test
-    fails if that load fails (e.g. on the VM with ModuleNotFoundError).
+    fails if that load fails or if the app imports resize_app (VM must not
+    depend on lambda-resize; on deploy that causes ModuleNotFoundError).
     """
     root = _project_root()
     service_path = _service_file_path()
@@ -81,10 +83,26 @@ def test_gunicorn_app_load_same_as_planttracer_service():
 
     module_name, callable_name = app_uri.split(":", 1)
     script = """
+import sys
+import builtins
+_resize_app_imported = []
+
+_real_import = builtins.__import__
+def _guard(name, *args, **kwargs):
+    if name == 'resize_app' or name.startswith('resize_app.'):
+        _resize_app_imported.append(name)
+    return _real_import(name, *args, **kwargs)
+builtins.__import__ = _guard
+
 import importlib
 m = importlib.import_module(%(module_name)r)
 app = getattr(m, %(callable_name)r)
 assert app is not None
+
+if _resize_app_imported:
+    print('FAIL: gunicorn app must not import resize_app (VM has no lambda-resize).', file=sys.stderr)
+    print('Imported:', _resize_app_imported, file=sys.stderr)
+    sys.exit(1)
 print('OK')
 """ % {
         "module_name": module_name,

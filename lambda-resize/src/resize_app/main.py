@@ -35,6 +35,117 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
     return method, path, payload
 
 
+def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
+    """
+    POST /api/v1 with action=track-movie. Body: api_key, movie_id, frame_start.
+    Authorizes via api_key (same as get-frame), then runs tracking.
+    """
+    from .lambda_tracking_handler import handler as track_handler  # pylint: disable=import-outside-toplevel
+    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
+
+    api_key = (payload.get("api_key") or "").strip()
+    movie_id = (payload.get("movie_id") or "").strip()
+    try:
+        frame_start = int(payload.get("frame_start", 0))
+    except (TypeError, ValueError):
+        frame_start = 0
+    if not api_key or not movie_id:
+        return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
+    ddbo = DDBO()
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None or not api_key_dict.get(ENABLED, True):
+        return resp_json(401, {"error": True, "message": "invalid or disabled api_key"})
+    user_id = api_key_dict.get(USER_ID)
+    if not user_id:
+        return resp_json(401, {"error": True, "message": "invalid api_key"})
+    return track_handler({"user_id": user_id, "movie_id": movie_id, "frame_start": frame_start})
+
+
+def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    GET /api/v1/movie-data?api_key=...&movie_id=...&format=zip (optional).
+    Returns 302 redirect to signed S3 URL for the movie (or zip if format=zip).
+    """
+    from .resize import resp_json, resp_redirect  # pylint: disable=import-outside-toplevel
+    from .src.app import odb  # pylint: disable=import-outside-toplevel
+    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
+    from .src.app.odb_movie_data import get_movie_data  # pylint: disable=import-outside-toplevel
+    from .src.app.s3_presigned import make_signed_url, object_exists  # pylint: disable=import-outside-toplevel
+
+    params = event.get("queryStringParameters") or event.get("query_params") or {}
+    api_key = (params.get("api_key") or "").strip()
+    movie_id = (params.get("movie_id") or "").strip()
+    zipfile = (params.get("format") or "").strip().lower() == "zip"
+    if not api_key or not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
+    ddbo = DDBO()
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None or not api_key_dict.get(ENABLED, True):
+        return resp_json(401, {"error": True, "message": "invalid or disabled api_key"})
+    user_id = api_key_dict.get(USER_ID)
+    if not user_id:
+        return resp_json(401, {"error": True, "message": "invalid api_key"})
+    try:
+        movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    except odb.UnauthorizedUser:
+        return resp_json(403, {"error": True, "message": "access denied"})
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    data_urn = get_movie_data(movie_id=movie["movie_id"], zipfile=zipfile, get_urn=True)
+    if not data_urn:
+        return resp_json(503, {"error": True, "message": "Movie not ready (no URN)."})
+    if not object_exists(data_urn):
+        return resp_json(
+            503,
+            {"error": True, "message": "Movie still processing (upload not yet at final key). Retry in a few seconds."},
+            headers={"Retry-After": "5"},
+        )
+    return resp_redirect(make_signed_url(urn=data_urn))
+
+
+def api_new_frame(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
+    """
+    POST /api/v1 with action=new-frame. Body: api_key, movie_id, frame_number, optional frame_base64_data.
+    Creates or updates a frame record; if frame_base64_data provided, uploads image to S3.
+    """
+    from .src.app import odb  # pylint: disable=import-outside-toplevel
+    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
+    from .src.app.odb_movie_data import create_new_movie_frame  # pylint: disable=import-outside-toplevel
+
+    api_key = (payload.get("api_key") or "").strip()
+    movie_id = (payload.get("movie_id") or "").strip()
+    try:
+        frame_number = int(payload.get("frame_number", 0))
+    except (TypeError, ValueError):
+        return resp_json(400, {"error": True, "message": "frame_number required and must be integer"})
+    frame_b64 = payload.get("frame_base64_data")
+    frame_data = None
+    if frame_b64:
+        try:
+            frame_data = base64.b64decode(frame_b64)
+        except (TypeError, ValueError):
+            return resp_json(400, {"error": True, "message": "invalid frame_base64_data"})
+    if not api_key or not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
+    ddbo = DDBO()
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None or not api_key_dict.get(ENABLED, True):
+        return resp_json(401, {"error": True, "message": "invalid or disabled api_key"})
+    user_id = api_key_dict.get(USER_ID)
+    if not user_id:
+        return resp_json(401, {"error": True, "message": "invalid api_key"})
+    try:
+        odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    except odb.UnauthorizedUser:
+        return resp_json(403, {"error": True, "message": "access denied"})
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    frame_urn = create_new_movie_frame(
+        movie_id=movie_id, frame_number=frame_number, frame_data=frame_data
+    )
+    return resp_json(200, {"error": False, "frame_urn": frame_urn})
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Called by Lambda for HTTP API requests (no S3 event invocation)."""
     from .resize import (  # pylint: disable=import-outside-toplevel
@@ -93,8 +204,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 case ("POST", "/api/v1", "rotate-and-zip"):
                     return api_rotate_and_zip(payload)
 
+                case ("POST", "/api/v1", "track-movie"):
+                    return api_track_movie(payload, resp_json)
+
+                case ("POST", "/api/v1", "new-frame"):
+                    return api_new_frame(payload, resp_json)
+
                 case ("GET", "/api/v1/frame", _):
                     return api_get_frame(event)
+
+                case ("GET", "/api/v1/movie-data", _):
+                    return api_get_movie_data(event)
 
                 case (_, "/api/v1", "heartbeat"):
                     return api_heartbeat(event, context)

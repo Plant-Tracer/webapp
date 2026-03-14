@@ -10,7 +10,8 @@ import pytest
 
 # https://bottlepy.org/docs/dev/recipes.html#unit-testing-bottle-applications
 
-from app import tracker
+from resize_app import tracker
+
 from app.constants import logger
 
 # Get the fixtures from conftest.py - they are auto-discovered by pytest

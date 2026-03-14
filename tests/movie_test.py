@@ -13,8 +13,9 @@ import requests
 import filetype
 import pytest
 
+from resize_app import tracker
+
 from app import odb
-from app import tracker
 from app import s3_presigned
 from app import odb_movie_data
 
@@ -124,16 +125,17 @@ def test_new_movie(client, new_movie):
                                    'movie_id': movie_id})
     assert resp.status_code == 403
 
-    # Make sure that we can get data for the movie
-    resp = client.post('/api/get-movie-data',
-                           data = {'api_key': api_key,
-                                   'movie_id': movie_id,
-                                   'redirect_inline':True})
-    logger.debug("test_new_movie: resp.data[0:10]=%s len=%s",resp.data[0:10],len(resp.data))
-    if resp.data[0:10] == b"#REDIRECT ":
-        movie_data = data_from_redirect(resp.text, client)
-    else:
-        movie_data = resp.data
+    # get-movie-data is on Lambda: GET /api/v1/movie-data returns 302 to signed URL
+    from resize_app.main import lambda_handler as lambda_handler_fn  # pylint: disable=import-outside-toplevel
+    event = {
+        "requestContext": {"http": {"method": "GET"}, "stage": ""},
+        "rawPath": "/api/v1/movie-data",
+        "queryStringParameters": {"api_key": api_key, "movie_id": movie_id},
+    }
+    result = lambda_handler_fn(event, None)
+    assert result["statusCode"] == 302, result
+    location = result["headers"]["Location"]
+    movie_data = requests.get(location, timeout=GET_TIMEOUT).content
 
     # movie_data is now a movie. We should validate it.
     logger.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])

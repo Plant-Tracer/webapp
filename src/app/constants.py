@@ -86,7 +86,7 @@ class C:
     YES = 'YES'
     NO = 'NO'
     MOVIE_EXTENSION = ".mov"
-    MOVIE_PROCESSED_EXTENSION = '_processed.mp4'  # rotated/scaled movie written by api_track_movie
+    MOVIE_PROCESSED_EXTENSION = '_processed.mp4'  # rotated/scaled movie written by Lambda (rotate or tracking)
     ZIP_MOVIE_EXTENSION = '_mp4.zip'
     # Single place for analysis/shrunk frame size (zip frames and get-frame?size=analysis).
     ANALYSIS_FRAME_MAX_WIDTH = 640

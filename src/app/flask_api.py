@@ -21,7 +21,6 @@ from validate_email_address import validate_email
 from . import config_check
 from . import odb
 from . import mailer
-from . import tracker
 from . import apikey
 from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
@@ -47,13 +46,9 @@ from .s3_presigned import (
     make_urn,
     make_signed_url,
     make_presigned_post,
-    object_exists,
 )
 from .odb_movie_data import (
-    write_object,
-    write_object_from_path,
     delete_movie,
-    create_new_movie_frame,
 )
 from .apikey import get_lambda_api_base
 
@@ -340,49 +335,6 @@ def api_new_movie():
         attribution_name=attribution_name or '')
     return ret
 
-@api_bp.route('/get-movie-data', methods=GET_POST)
-def api_get_movie_data():
-    """
-    Gets the user the movie.
-    :param api_key:   authentication
-    :param movie_id:  movie
-    :param format:    if 'zip' - return as as a zipfile
-    :param redirect_inline: - if True and we are redirecting, return "#REDIRECT url" (for testing)
-    :return:  IF MOVIE IS IN S3 - Redirect to a signed URL.
-              IF MOVIE IS IN DB - The raw movie data as a movie.
-    """
-    movie_id = get_movie_id()
-    movie    = odb.can_access_movie(user_id = get_user_id(), movie_id=movie_id)
-    assert movie_id == movie[MOVIE_ID]
-
-    data_urn = tracker.get_movie_data(movie_id=movie[MOVIE_ID],
-                                  zipfile = get('format')=='zip',
-                                  get_urn = True)
-
-    if not data_urn:
-        return make_response(
-            jsonify({"error": True, "message": "Movie not ready (no URN)."}),
-            503,
-        )
-    if not object_exists(data_urn):
-        resp = make_response(
-            jsonify({
-                "error": True,
-                "message": "Movie still processing (upload not yet at final key). Retry in a few seconds.",
-            }),
-            503,
-        )
-        resp.headers["Retry-After"] = "5"
-        return resp
-
-    # This is used for testing redirect response in the test program
-    if get_bool('redirect_inline'):
-        return "#REDIRECT " + data_urn
-
-    # Otherwise, redirect to the signed url
-    return redirect(make_signed_url(urn=data_urn))
-
-
 def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata):
     """Update the movie metadata."""
     for prop in MOVIE_METADATA_BULK_PROPS:
@@ -627,57 +579,7 @@ def api_add():
 
 ################################################################
 ################################################################
-## Movie tracking
-## Tracking is requested from the client; same code runs from Flask (VM) or Lambda via tracker.run_tracking.
-
-# pylint: disable=too-few-public-methods
-class FlaskTrackingEnv(tracker.TrackingEnv):
-    """Environment adapter so tracker.run_tracking can use Flask/VM I/O (odb, S3, set_movie_metadata).
-    VM does not run tracking; this env is not used for tracking. get_movie_data is stubbed so the path is never used."""
-
-    def get_movie_data(self, movie_id):
-        raise NotImplementedError("VM does not run tracking; do not call get_movie_data on FlaskTrackingEnv")
-
-    def get_movie_metadata(self, movie_id):
-        return odb.get_movie_metadata(movie_id=movie_id)
-
-    def get_movie_trackpoints(self, movie_id):
-        return odb.get_movie_trackpoints(movie_id=movie_id)
-
-    def put_frame_trackpoints(self, *, movie_id, frame_number, trackpoints):
-        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
-
-    def set_metadata(self, *, user_id, movie_id, prop, value):
-        odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=prop, value=value)
-
-    def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
-        set_movie_metadata(user_id=user_id, set_movie_id=movie_id, movie_metadata=movie_metadata)
-
-    def write_object(self, *, urn, data):
-        write_object(urn=urn, object_data=data)
-
-    def write_object_from_path(self, *, urn, path):
-        write_object_from_path(urn=urn, path=path)
-
-    def make_object_name(self, *, course_id, movie_id, ext, frame_number=None):
-        return make_object_name(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
-
-    def make_urn(self, *, object_name):
-        return make_urn(object_name=object_name)
-
-    def course_id_for_movie_id(self, movie_id):
-        return odb.course_id_for_movie_id(movie_id)
-
-    def update_movie(self, movie_id, updates):
-        ddbo = DDBO()
-        ddbo.update_table(ddbo.movies, movie_id, updates)
-
-
-def api_track_movie(*, user_id, movie_id, frame_start):
-    """Run tracking using shared tracker.run_tracking with Flask env (VM or Lambda)."""
-    env = FlaskTrackingEnv()
-    tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
-
+## Tracking: VM does not run tracking; client uses Lambda (see lambda-resize).
 
 @api_bp.route('/track/lambda-health', methods=GET_POST)
 def api_track_lambda_health():
@@ -732,32 +634,6 @@ def api_track_movie_queue():
         }),
         501,
     )
-
-
-## /new-frame is being able to create our own time lapse movie
-## It's for a camera app that we haven't written yet
-
-@api_bp.route('/new-frame', methods=POST)
-def api_new_frame():
-    """Create a new frame and return its frame_urn.
-    If frame exists, just update the frame_data (if frame data is provided).
-    :param: api_key  - api_key
-    :param: movie_id - the movie
-    :param: frame_number - the frame to create
-    :param: frame_data - if provided, it's uploaded; otherwise we just enter the frame into the database if it doesn't exist
-    :return: frame_urn - that's what we care about
-
-    """
-    movie_id=get_movie_id()
-    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
-    try:
-        frame_data = base64.b64decode( request.values.get('frame_base64_data'))
-    except TypeError:
-        frame_data = None
-    frame_urn = create_new_movie_frame( movie_id = movie[MOVIE_ID],
-                                            frame_number = get_int('frame_number'),
-                                            frame_data = frame_data)
-    return {'error': False, 'frame_urn': frame_urn}
 
 
 ## /put-frame-trackpoints:

@@ -72,6 +72,18 @@ def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, st
     }
 
 
+def resp_redirect(location: str, status: int = 302) -> Dict[str, Any]:
+    """Return HTTP redirect response (e.g. for get-movie-data)."""
+    return {
+        "statusCode": status,
+        "headers": {
+            "Location": location,
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": "",
+    }
+
+
 def _with_request_log_level(payload: Dict[str, Any]):
     """Context manager to temporarily adjust log level from JSON (log_level or LOG_LEVEL)."""
     class _Ctx:
