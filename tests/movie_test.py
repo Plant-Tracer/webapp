@@ -19,7 +19,7 @@ from app import s3_presigned
 from app import odb_movie_data
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
-from app.constants import E,MIME
+from app.constants import MIME
 from app.s3_presigned import s3_client
 from app.constants import logger
 
@@ -269,7 +269,6 @@ def test_movie_extract2(client, new_movie):
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     #movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
     #user_id = cfg[USER_ID]
 
     movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)

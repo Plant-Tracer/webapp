@@ -37,8 +37,6 @@ from .odb import (
     MOVIE_METADATA_BULK_PROPS,
     ORIG_MOVIE,
     ROTATION_STEPS,
-    PROCESSING_STATE,
-    PROCESSING_STATE_TRACKING,
     STATUS,
     DDBO,
     UnauthorizedUser,

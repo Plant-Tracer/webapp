@@ -24,13 +24,12 @@ from app.constants import C
 from app.paths import ffmpeg_path
 os.environ.setdefault(C.FFMPEG_PATH, ffmpeg_path())
 
-from app import flask_app
+from app import flask_app  # pylint: disable=wrong-import-position
 
-
-# Import fixtures so pytest can discover them
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
-from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pylint: disable=unused-import
-from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unused-import
+# Import fixtures so pytest can discover them (after env/path setup above)
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # pylint: disable=wrong-import-position,unused-import
+from .fixtures.localmail_config import mailer_config  # pylint: disable=wrong-import-position,unused-import
+from .fixtures.app_client import client  # pylint: disable=wrong-import-position,unused-import
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)

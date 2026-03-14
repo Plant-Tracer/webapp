@@ -89,9 +89,15 @@ def test_get_frame_returns_200_and_jpeg_when_authorized(
     def fake_extract_single_frame(data, frame_number):  # pylint: disable=unused-argument
         return fake_jpeg_bytes
 
-    monkeypatch.setattr(resize, "DDBO", lambda: FakeDDBO())
+    def fake_is_movie_id(mid):
+        return bool(mid and mid.startswith("m"))
+
+    def fake_dbo():
+        return FakeDDBO()
+
+    monkeypatch.setattr(resize, "DDBO", fake_dbo)
     monkeypatch.setattr(resize.odb, "can_access_movie", fake_can_access_movie)
-    monkeypatch.setattr(resize.odb, "is_movie_id", lambda mid: bool(mid and mid.startswith("m")))
+    monkeypatch.setattr(resize.odb, "is_movie_id", fake_is_movie_id)
     monkeypatch.setattr(resize, "_s3_client", lambda: s3)
     monkeypatch.setattr(resize, "extract_single_frame", fake_extract_single_frame)
     monkeypatch.setattr(resize, "resize_jpeg_to_fit", lambda jpg, _w, _h: jpg)
