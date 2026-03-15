@@ -13,6 +13,11 @@ from . import tracker
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
+CORS_HEADERS = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+}
+
 
 def _parse_event(event):
     """Extract user_id, movie_id, frame_start from API Gateway or direct invoke payload."""
@@ -39,11 +44,23 @@ def handler(event, context=None):
         user_id, movie_id, frame_start = _parse_event(event)
     except (KeyError, TypeError, json.JSONDecodeError) as e:
         logger.exception("Bad event: %s", e)
-        return {"statusCode": 400, "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)})}
+        return {
+            "statusCode": 400,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)}),
+        }
     try:
         env = LambdaTrackingEnv()
         tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
-        return {"statusCode": 200, "body": json.dumps({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: "Tracking completed"})}
+        return {
+            "statusCode": 200,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: "Tracking completed"}),
+        }
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.exception("Tracking failed: %s", e)
-        return {"statusCode": 500, "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)})}
+        return {
+            "statusCode": 500,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)}),
+        }

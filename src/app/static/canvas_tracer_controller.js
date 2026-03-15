@@ -783,6 +783,18 @@ function trace_movie(div_controller, movie_id, api_key) {
     });
 }
 
+/** If global cc exists from one-frame view, merge its frame 0 markers into frames so they are not lost when zip loads. */
+function preserve_frame0_markers_from_controller(frames) {
+    if (typeof cc === 'undefined' || !cc.frames || !cc.frames[0] || !cc.frames[0].markers || !cc.frames[0].markers.length) {
+        return frames;
+    }
+    const out = (typeof frames === 'object' && frames !== null && !Array.isArray(frames)) ? { ...frames } : (Array.isArray(frames) ? [...frames] : {});
+    const f0 = (out[0] != null) ? { ...out[0] } : {};
+    f0.markers = cc.frames[0].markers;
+    out[0] = f0;
+    return out;
+}
+
 /** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACKING COMPLETED). */
 function is_movie_tracked(metadata) {
     if (!metadata) return false;
@@ -814,7 +826,9 @@ function poll_for_zip_and_load(div_controller, movie_id, api_key, max_seconds) {
                 } else {
                     $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Track movie.');
                 }
-                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
+                // Preserve frame 0 markers from current one-frame view so first drag is not lost when zip loads
+                const framesToUse = preserve_frame0_markers_from_controller(resp.frames);
+                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, framesToUse, api_key, showResults);
                 return;
             }
             setTimeout(poll, ZIP_POLL_INTERVAL_MS);
