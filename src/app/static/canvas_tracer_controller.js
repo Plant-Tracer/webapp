@@ -18,7 +18,8 @@ const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const TRACKING_POLL_MSEC=1000;
-const RETRACK_MOVIE='Retrace movie';
+const TRACE_MOVIE = 'Trace movie';
+const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
@@ -105,7 +106,7 @@ class TracerController extends MovieController {
         const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
             this.last_tracked_frame >= this.total_frames - 1;
         if (fullyTraced) {
-            this.track_button.val( RETRACK_MOVIE );
+            this.track_button.val(RETRACE_MOVIE);
             this.download_button.show();
         }
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
@@ -313,7 +314,7 @@ class TracerController extends MovieController {
             this.tracking_status.text("Tracking unavailable (Lambda URL not configured).");
             return;
         }
-        this.tracking_status.text("Asking Lambda to track movie...");
+        this.tracking_status.text("Asking Lambda to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
         this.poll_for_track_end();
@@ -446,32 +447,71 @@ class TracerController extends MovieController {
         });
     }
 
-    /** movie is tracked - display the results */
+    /** Tracing completed - stop polling, load zip (wait up to 5s if needed), then show full movie. */
     movie_tracked(_data) {
-        // This should work. but it is not. So just force a reload until I can figure out what's wrong.
-        location.reload(true);
+        this.tracking = false;
+        this.set_movie_control_buttons();
+        this.tracking_status.text('Tracing complete. Loading movie...');
 
-        /***
+        const self = this;
+        const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
+        const maxZipWaitMs = 5000;
+        const zipPollMs = 500;
 
-        function dict_to_array( dict ) {
-            let array = [];
-            for (const key in dict) {
-                array[parseInt(key)] = dict[key];
-            }
-            return array;
+        /** Resolves with { zipUrl, metadata, frames } when zip is available, or rejects after maxZipWaitMs. */
+        function waitForZip() {
+            return new Promise((resolve, reject) => {
+                if (_data.metadata && _data.metadata.movie_zipfile_url) {
+                    resolve({ zipUrl: _data.metadata.movie_zipfile_url, metadata: _data.metadata, frames: _data.frames || {} });
+                    return;
+                }
+                const deadline = Date.now() + maxZipWaitMs;
+                function poll() {
+                    if (Date.now() > deadline) {
+                        reject(new Error('ZIP file did not become available in time. Please refresh and try again.'));
+                        return;
+                    }
+                    self.tracking_status.text('Waiting for ZIP file to be processed...');
+                    $.post(`${API_BASE}api/get-movie-metadata`, {
+                        api_key: self.api_key,
+                        movie_id: self.movie_id,
+                        frame_start: 0,
+                        frame_count: MAX_FRAMES,
+                        get_all_if_tracking_completed: true
+                    }).done((resp) => {
+                        if (resp.error || !resp.metadata) {
+                            setTimeout(poll, zipPollMs);
+                            return;
+                        }
+                        if (resp.metadata.movie_zipfile_url) {
+                            resolve({
+                                zipUrl: resp.metadata.movie_zipfile_url,
+                                metadata: resp.metadata,
+                                frames: resp.frames || {}
+                            });
+                            return;
+                        }
+                        setTimeout(poll, zipPollMs);
+                    }).fail(() => setTimeout(poll, zipPollMs));
+                }
+                poll();
+            });
         }
 
-        this.tracking = false;
-        this.tracking_status.text('Movie tracking complete.');
-        console.log("before load_movie. this.frames=",this.frames);
-        this.load_movie( dict_to_array(data.frames)); // reload the movie
-        console.log("after load_movie. this.frames=",this.frames);
-        this.download_button.show();
-        // change from 'track movie' to 'Retrack movie' and re-enable it
-        $(this.div_selector + ' input.track_button').val( RETRACK_MOVIE );
-        this.track_button.prop(DISABLED,false);
-        // We do not need to redraw, because the frame hasn't changed
-        */
+        waitForZip()
+            .then(({ zipUrl, metadata, frames }) => {
+                const framesToUse = preserve_frame0_markers_from_controller(frames);
+                trace_movie_frames(div, metadata, zipUrl, framesToUse, self.api_key, true);
+                $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
+                self.track_button.prop(DISABLED, false);
+                self.download_button.show();
+                $('#firsth2').html('Movie is traced! You can play and watch the trackpoints.');
+            })
+            .catch((err) => {
+                self.tracking_status.text('');
+                self.enableTrackButtonIfAllowed();
+                alert(err.message || 'Failed to load traced movie.');
+            });
     }
 
     rotate_button_pressed() {
@@ -728,9 +768,9 @@ function graph_data(cc, frames) {
 }
 
 /* Main function called when HTML page loads.
- * Gets metadata for the movie and all traced frames.
- * If the zip is not ready yet (e.g. still building after rotate), we show the first frame and poll
- * for the zip; when it appears we load it in the background so the user can keep placing markers.
+ * Gets metadata for the movie and traced frames. If no zip yet, shows frame 0 only (no polling).
+ * User places markers and clicks "Trace movie"; we then poll only for tracing to complete,
+ * then load the zip once (wait up to 5s if needed) and stop polling.
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
@@ -757,27 +797,22 @@ function trace_movie(div_controller, movie_id, api_key) {
             $(div_controller + ' canvas').prop('width', width).prop('height', height);
         }
         if (!resp.metadata.movie_zipfile_url) {
-            $('#firsth2').html('Waiting for processing to complete…');
+            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie". No polling.
             const frameBase = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
             const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
-            // Trigger zip build so shrinking and tracing can happen in parallel (no rotation case).
-            if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
-                fetch(LAMBDA_API_BASE + 'api/v1', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rotate-and-zip', movie_id, rotation_steps: 0 }),
-                }).catch(() => {});
+            if (demo_mode) {
+                $('#firsth2').html('Movie ready for tracing.');
+            } else {
+                $('#firsth2').html('Place markers and click Trace movie to start tracing.');
             }
-            // Zip may be building in background. Poll until it appears or 60s.
-            poll_for_zip_and_load(div_controller, movie_id, api_key, 60);
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
         if (demo_mode) {
             $('#firsth2').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
         } else {
-            $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Track movie.');
+            $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
     });
@@ -802,39 +837,6 @@ function is_movie_tracked(metadata) {
     const last = metadata.last_frame_tracked;
     const total = metadata.total_frames;
     return (last != null && total != null && total > 1 && last >= 1);
-}
-
-const ZIP_POLL_INTERVAL_MS = 2000;
-
-function poll_for_zip_and_load(div_controller, movie_id, api_key, max_seconds) {
-    const deadline = Date.now() + max_seconds * 1000;
-    const params = { api_key: api_key, movie_id: movie_id, frame_start: 0, frame_count: MAX_FRAMES };
-    function poll() {
-        if (Date.now() > deadline) {
-            $('#firsth2').html('Processing did not complete in time. Please come back later.');
-            return;
-        }
-        $.post(`${API_BASE}api/get-movie-metadata`, params).done((resp) => {
-            if (resp.error || !resp.metadata) {
-                setTimeout(poll, ZIP_POLL_INTERVAL_MS);
-                return;
-            }
-            if (resp.metadata.movie_zipfile_url) {
-                const showResults = is_movie_tracked(resp.metadata);
-                if (demo_mode) {
-                    $('#firsth2').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
-                } else {
-                    $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Track movie.');
-                }
-                // Preserve frame 0 markers from current one-frame view so first drag is not lost when zip loads
-                const framesToUse = preserve_frame0_markers_from_controller(resp.frames);
-                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, framesToUse, api_key, showResults);
-                return;
-            }
-            setTimeout(poll, ZIP_POLL_INTERVAL_MS);
-        });
-    }
-    setTimeout(poll, ZIP_POLL_INTERVAL_MS);
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
