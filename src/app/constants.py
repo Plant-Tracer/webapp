@@ -7,7 +7,7 @@ Constants are created in classes so we can import the class and don't have to im
 import logging
 import os
 
-__version__ = '9.7.0'
+__version__ = '0.9.7.1'
 
 # these aren't strictly constants...
 log_level = os.getenv("LOG_LEVEL","INFO").upper()

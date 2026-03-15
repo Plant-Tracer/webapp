@@ -29,12 +29,25 @@ import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
 
-// The default markers get added to a movie that is not tracked.
-// Note that a movie that is just tracked at frame 0 is tracked...
+// Default marker positions used only when a new movie is first loaded for analysis
+// and frame 0 has no markers yet (no frames traced). See create_default_markers().
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
                          {'x':50,'y':150,'label':'Ruler 10mm'}
                         ];
+
+/**
+ * Returns a copy of the default markers and logs to console.
+ * ONLY call this when loading a new movie for analysis and frame 0 has no markers yet.
+ * Decision to call is made in trace_movie_one_frame: we use server markers for frame 0
+ * if present; otherwise we call create_default_markers() once for the initial frame 0.
+ * Never use this in trace_movie_frames (zip load): there we use existing markers only;
+ * if frame 0 has no markers there, use [] so we don't overwrite user positions with defaults.
+ */
+function create_default_markers() {
+    console.log('[canvas_tracer_controller] Creating default markers (first-time analysis load; frame 0 has no markers yet).');
+    return [...DEFAULT_MARKERS];
+}
 
 // NOTE ./static is needed below but not above!
 setOptions({
@@ -506,7 +519,7 @@ class TracerController extends MovieController {
         waitForZip()
             .then(({ zipUrl, metadata, frames }) => {
                 $(div).removeClass('tracing-dimmed');
-                const framesToUse = preserve_frame0_markers_from_controller(frames);
+                const framesToUse = preserve_frame0_markers_from_controller(frames, self);
                 trace_movie_frames(div, metadata, zipUrl, framesToUse, self.api_key, true);
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
                 self.track_button.prop(DISABLED, false);
@@ -567,12 +580,12 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
         }
     };
 
-    var frames = [{'frame_url': frame0_url,
-                   'markers':DEFAULT_MARKERS }];
-    // If we have markers for frame 0, use them instead
-    if (metadata_frames && metadata_frames[0] && metadata_frames[0].markers) {
-        frames[0].markers = metadata_frames[0].markers;
-    }
+    // DECISION: Default markers only when frame 0 has no markers yet (first-time analysis load).
+    // If the server already has markers for frame 0, use those. Otherwise create defaults once.
+    const frame0Markers = (metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length)
+        ? metadata_frames[0].markers
+        : create_default_markers();
+    var frames = [{'frame_url': frame0_url, 'markers': frame0Markers}];
 
     cc.load_movie(frames);
     cc.create_marker_table();
@@ -580,6 +593,11 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
+//
+// When building markers per frame we never use DEFAULT_MARKERS here. Default markers
+// are only created once, in trace_movie_one_frame, when the analyze page first loads
+// and frame 0 has no markers yet. Here we use metadata_frames (which includes
+// preserved frame 0 markers from the controller); if a frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
     const m = name.match(/frame_(\d+)\.jpg$/i);
@@ -595,9 +613,11 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((_name, i) => {
-        // When zip exists but no tracking has been done, metadata_frames may be empty or sparse.
+        // Use existing markers only. Never use DEFAULT_MARKERS here: after tracing we have
+        // frame 0 markers from preserve_frame0_markers_from_controller; using defaults would
+        // overwrite user positions. If a frame has no markers, use [].
         const frameData = metadata_frames && metadata_frames[i];
-        const markers = (frameData && frameData.markers) ? frameData.markers : [...DEFAULT_MARKERS];
+        const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
@@ -832,14 +852,15 @@ function trace_movie(div_controller, movie_id, api_key) {
     });
 }
 
-/** If global cc exists from one-frame view, merge its frame 0 markers into frames so they are not lost when zip loads. */
-function preserve_frame0_markers_from_controller(frames) {
-    if (typeof cc === 'undefined' || !cc.frames || !cc.frames[0] || !cc.frames[0].markers || !cc.frames[0].markers.length) {
+/** If controller has frame 0 markers, merge them into frames so they are not lost when zip loads. */
+function preserve_frame0_markers_from_controller(frames, controller) {
+    const src = controller || (typeof cc !== 'undefined' ? cc : null);
+    if (!src || !src.frames || !src.frames[0] || !src.frames[0].markers || !src.frames[0].markers.length) {
         return frames;
     }
     const out = (typeof frames === 'object' && frames !== null && !Array.isArray(frames)) ? { ...frames } : (Array.isArray(frames) ? [...frames] : {});
     const f0 = (out[0] != null) ? { ...out[0] } : {};
-    f0.markers = cc.frames[0].markers;
+    f0.markers = src.frames[0].markers;
     out[0] = f0;
     return out;
 }

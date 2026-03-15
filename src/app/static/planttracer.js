@@ -364,7 +364,7 @@ function upload_movie()
     return;
   }
   // Hide the form immediately so the user sees that something is happening.
-  $('#upload-form form').hide();
+  $('#upload-movie-form').hide();
   $('#upload-button').prop('disabled', true);
   $('#upload_message').html(`Uploading movie ...`);
 
