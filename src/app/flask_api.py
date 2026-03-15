@@ -348,13 +348,13 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
 
 @api_bp.route('/edit-movie', methods=POST)
 def api_edit_movie():
-    """Request movie rotation (and zip). VM only updates rotation_steps and triggers Lambda.
+    """Request movie rotation. VM only updates rotation_steps and triggers Lambda.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
     :param action: must be 'rotate90cw'
     :param rotation_steps: 1–3; total 90° rotations. Client debounces and sends one request.
-    Lambda performs rotate, zip, and metadata update (including width/height swap).
+    Lambda performs rotate and metadata update (width/height swap). Zip is built when user opens Analyze.
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
@@ -380,6 +380,7 @@ def api_edit_movie():
                 "action": "rotate-and-zip",
                 "movie_id": movie_id,
                 "rotation_steps": steps,
+                "build_zip": False,
             }).encode("utf-8")
             req = Request(
                 base.rstrip("/") + "/api/v1",

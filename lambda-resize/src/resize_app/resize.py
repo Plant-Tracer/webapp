@@ -194,6 +194,9 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         steps = 1
     # Allow 0 = zip-only (no rotation); 1–3 = rotate then zip.
     steps = max(0, min(3, steps))
+    build_zip = payload.get("build_zip", True)
+    if isinstance(build_zip, str):
+        build_zip = build_zip.lower() not in ("false", "0", "no")
 
     ddbo = DDBO()
     try:
@@ -246,6 +249,21 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             movie_id,
             {"processing_state": "processing"},
         )
+
+    # Rotate-only (e.g. from upload page): update metadata and return; zip is built when user opens Analyze.
+    if not build_zip:
+        meta = extract_movie_metadata(movie_bytes_for_zip)
+        update_payload = {"processing_state": "ready"}
+        for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+            if key in meta and meta[key] is not None:
+                update_payload[attr] = meta[key]
+        try:
+            ddbo.update_table(ddbo.movies, movie_id, update_payload)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("rotate_only metadata update failed for %s: %s", movie_id, exc)
+        write_log(f"rotate_only movie_id={movie_id} steps={steps}", course_id=course_id)
+        LOGGER.info("rotate_only movie_id=%s steps=%s (zip deferred)", movie_id, steps)
+        return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
 
     def _zip_progress(current: int, total: int) -> None:
         """Best-effort progress updates in DynamoDB; safe to fail silently."""

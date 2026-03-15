@@ -76,9 +76,9 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
 
     def get_movie_data(self, movie_id):
         movie = self._movies.get_item(Key={MOVIE_ID: movie_id}, ConsistentRead=True).get("Item")
-        if not movie or not movie.get(MOVIE_DATA_URN):
+        urn = movie.get(MOVIE_DATA_URN) if movie else None
+        if not urn:
             raise ValueError(f"No movie_data_urn for movie_id={movie_id}")
-        urn = movie[MOVIE_DATA_URN]
         parsed = urllib.parse.urlparse(urn)
         if parsed.scheme != "s3":
             raise ValueError(f"Unsupported URN scheme: {urn}")

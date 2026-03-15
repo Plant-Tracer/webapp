@@ -1357,14 +1357,16 @@ def course_id_for_movie_id(movie_id):
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
+    """Return movie_data_urn for movie_id, or None if not yet set (e.g. before upload/processing)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_DATA_URN)
 
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_ZIPFILE_URN]
+    """Return movie_zipfile_urn for movie_id, or None if not yet set (e.g. before zip is built)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_ZIPFILE_URN)
 
 
 
@@ -1483,11 +1485,12 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 
     # update the last frame tracked. This is way, way more expensive than it should be.
     movie = ddbo.get_movie(movie_id)
-    if movie[LAST_FRAME_TRACKED] is None:
+    current = movie.get(LAST_FRAME_TRACKED, None)
+    if current is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
         movie[LAST_FRAME_TRACKED] = frame_number
     else:
-        movie[LAST_FRAME_TRACKED] = max(movie[LAST_FRAME_TRACKED], frame_number)
+        movie[LAST_FRAME_TRACKED] = max(current, frame_number)
     ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
 
 

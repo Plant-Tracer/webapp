@@ -413,7 +413,7 @@ async function apply_rotation_and_zip() {
   if (!linkEl || steps < 1) return;
   linkEl.classList.add('rotate-pending');
   const movie_id = window.movie_id;
-  $('#rotate_status').text(' … Rotating and creating zip…');
+  $('#rotate_status').text(' … Rotating…');
   let r;
   try {
     const formData = new FormData();
