@@ -519,17 +519,7 @@ class TracerController extends MovieController {
         waitForZip()
             .then(({ zipUrl, metadata, frames }) => {
                 $(div).removeClass('tracing-dimmed');
-                let framesToUse = preserve_frame0_markers_from_controller(frames, self);
-                // Force frame 0 markers from current controller so they are never overwritten by server data
-                if (self && self.frames && self.frames[0] && self.frames[0].markers && self.frames[0].markers.length) {
-                    const arr = Array.isArray(framesToUse) ? framesToUse : { ...framesToUse };
-                    const f0 = (arr[0] != null) ? { ...arr[0] } : {};
-                    f0.markers = self.frames[0].markers;
-                    arr[0] = f0;
-                    framesToUse = arr;
-                    console.log('[canvas_tracer_controller] Using frame 0 markers from controller after tracing:', self.frames[0].markers.length, 'markers');
-                }
-                trace_movie_frames(div, metadata, zipUrl, framesToUse, self.api_key, true);
+                trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true);
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
                 self.track_button.prop(DISABLED, false);
                 self.download_button.show();
@@ -603,10 +593,9 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
 //
-// When building markers per frame we never use DEFAULT_MARKERS here. Default markers
-// are only created once, in trace_movie_one_frame, when the analyze page first loads
-// and frame 0 has no markers yet. Here we use metadata_frames (which includes
-// preserved frame 0 markers from the controller); if a frame has no markers we use [].
+// Markers per frame come from the API (get-movie-metadata), which reads from the DB.
+// Lambda uses the DB for frame 0 when tracing, so frames[0].markers are correct. If a
+// frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
     const m = name.match(/frame_(\d+)\.jpg$/i);
@@ -622,14 +611,10 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((_name, i) => {
-        // Use existing markers only. Never use DEFAULT_MARKERS here: after tracing we have
-        // frame 0 markers from preserve_frame0_markers_from_controller; using defaults would
-        // overwrite user positions. If a frame has no markers, use [].
+        // Use markers from API (get-movie-metadata); they come from the DB. Lambda reads/writes
+        // frame 0 from the DB, so frames[0].markers are the user's positions. If missing, use [].
         const frameData = metadata_frames && metadata_frames[i];
         const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
-        if (i === 0 && markers.length > 0) {
-            console.log('[canvas_tracer_controller] trace_movie_frames: frame 0 using', markers.length, 'markers', markers.map(m => ({ label: m.label, x: m.x, y: m.y })));
-        }
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
@@ -862,21 +847,6 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
     });
-}
-
-/** If controller has frame 0 markers, merge them into frames so they are not lost when zip loads. */
-function preserve_frame0_markers_from_controller(frames, controller) {
-    const src = controller || (typeof cc !== 'undefined' ? cc : null);
-    if (!src || !src.frames || !src.frames[0] || !src.frames[0].markers || !src.frames[0].markers.length) {
-        console.log('[canvas_tracer_controller] preserve_frame0: no controller markers to preserve');
-        return frames;
-    }
-    const out = (typeof frames === 'object' && frames !== null && !Array.isArray(frames)) ? { ...frames } : (Array.isArray(frames) ? [...frames] : {});
-    const f0 = (out[0] != null) ? { ...out[0] } : {};
-    f0.markers = src.frames[0].markers;
-    out[0] = f0;
-    console.log('[canvas_tracer_controller] preserve_frame0: merged', src.frames[0].markers.length, 'markers for frame 0');
-    return out;
 }
 
 /** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACKING COMPLETED). */
