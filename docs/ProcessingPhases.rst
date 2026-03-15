@@ -43,7 +43,7 @@ Phase 3 – UI Refinements and Status Display
 - Make movie processing state visible and understandable in the UI:
 
   - Extend the movie list to show upload / processing / rotation status for each movie (e.g., ``uploading``, ``processing``, ``first-frame-ready``, ``zip-ready``, ``rotating``). **Done:** list shows ``processing_state`` in the Status column.
-  - Improve messaging on the analyze page when processing is still running (poll for up to 60 seconds, then ask the user to return later). **Done:** ``#firsth2`` shows "Waiting for processing to complete…" while polling; on timeout "Processing did not complete in time. Please come back later."
+  - Improve messaging on the analyze page when processing is still running (poll for up to 60 seconds, then ask the user to return later). **Done:** ``#status-big`` shows "Waiting for processing to complete…" while polling; on timeout "Processing did not complete in time. Please come back later."
   - Clarify first-frame behavior after upload (250ms polling with a clear error if the Lambda is not responding). **Done:** 250ms × 10 attempts; clear error message and no broken image icon.
 
 - Note (in comments/docs and code): the movie list page should eventually be re-architected around server-side rendering with Jinja2; for now it continues to rely on the existing JSON APIs and client-side rendering. **Done:** comment in ``flask_app.py`` at ``/list`` and in ``planttracer.js`` at ``list_movies_data``.

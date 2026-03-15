@@ -448,7 +448,6 @@ check-iam:
 		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
 	fi
 
-
 # Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
 install-lambda-deps: $(REQ)
 	poetry install --with lambda
@@ -593,6 +592,10 @@ sam-delete:
 # Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
+
+sam-reload:
+	@echo reload the VM
+	ssh ubuntu@$(STACK_NAME).planttracer.com -i $$HOME/.ssh/plantadmin.pem 'cd /opt/webapp;git pull; sudo systemctl restart planttracer'
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done

@@ -83,3 +83,10 @@ canvas {
 div#analysis-results {
     display:none;
 }
+
+/* Dim the frame area while tracing is in progress */
+#tracer.tracing-dimmed {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}

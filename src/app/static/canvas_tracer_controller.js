@@ -314,6 +314,8 @@ class TracerController extends MovieController {
             this.tracking_status.text("Tracking unavailable (Lambda URL not configured).");
             return;
         }
+        $('#status-big').html('Movie is being traced...');
+        $(this.div_selector).addClass('tracing-dimmed');
         this.tracking_status.text("Asking Lambda to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
@@ -337,6 +339,7 @@ class TracerController extends MovieController {
                 if (status !== 200) {
                     const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
                     this.tracking = false;
+                    $(this.div_selector).removeClass('tracing-dimmed');
                     this.set_movie_control_buttons();
                     this.enableTrackButtonIfAllowed();
                     this.tracking_status.text(msg);
@@ -346,12 +349,14 @@ class TracerController extends MovieController {
                 if (data && data.error) {
                     alert(data.message || 'Tracking failed.');
                     this.tracking = false;
+                    $(this.div_selector).removeClass('tracing-dimmed');
                     this.set_movie_control_buttons();
                     this.enableTrackButtonIfAllowed();
                 }
             })
             .catch((err) => {
                 this.tracking = false;
+                $(this.div_selector).removeClass('tracing-dimmed');
                 this.set_movie_control_buttons();
                 this.enableTrackButtonIfAllowed();
                 const msg = err && err.message ? err.message : "Tracking request failed.";
@@ -500,14 +505,16 @@ class TracerController extends MovieController {
 
         waitForZip()
             .then(({ zipUrl, metadata, frames }) => {
+                $(div).removeClass('tracing-dimmed');
                 const framesToUse = preserve_frame0_markers_from_controller(frames);
                 trace_movie_frames(div, metadata, zipUrl, framesToUse, self.api_key, true);
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
                 self.track_button.prop(DISABLED, false);
                 self.download_button.show();
-                $('#firsth2').html('Movie is traced! You can play and watch the trackpoints.');
+                $('#status-big').html('Press play &#9654; to watch the trackpoints.');
             })
             .catch((err) => {
+                $(div).removeClass('tracing-dimmed');
                 self.tracking_status.text('');
                 self.enableTrackButtonIfAllowed();
                 alert(err.message || 'Failed to load traced movie.');
@@ -517,7 +524,7 @@ class TracerController extends MovieController {
     rotate_button_pressed() {
         // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
         this.rotate_button.prop(DISABLED, true);
-        $('#firsth2').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
+        $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
@@ -554,9 +561,9 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
         cc.rotate_button.show();
         cc.rotate_button.prop(DISABLED, false);
         if (demo_mode) {
-            $('#firsth2').html('Movie cannot be traced in demo mode.');
+            $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
-            $('#firsth2').html('Movie ready for initial tracing.');
+            $('#status-big').html('Movie ready for initial tracing.');
         }
     };
 
@@ -573,12 +580,19 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 }
 
 // Called when we trace a movie for which we have the frame-by-frame analysis.
+/** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
+function frame_index_from_zip_name(name) {
+    const m = name.match(/frame_(\d+)\.jpg$/i);
+    return m ? parseInt(m[1], 10) : 0;
+}
+
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
                                   api_key,
                                   show_results=true) {
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
+    names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
     names.forEach((_name, i) => {
         // When zip exists but no tracking has been done, metadata_frames may be empty or sparse.
@@ -802,17 +816,17 @@ function trace_movie(div_controller, movie_id, api_key) {
             const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
-                $('#firsth2').html('Movie ready for tracing.');
+                $('#status-big').html('Movie ready for tracing.');
             } else {
-                $('#firsth2').html('Place markers and click Trace movie to start tracing.');
+                $('#status-big').html('Place markers and click Trace movie to start tracing.');
             }
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
         if (demo_mode) {
-            $('#firsth2').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
+            $('#status-big').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
         } else {
-            $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Trace movie.');
+            $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
     });
