@@ -332,6 +332,7 @@ class TracerController extends MovieController {
         this.tracking_status.text("Asking Lambda to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
+        this.poll_error_count = 0;
         this.poll_for_track_end();
         this.set_movie_control_buttons();
 
@@ -342,40 +343,50 @@ class TracerController extends MovieController {
             movie_id: this.movie_id,
             frame_start: this.frame_number
         });
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: body
-        })
-            .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
-            .then(({ status, data }) => {
-                if (status !== 200) {
-                    const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
-                    this.tracking = false;
-                    $(this.div_selector).removeClass('tracing-dimmed');
-                    this.set_movie_control_buttons();
-                    this.enableTrackButtonIfAllowed();
-                    this.tracking_status.text(msg);
-                    alert(msg);
-                    return;
-                }
-                if (data && data.error) {
-                    alert(data.message || 'Tracking failed.');
-                    this.tracking = false;
-                    $(this.div_selector).removeClass('tracing-dimmed');
-                    this.set_movie_control_buttons();
-                    this.enableTrackButtonIfAllowed();
-                }
+        const self = this;
+        const TRACK_MOVIE_MAX_ATTEMPTS = 3;
+        const TRACK_MOVIE_RETRY_DELAY_MS = 2000;
+
+        function tryTrackMovie(attempt) {
+            attempt = attempt || 1;
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body
             })
-            .catch((err) => {
-                this.tracking = false;
-                $(this.div_selector).removeClass('tracing-dimmed');
-                this.set_movie_control_buttons();
-                this.enableTrackButtonIfAllowed();
-                const msg = err && err.message ? err.message : "Tracking request failed.";
-                this.tracking_status.text(msg);
-                alert(msg);
-            });
+                .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
+                .then(({ status, data }) => {
+                    if (status === 200 && !(data && data.error)) {
+                        return;
+                    }
+                    const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
+                    const retryable = (status >= 500 || status === 0) && attempt < TRACK_MOVIE_MAX_ATTEMPTS;
+                    if (retryable) {
+                        console.warn('[track-movie] attempt', attempt, 'failed:', status, msg, '- retrying in', TRACK_MOVIE_RETRY_DELAY_MS, 'ms');
+                        return new Promise((resolve) => setTimeout(resolve, TRACK_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
+                    }
+                    self.tracking = false;
+                    $(self.div_selector).removeClass('tracing-dimmed');
+                    self.set_movie_control_buttons();
+                    self.enableTrackButtonIfAllowed();
+                    self.tracking_status.text(msg);
+                    alert(msg);
+                })
+                .catch((err) => {
+                    if (attempt < TRACK_MOVIE_MAX_ATTEMPTS) {
+                        console.warn('[track-movie] attempt', attempt, 'failed (network error):', err && err.message, '- retrying in', TRACK_MOVIE_RETRY_DELAY_MS, 'ms');
+                        return new Promise((resolve) => setTimeout(resolve, TRACK_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
+                    }
+                    self.tracking = false;
+                    $(self.div_selector).removeClass('tracing-dimmed');
+                    self.set_movie_control_buttons();
+                    self.enableTrackButtonIfAllowed();
+                    const msg = err && err.message ? err.message : "Tracking request failed.";
+                    self.tracking_status.text(msg);
+                    alert(msg);
+                });
+        }
+        tryTrackMovie(1);
     }
 
     add_frame_objects( frame ){
@@ -442,6 +453,7 @@ class TracerController extends MovieController {
 
     /*
      * Poll the server to see if tracking has ended.
+     * On poll error we log to console and only alert after 3 consecutive errors.
      */
     poll_for_track_end() {
         const params = {
@@ -449,20 +461,40 @@ class TracerController extends MovieController {
             movie_id:this.movie_id,
             get_all_if_tracking_completed: true
         };
-        $.post(`${API_BASE}api/get-movie-metadata`, params).done( (data) => {
-            if (data.error==false){
-                // Send the status back to the UX
-                if (data.metadata.status==TRACKING_COMPLETED_FLAG) {
-                    if (this.tracking) {
-                        this.movie_tracked(data);
+        const self = this;
+        $.post(`${API_BASE}api/get-movie-metadata`, params)
+            .done((data) => {
+                if (data.error === false) {
+                    self.poll_error_count = 0;
+                    if (data.metadata.status === TRACKING_COMPLETED_FLAG) {
+                        if (self.tracking) {
+                            self.movie_tracked(data);
+                        }
+                        return;
                     }
-                } else {
-                    /* Update the status and track again in 250 msec */
-                    this.tracking_status.text(data.metadata.status);
-                    this.timeout = setTimeout( ()=>{this.poll_for_track_end();}, TRACKING_POLL_MSEC );
+                    self.tracking_status.text(data.metadata.status);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    return;
                 }
-            }
-        });
+                self.poll_error_count = (self.poll_error_count || 0) + 1;
+                console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
+                if (self.poll_error_count >= 3) {
+                    alert('Status check failed 3 times in a row. You can refresh the page to try again.');
+                }
+                if (self.tracking) {
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                }
+            })
+            .fail((xhr, status, err) => {
+                self.poll_error_count = (self.poll_error_count || 0) + 1;
+                console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
+                if (self.poll_error_count >= 3) {
+                    alert('Status check failed 3 times in a row (e.g. network or server issue). You can refresh the page to try again.');
+                }
+                if (self.tracking) {
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                }
+            });
     }
 
     /** Tracing completed - stop polling, load zip (wait up to 5s if needed), then show full movie. */
@@ -523,7 +555,7 @@ class TracerController extends MovieController {
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
                 self.track_button.prop(DISABLED, false);
                 self.download_button.show();
-                $('#status-big').html('Press play &#9654; to watch the trackpoints.');
+                $('#status-big').html('Press play <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.');
             })
             .catch((err) => {
                 $(div).removeClass('tracing-dimmed');
@@ -808,6 +840,21 @@ function trace_movie(div_controller, movie_id, api_key) {
     // Wire up the close button on the demo pop-up
     $('#demo-popup-close').on('click',function() {
         $('#demo-popup').fadeOut(300);
+    });
+
+    // Clicking the ▶ in "Press play ▶ to watch..." triggers the play button
+    function triggerPlay() {
+        const playBtn = $('input.play_forward');
+        if (playBtn.length && !playBtn.prop('disabled')) {
+            playBtn.click();
+        }
+    }
+    $(document).off('click', '.status-big-play-trigger').on('click', '.status-big-play-trigger', triggerPlay);
+    $(document).off('keydown', '.status-big-play-trigger').on('keydown', '.status-big-play-trigger', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            triggerPlay();
+        }
     });
 
     const params = {

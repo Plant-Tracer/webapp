@@ -90,3 +90,12 @@ div#analysis-results {
     pointer-events: none;
     transition: opacity 0.2s ease;
 }
+
+/* Clickable play icon in the "Press play ▶ to watch the trackpoints" headline */
+.status-big-play-trigger {
+    cursor: pointer;
+    text-decoration: underline;
+}
+.status-big-play-trigger:hover {
+    opacity: 0.8;
+}
