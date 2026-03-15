@@ -3,6 +3,7 @@ Rotate video and build frame zip using OpenCV (cv2) + Pillow only (no ffmpeg, no
 Used by the Lambda rotate-and-zip API so we stay within deployment size limits.
 """
 
+# pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 import io
 import tempfile
 import zipfile
@@ -77,6 +78,68 @@ def rotate_video_av(data: bytes, steps: int) -> bytes:
                 return f.read()
 
 
+def prepare_movie_for_tracking_cv2(
+    input_path: str,
+    output_path: str,
+    rotation_steps: int,
+    max_width: int,
+    max_height: int,
+) -> None:
+    """
+    Rotate and/or scale video to output_path using cv2 only (no ffmpeg).
+    rotation_steps: 0–3 (90° CW each). Scale fits inside (max_width, max_height).
+    output_path must exist and be empty (caller creates it).
+    """
+    if rotation_steps < 0 or rotation_steps > 3:
+        raise ValueError("rotation_steps must be 0–3")
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open input video")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    fps = max(1.0, float(fps))
+    writer = None
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret or frame is None or frame.size == 0:
+                break
+            h, w = frame.shape[:2]
+            img = _frame_bgr_to_pil(frame)
+            if rotation_steps > 0:
+                img = _rotate_pil_90_cw(img, rotation_steps)
+                w, h = img.size
+            else:
+                w, h = img.size
+            # Scale to fit inside (max_width, max_height) preserving aspect
+            if max_width > 0 and max_height > 0 and (w > max_width or h > max_height):
+                scale = min(max_width / w, max_height / h)
+                new_w = max(2, int(w * scale))
+                new_h = max(2, int(h * scale))
+                if new_w % 2 != 0:
+                    new_w -= 1
+                if new_h % 2 != 0:
+                    new_h -= 1
+                img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                w, h = new_w, new_h
+            if w % 2 != 0:
+                w -= 1
+            if h % 2 != 0:
+                h -= 1
+            if w <= 0 or h <= 0:
+                continue
+            if (w, h) != img.size:
+                img = img.crop((0, 0, w, h))
+            out_frame = _pil_to_frame_bgr(img)
+            if writer is None:
+                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+            writer.write(out_frame)
+    finally:
+        cap.release()
+        if writer is not None:
+            writer.release()
+
+
 def video_frames_to_zip_av(
     data: bytes,
     jpeg_quality: int = 60,
@@ -116,7 +179,7 @@ def video_frames_to_zip_av(
                 if progress_cb and total > 0:
                     if idx % progress_every == 0 or idx == total:
                         progress_cb(idx, total)
-            if total <= 0 and progress_cb and idx > 0:
+            if total <= 0 and progress_cb and idx > 0:  # pylint: disable=R1716
                 progress_cb(idx, idx)
         cap.release()
         return buf.getvalue()

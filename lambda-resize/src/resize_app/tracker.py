@@ -6,6 +6,11 @@ Shared entry point run_tracking(..., env) allows the same logic to run from Flas
 Frame serving (get-frame API) runs in this Lambda (resize); the VM uses this module only for
 run_tracking and for api_get_movie_data (full movie download).
 Lives in lambda-resize; main app imports via app.tracker shim (re-exports from resize_app.tracker).
+
+All production paths use cv2 + Pillow only (no ffmpeg). cleanup_mp4, rotate_movie, and
+prepare_movie_for_tracking are LEGACY: they require an ffmpeg binary and are kept for
+optional/local use (e.g. CLI render_tracked_movie, tests). run_tracking always uses
+prepare_movie_for_tracking_cv2 (rotate_zip) for rotate+scale.
 """
 
 # pylint: disable=no-member
@@ -38,6 +43,7 @@ from .src.app.odb_movie_data import get_movie_data  # pylint: disable=unused-imp
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
 
+# Legacy: only used by cleanup_mp4, rotate_movie, prepare_movie_for_tracking. run_tracking uses cv2 only.
 FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT = 'point_array_out'
 RED = (0, 0, 255)
@@ -219,20 +225,19 @@ def extract_frame(*, movie_data, frame_number, fmt):
 
 
 def cleanup_mp4(*, infile, outfile):
-    """Given an import file, clean it up with ffmpeg"""
+    """LEGACY: Transcode to h264 with ffmpeg. Requires ffmpeg binary. Used only by render_tracked_movie."""
+    if not FFMPEG_PATH or not os.path.exists(FFMPEG_PATH):
+        raise RuntimeError("ffmpeg required for cleanup_mp4 (not available in this environment)")
+    if not os.path.exists(infile):
+        raise FileNotFoundError(infile)
 
-    # Make sure infile and FFMPEG_PATH exist
-    for p in [infile, FFMPEG_PATH]:
-        if not os.path.exists(p):
-            raise FileNotFoundError(p)
-
-    # If outfile exists, it will be overwritten
     cargs = ['-y', '-hide_banner', '-loglevel', 'error', '-i', infile, '-vcodec', 'h264', outfile]
     subprocess.call([FFMPEG_PATH] + cargs)
 
 
 # pylint: disable=too-many-locals
 def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
+    """LEGACY: Renders tracked video with dots; uses ffmpeg for final transcode. Not used in web/Lambda flow."""
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     # movie_trackpoints is an array of records where each has the form:
     # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
@@ -344,6 +349,9 @@ def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_fram
 
 
 def rotate_movie(movie_input, movie_output, transpose=1):
+    """LEGACY: Rotate video with ffmpeg. Use rotate_zip.rotate_video_av for cv2-only."""
+    if not FFMPEG_PATH or not os.path.exists(FFMPEG_PATH):
+        raise RuntimeError("ffmpeg required for rotate_movie (not available in this environment)")
     assert os.path.getsize(movie_input) > MIN_MOVIE_BYTES
     assert os.path.getsize(movie_output) == 0
     subprocess.call([FFMPEG_PATH, '-hide_banner', '-loglevel', 'error',
@@ -358,9 +366,9 @@ def prepare_movie_for_tracking(
     max_width: int,
     max_height: int,
 ) -> None:
-    """Rotate and/or scale video to output_path. Uses temp file and ffmpeg; output_path must exist and be empty.
-    rotation_steps: 0–3 (90° CW each). Scale fits within (max_width, max_height).
-    """
+    """LEGACY: Rotate and/or scale with ffmpeg. Production uses rotate_zip.prepare_movie_for_tracking_cv2."""
+    if not FFMPEG_PATH or not os.path.exists(FFMPEG_PATH):
+        raise RuntimeError("ffmpeg required for prepare_movie_for_tracking (not available in this environment)")
     if rotation_steps < 0 or rotation_steps > 3:
         raise ValueError("rotation_steps must be 0–3")
     if os.path.getsize(input_path) <= MIN_MOVIE_BYTES:
@@ -559,7 +567,8 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         if need_process:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
                 out_path = out_tf.name
-            prepare_movie_for_tracking(
+            from . import rotate_zip  # pylint: disable=import-outside-toplevel
+            rotate_zip.prepare_movie_for_tracking_cv2(
                 in_path,
                 out_path,
                 rotation_steps,
