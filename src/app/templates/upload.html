@@ -5,7 +5,7 @@
 {% block body %}
 
 <div id='upload-form'>
-  <h2>Upload a new movie</h2>
+  <h2 id='upload-form-title'>Upload a new movie</h2>
 
   <p>ID: {{user_id}}</p>
   <p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
@@ -15,8 +15,9 @@
 
   <p><i>Note: you can change your name or email by clicking on the pencil icon (✏️ ) above. </i></p>
 
-  <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
-
+  <div id='upload-instructions'>
+    <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
+  </div>
 
   <form id='upload-movie-form' class='pure-form pure-form-aligned'>
     <fieldset>

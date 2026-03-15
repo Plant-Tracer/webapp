@@ -298,6 +298,8 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
  */
 function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#upload_message').html('');
+  $('#upload-form-title').html('Movie uploaded');
+  $('#upload-instructions').hide();
   $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
   $('#movie_id').text(movie_id);
   // No rotation yet: Analyze goes straight to analyze page. After rotate we switch this to processing.
@@ -321,7 +323,7 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
         statusEl.text(`First frame not ready (${attempt}/${maxAttempts})…`);
         setTimeout(tryLoadFirstFrame, delayMs);
       } else {
-        statusEl.text('First frame could not be loaded. You can still rotate or click Analyze.');
+        statusEl.text('First frame could not be loaded. You can click Analyze.');
       }
     };
     img.onload = () => {
