@@ -459,27 +459,50 @@ function upload_ready_function() {
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked in the movie list.
+// Fetches playback URL via format=json so video element can load directly from S3.
 function play_clicked( e ) {
   const movie_id = e.getAttribute('x-movie_id');
-  console.log('play_clicked=',e,'movie_id=',movie_id);
-  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
-  const url = base ? `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}` : '';
-  console.log('play_clicked: video URL=', url);
   const rowid = e.getAttribute('x-rowid');
+  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
+  if (!base) {
+    return;
+  }
+  const apiUrl = `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
   $(`#tr-${rowid}`).show();
   const td = $(`#td-${rowid}`);
-
-  // Delete any existing video player
-  td.html('');
-  // Create a new video player
-  td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
-          `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+  td.html('<span class="loading">Loading…</span>');
   td.show();
-  const video = $(`#video-${rowid}`);
-  const vid = video.prop('id');
-  const videoEl = video.get(0);
-  console.log('video=', video, 'vid=', vid, 'currentSrc=', videoEl ? videoEl.currentSrc : '(no element)');
-  videoEl.play();
+
+  fetch(apiUrl)
+    .then(function (resp) {
+      if (!resp.ok) {
+        return resp.json().then(function (body) {
+          throw new Error(body.message || 'Failed to get playback URL');
+        }).catch(function (err) {
+          if (err.message) throw err;
+          throw new Error('Failed to get playback URL (' + resp.status + ')');
+        });
+      }
+      return resp.json();
+    })
+    .then(function (data) {
+      const url = data && data.url;
+      if (!url) {
+        throw new Error('No URL in response');
+      }
+      td.html('');
+      td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
+              `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+      td.show();
+      const video = $(`#video-${rowid}`);
+      const videoEl = video.get(0);
+      if (videoEl) {
+        videoEl.play();
+      }
+    })
+    .catch(function (err) {
+      td.html('<span class="error">' + (err.message || 'Playback failed') + '</span>');
+    });
 }
 
 function hide_clicked( e ) {

@@ -63,19 +63,23 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
 
 def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
     """
-    GET /api/v1/movie-data?api_key=...&movie_id=...&format=zip (optional).
-    Returns 302 redirect to signed S3 URL for the movie (or zip if format=zip).
+    GET /api/v1/movie-data?api_key=...&movie_id=...&format=zip|json (optional).
+    By default returns 302 redirect to signed S3 URL for the movie.
+    format=zip: 302 redirect to zip file.
+    format=json: 200 JSON with url (MP4), zip_url (if present), movie_id.
     """
     from .resize import resp_json, resp_redirect  # pylint: disable=import-outside-toplevel
     from .src.app import odb  # pylint: disable=import-outside-toplevel
-    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
+    from .src.app.odb import DDBO, USER_ID, ENABLED, MOVIE_DATA_URN, MOVIE_ZIPFILE_URN  # pylint: disable=import-outside-toplevel
     from .src.app.odb_movie_data import get_movie_data  # pylint: disable=import-outside-toplevel
     from .src.app.s3_presigned import make_signed_url, object_exists  # pylint: disable=import-outside-toplevel
 
     params = event.get("queryStringParameters") or event.get("query_params") or {}
     api_key = (params.get("api_key") or "").strip()
     movie_id = (params.get("movie_id") or "").strip()
-    zipfile = (params.get("format") or "").strip().lower() == "zip"
+    fmt = (params.get("format") or "").strip().lower()
+    zipfile = fmt == "zip"
+    format_json = fmt == "json"
     if not api_key or not odb.is_movie_id(movie_id):
         return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
     ddbo = DDBO()
@@ -91,6 +95,25 @@ def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
         return resp_json(403, {"error": True, "message": "access denied"})
     except odb.InvalidMovie_Id:
         return resp_json(404, {"error": True, "message": "movie not found"})
+
+    if format_json:
+        data_urn = movie.get(MOVIE_DATA_URN)
+        zip_urn = movie.get(MOVIE_ZIPFILE_URN)
+        if not data_urn:
+            return resp_json(503, {"error": True, "message": "Movie not ready (no URN)."})
+        if not object_exists(data_urn):
+            return resp_json(
+                503,
+                {"error": True, "message": "Movie still processing (upload not yet at final key). Retry in a few seconds."},
+                headers={"Retry-After": "5"},
+            )
+        body = {
+            "movie_id": movie_id,
+            "url": make_signed_url(urn=data_urn),
+            "zip_url": make_signed_url(urn=zip_urn) if zip_urn and object_exists(zip_urn) else None,
+        }
+        return resp_json(200, body)
+
     data_urn = get_movie_data(movie_id=movie["movie_id"], zipfile=zipfile, get_urn=True)
     if not data_urn:
         return resp_json(503, {"error": True, "message": "Movie not ready (no URN)."})

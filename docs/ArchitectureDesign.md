@@ -13,7 +13,7 @@ Three principles govern where logic lives:
 
 ## Get-movie-data and new-frame on Lambda
 
-**get-movie-data** (GET `/api/v1/movie-data`) returns a 302 redirect to a signed S3 URL for the movie (or zip if `format=zip`). The client uses this URL as the video source (e.g. in `planttracer.js` play button).
+**get-movie-data** (GET `/api/v1/movie-data`) returns a 302 redirect to a signed S3 URL for the movie (or zip if `format=zip`). For video playback the client uses `format=json` and gets 200 JSON `{ "movie_id", "url", "zip_url" }` (url = MP4, zip_url = zip if present), then sets the video element’s `src` to `url` so the browser loads the stream directly from S3 (redirects are not followed for cross-origin media).
 
 **new-frame** (POST `/api/v1` with `action: "new-frame"`) accepts client-supplied frame image data (base64) and writes it to S3 and DynamoDB for a future “create your own timelapse” flow. The VM does not serve this; Lambda handles it for consistency.
 

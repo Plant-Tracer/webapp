@@ -19,7 +19,7 @@ All client calls to the Lambda API are authorized: the client sends `api_key` (a
 | Operation      | Method | Path / body | Purpose |
 |----------------|--------|-------------|--------|
 | Get frame     | GET    | `/api/v1/frame?api_key=...&movie_id=...&frame_number=...&size=...` | Single frame as JPEG |
-| Get movie data| GET    | `/api/v1/movie-data?api_key=...&movie_id=...&format=zip` (optional) | 302 redirect to signed S3 URL (video or zip) |
+| Get movie data| GET    | `/api/v1/movie-data?api_key=...&movie_id=...&format=zip` or `format=json` (optional) | Default: 302 redirect to signed S3 URL (movie). `format=zip`: 302 to zip. `format=json`: 200 JSON `{ "movie_id", "url" (MP4), "zip_url" (if present) }` for playback or download links. |
 | Status        | GET    | `/status`   | Health check |
 | Track movie   | POST   | `/api/v1`   | Body: `{ "action": "track-movie", "api_key", "movie_id", "frame_start" }` |
 | New frame     | POST   | `/api/v1`   | Body: `{ "action": "new-frame", "api_key", "movie_id", "frame_number", "frame_base64_data"?(optional) }` |
