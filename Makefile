@@ -20,6 +20,13 @@ MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
 export DEBIAN_FRONTEND=noninteractive
 
+SAM_CONFIG ?= samconfig.toml
+STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+
+# Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
+SAM_LOGS_LIMIT ?= 1000
+SAM_LOGS_MINUTES ?= 15
+
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
 
@@ -510,11 +517,6 @@ endif
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
 	$(MAKE) sam-status
 
-SAM_CONFIG ?= samconfig.toml
-STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-SAM_LOGS_LIMIT ?= 100
-# Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
-SAM_LOGS_MINUTES ?= 15
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 sam-status:

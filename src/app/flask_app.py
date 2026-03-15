@@ -283,6 +283,14 @@ def func_analyze() -> str:
 ##
 @app.route('/login', methods=GET_POST)
 def func_login():
+    """Login/welcome: with api_key in URL, set cookie and show welcome page; else show register/resend."""
+    if request.values.get('api_key', '').strip() and request.values.get('api_key') != 'undefined':
+        response = make_response(render_template(
+            'welcome.html',
+            **page_dict('Welcome to Plant Tracer', require_auth=True),
+        ))
+        apikey.add_cookie(response)
+        return response
     return render_template('login.html', **page_dict('Login'))
 
 @app.route('/logout', methods=GET_POST)

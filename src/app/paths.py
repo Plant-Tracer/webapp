@@ -49,7 +49,7 @@ def _static_ffmpeg_for_machine():
 
 
 def ffmpeg_path():
-    """LEGACY: Path to ffmpeg binary. Raises if not found. Production paths use cv2 only."""
+    """LEGACY: Path to ffmpeg binary, or None if not found. Production paths use cv2 only."""
     if C.FFMPEG_PATH in os.environ:
         pth = os.environ[C.FFMPEG_PATH]
         if os.path.exists(pth):
@@ -63,4 +63,4 @@ def ffmpeg_path():
     pth = _static_ffmpeg_for_machine()
     if pth:
         return pth
-    raise FileNotFoundError("ffmpeg")
+    return None

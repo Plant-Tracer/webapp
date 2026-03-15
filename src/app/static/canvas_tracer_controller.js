@@ -773,13 +773,23 @@ function trace_movie(div_controller, movie_id, api_key) {
             poll_for_zip_and_load(div_controller, movie_id, api_key, 60);
             return;
         }
+        const showResults = is_movie_tracked(resp.metadata);
         if (demo_mode) {
-            $('#firsth2').html(`Movie is traced!</a>`);
+            $('#firsth2').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
         } else {
-            $('#firsth2').html(`Movie is traced! Check for errors and retrace as necessary.</a>`);
+            $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Track movie.');
         }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
     });
+}
+
+/** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACKING COMPLETED). */
+function is_movie_tracked(metadata) {
+    if (!metadata) return false;
+    if (metadata.status === 'TRACKING COMPLETED') return true;
+    const last = metadata.last_frame_tracked;
+    const total = metadata.total_frames;
+    return (last != null && total != null && total > 1 && last >= 1);
 }
 
 const ZIP_POLL_INTERVAL_MS = 2000;
@@ -798,12 +808,13 @@ function poll_for_zip_and_load(div_controller, movie_id, api_key, max_seconds) {
                 return;
             }
             if (resp.metadata.movie_zipfile_url) {
+                const showResults = is_movie_tracked(resp.metadata);
                 if (demo_mode) {
-                    $('#firsth2').html(`Movie is traced!</a>`);
+                    $('#firsth2').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
                 } else {
-                    $('#firsth2').html(`Movie is traced! Check for errors and retrace as necessary.</a>`);
+                    $('#firsth2').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Track movie.');
                 }
-                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key);
+                trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
                 return;
             }
             setTimeout(poll, ZIP_POLL_INTERVAL_MS);
