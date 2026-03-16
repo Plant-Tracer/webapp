@@ -8,17 +8,18 @@
  *        $('.class').show()
  */
 function $(selector) {
-    // Handle $(document).ready()
+    // Handle $(document).ready() while still returning a full wrapper so we
+    // can call .on() / .off() on document (used for delegated handlers).
     if (selector === document || (selector && selector.nodeType === 9)) {
-        return {
-            ready: function(callback) {
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', callback);
-                } else {
-                    callback();
-                }
+        const wrapper = new DOMWrapper(document);
+        wrapper.ready = function(callback) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', callback);
+            } else {
+                callback();
             }
         };
+        return wrapper;
     }
 
     if (typeof selector === 'string') {
