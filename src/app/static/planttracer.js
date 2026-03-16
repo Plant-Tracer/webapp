@@ -146,11 +146,13 @@ async function computeSHA256(file) {
 }
 
 /*
- * get the first frame with cache busting logic.
+ * Get the first frame URL from lambda-resize (get-frame API). Uses LAMBDA_API_BASE.
+ * Use size=analysis so the server resizes to the analysis max (e.g. 640x480).
  */
 function first_frame_url(movie_id)
 {
-  return `${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg&t=${new Date().getTime()}`;
+  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
+  return `${base}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis&t=${new Date().getTime()}`;
 }
 
 /*
@@ -296,6 +298,8 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
  */
 function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#upload_message').html('');
+  $('#upload-form-title').html('Movie uploaded');
+  $('#upload-instructions').hide();
   $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
   $('#movie_id').text(movie_id);
   // No rotation yet: Analyze goes straight to analyze page. After rotate we switch this to processing.
@@ -319,7 +323,7 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
         statusEl.text(`First frame not ready (${attempt}/${maxAttempts})…`);
         setTimeout(tryLoadFirstFrame, delayMs);
       } else {
-        statusEl.text('First frame could not be loaded. You can still rotate or click Analyze.');
+        statusEl.text('First frame could not be loaded. You can click Analyze.');
       }
     };
     img.onload = () => {
@@ -361,7 +365,8 @@ function upload_movie()
     $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
     return;
   }
-  // Disable the upload button immediately to prevent double-submits.
+  // Hide the form immediately so the user sees that something is happening.
+  $('#upload-movie-form').hide();
   $('#upload-button').prop('disabled', true);
   $('#upload_message').html(`Uploading movie ...`);
 
@@ -411,7 +416,7 @@ async function apply_rotation_and_zip() {
   if (!linkEl || steps < 1) return;
   linkEl.classList.add('rotate-pending');
   const movie_id = window.movie_id;
-  $('#rotate_status').text(' … Rotating and creating zip…');
+  $('#rotate_status').text(' … Rotating…');
   let r;
   try {
     const formData = new FormData();
@@ -457,24 +462,50 @@ function upload_ready_function() {
 ////////////////
 // PLAYBACK
 // callback when the play button is clicked in the movie list.
+// Fetches playback URL via format=json so video element can load directly from S3.
 function play_clicked( e ) {
   const movie_id = e.getAttribute('x-movie_id');
-  console.log('play_clicked=',e,'movie_id=',movie_id);
-  const url = `${API_BASE}api/get-movie-data?api_key=${api_key}&movie_id=${movie_id}`;
   const rowid = e.getAttribute('x-rowid');
+  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
+  if (!base) {
+    return;
+  }
+  const apiUrl = `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
   $(`#tr-${rowid}`).show();
   const td = $(`#td-${rowid}`);
-
-  // Delete any existing video player
-  td.html('');
-  // Create a new video player
-  td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
-          `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+  td.html('<span class="loading">Loading…</span>');
   td.show();
-  const video = $(`#video-${rowid}`);
-  const vid = video.prop('id');
-  console.log('video=',video,"vid=",vid);
-  video.get(0).play();
+
+  fetch(apiUrl)
+    .then(function (resp) {
+      if (!resp.ok) {
+        return resp.json().then(function (body) {
+          throw new Error(body.message || 'Failed to get playback URL');
+        }).catch(function (err) {
+          if (err.message) throw err;
+          throw new Error('Failed to get playback URL (' + resp.status + ')');
+        });
+      }
+      return resp.json();
+    })
+    .then(function (data) {
+      const url = data && data.url;
+      if (!url) {
+        throw new Error('No URL in response');
+      }
+      td.html('');
+      td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
+              `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
+      td.show();
+      const video = $(`#video-${rowid}`);
+      const videoEl = video.get(0);
+      if (videoEl) {
+        videoEl.play();
+      }
+    })
+    .catch(function (err) {
+      td.html('<span class="error">' + (err.message || 'Playback failed') + '</span>');
+    });
 }
 
 function hide_clicked( e ) {

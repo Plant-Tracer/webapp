@@ -5,9 +5,8 @@ Generate the https://camera.planttracer.org/ home page.
 Runs the camera.
 """
 
-# at top of home_app/home.py (module import time)
 import base64
-import binascii
+import io
 import json
 import os
 import sys
@@ -15,15 +14,31 @@ import time
 import urllib.parse
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional
 
 import boto3
 
 from .common import LOGGER
-from .rotate_zip import rotate_video_av, video_frames_to_zip_av
+from .movie_metadata import extract_movie_metadata
+from .rotate_zip import (
+    extract_single_frame,
+    resize_jpeg_to_fit,
+    rotate_video_av,
+    video_frames_to_zip_av,
+)
 from .src.app import odb
 from .src.app.constants import C
-from .src.app.odb import DDBO, MOVIE_DATA_URN, TOTAL_BYTES
+from .src.app.odb import (
+    DDBO,
+    ENABLED,
+    MOVIE_DATA_URN,
+    TOTAL_BYTES,
+    FPS,
+    WIDTH,
+    HEIGHT,
+    TOTAL_FRAMES,
+    USER_ID,
+)
 
 __version__ = "0.1.0"
 
@@ -54,6 +69,18 @@ def resp_json( status: int, body: Dict[str, Any], headers: Optional[Dict[str, st
             **(headers or {}),
         },
         "body": json.dumps(body, default=_json_serial),
+    }
+
+
+def resp_redirect(location: str, status: int = 302) -> Dict[str, Any]:
+    """Return HTTP redirect response (e.g. for get-movie-data)."""
+    return {
+        "statusCode": status,
+        "headers": {
+            "Location": location,
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": "",
     }
 
 
@@ -114,7 +141,7 @@ def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Called after the client uploads the movie to the final S3 key. Verify the object
     exists, then set date_uploaded, total_bytes, and processing_state so the VM can
-    serve get-movie-data and get-frame. Phase 2: no first-frame or zip in Lambda yet.
+    serve get-movie-data. get-frame is implemented in this Lambda (api/v1/frame).
     """
     movie_id = (payload.get("movie_id") or "").strip()
     if not odb.is_movie_id(movie_id):
@@ -167,6 +194,9 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         steps = 1
     # Allow 0 = zip-only (no rotation); 1–3 = rotate then zip.
     steps = max(0, min(3, steps))
+    build_zip = payload.get("build_zip", True)
+    if isinstance(build_zip, str):
+        build_zip = build_zip.lower() not in ("false", "0", "no")
 
     ddbo = DDBO()
     try:
@@ -220,6 +250,21 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             {"processing_state": "processing"},
         )
 
+    # Rotate-only (e.g. from upload page): update metadata and return; zip is built when user opens Analyze.
+    if not build_zip:
+        meta = extract_movie_metadata(movie_bytes_for_zip)
+        update_payload = {"processing_state": "ready"}
+        for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+            if key in meta and meta[key] is not None:
+                update_payload[attr] = meta[key]
+        try:
+            ddbo.update_table(ddbo.movies, movie_id, update_payload)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("rotate_only metadata update failed for %s: %s", movie_id, exc)
+        write_log(f"rotate_only movie_id={movie_id} steps={steps}", course_id=course_id)
+        LOGGER.info("rotate_only movie_id=%s steps=%s (zip deferred)", movie_id, steps)
+        return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
+
     def _zip_progress(current: int, total: int) -> None:
         """Best-effort progress updates in DynamoDB; safe to fail silently."""
         # Only write every 5 frames (and always for the final frame) to avoid excessive writes.
@@ -265,16 +310,17 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload zip"})
 
-    # Final state: zip finished, mark ready and set progress to 100%.
+    # Final state: zip finished, mark ready, and write full metadata from the movie we used (rotated or not).
+    meta = extract_movie_metadata(movie_bytes_for_zip)
+    update_payload = {
+        "movie_zipfile_urn": zip_urn,
+        "processing_state": "ready",
+    }
+    for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+        if key in meta and meta[key] is not None:
+            update_payload[attr] = meta[key]
     try:
-        ddbo.update_table(
-            ddbo.movies,
-            movie_id,
-            {
-                "movie_zipfile_urn": zip_urn,
-                "processing_state": "ready",
-            },
-        )
+        ddbo.update_table(ddbo.movies, movie_id, update_payload)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
     write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
@@ -282,33 +328,94 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
     return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
 
 
-################################################################
-## Parse Lambda Events and cookies
-def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
-    """parse HTTP API v2 event.
-    :param event: AWS Lambda HTTP API v2 event to parse
-    :return (method,path,payload) - method - HTTP Method; path=HTTP Path; payload=JSON body if POST
+def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
     """
-    stage = event.get("requestContext", {}).get("stage", "")
-    path = event.get("rawPath") or event.get("path") or "/"
-    if stage and path.startswith("/" + stage):
-        path = path[len(stage) + 1 :] or "/"
-    method = (
-        event.get("requestContext", {})
-        .get("http", {})
-        .get("method", event.get("httpMethod", "GET"))
-    )
-    body = event.get("body")
-    if event.get("isBase64Encoded"):
-        try:
-            body = base64.b64decode(body or "").decode("utf-8", "replace")
-        except binascii.Error:
-            body = None
+    GET /api/v1/frame: return a single frame as JPEG. Query params: api_key, movie_id, frame_number, size (optional, 'analysis' = resize to analysis size).
+    Authenticates via api_key, fetches movie from S3, extracts frame with PyAV, optionally resizes and updates width/height for frame 0.
+    """
+    params = event.get("queryStringParameters") or event.get("query_params") or {}
+    api_key = (params.get("api_key") or "").strip()
+    movie_id = (params.get("movie_id") or "").strip()
     try:
-        payload = json.loads(body) if body else {}
-    except json.JSONDecodeError:
-        payload = {}
-    return method, path, payload
+        frame_number = int(params.get("frame_number", 0))
+    except (TypeError, ValueError):
+        frame_number = 0
+    size_val = (params.get("size") or "").strip().lower()
+    size_analysis = size_val == "analysis"
+
+    if not api_key or not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
+    if frame_number < 0:
+        return resp_json(400, {"error": True, "message": "invalid frame_number"})
+
+    ddbo = DDBO()
+    api_key_dict = ddbo.get_api_key_dict(api_key)
+    if api_key_dict is None or not api_key_dict.get(ENABLED, True):
+        return resp_json(401, {"error": True, "message": "invalid or disabled api_key"})
+    user_id = api_key_dict.get(USER_ID)
+    if not user_id:
+        return resp_json(401, {"error": True, "message": "invalid api_key"})
+    try:
+        user = ddbo.get_user(user_id)
+        if not user.get(ENABLED, True):
+            return resp_json(401, {"error": True, "message": "user disabled"})
+    except Exception:  # pylint: disable=broad-exception-caught
+        return resp_json(401, {"error": True, "message": "user not found"})
+    try:
+        movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    except odb.UnauthorizedUser:
+        return resp_json(403, {"error": True, "message": "access denied"})
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(503, {"error": True, "message": "Movie still processing. Retry in a few seconds."})
+
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    s3 = _s3_client()
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        movie_bytes = obj["Body"].read()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        LOGGER.warning("get_frame get_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "failed to load movie from S3"})
+
+    try:
+        jpeg_bytes = extract_single_frame(movie_bytes, frame_number)
+    except ValueError as e:
+        return resp_json(400, {"error": True, "message": str(e)})
+
+    if size_analysis:
+        jpeg_bytes = resize_jpeg_to_fit(
+            jpeg_bytes,
+            getattr(C, "ANALYSIS_FRAME_MAX_WIDTH", 640),
+            getattr(C, "ANALYSIS_FRAME_MAX_HEIGHT", 480),
+        )
+
+    # Update stored width/height from first frame when missing (so analyze page has dimensions).
+    if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
+        try:
+            from PIL import Image  # pylint: disable=import-outside-toplevel
+            img = Image.open(io.BytesIO(jpeg_bytes))
+            img.load()
+            w, h = img.size
+            if w and h:
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("get_frame set_metadata failed: %s", exc)
+
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "image/jpeg", "Access-Control-Allow-Origin": "*"},
+        "body": base64.b64encode(jpeg_bytes).decode("ascii"),
+        "isBase64Encoded": True,
+    }
 
 
 def write_log(message, *, time_t=None, course_id=None, log_user_id=None, ipaddr=None):
@@ -400,71 +507,3 @@ def api_status() -> Dict[str, Any]:
         LOGGER.exception("api_status failed: %s", e)
         return resp_json(500, {"status": "error", "message": str(e)})
 
-################################################################
-## main entry point from lambda system
-
-# pylint: disable=too-many-branches, disable=unused-argument
-def lambda_handler(event, context) -> Dict[str, Any]:
-    """Called by Lambda for HTTP API requests (no S3 event invocation)."""
-    method, path, payload = parse_event(event)
-
-    with _with_request_log_level(payload):
-        try:
-            LOGGER.info( "req method='%s' path='%s' action='%s'", method, path, payload.get("action") )
-            action = (payload.get("action") or "").lower()
-
-            match (method, path, action):
-                ################################################################
-                # Status (GET; health check)
-                case ("GET", "/status", _):
-                    return api_status()
-                case ("GET", "/prod/status", _):
-                    return api_status()
-
-                ################################################################
-                # CORS preflight (OPTIONS) – handled entirely in Lambda
-                case ("OPTIONS", "/api/v1", _):
-                    # Very permissive CORS so the browser can always talk to Lambda.
-                    return resp_json(
-                        204,
-                        {},
-                        headers={
-                            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-                            "Access-Control-Allow-Headers": "*",
-                        },
-                    )
-
-                ################################################################
-                # JSON API Actions
-                case (_, "/api/v1", "ping"):
-                    return api_ping(event,context)
-
-                case (_, '/api/v1/ping', _):
-                    return api_ping(event,context)
-
-                case ("POST", "/api/v1", "resize-start"):
-                    return api_resize(event, context, payload)
-                case ("POST", "/api/v1", "start-processing"):
-                    return api_start_processing(payload)
-                case ("POST", "/api/v1", "rotate-and-zip"):
-                    return api_rotate_and_zip(payload)
-
-                case (_, "/api/v1", "heartbeat"):
-                    return api_heartbeat(event, context)
-
-                case (_, "/api/v1", "log"):
-                    return api_log()
-
-                case (_, "/api/v1", _):
-                    return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
-
-                ################################################################
-                # error
-                case (_, _, _):
-                    return resp_json( 400, { "error": True, "message": f"Unknown action {action}"})
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            LOGGER.exception("Unhandled exception! e=%s", e)
-
-            # Return JSON for API requests
-            return resp_json(500, {"error": True, "message": str(e)})

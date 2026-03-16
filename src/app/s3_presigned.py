@@ -19,9 +19,6 @@ from botocore.exceptions import ClientError
 
 from .constants import C
 
-MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
-FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
-
 # Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
 UPLOAD_STAGING_PREFIX = "uploads/"
 
@@ -79,8 +76,8 @@ def make_object_name(*,course_id,movie_id,frame_number=None, ext):
     that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
     if frame_number is None:
-        return MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id,ext=ext)
-    return FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number,ext=ext)
+        return C.MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
+    return C.FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
 
 
 def make_urn(*, object_name, scheme = C.SCHEME_S3 ):

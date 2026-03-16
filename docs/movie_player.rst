@@ -4,15 +4,15 @@ Design of the movie player
 API calls on that the JavaScript movie player can use
 -----------------------------------------------------
 
-- get-frame - returns the frame as JPEG
+- get-frame (lambda-resize GET api/v1/frame) - returns the frame as JPEG
 
-  Gets an individual frame. Returns a JPEG of the frame that is
-  fetched from S3 (if the frame is available) or from the movie (by
-  single-framing through the movie if the frame is not available).
+  Implemented in lambda-resize. Gets an individual frame: authenticates
+  via api_key, fetches the movie from S3, extracts the frame with PyAV,
+  optionally resizes to analysis size (size=analysis). Updates width/height
+  in the DB when serving frame 0 if missing. Client uses LAMBDA_API_BASE
+  for frame URLs.
 
-  If it has to single frame through the movie, it saves the frame.
-
-  Status: Implemented
+  Status: Implemented (Lambda)
 
 - edit-movie
 
@@ -23,7 +23,7 @@ API calls on that the JavaScript movie player can use
 
 - get-movie-metadata
 
-  Gets information about individual frames. Parameters:
+  Returns **stored** metadata only (no extraction or generation). Width/height are set when the first frame is served (get-frame) or by Lambda (rotate-and-zip). Full metadata (fps, total_frames, total_bytes) is set by Lambda. Parameters:
 
   frame_start - starting frame to get;
 

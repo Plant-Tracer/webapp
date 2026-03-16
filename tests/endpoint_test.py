@@ -139,12 +139,12 @@ def test_upload_movie_data(client, api_key):
     # Purge the movie (to clean up)
     odb_movie_data.purge_movie(movie_id = movie_id)
 
-# need /api/get-movie-data
+# get-movie-data: Lambda GET /api/v1/movie-data (redirect to signed URL)
 # need /api/get-movie-metadata
 # need /api/get-movie-trackpoints
 # need /api/delete-movie
-# need /api/track-movie
+# tracking: Lambda POST api/v1 action=track-movie
 # need /api/new-movie-analysis
-# need /api/new-frame
-# need /api/get-frame
+# new-frame: Lambda POST api/v1 action=new-frame
+# get-frame: Lambda GET api/v1/frame
 # need /api/put-frame-analysis

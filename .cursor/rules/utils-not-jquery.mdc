@@ -7,7 +7,7 @@ alwaysApply: true
 
 In this project, **`$` is not jQuery.** It is the custom lightweight helper from `src/app/static/utils.js`. Do not assume jQuery methods exist.
 
-- **Use:** `prop`, `attr`, `val`, `html`, `text`, `show`, `hide`, `on`, `off`, `click`, `css`, `get(index)`, `fadeIn`, `fadeOut`, `$.post`, `$$`. Also available: `hasClass`, `addClass`, `removeClass`, `toggleClass`, `one(event, handler)`, `find(selector)`, `parent()`, `children()` (implemented in `utils.js` on both `DOMWrapper` and `DOMCollection`).
+- **Use:** `prop`, `attr`, `val`, `html`, `text`, `show`, `hide`, `on`, `off`, `click`, `css`, `get(index)`, `fadeIn`, `fadeOut`, `$.post`, `$$`. Also available: `hasClass`, `addClass`, `removeClass`, `toggleClass`, `one(event, handler)`, `find(selector)`, `parent()`, `children()`, **`is(selector)`** (only `:visible` and `:hidden` supported; implemented in `utils.js` on both `DOMWrapper` and `DOMCollection`).
 - **Do not use** any other jQuery or DOM API unless you have verified it exists in `utils.js`.
 
 To get the raw DOM element from a single-element wrapper: `$('#id').get(0)` or `$('#id').get()`. For one-time event listeners you can use `$('#id').one('load', fn)` or native `element.addEventListener('load', fn, { once: true })`.

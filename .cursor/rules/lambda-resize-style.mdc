@@ -7,7 +7,8 @@ alwaysApply: true
 
 - **Vendored app code**  
   - The Lambda package (`lambda-resize/src/resize_app`) should use a **vendored copy** of the main `app` package under `resize_app/src/app/`.  
-  - Use `make -C lambda-resize vend-app` to sync `odb.py`, `schema.py`, `constants.py`, `mp4_metadata_lib.py` into `resize_app/src/app/` before any Lambda-specific linting, testing, or builds.
+  - Use `make -C lambda-resize vend-app` to sync `odb.py`, `schema.py`, `constants.py`, `mp4_metadata_lib.py`, `paths.py`, `odb_movie_data.py`, `s3_presigned.py` into `resize_app/src/app/` before any Lambda-specific linting, testing, or builds.
+  - **tracker.py** and tracking (e.g. `lambda_tracking_handler.py`, `lambda_tracking_env.py`) live only in `lambda-resize/src/resize_app/`. The VM (Flask/gunicorn) does not import or run tracking. The main app’s `src/app/tracker.py` Tests that need the tracker use `from resize_app import tracker` with `PYTHONPATH` including `lambda-resize/src`.
 
 - **Imports in Lambda code**  
   - In Lambda modules under `lambda-resize/src/resize_app`, prefer imports rooted at the vendored package, e.g.:  
@@ -19,6 +20,8 @@ alwaysApply: true
   - When running pylint or tests for `lambda-resize`, ensure:  
     - `vend-app` has been run first so `resize_app/src/app` exists.  
     - `PYTHONPATH` includes `lambda-resize/src` so imports like `resize_app.src.app` resolve correctly.
+  - **Local testing with AWS (DynamoDB, S3):** Use `AWS_REGION=local` so the app and Lambda code use local endpoints (e.g. DynamoDB Local, local S3). Example:  
+    `AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/movie_test.py::test_new_movie -v`
   - The main `Makefile` should reflect this by:  
     - Running `make -C lambda-resize vend-app` before Lambda lint/test targets.  
     - Using `PYTHONPATH=lambda-resize/src` when invoking pylint or pytest on `lambda-resize` modules.

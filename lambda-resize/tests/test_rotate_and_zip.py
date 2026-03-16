@@ -80,7 +80,7 @@ def test_rotate_and_zip_zero_steps_builds_zip_without_rotation(monkeypatch, fake
         calls["rotated"] = True
         return b"rotated-bytes"
 
-    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5):  # noqa: D401
+    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5, target_wh=(640, 480)):  # noqa: D401
         # Record the data we were asked to zip; we expect the *original* movie bytes.
         calls["zip_args"] = {
             "data": data,
@@ -139,7 +139,7 @@ def test_rotate_and_zip_one_step_rotates_and_builds_zip(monkeypatch, fake_env):
         calls["rotated_bytes"] = b"rotated-" + data
         return calls["rotated_bytes"]
 
-    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5):
+    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5, target_wh=(640, 480)):
         calls["zip_args"] = {
             "data": data,
             "jpeg_quality": jpeg_quality,
@@ -186,7 +186,7 @@ def test_zip_is_created_and_uploaded_with_expected_content(monkeypatch, fake_env
     ddbo, s3 = fake_env
     zip_body = b"fake-zip-content"
 
-    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5):
+    def fake_video_frames_to_zip_av(data, jpeg_quality=60, progress_cb=None, progress_every=5, target_wh=(640, 480)):
         return zip_body
 
     monkeypatch.setattr(resize, "video_frames_to_zip_av", fake_video_frames_to_zip_av)
