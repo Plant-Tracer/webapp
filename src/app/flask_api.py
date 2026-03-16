@@ -5,6 +5,7 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 
 
 """
+import base64
 import json
 import sys
 import smtplib
@@ -55,6 +56,17 @@ from .apikey import get_lambda_api_base
 api_bp = Blueprint('api', __name__)
 
 LAMBDA_HEALTH_TIMEOUT = 10
+
+# Minimal 1x1 pixel JPEG for GET /api/v1/frame when Lambda is not configured (e.g. local/test).
+# Client needs an image URL that loads so the analyze page can render markers.
+_PLACEHOLDER_FRAME_JPEG = base64.b64decode(
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
+    "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAHwAAAQUBAQEB"
+    "AQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1"
+    "FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo1Njc4OTpDREVGR0hJSlNUVVZX"
+    "WFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6ws"
+    "PExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/2gAIAQEAAD8A/F5IG/T/2Q=="
+)
 
 
 VALIDATE_FRAMES = True
@@ -475,6 +487,22 @@ def api_get_movie_metadata():
 
     logger.debug("get_movie_metadata returns: %s",ret)
     return jsonify(ret)
+
+
+@api_bp.route('/v1/frame', methods=['GET'])
+def api_get_frame():
+    """
+    Return a single frame image (JPEG). Used when Lambda is not configured (e.g. local/test).
+    Client requests frame 0 for the analyze page; returning a placeholder allows markers to render
+    and put-frame-trackpoints to be exercised. In production with LAMBDA_API_BASE set, the client
+    requests frames from Lambda instead.
+    """
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    response = make_response(_PLACEHOLDER_FRAME_JPEG)
+    response.headers['Content-Type'] = 'image/jpeg'
+    return response
 
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)

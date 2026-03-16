@@ -142,9 +142,11 @@ flake:
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
+	$(MAKE) -C lambda-resize vend-app
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
+	$(MAKE) -C lambda-resize vend-app
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
@@ -153,8 +155,8 @@ pytest-selenium:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/test_trackpoint_drag.py
-#TEST1FUNCTION="-k test_trackpoint_drag_and_database_update"
+TEST1MODULE=tests/endpoint_test.py
+#TEST1FUNCTION="-k test_ver1"
 pytest1:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
