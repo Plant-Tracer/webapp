@@ -18,7 +18,7 @@ const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
 const TRACKING_POLL_MSEC=1000;
-const TRACE_MOVIE = 'Trace movie';
+//const TRACE_MOVIE = 'Trace movie';
 const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 1000000;
 
@@ -485,7 +485,7 @@ class TracerController extends MovieController {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
                 }
             })
-            .fail((xhr, status, err) => {
+            .fail((_xhr, status, err) => {
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
                 if (self.poll_error_count >= 3) {
