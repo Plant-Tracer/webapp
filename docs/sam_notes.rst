@@ -64,6 +64,23 @@ Commands to try:
 `sam logs planttracer-app -s"5min ago"`
 * Prints all logs from last 5 minutes
 
+CloudWatch log format and simple view
+-------------------------------------
+
+``make sam-logs`` (and ``aws logs filter-log-events --output text``) prints one line per
+*field*: EVENTS, event ID, ingestion time (epoch ms), request ID, then the log message.
+So each logical event can look like several lines; the long numbers are event IDs and
+timestamps.
+
+To see only **timestamp and message** (no event IDs, no extra columns), use::
+
+  make sam-logs-simple
+
+This uses ``--query 'events[].[timestamp,message]'`` and formats each event as
+``YYYY-MM-DD HH:MM:SS	message``. If you view logs in the AWS Console, the multi-line
+layout is how CloudWatch displays event metadata; there is no way to suppress it in
+the console, but ``sam-logs-simple`` gives a compact view from the CLI.
+
 `sam validate && sam build && sam deploy --no-confirm-changeset`
 * validates, builds, and deploys without asking questions
 

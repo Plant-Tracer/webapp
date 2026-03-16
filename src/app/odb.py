@@ -61,20 +61,39 @@ MOVIE_ID = 'movie_id'
 MOVIE_DATA_URN = 'movie_data_urn'
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
 TITLE = 'title'
-TOTAL_BYTES='total_bytes'
-TOTAL_FRAMES='total_frames'
-DATE_UPLOADED='date_uploaded'
+DESCRIPTION = 'description'
+STATUS = 'status'
+ORIG_MOVIE = 'orig_movie'
+TOTAL_BYTES = 'total_bytes'
+TOTAL_FRAMES = 'total_frames'
+DATE_UPLOADED = 'date_uploaded'
 VERSION = 'version'
 DELETED = 'deleted'
 PUBLISHED = 'published'
 CREATED = 'created'
+CREATED_AT = 'created_at'
 EMAIL = 'email'
 NAME = 'name'
+FPS = 'fps'
+WIDTH = 'width'
+HEIGHT = 'height'
+RESEARCH_USE = 'research_use'
+CREDIT_BY_NAME = 'credit_by_name'
+ATTRIBUTION_NAME = 'attribution_name'
+ROTATION_STEPS = 'rotation_steps'
+MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
+# Props that set_movie_metadata (flask_api) can set in bulk from extracted movie metadata
+MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
+PROCESSING_STATE = 'processing_state'
+# Values for processing_state (single source of truth)
+PROCESSING_STATE_UPLOADING = 'uploading'
+PROCESSING_STATE_TRACKING = 'tracking'
+PROCESSING_STATE_TRACKED = 'tracked'
 
 USER_ID = 'user_id'
 
@@ -628,7 +647,7 @@ class DDBO:
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
-        assert 'movie_zipfile_url' not in moviedict
+        assert MOVIE_ZIPFILE_URL not in moviedict
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
@@ -965,7 +984,6 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     return {USER_ID:user_id}
 
 
-@log
 def unregister_from_course(*, course_id, user_id):
     """Remove user_id from course_id, but do not make other changes."""
     ddbo = DDBO()
@@ -977,7 +995,6 @@ def unregister_from_course(*, course_id, user_id):
         pass
     ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:user_id})
 
-@log
 def delete_user(*, user_id, purge_movies=False):
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
@@ -1038,7 +1055,6 @@ def make_new_api_key(*, email, demo_user=False):
     raise InvalidUser_Email(email)
 
 
-@log
 def get_user(user_id):
     return DDBO().get_user(user_id)
 
@@ -1055,15 +1071,12 @@ def get_first_api_key_for_user(user_id):
 ### Course Management ###
 #########################
 
-@log
 def lookup_course_by_id(*, course_id):
     return DDBO().get_course(course_id)
 
-@log
 def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
 
-@log
 def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT, ok_if_exists=False):
     """Create a new course
     """
@@ -1074,13 +1087,11 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
                         MAX_ENROLLMENT:max_enrollment},
                       ok_if_exists=ok_if_exists)
 
-@log
 def delete_course(*,course_id):
     """Delete a course.
     """
     DDBO().del_course(course_id)
 
-@log
 def add_course_admin(*, admin_id, course_id):
     """Promotes the user to be an administrator and makes them an administrator of a specific course.
     :param email: email address of the administrator
@@ -1107,7 +1118,6 @@ def add_course_admin(*, admin_id, course_id):
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
-@log
 def remove_course_admin(*, course_id, admin_id):
     """Removes email from the course admin list and takes them out of the course."""
     ddbo = DDBO()
@@ -1152,7 +1162,6 @@ def remove_course_admin(*, course_id, admin_id):
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 
-@log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
     logger.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
@@ -1162,13 +1171,11 @@ def check_course_admin(*, user_id, course_id):
     logger.debug("user=%s",user)
     return course_id in user[ ADMIN_FOR_COURSES ]
 
-@log
 def validate_course_key(*, course_key):
     if DDBO().get_course_by_course_key(course_key):
         return True
     return False
 
-@log
 def remaining_course_registrations(*,course_key):
     ddbo = DDBO()
     course = ddbo.get_course_by_course_key(course_key)
@@ -1178,7 +1185,6 @@ def remaining_course_registrations(*,course_key):
     enrolled = course_enrollments(course_id)
     return course['max_enrollment'] - len(enrolled)
 
-@log
 def course_enrollments(course_id):
     """Return a list of all those enrolled in the course (including staff)
     Gets all the movie frames"""
@@ -1201,7 +1207,6 @@ def course_enrollments(course_id):
 
 
 
-@log
 def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for a single movie.
     :param movie_id: the movie for which we need data.
@@ -1217,7 +1222,6 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     return movie
 
 
-@log
 def can_access_movie(*, user_id, movie_id):
     """
     Checks to see if the user is allowed to access the movie:
@@ -1242,7 +1246,6 @@ def can_access_movie(*, user_id, movie_id):
         return movie
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
-@log
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
                      research_use=0, credit_by_name=0, attribution_name=None):
     """
@@ -1264,29 +1267,28 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     if course_id is None:
         course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
-    ddbo.put_movie({MOVIE_ID:movie_id,
+    ddbo.put_movie({MOVIE_ID: movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
                     USER_NAME: user[USER_NAME],
-                    TITLE:title,
-                    'description':description,
-                    'orig_movie':orig_movie,
+                    TITLE: title,
+                    DESCRIPTION: description,
+                    ORIG_MOVIE: orig_movie,
                     PUBLISHED: 0,
                     DELETED: 0,
-                    'movie_zipfile_urn':None,
-                    MOVIE_DATA_URN:None,
-                    LAST_FRAME_TRACKED:None,
-                    'created_at':int(time.time()),
-                    # date_uploaded now reflects when upload was initiated (presigned URL issued)
-                    'date_uploaded':int(time.time()),
-                    TOTAL_FRAMES:None, # will be set later
-                    TOTAL_BYTES:None,  # will be set later
-                    VERSION:0,  # will be set to 1 with set_movie_data
-                    'research_use': research_use,
-                    'credit_by_name': credit_by_name,
-                    'attribution_name': attribution_name,
-                    'rotation_steps': 0,
-                    'processing_state': 'uploading',
+                    MOVIE_ZIPFILE_URN: None,
+                    MOVIE_DATA_URN: None,
+                    LAST_FRAME_TRACKED: None,
+                    CREATED_AT: int(time.time()),
+                    DATE_UPLOADED: int(time.time()),
+                    TOTAL_FRAMES: None,
+                    TOTAL_BYTES: None,
+                    VERSION: 0,
+                    RESEARCH_USE: research_use,
+                    CREDIT_BY_NAME: credit_by_name,
+                    ATTRIBUTION_NAME: attribution_name,
+                    ROTATION_STEPS: 0,
+                    PROCESSING_STATE: PROCESSING_STATE_UPLOADING,
                     })
     return movie_id
 
@@ -1355,18 +1357,19 @@ def course_id_for_movie_id(movie_id):
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
+    """Return movie_data_urn for movie_id, or None if not yet set (e.g. before upload/processing)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_DATA_URN)
 
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_ZIPFILE_URN]
+    """Return movie_zipfile_urn for movie_id, or None if not yet set (e.g. before zip is built)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_ZIPFILE_URN)
 
 
 
-@log
 def get_frame_urn(*, movie_id, frame_number):
     """Get a frame_urn by movie_id and frame number.
     :param: movie_id - the movie_id wanted
@@ -1482,12 +1485,34 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 
     # update the last frame tracked. This is way, way more expensive than it should be.
     movie = ddbo.get_movie(movie_id)
-    if movie['last_frame_tracked'] is None:
+    current = movie.get(LAST_FRAME_TRACKED, None)
+    if current is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
-        movie['last_frame_tracked'] = frame_number
+        movie[LAST_FRAME_TRACKED] = frame_number
     else:
-        movie['last_frame_tracked'] = max(movie['last_frame_tracked'],frame_number)
+        movie[LAST_FRAME_TRACKED] = max(current, frame_number)
     ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
+
+
+def clear_movie_tracking(movie_id):
+    """Remove all trackpoints and last_frame_tracked for a movie (e.g. after rotation).
+    Frames keep frame_number/urn; only trackpoints attribute is removed per frame.
+    """
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+    # Clear stored last_frame_tracked on the movie so next get_movie_metadata computes correctly.
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression='REMOVE last_frame_tracked',
+    )
 
 
 ################################################################
@@ -1500,16 +1525,16 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 # We kept this, even thoguh we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
-    'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
-    'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
-    'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
-    'fps': 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
-    'width': 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
-    'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
-    'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
-    'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
-    'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
-    'movie_zipfile_urn':'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
+    TITLE: 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
+    DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
+    STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
+    HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_FRAMES: 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_BYTES: 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
+    VERSION: 'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_ZIPFILE_URN: 'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     DELETED: 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
@@ -1518,10 +1543,9 @@ SET_MOVIE_METADATA = {
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 
     # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
-    'rotation_steps': 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
+    ROTATION_STEPS: 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
 }
 
-@log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """We tried doing this in a single statement and it failed
     :param user_id: - user doing the setting. 0 for root

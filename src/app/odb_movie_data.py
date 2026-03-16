@@ -14,7 +14,20 @@ from botocore.exceptions import ClientError,ParamValidationError
 
 from .s3_presigned import s3_client,make_urn,make_object_name
 from .constants import C,logger
-from .odb import DDBO,InvalidMovie_Id,is_movie_id,VERSION,course_id_for_movie_id,MOVIE_DATA_URN,DATE_UPLOADED,TOTAL_BYTES,TOTAL_FRAMES,FRAME_URN,DELETED
+from .odb import (
+    DDBO,
+    InvalidMovie_Id,
+    is_movie_id,
+    VERSION,
+    course_id_for_movie_id,
+    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+    DATE_UPLOADED,
+    TOTAL_BYTES,
+    TOTAL_FRAMES,
+    FRAME_URN,
+    DELETED,
+)
 
 def read_object(urn):
     o = urllib.parse.urlparse(urn)
@@ -87,23 +100,17 @@ def delete_object(urn):
 
 def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
     """Returns the movie contents for a movie_id.
-    If urn==True, just return the urn
+    If get_urn is True, just return the URN (or None if not set).
     """
     movie = DDBO().get_movie(movie_id)
-    try:
-        if zipfile:
-            urn = movie['movie_zipfile_urn']
-        else:
-            urn = movie['movie_data_urn']
-    except TypeError as e:
-        raise InvalidMovie_Id(movie_id) from e
+    urn = movie.get(MOVIE_ZIPFILE_URN) if zipfile else movie.get(MOVIE_DATA_URN)
 
     if get_urn:
         return urn
 
     if urn:
         return read_object(urn)
-    raise InvalidMovie_Id()
+    raise InvalidMovie_Id(movie_id)
 
 
 
@@ -114,8 +121,9 @@ def set_movie_data(*,movie_id, movie_data):
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
+    version = movie.get(VERSION, 0)
 
-    logger.debug("got movie=%s version=%s",movie,movie[VERSION])
+    logger.debug("got movie=%s version=%s", movie, version)
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
@@ -129,7 +137,7 @@ def set_movie_data(*,movie_id, movie_data):
                                               DATE_UPLOADED:int(time.time()),
                                               TOTAL_BYTES:len(movie_data),
                                               TOTAL_FRAMES:None,
-                                              VERSION:movie[VERSION]+1 })
+                                              VERSION: version + 1})
 
 
 ################################################################
@@ -165,13 +173,14 @@ def purge_movie_frames(*,movie_id, frame_numbers=None):
 
 
 def purge_movie_zipfile(*,movie_id):
-    """Delete the frames associated with a movie."""
-    logger.debug("purge_movie_data movie_id=%s",movie_id)
+    """Delete the zipfile object for a movie and clear MOVIE_ZIPFILE_URN in DB."""
+    logger.debug("purge_movie_zipfile movie_id=%s", movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
-    if movie.get('movie_zipfile_urn',None) is not None:
-        delete_object(movie['movie_zipfile_urn'])
-        ddbo.update_table(ddbo.movies, movie_id, {'movie_zipfile_urn':None})
+    urn = movie.get(MOVIE_ZIPFILE_URN, None)
+    if urn is not None:
+        delete_object(urn)
+        ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ZIPFILE_URN: None})
 
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""

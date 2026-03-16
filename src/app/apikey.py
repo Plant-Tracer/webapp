@@ -36,6 +36,13 @@ def in_demo_mode():
 api_base    = os.getenv(C.PLANTTRACER_API_BASE,'')
 static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
 
+
+def get_lambda_api_base():
+    """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
+    hostname = os.environ.get("HOSTNAME", "").strip()
+    domain = os.environ.get("DOMAIN", "").strip()
+    return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+
 @functools.cache
 def git_head_time():
     try:
@@ -70,11 +77,13 @@ def cookie_name():
 
 
 def add_cookie(response):
-    """Add the cookie if the apikey was in the get value"""
+    """Add the cookie if the api_key was in the query string. When setting from URL, clear any
+    existing api_key cookie first so the new key takes effect (avoids old cookie triggering logout)."""
     api_key = request.values.get('api_key', None)
-    if api_key:
+    if api_key and api_key != 'undefined':
+        response.set_cookie(cookie_name(), '', expires=0, path='/')
         response.set_cookie(cookie_name(), api_key,
-                            max_age = C.API_KEY_COOKIE_MAX_AGE)
+                            max_age=C.API_KEY_COOKIE_MAX_AGE)
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
@@ -95,19 +104,16 @@ def get_user_api_key():
     if in_demo_mode():
         return C.DEMO_MODE_API_KEY
 
-    # First check the cookie
-    api_key_cookie = request.cookies.get(cookie_name(), None)
-    if api_key_cookie:
-        logger.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key_cookie)
-        return api_key_cookie
-
-    # See if the value was manually provided
-    # NOTE - the frontend currently sends the parameter "api_key" as the string "undefined"
-    # when the value is not set, due to the elimination of JQuery. This workaround should be removed
-    # once the frontend is fixed to omit the parameter entirely when undefined.
+    # Prefer api_key from URL so emailed links work even when user has an old cookie (add_cookie will clear it).
     api_key_get = request.values.get('api_key', None)
     if (api_key_get is not None) and (api_key_get != 'undefined'):
         return api_key_get
+
+    # Then check the cookie
+    api_key_cookie = request.cookies.get(cookie_name(), None)
+    if api_key_cookie:
+        logger.debug("api_key from request.cookies cookie_name=%s api_key=%s", cookie_name(), api_key_cookie)
+        return api_key_cookie
 
     # No API key
     return None
@@ -187,9 +193,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         movie_id = 0            # to avoid errors
 
     # Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and start-processing
-    hostname = os.environ.get("HOSTNAME", "").strip()
-    domain = os.environ.get("DOMAIN", "").strip()
-    lambda_api_base = f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+    lambda_api_base = get_lambda_api_base()
 
     ret= {
         C.API_BASE: api_base,

@@ -179,7 +179,7 @@ def _before_request_config_check():
     path = request.path
     if path == "/config-error" or path.startswith("/static/") or path.startswith("/api/"):
         return None
-    if path in ("/ping", "/ver", "/health"):
+    if path in ("/ping", "/ver", "/health", "/status"):
         return None
     try:
         d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
@@ -283,6 +283,14 @@ def func_analyze() -> str:
 ##
 @app.route('/login', methods=GET_POST)
 def func_login():
+    """Login/welcome: with api_key in URL, set cookie and show welcome page; else show register/resend."""
+    if request.values.get('api_key', '').strip() and request.values.get('api_key') != 'undefined':
+        response = make_response(render_template(
+            'welcome.html',
+            **page_dict('Welcome to Plant Tracer', require_auth=True),
+        ))
+        apikey.add_cookie(response)
+        return response
     return render_template('login.html', **page_dict('Login'))
 
 @app.route('/logout', methods=GET_POST)
@@ -293,7 +301,13 @@ def func_logout():
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "ok", "message": "pong"})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK, C.API_KEY_MESSAGE: "pong"})
+
+
+@app.route("/status")
+def status():
+    """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
+    return jsonify({C.KEY_STATUS: C.STATUS_OK})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():

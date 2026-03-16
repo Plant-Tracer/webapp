@@ -76,7 +76,7 @@ class MovieController extends CanvasController {
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects e.g. [{'x':10,'y':20,'label':30},...]
-        console.log(`load_movie(${frames})`);
+        console.log('load_movie:', Array.isArray(frames) ? frames.length + ' frames' : frames);
         this.frames = frames;
 
         /* Now preload all of the images, downloading new ones as necessary.
@@ -100,8 +100,7 @@ class MovieController extends CanvasController {
     /**
      * Change the frame. This is called repeatedly when the movie is
      * playing, with the frame number changing First we verify the
-     * next frame number, then we call the /api/get-frame call to get
-     * the frame, with get_frame_handler getting the data.
+     * next frame number, then we use the frame URL (from zip blob or lambda-resize get-frame) to get the frame.
      *
      * Always redraws.
      *
