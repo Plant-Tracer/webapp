@@ -7,6 +7,8 @@ alwaysApply: true
 
 In this project, **`$` is not jQuery.** It is the custom lightweight helper from `src/app/static/utils.js`. Do not assume jQuery methods exist.
 
+- **Before writing or editing any JavaScript in this project, always review the current `src/app/static/utils.js` implementation first.** Treat that file as the source of truth for what `$` and `$$` support, and only use methods and patterns that are defined there (or that you have just added there explicitly).
+
 - **Use:** `prop`, `attr`, `val`, `html`, `text`, `show`, `hide`, `on`, `off`, `click`, `css`, `get(index)`, `fadeIn`, `fadeOut`, `$.post`, `$$`. Also available: `hasClass`, `addClass`, `removeClass`, `toggleClass`, `one(event, handler)`, `find(selector)`, `parent()`, `children()`, **`is(selector)`** (only `:visible` and `:hidden` supported; implemented in `utils.js` on both `DOMWrapper` and `DOMCollection`).
 - **Do not use** any other jQuery or DOM API unless you have verified it exists in `utils.js`.
 

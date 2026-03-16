@@ -47,6 +47,31 @@ function $$(selector) {
     return new DOMCollection(elements);
 }
 
+// Internal helper for storing delegated listeners so `.off` can remove them.
+function _storeListener(el, event, selector, handler, wrapped) {
+    if (!el) return;
+    if (!el._$listeners) {
+        el._$listeners = [];
+    }
+    el._$listeners.push({ event, selector, handler, wrapped });
+}
+
+function _removeStoredListeners(el, event, selector, handler) {
+    if (!el || !el._$listeners) return;
+    const remaining = [];
+    el._$listeners.forEach((entry) => {
+        const matchEvent = !event || entry.event === event;
+        const matchSelector = selector === undefined || selector === null || entry.selector === selector;
+        const matchHandler = !handler || entry.handler === handler;
+        if (matchEvent && matchSelector && matchHandler) {
+            el.removeEventListener(entry.event, entry.wrapped);
+        } else {
+            remaining.push(entry);
+        }
+    });
+    el._$listeners = remaining;
+}
+
 // Collection wrapper for multiple elements (like jQuery)
 class DOMCollection {
     constructor(elements) {
@@ -88,9 +113,43 @@ class DOMCollection {
         return this;
     }
 
-    on(event, handler) {
-        this.elements.forEach(el => {
-            if (el) el.addEventListener(event, handler);
+    on(event, selectorOrHandler, maybeHandler) {
+        this.elements.forEach((el) => {
+            if (!el) return;
+            // Delegated handler: on(event, selector, handler)
+            if (typeof selectorOrHandler === 'string' && typeof maybeHandler === 'function') {
+                const selector = selectorOrHandler;
+                const handler = maybeHandler;
+                const wrapped = function (e) {
+                    const target = e.target && e.target.closest && e.target.closest(selector);
+                    if (target && el.contains(target)) {
+                        handler.call(target, e);
+                    }
+                };
+                _storeListener(el, event, selector, handler, wrapped);
+                el.addEventListener(event, wrapped);
+            // Direct handler: on(event, handler)
+            } else if (typeof selectorOrHandler === 'function') {
+                const handler = selectorOrHandler;
+                _storeListener(el, event, null, handler, handler);
+                el.addEventListener(event, handler);
+            }
+        });
+        return this;
+    }
+
+    off(event, selectorOrHandler, maybeHandler) {
+        this.elements.forEach((el) => {
+            if (!el) return;
+            let selector = null;
+            let handler = null;
+            if (typeof selectorOrHandler === 'string') {
+                selector = selectorOrHandler;
+                handler = typeof maybeHandler === 'function' ? maybeHandler : null;
+            } else if (typeof selectorOrHandler === 'function') {
+                handler = selectorOrHandler;
+            }
+            _removeStoredListeners(el, event, selector, handler);
         });
         return this;
     }
@@ -314,18 +373,42 @@ class DOMWrapper {
         return this;
     }
 
-    // Event listeners
-    on(event, handler) {
-        if (this.element) {
+    // Event listeners (supports direct and delegated: on(event, handler) or on(event, selector, handler))
+    on(event, selectorOrHandler, maybeHandler) {
+        if (!this.element) return this;
+        // Delegated handler: on(event, selector, handler)
+        if (typeof selectorOrHandler === 'string' && typeof maybeHandler === 'function') {
+            const selector = selectorOrHandler;
+            const handler = maybeHandler;
+            const el = this.element;
+            const wrapped = function (e) {
+                const target = e.target && e.target.closest && e.target.closest(selector);
+                if (target && el.contains(target)) {
+                    handler.call(target, e);
+                }
+            };
+            _storeListener(el, event, selector, handler, wrapped);
+            el.addEventListener(event, wrapped);
+        // Direct handler: on(event, handler)
+        } else if (typeof selectorOrHandler === 'function') {
+            const handler = selectorOrHandler;
+            _storeListener(this.element, event, null, handler, handler);
             this.element.addEventListener(event, handler);
         }
         return this; // Chainable
     }
 
-    off(event, handler) {
-        if (this.element) {
-            this.element.removeEventListener(event, handler);
+    off(event, selectorOrHandler, maybeHandler) {
+        if (!this.element) return this;
+        let selector = null;
+        let handler = null;
+        if (typeof selectorOrHandler === 'string') {
+            selector = selectorOrHandler;
+            handler = typeof maybeHandler === 'function' ? maybeHandler : null;
+        } else if (typeof selectorOrHandler === 'function') {
+            handler = selectorOrHandler;
         }
+        _removeStoredListeners(this.element, event, selector, handler);
         return this; // Chainable
     }
 
