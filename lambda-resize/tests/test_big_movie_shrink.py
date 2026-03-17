@@ -5,6 +5,8 @@ import io
 import zipfile
 from pathlib import Path
 
+from PIL import Image
+
 from resize_app import resize
 from resize_app.src.app.constants import C, logger
 
@@ -114,7 +116,6 @@ def test_big_movie_tracking_uses_processed_mp4_and_shrunk_zip(monkeypatch):
         for name in names[:10]:
             count += 1
             data = zf.read(name)
-            from PIL import Image  # pylint: disable=import-outside-toplevel
 
             img = Image.open(io.BytesIO(data))
             img.load()

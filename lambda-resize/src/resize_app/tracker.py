@@ -39,6 +39,7 @@ from .src.app.odb import (
     STATUS,
 )
 from .src.app.odb_movie_data import get_movie_data  # pylint: disable=unused-import  # re-export for flask_api
+from . import rotate_zip
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -569,7 +570,6 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         if need_process:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
                 out_path = out_tf.name
-            from . import rotate_zip  # pylint: disable=import-outside-toplevel
             rotate_zip.prepare_movie_for_tracking_cv2(
                 in_path,
                 out_path,

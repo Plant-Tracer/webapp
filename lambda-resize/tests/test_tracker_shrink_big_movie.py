@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from PIL import Image  # pylint: disable=import-outside-toplevel
+from PIL import Image
 
 from resize_app.tracker import (
     TrackingEnv,

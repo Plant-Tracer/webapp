@@ -14,6 +14,7 @@ import filetype
 import pytest
 
 from resize_app import tracker
+from resize_app.main import lambda_handler as lambda_handler_fn
 
 from app import odb
 from app import s3_presigned
@@ -126,7 +127,6 @@ def test_new_movie(client, new_movie):
     assert resp.status_code == 403
 
     # get-movie-data is on Lambda: GET /api/v1/movie-data returns 302 to signed URL
-    from resize_app.main import lambda_handler as lambda_handler_fn  # pylint: disable=import-outside-toplevel
     event = {
         "requestContext": {"http": {"method": "GET"}, "stage": ""},
         "rawPath": "/api/v1/movie-data",

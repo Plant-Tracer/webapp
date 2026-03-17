@@ -5,7 +5,37 @@ Lambda HTTP API entry point. Parses the event and delegates to resize API handle
 import base64
 import binascii
 import json
+import os
+import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
+
+import boto3
+
+from .lambda_tracking_env import LambdaTrackingEnv
+from .resize import (  # pylint: disable=wrong-import-order
+    api_get_frame,
+    api_heartbeat,
+    api_log,
+    api_ping,
+    api_resize,
+    api_rotate_and_zip,
+    api_start_processing,
+    api_status,
+    resp_json,
+    resp_redirect,
+    _with_request_log_level,
+)
+from .src.app import odb
+from .src.app.odb import (
+    DDBO,
+    USER_ID,
+    ENABLED,
+    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+)
+from .src.app.odb_movie_data import create_new_movie_frame, get_movie_data
+from .src.app.s3_presigned import make_signed_url, object_exists
 
 # pylint: disable=too-many-branches, disable=unused-argument
 def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
@@ -38,12 +68,9 @@ def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
 def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     """
     POST /api/v1 with action=track-movie. Body: api_key, movie_id, frame_start.
-    Authorizes via api_key (same as get-frame), then runs tracking.
+    Authorizes via api_key (same as get-frame), then enqueues tracking work to SQS.
     Refuses to start if this movie is already tracking and status was updated <1 hour ago.
     """
-    from .lambda_tracking_handler import handler as track_handler  # pylint: disable=import-outside-toplevel
-    from .lambda_tracking_env import LambdaTrackingEnv  # pylint: disable=import-outside-toplevel
-    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
 
     api_key = (payload.get("api_key") or "").strip()
     movie_id = (payload.get("movie_id") or "").strip()
@@ -62,11 +89,36 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
         return resp_json(401, {"error": True, "message": "invalid api_key"})
     env = LambdaTrackingEnv()
     if not env.try_claim_tracking(movie_id):
-        return resp_json(409, {
-            "error": True,
-            "message": "Tracking already in progress for this movie. Wait for it to finish or try again in an hour.",
-        })
-    return track_handler({"user_id": user_id, "movie_id": movie_id, "frame_start": frame_start})
+        return resp_json(
+            409,
+            {
+                "error": True,
+                "message": "Tracking already in progress for this movie. Wait for it to finish or try again in an hour.",
+            },
+        )
+
+    queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
+    if not queue_url:
+        return resp_json(500, {"error": True, "message": "TRACKING_QUEUE_URL not configured"})
+
+    sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
+    body = {
+        "user_id": user_id,
+        "movie_id": movie_id,
+        "frame_start": frame_start,
+        "batch_size": int(payload.get("batch_size", 1)) or 1,
+    }
+    sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(body))
+    return resp_json(
+        202,
+        {
+            "error": False,
+            "accepted": True,
+            "movie_id": movie_id,
+            "frame_start": frame_start,
+            "batch_size": body["batch_size"],
+        },
+    )
 
 
 def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -76,11 +128,6 @@ def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
     format=zip: 302 redirect to zip file.
     format=json: 200 JSON with url (MP4), zip_url (if present), movie_id.
     """
-    from .resize import resp_json, resp_redirect  # pylint: disable=import-outside-toplevel
-    from .src.app import odb  # pylint: disable=import-outside-toplevel
-    from .src.app.odb import DDBO, USER_ID, ENABLED, MOVIE_DATA_URN, MOVIE_ZIPFILE_URN  # pylint: disable=import-outside-toplevel
-    from .src.app.odb_movie_data import get_movie_data  # pylint: disable=import-outside-toplevel
-    from .src.app.s3_presigned import make_signed_url, object_exists  # pylint: disable=import-outside-toplevel
 
     params = event.get("queryStringParameters") or event.get("query_params") or {}
     api_key = (params.get("api_key") or "").strip()
@@ -139,9 +186,6 @@ def api_new_frame(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     POST /api/v1 with action=new-frame. Body: api_key, movie_id, frame_number, optional frame_base64_data.
     Creates or updates a frame record; if frame_base64_data provided, uploads image to S3.
     """
-    from .src.app import odb  # pylint: disable=import-outside-toplevel
-    from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
-    from .src.app.odb_movie_data import create_new_movie_frame  # pylint: disable=import-outside-toplevel
 
     api_key = (payload.get("api_key") or "").strip()
     movie_id = (payload.get("movie_id") or "").strip()
@@ -179,25 +223,40 @@ def api_new_frame(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Called by Lambda for HTTP API requests (no S3 event invocation)."""
-    from .resize import (  # pylint: disable=import-outside-toplevel
-        api_get_frame,
-        api_heartbeat,
-        api_log,
-        api_ping,
-        api_resize,
-        api_rotate_and_zip,
-        api_start_processing,
-        api_status,
-        resp_json,
-        _with_request_log_level,
-    )
 
     method, path, payload = parse_event(event)
+
+    # Record Lambda invocation start in DynamoDB logs.
+    ddbo = DDBO()
+    request_id = getattr(context, "aws_request_id", "unknown")
+    log_id = f"resize-lambda:{request_id}"
+    start_ts = time.time()
+    start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+    ddbo.update_table(
+        ddbo.logs,
+        log_id,
+        {
+            "start_time": int(start_ts),
+            "sk": start_iso,
+        },
+    )
 
     with _with_request_log_level(payload):
         try:
             action = (payload.get("action") or "").lower()
             from .common import LOGGER  # pylint: disable=import-outside-toplevel
+
+            # Enrich DynamoDB log entry with request metadata.
+            ddbo.update_table(
+                ddbo.logs,
+                log_id,
+                {
+                    "method": method,
+                    "path": path,
+                    "action": action,
+                    "params": payload,
+                },
+            )
 
             LOGGER.info(
                 "req method='%s' path='%s' action='%s' payload=%s",
@@ -262,4 +321,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             from .common import LOGGER  # pylint: disable=import-outside-toplevel
 
             LOGGER.exception("Unhandled exception! e=%s", e)
+            ddbo.update_table(
+                ddbo.logs,
+                log_id,
+                {"elapsed_time": time.time() - start_ts},
+            )
             return resp_json(500, {"error": True, "message": str(e)})
+
+        ddbo.update_table(
+            ddbo.logs,
+            log_id,
+            {"elapsed_time": time.time() - start_ts},
+        )

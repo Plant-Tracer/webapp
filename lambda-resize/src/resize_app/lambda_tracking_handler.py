@@ -64,3 +64,26 @@ def handler(event, context=None):
             "headers": CORS_HEADERS,
             "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)}),
         }
+
+
+def sqs_handler(event, context=None):
+    """
+    SQS event source for tracking jobs.
+    Each record body is JSON: {"user_id": "...", "movie_id": "...", "frame_start": int, "batch_size": int}.
+    """
+    # pylint: disable=unused-argument
+    env = LambdaTrackingEnv()
+    for record in event.get("Records", []):
+        try:
+            body = json.loads(record.get("body") or "{}")
+            user_id = body["user_id"]
+            movie_id = body["movie_id"]
+            frame_start = int(body.get("frame_start", 0))
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.exception("Bad SQS record: %s", exc)
+            continue
+        try:
+            tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.exception("Tracking failed for movie_id=%s: %s", movie_id, exc)
+    return {}

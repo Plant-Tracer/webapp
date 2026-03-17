@@ -1,5 +1,5 @@
 ---
-description: Run pylint before committing; do not commit code that fails pylint
+description: Run pylint before committing; keep imports clean and never paper over lint errors
 globs: ["**/*.py"]
 alwaysApply: true
 ---
@@ -8,5 +8,6 @@ alwaysApply: true
 
 1. **Before committing:** Run pylint on any modified Python files (e.g. `poetry run pylint src/app/...`) and fix all reported issues.
 2. **Imports:** Put all imports at the **top level** of the file. Do not use imports inside functions (C0415 import-outside-toplevel). **Exception:** Imports inside an `if __name__ == "__main__":` block (e.g. `import argparse`) are allowed, since they run only when the module is executed as a script.
-3. **Return statements:** The project disables R0911 (too-many-return-statements) in `pyproject.toml` where needed; prefer refactoring with result variables and a single return when practical.
-4. **No lint shortcuts:** Do not leave pylint errors for "later"; resolve them before commit/push.
+3. **Never silence import-outside-toplevel:** Do **not** add `# pylint: disable=import-outside-toplevel` for new code. If pylint complains about import placement, fix the structure (move imports to the top) instead of disabling the warning.
+4. **Return statements:** The project disables R0911 (too-many-return-statements) in `pyproject.toml` where needed; prefer refactoring with result variables and a single return when practical.
+5. **No lint shortcuts:** Do not leave pylint errors for "later" or disable messages to “get things working”; resolve the root cause before commit/push.
