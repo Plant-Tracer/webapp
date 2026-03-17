@@ -12,8 +12,17 @@ from typing import Any, Dict, Tuple
 
 import boto3
 
-from .lambda_tracking_env import LambdaTrackingEnv
-from .resize import (  # pylint: disable=wrong-import-order
+from .src.app import odb
+from .src.app.odb import (
+    DDBO,
+    USER_ID,
+    ENABLED,
+    MOVIE_DATA_URN,
+    MOVIE_ZIPFILE_URN,
+)
+from .src.app.odb_movie_data import create_new_movie_frame, get_movie_data
+from .src.app.s3_presigned import make_signed_url, object_exists
+from .resize import (
     api_get_frame,
     api_heartbeat,
     api_log,
@@ -26,16 +35,8 @@ from .resize import (  # pylint: disable=wrong-import-order
     resp_redirect,
     _with_request_log_level,
 )
-from .src.app import odb
-from .src.app.odb import (
-    DDBO,
-    USER_ID,
-    ENABLED,
-    MOVIE_DATA_URN,
-    MOVIE_ZIPFILE_URN,
-)
-from .src.app.odb_movie_data import create_new_movie_frame, get_movie_data
-from .src.app.s3_presigned import make_signed_url, object_exists
+from .lambda_tracking_handler import sqs_handler
+from .lambda_tracking_env import LambdaTrackingEnv
 
 # pylint: disable=too-many-branches, disable=unused-argument
 def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
@@ -224,8 +225,8 @@ def api_new_frame(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     return resp_json(200, {"error": False, "frame_urn": frame_urn})
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Called by Lambda for HTTP API requests (no S3 event invocation)."""
+def http_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """HTTP API entrypoint (no S3/SQS event invocation)."""
 
     method, path, payload = parse_event(event)
 
@@ -336,3 +337,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             log_id,
             {"elapsed_time": time.time() - start_ts},
         )
+
+    # Normal path: response already returned from match-cases.
+    # This return is only here to satisfy type checkers; code paths above always return.
+    return resp_json(500, {"error": True, "message": "unreachable"})
+
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
+    # SQS events have a "Records" list with eventSource "aws:sqs".
+    if isinstance(event, dict) and "Records" in event:
+
+        return sqs_handler(event, context)
+
+    return http_lambda_handler(event, context)
