@@ -382,7 +382,6 @@ class DDBO:
         response = self.users.query(
             IndexName='email_idx',
             KeyConditionExpression=Key(EMAIL).eq(email),
-            ConsistentRead=True,
         )
         items = response.get('Items', [])
         if items:

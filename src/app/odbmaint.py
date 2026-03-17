@@ -334,10 +334,10 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                       max_enrollment = max_enrollment,
                       ok_if_exists = ok_if_exists)
 
-    # set up the admin
-    odb.register_email(email=admin_email, course_id=course_id, user_name=admin_name)
-    admin = odb.get_user_email(admin_email)
-    admin_id = admin[USER_ID]
+    # set up the admin; register_email returns {USER_ID: ...}, so we can avoid an
+    # immediate read by email (and any read-after-write inconsistency).
+    admin_result = odb.register_email(email=admin_email, course_id=course_id, user_name=admin_name)
+    admin_id = admin_result[USER_ID]
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)
     logger.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 
