@@ -80,6 +80,7 @@ all:
 
 check:
 	make lint
+	make start_local_minio start_local_dynamodb
 	AWS_REGION=local make pytest
 	make jscoverage
 

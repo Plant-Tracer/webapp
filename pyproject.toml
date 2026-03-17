@@ -151,7 +151,7 @@ extraPaths = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
-python_files = ["*_test.py"]
+python_files = ["*_test.py", "test_*.py"]
 norecursedirs = ["lib/ctools"]
 log_cli = true
 

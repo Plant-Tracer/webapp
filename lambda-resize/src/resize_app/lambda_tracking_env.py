@@ -4,11 +4,13 @@ No Flask. Uses vendored app for table/attribute names (odb, constants).
 """
 
 import os
+import time
 import urllib.parse
 from decimal import Decimal
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
+from botocore.exceptions import ClientError
 
 from .src.app.constants import C
 from .src.app.odb import (
@@ -19,6 +21,10 @@ from .src.app.odb import (
     COURSE_ID,
     LAST_FRAME_TRACKED,
     MOVIE_DATA_URN,
+    PROCESSING_STATE,
+    PROCESSING_STATE_TRACKING,
+    STATUS,
+    TRACKING_STATUS_UPDATED_AT,
 )
 from . import tracker
 
@@ -37,7 +43,7 @@ def _fix_value(prop, value):
     if prop in (
         "published", "deleted", "version", "last_frame_tracked", "research_use",
         "credit_by_name", "date_uploaded", "total_bytes", "total_frames",
-        "width", "height", "rotation_steps",
+        "width", "height", "rotation_steps", TRACKING_STATUS_UPDATED_AT,
     ):
         return int(value)
     if prop == "fps":
@@ -145,15 +151,68 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
                 ExpressionAttributeValues={":v": new_val},
             )
 
+    def try_claim_tracking(self, movie_id):
+        """
+        Claim this movie for tracking: set processing_state=tracking and tracking_status_updated_at=now.
+        Succeeds only if movie is not currently tracking, or tracking was last updated >1 hour ago.
+        Returns True if we claimed, False if already running (and not stale).
+        """
+        now_ts = int(time.time())
+        cutoff = now_ts - 3600  # 1 hour
+        item = self._movies.get_item(Key={MOVIE_ID: movie_id}, ConsistentRead=True).get("Item")
+        if item:
+            state = item.get(PROCESSING_STATE)
+            updated_at = item.get(TRACKING_STATUS_UPDATED_AT)
+            if state == PROCESSING_STATE_TRACKING and updated_at is not None:
+                try:
+                    ts = int(updated_at) if isinstance(updated_at, Decimal) else updated_at
+                except (TypeError, ValueError):
+                    ts = 0
+                if now_ts - ts < 3600:
+                    return False
+        try:
+            self._movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="SET #ps = :tracking, #ts = :now",
+                ConditionExpression=(
+                    Attr(PROCESSING_STATE).ne(PROCESSING_STATE_TRACKING)
+                    | Attr(TRACKING_STATUS_UPDATED_AT).not_exists()
+                    | Attr(TRACKING_STATUS_UPDATED_AT).lt(cutoff)
+                ),
+                ExpressionAttributeNames={
+                    "#ps": PROCESSING_STATE,
+                    "#ts": TRACKING_STATUS_UPDATED_AT,
+                },
+                ExpressionAttributeValues={
+                    ":tracking": PROCESSING_STATE_TRACKING,
+                    ":now": now_ts,
+                },
+            )
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return False
+            raise
+        return True
+
     def set_metadata(self, *, user_id, movie_id, prop, value):
         # pylint: disable=unused-argument
         value = _fix_value(prop, value)
-        self._movies.update_item(
-            Key={MOVIE_ID: movie_id},
-            UpdateExpression="SET #p = :v",
-            ExpressionAttributeNames={"#p": prop},
-            ExpressionAttributeValues={":v": value},
-        )
+        now_ts = int(time.time())
+        if prop == STATUS:
+            # Keep tracking_status_updated_at in sync so "already running" check stays valid.
+            self._movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="SET #p = :v, #ts = :now",
+                ExpressionAttributeNames={"#p": prop, "#ts": TRACKING_STATUS_UPDATED_AT},
+                ExpressionAttributeValues={":v": value, ":now": now_ts},
+            )
+        else:
+            self._movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="SET #p = :v",
+                ExpressionAttributeNames={"#p": prop},
+                ExpressionAttributeValues={":v": value},
+            )
 
     def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
         # pylint: disable=unused-argument

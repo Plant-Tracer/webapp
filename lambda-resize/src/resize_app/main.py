@@ -39,8 +39,10 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     """
     POST /api/v1 with action=track-movie. Body: api_key, movie_id, frame_start.
     Authorizes via api_key (same as get-frame), then runs tracking.
+    Refuses to start if this movie is already tracking and status was updated <1 hour ago.
     """
     from .lambda_tracking_handler import handler as track_handler  # pylint: disable=import-outside-toplevel
+    from .lambda_tracking_env import LambdaTrackingEnv  # pylint: disable=import-outside-toplevel
     from .src.app.odb import DDBO, USER_ID, ENABLED  # pylint: disable=import-outside-toplevel
 
     api_key = (payload.get("api_key") or "").strip()
@@ -58,6 +60,12 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     user_id = api_key_dict.get(USER_ID)
     if not user_id:
         return resp_json(401, {"error": True, "message": "invalid api_key"})
+    env = LambdaTrackingEnv()
+    if not env.try_claim_tracking(movie_id):
+        return resp_json(409, {
+            "error": True,
+            "message": "Tracking already in progress for this movie. Wait for it to finish or try again in an hour.",
+        })
     return track_handler({"user_id": user_id, "movie_id": movie_id, "frame_start": frame_start})
 
 

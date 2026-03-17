@@ -94,6 +94,8 @@ PROCESSING_STATE = 'processing_state'
 PROCESSING_STATE_UPLOADING = 'uploading'
 PROCESSING_STATE_TRACKING = 'tracking'
 PROCESSING_STATE_TRACKED = 'tracked'
+# When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
+TRACKING_STATUS_UPDATED_AT = 'tracking_status_updated_at'
 
 USER_ID = 'user_id'
 
