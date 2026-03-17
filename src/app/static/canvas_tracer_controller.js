@@ -356,7 +356,7 @@ class TracerController extends MovieController {
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
-                    if (status === 200 && !(data && data.error)) {
+                    if (status >= 200 && status < 300 && !(data && data.error)) {
                         return;
                     }
                     const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
@@ -370,6 +370,13 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.tracking_status.text(msg);
+                    console.error('[track-movie] final failure (HTTP):', {
+                        status,
+                        data,
+                        attempt,
+                        url,
+                        body: body,
+                    });
                     alert(msg);
                 })
                 .catch((err) => {
@@ -383,6 +390,12 @@ class TracerController extends MovieController {
                     self.enableTrackButtonIfAllowed();
                     const msg = err && err.message ? err.message : "Tracking request failed.";
                     self.tracking_status.text(msg);
+                    console.error('[track-movie] final failure (network):', {
+                        attempt,
+                        error: err && err.message,
+                        url,
+                        body: body,
+                    });
                     alert(msg);
                 });
         }

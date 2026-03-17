@@ -272,12 +272,16 @@ def http_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             match (method, path, action):
                 case ("GET", "/status", _):
-                    return api_status()
+                    resp = api_status()
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
                 case ("GET", "/prod/status", _):
-                    return api_status()
+                    resp = api_status()
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("OPTIONS", "/api/v1", _):
-                    return resp_json(
+                    resp = resp_json(
                         204,
                         {},
                         headers={
@@ -285,41 +289,69 @@ def http_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             "Access-Control-Allow-Headers": "*",
                         },
                     )
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case (_, "/api/v1", "ping"):
-                    return api_ping(event, context)
+                    resp = api_ping(event, context)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
                 case (_, "/api/v1/ping", _):
-                    return api_ping(event, context)
+                    resp = api_ping(event, context)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("POST", "/api/v1", "resize-start"):
-                    return api_resize(event, context, payload)
+                    resp = api_resize(event, context, payload)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
                 case ("POST", "/api/v1", "start-processing"):
-                    return api_start_processing(payload)
+                    resp = api_start_processing(payload)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
                 case ("POST", "/api/v1", "rotate-and-zip"):
-                    return api_rotate_and_zip(payload)
+                    resp = api_rotate_and_zip(payload)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("POST", "/api/v1", "track-movie"):
-                    return api_track_movie(payload, resp_json)
+                    resp = api_track_movie(payload, resp_json)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("POST", "/api/v1", "new-frame"):
-                    return api_new_frame(payload, resp_json)
+                    resp = api_new_frame(payload, resp_json)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("GET", "/api/v1/frame", _):
-                    return api_get_frame(event)
+                    resp = api_get_frame(event)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case ("GET", "/api/v1/movie-data", _):
-                    return api_get_movie_data(event)
+                    resp = api_get_movie_data(event)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case (_, "/api/v1", "heartbeat"):
-                    return api_heartbeat(event, context)
+                    resp = api_heartbeat(event, context)
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
                 case (_, "/api/v1", "log"):
-                    return api_log()
+                    resp = api_log()
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case (_, "/api/v1", _):
-                    return resp_json(400, {"error": True, "message": f"Unknown action {action}"})
+                    resp = resp_json(400, {"error": True, "message": f"Unknown action {action}"})
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
                 case (_, _, _):
-                    return resp_json(400, {"error": True, "message": f"Unknown action {action}"})
+                    resp = resp_json(400, {"error": True, "message": f"Unknown action {action}"})
+                    LOGGER.info("resp path='%s' resp=%s", path, resp)
+                    return resp
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             from .common import LOGGER  # pylint: disable=import-outside-toplevel

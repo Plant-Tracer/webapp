@@ -564,19 +564,19 @@ endef
 sam-logs:
 	@$(SAM_LOGS_RESOLVE); \
 	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text || true
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
 # Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
 sam-logs-simple:
 	@$(SAM_LOGS_RESOLVE); \
 	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
-	  aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS); \
+	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \
 	else \
 	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) $(SAM_LOGS_OPTIONS) \
 	    --query 'events[].[timestamp,message]' --output text | while IFS=$$'\t' read -r ts msg; do \
 	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
-	  done; \
+	  done || true; \
 	fi
 
 # Stream Lambda logs (timestamp + message). Sets SAM_LOGS_TAIL=1 and invokes sam-logs-simple.
