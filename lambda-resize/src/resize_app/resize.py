@@ -6,7 +6,6 @@ Runs the camera.
 """
 
 import base64
-import io
 import tempfile
 import json
 import os
@@ -554,4 +553,3 @@ def api_status() -> Dict[str, Any]:
     except Exception as e:  # pylint: disable=broad-exception-caught
         LOGGER.exception("api_status failed: %s", e)
         return resp_json(500, {"status": "error", "message": str(e)})
-

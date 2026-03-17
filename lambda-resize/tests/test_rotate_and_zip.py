@@ -19,16 +19,16 @@ class _FakeS3:
         self.get_calls = []
         self.put_calls = []
 
-    def get_object(self, Bucket, Key):  # pylint: disable=unused-argument
+    def get_object(self, Bucket, Key):
         self.get_calls.append((Bucket, Key))
         return {"Body": _FakeBody(self.data)}
 
-    def put_object(self, **kwargs):  # pylint: disable=unused-argument
+    def put_object(self, **kwargs):
         self.put_calls.append(kwargs)
 
 
 class _FakeLogs:
-    def put_item(self, **kwargs):  # pylint: disable=unused-argument
+    def put_item(self, **_kwargs):
         pass
 
 
@@ -39,7 +39,7 @@ class _FakeDDBO:
         self.get_movie_calls = []
         self.update_calls = []
 
-    def get_movie(self, movie_id):  # pylint: disable=unused-argument
+    def get_movie(self, movie_id):
         self.get_movie_calls.append(movie_id)
         # Minimal movie row for api_rotate_and_zip
         return {
@@ -47,7 +47,7 @@ class _FakeDDBO:
             "course_id": "COURSE1",
         }
 
-    def update_table(self, table, movie_id, attrs):  # pylint: disable=unused-argument
+    def update_table(self, _table, movie_id, attrs):
         self.update_calls.append((movie_id, dict(attrs)))
 
 
@@ -76,7 +76,7 @@ def test_rotate_and_zip_zero_steps_builds_zip_without_rotation(monkeypatch, fake
     # pylint understands the type.
     calls = {"rotated": False, "zip_args": {}}
 
-    def fake_rotate_video_av(data, steps):  # pylint: disable=unused-argument
+    def fake_rotate_video_av(data, _steps):
         calls["rotated"] = True
         return b"rotated-bytes"
 
@@ -134,7 +134,7 @@ def test_rotate_and_zip_one_step_rotates_and_builds_zip(monkeypatch, fake_env):
 
     calls = {"rotated": False, "rotated_bytes": None, "zip_args": {}}
 
-    def fake_rotate_video_av(data, steps):  # pylint: disable=unused-argument
+    def fake_rotate_video_av(data, _steps):
         calls["rotated"] = True
         calls["rotated_bytes"] = b"rotated-" + data
         return calls["rotated_bytes"]

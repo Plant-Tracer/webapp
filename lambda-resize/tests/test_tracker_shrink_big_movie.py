@@ -16,7 +16,6 @@ from resize_app.tracker import (
 from resize_app.src.app.constants import C
 from resize_app.src.app.odb import (
     LAST_FRAME_TRACKED,
-    MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
 )
 
@@ -29,6 +28,7 @@ BIG_MOVIE_FIXTURE = (
 )
 
 
+# pylint: disable=too-many-instance-attributes
 class _FakeEnv(TrackingEnv):
     """Minimal TrackingEnv for exercising run_tracking shrink logic."""
 
@@ -164,4 +164,3 @@ def test_run_tracking_shrinks_zip_frames_even_if_db_width_is_analysis_size(tmp_p
         isinstance(prop, str) and prop == MOVIE_ZIPFILE_URN
         for (_user, _mid, prop, _value) in env.metadata_sets
     ), "MOVIE_ZIPFILE_URN must be written via set_metadata"
-

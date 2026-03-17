@@ -19,7 +19,7 @@ class _FakeS3:
     def __init__(self, movie_bytes: bytes):
         self.movie_bytes = movie_bytes
 
-    def get_object(self, Bucket, Key):  # pylint: disable=unused-argument
+    def get_object(self, Bucket, Key):
         return {"Body": _FakeBody(self.movie_bytes)}
 
 
@@ -54,7 +54,7 @@ def test_get_frame_returns_400_when_api_key_missing(valid_event):
 def test_get_frame_returns_401_when_api_key_invalid(valid_event, monkeypatch):
     """Invalid api_key returns 401."""
     class FakeDDBO:
-        def get_api_key_dict(self, api_key):  # pylint: disable=unused-argument
+        def get_api_key_dict(self, _api_key):
             return None
 
     monkeypatch.setattr(resize, "DDBO", FakeDDBO)
@@ -72,13 +72,13 @@ def test_get_frame_returns_200_and_jpeg_when_authorized(
     s3 = _FakeS3(movie_bytes)
 
     class FakeDDBO:
-        def get_api_key_dict(self, api_key):  # pylint: disable=unused-argument
+        def get_api_key_dict(self, _api_key):
             return {"user_id": "u1", "enabled": True}
 
-        def get_user(self, user_id):  # pylint: disable=unused-argument
+        def get_user(self, _user_id):
             return {"enabled": True}
 
-    def fake_can_access_movie(*, user_id, movie_id):  # pylint: disable=unused-argument
+    def fake_can_access_movie(*, user_id, movie_id):
         return {
             "movie_id": movie_id,
             "movie_data_urn": "s3://bucket/course1/movie1.mov",
@@ -86,7 +86,7 @@ def test_get_frame_returns_200_and_jpeg_when_authorized(
             "height": None,
         }
 
-    def fake_extract_single_frame(data, frame_number):  # pylint: disable=unused-argument
+    def fake_extract_single_frame(_data, _frame_number):
         return fake_jpeg_bytes
 
     def fake_is_movie_id(mid):

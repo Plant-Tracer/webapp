@@ -46,15 +46,15 @@ def test_big_movie_tracking_uses_processed_mp4_and_shrunk_zip(monkeypatch):
             self.get_calls = []
             self.put_calls = []
 
-        def get_object(self, Bucket, Key):  # pylint: disable=unused-argument
+        def get_object(self, Bucket, Key):
             self.get_calls.append((Bucket, Key))
             return {"Body": _FakeBody(self.movie_bytes)}
 
-        def put_object(self, **kwargs):  # pylint: disable=unused-argument
+        def put_object(self, **kwargs):
             self.put_calls.append(kwargs)
 
     class _FakeLogs:
-        def put_item(self, **kwargs):  # pylint: disable=unused-argument
+        def put_item(self, **_kwargs):
             pass
 
     class _FakeDDBO:
@@ -69,11 +69,11 @@ def test_big_movie_tracking_uses_processed_mp4_and_shrunk_zip(monkeypatch):
             }
             self.update_calls = []
 
-        def get_movie(self, movie_id):  # pylint: disable=unused-argument
+        def get_movie(self, movie_id):
             assert movie_id == BIG_MOVIE_ID
             return dict(self.movie_row)
 
-        def update_table(self, table, movie_id, attrs):  # pylint: disable=unused-argument
+        def update_table(self, _table, movie_id, attrs):
             assert movie_id == BIG_MOVIE_ID
             self.update_calls.append(dict(attrs))
             # Keep an in-memory view of movie_data_urn for later assertions.

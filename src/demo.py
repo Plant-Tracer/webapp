@@ -6,7 +6,7 @@ import os
 import os.path
 
 
-def lambda_handler(event, context): # pylint: disable=unused-argument
+def lambda_handler(_event, _context):
     """Sample pure Lambda function
 
     Parameters

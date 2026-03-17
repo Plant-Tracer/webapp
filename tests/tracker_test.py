@@ -34,9 +34,9 @@ def test_track_movie():
     """End-to-end test of the track_movie function call."""
     input_trackpoints = TEST_MOVIE_START_TRACKPOINTS
 
-    # pylint: disable=unused-argument
     trackpoints = []
-    def callback(*,frame_number,frame_data,frame_trackpoints):
+    def callback(*, frame_number, frame_data, frame_trackpoints):
+        del frame_number, frame_data  # unused in this test
         trackpoints.extend(frame_trackpoints)
 
     # Get the new trackpoints

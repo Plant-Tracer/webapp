@@ -281,7 +281,15 @@ def prototype_callback(*, frame_number, frame_data, frame_trackpoints):
     logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s", frame_number, len(frame_data), frame_trackpoints)
 
 
-def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_frames=False, callback=prototype_callback):
+def track_movie(
+    *,
+    moviefile_input,
+    input_trackpoints,
+    frame_start=0,
+    label_frames=False,
+    callback=prototype_callback,
+    max_frame=None,
+):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -305,6 +313,8 @@ def track_movie(*, moviefile_input, input_trackpoints, frame_start=0, label_fram
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     logging.info("start movie tracking")
     for frame_number in range(1_000_000):
+        if max_frame is not None and frame_number > max_frame:
+            break
         frame_prev = frame_this
         result, frame_this = cap.read()
         if not result:
@@ -512,7 +522,7 @@ class TrackingCallback:
             os.unlink(self._zip_tf.name)
 
 
-def run_tracking(*, user_id, movie_id, frame_start, env):
+def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
     """Run full tracking pipeline using the given env for all I/O (DB, S3, metadata).
 
     env must be a TrackingEnv implementation (e.g. FlaskTrackingEnv or LambdaTrackingEnv).
@@ -598,11 +608,21 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
             research_comment=research_comment,
             total_frames=total_frames,
         )
+        # If max_frame is provided, clamp it to a hard safety cap of 9999 and, if
+        # we know total_frames, to the last real frame.
+        effective_max = None
+        if max_frame is not None:
+            hard_cap = 9999
+            if total_frames:
+                hard_cap = min(hard_cap, int(total_frames) - 1)
+            effective_max = min(int(max_frame), hard_cap)
+
         track_movie(
             input_trackpoints=input_trackpoints,
             frame_start=frame_start,
             moviefile_input=moviefile_input,
             callback=callback.notify,
+            max_frame=effective_max,
         )
         callback.close()
         env.update_movie(movie_id, {LAST_FRAME_TRACKED: callback.last_frame_tracked})
@@ -646,8 +666,8 @@ if __name__ == "__main__":
 
     # Get the new trackpoints
     tpts = []
-    # pylint: disable=unused-argument
     def cb2(*, frame_number, frame_data, frame_trackpoints):
+        del frame_number, frame_data  # unused in this CLI helper
         tpts.extend(frame_trackpoints)
 
     track_movie(moviefile_input=args.moviefile,

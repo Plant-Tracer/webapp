@@ -78,6 +78,8 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
         frame_start = int(payload.get("frame_start", 0))
     except (TypeError, ValueError):
         frame_start = 0
+    if frame_start < 0 or frame_start >= 10000:
+        return resp_json(400, {"error": True, "message": "frame_start must be between 0 and 9999"})
     if not api_key or not movie_id:
         return resp_json(400, {"error": True, "message": "api_key and movie_id required"})
     ddbo = DDBO()
@@ -106,7 +108,8 @@ def api_track_movie(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
         "user_id": user_id,
         "movie_id": movie_id,
         "frame_start": frame_start,
-        "batch_size": int(payload.get("batch_size", 1)) or 1,
+        "origin_start": frame_start,
+        "batch_size": max(1, min(int(payload.get("batch_size", 1)) or 1, 500)),
     }
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(body))
     return resp_json(

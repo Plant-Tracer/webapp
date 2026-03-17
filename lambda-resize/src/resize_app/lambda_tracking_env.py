@@ -195,7 +195,6 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
         return True
 
     def set_metadata(self, *, user_id, movie_id, prop, value):
-        # pylint: disable=unused-argument
         value = _fix_value(prop, value)
         now_ts = int(time.time())
         if prop == STATUS:
@@ -215,7 +214,6 @@ class LambdaTrackingEnv(tracker.TrackingEnv):
             )
 
     def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
-        # pylint: disable=unused-argument
         for prop in ("fps", "width", "height", "total_frames", "total_bytes"):
             if prop in movie_metadata:
                 self.set_metadata(user_id=user_id, movie_id=movie_id, prop=prop, value=movie_metadata[prop])
