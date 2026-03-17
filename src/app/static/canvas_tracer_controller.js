@@ -345,7 +345,7 @@ class TracerController extends MovieController {
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
-        const TRACK_MOVIE_RETRY_DELAY_MS = 2000;
+        const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
 
         function tryTrackMovie(attempt) {
             attempt = attempt || 1;
@@ -478,8 +478,8 @@ class TracerController extends MovieController {
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
-                if (self.poll_error_count >= 3) {
-                    alert('Status check failed 3 times in a row. You can refresh the page to try again.');
+                if (self.poll_error_count >= 10) {
+                    alert('Status check failed 10 times in a row. You can refresh the page to try again.');
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
@@ -488,8 +488,8 @@ class TracerController extends MovieController {
             .fail((_xhr, status, err) => {
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
-                if (self.poll_error_count >= 3) {
-                    alert('Status check failed 3 times in a row (e.g. network or server issue). You can refresh the page to try again.');
+                if (self.poll_error_count >= 10) {
+                    alert('Status check failed 10 times in a row (e.g. network or server issue). You can refresh the page to try again.');
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
@@ -518,10 +518,13 @@ class TracerController extends MovieController {
                 const deadline = Date.now() + maxZipWaitMs;
                 function poll() {
                     if (Date.now() > deadline) {
+                        $('#status-big').html('Tracing complete, but ZIP file did not become available in time. Please refresh and try again.');
                         reject(new Error('ZIP file did not become available in time. Please refresh and try again.'));
                         return;
                     }
-                    self.tracking_status.text('Waiting for ZIP file to be processed...');
+                    // Show a visible, stable message while we wait for the ZIP.
+                    self.tracking_status.text('');
+                    $('#status-big').text('Tracing complete. Waiting for ZIP file to be processed…');
                     $.post(`${API_BASE}api/get-movie-metadata`, {
                         api_key: self.api_key,
                         movie_id: self.movie_id,
@@ -560,6 +563,9 @@ class TracerController extends MovieController {
             .catch((err) => {
                 $(div).removeClass('tracing-dimmed');
                 self.tracking_status.text('');
+                if (!$('#status-big').text()) {
+                    $('#status-big').text('Tracing complete, but ZIP file did not become available. Please refresh and try again.');
+                }
                 self.enableTrackButtonIfAllowed();
                 alert(err.message || 'Failed to load traced movie.');
             });
