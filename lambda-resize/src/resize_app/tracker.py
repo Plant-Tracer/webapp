@@ -524,26 +524,28 @@ def run_tracking(*, user_id, movie_id, frame_start, env):
         movie_record.get("attribution_name"),
     )
 
-    movie_metadata = {
-        "width": movie_record.get("width"),
-        "height": movie_record.get("height"),
-        "total_frames": movie_record.get("total_frames"),
-        "total_bytes": movie_record.get("total_bytes"),
-        "fps": movie_record.get("fps"),
-    }
     movie_data = env.get_movie_data(movie_id=movie_id)
-    # Fill any missing metadata from the movie file so tracking can run.
-    if any(movie_metadata.get(k) is None for k in ("width", "height", "total_frames", "total_bytes", "fps")):
-        extracted = extract_movie_metadata(movie_data=movie_data)
-        to_set = {}
-        for key in ("width", "height", "total_frames", "total_bytes", "fps"):
-            if movie_metadata.get(key) is None and extracted.get(key) is not None:
-                to_set[key] = extracted[key]
-        if to_set.get("fps") is not None and not isinstance(to_set["fps"], str):
-            to_set["fps"] = str(to_set["fps"])
-        if to_set:
-            env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=to_set)
-            movie_metadata.update(to_set)
+    # Derive true movie dimensions from the file so shrink/rotate decisions are
+    # based on the real stream size, not any analysis/display size that may have
+    # been written into DB width/height by get-frame(size=analysis).
+    extracted = extract_movie_metadata(movie_data=movie_data)
+    movie_metadata = {
+        "width": extracted.get("width"),
+        "height": extracted.get("height"),
+        "total_frames": extracted.get("total_frames"),
+        "total_bytes": extracted.get("total_bytes"),
+        "fps": extracted.get("fps"),
+    }
+    # Persist missing metadata back to the movie record for later callers.
+    to_set = {}
+    for key in ("width", "height", "total_frames", "total_bytes", "fps"):
+        if movie_record.get(key) is None and movie_metadata.get(key) is not None:
+            to_set[key] = movie_metadata[key]
+    if to_set.get("fps") is not None and not isinstance(to_set["fps"], str):
+        to_set["fps"] = str(to_set["fps"])
+        movie_metadata["fps"] = to_set["fps"]
+    if to_set:
+        env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=to_set)
 
     rotation_steps = int(movie_record.get("rotation_steps") or 0)
     rotation_steps = max(0, min(3, rotation_steps))

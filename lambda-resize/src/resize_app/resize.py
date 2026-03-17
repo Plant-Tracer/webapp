@@ -437,25 +437,26 @@ def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
     except ValueError as e:
         return resp_json(400, {"error": True, "message": str(e)})
 
+    # For frame 0, record the *original* movie dimensions from the movie bytes
+    # before any analysis-size downscaling, so DB width/height always reflect
+    # the true stream size used for processing/tracking.
+    if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
+        try:
+            meta = extract_movie_metadata(movie_bytes)
+            w = meta.get("width")
+            h = meta.get("height")
+            if w and h:
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
+                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("get_frame set_metadata failed: %s", exc)
+
     if size_analysis:
         jpeg_bytes = resize_jpeg_to_fit(
             jpeg_bytes,
             getattr(C, "ANALYSIS_FRAME_MAX_WIDTH", 640),
             getattr(C, "ANALYSIS_FRAME_MAX_HEIGHT", 480),
         )
-
-    # Update stored width/height from first frame when missing (so analyze page has dimensions).
-    if frame_number == 0 and (not movie.get(WIDTH) or not movie.get(HEIGHT)):
-        try:
-            from PIL import Image  # pylint: disable=import-outside-toplevel
-            img = Image.open(io.BytesIO(jpeg_bytes))
-            img.load()
-            w, h = img.size
-            if w and h:
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
-                odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            LOGGER.debug("get_frame set_metadata failed: %s", exc)
 
     return {
         "statusCode": 200,
