@@ -9,7 +9,7 @@ from resize_app import resize
 from resize_app.src.app.constants import C, logger
 
 # Fixture path: test fails with an error if this file is missing.
-BIG_MOVIE_FIXTURE = Path(__file__).resolve().parent / "data" / "big-test-movie.mp4"
+BIG_MOVIE_FIXTURE = Path(__file__).resolve().parent.parent.parent / "tests" / "data" / "big-test-movie.mp4"
 
 
 def test_big_movie_tracking_uses_processed_mp4_and_shrunk_zip(monkeypatch):

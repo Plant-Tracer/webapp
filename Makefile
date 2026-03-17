@@ -88,8 +88,8 @@ coverage:
 	AWS_REGION=local make pytest-coverage
 	AWS_REGION=local make jscoverage
 
-ptags:
-	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
+tags:
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-resize/src/resize_app/*.py
 
 ################################################################
 ## Program development: static analysis tools

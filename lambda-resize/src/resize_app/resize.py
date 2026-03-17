@@ -7,6 +7,7 @@ Runs the camera.
 
 import base64
 import io
+import tempfile
 import json
 import os
 import sys
@@ -20,6 +21,7 @@ import boto3
 
 from .common import LOGGER
 from .movie_metadata import extract_movie_metadata
+from . import rotate_zip
 from .rotate_zip import (
     extract_single_frame,
     resize_jpeg_to_fit,
@@ -310,8 +312,53 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
         LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload zip"})
 
-    # Final state: zip finished, mark ready, and write full metadata from the movie we used (rotated or not).
+    # Final state: zip finished. Optionally shrink big movies into a processed MP4 and point MOVIE_DATA_URN at it,
+    # then mark ready and write full metadata from the final movie (processed if created, otherwise original/rotated).
     meta = extract_movie_metadata(movie_bytes_for_zip)
+    width = int(meta.get("width") or 0)
+    height = int(meta.get("height") or 0)
+    needs_shrink = width > C.ANALYSIS_FRAME_MAX_WIDTH or height > C.ANALYSIS_FRAME_MAX_HEIGHT
+
+    final_movie_bytes = movie_bytes_for_zip
+    if needs_shrink:
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as in_tf, tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".mp4", delete=True
+            ) as out_tf:
+                in_tf.write(movie_bytes_for_zip)
+                in_tf.flush()
+                rotate_zip.prepare_movie_for_tracking_cv2(
+                    in_tf.name,
+                    out_tf.name,
+                    0,  # rotation already applied above if needed
+                    C.ANALYSIS_FRAME_MAX_WIDTH,
+                    C.ANALYSIS_FRAME_MAX_HEIGHT,
+                )
+                out_tf.flush()
+                with open(out_tf.name, "rb") as f:
+                    final_movie_bytes = f.read()
+
+            processed_key = f"{course_id}/{movie_id}{C.MOVIE_PROCESSED_EXTENSION}"
+            processed_urn = f"s3://{bucket}/{processed_key}"
+            s3.put_object(
+                Bucket=bucket,
+                Key=processed_key,
+                Body=final_movie_bytes,
+                ContentType="video/mp4",
+            )
+            meta = extract_movie_metadata(final_movie_bytes)
+            meta["total_bytes"] = len(final_movie_bytes)
+            ddbo.update_table(
+                ddbo.movies,
+                movie_id,
+                {
+                    MOVIE_DATA_URN: processed_urn,
+                    TOTAL_BYTES: len(final_movie_bytes),
+                },
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOGGER.debug("processed movie generation failed for %s: %s", movie_id, exc)
+
     update_payload = {
         "movie_zipfile_urn": zip_urn,
         "processing_state": "ready",
