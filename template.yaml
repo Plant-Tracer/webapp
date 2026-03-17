@@ -581,6 +581,20 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*/index/*"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                Resource: !GetAtt TrackingQueue.Arn
+
+  TrackingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-tracking-queue"
+      VisibilityTimeout: 900
 
   LambdaFunction:
     Type: AWS::Serverless::Function
@@ -602,6 +616,7 @@ Resources:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Sub "${AWS::StackName}-"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
+          TRACKING_QUEUE_URL: !Ref TrackingQueue
       Events:
         AnyRoot:
           Type: HttpApi
@@ -612,6 +627,31 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
+
+  TrackingWorkerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Architectures: [arm64]
+      PackageType: Zip
+      CodeUri: lambda-resize/src/
+      Handler: resize_app.lambda_tracking_handler.sqs_handler
+      Timeout: 900
+      MemorySize: 1024
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_PREFIX: !Sub "${AWS::StackName}-"
+          PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
+          TRACKING_QUEUE_URL: !Ref TrackingQueue
+      Events:
+        TrackingQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TrackingQueue.Arn
+            BatchSize: 1
         AnyProxy:
           Type: HttpApi
           Properties:
