@@ -379,12 +379,15 @@ class DDBO:
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
-        response = self.users.query( IndexName='email_idx',
-                                     KeyConditionExpression=Key( EMAIL ).eq(email) )
+        response = self.users.query(
+            IndexName='email_idx',
+            KeyConditionExpression=Key(EMAIL).eq(email),
+            ConsistentRead=True,
+        )
         items = response.get('Items', [])
         if items:
             return items[0]
-        logger.debug("email %s not in table %s",email,self.users)
+        logger.debug("email %s not in table %s", email, self.users)
         raise InvalidUser_Email(email)
 
     def put_user(self, user):
