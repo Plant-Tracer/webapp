@@ -66,6 +66,7 @@ def sqs_handler(event, _context=None):
     SQS event source for tracking jobs.
     Each record body is JSON: {"user_id": "...", "movie_id": "...", "frame_start": int, "batch_size": int}.
     """
+    logger.info("sqs_handler invoked with %d record(s)", len(event.get("Records", [])))
     queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
 
@@ -84,8 +85,24 @@ def sqs_handler(event, _context=None):
             logger.exception("Bad SQS record: %s", e)
             continue
 
+        logger.info(
+            "SQS tracking request: movie_id=%s user_id=%s frame_start=%s origin_start=%s batch_size=%s",
+            movie_id,
+            user_id,
+            frame_start,
+            origin_start,
+            batch_size,
+        )
+
         max_frame = frame_start + batch_size - 1
         tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, max_frame=max_frame)
+        logger.info(
+            "Completed tracking batch: movie_id=%s user_id=%s frame_start=%s max_frame=%s",
+            movie_id,
+            user_id,
+            frame_start,
+            max_frame,
+        )
 
         # Decide whether to enqueue a follow-up batch.
         try:
@@ -134,17 +151,14 @@ def sqs_handler(event, _context=None):
             continue
 
         if queue_url:
-            sqs.send_message(
-                QueueUrl=queue_url,
-                MessageBody=json.dumps(
-                    {
-                        "user_id": user_id,
-                        "movie_id": movie_id,
-                        "frame_start": next_start,
-                        "origin_start": origin_start,
-                        "batch_size": 100,
-                    }
-                ),
-            )
+            msg = {
+                "user_id": user_id,
+                "movie_id": movie_id,
+                "frame_start": next_start,
+                "origin_start": origin_start,
+                "batch_size": 100,
+            }
+            logger.info("Enqueuing follow-up SQS batch: %s", msg)
+            sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
 
     return {}

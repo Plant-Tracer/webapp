@@ -107,6 +107,7 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
     except cv2.error:  # pylint: disable=catching-non-exception
         trackpoints_out = []
 
+    logger.info("output_trackpoints=%s",trackpoints)
     return trackpoints_out
 
 
@@ -294,8 +295,7 @@ def track_movie(
     frame_start=0,
     label_frames=False,
     callback=prototype_callback,
-    max_frame=None,
-):
+    max_frame=None ):
     """
     Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
     Draws frame numbers on each frame
@@ -311,6 +311,7 @@ def track_movie(
 
          - Frame0 is never tracked. It's trackpoints are the provided trackpoints.
     """
+    logger.info("track_movie moviefile_input=%s frame_start=%s",moviefile_input, frame_start)
     cap = cv2.VideoCapture(moviefile_input)
     frame_this = None
 
@@ -319,6 +320,7 @@ def track_movie(
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     logging.info("start movie tracking")
     for frame_number in range(1_000_000):
+        logger.info("frame_number=%s",frame_number)
         if max_frame is not None and frame_number > max_frame:
             break
         frame_prev = frame_this
@@ -355,6 +357,7 @@ def track_movie(
             tp['frame_number'] = frame_number  # set the frame number
 
         # Call the callback if we have one
+        logger.info("frame_number=%s current_trackpoints=%s",frame_number,current_trackpoints)
         if callback is not None:
             if label_frames:
                 frame_show = frame_this.copy()
@@ -495,6 +498,10 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
         movie_record.get("attribution_name"),
     )
 
+    if not input_trackpoints:
+        raise RuntimeError("Cannot track movie with no trackpoints")
+
+    logger.info("run_tracking user_id=%s movie_id=%s frame_start=%s input_trackpoints=%s",user_id,movie_id,frame_start,input_trackpoints)
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
     # been written into DB width/height by get-frame(size=analysis).
