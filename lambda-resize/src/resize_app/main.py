@@ -9,6 +9,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict, Tuple
 
 import boto3
@@ -412,7 +413,7 @@ def http_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ddbo.update_table(
                 ddbo.logs,
                 log_id,
-                {"elapsed_time": time.time() - start_ts},
+                {"elapsed_time": Decimal(str(time.time() - start_ts))},
             )
 
     # Normal path: response already returned from match-cases.
