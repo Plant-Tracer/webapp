@@ -1,9 +1,11 @@
 # -----------------------------------------------------------------------------
-# BUILD / DEPLOY (run from the directory containing this template.yaml)
+# Planttracer stack.
+# Creates:
+# - VM
+# - Lambda to Resize and Track
+# - SQS to allow tracker to queue longer track and return
 #
-# 1) Configure AWS credentials/profile as usual.
-#
-# 2) Deploy (guided the first time):
+# Deploy (guided the first time):
 #      sam deploy --guided
 #
 #    Subsequent deploys:
@@ -20,8 +22,12 @@ Globals:
   Function:
     Environment:
       Variables:
+        POWERTOOLS_SERVICE_NAME: "planttracer"
         LOG_LEVEL: !Ref LogLevel
         TABLE_PREFIX: !Ref AWS::StackName
+        POWERTOOLS_EVENT_HANDLER_AUTO_JSON_DECIMAL: "true"
+    Layers:
+      - arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:60
 
 Parameters:
   HostedZoneId:
@@ -640,7 +646,9 @@ Resources:
           Type: SQS
           Properties:
             Queue: !GetAtt TrackingQueue.Arn
-            BatchSize: 1
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
 
 Outputs:
   ApiId:

@@ -3,15 +3,15 @@ Lambda HTTP API entry point. Parses the event and delegates to resize API handle
 """
 
 import base64
-import binascii
 import functools
 import json
 import os
 import time
-from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
+from aws_lambda_powertools import Logger
+from aws_lambda_powertools.event_handler import APIGatewayHttpResolver, CORSConfig
 import boto3
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
@@ -40,15 +40,25 @@ from .resize import (
     api_start_processing,
     api_status,
     resp_json,
-    resp_redirect
+    resp_redirect,
 )
-from .lambda_tracking_handler import sqs_handler, MAX_BATCH_SIZE
-from .common import LOGGER
+from .lambda_tracking_handler import MAX_BATCH_SIZE
 
+LOGGER = Logger(service="planttracer")
 
-@functools.lru_cache(maxsize=1)
+# Permissive CORS
+cors_config = CORSConfig(
+    allow_origin="*",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+app = APIGatewayHttpResolver(cors=cors_config)
+
 def movies_table():
-    """Return the movies table resource used by Lambda tracking claim logic."""
+    """Return the movies table resource used by Lambda tracking claim logic.
+    DDBO() is a singleton, so no need to cache this function.
+    """
     return DDBO().movies
 
 
@@ -241,173 +251,74 @@ def api_new_frame(payload: Dict[str, Any], resp_json: Any) -> Dict[str, Any]:
     return resp_json(200, {"error": False, "frame_urn": frame_urn})
 
 
-# pylint: disable=too-many-branches, disable=unused-argument
-def parse_event(event: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
-    """Parse HTTP API v2 event.
-    :param event: AWS Lambda HTTP API v2 event to parse
-    :return (method, path, payload) - method - HTTP Method; path=HTTP Path; payload=JSON body if POST
+@app.get("/api/v1/ping")
+def handle_ping() -> Dict[str, Any]:
+    """Health check endpoint for Powertools router."""
+    return {
+        "error": False,
+        "message": "ok",
+        "now": time.time(),
+    }
+
+
+@app.get("/status")
+@app.get("/prod/status")
+def handle_status() -> Dict[str, Any]:
+    """Status endpoint compatible with existing api_status helper."""
+    return api_status()
+
+
+@app.options("/api/v1")
+def handle_options_api_v1() -> Dict[str, Any]:
+    """CORS preflight for /api/v1."""
+    # CORSConfig already injects most headers; return empty body.
+    return {}
+
+
+@app.post("/api/v1")
+def handle_api_v1_root() -> Dict[str, Any]:
     """
-    stage = event.get("requestContext", {}).get("stage", "")
-    path = event.get("rawPath") or event.get("path") or "/"
-    if stage and path.startswith("/" + stage):
-        path = path[len(stage) + 1 :] or "/"
-    method = (
-        event.get("requestContext", {})
-        .get("http", {})
-        .get("method", event.get("httpMethod", "GET"))
-    )
-    body = event.get("body")
-    if event.get("isBase64Encoded"):
-        try:
-            body = base64.b64decode(body or "").decode("utf-8", "replace")
-        except binascii.Error:
-            body = None
-    try:
-        payload = json.loads(body) if body else {}
-    except json.JSONDecodeError:
-        payload = {}
-    return method, path, payload
-
-
-def http_lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """HTTP API entrypoint (no S3/SQS event invocation)."""
-
-    method, path, payload = parse_event(event)
-
-    # Record Lambda invocation start in DynamoDB logs.
-    ddbo = DDBO()
-    request_id = getattr(context, "aws_request_id", "unknown")
-    log_id = f"resize-lambda:{request_id}"
-    start_ts = time.time()
-    start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
-    ddbo.update_table( ddbo.logs, log_id, { "start_time": int(start_ts),
-                                            "sk": start_iso } )
+    POST /api/v1 dispatcher based on JSON body 'action' field.
+    Mirrors the legacy http_lambda_handler routing.
+    """
+    event = app.current_event.raw_event
+    context = app.current_event.lambda_context
+    payload = app.current_event.json_body or {}
 
     with _with_request_log_level(payload):
-        try:
-            action = (payload.get("action") or "").lower()
-            from .common import LOGGER  # pylint: disable=import-outside-toplevel
+        action = (payload.get("action") or "").lower()
 
-            # Enrich DynamoDB log entry with request metadata.
-            ddbo.update_table(
-                ddbo.logs,
-                log_id,
-                {
-                    "method": method,
-                    "path": path,
-                    "action": action,
-                    "params": payload,
-                },
-            )
+        if action == "ping":
+            return api_ping(event, context)
+        if action == "resize-start":
+            return api_resize(event, context, payload)
+        if action == "start-processing":
+            return api_start_processing(payload)
+        if action == "rotate-and-zip":
+            return api_rotate_and_zip(payload)
+        if action == "track-movie":
+            return api_track_movie(payload, resp_json)
+        if action == "new-frame":
+            return api_new_frame(payload, resp_json)
+        if action == "heartbeat":
+            return api_heartbeat(event, context)
+        if action == "log":
+            return api_log()
 
-            LOGGER.info(
-                "req method='%s' path='%s' action='%s' payload=%s",
-                method,
-                path,
-                action,
-                payload,
-            )
-
-            match (method, path, action):
-                case ("GET", "/status", _):
-                    resp = api_status()
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-                case ("GET", "/prod/status", _):
-                    resp = api_status()
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("OPTIONS", "/api/v1", _):
-                    resp = resp_json(
-                        204,
-                        {},
-                        headers={
-                            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-                            "Access-Control-Allow-Headers": "*",
-                        },
-                    )
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case (_, "/api/v1", "ping"):
-                    resp = api_ping(event, context)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-                case (_, "/api/v1/ping", _):
-                    resp = api_ping(event, context)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("POST", "/api/v1", "resize-start"):
-                    resp = api_resize(event, context, payload)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-                case ("POST", "/api/v1", "start-processing"):
-                    resp = api_start_processing(payload)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-                case ("POST", "/api/v1", "rotate-and-zip"):
-                    resp = api_rotate_and_zip(payload)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("POST", "/api/v1", "track-movie"):
-                    resp = api_track_movie(payload, resp_json)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("POST", "/api/v1", "new-frame"):
-                    resp = api_new_frame(payload, resp_json)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("GET", "/api/v1/frame", _):
-                    resp = api_get_frame(event)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case ("GET", "/api/v1/movie-data", _):
-                    resp = api_get_movie_data(event)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case (_, "/api/v1", "heartbeat"):
-                    resp = api_heartbeat(event, context)
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-                case (_, "/api/v1", "log"):
-                    resp = api_log()
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case (_, "/api/v1", _):
-                    resp = resp_json(400, {"error": True, "message": f"Unknown action {action}"})
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-                case (_, _, _):
-                    resp = resp_json(400, {"error": True, "message": f"Unknown action {action}"})
-                    LOGGER.info("resp path='%s' resp=%s", path, resp)
-                    return resp
-
-        finally:
-            ddbo.update_table(
-                ddbo.logs,
-                log_id,
-                {"elapsed_time": Decimal(str(time.time() - start_ts))},
-            )
-
-    # Normal path: response already returned from match-cases.
-    # This return is only here to satisfy type checkers; code paths above always return.
-    return resp_json(500, {"error": True, "message": "unreachable"})
+        return resp_json(400, {"error": True, "message": f"Unknown action {action}"})
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
-    # SQS events have a "Records" list with eventSource "aws:sqs".
-    if isinstance(event, dict) and "Records" in event:
-        LOGGER.info("Lambda invoked by SQS: %d record(s)", len(event.get("Records", [])))
-        return sqs_handler(event, context)
-    LOGGER.info("Lambda invoked by HTTP")
-    return http_lambda_handler(event, context)
+@app.get("/api/v1/frame")
+def handle_get_frame() -> Dict[str, Any]:
+    """GET /api/v1/frame delegate."""
+    return api_get_frame(app.current_event.raw_event)
+
+
+@app.get("/api/v1/movie-data")
+def handle_get_movie_data() -> Dict[str, Any]:
+    """GET /api/v1/movie-data delegate."""
+    return api_get_movie_data(app.current_event.raw_event)
+
+
+# Powertools-compatible Lambda entry point
+lambda_handler = app.resolve

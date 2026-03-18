@@ -489,7 +489,7 @@ sam-build: $(REQ)
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
 
 sam-deploy: $(REQ)
