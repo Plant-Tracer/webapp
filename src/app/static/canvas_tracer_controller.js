@@ -17,7 +17,9 @@ const MARKER_RADIUS = 10;           // default radius of the marker
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-const TRACKING_POLL_MSEC=1000;
+// Global polling interval for status/metadata checks (e.g., tracking progress, ZIP availability).
+// Slower polling reduces load on the Lambda /status and metadata endpoints.
+const STATUS_POLL_MSEC = 10000;
 //const TRACE_MOVIE = 'Trace movie';
 const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 1000000;
@@ -128,26 +130,14 @@ class TracerController extends MovieController {
         this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
-    /** If Lambda is configured, call Flask API at API_BASE api/track/lambda-health (which probes Lambda status); else enable Track. */
+    /** If Lambda is configured, simply enable Track; Lambda health is checked when tracing is invoked. */
     async enableTrackButtonIfAllowed() {
         if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
             this.track_button.prop(DISABLED, false);
             return;
         }
-        try {
-            const r = await fetch(`${API_BASE}api/track/lambda-health`, { method: 'GET' });
-            const data = r.ok ? await r.json() : {};
-            if (data.status === 'ok') {
-                this.track_button.prop(DISABLED, false);
-                this.tracking_status.text('');
-            } else {
-                this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
-                this.track_button.prop(DISABLED, true);
-            }
-        } catch (_e) {
-            this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
-            this.track_button.prop(DISABLED, true);
-        }
+        this.track_button.prop(DISABLED, false);
+        this.tracking_status.text('');
     }
 
 
@@ -464,10 +454,10 @@ class TracerController extends MovieController {
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
-    /*
-     * Poll the server to see if tracking has ended.
-     * On poll error we log to console and only alert after 3 consecutive errors.
-     */
+        /*
+         * Poll the server to see if tracking has ended.
+         * On poll error we log to console and only alert after 3 consecutive errors.
+         */
     poll_for_track_end() {
         const params = {
             api_key:this.api_key,
@@ -486,7 +476,7 @@ class TracerController extends MovieController {
                         return;
                     }
                     self.tracking_status.text(data.metadata.status);
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
@@ -495,7 +485,7 @@ class TracerController extends MovieController {
                     alert('Status check failed 10 times in a row. You can refresh the page to try again.');
                 }
                 if (self.tracking) {
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             })
             .fail((_xhr, status, err) => {
@@ -518,7 +508,7 @@ class TracerController extends MovieController {
         const self = this;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
         const maxZipWaitMs = 5000;
-        const zipPollMs = 500;
+        const zipPollMs = STATUS_POLL_MSEC;
 
         /** Resolves with { zipUrl, metadata, frames } when zip is available, or rejects after maxZipWaitMs. */
         function waitForZip() {

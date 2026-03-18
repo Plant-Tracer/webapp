@@ -107,7 +107,7 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
     except cv2.error:  # pylint: disable=catching-non-exception
         trackpoints_out = []
 
-    logger.info("output_trackpoints=%s",trackpoints)
+    logger.info("cv2_track_frame output_trackpoints=%s", trackpoints_out)
     return trackpoints_out
 
 
@@ -333,6 +333,12 @@ def track_movie(
         frame_show = frame_this  # frame to show
         if frame_number <= frame_start:
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number'] == frame_number]
+            if frame_number == 0:
+                logger.info(
+                    "frame 0: using input_trackpoints from DB: total=%d for frame 0=%d",
+                    len(input_trackpoints),
+                    len(current_trackpoints),
+                )
             # Call the callback if we have one
             if label_frames:
                 frame_show = frame_this.copy()

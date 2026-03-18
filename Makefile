@@ -561,10 +561,13 @@ define SAM_LOGS_RESOLVE
 endef
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
+# Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
+# activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
 sam-logs:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text || true
+	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) || true
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
 # Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
@@ -573,8 +576,9 @@ sam-logs-simple:
 	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
 	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \
 	else \
-	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) $(SAM_LOGS_OPTIONS) \
-	    --query 'events[].[timestamp,message]' --output text | while IFS=$$'\t' read -r ts msg; do \
+	  REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ $(SAM_LOGS_OPTIONS) \
+	    --query 'events[].[timestamp,message]' --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) | while IFS=$$'\t' read -r ts msg; do \
 	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
 	  done || true; \
 	fi
@@ -582,6 +586,19 @@ sam-logs-simple:
 # Stream Lambda logs (timestamp + message). Sets SAM_LOGS_TAIL=1 and invokes sam-logs-simple.
 sam-logs-simple-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
+
+# Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
+# Use this when sam-logs is dominated by HTTP traffic and you want only tracking-queue activity.
+sqs-logs:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
+
+# Stream Lambda logs, showing only lines that contain SQS.
+sqs-logs-tail:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern "SQS" || true
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

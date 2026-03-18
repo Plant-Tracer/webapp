@@ -609,23 +609,6 @@ def api_add():
 ################################################################
 ## Tracking: VM does not run tracking; client uses Lambda (see lambda-resize).
 
-@api_bp.route('/track/lambda-health', methods=GET_POST)
-def api_track_lambda_health():
-    """Probe Lambda /status; return 200 + {status:'ok'} if Lambda is up, 503 + {status:'unavailable'} otherwise."""
-    base = get_lambda_api_base()
-    if not base:
-        return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: "Lambda URL not configured"}), 503
-    try:
-        with urlopen(base.rstrip("/") + "/status", timeout=LAMBDA_HEALTH_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode())
-            if data.get(C.KEY_STATUS) == C.STATUS_OK:
-                return jsonify({C.KEY_STATUS: C.STATUS_OK})
-            return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: "unexpected response"}), 503
-    except (HTTPError, URLError, OSError, json.JSONDecodeError) as ex:
-        logger.debug("Lambda health check failed: %s", ex)
-        return jsonify({C.KEY_STATUS: C.STATUS_UNAVAILABLE, C.KEY_REASON: str(ex)}), 503
-
-
 @api_bp.route('/track-movie-queue', methods=GET_POST)
 def api_track_movie_queue():
     """Tracks a movie that has been uploaded.

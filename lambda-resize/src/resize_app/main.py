@@ -407,5 +407,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
     # SQS events have a "Records" list with eventSource "aws:sqs".
     if isinstance(event, dict) and "Records" in event:
+        LOGGER.info("Lambda invoked by SQS: %d record(s)", len(event.get("Records", [])))
         return sqs_handler(event, context)
+    LOGGER.info("Lambda invoked by HTTP")
     return http_lambda_handler(event, context)
