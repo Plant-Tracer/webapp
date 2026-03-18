@@ -16,7 +16,6 @@ from .s3_presigned import s3_client,make_urn,make_object_name
 from .constants import C,logger
 from .odb import (
     DDBO,
-    InvalidMovie_Id,
     is_movie_id,
     VERSION,
     course_id_for_movie_id,
@@ -30,6 +29,7 @@ from .odb import (
 )
 
 def read_object(urn):
+    """Returns object as a byte array"""
     o = urllib.parse.urlparse(urn)
     logger.debug("urn=%s o=%s",urn,o)
     if o.scheme == C.SCHEME_S3 :
@@ -45,8 +45,26 @@ def read_object(urn):
     else:
         raise ValueError("Unknown schema: "+urn)
 
+def copy_object_to_path(urn, path: str):
+    """Copy an object from S3 to a local file path without buffering it all."""
+    o = urllib.parse.urlparse(urn)
+    logger.debug("urn=%s o=%s",urn,o)
+    if o.scheme == C.SCHEME_S3:
+        try:
+            s3_client().download_file(Bucket=o.netloc, Key=o.path[1:], Filename=path)
+        except ClientError as ex:
+            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+    elif o.scheme in ['http','https']:
+        with requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT, stream=True) as r:
+            r.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+    else:
+        raise ValueError("Unknown schema: "+urn)
+
 def write_object(urn, object_data):
-    logger.info("write_object(%s,len=%s)",urn,len(object_data))
     logger.info("write_object(%s,len=%s)",urn,len(object_data))
     assert "s3://s3://" not in urn
     o = urllib.parse.urlparse(urn)
@@ -97,21 +115,6 @@ def delete_object(urn):
 ########################
 ### Movie Management ###
 ########################
-
-def get_movie_data(*, movie_id, zipfile=False, get_urn=False):
-    """Returns the movie contents for a movie_id.
-    If get_urn is True, just return the URN (or None if not set).
-    """
-    movie = DDBO().get_movie(movie_id)
-    urn = movie.get(MOVIE_ZIPFILE_URN) if zipfile else movie.get(MOVIE_DATA_URN)
-
-    if get_urn:
-        return urn
-
-    if urn:
-        return read_object(urn)
-    raise InvalidMovie_Id(movie_id)
-
 
 
 def set_movie_data(*,movie_id, movie_data):

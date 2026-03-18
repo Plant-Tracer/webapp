@@ -49,11 +49,16 @@ class _FakeEnv:
             "credit_by_name": 1,
             "attribution_name": "Test Student",
         }
+        self.movie_id_for_course = "BIGCOURSE"
+        movie_data_urn = self.make_urn(
+            object_name=f"{self.movie_id_for_course}/{movie_id}{C.MOVIE_EXTENSION}"
+        )
+        self.movie_record["movie_data_urn"] = movie_data_urn
         self._trackpoints = []  # start with empty trackpoints; frame 0 only
         self.objects = {}  # urn -> bytes
+        self.objects[movie_data_urn] = movie_bytes
         self.movie_updates = []
         self.metadata_sets = []
-        self.movie_id_for_course = "BIGCOURSE"
         self.movies = object()
 
     def get_movie_data(self, movie_id):
@@ -68,6 +73,12 @@ class _FakeEnv:
         if urn not in self.objects:
             raise KeyError(urn)
         return self.objects[urn]
+
+    def copy_object_to_path(self, *, urn, path):
+        if urn not in self.objects:
+            raise KeyError(urn)
+        with open(path, "wb") as f:
+            f.write(self.objects[urn])
 
     def get_movie_trackpoints(self, movie_id):
         assert movie_id == self.movie_id
@@ -124,9 +135,8 @@ class _FakeEnv:
 
 def _patch_tracker_helpers(monkeypatch, env):
     monkeypatch.setattr(tracker_mod, "DDBO", lambda: env)
-    monkeypatch.setattr(tracker_mod, "get_movie_data", env.get_movie_data)
     monkeypatch.setattr(tracker_mod, "get_movie_metadata", env.get_movie_metadata)
-    monkeypatch.setattr(tracker_mod, "get_object_data", env.get_object_data)
+    monkeypatch.setattr(tracker_mod, "copy_object_to_path", env.copy_object_to_path)
     monkeypatch.setattr(tracker_mod, "get_movie_trackpoints", env.get_movie_trackpoints)
     monkeypatch.setattr(tracker_mod, "put_frame_trackpoints", env.put_frame_trackpoints)
     monkeypatch.setattr(tracker_mod, "write_object", env.write_object)
@@ -217,11 +227,11 @@ def test_run_tracking_appends_to_existing_zip_for_later_batches(monkeypatch):
     monkeypatch.setattr(
         tracker_mod,
         "extract_movie_metadata",
-        lambda movie_data: {
+        lambda movie_path: {
             "width": C.ANALYSIS_FRAME_MAX_WIDTH,
             "height": C.ANALYSIS_FRAME_MAX_HEIGHT,
             "total_frames": 3,
-            "total_bytes": len(movie_data),
+            "total_bytes": len(env.objects[env.movie_record["movie_data_urn"]]),
             "fps": "30",
         },
     )

@@ -9,6 +9,7 @@ import csv
 import math
 from zipfile import ZipFile
 import copy
+import urllib.parse
 
 import filetype
 from PIL import Image
@@ -21,6 +22,7 @@ from app import mp4_metadata_lib
 from app.constants import MIME, E, C
 from app.odb import API_KEY, MOVIE_ID, USER_ID
 from app.odb_movie_data import read_object, create_new_movie_frame
+from app.s3_presigned import s3_client
 
 # Fixtures are in conftest.py
 from app.constants import logger
@@ -178,12 +180,19 @@ def test_movie_tracking(client, new_movie):
     lines = response.text.splitlines()
 
     # Verify a ZIP file with the individual frames was created
-    zipfile_data = odb_movie_data.get_movie_data(movie_id=movie_id, zipfile=True)
+    movie = odb.get_movie(movie_id=movie_id)
+    zip_urn = movie.get("movie_zipfile_urn")
+    assert zip_urn is not None
+    o = urllib.parse.urlparse(zip_urn)
+    if o.scheme == "s3":
+        data = s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
+    else:
+        data = odb_movie_data.read_object(zip_urn)
     with tempfile.NamedTemporaryFile(suffix='.zip') as tf:
-        tf.write(zipfile_data)
+        tf.write(data)
         tf.flush()
         with ZipFile(tf.name, 'r') as myzip:
-            logger.info("names of files in zipfile: %s",myzip.namelist())
+            logger.info("names of files in zipfile: %s", myzip.namelist())
             frame_count = len(myzip.namelist())
 
     assert frame_count==54
@@ -255,7 +264,7 @@ def test_movie_tracking(client, new_movie):
     assert track2['label']=='track2'
 
     # ZIP JPEGs must carry research-attribution comment from movie record (default: research prohibited)
-    with ZipFile(io.BytesIO(zipfile_data), "r") as zf:
+    with ZipFile(io.BytesIO(zipdata), "r") as zf:
         names = [n for n in zf.namelist() if n.endswith(".jpg")]
         assert len(names) >= 1
         jpeg_bytes = zf.read(names[0])

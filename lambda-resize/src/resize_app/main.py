@@ -28,7 +28,7 @@ from .src.app.odb import (
     MOVIE_ZIPFILE_URN,
     TRACKING_STATUS_UPDATED_AT,
 )
-from .src.app.odb_movie_data import create_new_movie_frame, get_movie_data
+from .src.app.odb_movie_data import create_new_movie_frame
 from .src.app.s3_presigned import make_signed_url, object_exists
 from .resize import (
     api_get_frame,
@@ -189,25 +189,7 @@ def api_get_movie_data(event: Dict[str, Any]) -> Dict[str, Any]:
     except odb.InvalidMovie_Id:
         return resp_json(404, {"error": True, "message": "movie not found"})
 
-    if format_json:
-        data_urn = movie.get(MOVIE_DATA_URN)
-        zip_urn = movie.get(MOVIE_ZIPFILE_URN)
-        if not data_urn:
-            return resp_json(503, {"error": True, "message": "Movie not ready (no URN)."})
-        if not object_exists(data_urn):
-            return resp_json(
-                503,
-                {"error": True, "message": "Movie still processing (upload not yet at final key). Retry in a few seconds."},
-                headers={"Retry-After": "5"},
-            )
-        body = {
-            "movie_id": movie_id,
-            "url": make_signed_url(urn=data_urn),
-            "zip_url": make_signed_url(urn=zip_urn) if zip_urn and object_exists(zip_urn) else None,
-        }
-        return resp_json(200, body)
-
-    data_urn = get_movie_data(movie_id=movie["movie_id"], zipfile=zipfile, get_urn=True)
+    data_urn = movie.get(MOVIE_ZIPFILE_URN if zipfile else MOVIE_DATA_URN)
     if not data_urn:
         return resp_json(503, {"error": True, "message": "Movie not ready (no URN)."})
     if not object_exists(data_urn):

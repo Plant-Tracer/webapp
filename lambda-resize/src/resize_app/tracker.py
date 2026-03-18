@@ -21,7 +21,6 @@ import subprocess
 import logging
 import os
 import zipfile
-from io import BytesIO
 from collections import defaultdict
 
 import cv2
@@ -41,11 +40,10 @@ from .src.app.odb import (
 )
 from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints
 from .src.app.odb_movie_data import (
+    copy_object_to_path,
     course_id_for_movie_id,
-    get_movie_data,
     make_object_name,
     make_urn,
-    read_object as get_object_data,
     write_object,
     write_object_from_path,
 )
@@ -137,14 +135,12 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def extract_movie_metadata(*, movie_data):
-    """Use OpenCV to get movie metadata from stream properties (no full frame scan).
+def extract_movie_metadata(*, movie_path):
+    """Use OpenCV to get movie metadata from a local file path.
     Width, height, fps and usually frame count come from container/stream metadata.
     Only if frame count is missing do we fall back to counting frames."""
-    with tempfile.NamedTemporaryFile(mode='ab', suffix='.mp4') as tf:
-        tf.write(movie_data)
-        tf.flush()
-        cap = cv2.VideoCapture(tf.name)
+    cap = cv2.VideoCapture(movie_path)
+    try:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -160,10 +156,11 @@ def extract_movie_metadata(*, movie_data):
                 if len(frame) == 0:
                     raise MovieCorruptError()
                 total_frames += 1
+    finally:
         cap.release()
     return {
         'total_frames': total_frames,
-        'total_bytes': len(movie_data),
+        'total_bytes': os.path.getsize(movie_path),
         'width': width,
         'height': height,
         'fps': fps,
@@ -441,7 +438,7 @@ class TrackingCallback:
         movie_id,
         research_comment: str,
         total_frames: int,
-        existing_zip_data=None,
+        existing_zip_path=None,
     ):
         self.ddbo = ddbo
         self.user_id = user_id
@@ -449,16 +446,18 @@ class TrackingCallback:
         self.research_comment = research_comment or ""
         self.total_frames = total_frames
         self.last_frame_tracked = -1
-        self._zip_tf = tempfile.NamedTemporaryFile(  # pylint: disable=consider-using-with
+        with tempfile.NamedTemporaryFile(  # pylint: disable=consider-using-with
             suffix=".zip", prefix=f"movie_{movie_id}", delete=False
-        )
-        self._zipfile = zipfile.ZipFile(  # pylint: disable=consider-using-with
-            self._zip_tf.name, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
-        )
-        if existing_zip_data:
-            with zipfile.ZipFile(BytesIO(existing_zip_data), mode="r") as old_zip:
+        ) as tmp:
+            self._zip_tf = tmp
+            self._zipfile = zipfile.ZipFile(  # pylint: disable=consider-using-with
+                self._zip_tf.name, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+            )
+        if existing_zip_path:
+            with zipfile.ZipFile(existing_zip_path, mode="r") as old_zip:
                 for info in old_zip.infolist():
                     self._zipfile.writestr(info, old_zip.read(info.filename))
+            os.unlink(existing_zip_path)
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints):
         frame_jpeg = convert_frame_to_jpeg(frame_data, quality=60)
@@ -496,11 +495,18 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
         movie_record.get("attribution_name"),
     )
 
-    movie_data = get_movie_data(movie_id=movie_id)
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
     # been written into DB width/height by get-frame(size=analysis).
-    extracted = extract_movie_metadata(movie_data=movie_data)
+    movie_urn = movie_record.get(MOVIE_DATA_URN)
+    if not movie_urn:
+        raise RuntimeError(f"movie {movie_id} has no movie data URN")
+    movie_path = None
+    extracted = None
+    with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as movie_tf:
+        movie_path = movie_tf.name
+    copy_object_to_path(urn=movie_urn, path=movie_path)
+    extracted = extract_movie_metadata(movie_path=movie_path)
     movie_metadata = {
         "width": extracted.get("width"),
         "height": extracted.get("height"),
@@ -520,14 +526,16 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
     if to_set:
         ddbo.update_table(ddbo.movies, movie_id, to_set)
 
-    existing_zip_data = None
+    existing_zip_path = None
     if frame_start > 0:
         zip_urn = movie_record.get(MOVIE_ZIPFILE_URN)
         if not zip_urn:
             raise RuntimeError(
                 f"Cannot continue tracking from frame {frame_start} without an existing zipfile URN"
             )
-        existing_zip_data = get_object_data(urn=zip_urn)
+        with tempfile.NamedTemporaryFile(suffix=".zip", mode="wb", delete=False) as existing_zip_tf:
+            existing_zip_path = existing_zip_tf.name
+        copy_object_to_path(urn=zip_urn, path=existing_zip_path)
 
     rotation_steps = int(movie_record.get("rotation_steps") or 0)
     rotation_steps = max(0, min(3, rotation_steps))
@@ -539,15 +547,10 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
         or h > C.ANALYSIS_FRAME_MAX_HEIGHT
     )
 
-    in_path = None
+    in_path = movie_path
     out_path = None
     moviefile_input = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as infile:
-            infile.write(movie_data)
-            infile.flush()
-            in_path = infile.name
-
         if need_process:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
                 out_path = out_tf.name
@@ -578,7 +581,7 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
             movie_id=movie_id,
             research_comment=research_comment,
             total_frames=total_frames,
-            existing_zip_data=existing_zip_data,
+            existing_zip_path=existing_zip_path,
         )
         # If max_frame is provided, clamp it to a hard safety cap of 9999 and, if
         # we know total_frames, to the last real frame.

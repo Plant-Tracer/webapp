@@ -18,6 +18,7 @@ from app import odb
 from app import odb_movie_data
 from app.constants import logger
 from app.odb import API_KEY
+from .conftest import get_movie_bytes
 from .selenium_utils import authenticate_browser
 
 TEST_MOVIE_PATH = Path(__file__).resolve().parent / "data" / "2019-07-12 circumnutation.mp4"
@@ -108,7 +109,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert movie["deleted"] == 0
 
     # Verify MinIO object exists and matches file length
-    movie_bytes = odb_movie_data.get_movie_data(movie_id=movie_id)
+    movie_bytes = get_movie_bytes(movie_id)
     assert len(movie_bytes) == TEST_MOVIE_PATH.stat().st_size
 
     source_hash = hashlib.sha256(TEST_MOVIE_PATH.read_bytes()).hexdigest()

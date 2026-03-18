@@ -24,6 +24,7 @@ from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.constants import MIME
 from app.s3_presigned import s3_client
 from app.constants import logger
+from .conftest import get_movie_bytes
 
 # Get constants from fixtures (fixtures themselves are in conftest.py)
 from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
@@ -94,8 +95,6 @@ def data_from_redirect(url, the_client):
 
 # Test for edge cases
 def test_edge_case(new_movie):
-    with pytest.raises(odb.InvalidMovie_Id):
-        odb_movie_data.get_movie_data(movie_id = 3)
     with pytest.raises(ValueError):
         s3_presigned.make_urn(object_name="xxx",scheme='xxx')
 
@@ -273,7 +272,7 @@ def test_movie_extract2(client, new_movie):
     #movie_title = cfg[MOVIE_TITLE]
     #user_id = cfg[USER_ID]
 
-    movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)
+    movie_data = get_movie_bytes(movie_id)
     assert is_mp4(movie_data)
 
     # Grab three frames with the tracker and make sure they are different
@@ -379,7 +378,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logger.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = odb_movie_data.get_movie_data(movie_id=movie_id)
+    retrieved_movie_data = get_movie_bytes(movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
 
