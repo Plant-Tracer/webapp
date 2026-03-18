@@ -62,10 +62,12 @@ Resize code base:
 
 Movies:
 ------
-- Every movie has its mpeg file, its zipfile, and its `keyframe`. Eachg are stored at predictable locations:
+- Every movie has its mpeg file, its zipfile, and its `keyframe`. Each are stored at predictable locations:
   - movie: course_id/movie_id.mpeg
   - zipfile:  course_id/movie_id.zip
   - keyframe: course_id/movie_id.keyframe.jpeg
+
+- The tracking Lambda builds the JPEG animation zip. When tracking continues in later batches, the Lambda reads the existing zip from S3, copies its members into a fresh temporary zip, appends the new batch frames, and then writes the updated zip back to S3.
 
 
 Movie Metadata

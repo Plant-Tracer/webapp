@@ -2,7 +2,7 @@
 Implements blockmatching algorithm in OpenCV.
 Includes all code for getting the entire movie (get_movie_data) and getting individual
 frames (extract_frame, get_jpeg_dimensions, resize_jpeg_to_fit).
-Shared entry point run_tracking(..., env) allows the same logic to run from Flask or Lambda.
+Shared entry point run_tracking(...) uses module-level Lambda helpers directly.
 Frame serving (get-frame API) runs in this Lambda (resize); the VM uses this module only for
 run_tracking and for api_get_movie_data (full movie download).
 Lives in lambda-resize; main app imports via app.tracker shim (re-exports from resize_app.tracker).
@@ -20,9 +20,8 @@ import tempfile
 import subprocess
 import logging
 import os
-import time
 import zipfile
-from abc import ABC, abstractmethod
+from io import BytesIO
 from collections import defaultdict
 
 import cv2
@@ -32,6 +31,7 @@ from .src.app import paths
 from .src.app import mp4_metadata_lib
 from .src.app.constants import C
 from .src.app.odb import (
+    DDBO,
     LAST_FRAME_TRACKED,
     MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
@@ -39,30 +39,20 @@ from .src.app.odb import (
     PROCESSING_STATE_TRACKED,
     STATUS,
 )
-from .src.app.odb_movie_data import get_movie_data  # pylint: disable=unused-import  # re-export for flask_api
+from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints
+from .src.app.odb_movie_data import (
+    course_id_for_movie_id,
+    get_movie_data,
+    make_object_name,
+    make_urn,
+    read_object as get_object_data,
+    write_object,
+    write_object_from_path,
+)
 from . import rotate_zip
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
-DEBUG_LOG_PATH = "/Users/simsong/gits/webapp/.cursor/debug-f19a32.log"
-
-
-def _agent_debug_log(*, hypothesis_id, location, message, data):
-    payload = {
-        "sessionId": "f19a32",
-        "runId": "run1",
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }
-    try:
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
-            log_file.write(json.dumps(payload, separators=(",", ":")) + "\n")
-    except OSError:
-        pass
-
 # Legacy: only used by cleanup_mp4, rotate_movie, prepare_movie_for_tracking. run_tracking uses cv2 only.
 FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT = 'point_array_out'
@@ -95,7 +85,7 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
 
     """
     winSize = (15, 15)  # pylint: disable=invalid-name
-    maxLevel = 2  # pylint: disable=invalid-name
+    max_level = 2
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
     cv2_tpts = np.array([[pt['x'], pt['y']] for pt in trackpoints], dtype=np.float32)
 
@@ -104,7 +94,7 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
         gray_frame1 = cv2.cvtColor(frame_this, cv2.COLOR_BGR2GRAY)
         point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(
             gray_frame0, gray_frame1, cv2_tpts, None,
-            winSize=winSize, maxLevel=maxLevel, criteria=criteria
+            winSize=winSize, maxLevel=max_level, criteria=criteria
         )
         trackpoints_out = []
         for (i, pt) in enumerate(trackpoints):
@@ -331,14 +321,6 @@ def track_movie(
 
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     logging.info("start movie tracking")
-    # region agent log
-    _agent_debug_log(
-        hypothesis_id="H1",
-        location="tracker.py:track_movie:start",
-        message="tracking started",
-        data={"frame_start": frame_start, "input_trackpoints": len(input_trackpoints or []), "max_frame": max_frame},
-    )
-    # endregion
     for frame_number in range(1_000_000):
         if max_frame is not None and frame_number > max_frame:
             break
@@ -352,20 +334,6 @@ def track_movie(
         frame_show = frame_this  # frame to show
         if frame_number <= frame_start:
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number'] == frame_number]
-            # region agent log
-            if frame_number == frame_start:
-                _agent_debug_log(
-                    hypothesis_id="H1",
-                    location="tracker.py:track_movie:seed",
-                    message="seed trackpoints for batch",
-                    data={
-                        "frame_number": frame_number,
-                        "frame_start": frame_start,
-                        "seed_count": len(current_trackpoints),
-                        "seed_labels": [tp.get("label") for tp in current_trackpoints],
-                    },
-                )
-            # endregion
             # Call the callback if we have one
             if label_frames:
                 frame_show = frame_this.copy()
@@ -385,21 +353,6 @@ def track_movie(
 
         # create new list of trackpoints
         current_trackpoints = list(trackpoints_by_label.values())
-        # region agent log
-        if frame_number == frame_start + 1:
-            _agent_debug_log(
-                hypothesis_id="H1",
-                location="tracker.py:track_movie:first_tracked_frame",
-                message="first tracked frame after batch start",
-                data={
-                    "frame_number": frame_number,
-                    "frame_start": frame_start,
-                    "seed_count": len(trackpoints_by_label),
-                    "tracked_count": len(current_trackpoints),
-                },
-            )
-        # endregion
-
         # And set their new frame numbers
         for tp in current_trackpoints:
             tp['frame_number'] = frame_number  # set the frame number
@@ -471,64 +424,26 @@ def prepare_movie_for_tracking(
         raise RuntimeError("prepare_movie_for_tracking failed")
 
 
-class TrackingEnv(ABC):
-    """Abstract base for env adapters that connect the tracker to DB/S3 (Flask or Lambda)."""
-
-    @abstractmethod
-    def get_movie_data(self, movie_id):
-        """Return raw movie bytes for movie_id."""
-
-    @abstractmethod
-    def get_movie_metadata(self, movie_id):
-        """Return movie record dict (metadata) for movie_id."""
-
-    @abstractmethod
-    def get_movie_trackpoints(self, movie_id):
-        """Return list of trackpoint dicts (frame_number, x, y, label) for movie_id."""
-
-    @abstractmethod
-    def put_frame_trackpoints(self, *, movie_id, frame_number, trackpoints):
-        """Persist trackpoints for the given frame."""
-
-    @abstractmethod
-    def set_metadata(self, *, user_id, movie_id, prop, value):
-        """Set one metadata property on the movie."""
-
-    @abstractmethod
-    def set_movie_metadata(self, *, user_id, movie_id, movie_metadata):
-        """Set multiple movie metadata fields (e.g. fps, width, height, total_frames, total_bytes)."""
-
-    @abstractmethod
-    def write_object(self, *, urn, data):
-        """Write bytes to storage at urn."""
-
-    @abstractmethod
-    def write_object_from_path(self, *, urn, path):
-        """Upload file at path to storage at urn."""
-
-    @abstractmethod
-    def make_object_name(self, *, course_id, movie_id, ext, frame_number=None):
-        """Return object name (key) for the given course/movie and extension."""
-
-    @abstractmethod
-    def make_urn(self, *, object_name):
-        """Return full URN for the given object name."""
-
-    @abstractmethod
-    def course_id_for_movie_id(self, movie_id):
-        """Return course_id for the given movie_id."""
-
-    @abstractmethod
-    def update_movie(self, movie_id, updates):
-        """Update movie record with dict of attribute names to values (use KEY_* for known keys)."""
-
-
 # pylint: disable=too-many-instance-attributes
 class TrackingCallback:
-    """Callback used during track_movie that writes frames to a zip and persists via env."""
+    """Callback used during track_movie that writes frames to a zip and persists tracking data.
 
-    def __init__(self, *, env, user_id, movie_id, research_comment: str, total_frames: int):
-        self.env = env
+    The zip is always rebuilt into a fresh temporary archive. When tracking continues
+    from a later frame, the caller can supply the prior zip bytes so we copy those
+    frames into the new archive before appending the current batch.
+    """
+
+    def __init__(
+        self,
+        *,
+        ddbo,
+        user_id,
+        movie_id,
+        research_comment: str,
+        total_frames: int,
+        existing_zip_data=None,
+    ):
+        self.ddbo = ddbo
         self.user_id = user_id
         self.movie_id = movie_id
         self.research_comment = research_comment or ""
@@ -540,16 +455,12 @@ class TrackingCallback:
         self._zipfile = zipfile.ZipFile(  # pylint: disable=consider-using-with
             self._zip_tf.name, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
         )
+        if existing_zip_data:
+            with zipfile.ZipFile(BytesIO(existing_zip_data), mode="r") as old_zip:
+                for info in old_zip.infolist():
+                    self._zipfile.writestr(info, old_zip.read(info.filename))
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints):
-        # region agent log
-        _agent_debug_log(
-            hypothesis_id="H1",
-            location="tracker.py:TrackingCallback.notify",
-            message="writing tracked frame",
-            data={"frame_number": frame_number, "trackpoint_count": len(frame_trackpoints or [])},
-        )
-        # endregion
         frame_jpeg = convert_frame_to_jpeg(frame_data, quality=60)
         if self.research_comment:
             frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(
@@ -557,13 +468,9 @@ class TrackingCallback:
             )
         self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
         self._zipfile.writestr(f"frame_{frame_number:04}.jpg", frame_jpeg)
-        self.env.put_frame_trackpoints(
-            movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints
-        )
+        put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
         message = f"Tracked frames {frame_number + 1} of {self.total_frames}"
-        self.env.set_metadata(
-            user_id=self.user_id, movie_id=self.movie_id, prop=STATUS, value=message
-        )
+        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {STATUS: message})
 
     def close(self):
         self._zipfile.close()
@@ -574,39 +481,22 @@ class TrackingCallback:
             return f.read()
 
     def done(self):
-        self.env.set_metadata(
-            user_id=self.user_id,
-            movie_id=self.movie_id,
-            prop=STATUS,
-            value=C.TRACKING_COMPLETED,
-        )
-        self.env.update_movie(self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
+        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {STATUS: C.TRACKING_COMPLETED})
+        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
         if os.path.exists(self._zip_tf.name):
             os.unlink(self._zip_tf.name)
 
-
-def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
-    """Run full tracking pipeline using the given env for all I/O (DB, S3, metadata).
-
-    env must be a TrackingEnv implementation (e.g. FlaskTrackingEnv or LambdaTrackingEnv).
-    """
-    input_trackpoints = env.get_movie_trackpoints(movie_id=movie_id)
-    # region agent log
-    _agent_debug_log(
-        hypothesis_id="H1",
-        location="tracker.py:run_tracking",
-        message="loaded input trackpoints",
-        data={"movie_id": movie_id, "frame_start": frame_start, "input_trackpoint_count": len(input_trackpoints or [])},
-    )
-    # endregion
-    movie_record = env.get_movie_metadata(movie_id=movie_id)
+def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
+    """Run full tracking pipeline using module-level Lambda helpers."""
+    input_trackpoints = get_movie_trackpoints(movie_id=movie_id)
+    movie_record = get_movie_metadata(movie_id=movie_id)
     research_comment = mp4_metadata_lib.build_comment(
         movie_record.get("research_use", 0) or 0,
         movie_record.get("credit_by_name", 0) or 0,
         movie_record.get("attribution_name"),
     )
 
-    movie_data = env.get_movie_data(movie_id=movie_id)
+    movie_data = get_movie_data(movie_id=movie_id)
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
     # been written into DB width/height by get-frame(size=analysis).
@@ -626,8 +516,18 @@ def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
     if to_set.get("fps") is not None and not isinstance(to_set["fps"], str):
         to_set["fps"] = str(to_set["fps"])
         movie_metadata["fps"] = to_set["fps"]
+    ddbo = DDBO()
     if to_set:
-        env.set_movie_metadata(user_id=user_id, movie_id=movie_id, movie_metadata=to_set)
+        ddbo.update_table(ddbo.movies, movie_id, to_set)
+
+    existing_zip_data = None
+    if frame_start > 0:
+        zip_urn = movie_record.get(MOVIE_ZIPFILE_URN)
+        if not zip_urn:
+            raise RuntimeError(
+                f"Cannot continue tracking from frame {frame_start} without an existing zipfile URN"
+            )
+        existing_zip_data = get_object_data(urn=zip_urn)
 
     rotation_steps = int(movie_record.get("rotation_steps") or 0)
     rotation_steps = max(0, min(3, rotation_steps))
@@ -659,25 +559,26 @@ def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
                 C.ANALYSIS_FRAME_MAX_HEIGHT,
             )
             mp4_metadata_lib.set_comment(out_path, research_comment)
-            processed_oname = env.make_object_name(
-                course_id=env.course_id_for_movie_id(movie_id),
+            processed_oname = make_object_name(
+                course_id=course_id_for_movie_id(movie_id),
                 movie_id=movie_id,
                 ext=C.MOVIE_PROCESSED_EXTENSION,
             )
-            processed_urn = env.make_urn(object_name=processed_oname)
-            env.write_object_from_path(urn=processed_urn, path=out_path)
-            env.update_movie(movie_id, {MOVIE_DATA_URN: processed_urn})
+            processed_urn = make_urn(object_name=processed_oname)
+            write_object_from_path(urn=processed_urn, path=out_path)
+            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN: processed_urn})
             moviefile_input = out_path
         else:
             moviefile_input = in_path
 
         total_frames = movie_metadata.get("total_frames") or 0
         callback = TrackingCallback(
-            env=env,
+            ddbo=ddbo,
             user_id=user_id,
             movie_id=movie_id,
             research_comment=research_comment,
             total_frames=total_frames,
+            existing_zip_data=existing_zip_data,
         )
         # If max_frame is provided, clamp it to a hard safety cap of 9999 and, if
         # we know total_frames, to the last real frame.
@@ -696,17 +597,15 @@ def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
             max_frame=effective_max,
         )
         callback.close()
-        env.update_movie(movie_id, {LAST_FRAME_TRACKED: callback.last_frame_tracked})
-        zip_oname = env.make_object_name(
-            course_id=env.course_id_for_movie_id(movie_id),
+        ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: callback.last_frame_tracked})
+        zip_oname = make_object_name(
+            course_id=course_id_for_movie_id(movie_id),
             movie_id=movie_id,
             ext=C.ZIP_MOVIE_EXTENSION,
         )
-        zip_urn = env.make_urn(object_name=zip_oname)
-        env.write_object(urn=zip_urn, data=callback.zipfile_data)
-        env.set_metadata(
-            user_id=user_id, movie_id=movie_id, prop=MOVIE_ZIPFILE_URN, value=zip_urn
-        )
+        zip_urn = make_urn(object_name=zip_oname)
+        write_object(urn=zip_urn, object_data=callback.zipfile_data)
+        ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ZIPFILE_URN: zip_urn})
         callback.done()
     finally:
         if in_path and os.path.exists(in_path):

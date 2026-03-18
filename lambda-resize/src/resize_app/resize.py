@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 
 import boto3
+from botocore.exceptions import ClientError
 
 from .common import LOGGER
 from .movie_metadata import extract_movie_metadata
@@ -85,24 +86,6 @@ def resp_redirect(location: str, status: int = 302) -> Dict[str, Any]:
     }
 
 
-def _with_request_log_level(payload: Dict[str, Any]):
-    """Context manager to temporarily adjust log level from JSON (log_level or LOG_LEVEL)."""
-    class _Ctx:
-        def __init__(self):
-            self.old = LOGGER.level
-
-        def __enter__(self):
-            lvl = payload.get("log_level") or payload.get("LOG_LEVEL")
-            if isinstance(lvl, str):
-                LOGGER.setLevel(lvl)
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            LOGGER.setLevel(self.old)
-
-    return _Ctx()
-
-
 ################################################################
 ## api code.
 ## api calls do not use sessions. Authenticated APIs (e.g. api_register, api_grade)
@@ -163,7 +146,7 @@ def api_start_processing(payload: Dict[str, Any]) -> Dict[str, Any]:
     s3 = _s3_client()
     try:
         head = s3.head_object(Bucket=bucket, Key=key)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except ClientError as e:
         LOGGER.warning("start_processing head_object failed: %s %s %s", bucket, key, e)
         return resp_json(503, {"error": True, "message": "object not found in S3; upload may not have completed"})
     size = head.get("ContentLength", 0)
@@ -218,7 +201,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
     try:
         obj = s3.get_object(Bucket=bucket, Key=key)
         data = obj["Body"].read()
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except ClientError as e:
         LOGGER.warning("rotate_and_zip get_object failed: %s %s %s", bucket, key, e)
         return resp_json(503, {"error": True, "message": "failed to download movie from S3"})
 
@@ -226,13 +209,13 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
     if steps > 0:
         try:
             rotated = rotate_video_av(data, steps)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, RuntimeError) as e:
             LOGGER.exception("rotate_video_av failed: %s", e)
             return resp_json(500, {"error": True, "message": "rotation failed"})
 
         try:
             s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except ClientError as e:
             LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
             return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
 
@@ -260,7 +243,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
                 update_payload[attr] = meta[key]
         try:
             ddbo.update_table(ddbo.movies, movie_id, update_payload)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except ClientError as exc:
             LOGGER.debug("rotate_only metadata update failed for %s: %s", movie_id, exc)
         write_log(f"rotate_only movie_id={movie_id} steps={steps}", course_id=course_id)
         LOGGER.info("rotate_only movie_id=%s steps=%s (zip deferred)", movie_id, steps)
@@ -285,7 +268,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
                     "processing_state": "processing-zip",
                 },
             )
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except ClientError as exc:
             LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
 
     try:
@@ -294,7 +277,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             progress_cb=_zip_progress,
             target_wh=(C.ANALYSIS_FRAME_MAX_WIDTH, C.ANALYSIS_FRAME_MAX_HEIGHT),
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ValueError, RuntimeError) as e:
         LOGGER.exception("video_frames_to_zip_av failed: %s", e)
         return resp_json(500, {"error": True, "message": "zip build failed"})
 
@@ -307,7 +290,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             Body=zip_bytes,
             ContentType="application/zip",
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except ClientError as e:
         LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
         return resp_json(503, {"error": True, "message": "failed to upload zip"})
 
@@ -355,7 +338,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
                     TOTAL_BYTES: len(final_movie_bytes),
                 },
             )
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (ValueError, RuntimeError, ClientError, OSError) as exc:
             LOGGER.debug("processed movie generation failed for %s: %s", movie_id, exc)
 
     update_payload = {
@@ -367,7 +350,7 @@ def api_rotate_and_zip(payload: Dict[str, Any]) -> Dict[str, Any]:  # pylint: di
             update_payload[attr] = meta[key]
     try:
         ddbo.update_table(ddbo.movies, movie_id, update_payload)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except ClientError as exc:
         LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
     write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
     LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
@@ -405,7 +388,7 @@ def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
         user = ddbo.get_user(user_id)
         if not user.get(ENABLED, True):
             return resp_json(401, {"error": True, "message": "user disabled"})
-    except Exception:  # pylint: disable=broad-exception-caught
+    except odb.InvalidUser_Id:
         return resp_json(401, {"error": True, "message": "user not found"})
     try:
         movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
@@ -427,7 +410,7 @@ def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
     try:
         obj = s3.get_object(Bucket=bucket, Key=key)
         movie_bytes = obj["Body"].read()
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except ClientError as e:
         LOGGER.warning("get_frame get_object failed: %s %s %s", bucket, key, e)
         return resp_json(503, {"error": True, "message": "failed to load movie from S3"})
 
@@ -447,7 +430,7 @@ def api_get_frame(event: Dict[str, Any]) -> Dict[str, Any]:
             if w and h:
                 odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=WIDTH, value=w)
                 odb.set_metadata(user_id=user_id, set_movie_id=movie_id, prop=HEIGHT, value=h)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except ClientError as exc:
             LOGGER.debug("get_frame set_metadata failed: %s", exc)
 
     if size_analysis:
@@ -550,6 +533,6 @@ def api_status() -> Dict[str, Any]:
                 "recent_logs": recent.get("items", []),
             },
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except ClientError as e:
         LOGGER.exception("api_status failed: %s", e)
         return resp_json(500, {"status": "error", "message": str(e)})

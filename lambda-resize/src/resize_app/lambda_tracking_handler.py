@@ -10,12 +10,13 @@ import os
 import boto3
 
 from .src.app.constants import C
-from .lambda_tracking_env import LambdaTrackingEnv
+from .src.app.odb import InvalidMovie_Id, get_movie_metadata
 from . import tracker
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
+MAX_BATCH_SIZE = 500
 CORS_HEADERS = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
@@ -52,33 +53,24 @@ def handler(event, context=None):
             "headers": CORS_HEADERS,
             "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)}),
         }
-    try:
-        env = LambdaTrackingEnv()
-        tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, env=env)
-        return {
-            "statusCode": 200,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: "Tracking completed"}),
-        }
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.exception("Tracking failed: %s", e)
-        return {
-            "statusCode": 500,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(e)}),
-        }
+    tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start)
+    return {
+        "statusCode": 200,
+        "headers": CORS_HEADERS,
+        "body": json.dumps({C.API_KEY_ERROR: False, C.API_KEY_MESSAGE: "Tracking completed"}),
+    }
 
 
-def sqs_handler(event, context=None):
+def sqs_handler(event, _context=None):
     """
     SQS event source for tracking jobs.
     Each record body is JSON: {"user_id": "...", "movie_id": "...", "frame_start": int, "batch_size": int}.
     """
-    del context  # unused in this handler
-    env = LambdaTrackingEnv()
     queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
 
+    # We should only have a single tracking request, but we should still look for multiple records
+    # in case they get batched for different movies
     for record in event.get("Records", []):
         try:
             body = json.loads(record.get("body") or "{}")
@@ -86,82 +78,73 @@ def sqs_handler(event, context=None):
             movie_id = body["movie_id"]
             frame_start = int(body.get("frame_start", 0))
             origin_start = int(body.get("origin_start", frame_start))
-            batch_size = int(body.get("batch_size", 500)) or 500
+            batch_size = int(body.get("batch_size", MAX_BATCH_SIZE)) or MAX_BATCH_SIZE
             batch_size = max(1, min(batch_size, 500))
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.exception("Bad SQS record: %s", exc)
+        except (KeyError,TypeError) as e:
+            logger.exception("Bad SQS record: %s", e)
             continue
 
+        max_frame = frame_start + batch_size - 1
+        tracker.run_tracking(user_id=user_id, movie_id=movie_id, frame_start=frame_start, max_frame=max_frame)
+
+        # Decide whether to enqueue a follow-up batch.
         try:
-            max_frame = frame_start + batch_size - 1
-            tracker.run_tracking(
-                user_id=user_id,
-                movie_id=movie_id,
-                frame_start=frame_start,
-                env=env,
-                max_frame=max_frame,
-            )
+            movie = get_movie_metadata(movie_id=movie_id)
+        except InvalidMovie_Id as exc:
+            logger.exception("get_movie_metadata failed for %s: %s", movie_id, exc)
+            continue
 
-            # Decide whether to enqueue a follow-up batch.
-            try:
-                movie = env.get_movie_metadata(movie_id)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.exception("get_movie_metadata failed for %s: %s", movie_id, exc)
-                continue
+        last = movie.get("last_frame_tracked")
+        total_frames = movie.get("total_frames")
+        if last is None:
+            continue
+        try:
+            last = int(last)
+        except (TypeError, ValueError):
+            continue
 
-            last = movie.get("last_frame_tracked")
-            total_frames = movie.get("total_frames")
-            if last is None:
-                continue
+        # Hard safety cap at frame 9999 and (if known) last real frame.
+        max_allowed = 9999
+        if total_frames:
             try:
-                last = int(last)
+                max_allowed = min(max_allowed, int(total_frames) - 1)
             except (TypeError, ValueError):
-                continue
+                max_allowed = 9999
 
-            # Hard safety cap at frame 9999 and (if known) last real frame.
-            max_allowed = 9999
-            if total_frames:
-                try:
-                    max_allowed = min(max_allowed, int(total_frames) - 1)
-                except (TypeError, ValueError):
-                    max_allowed = 9999
+        # Monotonicity guard: only move forward.
+        if last < frame_start or last >= max_allowed:
+            continue
 
-            # Monotonicity guard: only move forward.
-            if last < frame_start or last >= max_allowed:
-                continue
+        next_start = last + 1
+        if next_start > max_allowed:
+            continue
 
-            next_start = last + 1
-            if next_start > max_allowed:
-                continue
+        # Explicitly abort (for this chain) if we are not moving strictly
+        # forward relative to both the original and current batch start.
+        if next_start <= origin_start or next_start <= frame_start:
+            logger.error(
+                "Refusing to enqueue non-advancing batch: movie_id=%s "
+                "origin_start=%s frame_start=%s last=%s next_start=%s",
+                movie_id,
+                origin_start,
+                frame_start,
+                last,
+                next_start,
+            )
+            continue
 
-            # Explicitly abort (for this chain) if we are not moving strictly
-            # forward relative to both the original and current batch start.
-            if next_start <= origin_start or next_start <= frame_start:
-                logger.error(
-                    "Refusing to enqueue non-advancing batch: movie_id=%s "
-                    "origin_start=%s frame_start=%s last=%s next_start=%s",
-                    movie_id,
-                    origin_start,
-                    frame_start,
-                    last,
-                    next_start,
-                )
-                continue
-
-            if queue_url:
-                sqs.send_message(
-                    QueueUrl=queue_url,
-                    MessageBody=json.dumps(
-                        {
-                            "user_id": user_id,
-                            "movie_id": movie_id,
-                            "frame_start": next_start,
-                            "origin_start": origin_start,
-                            "batch_size": 100,
-                        }
-                    ),
-                )
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.exception("Tracking failed for movie_id=%s: %s", movie_id, exc)
+        if queue_url:
+            sqs.send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps(
+                    {
+                        "user_id": user_id,
+                        "movie_id": movie_id,
+                        "frame_start": next_start,
+                        "origin_start": origin_start,
+                        "batch_size": 100,
+                    }
+                ),
+            )
 
     return {}
