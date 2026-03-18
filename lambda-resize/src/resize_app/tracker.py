@@ -43,6 +43,24 @@ from . import rotate_zip
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
+DEBUG_LOG_PATH = "/Users/simsong/gits/webapp/.cursor/debug-f19a32.log"
+
+
+def _agent_debug_log(*, hypothesis_id, location, message, data):
+    payload = {
+        "sessionId": "f19a32",
+        "runId": "run1",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(payload, separators=(",", ":")) + "\n")
+    except OSError:
+        pass
 
 # Legacy: only used by cleanup_mp4, rotate_movie, prepare_movie_for_tracking. run_tracking uses cv2 only.
 FFMPEG_PATH = paths.ffmpeg_path()
@@ -312,6 +330,14 @@ def track_movie(
 
     # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
     logging.info("start movie tracking")
+    # region agent log
+    _agent_debug_log(
+        hypothesis_id="H1",
+        location="tracker.py:track_movie:start",
+        message="tracking started",
+        data={"frame_start": frame_start, "input_trackpoints": len(input_trackpoints or []), "max_frame": max_frame},
+    )
+    # endregion
     for frame_number in range(1_000_000):
         if max_frame is not None and frame_number > max_frame:
             break
@@ -325,6 +351,20 @@ def track_movie(
         frame_show = frame_this  # frame to show
         if frame_number <= frame_start:
             current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number'] == frame_number]
+            # region agent log
+            if frame_number == frame_start:
+                _agent_debug_log(
+                    hypothesis_id="H1",
+                    location="tracker.py:track_movie:seed",
+                    message="seed trackpoints for batch",
+                    data={
+                        "frame_number": frame_number,
+                        "frame_start": frame_start,
+                        "seed_count": len(current_trackpoints),
+                        "seed_labels": [tp.get("label") for tp in current_trackpoints],
+                    },
+                )
+            # endregion
             # Call the callback if we have one
             if label_frames:
                 frame_show = frame_this.copy()
@@ -344,6 +384,20 @@ def track_movie(
 
         # create new list of trackpoints
         current_trackpoints = list(trackpoints_by_label.values())
+        # region agent log
+        if frame_number == frame_start + 1:
+            _agent_debug_log(
+                hypothesis_id="H1",
+                location="tracker.py:track_movie:first_tracked_frame",
+                message="first tracked frame after batch start",
+                data={
+                    "frame_number": frame_number,
+                    "frame_start": frame_start,
+                    "seed_count": len(trackpoints_by_label),
+                    "tracked_count": len(current_trackpoints),
+                },
+            )
+        # endregion
 
         # And set their new frame numbers
         for tp in current_trackpoints:
@@ -487,6 +541,14 @@ class TrackingCallback:
         )
 
     def notify(self, *, frame_number, frame_data, frame_trackpoints):
+        # region agent log
+        _agent_debug_log(
+            hypothesis_id="H1",
+            location="tracker.py:TrackingCallback.notify",
+            message="writing tracked frame",
+            data={"frame_number": frame_number, "trackpoint_count": len(frame_trackpoints or [])},
+        )
+        # endregion
         frame_jpeg = convert_frame_to_jpeg(frame_data, quality=60)
         if self.research_comment:
             frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(
@@ -528,6 +590,14 @@ def run_tracking(*, user_id, movie_id, frame_start, env, max_frame=None):
     env must be a TrackingEnv implementation (e.g. FlaskTrackingEnv or LambdaTrackingEnv).
     """
     input_trackpoints = env.get_movie_trackpoints(movie_id=movie_id)
+    # region agent log
+    _agent_debug_log(
+        hypothesis_id="H1",
+        location="tracker.py:run_tracking",
+        message="loaded input trackpoints",
+        data={"movie_id": movie_id, "frame_start": frame_start, "input_trackpoint_count": len(input_trackpoints or [])},
+    )
+    # endregion
     movie_record = env.get_movie_metadata(movie_id=movie_id)
     research_comment = mp4_metadata_lib.build_comment(
         movie_record.get("research_use", 0) or 0,

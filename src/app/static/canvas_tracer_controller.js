@@ -24,6 +24,27 @@ const MAX_FRAMES = 1000000;
 
 var cell_id_counter = 0;
 
+function agentDebugLog(location, message, data, hypothesisId) {
+    // region agent log
+    fetch('http://127.0.0.1:7583/ingest/7239442b-da2b-423a-8fe8-caf6d8763254', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'f19a32'
+        },
+        body: JSON.stringify({
+            sessionId: 'f19a32',
+            runId: 'run1',
+            hypothesisId,
+            location,
+            message,
+            data,
+            timestamp: Date.now()
+        })
+    }).catch(() => {});
+    // endregion
+}
+
 import { $ } from "./utils.js";
 import { Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
@@ -485,6 +506,12 @@ class TracerController extends MovieController {
                         }
                         return;
                     }
+                    agentDebugLog(
+                        'canvas_tracer_controller.js:poll_for_track_end',
+                        'tracking status polled',
+                        { status: data.metadata.status, tracking: self.tracking, movieId: self.movie_id },
+                        'H2'
+                    );
                     self.tracking_status.text(data.metadata.status);
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
                     return;
@@ -515,6 +542,12 @@ class TracerController extends MovieController {
         this.tracking = false;
         this.set_movie_control_buttons();
         this.tracking_status.text('Tracing complete. Loading movie...');
+        agentDebugLog(
+            'canvas_tracer_controller.js:movie_tracked',
+            'tracking completed, waiting for zip',
+            { movieId: this.movie_id, hasZipUrl: !!(_data.metadata && _data.metadata.movie_zipfile_url) },
+            'H2'
+        );
 
         const self = this;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
@@ -536,6 +569,12 @@ class TracerController extends MovieController {
                         return;
                     }
                     // Show a visible, stable message while we wait for the ZIP.
+                    agentDebugLog(
+                        'canvas_tracer_controller.js:movie_tracked:waitForZip',
+                        'clearing tracking status while waiting for zip',
+                        { previousStatus: self.tracking_status.text(), movieId: self.movie_id },
+                        'H2'
+                    );
                     self.tracking_status.text('');
                     $('#status-big').text('Tracing complete. Waiting for ZIP file to be processed…');
                     $.post(`${API_BASE}api/get-movie-metadata`, {
@@ -550,6 +589,12 @@ class TracerController extends MovieController {
                             return;
                         }
                         if (resp.metadata.movie_zipfile_url) {
+                            agentDebugLog(
+                                'canvas_tracer_controller.js:movie_tracked:waitForZip',
+                                'zip became available',
+                                { movieId: self.movie_id },
+                                'H2'
+                            );
                             resolve({
                                 zipUrl: resp.metadata.movie_zipfile_url,
                                 metadata: resp.metadata,
