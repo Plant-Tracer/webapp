@@ -58,8 +58,10 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
-MOVIE_DATA_URN = 'movie_data_urn'
-MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
+MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
+MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
+MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 TITLE = 'title'
 DESCRIPTION = 'description'
 STATUS = 'status'
@@ -80,8 +82,15 @@ HEIGHT = 'height'
 RESEARCH_USE = 'research_use'
 CREDIT_BY_NAME = 'credit_by_name'
 ATTRIBUTION_NAME = 'attribution_name'
-ROTATION_STEPS = 'rotation_steps'
+MOVIE_MAX_WIDTH = 640
+MOVIE_JPEG_QUALITY = 85
+
+
+# response keys:
 MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
+
+# obsolete:
+ROTATION_STEPS = 'rotation_steps' # no longer used
 # Props that set_movie_metadata (flask_api) can set in bulk from extracted movie metadata
 MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 

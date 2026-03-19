@@ -459,7 +459,7 @@ install-lambda-deps: $(REQ)
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
 lambda-resize-lint: install-lambda-deps
 	$(MAKE) -C lambda-resize vend-app
-	poetry run ruff check lambda-resize/src
+	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
 lambda-resize-check: lambda-resize-lint

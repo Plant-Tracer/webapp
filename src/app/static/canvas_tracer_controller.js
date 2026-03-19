@@ -319,16 +319,15 @@ class TracerController extends MovieController {
         }
         $('#status-big').html('Movie is being traced...');
         $(this.div_selector).addClass('tracing-dimmed');
-        this.tracking_status.text("Asking Lambda to trace movie...");
+        this.tracking_status.text("Asking pipeline to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
         this.poll_error_count = 0;
         this.poll_for_track_end();
         this.set_movie_control_buttons();
 
-        const url = LAMBDA_API_BASE.replace(/\/$/, '') + '/api/v1';
+        const url = LAMBDA_API_BASE.replace(/\/$/, '') + '/resize-api/v1/track-movie';
         const body = JSON.stringify({
-            action: 'track-movie',
             api_key: this.api_key,
             movie_id: this.movie_id,
             frame_start: this.frame_number
@@ -626,8 +625,8 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
         : create_default_markers();
     var frames = [{'frame_url': frame0_url, 'markers': frame0Markers}];
 
-    cc.load_movie(frames);
-    cc.create_marker_table();
+    cc.load_movie(frames);      // all the frames - we just have one for now
+    cc.create_marker_table();   // create the initial table
     cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 }
 
@@ -883,7 +882,7 @@ function trace_movie(div_controller, movie_id, api_key) {
             $(div_controller + ' canvas').prop('width', width).prop('height', height);
         }
         if (!resp.metadata.movie_zipfile_url) {
-            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie". No polling.
+            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
             const frameBase = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
             const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
@@ -898,7 +897,8 @@ function trace_movie(div_controller, movie_id, api_key) {
         if (demo_mode) {
             $('#status-big').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
         } else {
-            $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Trace movie.');
+          $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
+                                : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
         trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
     });

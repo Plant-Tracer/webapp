@@ -1,6 +1,7 @@
 """
 Rotate video and build frame zip using OpenCV (cv2) + Pillow only (no ffmpeg, no PyAV).
 Used by the Lambda rotate-and-zip API so we stay within deployment size limits.
+Future versions will not make the zip file when the player can forward and backward step without all of the images.
 """
 
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
@@ -14,7 +15,6 @@ from PIL import Image
 
 # One 90° CW rotation in PIL terms (PIL rotates CCW, so 90 CW = 270 CCW)
 PIL_ROTATE_90_CW = Image.Transpose.ROTATE_270
-
 
 def _rotate_pil_90_cw(img: Image.Image, steps: int) -> Image.Image:
     """Apply steps × 90° clockwise. steps in 1..3."""

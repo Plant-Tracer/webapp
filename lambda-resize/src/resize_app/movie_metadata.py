@@ -4,7 +4,6 @@ Used by Lambda rotate-and-zip so DB has full metadata after processing.
 Uses OpenCV (cv2) only; no PyAV dependency.
 """
 
-import io
 import tempfile
 from typing import Any, Dict
 
