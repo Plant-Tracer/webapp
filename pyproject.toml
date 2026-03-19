@@ -13,11 +13,13 @@ dynamic = ["dependencies"]
 
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
+sqs_cli = "sqs_cli:main"
 
 [tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
+    { include = "sqs_cli.py", from = "lambda-resize/src" },
 ]
 
 [tool.poetry.dependencies]
@@ -47,6 +49,8 @@ tabulate = "*"
 validate_email_address = "*"
 html5lib = "^1.1"
 html5validate = "^0.0.2"
+
+
 
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda / lambda-resize (single source of truth)
@@ -147,7 +151,7 @@ reportMissingTypeStubs = "warning"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
-extraPaths = ["src"]
+extraPaths = ["src", "lambda-resize/src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
