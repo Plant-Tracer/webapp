@@ -22,6 +22,7 @@ from aws_lambda_powertools.utilities.batch import (
 )
 
 from . import movie_glue
+from . import mpeg_jpeg_zip
 from . import lambda_tracking_handler
 
 LOGGER = Logger(service="planttracer")
@@ -67,13 +68,13 @@ def handle_first_frame() -> Any:
     movie_id = app.current_event.get_query_string_value(name="movie_id", default_value=None)
     match movie_id:
         case "red-0":
-            data = movie_glue.generate_test_jpeg(0)
+            data = mpeg_jpeg_zip.generate_test_jpeg(0)
         case "red-90":
-            data = movie_glue.generate_test_jpeg(90)
+            data = mpeg_jpeg_zip.generate_test_jpeg(90)
         case "red-180":
-            data = movie_glue.generate_test_jpeg(180)
+            data = mpeg_jpeg_zip.generate_test_jpeg(180)
         case "red-270":
-            data = movie_glue.generate_test_jpeg(270)
+            data = mpeg_jpeg_zip.generate_test_jpeg(270)
         case _:
             try:
                 (url,rotation) = movie_glue.get_movie_url(api_key=api_key, movie_id=movie_id)

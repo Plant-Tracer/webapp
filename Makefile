@@ -102,7 +102,7 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	$(MAKE) -C lambda-resize vend-app
+	make vend-lambda-resize
 	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
 		src tests *.py \
 		lambda-resize/src/resize_app/resize.py \
@@ -143,11 +143,11 @@ flake:
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
-	$(MAKE) -C lambda-resize vend-app
+	make vend-lambda-resize
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	$(MAKE) -C lambda-resize vend-app
+	make vend-lambda-resize
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
@@ -451,6 +451,14 @@ check-iam:
 		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
 	fi
 
+################################################################
+## lambda-resize
+
+vend-lambda-resize:
+	mkdir -p lambda-resize/src/resize_app/src/app
+	rsync --verbose --archive src/app/{odb,schema,constants,mp4_metadata_lib,paths,odb_movie_data,s3_presigned}.py \
+		lambda-resize/src/resize_app/src/app/
+
 # Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
 install-lambda-deps: $(REQ)
 	poetry install --with lambda
@@ -458,7 +466,7 @@ install-lambda-deps: $(REQ)
 # lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
 lambda-resize-lint: install-lambda-deps
-	$(MAKE) -C lambda-resize vend-app
+	make vend-lambda-resize
 	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
@@ -481,7 +489,7 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
 	  exit 1; \
 	fi
-	$(MAKE) -C lambda-resize vend-app
+	make vend-lambda-resize
 	poetry check
 	poetry lock
 	printenv | grep AWS

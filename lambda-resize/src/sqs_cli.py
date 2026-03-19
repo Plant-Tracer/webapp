@@ -5,9 +5,10 @@ Toy cli for exercising the routines.
 from pathlib import Path
 import argparse
 from resize_app import movie_glue
+from resize_app import mpeg_jpeg_zip
 
 def do_jpeg(args):
-    data = movie_glue.generate_test_jpeg(args.rotation)
+    data = mpeg_jpeg_zip.generate_test_jpeg(args.rotation)
     args.output.write_bytes(data)
 
 def main():
