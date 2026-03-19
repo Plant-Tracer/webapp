@@ -82,8 +82,6 @@ HEIGHT = 'height'
 RESEARCH_USE = 'research_use'
 CREDIT_BY_NAME = 'credit_by_name'
 ATTRIBUTION_NAME = 'attribution_name'
-MOVIE_MAX_WIDTH = 640
-MOVIE_JPEG_QUALITY = 85
 
 
 # response keys:

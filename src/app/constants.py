@@ -34,6 +34,7 @@ class C:
     AWS_PROFILE = 'AWS_PROFILE'
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
+
     # Environment variables for AWS Configuration
     # SERVER_EMAIL: sender address for all outgoing email (env var name; value default admin@planttracer.com, configured in SES)
     SERVER_EMAIL = 'SERVER_EMAIL'
@@ -60,6 +61,8 @@ class C:
 
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
+    MOVIE_MAX_WIDTH = 640
+    MOVIE_JPEG_QUALITY = 85
 
     # Logging
     LOGGING_CONFIG='%(asctime)s  %(filename)s:%(lineno)d %(levelname)s: %(message)s'

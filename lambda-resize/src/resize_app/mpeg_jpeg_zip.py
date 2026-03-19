@@ -3,25 +3,29 @@ mpeg_jpeg_zip.py:
 Routines for ripping mpegs out of jepgs and making zip files
 """
 
+import tempfile
 import os
+import zipfile
 import sys
 import time
 import uuid
 import json
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TypeAlias,Generator
 import io
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 from contextlib import closing
+import numpy as np
+from PIL import Image
 
+
+from .src.app.constants import C
 from .src.app.odb import (
     DDBO,
     ENABLED,
     MOVIE_DATA_URN,
     MOVIE_ROTATION,
-    MOVIE_MAX_WIDTH,
-    MOVIE_JPEG_QUALITY,
     TOTAL_BYTES,
     FPS,
     WIDTH,
@@ -30,37 +34,19 @@ from .src.app.odb import (
     USER_ID,
 )
 
-
 from botocore.exceptions import ClientError
 from aws_lambda_powertools.event_handler import Response
 from aws_lambda_powertools import Logger
 
-def add_jpeg_comment(jpeg_bytes: bytes, comment: str) -> bytes:
-    """
-    Safely injects a standard JPEG COM (Comment) segment into a JPEG byte array.
-    """
-    # Ensure it's actually a JPEG (starts with FF D8)
-    if not jpeg_bytes.startswith(b'\xff\xd8'):
-        return jpeg_bytes
+# Just a label for clarity
+Jpeg: TypeAlias = bytes
+ImgArray: TypeAlias = np.ndarray
 
-    # Convert the string to bytes
-    comment_bytes = comment.encode('utf-8')
 
-    # A JPEG segment length includes the 2 bytes for the length field itself.
-    # The max length of a JPEG segment is 65535 bytes.
-    segment_length = len(comment_bytes) + 2
-    if segment_length > 65535:
-        comment_bytes = comment_bytes[:65533]
-        segment_length = 65535
+################################################################
+## jpeg generation
 
-    # Build the COM segment:
-    # Marker (0xFF 0xFE) + Length (2 bytes, big-endian) + Comment Bytes
-    com_segment = b'\xff\xfe' + segment_length.to_bytes(2, byteorder='big') + comment_bytes
-
-    # Slice the original array: [Start Marker] + [Comment Segment] + [Rest of Image]
-    return jpeg_bytes[:2] + com_segment + jpeg_bytes[2:]
-
-def generate_test_jpeg(n: int) -> bytes:
+def generate_test_jpeg(n: int) -> Jpeg:
     """
     Generates a red 640x480 rectangle with centered text,
     rotates it by n degrees, and returns it as a binary JPEG string.
@@ -95,7 +81,139 @@ def generate_test_jpeg(n: int) -> bytes:
 
     return img_byte_arr.getvalue()
 
-def get_frames_frame_jpeg_from_url(url: str, rotation: int) -> Optional[bytes]:
+################################################################
+## jpeg analysis
+##
+
+def add_jpeg_comment(jpeg_bytes: Jpeg, comment: str) -> Jpeg:
+    """
+    Safely injects a standard JPEG COM (Comment) segment into a JPEG byte array.
+    """
+    # Ensure it's actually a JPEG (starts with FF D8)
+    if not jpeg_bytes.startswith(b'\xff\xd8'):
+        return jpeg_bytes
+
+    # Convert the string to bytes
+    comment_bytes = comment.encode('utf-8')
+
+    # A JPEG segment length includes the 2 bytes for the length field itself.
+    # The max length of a JPEG segment is 65535 bytes.
+    segment_length = len(comment_bytes) + 2
+    if segment_length > 65535:
+        comment_bytes = comment_bytes[:65533]
+        segment_length = 65535
+
+    # Build the COM segment:
+    # Marker (0xFF 0xFE) + Length (2 bytes, big-endian) + Comment Bytes
+    com_segment = b'\xff\xfe' + segment_length.to_bytes(2, byteorder='big') + comment_bytes
+
+    # Slice the original array: [Start Marker] + [Comment Segment] + [Rest of Image]
+    return jpeg_bytes[:2] + com_segment + jpeg_bytes[2:]
+
+def convert_frame_to_jpeg( img:ImgArray, quality=90 ):
+    """Use CV2 to convert a frame to a jpeg"""
+    success, jpg_img = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not success:
+        raise ValueError("could not encode image")
+    return jpg_img.tobytes()
+
+
+def get_jpeg_dimensions( jpeg_bytes:Jpeg ):
+    """Return (width, height) of a JPEG image, or None if decode fails."""
+    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return None
+    h, w = img.shape[:2]
+    return (w, h)
+
+def resize_jpeg_to_fit( jpeg_bytes:Jpeg, max_width:int, max_height:int, quality=90):
+    """Resize JPEG bytes to fit inside (max_width, max_height), preserving aspect. Returns JPEG bytes."""
+    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return jpeg_bytes
+    h, w = img.shape[:2]
+    if w <= max_width and h <= max_height:
+        return jpeg_bytes
+    scale = min(max_width / w, max_height / h)
+    new_w = int(round(w * scale))
+    new_h = int(round(h * scale))
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+    success, jpg_img = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not success:
+        raise ValueError()
+    return jpg_img.tobytes()
+
+
+################################################################
+## cv2 mov handling
+##
+
+def extract_movie_metadata(*, movie_path):
+    """Use OpenCV to get movie metadata from a local file path.
+    Width, height, fps and usually frame count come from container/stream metadata.
+    Only if frame count is missing do we fall back to counting frames."""
+    cap = cv2.VideoCapture(movie_path)
+    try:
+        width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        fps    = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if frame_count is not None and frame_count > 0:
+            total_frames = int(frame_count)
+        else:
+            total_frames = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if len(frame) == 0:
+                    raise ValueError("corrupt movie frame")
+                total_frames += 1
+    finally:
+        cap.release()
+    return {
+        'total_frames': total_frames,
+        'total_bytes': os.path.getsize(movie_path),
+        'width': width,
+        'height': height,
+        'fps': fps,
+    }
+
+
+def extract_frame(*, movie_data, frame_number, fmt):
+    """Extract a single frame from movie data using CV2. This is not an efficient approach to read the entire movie.
+    Perhaps  make frame_number an array of frames to allow multiple frames to be extracted, with a callback?
+    :param: movie_data - binary object of data
+    :param: frame_number - frame to extract
+    :param: fmt - format wanted. CV2-return a CV2 image; 'jpeg' - return a jpeg image as a byte array.
+    """
+    assert fmt in ['CV2', 'jpeg']
+    assert movie_data is not None
+    # CV2's VideoCapture method does not support reading from a memory buffer.
+    # So perhaps we will change this to use a named pipe
+    with tempfile.NamedTemporaryFile(mode='ab') as tf:
+        tf.write(movie_data)
+        tf.flush()
+        cap = cv2.VideoCapture(tf.name)
+
+    # skip to frame_number (first frame is #0)
+    for _ in range(frame_number + 1):
+        ret, frame = cap.read()
+        if not ret:
+            raise ValueError(f"invalid frame_number {frame_number}")
+        match fmt:
+            case 'CV2':
+                return frame
+            case 'jpeg':
+                return convert_frame_to_jpeg(frame)
+            case _:
+                raise ValueError("Invalid fmt: " + fmt)
+    raise ValueError(f"invalid frame_number {frame_number}")
+
+
+def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
     """
     Generator
     Fetches the first frame of a video from a URL, applies rotation,
@@ -103,7 +221,7 @@ def get_frames_frame_jpeg_from_url(url: str, rotation: int) -> Optional[bytes]:
 
     :param url: The presigned S3 URL (or any accessible HTTP video URL).
     :param rotation: 0, 90, 180, or 270.
-    :return: yields a sequence of JPEG image as a byte array, or None if the video couldn't be read.
+    :yield: OpenCV image frames (ndarray)
     """
 
     # 1. Read the first frame from the URL
@@ -129,34 +247,27 @@ def get_frames_frame_jpeg_from_url(url: str, rotation: int) -> Optional[bytes]:
             max_dim = max(h, w)
 
             if max_dim > 0:
-                scale = MOVIE_MAX_WIDTH / max_dim
+                scale = C.MOVIE_MAX_WIDTH / max_dim
                 new_w = int(w * scale)
                 new_h = int(h * scale)
-
-                # cv2.INTER_AREA is the best interpolation method for shrinking images
                 frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-            # 4. Encode the frame to JPEG in memory
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), MOVIE_JPEG_QUALITY]
-            result, encimg = cv2.imencode('.jpg', frame, encode_param)
-
-            if not result:
-                raise ValueError("Failed to encode frame to JPEG.")
-
-            # 5. Return the binary string
-            yield encimg.tobytes()
+            yield frame
     finally:
         # Finished. Release the handle
         cap.release()
+
+
 
 def get_first_frame_from_url(url: str, rotation: int) -> Optional[bytes]:
     """
     Safely grabs the first frame using a context manager and a for loop.
     """
     # closing() turns the generator into a context manager
-    with closing(get_frames_frame_jpeg_from_url(url, rotation)) as frame_gen:
+    with closing(get_frames_from_url(url, rotation)) as frame_gen:
 
         # The for loop elegantly yields the first item
+        print("frame_gen:",frame_gen)
         for frame in frame_gen:
             # We return immediately, which exits the 'with' block.
             # Python automatically calls frame_gen.close() here!
