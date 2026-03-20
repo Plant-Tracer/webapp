@@ -502,6 +502,19 @@ sam-build: $(REQ)
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+	@echo "========================================"
+	@echo "Checking unzipped artifact sizes..."
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			size_mb=$$(du -sm "$$dir" | cut -f1); \
+			echo "Size of $$dir is $${size_mb}MB"; \
+			if [ "$$size_mb" -ge 250 ]; then \
+				echo "ERROR: $$dir exceeds the AWS Lambda 250MB unzipped limit!"; \
+				exit 1; \
+			fi; \
+		fi; \
+	done
+	@echo "Size check passed! All functions are under 250MB."
 
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
