@@ -24,7 +24,6 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-boto3 = ">=1.39.14,<2.0.0"
 apig-wsgi = "^2.20.0"
 
 [tool.poetry.requires-plugins]
@@ -49,6 +48,7 @@ tabulate = "*"
 validate_email_address = "*"
 html5lib = "^1.1"
 html5validate = "^0.0.2"
+boto3 = "^1.42.72"
 
 
 [tool.poetry.group.lambda.dependencies]
@@ -86,6 +86,7 @@ service_identity = "*"
 filetype = "^1.2.0"
 cfn-lint = "^1.43.4"
 botocore = {extras = ["crt"], version = "^1.42.63"}
+boto3 = "^1.42.72"
 
 
 [build-system]

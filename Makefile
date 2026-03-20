@@ -516,6 +516,22 @@ sam-build: $(REQ)
 	done
 	@echo "Size check passed! All functions are under 250MB."
 
+sam-audit-size:
+	@echo "========================================"
+	@echo "Top 20 largest items in SAM build directories (sizes in MB):"
+	@if [ ! -d ".aws-sam/build" ]; then \
+		echo "ERROR: .aws-sam/build not found. Run 'make sam-build' first."; \
+		exit 1; \
+	fi
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			echo "----------------------------------------"; \
+			echo "Analyzing: $$dir"; \
+			du -sm "$$dir"* | sort -nr | head -n 20; \
+		fi; \
+	done
+	@echo "========================================"
+
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
