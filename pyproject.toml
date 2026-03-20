@@ -51,7 +51,6 @@ html5lib = "^1.1"
 html5validate = "^0.0.2"
 
 
-
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda / lambda-resize (single source of truth)
 # Pillow: resizing/rotate_zip; mutagen: MP4 metadata; pydantic: vendored app/schema; opencv: video/frames/tracking
@@ -60,6 +59,7 @@ mutagen = "*"
 pydantic = "*"
 opencv-python-headless = "*"
 requests = ">=2.32.4,<3.0.0"
+imageio = {extras = ["ffmpeg"], version = "^2.37.3"}
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail

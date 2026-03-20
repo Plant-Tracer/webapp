@@ -32,6 +32,9 @@ SAM_LOGS_MINUTES ?= 15
 
 REQ := .venv/pyvenv.cfg
 
+# files used by lambda
+VEND_FILES := src/app/{odb,schema,constants,mp4_metadata_lib,paths,odb_movie_data,s3_presigned,schema}.py
+
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
     $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
@@ -456,7 +459,7 @@ check-iam:
 
 vend-lambda-resize:
 	mkdir -p lambda-resize/src/resize_app/src/app
-	rsync --verbose --archive src/app/{odb,schema,constants,mp4_metadata_lib,paths,odb_movie_data,s3_presigned}.py \
+	rsync --verbose --archive $(VEND_FILES) \
 		lambda-resize/src/resize_app/src/app/
 
 # Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).

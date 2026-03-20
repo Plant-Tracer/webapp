@@ -11,9 +11,13 @@ All production paths use cv2 + Pillow only (no ffmpeg). cleanup_mp4, rotate_movi
 prepare_movie_for_tracking are LEGACY: they require an ffmpeg binary and are kept for
 optional/local use (e.g. CLI render_tracked_movie, tests). run_tracking always uses
 prepare_movie_for_tracking_cv2 (rotate_zip) for rotate+scale.
+
+Uses imageio to write tracked movie, which does not have H.264 licensing issues
+
 """
 
 # pylint: disable=no-member
+from typing import List,Optional
 import json
 import argparse
 import tempfile
@@ -24,12 +28,11 @@ import zipfile
 from collections import defaultdict
 
 import cv2
-import os
-import cv2
+import imageio
 import numpy as np
+from pathlib import Path
 
-from . import mpeg_jpeg_zip
-
+from .src.app.schema import Trackpoint
 from .src.app import paths
 from .src.app import mp4_metadata_lib
 from .src.app.constants import C
@@ -51,7 +54,8 @@ from .src.app.odb_movie_data import (
     write_object,
     write_object_from_path,
 )
-from . import rotate_zip
+from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,extract_movie_metadata,get_frames_from_url
+
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
@@ -64,24 +68,26 @@ TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_SCALE = 0.75
 TEXT_THICKNESS = 2
 TEXT_MARGIN = 5
+CIRCLE_WIDTH = 6
+CIRCLE_COLOR = RED
 MIN_MOVIE_BYTES = 10
 
 ## JPEG support
 
 
-def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
+def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints:List[Trackpoint]):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
     :param: frame0 - cv2 image of the previous frame in CV2 format
     :param: frame1 - cv2 image of the current frame in CV2 format
-    :param: trackpoints  - array of trackpoints (dicts of x,y and label)
+    :param: trackpoints  - array of Trackpoint objects
     :return: array of trackpoints
 
     """
     winSize = (15, 15)  # pylint: disable=invalid-name
     max_level = 2
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-    cv2_tpts = np.array([[pt['x'], pt['y']] for pt in trackpoints], dtype=np.float32)
+    cv2_tpts = np.array([[pt.x, pt.y] for pt in trackpoints], dtype=np.float32)
 
     try:
         gray_frame0 = cv2.cvtColor(frame_prev, cv2.COLOR_BGR2GRAY)
@@ -93,13 +99,9 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
         trackpoints_out = []
         for (i, pt) in enumerate(trackpoints):
             if status_array[i] == 1:
-                trackpoints_out.append({
-                    'x': point_array_out[i][0],
-                    'y': point_array_out[i][1],
-                    'status': int(status_array[i][0]),
-                    'err': float(err[i][0]),
-                    'label': pt['label']
-                })
+                trackpoints_out.append(Trackpoint(x=point_array_out[i][0],
+                                                  y=point_array_out[i][1],
+                                                  label=pt.label))
     except cv2.error:  # pylint: disable=catching-non-exception
         trackpoints_out = []
 
@@ -107,7 +109,7 @@ def cv2_track_frame(*, frame_prev, frame_this, trackpoints):
     return trackpoints_out
 
 
-def cv2_label_frame(*, frame, trackpoints, frame_label=None):
+def cv2_label_frame(*, frame:np.ndarray, trackpoints:List[Trackpoint], frame_label=None):
     """
     :param: frame - cv2 frame
     :param: trackpoints - array of dicts where each dict has at least an ['x'] and a ['y']
@@ -119,8 +121,8 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
 
     # use the points to annotate the colored frames. write to colored tracked video
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
-    for point in trackpoints:
-        cv2.circle(frame, (int(point['x']), int(point['y'])), 3, RED, -1)     # pylint: disable=no-member
+    for pt in trackpoints:
+        cv2.circle(frame, (int(pt.x), int(pt.y)), CIRCLE_WIDTH, CIRCLE_COLOR, -1)     # pylint: disable=no-member
 
     if frame_label is not None:
         # Label in upper right hand corner
@@ -132,9 +134,9 @@ def cv2_label_frame(*, frame, trackpoints, frame_label=None):
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def cleanup_mp4(*, infile: str, outfile: str):
+def cleanup_mp4(*, infile: Path, outfile: Path):
     """Transcode video to H.264 MP4 using pure OpenCV (no external binary)."""
-    if not os.path.exists(infile):
+    if not infile.exists():
         raise FileNotFoundError(infile)
 
     # 1. Open the input video
@@ -422,6 +424,88 @@ class TrackingCallback:
         self.ddbo.update_table(self.ddbo.movies, self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
         if os.path.exists(self._zip_tf.name):
             os.unlink(self._zip_tf.name)
+
+
+def track_movie_v2(*, movie_url, frame_start, trackpoints,
+                   zipfile_path:Optional[Path] = None,
+                   tracked_movie_path:Optional[Path] = None,
+                   rotate=0, comment=None):
+    """
+    Track from frame_start to end of movie.
+    If frame_start==0, the movie is untracked. frame_start is set to 1.
+
+    :param movie_url: filename or URL of an MPEG4
+    :param frame_start: first frame to track.
+    :param trackpoints: a trackpoints data structure. Trackpoints for frame_start-1 must be provided.
+    :param zipfile_path: If provided, where the zipfile of scaled, rotated images goes.
+    :param rotation: the rotation (in degrees) to apply to the movie before scaling
+    """
+
+    # track from frame frame_start+1 to end using data from frame_start
+
+    print("frame_start=",frame_start)
+    if frame_start==0:
+        frame_start=1
+
+    # if the movie_url is a file, make sure it exists
+    if not str(movie_url).startswith("http"):
+        if not Path(movie_url).exists():
+            raise FileNotFoundError(movie_url)
+
+    trackpoints_output = [tp for tp in trackpoints if tp.frame_number <= frame_start]
+    # make sure we have trackpoints for frame_start-1
+    if not any([tp for tp in trackpoints if tp.frame_number == frame_start-1]):
+        raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
+
+    # Check to see if we are making a zipfile
+    zf = None
+    if zipfile_path is not None:
+        # pylint: disable=consider-using-with
+        zf = zipfile.ZipFile(zipfile_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9)
+
+    # Check to see if we are making a tracked_movie
+    tracked_movie_writer = None
+    if tracked_movie_path is not None:
+        md = extract_movie_metadata(movie_path=tracked_movie_path, get_frame_count = False)
+        tracked_movie_writer = imageio.get_writer(tracked_movie_path, format='FFMPEG', mode='I',
+                                                  fps=30, codec='libx264', macro_block_size=None)
+
+    trackpoints_prev = None
+    frame_prev = None
+    for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotate)):
+        # Track if in tracking time, else get trackpoints_this from the history
+        if frame_number >= frame_start:
+            trackpoints_this = cv2_track_frame(frame_prev = frame_prev, frame_this = frame, trackpoints = trackpoints_prev)
+            print(trackpoints_prev,"->",trackpoints_this)
+            trackpoints_output.extend(trackpoints_this) # add to the output
+        else:
+            trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+
+        # Create the zipfile if asked
+        if zf is not None:
+            jpeg = convert_frame_to_jpeg(frame)
+            if comment is not None:
+                jpeg = add_jpeg_comment(jpeg, comment)
+            zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
+
+        # Label the frame and write to the mp4 output if we are doing that
+        if tracked_movie_writer:
+            frame_to_label = frame.copy()
+            cv2_label_frame(frame=frame_to_label, trackpoints=trackpoints_this,frame_label=frame_number)
+            # IMPORTANT: OpenCV uses BGR colors, but ImageIO expects RGB!
+            frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
+            tracked_movie_writer.append_data(frame_rgb)
+
+        # Advance
+        trackpoints_prev = trackpoints_this
+        frame_prev = frame
+
+    # Done
+    if tracked_movie_writer:
+        tracked_movie_writer.close()
+    return trackpoints_output
+
+
 
 
 if __name__ == "__main__":

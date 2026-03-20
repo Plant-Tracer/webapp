@@ -9,7 +9,9 @@ from typing import NamedTuple
 import boto3
 import urllib
 from pathlib import Path
+import zipfile
 
+from .src.app.schema import Trackpoint
 from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints
 from .src.app.odb_movie_data import (
     copy_object_to_path,
@@ -21,6 +23,7 @@ from .src.app.odb_movie_data import (
 )
 from . import rotate_zip
 from . import mpeg_jpeg_zip
+from .mpeg_jpeg_zip import add_jpeg_comment, convert_frame_to_jpeg
 
 from aws_lambda_powertools import Logger
 
@@ -106,33 +109,6 @@ def get_movie_url(*,api_key=None,movie_id=None) -> MovieInfo:
                                             Params={'Bucket': bucket, 'Key': key},
                                             ExpiresIn=300 )
     return MovieInfo(url=signed_url, rotation=rotation)
-
-
-def run_tracking(*, movie_url, frame_start, trackpoints, zipfile_path:Path = None, rotation=0):
-    """
-    :param movie_url: filename or URL of an MPEG4
-    :param frame_start: first frame to track.
-    :param trackpoints: a trackpoints data structure. Trackpoints for frame_start must be provided.
-    :param zipfile_path: If provided, where the zipfile of scaled, rotated images goes.
-    :param rotation: the rotation (in degrees) to apply to the movie before scaling
-    """
-
-    # track from frame frame_start+1 to end using data from frame_start
-
-    output_trackpoints = [tp for tp in trackpoints if tp['frame_number'] <= frame_start]
-    last_trackpoints = [tp for tp in trackpoints if tp['frame_number'] == frame_start]
-
-    if len(last_trackpoints) == 0:
-        raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start}")
-
-    zf = None
-    if zipfile_path is not None:
-        # pylint: disable=consider-using-with
-        zf = zipfile.ZipFile(zipfile_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9)
-
-    for (frame_number, frame) in enumerate(mpeg_jpeg_zip.get_frames_as_jpegs_from_url(movie_url, rotation)):
-        pass
-
 
 
 def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):

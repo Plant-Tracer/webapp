@@ -150,7 +150,7 @@ def resize_jpeg_to_fit( jpeg_bytes:Jpeg, max_width:int, max_height:int, quality=
 ## cv2 mov handling
 ##
 
-def extract_movie_metadata(*, movie_path):
+def extract_movie_metadata(*, movie_path:str, get_frame_count=True):
     """Use OpenCV to get movie metadata from a local file path.
     Width, height, fps and usually frame count come from container/stream metadata.
     Only if frame count is missing do we fall back to counting frames."""
@@ -159,27 +159,33 @@ def extract_movie_metadata(*, movie_path):
         width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
         fps    = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        if frame_count is not None and frame_count > 0:
-            total_frames = int(frame_count)
+        frame_count = None
+        if get_frame_count:
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if frame_count is not None and frame_count > 0:
+                frame_count = int(frame_count)
+            else:
+                frame_count = 0
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    if len(frame) == 0:
+                        raise ValueError("corrupt movie frame")
+                    frame_count += 1
+        if os.path.exists(movie_path):
+            total_bytes = os.path.getsize(movie_path)
         else:
-            total_frames = 0
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                if len(frame) == 0:
-                    raise ValueError("corrupt movie frame")
-                total_frames += 1
+            total_bytes = None
+        return {
+            'total_frames': frame_count,
+            'total_bytes': total_bytes,
+            'width': width,
+            'height': height,
+            'fps': fps,
+        }
     finally:
         cap.release()
-    return {
-        'total_frames': total_frames,
-        'total_bytes': os.path.getsize(movie_path),
-        'width': width,
-        'height': height,
-        'fps': fps,
-    }
 
 
 def extract_frame(*, movie_data, frame_number, fmt):
@@ -213,14 +219,14 @@ def extract_frame(*, movie_data, frame_number, fmt):
     raise ValueError(f"invalid frame_number {frame_number}")
 
 
-def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
+def get_frames_from_url(url: str, rotate: int) -> Generator[Any, None, None]:
     """
     Generator
-    Fetches the first frame of a video from a URL, applies rotation,
+    Fetches the first frame of a video from a URL, applies rotate,
     scales to a maximum dimension of 640px, and returns a binary JPEG.
 
     :param url: The presigned S3 URL (or any accessible HTTP video URL).
-    :param rotation: 0, 90, 180, or 270.
+    :param rotate: 0, 90, 180, or 270.
     :yield: OpenCV image frames (ndarray)
     """
 
@@ -232,15 +238,15 @@ def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
             if not success or frame is None:
                 break
 
-            # 2. Apply Rotation
-            if rotation == 90:
+            # 2. Apply Rotate
+            if rotate == 90:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-            elif rotation == 180:
+            elif rotate == 180:
                 frame = cv2.rotate(frame, cv2.ROTATE_180)
-            elif rotation == 270:
+            elif rotate == 270:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            elif rotation != 0:
-                raise ValueError("Rotation must be 0, 90, 180, or 270")
+            elif rotate != 0:
+                raise ValueError("Rotate must be 0, 90, 180, or 270")
 
             # 3. Calculate scaling to make the maximum dimension 640
             h, w = frame.shape[:2]
@@ -259,12 +265,12 @@ def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
 
 
 
-def get_first_frame_from_url(url: str, rotation: int) -> Optional[bytes]:
+def get_first_frame_from_url(url: str, rotate: int) -> Optional[bytes]:
     """
     Safely grabs the first frame using a context manager and a for loop.
     """
     # closing() turns the generator into a context manager
-    with closing(get_frames_from_url(url, rotation)) as frame_gen:
+    with closing(get_frames_from_url(url, rotate)) as frame_gen:
 
         # The for loop elegantly yields the first item
         print("frame_gen:",frame_gen)
