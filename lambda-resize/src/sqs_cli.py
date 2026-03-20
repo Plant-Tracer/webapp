@@ -31,9 +31,13 @@ def do_track(args):
     trackpoints = [Trackpoint(**tp) for tp in json.loads(args.trackpoints)]
     print("Tracking Trackpoints:",trackpoints)
 
+    def tracker_callback(obj:TrackerCallbackArg):
+        print(obj)
+
     tracker.track_movie_v2(movie_url=args.infile, frame_start=0, trackpoints=trackpoints,
                                zipfile_path = args.zipfile,
-                               tracked_movie_path = args.tracked_movie,
+                               movie_traced_path = args.movie_traced,
+                               callback=tracker_callback
                                rotate=args.rotate, comment=args.comment)
 
 def main():
@@ -56,7 +60,7 @@ def main():
     track_parser.set_defaults(func=do_track)
     track_parser.add_argument("--infile", type=Path, default=TEST_FILE)
     track_parser.add_argument("--zipfile", type=Path, default=Path("outfile.zip"))
-    track_parser.add_argument("--tracked_movie", type=Path, default=Path("tracked.mp4"))
+    track_parser.add_argument("--movie_traced", type=Path, default=Path("tracked.mp4"))
     track_parser.add_argument("--trackpoints", type=str, default=TEST_TRACKPOINTS)
     track_parser.add_argument("--comment", type=str, default="test comment")
     track_parser.add_argument("--rotate",type=int,default=0)

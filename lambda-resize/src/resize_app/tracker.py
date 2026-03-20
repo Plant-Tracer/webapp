@@ -9,7 +9,7 @@ Lives in lambda-resize; main app imports via app.tracker shim (re-exports from r
 
 All production paths use cv2 + Pillow only (no ffmpeg). cleanup_mp4, rotate_movie, and
 prepare_movie_for_tracking are LEGACY: they require an ffmpeg binary and are kept for
-optional/local use (e.g. CLI render_tracked_movie, tests). run_tracking always uses
+optional/local use (e.g. CLI render_movie_traced, tests). run_tracking always uses
 prepare_movie_for_tracking_cv2 (rotate_zip) for rotate+scale.
 
 Uses imageio to write tracked movie, which does not have H.264 licensing issues
@@ -17,7 +17,7 @@ Uses imageio to write tracked movie, which does not have H.264 licensing issues
 """
 
 # pylint: disable=no-member
-from typing import List,Optional
+from typing import List,Optional,NamedTuple
 import json
 import argparse
 import tempfile
@@ -73,6 +73,11 @@ CIRCLE_COLOR = RED
 MIN_MOVIE_BYTES = 10
 
 ## JPEG support
+
+class TrackerCallbackArg(NamedTuple):
+    frame_number:int
+    frame_data:np.ndarray
+    frame_trackpoints:List[Trackpoint] | None
 
 
 def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints:List[Trackpoint]):
@@ -134,302 +139,16 @@ def cv2_label_frame(*, frame:np.ndarray, trackpoints:List[Trackpoint], frame_lab
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
-def cleanup_mp4(*, infile: Path, outfile: Path):
-    """Transcode video to H.264 MP4 using pure OpenCV (no external binary)."""
-    if not infile.exists():
-        raise FileNotFoundError(infile)
+def prototype_callback(obj:TrackerCallbackArg):
+    """Demo"""
+    logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s", obj.frame_number, len(obj.frame_data), obj.frame_trackpoints)
 
-    # 1. Open the input video
-    cap = cv2.VideoCapture(infile)
-    if not cap.isOpened():
-        raise RuntimeError(f"OpenCV could not open input video: {infile}")
-
-    # 2. Grab video properties
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # 3. Initialize the VideoWriter
-    # 'avc1' is the FourCC code for H.264 encoding.
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
-
-    out = cv2.VideoWriter(outfile, fourcc, fps, (width, height))
-
-    if not out.isOpened():
-        cap.release()
-        raise RuntimeError(
-            f"OpenCV failed to initialize the VideoWriter for {outfile}. "
-            "Your OpenCV build might lack H.264 support."
-        )
-
-    # 4. Read and write frame-by-frame
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break  # End of video stream
-        out.write(frame)
-
-    # 5. Clean up
-    cap.release()
-    out.release()
-
-
-# pylint: disable=too-many-locals
-def render_tracked_movie(*, moviefile_input, moviefile_output, movie_trackpoints, label_frames=True):
-    """LEGACY: Renders tracked video with dots; uses ffmpeg for final transcode. Not used in web/Lambda flow."""
-    # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
-    # movie_trackpoints is an array of records where each has the form:
-    # {'x': 152.94203, 'y': 76.80803, 'status': 1, 'err': 0.08736111223697662, 'label': 'mypoint', 'frame_number': 189}
-
-    cap = cv2.VideoCapture(moviefile_input)
-    ret, current_frame_data = cap.read()
-    # Get video properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
-    logging.info("start movie rendering")
-    trackpoints_by_frame = defaultdict(list)
-    for tp in movie_trackpoints:
-        trackpoints_by_frame[tp['frame_number']].append(tp)
-
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tf:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(tf.name, fourcc, fps, (width, height))
-
-        for frame_number in range(1_000_000):
-            ret, current_frame_data = cap.read()
-            if not ret:
-                break
-
-            # Label the output and write it
-            if label_frames:
-                cv2_label_frame(frame=current_frame_data, trackpoints=trackpoints_by_frame[frame_number], frame_label=frame_number)
-            out.write(current_frame_data)
-
-        cap.release()
-        out.release()
-
-        # Finally, use ffmpeg to transcode the output to a proper mp4 file (This shouldn't be necessary)
-        cleanup_mp4(infile=tf.name, outfile=moviefile_output)
-    logging.info("rendered movie")
-
-
-def prototype_callback(*, frame_number, frame_data, frame_trackpoints):
-    logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s", frame_number, len(frame_data), frame_trackpoints)
-
-
-def track_movie(
-    *,
-    moviefile_input,
-    input_trackpoints,
-    frame_start=0,
-    label_frames=False,
-    callback=prototype_callback,
-    max_frame=None ):
-    """
-    Summary - takes in a movie(cap) and returns annotatted movie with red dots on all the trackpoints.
-    Draws frame numbers on each frame
-    :param: moviefile_input  - file name of an MP4 to track. Must not be annotated. CV2 cannot read movies from memory; this is a known problem.
-    :param: trackpoints - a list all current trackpoints.
-                        - Each trackpoint is dictionary {'x', 'y', 'label', 'frame_number'} to track.
-                        - code would be cleaner if this were a dictionary keyed by label!
-    :param: frame_start - the frame to start tracking out (frames 0..(frame_start-1) are just copied to output)
-    :param: callback - a function to callback with (*, frame_number, jpeg, trackpoints)
-
-    Note - no longer renders the tracked movie. That's now in render_tracked_movie().
-         - no longer returns trackpoints; that's the job of the callback
-
-         - Frame0 is never tracked. It's trackpoints are the provided trackpoints.
-    """
-    logger.info("track_movie moviefile_input=%s frame_start=%s",moviefile_input, frame_start)
-    cap = cv2.VideoCapture(moviefile_input)
-    frame_this = None
-
-    # should be movie name + tracked
-
-    # Create a VideoWriter object to save the output video to a temporary file (which we will then transcode with ffmpeg)
-    logging.info("start movie tracking")
-    for frame_number in range(1_000_000):
-        logger.info("frame_number=%s",frame_number)
-        if max_frame is not None and frame_number > max_frame:
-            break
-        frame_prev = frame_this
-        success, frame_this = cap.read()
-        if not success:
-            break
-
-        # Copy over the trackpoints for the current frame if this was previously tracked or is the first frame to track
-        # This also copies over frame_prev at start (when frame_number=0 and frame_start=0, it is <= frame_start)
-        frame_show = frame_this  # frame to show
-        if frame_number <= frame_start:
-            current_trackpoints = [tp for tp in input_trackpoints if tp['frame_number'] == frame_number]
-            if frame_number == 0:
-                logger.info(
-                    "frame 0: using input_trackpoints from DB: total=%d for frame 0=%d",
-                    len(input_trackpoints),
-                    len(current_trackpoints),
-                )
-            # Call the callback if we have one
-            if label_frames:
-                frame_show = frame_this.copy()
-                cv2_label_frame(frame=frame_show, trackpoints=current_trackpoints, frame_label=frame_number)
-            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
-            continue
-
-        # If this is after the starting frame, then track it
-        # This is run every time through the loop except the first time.
-        assert frame_prev is not None
-        trackpoints_by_label = {tp['label']: tp for tp in current_trackpoints}
-        new_trackpoints = cv2_track_frame(frame_prev=frame_prev, frame_this=frame_this, trackpoints=current_trackpoints)
-
-        # Copy in updated trackpoints
-        for tp in new_trackpoints:
-            trackpoints_by_label[tp['label']] = tp
-
-        # create new list of trackpoints
-        current_trackpoints = list(trackpoints_by_label.values())
-        # And set their new frame numbers
-        for tp in current_trackpoints:
-            tp['frame_number'] = frame_number  # set the frame number
-
-        # Call the callback if we have one
-        logger.info("frame_number=%s current_trackpoints=%s",frame_number,current_trackpoints)
-        if callback is not None:
-            if label_frames:
-                frame_show = frame_this.copy()
-                cv2_label_frame(frame=frame_show, trackpoints=[], frame_label=frame_number)
-            callback(frame_number=frame_number, frame_data=frame_show, frame_trackpoints=current_trackpoints)
-
-    cap.release()
-
-
-def rotate_movie(movie_input, movie_output, transpose=1):
-    """LEGACY: Rotate video with ffmpeg. Use rotate_zip.rotate_video_av for cv2-only."""
-    if not FFMPEG_PATH or not os.path.exists(FFMPEG_PATH):
-        raise RuntimeError("ffmpeg required for rotate_movie (not available in this environment)")
-    assert os.path.getsize(movie_input) > MIN_MOVIE_BYTES
-    assert os.path.getsize(movie_output) == 0
-    subprocess.call([FFMPEG_PATH, '-hide_banner', '-loglevel', 'error',
-                     '-i', movie_input, '-vf', f'transpose={int(transpose)}', '-c:a', 'copy', '-y', movie_output])
-    assert os.path.getsize(movie_output) > MIN_MOVIE_BYTES
-
-
-def prepare_movie_for_tracking(
-    input_path: str,
-    output_path: str,
-    rotation_steps: int,
-    max_width: int,
-    max_height: int,
-) -> None:
-    """LEGACY: Rotate and/or scale with ffmpeg. Production uses rotate_zip.prepare_movie_for_tracking_cv2."""
-    if not FFMPEG_PATH or not os.path.exists(FFMPEG_PATH):
-        raise RuntimeError("ffmpeg required for prepare_movie_for_tracking (not available in this environment)")
-    if rotation_steps < 0 or rotation_steps > 3:
-        raise ValueError("rotation_steps must be 0–3")
-    if os.path.getsize(input_path) <= MIN_MOVIE_BYTES:
-        raise ValueError("input movie too small")
-    with open(output_path, "wb"):
-        pass
-    vf_parts = []
-    if rotation_steps == 1:
-        vf_parts.append("transpose=1")
-    elif rotation_steps == 2:
-        vf_parts.append("transpose=2,transpose=2")
-    elif rotation_steps == 3:
-        vf_parts.append("transpose=2")
-    # Fit inside (max_width, max_height) preserving aspect (ffmpeg scale filter)
-    vf_parts.append(f"scale={max_width}:{max_height}:force_original_aspect_ratio=decrease")
-    vf = ",".join(vf_parts)
-    rc = subprocess.call(
-        [
-            FFMPEG_PATH,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            input_path,
-            "-vf",
-            vf,
-            "-c:a",
-            "copy",
-            "-y",
-            output_path,
-        ]
-    )
-    if rc != 0 or os.path.getsize(output_path) <= MIN_MOVIE_BYTES:
-        raise RuntimeError("prepare_movie_for_tracking failed")
-
-
-# pylint: disable=too-many-instance-attributes
-class TrackingCallback:
-    """Callback used during track_movie that writes frames to a zip and persists tracking data.
-
-    The zip is always rebuilt into a fresh temporary archive. When tracking continues
-    from a later frame, the caller can supply the prior zip bytes so we copy those
-    frames into the new archive before appending the current batch.
-    """
-
-    def __init__(
-        self,
-        *,
-        ddbo,
-        user_id,
-        movie_id,
-        research_comment: str,
-        total_frames: int,
-        existing_zip_path=None,
-    ):
-        self.ddbo = ddbo
-        self.user_id = user_id
-        self.movie_id = movie_id
-        self.research_comment = research_comment or ""
-        self.total_frames = total_frames
-        self.last_frame_tracked = -1
-        with tempfile.NamedTemporaryFile(  # pylint: disable=consider-using-with
-            suffix=".zip", prefix=f"movie_{movie_id}", delete=False
-        ) as tmp:
-            self._zip_tf = tmp
-            self._zipfile = zipfile.ZipFile(  # pylint: disable=consider-using-with
-                self._zip_tf.name, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
-            )
-        if existing_zip_path:
-            with zipfile.ZipFile(existing_zip_path, mode="r") as old_zip:
-                for info in old_zip.infolist():
-                    self._zipfile.writestr(info, old_zip.read(info.filename))
-            os.unlink(existing_zip_path)
-
-    def notify(self, *, frame_number, frame_data, frame_trackpoints):
-        frame_jpeg = convert_frame_to_jpeg(frame_data, quality=60)
-        if self.research_comment:
-            frame_jpeg = mp4_metadata_lib.add_comment_to_jpeg(
-                frame_jpeg, self.research_comment, quality=60
-            )
-        self.last_frame_tracked = max(self.last_frame_tracked, frame_number)
-        self._zipfile.writestr(f"frame_{frame_number:04}.jpg", frame_jpeg)
-        put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
-        message = f"Tracked frames {frame_number + 1} of {self.total_frames}"
-        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {STATUS: message})
-
-    def close(self):
-        self._zipfile.close()
-
-    @property
-    def zipfile_data(self):
-        with open(self._zip_tf.name, "rb") as f:
-            return f.read()
-
-    def done(self):
-        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {STATUS: C.TRACKING_COMPLETED})
-        self.ddbo.update_table(self.ddbo.movies, self.movie_id, {PROCESSING_STATE: PROCESSING_STATE_TRACKED})
-        if os.path.exists(self._zip_tf.name):
-            os.unlink(self._zip_tf.name)
-
-
-def track_movie_v2(*, movie_url, frame_start, trackpoints,
-                   zipfile_path:Optional[Path] = None,
-                   tracked_movie_path:Optional[Path] = None,
-                   rotate=0, comment=None):
+def track_movie_v2(*, movie_url, frame_start:int, trackpoints:List[Trackpoint],
+                   movie_zipfile_path:Optional[Path] = None,
+                   movie_traced_path:Optional[Path] = None,
+                   rotate=0,
+                   callback = prototype_callback,
+                   comment="Processed by PlantTracer AWS Lambda"):
     """
     Track from frame_start to end of movie.
     If frame_start==0, the movie is untracked. frame_start is set to 1.
@@ -437,7 +156,7 @@ def track_movie_v2(*, movie_url, frame_start, trackpoints,
     :param movie_url: filename or URL of an MPEG4
     :param frame_start: first frame to track.
     :param trackpoints: a trackpoints data structure. Trackpoints for frame_start-1 must be provided.
-    :param zipfile_path: If provided, where the zipfile of scaled, rotated images goes.
+    :param movie_zipfile_path: If provided, where the movie_zipfile of scaled, rotated images goes.
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
@@ -457,21 +176,22 @@ def track_movie_v2(*, movie_url, frame_start, trackpoints,
     if not any([tp for tp in trackpoints if tp.frame_number == frame_start-1]):
         raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
 
-    # Check to see if we are making a zipfile
+    # Check to see if we are making a movie_zipfile
     zf = None
-    if zipfile_path is not None:
+    if movie_zipfile_path is not None:
         # pylint: disable=consider-using-with
-        zf = zipfile.ZipFile(zipfile_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9)
+        zf = zipfile.ZipFile(movie_zipfile_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9)
 
-    # Check to see if we are making a tracked_movie
-    tracked_movie_writer = None
-    if tracked_movie_path is not None:
-        md = extract_movie_metadata(movie_path=tracked_movie_path, get_frame_count = False)
-        tracked_movie_writer = imageio.get_writer(tracked_movie_path, format='FFMPEG', mode='I',
-                                                  fps=30, codec='libx264', macro_block_size=None)
-
+    # Check to see if we are making a movie_traced
+    movie_traced_writer = None
+    if movie_traced_path is not None:
+        movie_traced_writer = imageio.get_writer(movie_traced_path, format='FFMPEG', mode='I',
+                                                  fps=15, codec='libx264',
+                                                  macro_block_size=None,
+                                                  output_params=['-metadata', f'comment={comment}'])
     trackpoints_prev = None
     frame_prev = None
+    trackpoints_this = None
     for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotate)):
         # Track if in tracking time, else get trackpoints_this from the history
         if frame_number >= frame_start:
@@ -481,7 +201,7 @@ def track_movie_v2(*, movie_url, frame_start, trackpoints,
         else:
             trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
 
-        # Create the zipfile if asked
+        # Create the movie_zipfile if asked
         if zf is not None:
             jpeg = convert_frame_to_jpeg(frame)
             if comment is not None:
@@ -489,23 +209,24 @@ def track_movie_v2(*, movie_url, frame_start, trackpoints,
             zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
 
         # Label the frame and write to the mp4 output if we are doing that
-        if tracked_movie_writer:
+        if movie_traced_writer:
             frame_to_label = frame.copy()
             cv2_label_frame(frame=frame_to_label, trackpoints=trackpoints_this,frame_label=frame_number)
             # IMPORTANT: OpenCV uses BGR colors, but ImageIO expects RGB!
             frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
-            tracked_movie_writer.append_data(frame_rgb)
+            movie_traced_writer.append_data(frame_rgb)
+
+        if callback is not None:
+            callback(TrackerCallbackArg(frame_number=frame_number, frame_data=frame, frame_trackpoints=trackpoints_output))
 
         # Advance
         trackpoints_prev = trackpoints_this
         frame_prev = frame
 
     # Done
-    if tracked_movie_writer:
-        tracked_movie_writer.close()
+    if movie_traced_writer:
+        movie_traced_writer.close()
     return trackpoints_output
-
-
 
 
 if __name__ == "__main__":
@@ -518,7 +239,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--moviefile", default='tests/data/2019-07-12 circumnutation.mp4', help='mpeg4 file')
     parser.add_argument(
-        "--points_to_track", default='[{"x":138,"y":86,"label":"mypoint"}]',
+        "--points_to_track", default='[{"x":276,"y":172,"label":"mypoint"}]',
         help="list of points to track as json 2D array.")
     parser.add_argument('--outfile', default='tracked_output.mp4')
     args = parser.parse_args()
@@ -526,18 +247,11 @@ if __name__ == "__main__":
     # Get the trackpoints
     tpts = json.loads(args.points_to_track)
     # Make sure every trackpoint is for frame 0
-    ipts = [{**tp, **{'frame_number': 0}} for tp in tpts]
+    ipts = [Trackpoint(**{**tp, **{'frame_number': 0}}) for tp in tpts]
 
     # Get the new trackpoints
-    tpts = []
-    def cb2(*, frame_number, frame_data, frame_trackpoints):
-        del frame_number, frame_data  # unused in this CLI helper
-        tpts.extend(frame_trackpoints)
-
-    track_movie(moviefile_input=args.moviefile,
-                input_trackpoints=ipts,
-                callback=cb2)
-    # Now render the movie
-    render_tracked_movie(moviefile_input=args.moviefile, moviefile_output='tracked.mp4',
-                        movie_trackpoints=tpts)
-    subprocess.call(['open', 'tracked.mp4'])
+    track_movie_v2(movie_url=Path(args.moviefile),
+                   trackpoints=ipts,
+                   frame_start=0,
+                   movie_traced_path='traced.mp4')
+    subprocess.call(['open', 'traced.mp4'])

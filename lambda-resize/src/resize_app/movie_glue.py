@@ -33,10 +33,8 @@ from .src.app.odb import (
     ENABLED,
     MOVIE_DATA_URN,
     MOVIE_ROTATION,
-    TOTAL_BYTES,
-    FPS,
-    WIDTH,
-    HEIGHT,
+    MOVIE_TRACED_URN,
+    MOVIE_ZIPFILE_URN,
     TOTAL_FRAMES,
     USER_ID,
 )
@@ -51,18 +49,16 @@ class MovieInfo(NamedTuple):
     rotation: int
 
 def queue_tracking(api_key, movie_id, frame_start):
+    """Send a tracking request through the SQS"""
     queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
     if not queue_url:
         LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
         raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
-    msg = { "api_key": api_key,
-            "movie_id": movie_id,
-            "frame_start": frame_start }
+    msg = { "api_key": api_key, "movie_id": movie_id, "frame_start": frame_start }
     LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
-    return {"error":False,
-            "message": msg}
+    return {"error":False, "message": msg}
 
 def get_movie_url(*,api_key=None,movie_id=None) -> MovieInfo:
     """
@@ -111,9 +107,10 @@ def get_movie_url(*,api_key=None,movie_id=None) -> MovieInfo:
     return MovieInfo(url=signed_url, rotation=rotation)
 
 
-def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
-    """Run full tracking pipeline using module-level Lambda helpers."""
-    input_trackpoints = get_movie_trackpoints(movie_id=movie_id)
+def run_tracking(*, user_id, movie_id, frame_start):
+    """Run tracking pipeline and create both zipfile and tracked mp4."""
+    ddbo = DDBO()
+    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
     movie_record = get_movie_metadata(movie_id=movie_id)
     research_comment = mp4_metadata_lib.build_comment(
         movie_record.get("research_use", 0) or 0,
@@ -124,124 +121,55 @@ def run_tracking(*, user_id, movie_id, frame_start, max_frame=None):
     if not input_trackpoints:
         raise RuntimeError("Cannot track movie with no trackpoints")
 
-    logger.info("run_tracking user_id=%s movie_id=%s frame_start=%s input_trackpoints=%s",user_id,movie_id,frame_start,input_trackpoints)
+    LOGGER.info("run_tracking user_id=%s movie_id=%s frame_start=%s input_trackpoints=%s",user_id,movie_id,frame_start,input_trackpoints)
+
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
     # been written into DB width/height by get-frame(size=analysis).
     movie_urn = movie_record.get(MOVIE_DATA_URN)
     if not movie_urn:
         raise RuntimeError(f"movie {movie_id} has no movie data URN")
-    movie_path = None
-    extracted = None
-    with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb", delete=False) as movie_tf:
-        movie_path = movie_tf.name
-    copy_object_to_path(urn=movie_urn, path=movie_path)
-    extracted = extract_movie_metadata(movie_path=movie_path)
-    movie_metadata = {
-        "width": extracted.get("width"),
-        "height": extracted.get("height"),
-        "total_frames": extracted.get("total_frames"),
-        "total_bytes": extracted.get("total_bytes"),
-        "fps": extracted.get("fps"),
-    }
-    # Persist missing metadata back to the movie record for later callers.
-    to_set = {}
-    for key in ("width", "height", "total_frames", "total_bytes", "fps"):
-        if movie_record.get(key) is None and movie_metadata.get(key) is not None:
-            to_set[key] = movie_metadata[key]
-    if to_set.get("fps") is not None and not isinstance(to_set["fps"], str):
-        to_set["fps"] = str(to_set["fps"])
-        movie_metadata["fps"] = to_set["fps"]
-    ddbo = DDBO()
-    if to_set:
-        ddbo.update_table(ddbo.movies, movie_id, to_set)
 
-    existing_zip_path = None
-    if frame_start > 0:
-        zip_urn = movie_record.get(MOVIE_ZIPFILE_URN)
-        if not zip_urn:
-            raise RuntimeError(
-                f"Cannot continue tracking from frame {frame_start} without an existing zipfile URN"
-            )
-        with tempfile.NamedTemporaryFile(suffix=".zip", mode="wb", delete=False) as existing_zip_tf:
-            existing_zip_path = existing_zip_tf.name
-        copy_object_to_path(urn=zip_urn, path=existing_zip_path)
-
-    rotation_steps = int(movie_record.get("rotation_steps") or 0)
-    rotation_steps = max(0, min(3, rotation_steps))
-    w = movie_metadata.get("width") or 0
-    h = movie_metadata.get("height") or 0
-    need_process = (
-        rotation_steps > 0
-        or w > C.ANALYSIS_FRAME_MAX_WIDTH
-        or h > C.ANALYSIS_FRAME_MAX_HEIGHT
-    )
-
-    in_path = movie_path
-    out_path = None
-    moviefile_input = None
+    zipfile_path = None
+    movie_traced_path = None
     try:
-        if need_process:
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as out_tf:
-                out_path = out_tf.name
-            rotate_zip.prepare_movie_for_tracking_cv2(
-                in_path,
-                out_path,
-                rotation_steps,
-                C.ANALYSIS_FRAME_MAX_WIDTH,
-                C.ANALYSIS_FRAME_MAX_HEIGHT,
-            )
-            mp4_metadata_lib.set_comment(out_path, research_comment)
-            processed_oname = make_object_name(
-                course_id=course_id_for_movie_id(movie_id),
-                movie_id=movie_id,
-                ext=C.MOVIE_PROCESSED_EXTENSION,
-            )
-            processed_urn = make_urn(object_name=processed_oname)
-            write_object_from_path(urn=processed_urn, path=out_path)
-            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN: processed_urn})
-            moviefile_input = out_path
-        else:
-            moviefile_input = in_path
+        with tempfile.NamedTemporaryFile(suffix=".zip", mode="wb") as tf:
+            zipfile_path = Path(tf.name)
 
-        total_frames = movie_metadata.get("total_frames") or 0
-        callback = TrackingCallback(
-            ddbo=ddbo,
-            user_id=user_id,
-            movie_id=movie_id,
-            research_comment=research_comment,
-            total_frames=total_frames,
-            existing_zip_path=existing_zip_path,
-        )
-        # If max_frame is provided, clamp it to a hard safety cap of 9999 and, if
-        # we know total_frames, to the last real frame.
-        effective_max = None
-        if max_frame is not None:
-            hard_cap = 9999
-            if total_frames:
-                hard_cap = min(hard_cap, int(total_frames) - 1)
-            effective_max = min(int(max_frame), hard_cap)
+        with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb") as tf:
+            movie_traced_path = Path(tf.name)
 
-        track_movie(
-            input_trackpoints=input_trackpoints,
-            frame_start=frame_start,
-            moviefile_input=moviefile_input,
-            callback=callback.notify,
-            max_frame=effective_max,
-        )
-        callback.close()
-        ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: callback.last_frame_tracked})
-        zip_oname = make_object_name(
-            course_id=course_id_for_movie_id(movie_id),
-            movie_id=movie_id,
-            ext=C.ZIP_MOVIE_EXTENSION,
-        )
-        zip_urn = make_urn(object_name=zip_oname)
-        write_object(urn=zip_urn, object_data=callback.zipfile_data)
-        ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ZIPFILE_URN: zip_urn})
-        callback.done()
+        def trackercallback(obj:TrackerCallbackArg):
+            if obj.frame_trackpoints:
+                ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
+                put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
+
+
+        tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(movie_urn),
+                               frame_start = frame_start,
+                               trackpoints = input_trackpoints,
+                               movie_zipfile_path = movie_zipfile_path,
+                               movie_traced_path = movie_traced_path,
+                               rotate = movie_record.get("rotate",0) or 0,
+                               comment = research_comment,
+                               callback = tracker_callback )
+
+        # Upload the zipfile and the traced movie
+        total_frames = max([tp.frame_number for tp in trackpoints])
+        movie_zipfile_urn = movie_urn.replace(".","_zipfile.")
+        write_object_from_path(urn=movie_zipfile_urn, path=zipfile_path)
+
+        movie_traced_urn = movie_urn.replace(".","_traced.")
+        write_object_from_path(urn=movie_traced_urn, path=movie_traced_path)
+
+        # Update the database
+        # note: should we update width, height and fps?
+        ddbo.update_table(ddbo.movies, movie_id, {TOTAL_FRAMES:total_frames,
+                                                  MOVIE_TRACED_URN: movie_traced_urn,
+                                                  MOVIE_ZIPFILE_URN: movie_zipfile_urn})
+
     finally:
-        if in_path and os.path.exists(in_path):
-            os.unlink(in_path)
-        if out_path and os.path.exists(out_path):
-            os.unlink(out_path)
+        if zipfile_path and zipfile_path.exists():
+            zipfile_path.unlink()
+        if movie_traced_path and movie_traced_path.exists():
+            movie_traced_path.unlink()
