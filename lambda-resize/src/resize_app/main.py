@@ -5,6 +5,13 @@ API's primary function:
 - Creates a ZIP of the tracking with the rotated frames.
 - Renders into the frames.
 - Uses all the final frames to make a new mp4 that is also uploaded.
+
+Methods:
+/resize-api/v1/ping
+/resize-api/v1/first-frame
+/resize-api/v1/trace-movie
+
+
 """
 
 import time
@@ -36,6 +43,7 @@ app = APIGatewayHttpResolver(cors=cors_config)
 
 @app.get("/resize-api/v1/ping")
 def api_ping() -> Dict[str, Any]:
+    LOGGER.info("ping")
     return {
         "error": False,
         "message": "ok",
@@ -55,8 +63,10 @@ def first_handle_frame() -> Any:
     'red-180' - a 640x480 red rectangle rotated 180 degrees
     'red-270' - a 640x480 red rectangle rotated 270 degrees
     """
+
     api_key = app.current_event.get_query_string_value(name="api_key", default_value=None)
     movie_id = app.current_event.get_query_string_value(name="movie_id", default_value=None)
+    LOGGER.info("first_frame movie_id=%s",movie_id)
     match movie_id:
         case "red-0":
             data = mpeg_jpeg_zip.generate_test_jpeg(0)
@@ -78,6 +88,7 @@ def first_handle_frame() -> Any:
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
     """Queue the tracing of the movie"""
+    LOGGER.info("trace-movie. movie_id=%s",movie_id)
     api_key = app.current_event.get_query_string_value(name="api_key")
     if not api_key:
         raise ValueError("api_key must be provided")
