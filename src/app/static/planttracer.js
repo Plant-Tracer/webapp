@@ -45,7 +45,6 @@ function add_func() {
 ///  page: /resend
 
 // Implements the registration web page
-// Implements the registration web page
 function register_func() {
   const email = $('#email').val().toLowerCase();
   if (email == '') {
@@ -65,38 +64,26 @@ function register_func() {
 
   $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}</b>...</br>`);
 
-  // Use URLSearchParams to mimic jQuery's default application/x-www-form-urlencoded behavior
-  const params = new URLSearchParams();
-  params.append('email', email);
-  params.append('course_key', course_key);
-  params.append('planttracer_endpoint', planttracer_endpoint);
-  params.append('name', name);
+  const payload = {
+      email: email,
+      course_key: course_key,
+      planttracer_endpoint: planttracer_endpoint,
+      name: name
+  };
 
-  fetch(`${API_BASE}api/register`, {
-    method: 'POST',
-    body: params
-  })
-  .then(async (response) => {
-    if (!response.ok) {
-      // Capture the error text directly from the response body
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-    return response.json();
-  })
-  .then((data) => {
-    if (data.error) {
-      // Note: Injecting data.message directly into .html() can be an XSS risk.
-      // Ensure the backend sanitizes this message before sending it.
-      $('#message').html(`<b>Error: ${data.message}</b>`);
-    } else {
-      $('#message').html(`<b>${data.message}</b>`);
-    }
-  })
-  .catch((error) => {
-    $('#message').html("POST error: " + error.message);
-    console.error("Fetch error:", error);
-  });
+  $.post(`${API_BASE}api/register`, payload)
+    .done((data) => {
+      if (data.error) {
+        // Warning: using .html() with server data can be an XSS risk.
+        $('#message').html('<b>Error:</b> ' + data.message);
+      } else {
+        $('#message').html('<b>Success:</b> ' + data.message);
+      }
+    })
+    .fail((error) => {
+      $('#message').html("POST error: " + (error.responseText || "Network error"));
+      console.error("Register error:", error);
+    });
 }
 
 // Implements the resend a link web page
@@ -109,28 +96,19 @@ function resend_func() {
 
   $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
 
-  const params = new URLSearchParams();
-  params.append('email', email);
-  params.append('planttracer_endpoint', planttracer_endpoint);
+  const payload = {
+      email: email,
+      planttracer_endpoint: planttracer_endpoint
+  };
 
-  fetch(`${API_BASE}api/resend-link`, {
-    method: 'POST',
-    body: params
-  })
-  .then(async (response) => {
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-    return response.json();
-  })
-  .then((data) => {
-    $('#message').html('Response: ' + data.message);
-  })
-  .catch((error) => {
-    $('#message').html(`POST error: ` + error.message);
-    console.error("Fetch error:", error);
-  });
+  $.post(`${API_BASE}api/resend-link`, payload)
+    .done((data) => {
+      $('#message').html('Response: ' + data.message);
+    })
+    .fail((error) => {
+      $('#message').html("POST error: " + (error.responseText || "Network error"));
+      console.error("Resend error:", error);
+    });
 }
 
 ////////////////////////////////////////////////////////////////
