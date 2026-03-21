@@ -52,7 +52,7 @@ def api_ping() -> Dict[str, Any]:
     }
 
 @app.get("/resize-api/v1/first-frame")
-def first_handle_frame() -> Any:
+def handle_first_frame() -> Any:
     """GET /api/v1/first-frame.
     Returns the first frame (frame 0) with proper rotation.
     :param api_key: the actual api_key
@@ -79,8 +79,10 @@ def first_handle_frame() -> Any:
         case _:
             try:
                 (url,rotation) = movie_glue.get_movie_url_and_rotation(api_key=api_key, movie_id=movie_id)
+                LOGGER.info("url=%s rotation=%s",url,rotation)
                 return mpeg_jpeg_zip.get_first_frame_from_url(url,rotation)
             except ValueError as e:
+                LOGGER.exception("e=%s",e)
                 return Response(status_code=403, body=str(e.args))
 
     return Response(status_code=200, content_type="image/jpeg", body=data)
