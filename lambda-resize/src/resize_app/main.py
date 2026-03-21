@@ -8,7 +8,6 @@ API's primary function:
 """
 
 import time
-import os
 import sys
 from typing import Any, Dict
 
@@ -45,17 +44,10 @@ def api_ping() -> Dict[str, Any]:
         "path": sys.path
     }
 
-@app.get("/resize-api/v1/movie-status")
-def handle_get_status() -> Any:
-    api_key = app.current_event.get_query_string_value(name="api_key", default_value=None)
-    movie_id = app.current_event.get_query_string_value(name="movie_id", default_value=None)
-    return Response(status_code=200,
-                    body=movie_glue.movie_status(api_key=api_key, movie_id=movie_id))
-
 @app.get("/resize-api/v1/first-frame")
-def handle_first_frame() -> Any:
+def first_handle_frame() -> Any:
     """GET /api/v1/first-frame.
-    Returns the first frame with proper rotation.
+    Returns the first frame (frame 0) with proper rotation.
     :param api_key: the actual api_key
     :param movie_id: the movie_id of the movie
     Note: special values for movie_id:
@@ -77,8 +69,8 @@ def handle_first_frame() -> Any:
             data = mpeg_jpeg_zip.generate_test_jpeg(270)
         case _:
             try:
-                (url,rotation) = movie_glue.get_movie_url(api_key=api_key, movie_id=movie_id)
-                return mpeg_jpeg_zip.get_first_frame_from_url(url)
+                (url,rotation) = movie_glue.get_movie_url_and_rotation(api_key=api_key, movie_id=movie_id)
+                return mpeg_jpeg_zip.get_first_frame_from_url(url,rotation)
             except ValueError as e:
                 return Response(status_code=403, body=str(e.args))
 
@@ -87,10 +79,15 @@ def handle_first_frame() -> Any:
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
     """Queue the tracing of the movie"""
-    api_key = app.current_event.get_query_string_value(name="api_key", default_value=None)
-    movie_id = app.current_event.get_query_string_value(name="movie_id", default_value=None)
-    first_frame = app.current_event.get_query_string_value(name="first_frame", default_value=None)
-    return movie_glue.trace_movie(api_key, movie_id, first_frame)
+    api_key = app.current_event.get_query_string_value(name="api_key")
+    if not api_key:
+        raise ValueError("api_key must be provided")
+    movie_id = app.current_event.get_query_string_value(name="movie_id")
+    if not movie_id:
+        raise ValueError("movie_id must be provided")
+    frame_start = app.current_event.get_query_string_value(name="frame_start") or 0
+
+    return movie_glue.queue_tracing(api_key, movie_id, frame_start)
 
 @LOGGER.inject_lambda_context(log_event=True)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:

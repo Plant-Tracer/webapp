@@ -5,15 +5,13 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 
 
 """
-import base64
 import json
 import sys
 import smtplib
 import io
 import csv
 from collections import defaultdict
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
 
 from flask import Blueprint, request, make_response, current_app, jsonify
 from validate_email_address import validate_email
@@ -33,10 +31,12 @@ from .odb import (
     COURSE_ID,
     MOVIE_ZIPFILE_URN,
     MOVIE_ZIPFILE_URL,
+    MOVIE_TRACED_URN,
+    MOVIE_TRACED_URL,
     MOVIE_METADATA_BULK_PROPS,
-    ORIG_MOVIE,
-    ROTATION_STEPS,
-    STATUS,
+    MOVIE_ROTATION,
+    MOVIE_STATUS,
+    MOVIE_STATE_TRACING_COMPLETED,
     DDBO,
     UnauthorizedUser,
     clear_movie_tracking,
@@ -50,30 +50,9 @@ from .s3_presigned import (
 from .odb_movie_data import (
     delete_movie,
 )
-from .apikey import get_lambda_api_base
 
 
 api_bp = Blueprint('api', __name__)
-
-LAMBDA_HEALTH_TIMEOUT = 10
-
-# Minimal 1x1 pixel JPEG for GET /api/v1/frame when Lambda is not configured (e.g. local/test).
-# Client needs an image URL that loads so the analyze page can render markers.
-_PLACEHOLDER_FRAME_JPEG = base64.b64decode(
-    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
-    "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAHwAAAQUBAQEB"
-    "AQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1"
-    "FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo1Njc4OTpDREVGR0hJSlNUVVZX"
-    "WFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6ws"
-    "PExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/2gAIAQEAAD8A/F5IG/T/2Q=="
-)
-
-
-VALIDATE_FRAMES = True
-
-class InvalidFrameNumber(Exception):
-    """Invalid Frame Number Exception"""
-
 
 ################################################################
 ### Handle invalid apikey exceptions
@@ -335,7 +314,8 @@ def api_new_movie():
                              ext=C.MOVIE_EXTENSION)
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-    # Phase 2: always upload to final key; client calls Lambda start-processing after upload
+
+    # Always upload to final key
     upload_urn = movie_data_urn
     ret['presigned_post'] = make_presigned_post(
         urn=upload_urn,
@@ -360,7 +340,7 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
 
 @api_bp.route('/edit-movie', methods=POST)
 def api_edit_movie():
-    """Request movie rotation. VM only updates rotation_steps and triggers Lambda.
+    """Request movie rotation. VM only updates rotation_steps.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
@@ -376,35 +356,10 @@ def api_edit_movie():
     if action != 'rotate90cw':
         return E.INVALID_EDIT_ACTION
 
-    steps = get_int('rotation_steps')
-    if steps is None:
-        steps = 1
-    steps = max(1, min(3, int(steps)))
-
+    new_rotation = ((get_int(MOVIE_ROTATION,0) or 0) + 90) % 360
     clear_movie_tracking(movie_id)
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {ROTATION_STEPS: steps})
-
-    base = get_lambda_api_base()
-    if base:
-        try:
-            data = json.dumps({
-                "action": "rotate-and-zip",
-                "movie_id": movie_id,
-                "rotation_steps": steps,
-                "build_zip": False,
-            }).encode("utf-8")
-            req = Request(
-                base.rstrip("/") + "/api/v1",
-                data=data,
-                method="POST",
-                headers={"Content-Type": "application/json"},
-            )
-            with urlopen(req, timeout=10) as _r:
-                pass
-        except Exception as ex:  # pylint: disable=broad-exception-caught
-            logger.warning("Failed to trigger Lambda rotate-and-zip for movie_id=%s: %s", movie_id, ex)
-
+    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ROTATION: new_rotation})
     return {"error": False}
 
 
@@ -416,7 +371,7 @@ def api_delete_movie():
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
     movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False),
-                             movie_id=get_movie_id())
+                                 movie_id=get_movie_id())
     delete_movie(movie_id=movie[MOVIE_ID], delete=get_bool('delete',True))
     return {'error': False}
 
@@ -450,7 +405,6 @@ def api_get_movie_metadata():
     get_all_if_tracking_completed = get_bool('get_all_if_tracking_completed')
 
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
-
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # Return only stored metadata; do not generate or write metadata here.
@@ -460,11 +414,15 @@ def api_get_movie_metadata():
     if movie_metadata.get(MOVIE_ZIPFILE_URN, None):
         movie_metadata[MOVIE_ZIPFILE_URL] = make_signed_url(urn=movie_metadata[MOVIE_ZIPFILE_URN])
 
+    # If we have a movie_traced_urn, create a signed url (this can't be stored in the database...)
+    if movie_metadata.get(MOVIE_TRACED_URN, None):
+        movie_metadata[MOVIE_TRACED_URL] = make_signed_url(urn=movie_metadata[MOVIE_TRACED_URN])
+
     ret = {C.API_KEY_ERROR: False, C.API_KEY_METADATA: movie_metadata}
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
-    tracking_completed = movie_metadata.get(STATUS, '') == C.TRACKING_COMPLETED
+    tracking_completed = movie_metadata.get(MOVIE_STATUS, '') == MOVIE_STATE_TRACING_COMPLETED
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
@@ -487,22 +445,6 @@ def api_get_movie_metadata():
 
     logger.debug("get_movie_metadata returns: %s",ret)
     return jsonify(ret)
-
-
-@api_bp.route('/v1/frame', methods=['GET'])
-def api_get_frame():
-    """
-    Return a single frame image (JPEG). Used when Lambda is not configured (e.g. local/test).
-    Client requests frame 0 for the analyze page; returning a placeholder allows markers to render
-    and put-frame-trackpoints to be exercised. In production with LAMBDA_API_BASE set, the client
-    requests frames from Lambda instead.
-    """
-    user_id = get_user_id(allow_demo=False)
-    movie_id = get_movie_id()
-    odb.can_access_movie(user_id=user_id, movie_id=movie_id)
-    response = make_response(_PLACEHOLDER_FRAME_JPEG)
-    response.headers['Content-Type'] = 'image/jpeg'
-    return response
 
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
@@ -563,7 +505,6 @@ def api_list_users():
 def api_list_users_courses():
     return {**{'error': False}, **odb.list_users_courses(user_id=get_user_id())}
 
-
 @api_bp.route('/ver', methods=GET_POST)
 def api_ver():
     """Report the python version. Allows us to validate we are using Python3.
@@ -571,7 +512,6 @@ def api_ver():
     """
     current_app.logger.error("api_ver")
     return {'__version__': __version__, 'sys_version': sys.version}
-
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():
@@ -591,61 +531,8 @@ def api_config_check():
 
 
 ################################################################
-##
-## For debug
-##
-@api_bp.route('/add', methods=GET_POST)
-def api_add():
-    a = get_float('a')
-    b = get_float('b')
-    try:
-        return {'result': a+b, 'error': False}
-    except (TypeError, ValueError):
-        return {'error': True, 'message': 'arguments malformed'}
-
-
-
-################################################################
 ################################################################
 ## Tracking: VM does not run tracking; client uses Lambda (see lambda-resize).
-
-@api_bp.route('/track-movie-queue', methods=GET_POST)
-def api_track_movie_queue():
-    """Tracks a movie that has been uploaded.
-    :param api_key: the user's api_key
-    :param movie_id: the movie to track; a new movie will be created
-    :param frame_start: the frame to start tracking; frames 0..(frame_start-1) have track points copied.
-    :param run_async: if True, do not wait for completion
-    :return: dict['error'] = True/False
-             dict['message'] = message to display
-             dict['frame_start'] = where the tracking started
-    """
-
-    # pylint-disable: disable=unsupported-membership-test
-    movie_id       = get_movie_id()
-    user_id        = get_user_id(allow_demo=False)
-    run_async      = get_bool('run_async')
-    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
-
-    # Make sure the movie we are tracking is an original movie, and that
-    # we are not tracking a movie that is not an original movie
-    movie_row = odb.list_movies(user_id=user_id, movie_id=movie[MOVIE_ID])
-    assert len(movie_row)==1
-    if movie_row[0][ORIG_MOVIE] is not None:
-        return make_response(jsonify(E.MUST_TRACK_ORIG_MOVIE), 400)
-
-    if run_async:
-        raise RuntimeError("TODO - launch with concurrent.futures.ThreadPoolExecutor")
-
-    # VM does not run tracking; client must use Lambda for tracking.
-    return make_response(
-        jsonify({
-            C.API_KEY_ERROR: True,
-            "message": "Tracking is not available on this server; use Lambda to run tracking.",
-        }),
-        501,
-    )
-
 
 ## /put-frame-trackpoints:
 ## Writes analysis and trackpoints for specific frames. This is used by the client to update the trackpoints before asking for new tracking.

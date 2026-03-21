@@ -13,7 +13,6 @@ import requests
 import filetype
 import pytest
 
-from resize_app import tracker
 from resize_app.main import lambda_handler as lambda_handler_fn
 
 from app import odb
@@ -247,8 +246,8 @@ def test_movie_update_metadata(client, new_movie):
     assert movie[MOVIE_ID] == movie_id
     assert movie['published'] == 1
 
-def test_movie_extract1(client, new_movie):
-    """Check single frame extarct and error handling"""
+def test_movie_extract_first(client, new_movie):
+    """Check single frame exatrct and error handling"""
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
     #movie_title = cfg[MOVIE_TITLE]
@@ -261,39 +260,8 @@ def test_movie_extract1(client, new_movie):
 
     resp = client.post('/api/get-frame',
                            data={'api_key': api_key,
-                                 'movie_id': str(movie_id),
-                                 'frame_number': '-1'})
+                                 'movie_id': str(movie_id)})
     assert resp.status_code == 404
-
-def test_movie_extract2(client, new_movie):
-    """Try extracting individual movie frames"""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
-    #user_id = cfg[USER_ID]
-
-    movie_data = get_movie_bytes(movie_id)
-    assert is_mp4(movie_data)
-
-    # Grab three frames with the tracker and make sure they are different
-    def get_movie_data_jpeg(frame_number):
-        data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
-        logger.debug("len(data)=%s",len(data))
-        assert is_jpeg(data)
-        return data
-
-    frames = {}
-    for n in (0,1,2):
-        frames[n] = get_movie_data_jpeg(n)
-
-    if (frames[0] != frames[1]) or (frames[0]!= frames[2]):
-        for n in (0,1,2):
-            with open(f"/tmp/frame{n}","wb") as f:
-                f.write(frames[n])
-        raise RuntimeError("did not get 3 different frames for frames[0], frames[1], frames[2]")
-
-    # get-frame was moved to lambda-resize; frame extraction is tested via tracker above.
-
 
 @pytest.mark.skip(reason='logging disabled on move to DynamoDB')
 def test_log_search_movie(new_movie):

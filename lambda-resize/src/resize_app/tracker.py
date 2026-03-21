@@ -20,41 +20,19 @@ Uses imageio to write tracked movie, which does not have H.264 licensing issues
 from typing import List,Optional,NamedTuple
 import json
 import argparse
-import tempfile
 import subprocess
 import logging
-import os
 import zipfile
-from collections import defaultdict
+from pathlib import Path
 
 import cv2
 import imageio
 import numpy as np
-from pathlib import Path
 
 from .src.app.schema import Trackpoint
 from .src.app import paths
-from .src.app import mp4_metadata_lib
 from .src.app.constants import C
-from .src.app.odb import (
-    DDBO,
-    LAST_FRAME_TRACKED,
-    MOVIE_DATA_URN,
-    MOVIE_ZIPFILE_URN,
-    PROCESSING_STATE,
-    PROCESSING_STATE_TRACKED,
-    STATUS,
-)
-from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints
-from .src.app.odb_movie_data import (
-    copy_object_to_path,
-    course_id_for_movie_id,
-    make_object_name,
-    make_urn,
-    write_object,
-    write_object_from_path,
-)
-from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,extract_movie_metadata,get_frames_from_url
+from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,get_frames_from_url
 
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -97,7 +75,7 @@ def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints
     try:
         gray_frame0 = cv2.cvtColor(frame_prev, cv2.COLOR_BGR2GRAY)
         gray_frame1 = cv2.cvtColor(frame_this, cv2.COLOR_BGR2GRAY)
-        point_array_out, status_array, err = cv2.calcOpticalFlowPyrLK(
+        point_array_out, status_array, _err = cv2.calcOpticalFlowPyrLK(
             gray_frame0, gray_frame1, cv2_tpts, None,
             winSize=winSize, maxLevel=max_level, criteria=criteria
         )
@@ -173,7 +151,7 @@ def track_movie_v2(*, movie_url, frame_start:int, trackpoints:List[Trackpoint],
 
     trackpoints_output = [tp for tp in trackpoints if tp.frame_number <= frame_start]
     # make sure we have trackpoints for frame_start-1
-    if not any([tp for tp in trackpoints if tp.frame_number == frame_start-1]):
+    if not any((tp for tp in trackpoints if tp.frame_number == frame_start-1)):
         raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
 
     # Check to see if we are making a movie_zipfile

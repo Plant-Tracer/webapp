@@ -6,27 +6,18 @@ Routines for providing access to the movies for the lambda
 import os
 import json
 from typing import NamedTuple
-import boto3
 import urllib
 from pathlib import Path
-import zipfile
+import tempfile
 
-from .src.app.schema import Trackpoint
-from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints
-from .src.app.odb_movie_data import (
-    copy_object_to_path,
-    course_id_for_movie_id,
-    make_object_name,
-    make_urn,
-    write_object,
-    write_object_from_path,
-)
-from . import rotate_zip
-from . import mpeg_jpeg_zip
-from .mpeg_jpeg_zip import add_jpeg_comment, convert_frame_to_jpeg
-
+import boto3
 from aws_lambda_powertools import Logger
 
+from .src.app.schema import Trackpoint
+from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints, LAST_FRAME_TRACKED
+from .src.app.odb_movie_data import (write_object_from_path )
+from .src.app import mp4_metadata_lib
+from .src.app import s3_presigned
 from .src.app import odb
 from .src.app.odb import (
     DDBO,
@@ -35,9 +26,10 @@ from .src.app.odb import (
     MOVIE_ROTATION,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
-    TOTAL_FRAMES,
-    USER_ID,
+    MOVIE_STATUS
 )
+
+from . import tracker
 
 __version__ = "0.1.0"
 LOG_ID_STATUS_PING = "lambda-status-ping"
@@ -60,7 +52,7 @@ def queue_tracking(api_key, movie_id, frame_start):
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
     return {"error":False, "message": msg}
 
-def get_movie_url(*,api_key=None,movie_id=None) -> MovieInfo:
+def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     """
     Given an api_key and a movie_id, return a signed URL and the desired movie rotation
     """
@@ -107,8 +99,8 @@ def get_movie_url(*,api_key=None,movie_id=None) -> MovieInfo:
     return MovieInfo(url=signed_url, rotation=rotation)
 
 
-def run_tracking(*, user_id, movie_id, frame_start):
-    """Run tracking pipeline and create both zipfile and tracked mp4."""
+def run_tracing(*, user_id, movie_id, frame_start):
+    """Run tracing pipeline and create both zipfile and tracked mp4."""
     ddbo = DDBO()
     input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
     movie_record = get_movie_metadata(movie_id=movie_id)
@@ -134,18 +126,18 @@ def run_tracking(*, user_id, movie_id, frame_start):
     movie_traced_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".zip", mode="wb") as tf:
-            zipfile_path = Path(tf.name)
+            movie_zipfile_path = Path(tf.name)
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", mode="wb") as tf:
             movie_traced_path = Path(tf.name)
 
-        def trackercallback(obj:TrackerCallbackArg):
+        def tracker_callback(obj:tracker.TrackerCallbackArg):
             if obj.frame_trackpoints:
                 ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
-                put_frame_trackpoints(movie_id=self.movie_id, frame_number=frame_number, trackpoints=frame_trackpoints)
+                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=obj.frame_trackpoints)
 
 
-        tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(movie_urn),
+        trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(movie_urn),
                                frame_start = frame_start,
                                trackpoints = input_trackpoints,
                                movie_zipfile_path = movie_zipfile_path,
@@ -165,6 +157,7 @@ def run_tracking(*, user_id, movie_id, frame_start):
         # Update the database
         # note: should we update width, height and fps?
         ddbo.update_table(ddbo.movies, movie_id, {TOTAL_FRAMES:total_frames,
+                                                  MOVIE_STATUS: STATUS_TRACKING_COMPLETED,
                                                   MOVIE_TRACED_URN: movie_traced_urn,
                                                   MOVIE_ZIPFILE_URN: movie_zipfile_urn})
 

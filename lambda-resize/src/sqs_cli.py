@@ -31,14 +31,14 @@ def do_track(args):
     trackpoints = [Trackpoint(**tp) for tp in json.loads(args.trackpoints)]
     print("Tracking Trackpoints:",trackpoints)
 
-    def tracker_callback(obj:TrackerCallbackArg):
+    def tracker_callback(obj:tracker.TrackerCallbackArg):
         print(obj)
 
     tracker.track_movie_v2(movie_url=args.infile, frame_start=0, trackpoints=trackpoints,
-                               zipfile_path = args.zipfile,
-                               movie_traced_path = args.movie_traced,
-                               callback=tracker_callback
-                               rotate=args.rotate, comment=args.comment)
+                           movie_zipfile_path = args.zipfile,
+                           movie_traced_path = args.movie_traced,
+                           rotate=args.rotate, callback=tracker_callback,
+                           comment=args.comment)
 
 def main():
     parser = argparse.ArgumentParser(prog='sqs_cli', description='cli tester for SQS',

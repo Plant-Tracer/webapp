@@ -71,9 +71,9 @@ fix_boto_log_level()
 
 
 
-################################################################
+#######################################################################
 ### Error Handling. An exception automatically generates this response.
-################################################################
+#######################################################################
 
 @app.errorhandler(NotFound)
 def not_found(e: NotFound) -> tuple[str, int]:
@@ -120,7 +120,6 @@ def handle_email_error(e: InvalidUser_Email) -> tuple[str, int]:
 # Cache for config check results; avoid hitting S3/DynamoDB on every request
 _CONFIG_CHECK_CACHE = {}
 _CONFIG_CHECK_TTL = 60  # seconds
-
 
 def _config_error_page_context(error_title: str, error_message: str):
     """Build template context for config_error.html without touching the DB."""
@@ -181,17 +180,13 @@ def _before_request_config_check():
         return None
     if path in ("/ping", "/ver", "/health", "/status"):
         return None
-    try:
-        d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
-        if not d_ok:
-            return redirect("/config-error?reason=dynamodb")
-        if not c_ok:
-            return redirect("/config-error?reason=cors")
-        if not r_ok:
-            return redirect("/config-error?reason=region")
-    except Exception:  # pylint: disable=broad-exception-caught
-        # Do not block the app if the check itself fails (e.g. import error)
-        pass
+    d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
+    if not d_ok:
+        return redirect("/config-error?reason=dynamodb")
+    if not c_ok:
+        return redirect("/config-error?reason=cors")
+    if not r_ok:
+        return redirect("/config-error?reason=region")
     return None
 
 
@@ -246,7 +241,6 @@ def func_config_error():
 # HTML Pages served with template system
 ################################################################
 
-################
 ## These mostly do forms or static content
 
 @app.route('/', methods=GET)
@@ -405,6 +399,3 @@ def func_ver():
                                              sys_version= sys.version))
     response.headers['Content-Type'] = 'text/plain'
     return response
-
-################################################################
-## Finally, if we are running under flask, run this.

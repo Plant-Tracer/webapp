@@ -42,15 +42,6 @@ def test_s3_cors_configuration_is_fully_open():
         assert required in methods, f"S3 CORS must allow {required}"
 
 
-def test_lambda_resp_json_includes_cors_header():
-    """Lambda resp_json() helper should always include Access-Control-Allow-Origin: *."""
-    # resp_json lives in resize_app.resize; import it directly for type checkers.
-    from resize_app.resize import resp_json  # type: ignore  # pylint: disable=import-error,import-outside-toplevel
-    resp = resp_json(200, {"ok": True})
-    headers = resp.get("headers") or {}
-    assert headers.get("Access-Control-Allow-Origin") == "*"
-
-
 def test_lambda_options_preflight_cors_headers():
     """OPTIONS /api/v1 should return permissive CORS headers."""
     resize = _import_lambda_resize_module()
@@ -117,4 +108,3 @@ def test_lambda_track_movie_response_has_cors():
     assert headers.get("Access-Control-Allow-Origin") == "*", (
         "track-movie response must include Access-Control-Allow-Origin for CORS"
     )
-

@@ -5,38 +5,34 @@ Routines for ripping mpegs out of jepgs and making zip files
 
 import tempfile
 import os
-import zipfile
-import sys
-import time
-import uuid
-import json
-from decimal import Decimal
-from typing import Any, Dict, Optional, TypeAlias,Generator
+from contextlib import closing
+from typing import Any, Optional, TypeAlias,Generator
 import io
 from PIL import Image, ImageDraw, ImageFont
 import cv2
-from contextlib import closing
 import numpy as np
-from PIL import Image
+#from PIL import Image
+# pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
 
 from .src.app.constants import C
-from .src.app.odb import (
-    DDBO,
-    ENABLED,
-    MOVIE_DATA_URN,
-    MOVIE_ROTATION,
-    TOTAL_BYTES,
-    FPS,
-    WIDTH,
-    HEIGHT,
-    TOTAL_FRAMES,
-    USER_ID,
-)
 
-from botocore.exceptions import ClientError
-from aws_lambda_powertools.event_handler import Response
-from aws_lambda_powertools import Logger
+#from .src.app.odb import (
+#    DDBO,
+#    ENABLED,
+#    MOVIE_DATA_URN,
+#    MOVIE_ROTATION,
+#    TOTAL_BYTES,
+#    FPS,
+#    WIDTH,
+#    HEIGHT,
+#    TOTAL_FRAMES,
+#    USER_ID,
+#)
+
+#from botocore.exceptions import ClientError
+#from aws_lambda_powertools.event_handler import Response
+#from aws_lambda_powertools import Logger
 
 # Just a label for clarity
 Jpeg: TypeAlias = bytes

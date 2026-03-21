@@ -64,7 +64,6 @@ MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 TITLE = 'title'
 DESCRIPTION = 'description'
-STATUS = 'status'
 ORIG_MOVIE = 'orig_movie'
 TOTAL_BYTES = 'total_bytes'
 TOTAL_FRAMES = 'total_frames'
@@ -83,8 +82,8 @@ RESEARCH_USE = 'research_use'
 CREDIT_BY_NAME = 'credit_by_name'
 ATTRIBUTION_NAME = 'attribution_name'
 
-
 # response keys:
+MOVIE_TRACED_URL = 'movie_traced_url'  # response key (signed URL), not stored in DB
 MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
 
 # obsolete:
@@ -96,13 +95,14 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
-PROCESSING_STATE = 'processing_state'
+
 # Values for processing_state (single source of truth)
-PROCESSING_STATE_UPLOADING = 'uploading'
-PROCESSING_STATE_TRACKING = 'tracking'
-PROCESSING_STATE_TRACKED = 'tracked'
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
-TRACKING_STATUS_UPDATED_AT = 'tracking_status_updated_at'
+MOVIE_STATUS = 'status'
+MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_TRACING   = 'tracing'
+MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
+MOVIE_STATE_UPDATED_AT = 'status_updated_at'
 
 USER_ID = 'user_id'
 
@@ -1299,7 +1299,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     CREDIT_BY_NAME: credit_by_name,
                     ATTRIBUTION_NAME: attribution_name,
                     ROTATION_STEPS: 0,
-                    PROCESSING_STATE: PROCESSING_STATE_UPLOADING,
+                    MOVIE_STATUS: MOVIE_STATE_UPLOADING,
                     })
     return movie_id
 
@@ -1307,19 +1307,17 @@ def get_movie(*, movie_id):
     """Returns the movie's data"""
     return DDBO().get_movie(movie_id)
 
-#def set_movie_metadata(*, movie_id, movie_metadata):
-#    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
-#
-#    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
-#    assert is_movie_id(movie_id)
-#    assert MOVIE_ID not in movie_metadata
-#    assert 'id' not in movie_metadata
-#    if 'fps' in movie_metadata:
-#        movie_metadata = copy.copy(movie_metadata)
-#        movie_metadata['fps'] = str(movie_metadata['fps'])
-#    ddbo = DDBO()
-#    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
-
+def set_movie_metadata(*, movie_id, movie_metadata):
+    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
+    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
+    assert is_movie_id(movie_id)
+    assert MOVIE_ID not in movie_metadata
+    assert 'id' not in movie_metadata
+    if 'fps' in movie_metadata:
+        movie_metadata = copy.copy(movie_metadata)
+        movie_metadata['fps'] = str(movie_metadata['fps'])
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
@@ -1533,12 +1531,12 @@ def clear_movie_tracking(movie_id):
 
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
-# We kept this, even thoguh we are now just parsing it
+# We kept this, even though we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
     TITLE: 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
     DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
-    STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
     FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
     WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
     HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',

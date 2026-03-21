@@ -7,6 +7,7 @@ Uses OpenCV (cv2) only; no PyAV dependency.
 import tempfile
 from typing import Any, Dict
 
+# pylint: disable=no-member
 import cv2
 
 

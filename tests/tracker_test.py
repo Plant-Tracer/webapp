@@ -18,17 +18,14 @@ from app.constants import logger
 from .constants import TEST_CIRCUMNUTATION_PATH, TEST_PLANTMOVIE_PATH
 
 # Actual labels for the circumnutation movie
-TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':140,'y':82,'label':'apex'},
-                                {'frame_number':0,'x':240,'y':96,'label':'ruler 0 mm'},
-                                {'frame_number':0,'x':242,'y':135,'label':'ruler 20 mm'}]
+# Rescaled lFor 640x480 video
+TEST_MOVIE_START_TRACKPOINTS = [{'frame_number':0,'x':280,'y':164,'label':'apex'},
+                                {'frame_number':0,'x':480,'y':192,'label':'ruler 0 mm'},
+                                {'frame_number':0,'x':484,'y':270,'label':'ruler 20 mm'}]
 
-TEST_MOVIE_END_TRACKPOINTS = [{'frame_number':295,'x':58,'y':75,'label':'apex'},
-                              {'frame_number':295,'x':240,'y':96,'label':'ruler 0 mm'},
-                              {'frame_number':295,'x':242,'y':135,'label':'ruler 20 mm'}]
-
-def test_cleanup_mp4():
-    with pytest.raises(FileNotFoundError):
-        tracker.cleanup_mp4(infile='no-such-file',outfile='no-such-file')
+TEST_MOVIE_END_TRACKPOINTS = [{'frame_number':295,'x':116,'y':150,'label':'apex'},
+                              {'frame_number':295,'x':480,'y':192,'label':'ruler 0 mm'},
+                              {'frame_number':295,'x':484,'y':270,'label':'ruler 20 mm'}]
 
 def test_track_movie():
     """End-to-end test of the track_movie function call."""

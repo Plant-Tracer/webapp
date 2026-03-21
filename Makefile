@@ -107,11 +107,7 @@ lint: $(REQ)
 pylint:
 	make vend-lambda-resize
 	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
-		src tests *.py \
-		lambda-resize/src/resize_app/resize.py \
-		lambda-resize/src/resize_app/rotate_zip.py \
-		lambda-resize/src/resize_app/tracker.py \
-		lambda-resize/tests
+		lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:

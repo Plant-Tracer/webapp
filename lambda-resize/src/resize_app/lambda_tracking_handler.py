@@ -3,20 +3,12 @@ Lambda entry points for tracking: direct invoke (no Flask) and SQS.
 """
 
 import json
-import os
+import time
 
-import boto3
 from aws_lambda_powertools import Logger
-from aws_lambda_powertools.utilities.batch import (
-    BatchProcessor,
-    EventType,
-    process_partial_response,
-)
 from aws_lambda_powertools.utilities.data_classes.sqs_event import SQSRecord
 
-from .src.app.constants import C
-from .src.app.odb import InvalidMovie_Id, get_movie_metadata
-from . import tracker
+import movie_glue
 
 LOGGER = Logger(service="planttracer")
 MAX_BATCH_SIZE = 500
@@ -50,9 +42,8 @@ def process_tracking_record(record: SQSRecord):
     Process a single SQS message.
     If this raises an exception, BatchProcessor marks only this record for retry.
     """
-    body_str = record.body or "{}"
     try:
-        body = json.loads(body_str)
+        body = json.loads(record.body or "{}")
     except json.JSONDecodeError as exc:
         LOGGER.error("Invalid JSON in SQS body: %s", exc)
         raise
@@ -60,62 +51,13 @@ def process_tracking_record(record: SQSRecord):
     user_id = body.get("user_id")
     movie_id = body.get("movie_id")
     frame_start = _safe_int(body.get("frame_start", 0))
-    origin_start = _safe_int(body.get("origin_start", frame_start))
-    batch_size = _safe_int(body.get("batch_size", MAX_BATCH_SIZE)) or MAX_BATCH_SIZE
-    batch_size = max(1, min(batch_size, MAX_BATCH_SIZE))
 
     if not user_id or not movie_id:
         raise ValueError("user_id and movie_id are required in SQS message")
 
-    LOGGER.info( "SQS tracking request: movie_id=%s user_id=%s frame_start=%s origin_start=%s batch_size=%s",
-                 movie_id, user_id, frame_start, origin_start, batch_size )
-
-    max_frame = frame_start + batch_size - 1
-
-    tracker.run_tracking( user_id=user_id, movie_id=movie_id, frame_start=frame_start, max_frame=max_frame )
-    LOGGER.info( "Completed tracking batch: movie_id=%s user_id=%s frame_start=%s max_frame=%s",
-                 movie_id, user_id, frame_start, max_frame, )
-
-    # Decide whether to enqueue a follow-up batch.
-    try:
-        movie = get_movie_metadata(movie_id=movie_id)
-    except InvalidMovie_Id as exc:
-        LOGGER.exception("get_movie_metadata failed for %s: %s", movie_id, exc)
-        # Raise so this message can be retried if metadata is temporarily unavailable.
-        raise
-
-    last = movie.get("last_frame_tracked")
-    total_frames = movie.get("total_frames")
-    if last is None:
-        return
-
-    try:
-        last = int(last)
-    except (TypeError, ValueError):
-        return
-
-    # Hard safety cap at frame 9999 and (if known) last real frame.
-    max_allowed = 9999
-    if total_frames:
-        try:
-            max_allowed = min(max_allowed, int(total_frames) - 1)
-        except (TypeError, ValueError):
-            max_allowed = 9999
-
-    # Monotonicity guard: only move forward.
-    if last < frame_start or last >= max_allowed:
-        return
-
-    next_start = last + 1
-    if next_start > max_allowed:
-        return
-
-    # Explicitly abort (for this chain) if we are not moving strictly
-    # forward relative to both the original and current batch start.
-    if next_start <= origin_start or next_start <= frame_start:
-        LOGGER.error( "Refusing to enqueue non-advancing batch: movie_id=%s "
-                      "origin_start=%s frame_start=%s last=%s next_start=%s",
-                      movie_id, origin_start, frame_start, last, next_start)
-        return
-
-    queue_tracking(user_id, movie_id, next_start, origin_start, batch_size)
+    t0 = time.time()
+    LOGGER.info( "SQS Start tracking batch: movie_id=%s user_id=%s frame_start=%s ",
+                 movie_id, user_id, frame_start)
+    movie_glue.run_tracing( user_id=user_id, movie_id=movie_id, frame_start=frame_start)
+    LOGGER.info( "SQS Completed tracking batch: movie_id=%s user_id=%s frame_start=%s elapsed_time=%s",
+                 movie_id, user_id, frame_start, time.time()-t0)
