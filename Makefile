@@ -567,7 +567,7 @@ sam-status:
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
-	URL="https://$$DNS/status"; \
+	URL="https://$$DNS/resize-api/v1/ping"; \
 	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
 	CODE=$$(echo "$$RESP" | tail -1); \
 	BODY=$$(echo "$$RESP" | sed '$$d'); \

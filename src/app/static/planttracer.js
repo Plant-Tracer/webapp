@@ -183,7 +183,7 @@ async function checkLambdaStatus() {
     const r = await fetch(LAMBDA_API_BASE + 'status', { method: 'GET' });
     if (!r.ok) return false;
     const data = await r.json();
-    return data && data.status === 'ok';
+    return data && data.message === 'ok';
   } catch (e) {
     console.warn('Lambda status check failed', e);
     return false;
