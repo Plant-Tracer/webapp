@@ -45,52 +45,92 @@ function add_func() {
 ///  page: /resend
 
 // Implements the registration web page
+// Implements the registration web page
 function register_func() {
   const email = $('#email').val().toLowerCase();
-  if (email=='') {
+  if (email == '') {
     $('#message').html("<b>Please provide an email address</b>");
     return;
   }
   let course_key = $('#course_key').val();
-  if (course_key=='') {
+  if (course_key == '') {
     $('#message').html("<b>Please provide a course key</b>");
     return;
   }
   let name = $('#name').val();
-  if (name=='') {
+  if (name == '') {
     $('#message').html("<b>Please provide a name</b>");
     return;
   }
-  $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-  $.post(`${API_BASE}api/register`, {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
-    .done( function(data) {
-      if (data.error){
-        $('#message').html(`<b>Error: ${data.message}`);
-      } else {
-        $('#message').html(`<b>${data.message}</b>`);
-      }})
-    .fail( function(xhr, _status, _error) {
-      $('#message').html("POST error: "+xhr.responseText);
-      console.log("xhr:",xhr);
-    });
+
+  $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}</b>...</br>`);
+
+  // Use URLSearchParams to mimic jQuery's default application/x-www-form-urlencoded behavior
+  const params = new URLSearchParams();
+  params.append('email', email);
+  params.append('course_key', course_key);
+  params.append('planttracer_endpoint', planttracer_endpoint);
+  params.append('name', name);
+
+  fetch(`${API_BASE}api/register`, {
+    method: 'POST',
+    body: params
+  })
+  .then(async (response) => {
+    if (!response.ok) {
+      // Capture the error text directly from the response body
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+    return response.json();
+  })
+  .then((data) => {
+    if (data.error) {
+      // Note: Injecting data.message directly into .html() can be an XSS risk.
+      // Ensure the backend sanitizes this message before sending it.
+      $('#message').html(`<b>Error: ${data.message}</b>`);
+    } else {
+      $('#message').html(`<b>${data.message}</b>`);
+    }
+  })
+  .catch((error) => {
+    $('#message').html("POST error: " + error.message);
+    console.error("Fetch error:", error);
+  });
 }
 
 // Implements the resend a link web page
 function resend_func() {
   let email = $('#email').val().toLowerCase();
-  if (email=='') {
+  if (email == '') {
     $('#message').html("<b>Please provide an email address</b>");
     return;
   }
+
   $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-  $.post(`${API_BASE}api/resend-link`, {email:email, planttracer_endpoint:planttracer_endpoint})
-    .done(function(data) {
-      $('#message').html('Response: ' + data.message);
-    })
-    .fail(function(xhr, status, error) {
-      $('#message').html(`POST error: `+xhr.responseText);
-      console.log("xhr:",xhr,"status:",status,"error:",error);
-    });
+
+  const params = new URLSearchParams();
+  params.append('email', email);
+  params.append('planttracer_endpoint', planttracer_endpoint);
+
+  fetch(`${API_BASE}api/resend-link`, {
+    method: 'POST',
+    body: params
+  })
+  .then(async (response) => {
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+    return response.json();
+  })
+  .then((data) => {
+    $('#message').html('Response: ' + data.message);
+  })
+  .catch((error) => {
+    $('#message').html(`POST error: ` + error.message);
+    console.error("Fetch error:", error);
+  });
 }
 
 ////////////////////////////////////////////////////////////////

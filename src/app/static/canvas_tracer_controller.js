@@ -97,7 +97,7 @@ class TracerController extends MovieController {
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
         this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
-        this.marker_name_input.on('keydown', (e) => { if (e.keyCode==13) this.add_marker_onclick_handler(event);});
+        this.marker_name_input.on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
         this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
