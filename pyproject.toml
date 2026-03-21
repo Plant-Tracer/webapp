@@ -64,7 +64,7 @@ imageio = {extras = ["ffmpeg"], version = "^2.37.3"}
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
 mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
-aws-lambda-powertools = {extras = ["utilities", "pydantic"], version = "^3.25.0"}
+aws-lambda-powertools = {extras = ["utilities", "pydantic"], version = "*"}
 boto3-stubs = {extras = ["essential"], version = "*"}
 codecov = "*"
 myst-parser = "*"

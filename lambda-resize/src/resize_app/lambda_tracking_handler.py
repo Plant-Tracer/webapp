@@ -8,7 +8,7 @@ import time
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.data_classes.sqs_event import SQSRecord
 
-import movie_glue
+from . import movie_glue
 
 LOGGER = Logger(service="planttracer")
 MAX_BATCH_SIZE = 500

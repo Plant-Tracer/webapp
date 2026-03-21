@@ -269,7 +269,6 @@ def get_first_frame_from_url(url: str, rotate: int) -> Optional[bytes]:
     with closing(get_frames_from_url(url, rotate)) as frame_gen:
 
         # The for loop elegantly yields the first item
-        print("frame_gen:",frame_gen)
         for frame in frame_gen:
             # We return immediately, which exits the 'with' block.
             # Python automatically calls frame_gen.close() here!

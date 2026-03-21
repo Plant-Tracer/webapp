@@ -29,8 +29,7 @@ LOGGER = Logger(service="planttracer")
 # Permissive CORS automatically applied to all routes
 cors_config = CORSConfig(
     allow_origin="*",
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 app = APIGatewayHttpResolver(cors=cors_config)

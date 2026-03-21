@@ -24,20 +24,20 @@ UPLOAD_STAGING_PREFIX = "uploads/"
 
 logger = logging.getLogger(__name__)
 
+_S3_CLIENTS = {}
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
 
-def s3_client(region_name=None, endpoint_url=None):
+def s3_client():
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
-    if region_name is None:
-        region_name = os.environ.get(C.AWS_REGION, None)
-    if endpoint_url is None:
-        endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
-
+    region_name = os.environ.get(C.AWS_REGION, None)
+    endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
     logger.info("s3_client region=%s endpoint_url=%s ", region_name, endpoint_url)
-
-    return boto3.Session().client('s3', region_name=region_name, endpoint_url=endpoint_url)
+    cache_key = f"{region_name}_{endpoint_url}"
+    if cache_key not in _S3_CLIENTS:
+         _S3_CLIENTS[cache_key] = boto3.client('s3', region_name=region_name, endpoint_url=endpoint_url)
+    return _S3_CLIENTS[cache_key]
 
 
 def _get_bucket_region(bucket):

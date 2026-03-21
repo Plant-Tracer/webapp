@@ -13,7 +13,7 @@ from app import odb
 from app import odbmaint
 from app import mailer
 from app.paths import TEST_DATA_DIR
-from app.odb import DDBO, InvalidCourse_Id, USER_ID, MOVIE_STATE_TRACKING_COMPLETED
+from app.odb import DDBO, InvalidCourse_Id, USER_ID
 from app.odb_movie_data import set_movie_data
 from app.constants import C
 
@@ -67,7 +67,7 @@ def populate_demo_movies():
             set_movie_data(movie_id=movie_id, movie_data=f.read())
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.
         base, _ = os.path.splitext(fn)
-        trackpoints_path = os.path.join(TEST_DATA_DIR, base + '_trackpoints.json')
+        _trackpoints_path = os.path.join(TEST_DATA_DIR, base + '_trackpoints.json')
         # Juse the API
 
 

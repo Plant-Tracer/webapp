@@ -85,7 +85,8 @@ def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints
                 trackpoints_out.append(Trackpoint(x=point_array_out[i][0],
                                                   y=point_array_out[i][1],
                                                   label=pt.label))
-    except cv2.error:  # pylint: disable=catching-non-exception
+    except cv2.error as e:  # pylint: disable=catching-non-exception
+        logger.error("Optical flow failed: %s",e)
         trackpoints_out = []
 
     logger.info("cv2_track_frame output_trackpoints=%s", trackpoints_out)
@@ -121,7 +122,9 @@ def prototype_callback(obj:TrackerCallbackArg):
     """Demo"""
     logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s", obj.frame_number, len(obj.frame_data), obj.frame_trackpoints)
 
-def track_movie_v2(*, movie_url, frame_start:int, trackpoints:List[Trackpoint],
+def track_movie_v2(*, movie_url,
+                   frame_start:int,
+                   trackpoints:List[Trackpoint],
                    movie_zipfile_path:Optional[Path] = None,
                    movie_traced_path:Optional[Path] = None,
                    rotate=0,
@@ -140,7 +143,6 @@ def track_movie_v2(*, movie_url, frame_start:int, trackpoints:List[Trackpoint],
 
     # track from frame frame_start+1 to end using data from frame_start
 
-    print("frame_start=",frame_start)
     if frame_start==0:
         frame_start=1
 
@@ -174,7 +176,6 @@ def track_movie_v2(*, movie_url, frame_start:int, trackpoints:List[Trackpoint],
         # Track if in tracking time, else get trackpoints_this from the history
         if frame_number >= frame_start:
             trackpoints_this = cv2_track_frame(frame_prev = frame_prev, frame_this = frame, trackpoints = trackpoints_prev)
-            print(trackpoints_prev,"->",trackpoints_this)
             trackpoints_output.extend(trackpoints_this) # add to the output
         else:
             trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
