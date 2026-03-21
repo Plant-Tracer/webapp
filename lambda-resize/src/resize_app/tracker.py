@@ -58,7 +58,7 @@ class TrackerCallbackArg(NamedTuple):
     frame_trackpoints:List[Trackpoint] | None
 
 
-def cv2_track_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackpoints:List[Trackpoint]):
+def cv2_track_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackpoints:List[Trackpoint], frame_number:int):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
     :param: frame_prev - cv2 image of the previous frame in CV2 format.
@@ -85,11 +85,12 @@ def cv2_track_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
             if status_array[i] == 1:
                 trackpoints_out.append(Trackpoint(x=point_array_out[i][0],
                                                   y=point_array_out[i][1],
-                                                  label=pt.label))
+                                                  label=pt.label,
+                                                  frame_number = frame_number ))
     except cv2.error as e:  # pylint: disable=catching-non-exception
         logger.error("Optical flow failed: %s",e)
-        trackpoints_out = []
-
+        # Don't return empty! Return the previous trackpoints but update their frame_number
+        trackpoints_out = [ Trackpoint(x=pt.x, y=pt.y, label=pt.label, frame_number=frame_number) for pt in trackpoints ]
     logger.info("cv2_track_frame output_trackpoints=%s", trackpoints_out)
     return trackpoints_out
 
@@ -177,7 +178,7 @@ def track_movie_v2(*, movie_url,
         # Track if in tracking time, else get trackpoints_this from the history
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if frame_number >= frame_start:
-            trackpoints_this = cv2_track_frame(gray_frame_prev = gray_frame_prev, gray_frame = gray_frame, trackpoints = trackpoints_prev)
+            trackpoints_this = cv2_track_frame(gray_frame_prev = gray_frame_prev, gray_frame = gray_frame, trackpoints = trackpoints_prev, frame_number=frame_number)
             trackpoints_output.extend(trackpoints_this) # add to the output
         else:
             trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
