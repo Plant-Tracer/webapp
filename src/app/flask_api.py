@@ -29,10 +29,9 @@ from .odb import (
     USER_ID,
     MOVIE_ID,
     COURSE_ID,
+    MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
-    MOVIE_ZIPFILE_URL,
     MOVIE_TRACED_URN,
-    MOVIE_TRACED_URL,
     MOVIE_METADATA_BULK_PROPS,
     MOVIE_ROTATION,
     MOVIE_STATUS,
@@ -409,13 +408,11 @@ def api_get_movie_metadata():
     # Return only stored metadata; do not generate or write metadata here.
     # Width/height are set when the first frame is served (Lambda get-frame) or by Lambda (rotate-and-zip).
 
-    # If we have a movie_zipfile_urn, create a signed url (this can't be stored in the database...)
-    if movie_metadata.get(MOVIE_ZIPFILE_URN, None):
-        movie_metadata[MOVIE_ZIPFILE_URL] = make_signed_url(urn=movie_metadata[MOVIE_ZIPFILE_URN])
-
-    # If we have a movie_traced_urn, create a signed url (this can't be stored in the database...)
-    if movie_metadata.get(MOVIE_TRACED_URN, None):
-        movie_metadata[MOVIE_TRACED_URL] = make_signed_url(urn=movie_metadata[MOVIE_TRACED_URN])
+    # For any of these URNs, create URLs
+    for urn_name in [MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN]:
+        if (movie_metadata.get(urn_name,"") or "").startswith("s3:"):
+            url_name = urn_name.replace("urn","url")
+            movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
 
     ret = {C.API_KEY_ERROR: False, C.API_KEY_METADATA: movie_metadata}
 

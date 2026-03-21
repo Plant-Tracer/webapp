@@ -8,6 +8,7 @@ import copy
 import re
 import urllib
 from urllib.parse import quote
+import json
 
 import requests
 import filetype
@@ -135,12 +136,12 @@ def test_new_movie(client, new_movie):
                            data = {'api_key': api_key,
                                    'movie_id': movie_id})
     res = resp.get_json()
-    logger.debug('res=%s',res)
+    logger.debug('json res=%s',json.dumps(res,indent=2))
     assert res['error'] is False
     assert res['metadata']['title'] == movie_title
+    assert len(res['metadata']['movie_data_urn']) > 0 # should have a urn!
 
-    # Can we get the movie data? Is it good?
-    movie_data_url = res['metdataa']['movie_data_url']
+    movie_data_url = res['metadata']['movie_data_url']
     logger.debug("movie_data_url=%s",movie_data_url)
     assert movie_data_url is not None
     r = requests.get(movie_data_url, timeout=GET_TIMEOUT)
