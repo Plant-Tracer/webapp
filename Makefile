@@ -134,6 +134,12 @@ flake:
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 ################################################################
+dump.txt:
+	/bin/rm -f dump.txt && touch dump.txt && for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py ; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
+
+
+
+################################################################
 ## Program development: dynamic analysis
 ##
 

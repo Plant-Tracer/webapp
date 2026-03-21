@@ -449,6 +449,8 @@ def api_get_movie_trackpoints():
     :param api_key:   authentication
     :param movie_id:   movie
     :param: format - 'xlsx' or 'json'
+    Note: this builds the entire response in memory. That is not a problem, as the maximum movie is 10,000 frames.
+    Even with 100 trackpoints per frame, this will easily fit in RAM.
     """
     movie_id = get_movie_id()
     movie = odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id)
@@ -511,7 +513,9 @@ def api_ver():
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():
-    """Return DynamoDB, S3 CORS, and S3 bucket region check results as JSON (no auth required)."""
+    """Return DynamoDB, S3 CORS, and S3 bucket region check results as JSON (no auth required).
+    Note that this does not require authentication.
+    """
     origin = f"{request.scheme}://{request.host}"
     d_ok, d_msg = config_check.check_dynamodb()
     c_ok, c_msg = config_check.check_s3_cors(origin)

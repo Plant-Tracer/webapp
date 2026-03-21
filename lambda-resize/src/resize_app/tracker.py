@@ -58,13 +58,16 @@ class TrackerCallbackArg(NamedTuple):
     frame_trackpoints:List[Trackpoint] | None
 
 
-def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints:List[Trackpoint]):
+def cv2_track_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackpoints:List[Trackpoint]):
     """
     Summary - Takes the original marked marked_frame and new frame and returns a frame that is annotated.
-    :param: frame0 - cv2 image of the previous frame in CV2 format
-    :param: frame1 - cv2 image of the current frame in CV2 format
+    :param: frame_prev - cv2 image of the previous frame in CV2 format.
+    :param: frame_this - cv2 image of the current frame in CV2 format
     :param: trackpoints  - array of Trackpoint objects
     :return: array of trackpoints
+
+    Note: frames must be grayscale converted with:
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     """
     winSize = (15, 15)  # pylint: disable=invalid-name
@@ -73,10 +76,8 @@ def cv2_track_frame(*, frame_prev:np.ndarray, frame_this:np.ndarray, trackpoints
     cv2_tpts = np.array([[pt.x, pt.y] for pt in trackpoints], dtype=np.float32)
 
     try:
-        gray_frame0 = cv2.cvtColor(frame_prev, cv2.COLOR_BGR2GRAY)
-        gray_frame1 = cv2.cvtColor(frame_this, cv2.COLOR_BGR2GRAY)
         point_array_out, status_array, _err = cv2.calcOpticalFlowPyrLK(
-            gray_frame0, gray_frame1, cv2_tpts, None,
+            gray_frame_prev, gray_frame, cv2_tpts, None,
             winSize=winSize, maxLevel=max_level, criteria=criteria
         )
         trackpoints_out = []
@@ -170,12 +171,13 @@ def track_movie_v2(*, movie_url,
                                                   macro_block_size=None,
                                                   output_params=['-metadata', f'comment={comment}'])
     trackpoints_prev = None
-    frame_prev = None
+    gray_frame_prev = None
     trackpoints_this = None
     for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotate)):
         # Track if in tracking time, else get trackpoints_this from the history
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if frame_number >= frame_start:
-            trackpoints_this = cv2_track_frame(frame_prev = frame_prev, frame_this = frame, trackpoints = trackpoints_prev)
+            trackpoints_this = cv2_track_frame(gray_frame_prev = gray_frame_prev, gray_frame = gray_frame, trackpoints = trackpoints_prev)
             trackpoints_output.extend(trackpoints_this) # add to the output
         else:
             trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
@@ -200,8 +202,7 @@ def track_movie_v2(*, movie_url,
 
         # Advance
         trackpoints_prev = trackpoints_this
-        frame_prev = frame
-
+        gray_frame_prev = gray_frame
     # Done
     if movie_traced_writer:
         movie_traced_writer.close()
