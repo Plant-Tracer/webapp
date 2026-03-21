@@ -338,28 +338,27 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
 ## Movie editing
 ## Rotation and zip are done only in Lambda (no full movie scan on VM).
 
-@api_bp.route('/edit-movie', methods=POST)
+@api_bp.route('/rotate-movie', methods=POST)
 def api_edit_movie():
-    """Request movie rotation. VM only updates rotation_steps.
+    """Set movie rotation.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
-    :param action: must be 'rotate90cw'
-    :param rotation_steps: 1–3; total 90° rotations. Client debounces and sends one request.
-    Lambda performs rotate and metadata update (width/height swap). Zip is built when user opens Analyze.
+    :param rotation in degrees.
+    Lambda performs rotate and scaling when the analysis is generated.
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
     odb.can_access_movie(user_id=user_id, movie_id=movie_id)
 
-    action = get("action")
-    if action != 'rotate90cw':
-        return E.INVALID_EDIT_ACTION
+    rotation = get_int("rotation")
+    if rotation not in [0,90,180,270]:
+        return {"error": True, "message":"Invalid rotation"}
 
-    new_rotation = ((get_int(MOVIE_ROTATION,0) or 0) + 90) % 360
     clear_movie_tracking(movie_id)
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ROTATION: new_rotation})
+    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ROTATION: rotation})
+    logger.debug("edit-movie: movie_id=%s rotation=%s",movie_id,rotation)
     return {"error": False}
 
 

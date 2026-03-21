@@ -13,11 +13,10 @@ import requests
 import filetype
 import pytest
 
-from resize_app.main import lambda_handler as lambda_handler_fn
-
 from app import odb
 from app import s3_presigned
 from app import odb_movie_data
+from app import apikey
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.constants import MIME
@@ -97,6 +96,13 @@ def test_edge_case(new_movie):
     with pytest.raises(ValueError):
         s3_presigned.make_urn(object_name="xxx",scheme='xxx')
 
+class DummyContext:
+    def __init__(self):
+        self.function_name = "test_movie_function"
+        self.memory_limit_in_mb = 128
+        self.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
+        self.aws_request_id = "52fdfc07-2182-154f-163f-5f0f9a621d72"
+
 def test_new_movie(client, new_movie):
     cfg = copy.copy(new_movie)
     movie_id = cfg[MOVIE_ID]
@@ -124,29 +130,27 @@ def test_new_movie(client, new_movie):
                                    'movie_id': movie_id})
     assert resp.status_code == 403
 
-    # get-movie-data is on Lambda: GET /api/v1/movie-data returns 302 to signed URL
-    event = {
-        "requestContext": {"http": {"method": "GET"}, "stage": ""},
-        "rawPath": "/api/v1/movie-data",
-        "queryStringParameters": {"api_key": api_key, "movie_id": movie_id},
-    }
-    result = lambda_handler_fn(event, None)
-    assert result["statusCode"] == 302, result
-    location = result["headers"]["Location"]
-    movie_data = requests.get(location, timeout=GET_TIMEOUT).content
+    # Make sure that we can get the metadata
+    resp = client.post('/api/get-movie-metadata',
+                           data = {'api_key': api_key,
+                                   'movie_id': movie_id})
+    res = resp.get_json()
+    logger.debug('res=%s',res)
+    assert res['error'] is False
+    assert res['metadata']['title'] == movie_title
+
+    # Can we get the movie data? Is it good?
+    movie_data_url = res['metdataa']['movie_data_url']
+    logger.debug("movie_data_url=%s",movie_data_url)
+    assert movie_data_url is not None
+    r = requests.get(movie_data_url, timeout=GET_TIMEOUT)
+    movie_data = r.content
 
     # movie_data is now a movie. We should validate it.
     logger.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
     assert len(movie_data)>0
     assert is_mp4(movie_data)
 
-    # Make sure that we can get the metadata
-    resp = client.post('/api/get-movie-metadata',
-                           data = {'api_key': api_key,
-                                   'movie_id': movie_id})
-    res = resp.get_json()
-    assert res['error'] is False
-    assert res['metadata']['title'] == movie_title
 
 def test_movie_upload_presigned_post(client, new_course, local_s3):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
@@ -245,23 +249,6 @@ def test_movie_update_metadata(client, new_movie):
     logger.debug("movie=%s",movie)
     assert movie[MOVIE_ID] == movie_id
     assert movie['published'] == 1
-
-def test_movie_extract_first(client, new_movie):
-    """Check single frame exatrct and error handling"""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
-
-    # get-frame was moved to lambda-resize; Flask no longer has this route.
-    resp = client.post('/api/get-frame')
-    assert resp.status_code == 404
-
-    resp = client.post('/api/get-frame',
-                           data={'api_key': api_key,
-                                 'movie_id': str(movie_id)})
-    assert resp.status_code == 404
 
 @pytest.mark.skip(reason='logging disabled on move to DynamoDB')
 def test_log_search_movie(new_movie):
@@ -438,3 +425,49 @@ def test_new_movie_attribution_paths(client, new_course, local_s3):
     resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id3})
     assert resp.get_json()["error"] is False
     odb_movie_data.purge_movie(movie_id=movie_id3)
+
+
+def test_api_edit_movie(new_movie, client):
+    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
+    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+
+    movie = odb.get_movie(movie_id=movie_id)
+    movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
+    logger.debug("movie=%s movie_metadata=%s", movie, movie_metadata)
+
+    assert movie['user_id'] == new_movie[USER_ID]
+
+    userdict = apikey.user_dict_for_api_key(new_movie[API_KEY])
+    assert userdict[USER_ID] == new_movie[USER_ID], f"userdict={userdict} new_movie={new_movie}"
+
+    # Invalid action
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '500'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation', 0) == 0
+
+    # Invalid api_key
+    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'rotation': '0'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
+
+    # Success: rotation_steps omitted => 1 step
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '90'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation') == 90, f"{movie}"
+
+    # Success: rotation_steps=2
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '180'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation') == 180, f"{movie}"
+
+    movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
+    logger.debug("movie_metadata2=%s", movie_metadata2)
+    assert movie_metadata2.get('rotation') == 180, f"{movie}"

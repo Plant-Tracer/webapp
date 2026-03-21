@@ -117,7 +117,7 @@ class Movie(BaseModel):
     attribution_name: str | None = None
 
     # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
-    rotation_steps: Annotated[int, Field(ge=0, le=3)] = 0
+    rotation: Annotated[int, Field(ge=0, lt=360)] = 0
 
 
 def fix_movie_prop_value(prop, value):

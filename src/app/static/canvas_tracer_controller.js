@@ -69,6 +69,7 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
+      this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
         // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
         this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
             ? movie_metadata.last_frame_tracked : -1;
@@ -573,11 +574,12 @@ class TracerController extends MovieController {
         // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
         this.rotate_button.prop(DISABLED, true);
         $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
+      this.movie_rotation += 90;
         const params = {
-            api_key: this.api_key,
-            movie_id: this.movie_id,
-            action: 'rotate90cw'};
-        $.post(`${API_BASE}api/edit-movie`, params).done((data) => {
+          api_key: this.api_key,
+          movie_id: this.movie_id,
+          rotation: this.movie_rotation};
+        $.post(`${API_BASE}api/rotate-movie`, params).done((data) => {
             if (data.error) {
                 alert(data.message);
                 this.rotate_button.prop(DISABLED, false);

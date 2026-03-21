@@ -388,7 +388,7 @@ async function _get_movie_metadata(movie_id){
 // Rotate: debounce multiple clicks (~1s), then send one request with total rotation_steps (1–3).
 // Server rotates that many 90° steps and builds the zip in the background.
 const ROTATE_DEBOUNCE_MS = 1000;
-let rotate_pending_steps = 0;
+let rotate_pending = 0;
 let rotate_debounce_timer = null;
 
 function rotate_movie() {
@@ -396,12 +396,8 @@ function rotate_movie() {
   if (!linkEl || linkEl.classList.contains('rotate-pending')) {
     return;
   }
-  if (rotate_pending_steps >= 3) {
-    return;
-  }
-  rotate_pending_steps += 1;
-  const degrees = rotate_pending_steps * 90;
-  $('#rotate_status').text(` … ${degrees}° queued (wait ${ROTATE_DEBOUNCE_MS / 1000}s or click again)`);
+  rotate_pending += 90;
+  $('#rotate_status').text(rotate_pending);
   if (rotate_debounce_timer) {
     clearTimeout(rotate_debounce_timer);
   }
@@ -410,10 +406,8 @@ function rotate_movie() {
 
 async function apply_rotation_and_zip() {
   rotate_debounce_timer = null;
-  const steps = rotate_pending_steps;
-  rotate_pending_steps = 0;
+  rotate_pending = 0;
   const linkEl = $('#rotate_movie_link').get(0);
-  if (!linkEl || steps < 1) return;
   linkEl.classList.add('rotate-pending');
   const movie_id = window.movie_id;
   $('#rotate_status').text(' … Rotating…');
@@ -422,9 +416,8 @@ async function apply_rotation_and_zip() {
     const formData = new FormData();
     formData.append('api_key', api_key);
     formData.append('movie_id', movie_id);
-    formData.append('action', 'rotate90cw');
-    formData.append('rotation_steps', String(steps));
-    r = await fetch(`${API_BASE}api/edit-movie`, { method: 'POST', body: formData });
+    formData.append('rotate', String(rotate_pending));
+    r = await fetch(`${API_BASE}api/rotate-movie`, { method: 'POST', body: formData });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       $('#rotate_status').text(' Rotation failed.' + (err.message ? ' ' + err.message : ''));

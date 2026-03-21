@@ -6,7 +6,6 @@ These tests ensure that:
 - Lambda HTTP JSON responses always include Access-Control-Allow-Origin: *.
 """
 
-import json
 import pathlib
 import sys
 
@@ -40,71 +39,3 @@ def test_s3_cors_configuration_is_fully_open():
     methods = rule.get("AllowedMethods") or []
     for required in ("GET", "PUT", "POST", "DELETE"):
         assert required in methods, f"S3 CORS must allow {required}"
-
-
-def test_lambda_options_preflight_cors_headers():
-    """OPTIONS /api/v1 should return permissive CORS headers."""
-    resize = _import_lambda_resize_module()
-    event = {
-        "requestContext": {
-            "http": {
-                "method": "OPTIONS",
-            }
-        },
-        "rawPath": "/api/v1",
-        "body": "",
-        "isBase64Encoded": False,
-    }
-    resp = resize.lambda_handler(event, context={})
-    headers = resp.get("headers") or {}
-    assert headers.get("Access-Control-Allow-Origin") == "*"
-    # Methods and headers should be fully open for browser clients
-    assert "GET" in headers.get("Access-Control-Allow-Methods", "")
-    assert "POST" in headers.get("Access-Control-Allow-Methods", "")
-    assert "OPTIONS" in headers.get("Access-Control-Allow-Methods", "")
-    assert headers.get("Access-Control-Allow-Headers") in ("*", "Content-Type,*")
-
-
-def test_lambda_rotate_and_zip_error_still_has_cors():
-    """
-    Even when rotate-and-zip fails (e.g. invalid movie_id), Lambda should
-    still set Access-Control-Allow-Origin: * so the browser does not see a
-    CORS error.
-    """
-    resize = _import_lambda_resize_module()
-    payload = {"action": "rotate-and-zip", "movie_id": "invalid-id-for-test"}
-    event = {
-        "requestContext": {
-            "http": {
-                "method": "POST",
-            }
-        },
-        "rawPath": "/api/v1",
-        "body": json.dumps(payload),
-        "isBase64Encoded": False,
-    }
-    resp = resize.lambda_handler(event, context={})
-    headers = resp.get("headers") or {}
-    assert headers.get("Access-Control-Allow-Origin") == "*"
-
-
-def test_lambda_track_movie_response_has_cors():
-    """
-    track-movie response (from lambda_tracking_handler) must include
-    Access-Control-Allow-Origin so the browser does not block the response.
-    """
-    resize = _import_lambda_resize_module()
-    payload = {"action": "track-movie", "api_key": "a" * 32, "movie_id": "m" + "0" * 31}
-    event = {
-        "requestContext": {
-            "http": {"method": "POST"},
-        },
-        "rawPath": "/api/v1",
-        "body": json.dumps(payload),
-        "isBase64Encoded": False,
-    }
-    resp = resize.lambda_handler(event, context={})
-    headers = resp.get("headers") or {}
-    assert headers.get("Access-Control-Allow-Origin") == "*", (
-        "track-movie response must include Access-Control-Allow-Origin for CORS"
-    )

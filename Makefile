@@ -50,7 +50,7 @@ ifeq ($(AWS_REGION),local)
 endif
 
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
-    $(warning DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
+    $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
 endif
 
