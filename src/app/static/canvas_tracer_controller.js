@@ -16,11 +16,8 @@
 const MARKER_RADIUS = 10;           // default radius of the marker
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-// Global polling interval for status/metadata checks (e.g., tracking progress, ZIP availability).
-// Slower polling reduces load on the Lambda /status and metadata endpoints.
+const TRACING_COMPLETED_FLAG='tracing completed';
 const STATUS_POLL_MSEC = 10000;
-//const TRACE_MOVIE = 'Trace movie';
 const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 1000000;
 
@@ -468,7 +465,7 @@ class TracerController extends MovieController {
             .done((data) => {
                 if (data.error === false) {
                     self.poll_error_count = 0;
-                    if (data.metadata.status === TRACKING_COMPLETED_FLAG) {
+                    if (data.metadata.status === TRACING_COMPLETED_FLAG) {
                         if (self.tracking) {
                             self.movie_tracked(data);
                         }
@@ -494,7 +491,7 @@ class TracerController extends MovieController {
                     alert('Status check failed 10 times in a row (e.g. network or server issue). You can refresh the page to try again.');
                 }
                 if (self.tracking) {
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             });
     }
@@ -904,10 +901,10 @@ function trace_movie(div_controller, movie_id, api_key) {
     });
 }
 
-/** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACKING COMPLETED). */
+/** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACING COMPLETED). */
 function is_movie_tracked(metadata) {
     if (!metadata) return false;
-    if (metadata.status === 'TRACKING COMPLETED') return true;
+    if (metadata.status === 'TRACING COMPLETED') return true;
     const last = metadata.last_frame_tracked;
     const total = metadata.total_frames;
     return (last != null && total != null && total > 1 && last >= 1);

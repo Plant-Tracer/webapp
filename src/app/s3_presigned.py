@@ -36,7 +36,7 @@ def s3_client():
     logger.info("s3_client region=%s endpoint_url=%s ", region_name, endpoint_url)
     cache_key = f"{region_name}_{endpoint_url}"
     if cache_key not in _S3_CLIENTS:
-         _S3_CLIENTS[cache_key] = boto3.client('s3', region_name=region_name, endpoint_url=endpoint_url)
+        _S3_CLIENTS[cache_key] = boto3.client('s3', region_name=region_name, endpoint_url=endpoint_url)
     return _S3_CLIENTS[cache_key]
 
 
