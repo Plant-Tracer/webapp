@@ -3,7 +3,7 @@
 //code for /analyze
 
 /* eslint-env es6 */
-/* global LAMBDA_API_BASE */
+/* see eslint.config for globals */
 
 /* jshint esversion: 8 */
 
@@ -128,12 +128,7 @@ class TracerController extends MovieController {
         this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
-    /** If Lambda is configured, simply enable Track; Lambda health is checked when tracing is invoked. */
     async enableTrackButtonIfAllowed() {
-        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
-            this.track_button.prop(DISABLED, false);
-            return;
-        }
         this.track_button.prop(DISABLED, false);
         this.tracking_status.text('');
     }
@@ -300,7 +295,7 @@ class TracerController extends MovieController {
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
-     * Requests tracking via the Lambda API (POST LAMBDA_API_BASE + 'api/v1' with action 'track-movie').
+     * Requests tracking via the Lambda API (POST LAMBDA_API_BASE + 'resize-api/v1/track-movie').
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
@@ -310,11 +305,6 @@ class TracerController extends MovieController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end() {
-        // Ask the Lambda API to track from this frame to the end of the movie.
-        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
-            this.tracking_status.text("Tracking unavailable (Lambda URL not configured).");
-            return;
-        }
         $('#status-big').html('Movie is being traced...');
         $(this.div_selector).addClass('tracing-dimmed');
         this.tracking_status.text("Asking pipeline to trace movie...");
@@ -324,7 +314,7 @@ class TracerController extends MovieController {
         this.poll_for_track_end();
         this.set_movie_control_buttons();
 
-        const url = LAMBDA_API_BASE.replace(/\/$/, '') + '/resize-api/v1/track-movie';
+        const url = `${LAMBDA_API_BASE}resize-api/v1/trace-movie`;
         const body = JSON.stringify({
             api_key: this.api_key,
             movie_id: this.movie_id,
@@ -882,8 +872,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         if (!resp.metadata.movie_zipfile_url) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
-            const frameBase = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
-            const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
+            const frame0 = `${LAMBDA_API_BASE}api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
                 $('#status-big').html('Movie ready for tracing.');

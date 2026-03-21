@@ -169,8 +169,7 @@ async function computeSHA256(file) {
  */
 function first_frame_url(movie_id)
 {
-  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
-  return `${base}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis&t=${new Date().getTime()}`;
+  return `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
 }
 
 /*
@@ -178,9 +177,8 @@ function first_frame_url(movie_id)
  * If LAMBDA_API_BASE is not set, resolves with true (skip check).
  */
 async function checkLambdaStatus() {
-  if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) return true;
   try {
-    const r = await fetch(LAMBDA_API_BASE + 'status', { method: 'GET' });
+    const r = await fetch(LAMBDA_API_BASE + 'resize-api/v1/ping', { method: 'GET' });
     if (!r.ok) return false;
     const data = await r.json();
     return data && data.message === 'ok';
@@ -320,7 +318,6 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#upload-instructions').hide();
   $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
   $('#movie_id').text(movie_id);
-  // No rotation yet: Analyze goes straight to analyze page. After rotate we switch this to processing.
   $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
   $('#track_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
   $('#upload-preview').show();
