@@ -100,6 +100,7 @@ LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
 MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_READY      = 'ready'
 MOVIE_STATE_TRACING   = 'tracing'
 MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
 MOVIE_STATE_UPDATED_AT = 'status_updated_at'

@@ -27,6 +27,7 @@ from .src.app.odb import (
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     MOVIE_STATUS,
+    MOVIE_STATE_READY,
     MOVIE_STATE_TRACING,
     MOVIE_STATE_TRACING_COMPLETED,
     TOTAL_FRAMES,
@@ -91,6 +92,9 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     urn = movie.get(MOVIE_DATA_URN)
     if not urn or not urn.strip():
         raise ValueError("MOVIE_DATA_URN not set")
+
+    if movie.get(MOVIE_STATUS,'')==MOVIE_STATE_UPLOADING:
+        odb.set_movie_metadata(movie_id=movie_id, movie_metadata={MOVIE_STATUS:MOVIE_STATE_READY})
 
     parsed = urllib.parse.urlparse(urn)
     if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:

@@ -14,6 +14,7 @@ Methods:
 
 """
 
+import traceback
 import time
 import sys
 from typing import Any, Dict
@@ -40,6 +41,29 @@ cors_config = CORSConfig(
 )
 
 app = APIGatewayHttpResolver(cors=cors_config)
+
+
+@app.exception_handler(Exception)
+def handle_all_exceptions(ex: Exception):
+    """
+    Catch any unhandled exception, log it, and return it to the frontend
+    with a 500 status code and proper CORS headers.
+    """
+    LOGGER.exception(f"Unhandled exception caught by global handler: {ex}")
+
+    # You can return the raw exception string, or a full traceback for debugging
+    error_payload = {
+        "error": type(ex).__name__,
+        "message": str(ex),
+        "traceback": traceback.format_exc() # Extremely helpful for dev, remove in prod!
+    }
+
+    # Powertools will automatically attach your CORS headers to this response!
+    return Response(
+        status_code=500,
+        content_type="application/json",
+        body=error_payload
+    )
 
 @app.get("/resize-api/v1/ping")
 def api_ping() -> Dict[str, Any]:
@@ -90,16 +114,23 @@ def handle_first_frame() -> Any:
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
     """Queue the tracing of the movie"""
-    api_key = app.current_event.get_query_string_value(name="api_key")
-    if not api_key:
-        raise ValueError("api_key must be provided")
-    movie_id = app.current_event.get_query_string_value(name="movie_id")
-    if not movie_id:
-        raise ValueError("movie_id must be provided")
-    LOGGER.info("trace-movie. movie_id=%s",movie_id)
-    frame_start = app.current_event.get_query_string_value(name="frame_start") or 0
+    # 1. Parse the JSON body sent by the JS fetch request
+    body = app.current_event.json_body
+    if not body:
+         return Response(status_code=400, body="Request body must be provided")
 
+    api_key = body.get("api_key")
+    if not api_key:
+        return Response(status_code=400, body="api_key must be provided")
+
+    movie_id = body.get("movie_id")
+    if not movie_id:
+        return Response(status_code=400, body="movie_id must be provided")
+
+    frame_start = body.get("frame_start", 0)
+    LOGGER.info("trace-movie. movie_id=%s", movie_id)
     return movie_glue.queue_tracing(api_key, movie_id, frame_start)
+
 
 @LOGGER.inject_lambda_context(log_event=True)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
