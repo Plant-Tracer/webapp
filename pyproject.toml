@@ -100,7 +100,7 @@ recursive = true
 source-roots = ["src", "lambda-resize/src"]
 init-hook = "import sys; sys.path.insert(0, 'lambda-resize/src');"
 ignore-paths = [
-    "^lambda-resize/src/.*$",
+    "^lambda-resize/src/resize_app/src/.*$",
     "^resize_app/.*$"
 ]
 
