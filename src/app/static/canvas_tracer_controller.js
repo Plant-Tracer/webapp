@@ -35,6 +35,9 @@ const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':150,'label':'Ruler 10mm'}
                         ];
 
+let xChartInstance = null;
+let yChartInstance = null;
+
 /**
  * Returns a copy of the default markers and logs to console.
  * ONLY call this when loading a new movie for analysis and frame 0 has no markers yet.
@@ -722,11 +725,19 @@ function graph_data(cc, frames) {
         }
     });
 
-    const ctxX = document.getElementById('apex-xChart').getContext('2d');
-    const ctxY = document.getElementById('apex-yChart').getContext('2d');
+    const canvasX = document.getElementById('apex-xChart');
+    const canvasY = document.getElementById('apex-yChart');
 
+    // DESTROY existing charts if they exist
+    if (xChartInstance) {
+        xChartInstance.destroy();
+    }
+    if (yChartInstance) {
+        yChartInstance.destroy();
+    }
+    
     // Graph for Frame Number or Time vs X Position
-    const _xChart = new Chart(ctxX, {
+    xChartInstance = new Chart(canvasX.getContext('2d'), {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -772,7 +783,7 @@ function graph_data(cc, frames) {
     });
 
     // Graph for Y Position
-    const _yChart = new Chart(ctxY, {
+    yChartInstance = new Chart(canvasY.getContext('2d'), {
         type: 'line',
         data: {
             labels: frame_labels,
