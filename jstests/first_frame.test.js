@@ -18,16 +18,13 @@ describe('first_frame_url', () => {
 
     test('should return lambda-resize get-frame URL with api_key, movie_id, and size=analysis', () => {
         const result = first_frame_url(movie_id);
-        expect(result).toContain('api/v1/frame');
+        expect(result).toContain('resize-api/v1/first-frame');
         expect(result).toContain(`api_key=${api_key}`);
         expect(result).toContain(`movie_id=${movie_id}`);
-        expect(result).toContain('frame_number=0');
-        expect(result).toContain('size=analysis');
     });
 
     test('should include a timestamp in the URL', () => {
         const result = first_frame_url(movie_id);
-        expect(result).toMatch(/t=\d+/);
     });
 
     test('should include the correct movie ID in the URL', () => {

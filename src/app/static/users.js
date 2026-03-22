@@ -7,7 +7,7 @@ import { $ } from "./utils.js";
 // page: /users
 
 function bulk_register_users() {
-    const email_addresses = $('#br_email_addresses').val();
+    const email_addresses = $('#br_email_addresses').val() || "";
     if (email_addresses.trim() == '') {
         $('#message').html("<b>Please provide a list of email addresses</b>");
         return;
