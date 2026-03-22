@@ -76,7 +76,7 @@ class MovieController extends CanvasController {
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects e.g. [{'x':10,'y':20,'label':30},...]
-        console.log(`load_movie(${frames})`);
+        console.log('load_movie:', Array.isArray(frames) ? frames.length + ' frames' : frames);
         this.frames = frames;
 
         /* Now preload all of the images, downloading new ones as necessary.
@@ -100,8 +100,7 @@ class MovieController extends CanvasController {
     /**
      * Change the frame. This is called repeatedly when the movie is
      * playing, with the frame number changing First we verify the
-     * next frame number, then we call the /api/get-frame call to get
-     * the frame, with get_frame_handler getting the data.
+     * next frame number, then we use the frame URL (from zip blob or lambda-resize get-frame) to get the frame.
      *
      * Always redraws.
      *
@@ -218,9 +217,13 @@ class MovieController extends CanvasController {
 
         $(this.div_selector + ' input.frame_number_field').prop('disabled',false);
         $(this.div_selector + ' input.frame_stoppage').prop('disabled',true);
+        // Subclasses (e.g. TracerController) may set max_frame_index to restrict navigation to last traced frame.
+        const maxFrame = (this.max_frame_index != null && this.max_frame_index >= 0)
+            ? this.max_frame_index
+            : (this.frames.length > 0 ? this.frames.length - 1 : 0);
         $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
-        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number==this.length-1);
-        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number==this.length-1);
+        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number >= maxFrame);
+        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number >= maxFrame);
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
     }
 }

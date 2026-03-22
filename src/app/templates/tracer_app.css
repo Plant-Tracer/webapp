@@ -83,3 +83,19 @@ canvas {
 div#analysis-results {
     display:none;
 }
+
+/* Dim the frame area while tracing is in progress */
+#tracer.tracing-dimmed {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+/* Clickable play icon in the "Press play ▶ to watch the trackpoints" headline */
+.status-big-play-trigger {
+    cursor: pointer;
+    text-decoration: underline;
+}
+.status-big-play-trigger:hover {
+    opacity: 0.8;
+}

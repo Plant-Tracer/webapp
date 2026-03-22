@@ -13,9 +13,7 @@ You are receiving this email because someone (probably you) entered your email a
 
 Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.
 
-Upload a new movie: {{ planttracer_endpoint }}/upload?api_key={{ api_key }}
-
-List or edit your movies, or edit your profile: {{ planttracer_endpoint }}/list?api_key={{ api_key }}
+Click this link to log in (then upload or list your movies): {{ planttracer_endpoint }}/login?api_key={{ api_key }}
 
 --{{ boundary }}
 Content-Type: text/html; charset=UTF-8
@@ -25,12 +23,14 @@ Content-Type: text/html; charset=UTF-8
 <head><meta charset="UTF-8"><title>Plant Tracer Login Information</title></head>
 <body>
 <p>Hi! Welcome to Plant Tracer.</p>
-<p>You are receiving this email because someone (probably you) entered your email address {{ to_addrs }} at the Plant Tracer website (<a href="{{ planttracer_endpoint }}">{{ planttracer_endpoint }}</a>).</p>
+<p>You are receiving this email because someone (probably you) entered your email address {{ to_addrs }}
+  at the Plant Tracer website (<a ses:no-track href="{{ planttracer_endpoint }}">{{ planttracer_endpoint }}</a>).
+</p>
 <p>Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.</p>
 <ul>
-<li>Upload a new movie: <a href="{{ planttracer_endpoint }}/upload?api_key={{ api_key }}">{{ planttracer_endpoint }}/upload?api_key={{ api_key }}</a></li>
-<li>List or edit your movies, or edit your profile: <a href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}">{{ planttracer_endpoint }}/list?api_key={{ api_key }}</a></li>
+<li>Log in to Plant Tracer: <a ses:no-track href="{{ planttracer_endpoint }}/login?api_key={{ api_key }}">{{ planttracer_endpoint }}/login?api_key={{ api_key }}</a></li>
 </ul>
+<p>After logging in you can upload a new movie or list and edit your movies.</p>
 </body>
 </html>
 

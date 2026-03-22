@@ -1,6 +1,7 @@
 """
 movie_tracker_test.py - test the api tracking
 """
+import io
 import sys
 import json
 import tempfile
@@ -10,13 +11,16 @@ from zipfile import ZipFile
 import copy
 
 import filetype
+from PIL import Image
 
+from resize_app.lambda_tracking_handler import handler as lambda_tracking_handler
 
 from app import odb
 from app import odb_movie_data
-from app.constants import MIME,E,C
-from app.odb import API_KEY,MOVIE_ID
-from app.odb_movie_data import read_object,create_new_movie_frame
+from app import mp4_metadata_lib
+from app.constants import MIME, E, C
+from app.odb import API_KEY, MOVIE_ID, USER_ID
+from app.odb_movie_data import read_object, create_new_movie_frame
 
 # Fixtures are in conftest.py
 from app.constants import logger
@@ -114,12 +118,11 @@ def test_movie_tracking(client, new_movie):
     """
     cfg      = copy.copy(new_movie)
     movie_id    = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
     api_key  = cfg[API_KEY]
-    #user_id  = cfg[USER_ID]
+    user_id  = cfg[USER_ID]
     tpts     = [{"x":275,"y":215,"label":"track1"},{"x":410,"y":175,"label":"track2"}]
 
-    # save the trackpoints
+    # save the trackpoints via API
     response = client.post('/api/put-frame-trackpoints',
                            data = {'api_key': api_key,
                                    'movie_id': movie_id,
@@ -131,15 +134,13 @@ def test_movie_tracking(client, new_movie):
     logger.debug("save trackpoints ret=%s",ret)
     assert ret['error'] is False
 
-    # Now track with the tracking API.
-    response = client.post('/api/track-movie-queue',
-                           data = {'api_key': api_key,
-                                   'movie_id': str(movie_id),
-                                   'frame_start': '0' })
-    assert response.status_code == 200
-    ret = response.get_json()
-    logger.debug("track movie ret=%s",ret)
-    assert ret['error'] is False
+    # Run tracking via Lambda handler (same code path as deployed Lambda; uses LambdaTrackingEnv).
+    event = {"user_id": user_id, "movie_id": str(movie_id), "frame_start": 0}
+    result = lambda_tracking_handler(event, None)
+    assert result["statusCode"] == 200, result
+    body = json.loads(result["body"])
+    logger.debug("track movie result=%s", body)
+    assert body["error"] is False
 
     response = client.post('/api/get-movie-metadata',
                            data = {'api_key': api_key,
@@ -252,3 +253,13 @@ def test_movie_tracking(client, new_movie):
     assert track2['x']==410
     assert track2['y']==175
     assert track2['label']=='track2'
+
+    # ZIP JPEGs must carry research-attribution comment from movie record (default: research prohibited)
+    with ZipFile(io.BytesIO(zipfile_data), "r") as zf:
+        names = [n for n in zf.namelist() if n.endswith(".jpg")]
+        assert len(names) >= 1
+        jpeg_bytes = zf.read(names[0])
+    img = Image.open(io.BytesIO(jpeg_bytes))
+    comment_bytes = img.info.get("comment")
+    assert comment_bytes is not None, "ZIP frame JPEG should have comment"
+    assert mp4_metadata_lib.RESEARCH_PROHIBITED.encode("utf-8") == comment_bytes

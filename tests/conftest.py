@@ -18,13 +18,19 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 
-from app import flask_app
+# Set FFMPEG_PATH before importing flask_app if ffmpeg is available (for tests that use resize_app.tracker).
+from app.constants import C
+from app.paths import ffmpeg_path
+_ffmpeg = ffmpeg_path()
+if _ffmpeg:
+    os.environ.setdefault(C.FFMPEG_PATH, _ffmpeg)
 
+from app import flask_app  # pylint: disable=wrong-import-position
 
-# Import fixtures so pytest can discover them
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # noqa: F401, E402 pylint: disable=unused-import
-from .fixtures.localmail_config import mailer_config  # noqa: F401, E402  pylint: disable=unused-import
-from .fixtures.app_client import client  # noqa: F401, E402 pylint: disable=unused-import
+# Import fixtures so pytest can discover them (after env/path setup above)
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # pylint: disable=wrong-import-position,unused-import
+from .fixtures.localmail_config import mailer_config  # pylint: disable=wrong-import-position,unused-import
+from .fixtures.app_client import client  # pylint: disable=wrong-import-position,unused-import
 
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -107,7 +113,7 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
         options.binary_location = os.environ['CHROME_PATH']
 
     try:
-        driver = webdriver.Chrome(options=options)
+        driver = webdriver.Chrome(options=options)  # pylint: disable=not-callable
         yield driver
         driver.quit()
     except WebDriverException as e:

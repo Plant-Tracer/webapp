@@ -8,17 +8,18 @@
  *        $('.class').show()
  */
 function $(selector) {
-    // Handle $(document).ready()
+    // Handle $(document).ready() while still returning a full wrapper so we
+    // can call .on() / .off() on document (used for delegated handlers).
     if (selector === document || (selector && selector.nodeType === 9)) {
-        return {
-            ready: function(callback) {
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', callback);
-                } else {
-                    callback();
-                }
+        const wrapper = new DOMWrapper(document);
+        wrapper.ready = function(callback) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', callback);
+            } else {
+                callback();
             }
         };
+        return wrapper;
     }
 
     if (typeof selector === 'string') {
@@ -45,6 +46,31 @@ function $(selector) {
 function $$(selector) {
     const elements = document.querySelectorAll(selector);
     return new DOMCollection(elements);
+}
+
+// Internal helper for storing delegated listeners so `.off` can remove them.
+function _storeListener(el, event, selector, handler, wrapped) {
+    if (!el) return;
+    if (!el._$listeners) {
+        el._$listeners = [];
+    }
+    el._$listeners.push({ event, selector, handler, wrapped });
+}
+
+function _removeStoredListeners(el, event, selector, handler) {
+    if (!el || !el._$listeners) return;
+    const remaining = [];
+    el._$listeners.forEach((entry) => {
+        const matchEvent = !event || entry.event === event;
+        const matchSelector = selector === undefined || selector === null || entry.selector === selector;
+        const matchHandler = !handler || entry.handler === handler;
+        if (matchEvent && matchSelector && matchHandler) {
+            el.removeEventListener(entry.event, entry.wrapped);
+        } else {
+            remaining.push(entry);
+        }
+    });
+    el._$listeners = remaining;
 }
 
 // Collection wrapper for multiple elements (like jQuery)
@@ -88,9 +114,43 @@ class DOMCollection {
         return this;
     }
 
-    on(event, handler) {
-        this.elements.forEach(el => {
-            if (el) el.addEventListener(event, handler);
+    on(event, selectorOrHandler, maybeHandler) {
+        this.elements.forEach((el) => {
+            if (!el) return;
+            // Delegated handler: on(event, selector, handler)
+            if (typeof selectorOrHandler === 'string' && typeof maybeHandler === 'function') {
+                const selector = selectorOrHandler;
+                const handler = maybeHandler;
+                const wrapped = function (e) {
+                    const target = e.target && e.target.closest && e.target.closest(selector);
+                    if (target && el.contains(target)) {
+                        handler.call(target, e);
+                    }
+                };
+                _storeListener(el, event, selector, handler, wrapped);
+                el.addEventListener(event, wrapped);
+            // Direct handler: on(event, handler)
+            } else if (typeof selectorOrHandler === 'function') {
+                const handler = selectorOrHandler;
+                _storeListener(el, event, null, handler, handler);
+                el.addEventListener(event, handler);
+            }
+        });
+        return this;
+    }
+
+    off(event, selectorOrHandler, maybeHandler) {
+        this.elements.forEach((el) => {
+            if (!el) return;
+            let selector = null;
+            let handler = null;
+            if (typeof selectorOrHandler === 'string') {
+                selector = selectorOrHandler;
+                handler = typeof maybeHandler === 'function' ? maybeHandler : null;
+            } else if (typeof selectorOrHandler === 'function') {
+                handler = selectorOrHandler;
+            }
+            _removeStoredListeners(el, event, selector, handler);
         });
         return this;
     }
@@ -109,6 +169,86 @@ class DOMCollection {
             if (el) el.style[property] = value;
         });
         return this;
+    }
+
+    get(index) {
+        if (index === undefined) {
+            return this.elements[0] || null;
+        }
+        return this.elements[index] || null;
+    }
+
+    hasClass(className) {
+        return this.elements[0] ? this.elements[0].classList.contains(className) : false;
+    }
+
+    /**
+     * Check state of the first element. Supports :visible and :hidden (jQuery-like).
+     * :visible = display is not 'none' and element has layout (offsetParent or dimensions).
+     * :hidden = opposite of :visible.
+     */
+    is(selector) {
+        const el = this.elements[0];
+        if (!el) return false;
+        if (selector === ':visible') {
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return el.offsetParent !== null || (el.offsetWidth > 0 && el.offsetHeight > 0);
+        }
+        if (selector === ':hidden') {
+            return !this.is(':visible');
+        }
+        return false;
+    }
+
+    addClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.add(className);
+        });
+        return this;
+    }
+
+    removeClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.remove(className);
+        });
+        return this;
+    }
+
+    toggleClass(className) {
+        this.elements.forEach(el => {
+            if (el) el.classList.toggle(className);
+        });
+        return this;
+    }
+
+    one(event, handler) {
+        this.elements.forEach(el => {
+            if (el) el.addEventListener(event, handler, { once: true });
+        });
+        return this;
+    }
+
+    find(selector) {
+        const found = [];
+        this.elements.forEach(el => {
+            if (el) {
+                const matches = el.querySelectorAll(selector);
+                found.push(...matches);
+            }
+        });
+        return new DOMCollection(found);
+    }
+
+    parent() {
+        const parents = this.elements.map(el => el && el.parentElement).filter(Boolean);
+        return new DOMCollection(parents);
+    }
+
+    children() {
+        const childLists = this.elements.map(el => el ? Array.from(el.children) : []);
+        const flat = childLists.flat();
+        return new DOMCollection(flat);
     }
 
     get length() {
@@ -234,18 +374,42 @@ class DOMWrapper {
         return this;
     }
 
-    // Event listeners
-    on(event, handler) {
-        if (this.element) {
+    // Event listeners (supports direct and delegated: on(event, handler) or on(event, selector, handler))
+    on(event, selectorOrHandler, maybeHandler) {
+        if (!this.element) return this;
+        // Delegated handler: on(event, selector, handler)
+        if (typeof selectorOrHandler === 'string' && typeof maybeHandler === 'function') {
+            const selector = selectorOrHandler;
+            const handler = maybeHandler;
+            const el = this.element;
+            const wrapped = function (e) {
+                const target = e.target && e.target.closest && e.target.closest(selector);
+                if (target && el.contains(target)) {
+                    handler.call(target, e);
+                }
+            };
+            _storeListener(el, event, selector, handler, wrapped);
+            el.addEventListener(event, wrapped);
+        // Direct handler: on(event, handler)
+        } else if (typeof selectorOrHandler === 'function') {
+            const handler = selectorOrHandler;
+            _storeListener(this.element, event, null, handler, handler);
             this.element.addEventListener(event, handler);
         }
         return this; // Chainable
     }
 
-    off(event, handler) {
-        if (this.element) {
-            this.element.removeEventListener(event, handler);
+    off(event, selectorOrHandler, maybeHandler) {
+        if (!this.element) return this;
+        let selector = null;
+        let handler = null;
+        if (typeof selectorOrHandler === 'string') {
+            selector = selectorOrHandler;
+            handler = typeof maybeHandler === 'function' ? maybeHandler : null;
+        } else if (typeof selectorOrHandler === 'function') {
+            handler = selectorOrHandler;
         }
+        _removeStoredListeners(this.element, event, selector, handler);
         return this; // Chainable
     }
 
@@ -296,6 +460,64 @@ class DOMWrapper {
             this.element.style[property] = value;
         }
         return this;
+    }
+
+    hasClass(className) {
+        return this.element ? this.element.classList.contains(className) : false;
+    }
+
+    /**
+     * Check state of the element. Supports :visible and :hidden (jQuery-like).
+     * :visible = display is not 'none' and element has layout (offsetParent or dimensions).
+     * :hidden = opposite of :visible.
+     */
+    is(selector) {
+        if (!this.element) return false;
+        if (selector === ':visible') {
+            const style = window.getComputedStyle(this.element);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return this.element.offsetParent !== null ||
+                (this.element.offsetWidth > 0 && this.element.offsetHeight > 0);
+        }
+        if (selector === ':hidden') {
+            return !this.is(':visible');
+        }
+        return false;
+    }
+
+    addClass(className) {
+        if (this.element) this.element.classList.add(className);
+        return this;
+    }
+
+    removeClass(className) {
+        if (this.element) this.element.classList.remove(className);
+        return this;
+    }
+
+    toggleClass(className) {
+        if (this.element) this.element.classList.toggle(className);
+        return this;
+    }
+
+    one(event, handler) {
+        if (this.element) this.element.addEventListener(event, handler, { once: true });
+        return this;
+    }
+
+    find(selector) {
+        if (!this.element) return new DOMCollection([]);
+        return new DOMCollection(this.element.querySelectorAll(selector));
+    }
+
+    parent() {
+        if (!this.element || !this.element.parentElement) return new DOMCollection([]);
+        return new DOMCollection([this.element.parentElement]);
+    }
+
+    children() {
+        if (!this.element) return new DOMCollection([]);
+        return new DOMCollection(this.element.children);
     }
 }
 

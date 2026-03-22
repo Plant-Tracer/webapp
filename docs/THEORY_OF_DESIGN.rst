@@ -1,6 +1,13 @@
 Web app theory of design
 ========================
 
+S3 bucket and long-term archive
+-------------------------------
+
+We **always deploy to an existing S3 bucket**. The bucket is not created by the stack and must **outlive the stack**, because it is the long-term archive of all student-uploaded videos. Stacks (and thus DynamoDB tables) may be torn down or migrated; the bucket is the durable store.
+
+Because the S3 bucket will outlive the DynamoDB database, **all metadata that must survive (research-use, attribution) is stored in the MP4 file itself** (see ``docs/MOVIE_METADATA.rst`` and ``etc/mp4_metadata.py``). The object remains self-describing even if the application database is gone. The Lambda that processes uploads is invoked via its HTTP API; we no longer depend on S3 → Lambda triggers on the ``uploads/`` prefix.
+
 Authentication
 --------------
 

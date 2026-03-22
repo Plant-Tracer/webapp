@@ -7,26 +7,26 @@ const first_frame_url = module.first_frame_url
 
 
 describe('first_frame_url', () => {
-    // Mock API base URL and API key
-    const API_BASE = 'https://planttracer.com';
+    const LAMBDA_API_BASE = 'https://lambda.planttracer.com/';
     const api_key = 'abcdefghijklmnopqrstuvwxyz';
     const movie_id = '600';
 
-    // Mock Date object to control the timestamp
     beforeEach(() => {
-        global.API_BASE = API_BASE;
+        global.LAMBDA_API_BASE = LAMBDA_API_BASE;
         global.api_key = api_key;
     });
 
-    test('should return a URL containing API base, api_key, and movie_id', () => {
+    test('should return lambda-resize get-frame URL with api_key, movie_id, and size=analysis', () => {
         const result = first_frame_url(movie_id);
-        // Check that the URL contains the base, api_key, movie_id, frame_number, and format
-        expect(result).toContain(`${API_BASE}api/get-frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&format=jpeg`);
+        expect(result).toContain('api/v1/frame');
+        expect(result).toContain(`api_key=${api_key}`);
+        expect(result).toContain(`movie_id=${movie_id}`);
+        expect(result).toContain('frame_number=0');
+        expect(result).toContain('size=analysis');
     });
 
     test('should include a timestamp in the URL', () => {
         const result = first_frame_url(movie_id);
-        // Use regex to check that t= is followed by a numeric timestamp
         expect(result).toMatch(/t=\d+/);
     });
 

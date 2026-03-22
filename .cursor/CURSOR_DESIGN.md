@@ -20,7 +20,7 @@ The Plant Tracer webapp is a Flask-based web application for uploading, managing
    - ES6 modules for modern JavaScript
 
 3. **Data Storage**:
-   - **Amazon S3**: Movies, frames, ZIP files
+   - **Amazon S3**: Movies, frames, ZIP files. We always deploy to an **existing** bucket; the bucket **outlives the stack** as the long-term archive of student videos. Because the bucket outlives DynamoDB, research/attribution metadata is stored **in the MP4 file** (see `.cursor/rules/s3-bucket-and-mp4-metadata.mdc` and `docs/MOVIE_METADATA.rst`).
    - **Amazon DynamoDB**: Course data, user accounts, movie metadata, annotations
 
 4. **Future Lambda Functions** (not yet working):
@@ -76,7 +76,7 @@ Both coverage files are uploaded to codecov.io in CI/CD.
 ### Type Annotations
 
 **Preference**: Use type annotations when possible. The project uses:
-- Python 3.13+ type hints
+- Python 3.12 (matches Ubuntu 24.04; see `pyproject.toml`)
 - Pyright for type checking (configured in `pyproject.toml`)
 - Type checking mode: `basic` (not strict)
 
@@ -136,7 +136,7 @@ These are separate from the main Flask app and have their own deployment pipelin
 2. **Type annotations are preferred** but not strictly required
 3. **JavaScript coverage from Chromium tests is missing** - this needs to be fixed
 4. **Tests should be self-contained** - fixtures handle all setup
-5. **jQuery has been completely eliminated** - replaced with custom lightweight `$` utility in `utils.js`
+5. **jQuery has been completely eliminated** - replaced with custom lightweight `$` and `$$` utilities in `utils.js` (see `.cursor/rules/utils-not-jquery.mdc` for the allowed API)
 6. **Local services run on fixed ports** - see `Makefile` for endpoints
 
 ## Environment Variables

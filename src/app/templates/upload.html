@@ -5,7 +5,7 @@
 {% block body %}
 
 <div id='upload-form'>
-  <h2>Upload a new movie</h2>
+  <h2 id='upload-form-title'>Upload a new movie</h2>
 
   <p>ID: {{user_id}}</p>
   <p>Name:  <span id='user-name'  x-user_id='{{user_id}}' x-property='name' >{{user_name}}</span>
@@ -15,10 +15,11 @@
 
   <p><i>Note: you can change your name or email by clicking on the pencil icon (✏️ ) above. </i></p>
 
-  <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
+  <div id='upload-instructions'>
+    <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
+  </div>
 
-
-  <form class='pure-form pure-form-aligned'>
+  <form id='upload-movie-form' class='pure-form pure-form-aligned'>
     <fieldset>
       <div class='pure-control-group'>
         <label for='title'>Title:</label>
@@ -37,6 +38,23 @@
         <span class="pure-form-message-inline">required</span>
       </div>
       <div class='pure-control-group'>
+        <label>
+          <input type='checkbox' id='research-use-checkbox' name='research_use' value='1' onchange='sync_attribution_ui()'>
+          The uploaded movie may be used in academic research.
+        </label>
+      </div>
+      <div class='pure-control-group' id='attribution-group' style='display:none'>
+        <label>
+          <input type='checkbox' id='credit-by-name-checkbox' name='credit_by_name' value='1' onchange='sync_attribution_ui()'>
+          I would like credit by name for the use of this video in research.
+        </label>
+        <span class="pure-form-message-inline">If unchecked, video will be used anonymously.</span>
+      </div>
+      <div class='pure-control-group' id='attribution-name-group' style='display:none'>
+        <label for='attribution-name'>Name for attribution:</label>
+        <input type='text' id='attribution-name' name='attribution_name' placeholder='In the text' disabled>
+      </div>
+      <div class='pure-control-group'>
         <label for='submit-button'>Click to upload:</label>
         <input id='upload-button' type='button' value='upload' onclick='upload_movie()' >
       </div>
@@ -53,15 +71,20 @@
 <div style='display:none' id='upload-preview'>
   <p>Movie <i><span id='uploaded_movie_title'></span></i> (<span id='movie_id'></span>) successfully uploaded.</p>
   <p>Here's the first frame of your movie:</p>
-  <img id='image-preview' src='' alt='image preview'>
+  <img id='image-preview' src='' alt=''>
+  <p id='image-preview-status' class='image-preview-status' style='display:none; margin-top:0.5em;'></p>
 
-  <h2>Next steps...</h2>
-  Now you can:
+  <h2>Next steps</h2>
+  <p>Confirm the first frame and rotation, then continue:</p>
+  <ul>
+    <li><a href='javascript:;' id='rotate_movie_link' onclick='rotate_movie()'>
+        Rotate 90º clockwise</a> — click 1–3 times, then wait ~1s; one rotation + zip is applied.<span id='rotate_status'></span></li>
+    <li><a href='javascript:;' id='process_movie_link'><strong>Analyze</strong></a> — go to the analysis page (or to processing first if you rotated).</li>
+  </ul>
+  <p>Or:</p>
   <ul>
     <li><a href='javascript:;' id='delete_movie_link' onclick='purge_movie()'>
         Delete the movie (if you uploaded the wrong movie)</a></li>
-    <li><a href='javascript:;' id='rotate_movie_link' onclick='rotate_movie()'>
-        Rotate the movie 90º clockwise (repeat as necessary)</a><span id='rotate_status'></span></li>
     <li><a href='' id='track_movie_link' >Track the uploaded movie</a></li>
     <li><a href='list'>List all uploaded movies</a></li>
     <li><a href='upload'>Upload another movie</a></li>

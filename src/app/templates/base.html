@@ -18,11 +18,18 @@
     <script type="module" src="{{ url_for('static', filename='planttracer.js') }}"></script>
 
     <script>
-      // These variables will be substituted by the template engine
+      // Page endpoints (substituted by template):
+      // API_BASE       - Flask API base URL (HTML and API same origin). Used for: auth, get-movie-metadata, edit-movie, put-frame-trackpoints, etc.
+      // LAMBDA_API_BASE - Lambda (lambda-resize) HTTP API base URL. Set by server from get_lambda_api_base().
+      //   Used for: get-frame (api/v1/frame), get-movie-data (api/v1/movie-data), new-frame, status, rotate-and-zip, start-processing, track-movie.
+      //   All client calls to the Lambda API are authorized (client sends api_key in request; Lambda validates).
+      //   Available as global LAMBDA_API_BASE to all JavaScript. See docs/ClientLambdaAPI.md.
+      // STATIC_BASE    - static assets base URL.
       "use strict";
       const version = '{{version}}';
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
+      const LAMBDA_API_BASE = "{{ lambda_api_base }}";
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = "{{user_id}}";

@@ -22,16 +22,22 @@ Environment variables that you should know about/set:
 AWS SAM template that uses cloud formations to:
 - Create a new VM
 - Create the necessary DynamoDB tables all with the given prefix.
-- Create a lambda function that watches the S3 bucket in the /uploads
-  prefix, resizes as necessary, and moves the object to the correct location.
+- The **bucket is always an existing bucket** (it outlives the stack as the
+  long-term archive of student videos). The Lambda is invoked via its HTTP
+  API; it can move uploaded objects to their final keys as needed, write
+  research/attribution metadata into the MP4 file (so the object remains
+  self-describing when the database is gone), update DynamoDB, and log to
+  the logs table.
 
 ## The created VM
 
 ## The Created Lambda Function
 
+**Video processing:** All rotate, scale, frame extraction, and tracking use **cv2 + Pillow only**. The Lambda does not bundle or use ffmpeg. Any ffmpeg-related code in the repo is legacy (e.g. for local CLI or tests).
+
 Core functionality:
-- Watches AWS S3. When a movie is uploaded:
-  - Process (see below)
+- Invoked via HTTP API. When processing is requested (e.g. after upload), can process (see below).
+- **Rotate-and-zip**: POST ``action=rotate-and-zip`` with ``movie_id`` and ``rotation_steps`` (1–3). Rotates the movie using PyAV + Pillow only (no ffmpeg binary; keeps deployment small), uploads the rotated movie back to S3, builds a zip of all frames, uploads the zip, and updates DynamoDB with full metadata (width, height, fps, total_frames, total_bytes; width/height are swapped for 90°/270°). The VM does not rotate or build zip; it only updates ``rotation_steps`` and triggers this Lambda.
 - Accepts resize requests with an S3 URL
   - Process
 - Process an AWS URL:

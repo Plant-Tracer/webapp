@@ -27,8 +27,8 @@ TEST_DATA_DIR   = join(ROOT_DIR, 'tests', 'data')
 STANDALONE_PATH = join(ROOT_DIR, 'standalone.py')
 TEST_MOVIE_FILENAME = join(TEST_DATA_DIR,'2019-07-31 plantmovie-rotated.mov')
 
-# Static ffmpeg binaries for environments without system ffmpeg (e.g. Lambda).
-# Use the one matching host architecture; do not run amd64 on arm64 or vice versa.
+# LEGACY: Static ffmpeg binaries. Production uses cv2+Pillow only; ffmpeg is only for legacy
+# tracker helpers (cleanup_mp4, rotate_movie, render_tracked_movie). Use the one matching host arch.
 AWS_LAMBDA_LINUX_STATIC_FFMPEG_AMD64 = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 AWS_LAMBDA_LINUX_STATIC_FFMPEG_ARM64 = join(ETC_DIR, 'ffmpeg-6.1-arm64-static')
 
@@ -49,6 +49,7 @@ def _static_ffmpeg_for_machine():
 
 
 def ffmpeg_path():
+    """LEGACY: Path to ffmpeg binary, or None if not found. Production paths use cv2 only."""
     if C.FFMPEG_PATH in os.environ:
         pth = os.environ[C.FFMPEG_PATH]
         if os.path.exists(pth):
@@ -62,4 +63,4 @@ def ffmpeg_path():
     pth = _static_ffmpeg_for_machine()
     if pth:
         return pth
-    raise FileNotFoundError("ffmpeg")
+    return None

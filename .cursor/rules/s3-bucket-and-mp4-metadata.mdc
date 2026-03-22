@@ -1,0 +1,13 @@
+---
+description: S3 bucket is a long-term archive and outlives the stack; MP4 metadata is required for traceability
+globs: ["**/*.py", "**/template.yaml", "**/README*", "docs/**"]
+alwaysApply: true
+---
+
+# S3 Bucket and MP4 Metadata
+
+1. **We always deploy to an existing S3 bucket.** The bucket is not created by the stack. It must **outlive the stack** because it is the long-term archive of all student-uploaded videos.
+
+2. **All metadata that must survive the database must be stored in the MP4 file.** Because the S3 bucket will outlive the DynamoDB database (e.g. stack teardown, schema changes, or migration), research-use and attribution choices are written into the MP4 comment/metadata (see `etc/mp4_metadata.py` and `src/app/mp4_metadata_lib.py`) so that the object remains self-describing. S3 object metadata (x-amz-meta-*) is set at upload; Lambda may write research/attribution into the MP4 when processing.
+
+3. **Lambda is invoked via HTTP API.** The Lambda that processes uploads is called through its HTTP API, not via S3 bucket notifications. The template does not create the bucket; it only passes the bucket name to the VM and Lambda so they can read and write objects under `course_id/movie_id/...` keys.

@@ -24,9 +24,30 @@ TEST_MOVIE_PATH = Path(__file__).resolve().parent / "data" / "2019-07-12 circumn
 
 
 def _wait_for_movie_id(driver):
-    """Helper for WebDriverWait: returns movie_id text once populated."""
-    text = driver.find_element(By.ID, "movie_id").text.strip()
-    return text if text else False
+    """Helper for WebDriverWait: returns movie_id text once populated.
+
+    Supports both the legacy upload preview (span#movie_id) and the new
+    /processing page (p#processing_movie_id with 'Movie ID: <id>').
+    """
+    # Legacy upload preview: span with id="movie_id"
+    try:
+        text = driver.find_element(By.ID, "movie_id").text.strip()
+        if text:
+            return text
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+    # New processing page: paragraph with id="processing_movie_id"
+    try:
+        ptext = driver.find_element(By.ID, "processing_movie_id").text.strip()
+        if not ptext:
+            return False
+        # Expected format: "Movie ID: <id>"
+        parts = ptext.split(":", 1)
+        movie_id = parts[1].strip() if len(parts) == 2 else ptext
+        return movie_id or False
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
 
 
 def _section_contains_title(driver, title):

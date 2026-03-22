@@ -50,6 +50,12 @@ grep -n "def method_name" src/app/odb.py
 grep -B 5 "def method_name" src/app/odb.py
 ```
 
+## Movie metadata and tracking
+
+- **get-movie-metadata** returns only stored metadata (width, height, fps, total_frames, total_bytes when present). No extraction or generation. Width/height are set when the first frame is served (Lambda get-frame api/v1/frame) or by Lambda (rotate-and-zip).
+- **Analyze page**: Only width and height are required to show the first frame and place markers. If total_frames is missing or 0, play/frame-movement buttons stay disabled. When total_frames (and zip) are available, full navigation works.
+- **run_tracking** does not require metadata in the DB. It loads the movie bytes and, if any of width, height, total_frames, fps, or total_bytes are missing, calls `extract_movie_metadata` once, persists the result, and then runs tracking.
+
 ## Testing Best Practices
 
 ### Fixtures

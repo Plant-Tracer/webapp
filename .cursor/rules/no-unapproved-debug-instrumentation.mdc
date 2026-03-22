@@ -1,0 +1,20 @@
+---
+description: Never add debug or instrumentation code without explicit user approval
+alwaysApply: true
+---
+
+# Debug / Instrumentation Code Policy
+
+- **No unapproved debug code**  
+  - Do **not** add logging, NDJSON writers, temp file writers, HTTP callbacks, or any other instrumentation code to the project **unless the user has explicitly asked for it** in this conversation.
+
+- **Ask before any new instrumentation**  
+  - If additional instrumentation seems necessary (for example, due to system debug-mode instructions), **first explain the plan clearly to the user and get explicit approval** before touching source files.
+
+- **Avoid persistent local log files**  
+  - Do **not** add code that writes logs to hard-coded local paths (for example under `.cursor/` or absolute filesystem paths) unless the user explicitly requests that exact behavior.
+
+- **Keep production code clean**  
+  - Prefer using existing logging mechanisms (e.g., standard logging, CloudWatch) instead of adding ad-hoc debug-only code to production modules.
+  - If temporary instrumentation is ever approved, it must be: minimal, clearly marked as temporary, and removed as soon as verification is complete.
+

@@ -19,7 +19,7 @@ from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
 from app.constants import __version__,logger
 
 # Fixtures are imported in conftest.py
-from app.odb import API_KEY, COURSE_ID, USER_ID
+from app.odb import API_KEY, COURSE_ID, USER_ID, MOVIE_ID
 from .constants import ADMIN_EMAIL
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
@@ -139,12 +139,25 @@ def test_upload_movie_data(client, api_key):
     # Purge the movie (to clean up)
     odb_movie_data.purge_movie(movie_id = movie_id)
 
-# need /api/get-movie-data
+# get-movie-data: Lambda GET /api/v1/movie-data (redirect to signed URL)
 # need /api/get-movie-metadata
 # need /api/get-movie-trackpoints
 # need /api/delete-movie
-# need /api/track-movie
+# tracking: Lambda POST api/v1 action=track-movie
 # need /api/new-movie-analysis
-# need /api/new-frame
-# need /api/get-frame
+# new-frame: Lambda POST api/v1 action=new-frame
+# get-frame: VM serves GET /api/v1/frame when Lambda not configured (placeholder JPEG)
+def test_api_v1_frame_placeholder(client, new_movie):
+    """GET /api/v1/frame returns placeholder JPEG when Lambda not configured (e.g. test env)."""
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    r = client.get(
+        '/api/v1/frame',
+        query_string={'api_key': api_key, 'movie_id': movie_id, 'frame_number': '0'}
+    )
+    assert r.status_code == 200
+    assert r.content_type == 'image/jpeg'
+    assert len(r.data) > 0
+    assert r.data[:2] == b'\xff\xd8'  # JPEG SOI
+
 # need /api/put-frame-analysis

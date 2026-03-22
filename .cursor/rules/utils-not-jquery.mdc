@@ -7,9 +7,9 @@ alwaysApply: true
 
 In this project, **`$` is not jQuery.** It is the custom lightweight helper from `src/app/static/utils.js`. Do not assume jQuery methods exist.
 
-- **Use:** `prop`, `attr`, `val`, `html`, `text`, `show`, `hide`, `on`, `off`, `click`, `css`, `get(index)`, `fadeIn`, `fadeOut`.
-- **Do not use:** `hasClass`, `addClass`, `removeClass`, `toggleClass`, `one()`, `find()`, `parent()`, `children()`, or any other jQuery-specific API unless you have verified it exists in `utils.js`.
+- **Before writing or editing any JavaScript in this project, always review the current `src/app/static/utils.js` implementation first.** Treat that file as the source of truth for what `$` and `$$` support, and only use methods and patterns that are defined there (or that you have just added there explicitly).
 
-For class names, use the DOM: `element.classList.contains()`, `element.classList.add()`, `element.classList.remove()`. Get the element with `$('#id').get(0)`.
+- **Use:** `prop`, `attr`, `val`, `html`, `text`, `show`, `hide`, `on`, `off`, `click`, `css`, `get(index)`, `fadeIn`, `fadeOut`, `$.post`, `$$`. Also available: `hasClass`, `addClass`, `removeClass`, `toggleClass`, `one(event, handler)`, `find(selector)`, `parent()`, `children()`, **`is(selector)`** (only `:visible` and `:hidden` supported; implemented in `utils.js` on both `DOMWrapper` and `DOMCollection`).
+- **Do not use** any other jQuery or DOM API unless you have verified it exists in `utils.js`.
 
-For one-time event listeners, use native: `element.addEventListener('load', fn, { once: true })` instead of `$.one('load', fn)`.
+To get the raw DOM element from a single-element wrapper: `$('#id').get(0)` or `$('#id').get()`. For one-time event listeners you can use `$('#id').one('load', fn)` or native `element.addEventListener('load', fn, { once: true })`.
