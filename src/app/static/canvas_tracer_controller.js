@@ -316,19 +316,23 @@ class TracerController extends MovieController {
 
         const url = `${LAMBDA_API_BASE}resize-api/v1/trace-movie`;
         const body = JSON.stringify({
-            api_key: this.api_key,
             movie_id: this.movie_id,
             frame_start: this.frame_number
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
         const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
+	console.log("track_to_end api_key=",this.api_key);
+	console.log("track_to_end body=",body);
 
         function tryTrackMovie(attempt) {
             attempt = attempt || 1;
             return fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+		    'Content-Type': 'application/json'
+		    'x-api-key': self.api_key
+		},
                 body: body
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
@@ -604,6 +608,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
             $('#status-big').html('Movie ready for initial tracing.');
+	    cc.track_button.prop(DISABLED,false); // enable
         }
     };
 
@@ -872,7 +877,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         if (!resp.metadata.movie_zipfile_url) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
-            const frame0 = `${LAMBDA_API_BASE}api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
+            const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
                 $('#status-big').html('Movie ready for tracing.');
