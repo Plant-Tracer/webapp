@@ -1,0 +1,4 @@
+- check all of the routines (tests) to make rectangles and etract the first frames of the movies.
+- get trackpoints from database and iterate through
+  - with tests that allow me to run all locally, without a database
+  - proxy object that gets called with the tracing and builds the zipfile.

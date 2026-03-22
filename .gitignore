@@ -209,3 +209,4 @@ samconfig.toml
 .envrc
 .env
 .op
+*.jpeg

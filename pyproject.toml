@@ -13,16 +13,17 @@ dynamic = ["dependencies"]
 
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
+sqs_cli = "sqs_cli:main"
 
 [tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
+    { include = "sqs_cli.py", from = "lambda-resize/src" },
 ]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-boto3 = ">=1.39.14,<2.0.0"
 apig-wsgi = "^2.20.0"
 
 [tool.poetry.requires-plugins]
@@ -47,6 +48,8 @@ tabulate = "*"
 validate_email_address = "*"
 html5lib = "^1.1"
 html5validate = "^0.0.2"
+boto3 = "^1.42.72"
+
 
 [tool.poetry.group.lambda.dependencies]
 # Dependencies only needed for the Lambda / lambda-resize (single source of truth)
@@ -56,10 +59,12 @@ mutagen = "*"
 pydantic = "*"
 opencv-python-headless = "*"
 requests = ">=2.32.4,<3.0.0"
+imageio = {extras = ["ffmpeg"], version = "^2.37.3"}
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
 mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
+aws-lambda-powertools = {extras = ["utilities", "pydantic"], version = "*"}
 boto3-stubs = {extras = ["essential"], version = "*"}
 codecov = "*"
 myst-parser = "*"
@@ -81,6 +86,7 @@ service_identity = "*"
 filetype = "^1.2.0"
 cfn-lint = "^1.43.4"
 botocore = {extras = ["crt"], version = "^1.42.63"}
+boto3 = "^1.42.72"
 
 
 [build-system]
@@ -91,10 +97,12 @@ build-backend = "poetry.core.masonry.api"
 # Specify the Python version Pylint should assume for syntax checking.
 py-version = "3.12"
 recursive = true
-# src for app package; lambda-resize/src so resize_app is importable (e.g. lambda-resize/tests, tests that use resize_app).
 source-roots = ["src", "lambda-resize/src"]
-# Ensure lambda-resize/src is on sys.path so "from resize_app import ..." resolves when linting lambda-resize or app.tracker.
-init-hook = "import sys; sys.path.insert(0, 'lambda-resize/src')"
+init-hook = "import sys; sys.path.insert(0, 'lambda-resize/src');"
+ignore-paths = [
+    "^lambda-resize/src/resize_app/src/.*$",
+    "^resize_app/.*$"
+]
 
 [tool.pylint.messages_control]
 # Disable specific messages by their symbolic name or message ID.
@@ -146,7 +154,7 @@ reportMissingTypeStubs = "warning"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
-extraPaths = ["src"]
+extraPaths = ["src", "lambda-resize/src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -164,5 +172,7 @@ markers = [
   "selenium: marks tests that require Selenium WebDriver (deselect with '-m \"not selenium\"')",
 ]
 
-[tool.pytest.ini_options.env]
-PYTEST = "1"
+env = [
+    "PYTEST=1",
+    "AWS_REGION=local"
+    ]

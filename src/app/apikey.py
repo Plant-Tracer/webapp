@@ -17,7 +17,7 @@ from os.path import join
 from flask import request
 
 from . import odb
-from .paths import ETC_DIR
+from .paths import STATIC_DIR
 from .constants import C,__version__,logger,printable80,log_level
 from .odb import InvalidAPI_Key
 
@@ -144,7 +144,7 @@ def get_user_dict():
 
 @lru_cache(maxsize=1)
 def favicon_base64():
-    with open( join( ETC_DIR, C.FAVICON), 'rb') as f:
+    with open( join( STATIC_DIR, C.FAVICON), 'rb') as f:
         return base64.b64encode(f.read()).decode('utf-8')
 
 # pylint: disable=too-many-locals

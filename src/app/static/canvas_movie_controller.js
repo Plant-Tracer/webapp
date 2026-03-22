@@ -108,6 +108,15 @@ class MovieController extends CanvasController {
     goto_frame( frame ) {
         console.log(`goto_frame(${frame})`);
 
+	// 1. Defend against empty arrays completely
+	if (!this.frames || this.frames.length === 0) {
+            console.warn("goto_frame aborted: No frames loaded yet.");
+            this.clear_objects();
+            this.add_object(new Text(24, 24, "No frames available"));
+            this.redraw();
+            return; // Bail out early!
+        }
+
         frame = parseInt(frame);         // make sure it is integer
         if ( isNaN(frame) || frame<0 ) {
             frame = 0;
@@ -120,11 +129,15 @@ class MovieController extends CanvasController {
         // set the frame number, clear the screen and re-add the objects
         this.frame_number = frame;
         this.clear_objects();
-        if (this.frames[frame].web_image){
-            this.add_object( this.frames[frame].web_image ); // always add this first
+
+	// 2. Safely check if the frame object exists BEFORE checking .web_image
+        const currentFrame = this.frames[frame];
+        if (currentFrame && currentFrame.web_image) {
+            this.add_object( currentFrame.web_image );
         } else {
-            this.add_object( new Text(24,24,"No web_image for frame "+frame) );
+            this.add_object( new Text(24, 24, "No web_image for frame " + frame) );
         }
+
         this.add_frame_objects( frame );                 // typically will be subclassed
         $(this.div_selector+" input.frame_number_field").val(this.frame_number);
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate

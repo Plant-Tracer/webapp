@@ -3,7 +3,7 @@
 //code for /analyze
 
 /* eslint-env es6 */
-/* global LAMBDA_API_BASE */
+/* see eslint.config for globals */
 
 /* jshint esversion: 8 */
 
@@ -16,9 +16,8 @@
 const MARKER_RADIUS = 10;           // default radius of the marker
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
-const TRACKING_COMPLETED_FLAG='TRACKING COMPLETED';
-const TRACKING_POLL_MSEC=1000;
-//const TRACE_MOVIE = 'Trace movie';
+const TRACING_COMPLETED_FLAG='tracing completed';
+const STATUS_POLL_MSEC = 10000;
 const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 1000000;
 
@@ -35,6 +34,9 @@ const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
                          {'x':50,'y':100,'label':'Ruler 0mm'},
                          {'x':50,'y':150,'label':'Ruler 10mm'}
                         ];
+
+let xChartInstance = null;
+let yChartInstance = null;
 
 /**
  * Returns a copy of the default markers and logs to console.
@@ -70,6 +72,7 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
+      this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
         // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
         this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
             ? movie_metadata.last_frame_tracked : -1;
@@ -97,7 +100,7 @@ class TracerController extends MovieController {
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
         this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
-        this.marker_name_input.on('keydown', (e) => { if (e.keyCode==13) this.add_marker_onclick_handler(event);});
+        this.marker_name_input.on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
         this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
@@ -128,26 +131,9 @@ class TracerController extends MovieController {
         this.setup_zoom_storage('analysis_zoom_' + this.movie_id);
     }
 
-    /** If Lambda is configured, call Flask API at API_BASE api/track/lambda-health (which probes Lambda status); else enable Track. */
     async enableTrackButtonIfAllowed() {
-        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
-            this.track_button.prop(DISABLED, false);
-            return;
-        }
-        try {
-            const r = await fetch(`${API_BASE}api/track/lambda-health`, { method: 'GET' });
-            const data = r.ok ? await r.json() : {};
-            if (data.status === 'ok') {
-                this.track_button.prop(DISABLED, false);
-                this.tracking_status.text('');
-            } else {
-                this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
-                this.track_button.prop(DISABLED, true);
-            }
-        } catch (_e) {
-            this.tracking_status.text('Tracking unavailable (Lambda not reachable).');
-            this.track_button.prop(DISABLED, true);
-        }
+        this.track_button.prop(DISABLED, false);
+        this.tracking_status.text('');
     }
 
 
@@ -312,7 +298,7 @@ class TracerController extends MovieController {
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
-     * Requests tracking via the Lambda API (POST LAMBDA_API_BASE + 'api/v1' with action 'track-movie').
+     * Requests tracking via the Lambda API (POST LAMBDA_API_BASE + 'resize-api/v1/track-movie').
      * Here are some pages for notes about playing the video:
      * https://www.w3schools.com/html/tryit.asp?filename=tryhtml5_video_js_prop
      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
@@ -322,41 +308,39 @@ class TracerController extends MovieController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end() {
-        // Ask the Lambda API to track from this frame to the end of the movie.
-        if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
-            this.tracking_status.text("Tracking unavailable (Lambda URL not configured).");
-            return;
-        }
         $('#status-big').html('Movie is being traced...');
         $(this.div_selector).addClass('tracing-dimmed');
-        this.tracking_status.text("Asking Lambda to trace movie...");
+        this.tracking_status.text("Asking pipeline to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
         this.poll_error_count = 0;
         this.poll_for_track_end();
         this.set_movie_control_buttons();
 
-        const url = LAMBDA_API_BASE.replace(/\/$/, '') + '/api/v1';
+        const url = `${LAMBDA_API_BASE}resize-api/v1/trace-movie`;
         const body = JSON.stringify({
-            action: 'track-movie',
-            api_key: this.api_key,
             movie_id: this.movie_id,
             frame_start: this.frame_number
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
         const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
+        console.log("track_to_end api_key=",this.api_key);
+        console.log("track_to_end body=",body);
 
         function tryTrackMovie(attempt) {
             attempt = attempt || 1;
             return fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': self.api_key
+                },
                 body: body
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
-                    if (status === 200 && !(data && data.error)) {
+                    if (status >= 200 && status < 300 && !(data && data.error)) {
                         return;
                     }
                     const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
@@ -370,6 +354,13 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.tracking_status.text(msg);
+                    console.error('[track-movie] final failure (HTTP):', {
+                        status,
+                        data,
+                        attempt,
+                        url,
+                        body: body,
+                    });
                     alert(msg);
                 })
                 .catch((err) => {
@@ -383,6 +374,12 @@ class TracerController extends MovieController {
                     self.enableTrackButtonIfAllowed();
                     const msg = err && err.message ? err.message : "Tracking request failed.";
                     self.tracking_status.text(msg);
+                    console.error('[track-movie] final failure (network):', {
+                        attempt,
+                        error: err && err.message,
+                        url,
+                        body: body,
+                    });
                     alert(msg);
                 });
         }
@@ -451,10 +448,10 @@ class TracerController extends MovieController {
         super.set_movie_control_buttons(); // otherwise run the super class
     }
 
-    /*
-     * Poll the server to see if tracking has ended.
-     * On poll error we log to console and only alert after 3 consecutive errors.
-     */
+        /*
+         * Poll the server to see if tracking has ended.
+         * On poll error we log to console and only alert after 3 consecutive errors.
+         */
     poll_for_track_end() {
         const params = {
             api_key:this.api_key,
@@ -466,14 +463,21 @@ class TracerController extends MovieController {
             .done((data) => {
                 if (data.error === false) {
                     self.poll_error_count = 0;
-                    if (data.metadata.status === TRACKING_COMPLETED_FLAG) {
+                    if (data.metadata.status === TRACING_COMPLETED_FLAG) {
                         if (self.tracking) {
                             self.movie_tracked(data);
                         }
                         return;
                     }
-                    self.tracking_status.text(data.metadata.status);
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    const last = data.metadata.last_frame_tracked;
+                    if (last != null) {
+                        let statusText = `Tracing frame ${last}`;
+                        self.tracking_status.text(statusText);
+                        $('#status-big').text(statusText);
+                    } else {
+                        self.tracking_status.text(data.metadata.status || "Tracing starting...");
+                    }
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
@@ -482,7 +486,7 @@ class TracerController extends MovieController {
                     alert('Status check failed 10 times in a row. You can refresh the page to try again.');
                 }
                 if (self.tracking) {
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             })
             .fail((_xhr, status, err) => {
@@ -492,7 +496,7 @@ class TracerController extends MovieController {
                     alert('Status check failed 10 times in a row (e.g. network or server issue). You can refresh the page to try again.');
                 }
                 if (self.tracking) {
-                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, TRACKING_POLL_MSEC);
+                    self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             });
     }
@@ -502,11 +506,10 @@ class TracerController extends MovieController {
         this.tracking = false;
         this.set_movie_control_buttons();
         this.tracking_status.text('Tracing complete. Loading movie...');
-
         const self = this;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
         const maxZipWaitMs = 5000;
-        const zipPollMs = 500;
+        const zipPollMs = STATUS_POLL_MSEC;
 
         /** Resolves with { zipUrl, metadata, frames } when zip is available, or rejects after maxZipWaitMs. */
         function waitForZip() {
@@ -575,11 +578,12 @@ class TracerController extends MovieController {
         // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
         this.rotate_button.prop(DISABLED, true);
         $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
+      this.movie_rotation += 90;
         const params = {
-            api_key: this.api_key,
-            movie_id: this.movie_id,
-            action: 'rotate90cw'};
-        $.post(`${API_BASE}api/edit-movie`, params).done((data) => {
+          api_key: this.api_key,
+          movie_id: this.movie_id,
+          rotation: this.movie_rotation};
+        $.post(`${API_BASE}api/rotate-movie`, params).done((data) => {
             if (data.error) {
                 alert(data.message);
                 this.rotate_button.prop(DISABLED, false);
@@ -614,6 +618,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
             $('#status-big').html('Movie ready for initial tracing.');
+            cc.track_button.prop(DISABLED,false); // enable
         }
     };
 
@@ -624,8 +629,8 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
         : create_default_markers();
     var frames = [{'frame_url': frame0_url, 'markers': frame0Markers}];
 
-    cc.load_movie(frames);
-    cc.create_marker_table();
+    cc.load_movie(frames);      // all the frames - we just have one for now
+    cc.create_marker_table();   // create the initial table
     cc.track_button.prop(DISABLED,true); // disable it until we have a marker added.
 }
 
@@ -636,25 +641,34 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 // frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
-    const m = name.match(/frame_(\d+)\.jpg$/i);
+    console.log("name=",name);
+    const m = name.match(/frame_(\d+)\.jpe?g$/i);
     return m ? parseInt(m[1], 10) : 0;
 }
 
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
-                                  api_key,
-                                  show_results=true) {
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_url,
+                                  metadata_frames, api_key, show_results=true) {
+    console.log("trace_movie_frames movie_zipfile_url=",movie_zipfile_url,"metdata_frames=",metadata_frames);
     const movie_frames = [];
-    const {entries} = await unzip(movie_zipfile);
-    const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
+    const {entries} = await unzip(movie_zipfile_url);
+    console.log("entries=",entries);
+    const names = Object.keys(entries).filter(name => /\.(jpg|jpeg)$/i.test(name));
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
+
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
+
     names.forEach((_name, i) => {
-        // Use markers from API (get-movie-metadata); they come from the DB. Lambda reads/writes
-        // frame 0 from the DB, so frames[0].markers are the user's positions. If missing, use [].
-        const frameData = metadata_frames && metadata_frames[i];
+        const frameIndex = frame_index_from_zip_name(_name);
+
+        // Access the dictionary using a string key to match JSON standards
+        const frameData = metadata_frames && metadata_frames[String(frameIndex)];
+
         const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
+
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
+
+    console.log("movie_frmes=",movie_frames);
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
@@ -711,11 +725,19 @@ function graph_data(cc, frames) {
         }
     });
 
-    const ctxX = document.getElementById('apex-xChart').getContext('2d');
-    const ctxY = document.getElementById('apex-yChart').getContext('2d');
+    const canvasX = document.getElementById('apex-xChart');
+    const canvasY = document.getElementById('apex-yChart');
+
+    // DESTROY existing charts if they exist
+    if (xChartInstance) {
+        xChartInstance.destroy();
+    }
+    if (yChartInstance) {
+        yChartInstance.destroy();
+    }
 
     // Graph for Frame Number or Time vs X Position
-    const _xChart = new Chart(ctxX, {
+    xChartInstance = new Chart(canvasX.getContext('2d'), {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -761,7 +783,7 @@ function graph_data(cc, frames) {
     });
 
     // Graph for Y Position
-    const _yChart = new Chart(ctxY, {
+    yChartInstance = new Chart(canvasY.getContext('2d'), {
         type: 'line',
         data: {
             labels: frame_labels,
@@ -881,9 +903,8 @@ function trace_movie(div_controller, movie_id, api_key) {
             $(div_controller + ' canvas').prop('width', width).prop('height', height);
         }
         if (!resp.metadata.movie_zipfile_url) {
-            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie". No polling.
-            const frameBase = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
-            const frame0 = `${frameBase}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis`;
+            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
+            const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
                 $('#status-big').html('Movie ready for tracing.');
@@ -896,16 +917,19 @@ function trace_movie(div_controller, movie_id, api_key) {
         if (demo_mode) {
             $('#status-big').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
         } else {
-            $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.' : 'Movie ready for tracing. Place markers and click Trace movie.');
+          $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
+                                : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
+        const movie_zipfile_url = resp.metadata.movie_zipfile_url;
+        console.log("1. movie_zipfile_url=",movie_zipfile_url);
+        trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
     });
 }
 
-/** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACKING COMPLETED). */
+/** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACING COMPLETED). */
 function is_movie_tracked(metadata) {
     if (!metadata) return false;
-    if (metadata.status === 'TRACKING COMPLETED') return true;
+    if (metadata.status === 'TRACING COMPLETED') return true;
     const last = metadata.last_frame_tracked;
     const total = metadata.total_frames;
     return (last != null && total != null && total > 1 && last >= 1);

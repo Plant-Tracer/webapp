@@ -11,8 +11,10 @@ make check catches the problem before deploy.
 """
 
 import os
-
+import subprocess
+from pathlib import Path
 import pytest
+
 
 
 REQUIREMENTS_PATH = os.path.join(
@@ -23,6 +25,8 @@ REQUIRED_PACKAGES = ["opencv-python-headless"]
 
 def test_lambda_requirements_include_tracker_deps():
     """Lambda requirements.txt must include opencv (cv2) for tracker/track-movie."""
+    cmd = f"cd {Path(__file__).parent.parent} ; make lambda-resize/src/requirements.txt"
+    subprocess.call(cmd,shell=True)
     if not os.path.isfile(REQUIREMENTS_PATH):
         pytest.skip(f"Lambda requirements not found: {REQUIREMENTS_PATH}")
     with open(REQUIREMENTS_PATH, encoding="utf-8") as f:

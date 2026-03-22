@@ -9,6 +9,7 @@ import pytest
 from app import odb
 from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
 from app.constants import logger
+from app.schema import Trackpoint
 
 # Fixtures are imported in conftest.py
 
@@ -139,8 +140,8 @@ def test_odb(local_ddb):
 
     # Give it some trackpoints
     odb.put_frame_trackpoints(movie_id=TEST_MOVIE_ID, frame_number=1,
-                              trackpoints=[{'x':20, 'y':30, 'label':'name3'},
-                                           {'x':65, 'y':85, 'label':'name4'}])
+                              trackpoints=[Trackpoint(x=20, y=30, label='name3'),
+                                           Trackpoint(x=65, y=85, label='name4')])
     assert odb.last_tracked_movie_frame(movie_id=TEST_MOVIE_ID)==1
 
 

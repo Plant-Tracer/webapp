@@ -1,12 +1,6 @@
 "use strict";
 /* jshint esversion: 8 */
-/*global admin */
 import { $ } from "./utils.js";
-/*global user_id */
-/*global user_primary_course_id */
-/*global planttracer_endpoint */
-/*global MAX_FILE_UPLOAD */
-/*global LAMBDA_API_BASE */
 
 
 
@@ -47,49 +41,67 @@ function add_func() {
 // Implements the registration web page
 function register_func() {
   const email = $('#email').val().toLowerCase();
-  if (email=='') {
+  if (email == '') {
     $('#message').html("<b>Please provide an email address</b>");
     return;
   }
   let course_key = $('#course_key').val();
-  if (course_key=='') {
+  if (course_key == '') {
     $('#message').html("<b>Please provide a course key</b>");
     return;
   }
   let name = $('#name').val();
-  if (name=='') {
+  if (name == '') {
     $('#message').html("<b>Please provide a name</b>");
     return;
   }
-  $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}<b>...</br>`);
-  $.post(`${API_BASE}api/register`, {email:email, course_key:course_key, planttracer_endpoint:planttracer_endpoint, name:name})
-    .done( function(data) {
-      if (data.error){
-        $('#message').html(`<b>Error: ${data.message}`);
+
+  $('#message').html(`Asking to register <b>${email}</b> for course key <b>${course_key}</b>...</br>`);
+
+  const payload = {
+      email: email,
+      course_key: course_key,
+      planttracer_endpoint: planttracer_endpoint,
+      name: name
+  };
+
+  $.post(`${API_BASE}api/register`, payload)
+    .done((data) => {
+      if (data.error) {
+        // Warning: using .html() with server data can be an XSS risk.
+        $('#message').html('<b>Error:</b> ' + data.message);
       } else {
-        $('#message').html(`<b>${data.message}</b>`);
-      }})
-    .fail( function(xhr, _status, _error) {
-      $('#message').html("POST error: "+xhr.responseText);
-      console.log("xhr:",xhr);
+        $('#message').html('<b>Success:</b> ' + data.message);
+      }
+    })
+    .fail((error) => {
+      $('#message').html("POST error: " + (error.responseText || "Network error"));
+      console.error("Register error:", error);
     });
 }
 
 // Implements the resend a link web page
 function resend_func() {
   let email = $('#email').val().toLowerCase();
-  if (email=='') {
+  if (email == '') {
     $('#message').html("<b>Please provide an email address</b>");
     return;
   }
+
   $('#message').html(`Asking to resend registration link for <b>${email}</b>...</br>`);
-  $.post(`${API_BASE}api/resend-link`, {email:email, planttracer_endpoint:planttracer_endpoint})
-    .done(function(data) {
+
+  const payload = {
+      email: email,
+      planttracer_endpoint: planttracer_endpoint
+  };
+
+  $.post(`${API_BASE}api/resend-link`, payload)
+    .done((data) => {
       $('#message').html('Response: ' + data.message);
     })
-    .fail(function(xhr, status, error) {
-      $('#message').html(`POST error: `+xhr.responseText);
-      console.log("xhr:",xhr,"status:",status,"error:",error);
+    .fail((error) => {
+      $('#message').html("POST error: " + (error.responseText || "Network error"));
+      console.error("Resend error:", error);
     });
 }
 
@@ -151,8 +163,7 @@ async function computeSHA256(file) {
  */
 function first_frame_url(movie_id)
 {
-  const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE : '';
-  return `${base}api/v1/frame?api_key=${api_key}&movie_id=${movie_id}&frame_number=0&size=analysis&t=${new Date().getTime()}`;
+  return `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
 }
 
 /*
@@ -160,12 +171,11 @@ function first_frame_url(movie_id)
  * If LAMBDA_API_BASE is not set, resolves with true (skip check).
  */
 async function checkLambdaStatus() {
-  if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) return true;
   try {
-    const r = await fetch(LAMBDA_API_BASE + 'status', { method: 'GET' });
+    const r = await fetch(LAMBDA_API_BASE + 'resize-api/v1/ping', { method: 'GET' });
     if (!r.ok) return false;
     const data = await r.json();
-    return data && data.status === 'ok';
+    return data && data.message === 'ok';
   } catch (e) {
     console.warn('Lambda status check failed', e);
     return false;
@@ -302,7 +312,6 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#upload-instructions').hide();
   $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
   $('#movie_id').text(movie_id);
-  // No rotation yet: Analyze goes straight to analyze page. After rotate we switch this to processing.
   $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
   $('#track_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
   $('#upload-preview').show();
@@ -388,7 +397,7 @@ async function _get_movie_metadata(movie_id){
 // Rotate: debounce multiple clicks (~1s), then send one request with total rotation_steps (1–3).
 // Server rotates that many 90° steps and builds the zip in the background.
 const ROTATE_DEBOUNCE_MS = 1000;
-let rotate_pending_steps = 0;
+let rotate_pending = 0;
 let rotate_debounce_timer = null;
 
 function rotate_movie() {
@@ -396,54 +405,51 @@ function rotate_movie() {
   if (!linkEl || linkEl.classList.contains('rotate-pending')) {
     return;
   }
-  if (rotate_pending_steps >= 3) {
-    return;
-  }
-  rotate_pending_steps += 1;
-  const degrees = rotate_pending_steps * 90;
-  $('#rotate_status').text(` … ${degrees}° queued (wait ${ROTATE_DEBOUNCE_MS / 1000}s or click again)`);
+  rotate_pending += 90;
+  $('#rotate_status').text(rotate_pending);
   if (rotate_debounce_timer) {
     clearTimeout(rotate_debounce_timer);
   }
   rotate_debounce_timer = setTimeout(() => apply_rotation_and_zip(), ROTATE_DEBOUNCE_MS);
 }
 
+let current_rotation = 0;
+
 async function apply_rotation_and_zip() {
-  rotate_debounce_timer = null;
-  const steps = rotate_pending_steps;
-  rotate_pending_steps = 0;
-  const linkEl = $('#rotate_movie_link').get(0);
-  if (!linkEl || steps < 1) return;
-  linkEl.classList.add('rotate-pending');
-  const movie_id = window.movie_id;
-  $('#rotate_status').text(' … Rotating…');
-  let r;
-  try {
-    const formData = new FormData();
-    formData.append('api_key', api_key);
-    formData.append('movie_id', movie_id);
-    formData.append('action', 'rotate90cw');
-    formData.append('rotation_steps', String(steps));
-    r = await fetch(`${API_BASE}api/edit-movie`, { method: 'POST', body: formData });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      $('#rotate_status').text(' Rotation failed.' + (err.message ? ' ' + err.message : ''));
-      linkEl.classList.remove('rotate-pending');
-      return;
+    const movie_id = window.movie_id;
+    const previewImg = $('#image-preview').get(0);
+    const rotateStatus = $('#rotate_status');
+
+    // 1. Update Visuals
+    current_rotation = (current_rotation + 90) % 360;
+    previewImg.style.transform = `rotate(${current_rotation}deg)`;
+    rotateStatus.text(' … Saving rotation…');
+
+    // 2. Point 'Analyze' directly to the analysis page
+    $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+
+// 3. Update the backend via /rotate-movie
+    try {
+        const formData = new FormData();
+        formData.append('api_key', api_key);
+        formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
+        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation")
+
+        const r = await fetch(`${API_BASE}api/rotate-movie`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const resp = await r.json();
+        if (resp.error) {
+            rotateStatus.text(' Error: ' + resp.message);
+        } else {
+            rotateStatus.text(' (Rotation saved)');
+        }
+    } catch (e) {
+        rotateStatus.text(' Network error updating rotation.');
+        console.error("Rotation sync failed:", e);
     }
-    // After rotation, Analyze should go to processing page (rotate+zip), then auto-redirect to analyze.
-    $('#process_movie_link').attr('href', `/processing?movie_id=${movie_id}`);
-    $('#image-preview').attr('src', first_frame_url(movie_id));
-    const reenable_rotate = () => {
-      linkEl.classList.remove('rotate-pending');
-      $('#rotate_status').text('');
-    };
-    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
-    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
-  } catch (_e) {
-    $('#rotate_status').text(' Request failed.');
-    linkEl.classList.remove('rotate-pending');
-  }
 }
 
 function purge_movie() {
@@ -470,6 +476,8 @@ function play_clicked( e ) {
   if (!base) {
     return;
   }
+  // ask the movie-data service for JSON information about the movie,
+  // which will be a signed S3 GET URL
   const apiUrl = `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
   $(`#tr-${rowid}`).show();
   const td = $(`#td-${rowid}`);
