@@ -635,19 +635,24 @@ function frame_index_from_zip_name(name) {
     return m ? parseInt(m[1], 10) : 0;
 }
 
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames,
-                                  api_key,
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames, 
+                                  api_key, 
                                   show_results=true) {
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile);
     const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
+    
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
+    
     names.forEach((_name, i) => {
-        // Use markers from API (get-movie-metadata); they come from the DB. Lambda reads/writes
-        // frame 0 from the DB, so frames[0].markers are the user's positions. If missing, use [].
-        const frameData = metadata_frames && metadata_frames[i];
+        const frameIndex = frame_index_from_zip_name(_name);
+        
+	// Access the dictionary using a string key to match JSON standards
+        const frameData = metadata_frames && metadata_frames[String(frameIndex)];
+
         const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
+        
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
