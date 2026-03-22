@@ -196,7 +196,7 @@ def extract_frame(*, movie_data, frame_number, fmt):
     raise ValueError(f"invalid frame_number {frame_number}")
 
 
-def get_frames_from_url(url: str, rotate: int) -> Generator[Any, None, None]:
+def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
     """
     Generator
     Fetches the first frame of a video from a URL, applies rotate,
@@ -215,15 +215,15 @@ def get_frames_from_url(url: str, rotate: int) -> Generator[Any, None, None]:
             if not success or frame is None:
                 break
 
-            # 2. Apply Rotate
-            if rotate == 90:
+            # 2. Apply Rotation
+            if rotation == 90:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-            elif rotate == 180:
+            elif rotation == 180:
                 frame = cv2.rotate(frame, cv2.ROTATE_180)
-            elif rotate == 270:
+            elif rotation == 270:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            elif rotate != 0:
-                raise ValueError("Rotate must be 0, 90, 180, or 270")
+            elif rotation != 0:
+                raise ValueError("Rotation must be 0, 90, 180, or 270")
 
             # 3. Calculate scaling to make the maximum dimension 640
             h, w = frame.shape[:2]
@@ -242,13 +242,13 @@ def get_frames_from_url(url: str, rotate: int) -> Generator[Any, None, None]:
 
 
 
-def get_first_frame_from_url(url: str, rotate: int) -> np.ndarray:
+def get_first_frame_from_url(url: str, rotation: int) -> np.ndarray:
     """
     Safely grabs the first frame using a context manager and a for loop.
     Returns it as an np.ndarray which must be converted into something.
     """
     # closing() turns the generator into a context manager
-    with closing(get_frames_from_url(url, rotate)) as frame_gen:
+    with closing(get_frames_from_url(url, rotation)) as frame_gen:
 
         # The for loop elegantly yields the first item
         for frame in frame_gen:
@@ -257,4 +257,4 @@ def get_first_frame_from_url(url: str, rotate: int) -> np.ndarray:
             return frame
 
     # If the loop never runs (video was empty/broken), it falls through to here
-    raise ValueError(f"First frame of {url} rotate {rotate} not available")
+    raise ValueError(f"First frame of {url} rotation {rotation} not available")

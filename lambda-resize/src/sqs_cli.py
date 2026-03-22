@@ -37,7 +37,7 @@ def do_track(args):
     tracker.track_movie_v2(movie_url=args.infile, frame_start=0, trackpoints=trackpoints,
                            movie_zipfile_path = args.zipfile,
                            movie_traced_path = args.movie_traced,
-                           rotate=args.rotate, callback=tracker_callback,
+                           rotation=args.rotate, callback=tracker_callback,
                            comment=args.comment)
 
 def main():
