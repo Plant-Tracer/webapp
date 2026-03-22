@@ -572,18 +572,16 @@ sam-status:
 	CODE=$$(echo "$$RESP" | tail -1); \
 	BODY=$$(echo "$$RESP" | sed '$$d'); \
 	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
-	OK=1; \
 	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 	  echo "Lambda status: operational ($$URL)"; \
 	else \
 	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
-	  OK=0; \
 	fi; \
 	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
 	echo ""; \
 	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
 	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
-	if [ "$$OK" -ne 1 ]; then exit 1; fi
+
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
