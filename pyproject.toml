@@ -172,5 +172,7 @@ markers = [
   "selenium: marks tests that require Selenium WebDriver (deselect with '-m \"not selenium\"')",
 ]
 
-[tool.pytest.ini_options.env]
-PYTEST = "1"
+env = [
+    "PYTEST=1",
+    "AWS_REGION=local"
+    ]
