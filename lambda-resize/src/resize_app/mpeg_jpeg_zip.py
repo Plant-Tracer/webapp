@@ -11,28 +11,9 @@ import io
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
-#from PIL import Image
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
-
 from .src.app.constants import C
-
-#from .src.app.odb import (
-#    DDBO,
-#    ENABLED,
-#    MOVIE_DATA_URN,
-#    MOVIE_ROTATION,
-#    TOTAL_BYTES,
-#    FPS,
-#    WIDTH,
-#    HEIGHT,
-#    TOTAL_FRAMES,
-#    USER_ID,
-#)
-
-#from botocore.exceptions import ClientError
-#from aws_lambda_powertools.event_handler import Response
-#from aws_lambda_powertools import Logger
 
 # Just a label for clarity
 Jpeg: TypeAlias = bytes
@@ -261,9 +242,10 @@ def get_frames_from_url(url: str, rotate: int) -> Generator[Any, None, None]:
 
 
 
-def get_first_frame_from_url(url: str, rotate: int) -> Optional[bytes]:
+def get_first_frame_from_url(url: str, rotate: int) -> np.ndarray:
     """
     Safely grabs the first frame using a context manager and a for loop.
+    Returns it as an np.ndarray which must be converted into something.
     """
     # closing() turns the generator into a context manager
     with closing(get_frames_from_url(url, rotate)) as frame_gen:
@@ -275,4 +257,4 @@ def get_first_frame_from_url(url: str, rotate: int) -> Optional[bytes]:
             return frame
 
     # If the loop never runs (video was empty/broken), it falls through to here
-    return None
+    raise ValueError(f"First frame of {url} rotate {rotate} not available")
