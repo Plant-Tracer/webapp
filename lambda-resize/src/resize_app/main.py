@@ -122,7 +122,7 @@ def handle_post_actions():
     # 1. Parse the JSON body sent by the JS fetch request
     body = app.current_event.json_body
     if not body:
-         return Response(status_code=400, body="Request body must be provided")
+        return Response(status_code=400, body="Request body must be provided")
 
     movie_id = body.get("movie_id")
     if not movie_id:

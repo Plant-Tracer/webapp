@@ -199,7 +199,7 @@ def track_movie_v2(*, movie_url,
             movie_traced_writer.append_data(frame_rgb)
 
         if callback is not None:
-            callback(TrackerCallbackArg(frame_number=frame_number, frame_data=frame, frame_trackpoints=trackpoints_output))
+            callback(TrackerCallbackArg(frame_number=frame_number, frame_data=frame, frame_trackpoints=trackpoints_this))
 
         # Advance
         trackpoints_prev = trackpoints_this

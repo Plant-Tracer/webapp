@@ -106,8 +106,7 @@ lint: $(REQ)
 
 pylint:
 	make vend-lambda-resize
-	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
-		lambda-resize src tests  *.py
+	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:
@@ -495,6 +494,7 @@ sam-build: $(REQ)
 	  exit 1; \
 	fi
 	make vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
 	printenv | grep AWS

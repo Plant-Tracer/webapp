@@ -17,20 +17,6 @@ CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
 }
 
-def _parse_event(event):
-    """Extract user_id, movie_id, frame_start from API Gateway or direct invoke payload."""
-    if isinstance(event.get("body"), str):
-        body = json.loads(event["body"])
-    else:
-        body = event
-    user_id = body.get("user_id")
-    movie_id = body.get("movie_id")
-    frame_start = body.get("frame_start", 0)
-    if not user_id or not movie_id:
-        raise ValueError("user_id and movie_id required")
-    return user_id, movie_id, int(frame_start)
-
-
 def _safe_int(value, default=0):
     try:
         return int(value)
@@ -48,16 +34,15 @@ def process_tracking_record(record: SQSRecord):
         LOGGER.error("Invalid JSON in SQS body: %s", exc)
         raise
 
-    user_id = body.get("user_id")
     movie_id = body.get("movie_id")
     frame_start = _safe_int(body.get("frame_start", 0))
 
-    if not user_id or not movie_id:
-        raise ValueError("user_id and movie_id are required in SQS message")
+    if not movie_id:
+        raise ValueError("movie_id is required in SQS message")
 
     t0 = time.time()
-    LOGGER.info( "SQS Start tracking batch: movie_id=%s user_id=%s frame_start=%s ",
-                 movie_id, user_id, frame_start)
-    movie_glue.run_tracing( user_id=user_id, movie_id=movie_id, frame_start=frame_start)
-    LOGGER.info( "SQS Completed tracking batch: movie_id=%s user_id=%s frame_start=%s elapsed_time=%s",
-                 movie_id, user_id, frame_start, time.time()-t0)
+    LOGGER.info( "SQS Start tracking batch: movie_id=%s frame_start=%s ",
+                 movie_id, frame_start)
+    movie_glue.run_tracing( movie_id=movie_id, frame_start=frame_start)
+    LOGGER.info( "SQS Completed tracking batch: movie_id=%s frame_start=%s elapsed_time=%s",
+                 movie_id, frame_start, time.time()-t0)

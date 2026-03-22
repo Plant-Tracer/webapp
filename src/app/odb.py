@@ -643,7 +643,7 @@ class DDBO:
 
     ### movie management
 
-    def get_movie(self, movie_id) -> dict:
+    def get_movie(self, movie_id, fields: list[str]|None=None) -> dict:
         """Given a movie_id, return the movie object.
 
         Raises:
@@ -652,7 +652,18 @@ class DDBO:
         # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        movie_dict = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        params = {
+            'Key': {MOVIE_ID: movie_id},
+            'ConsistentRead': True
+        }
+
+        if fields:
+            # Map fields to #alias to avoid DynamoDB reserved word conflicts
+            attr_names = {f"#f{i}": field for i, field in enumerate(fields)}
+            params['ProjectionExpression'] = ", ".join(attr_names.keys())
+            params['ExpressionAttributeNames'] = attr_names
+
+        movie_dict = self.movies.get_item(**params).get('Item')
         if isinstance(movie_dict,dict):
             return movie_dict
         raise InvalidMovie_Id(movie_id)
@@ -1478,13 +1489,13 @@ def last_tracked_movie_frame(*, movie_id):
             break
     return None
 
-def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint]):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
-    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    :param: trackpoints - array of Tractpoints.
     """
     # Remove numpy from trackpoints
-    trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
+    trackpoints = [ tp.model_dump() for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
@@ -1494,14 +1505,14 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
                                    ExpressionAttributeValues={':val':trackpoints})
 
     # update the last frame tracked. This is way, way more expensive than it should be.
-    movie = ddbo.get_movie(movie_id)
+    movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
     if current is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
-        movie[LAST_FRAME_TRACKED] = frame_number
+        lft = frame_number
     else:
-        movie[LAST_FRAME_TRACKED] = max(current, frame_number)
-    ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
+        lft = max(current, frame_number)
+    set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
 
 
 def clear_movie_tracking(movie_id):
