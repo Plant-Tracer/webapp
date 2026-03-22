@@ -114,14 +114,15 @@ def handle_first_frame() -> Any:
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
     """Queue the tracing of the movie"""
+
+    api_key = app.current_event.get_header_value(name="x-api-key")
+    if not api_key:
+        return Response(status_code=401, body="x-api-key header must be provided")
+
     # 1. Parse the JSON body sent by the JS fetch request
     body = app.current_event.json_body
     if not body:
          return Response(status_code=400, body="Request body must be provided")
-
-    api_key = body.get("api_key")
-    if not api_key:
-        return Response(status_code=400, body="api_key must be provided")
 
     movie_id = body.get("movie_id")
     if not movie_id:
