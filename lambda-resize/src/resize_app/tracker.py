@@ -129,7 +129,7 @@ def track_movie_v2(*, movie_url,
                    trackpoints:List[Trackpoint],
                    movie_zipfile_path:Optional[Path] = None,
                    movie_traced_path:Optional[Path] = None,
-                   rotate=0,
+                   rotation=0,
                    callback = prototype_callback,
                    comment="Processed by PlantTracer AWS Lambda"):
     """
@@ -174,7 +174,7 @@ def track_movie_v2(*, movie_url,
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
-    for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotate)):
+    for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
         # Track if in tracking time, else get trackpoints_this from the history
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if frame_number >= frame_start:

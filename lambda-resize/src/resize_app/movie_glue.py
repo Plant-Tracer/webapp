@@ -150,13 +150,13 @@ def run_tracing(*, movie_id, frame_start):
                 put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=obj.frame_trackpoints)
 
 
-        rotate = movie_record.get("rotate",0) or 0
+        rotation = movie_record.get(MOVIE_ROTATION,0) or 0
         trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(urn=movie_urn),
                                              frame_start = frame_start,
                                              trackpoints = input_trackpoints,
                                              movie_zipfile_path = movie_zipfile_path,
                                              movie_traced_path = movie_traced_path,
-                                             rotate = rotate,
+                                             rotation = rotation,
                                              callback = tracker_callback,
                                              comment = research_comment )
 
