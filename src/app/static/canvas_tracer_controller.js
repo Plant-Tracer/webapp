@@ -330,7 +330,7 @@ class TracerController extends MovieController {
             return fetch(url, {
                 method: 'POST',
                 headers: {
-		    'Content-Type': 'application/json'
+		    'Content-Type': 'application/json',
 		    'x-api-key': self.api_key
 		},
                 body: body
