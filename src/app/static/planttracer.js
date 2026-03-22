@@ -1,12 +1,6 @@
 "use strict";
 /* jshint esversion: 8 */
-/*global admin */
 import { $ } from "./utils.js";
-/*global user_id */
-/*global user_primary_course_id */
-/*global planttracer_endpoint */
-/*global MAX_FILE_UPLOAD */
-/*global LAMBDA_API_BASE */
 
 
 
@@ -439,13 +433,13 @@ async function apply_rotation_and_zip() {
         const formData = new FormData();
         formData.append('api_key', api_key);
         formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
-        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation") 
-	
-        const r = await fetch(`${API_BASE}api/rotate-movie`, { 
-            method: 'POST', 
-            body: formData 
+        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation")
+
+        const r = await fetch(`${API_BASE}api/rotate-movie`, {
+            method: 'POST',
+            body: formData
         });
-        
+
         const resp = await r.json();
         if (resp.error) {
             rotateStatus.text(' Error: ' + resp.message);

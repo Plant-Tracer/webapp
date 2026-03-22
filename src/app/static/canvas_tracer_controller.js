@@ -325,17 +325,17 @@ class TracerController extends MovieController {
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
         const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
-	console.log("track_to_end api_key=",this.api_key);
-	console.log("track_to_end body=",body);
+        console.log("track_to_end api_key=",this.api_key);
+        console.log("track_to_end body=",body);
 
         function tryTrackMovie(attempt) {
             attempt = attempt || 1;
             return fetch(url, {
                 method: 'POST',
                 headers: {
-		    'Content-Type': 'application/json',
-		    'x-api-key': self.api_key
-		},
+                    'Content-Type': 'application/json',
+                    'x-api-key': self.api_key
+                },
                 body: body
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
@@ -469,13 +469,13 @@ class TracerController extends MovieController {
                         }
                         return;
                     }
-		    const last = data.metadata.last_frame_tracked;
-		    if (last != null) {
-			let statusText = `Tracing frame ${last}`;
-			self.tracking_status.text(statusText);
-			$('#status-big').text(statusText);
-		    } else {
-			self.tracking_status.text(data.metadata.status || "Tracing starting...");
+                    const last = data.metadata.last_frame_tracked;
+                    if (last != null) {
+                        let statusText = `Tracing frame ${last}`;
+                        self.tracking_status.text(statusText);
+                        $('#status-big').text(statusText);
+                    } else {
+                        self.tracking_status.text(data.metadata.status || "Tracing starting...");
                     }
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
@@ -618,7 +618,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
             $('#status-big').html('Movie ready for initial tracing.');
-	    cc.track_button.prop(DISABLED,false); // enable
+            cc.track_button.prop(DISABLED,false); // enable
         }
     };
 
@@ -647,24 +647,24 @@ function frame_index_from_zip_name(name) {
 }
 
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_url,
-				  metadata_frames, api_key, show_results=true) {
+                                  metadata_frames, api_key, show_results=true) {
     console.log("trace_movie_frames movie_zipfile_url=",movie_zipfile_url,"metdata_frames=",metadata_frames);
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile_url);
     console.log("entries=",entries);
     const names = Object.keys(entries).filter(name => /\.(jpg|jpeg)$/i.test(name));
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
-    
+
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
-    
+
     names.forEach((_name, i) => {
         const frameIndex = frame_index_from_zip_name(_name);
-        
-	// Access the dictionary using a string key to match JSON standards
+
+        // Access the dictionary using a string key to match JSON standards
         const frameData = metadata_frames && metadata_frames[String(frameIndex)];
 
         const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
-        
+
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
@@ -735,7 +735,7 @@ function graph_data(cc, frames) {
     if (yChartInstance) {
         yChartInstance.destroy();
     }
-    
+
     // Graph for Frame Number or Time vs X Position
     xChartInstance = new Chart(canvasX.getContext('2d'), {
         type: 'line',
@@ -920,8 +920,8 @@ function trace_movie(div_controller, movie_id, api_key) {
           $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
                                 : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
-	const movie_zipfile_url = resp.metadata.movie_zipfile_url;
-	console.log("1. movie_zipfile_url=",movie_zipfile_url);
+        const movie_zipfile_url = resp.metadata.movie_zipfile_url;
+        console.log("1. movie_zipfile_url=",movie_zipfile_url);
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
     });
 }

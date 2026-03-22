@@ -1,6 +1,5 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global user_primary_course_id */
 import { $ } from "./utils.js";
 
 
