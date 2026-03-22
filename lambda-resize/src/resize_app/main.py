@@ -78,9 +78,9 @@ def handle_first_frame() -> Any:
             data = mpeg_jpeg_zip.generate_test_jpeg(270)
         case _:
             try:
-                (url,rotation) = movie_glue.get_movie_url_and_rotation(api_key=api_key, movie_id=movie_id)
-                LOGGER.info("url=%s rotation=%s",url,rotation)
-                return mpeg_jpeg_zip.get_first_frame_from_url(url,rotation)
+                obj = movie_glue.get_movie_url_and_rotation(api_key=api_key, movie_id=movie_id)
+                LOGGER.info("obj=%s",obj)
+                return mpeg_jpeg_zip.get_first_frame_from_url(obj.signed_url,obj.rotation)
             except ValueError as e:
                 LOGGER.exception("e=%s",e)
                 return Response(status_code=403, body=str(e.args))
