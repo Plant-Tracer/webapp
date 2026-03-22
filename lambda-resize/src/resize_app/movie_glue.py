@@ -144,6 +144,7 @@ def run_tracing(*, movie_id, frame_start):
             movie_traced_path = Path(tf.name)
 
         def tracker_callback(obj:tracker.TrackerCallbackArg):
+            LOGGER.info("tracker_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints))
             if obj.frame_trackpoints:
                 ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
                 put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=obj.frame_trackpoints)
