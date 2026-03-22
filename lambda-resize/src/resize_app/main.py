@@ -90,13 +90,13 @@ def handle_first_frame() -> Any:
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
     """Queue the tracing of the movie"""
-    LOGGER.info("trace-movie. movie_id=%s",movie_id)
     api_key = app.current_event.get_query_string_value(name="api_key")
     if not api_key:
         raise ValueError("api_key must be provided")
     movie_id = app.current_event.get_query_string_value(name="movie_id")
     if not movie_id:
         raise ValueError("movie_id must be provided")
+    LOGGER.info("trace-movie. movie_id=%s",movie_id)
     frame_start = app.current_event.get_query_string_value(name="frame_start") or 0
 
     return movie_glue.queue_tracing(api_key, movie_id, frame_start)
