@@ -6,7 +6,7 @@ Routines for ripping mpegs out of jepgs and making zip files
 import tempfile
 import os
 from contextlib import closing
-from typing import Any, Optional, TypeAlias,Generator
+from typing import Any, TypeAlias,Generator
 import io
 from PIL import Image, ImageDraw, ImageFont
 import cv2
