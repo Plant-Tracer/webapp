@@ -473,7 +473,7 @@ class TracerController extends MovieController {
 		    if (last != null) {
 			let statusText = `Tracing frame ${last}`;
 			self.tracking_status.text(statusText);
-			$('#status-big').text(statusMsg);
+			$('#status-big').text(statusText);
 		    } else {
 			self.tracking_status.text(data.metadata.status || "Tracing starting...");
                     }
