@@ -489,7 +489,7 @@ lambda-resize-check: lambda-resize-lint
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
-sam-build: $(REQ) lambda-resize/src/requirements.txt:
+sam-build: $(REQ)
 	@# Refuse to build if there are local changes or unpushed commits.
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
 	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
@@ -505,6 +505,7 @@ sam-build: $(REQ) lambda-resize/src/requirements.txt:
 	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
 	  exit 1; \
 	fi
+	make lambda-resize/src/requirements.txt:
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
