@@ -434,7 +434,8 @@ def api_get_movie_metadata():
                                          frame_start=frame_start,
                                          frame_count=frame_count)
         for tpt in tpts:
-            frame = ret[C.API_KEY_FRAMES][tpt['frame_number']]
+            frame_key = str(tpt['frame_number'])
+            frame = ret[C.API_KEY_FRAMES][frame_key]
             if C.API_KEY_MARKERS not in frame:
                 frame[C.API_KEY_MARKERS] = []
             frame[C.API_KEY_MARKERS].append(tpt)
