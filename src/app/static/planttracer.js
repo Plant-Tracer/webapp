@@ -419,39 +419,45 @@ function rotate_movie() {
   rotate_debounce_timer = setTimeout(() => apply_rotation_and_zip(), ROTATE_DEBOUNCE_MS);
 }
 
+let current_rotation = 0;
+
 async function apply_rotation_and_zip() {
-  rotate_debounce_timer = null;
-  rotate_pending = 0;
-  const linkEl = $('#rotate_movie_link').get(0);
-  linkEl.classList.add('rotate-pending');
-  const movie_id = window.movie_id;
-  $('#rotate_status').text(' … Rotating…');
-  let r;
-  try {
-    const formData = new FormData();
-    formData.append('api_key', api_key);
-    formData.append('movie_id', movie_id);
-    formData.append('rotate', String(rotate_pending));
-    r = await fetch(`${API_BASE}api/rotate-movie`, { method: 'POST', body: formData });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      $('#rotate_status').text(' Rotation failed.' + (err.message ? ' ' + err.message : ''));
-      linkEl.classList.remove('rotate-pending');
-      return;
+    const movie_id = window.movie_id;
+    const previewImg = $('#image-preview').get(0);
+    const rotateStatus = $('#rotate_status');
+    const linkEl = $('#rotate_movie_link');
+
+    // 1. Update Visuals
+    current_rotation = (current_rotation + 90) % 360;
+    previewImg.style.transform = `rotate(${current_rotation}deg)`;
+    rotateStatus.text(' … Saving rotation…');
+
+    // 2. Point 'Analyze' directly to the analysis page
+    $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+
+    // 3. Update Metadata on the VM
+    try {
+        const formData = new FormData();
+        formData.append('api_key', api_key);
+        formData.append('set_movie_id', movie_id); // Matches api_set_metadata param 
+        formData.append('property', 'rotation');     // Target the rotation property 
+        formData.append('value', String(current_rotation));
+
+        const r = await fetch(`${API_BASE}api/set-metadata`, { 
+            method: 'POST', 
+            body: formData 
+        });
+        
+        const resp = await r.json();
+        if (resp.error) {
+            rotateStatus.text(' Error: ' + resp.message);
+        } else {
+            rotateStatus.text(' (Rotation saved)');
+        }
+    } catch (e) {
+        rotateStatus.text(' Network error.');
+        console.error(e);
     }
-    // After rotation, Analyze should go to processing page (rotate+zip), then auto-redirect to analyze.
-    $('#process_movie_link').attr('href', `/processing?movie_id=${movie_id}`);
-    $('#image-preview').attr('src', first_frame_url(movie_id));
-    const reenable_rotate = () => {
-      linkEl.classList.remove('rotate-pending');
-      $('#rotate_status').text('');
-    };
-    $('#image-preview').get(0).addEventListener('load', reenable_rotate, { once: true });
-    $('#image-preview').get(0).addEventListener('error', reenable_rotate, { once: true });
-  } catch (_e) {
-    $('#rotate_status').text(' Request failed.');
-    linkEl.classList.remove('rotate-pending');
-  }
 }
 
 function purge_movie() {

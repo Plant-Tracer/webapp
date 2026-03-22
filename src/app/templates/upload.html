@@ -65,12 +65,37 @@
 
 <style>
   #rotate_movie_link.rotate-pending { pointer-events: none; cursor: not-allowed; opacity: 0.6; }
+/* Container to prevent layout shifting or overlap during rotation */
+.preview-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 640px; /* Matches MOVIE_MAX_WIDTH from constants */ 
+    margin: 20px 0;
+    overflow: hidden;
+    background-color: #f4f4f4;
+    border-radius: 4px;
+}
+  #image-preview {
+    transition: transform 0.3s ease; /* Smooth rotation animation */
+    max-width: 100%;
+    max-height: 640px;
+    margin: 20px 0;
+  }
+.rotated-vertical {
+    /* If the image was 640x480, we want the box to now be 480x640 */
+    margin-top: 80px;    /* Half the difference to prevent overlap */
+    margin-bottom: 80px;
+}
 </style>
 <!-- uploaded image shows here -->
 <div style='display:none' id='upload-preview'>
   <p>Movie <i><span id='uploaded_movie_title'></span></i> (<span id='movie_id'></span>) successfully uploaded.</p>
   <p>Here's the first frame of your movie:</p>
+<div class="preview-container">
   <img id='image-preview' src='' alt=''>
+</div>
   <p id='image-preview-status' class='image-preview-status' style='display:none; margin-top:0.5em;'></p>
 
   <h2>Next steps</h2>
