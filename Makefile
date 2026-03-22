@@ -9,6 +9,7 @@
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 
+SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
@@ -33,7 +34,13 @@ SAM_LOGS_MINUTES ?= 15
 REQ := .venv/pyvenv.cfg
 
 # files used by lambda
-VEND_FILES := src/app/{odb,schema,constants,mp4_metadata_lib,paths,odb_movie_data,s3_presigned,schema}.py
+VEND_FILES := src/app/odb.py \
+              src/app/schema.py \
+              src/app/constants.py \
+              src/app/mp4_metadata_lib.py \
+              src/app/paths.py \
+              src/app/odb_movie_data.py \
+              src/app/s3_presigned.py
 
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
