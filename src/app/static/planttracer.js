@@ -425,7 +425,6 @@ async function apply_rotation_and_zip() {
     const movie_id = window.movie_id;
     const previewImg = $('#image-preview').get(0);
     const rotateStatus = $('#rotate_status');
-    const linkEl = $('#rotate_movie_link');
 
     // 1. Update Visuals
     current_rotation = (current_rotation + 90) % 360;
@@ -435,15 +434,14 @@ async function apply_rotation_and_zip() {
     // 2. Point 'Analyze' directly to the analysis page
     $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
 
-    // 3. Update Metadata on the VM
+// 3. Update the backend via /rotate-movie
     try {
         const formData = new FormData();
         formData.append('api_key', api_key);
-        formData.append('set_movie_id', movie_id); // Matches api_set_metadata param 
-        formData.append('property', 'rotation');     // Target the rotation property 
-        formData.append('value', String(current_rotation));
-
-        const r = await fetch(`${API_BASE}api/set-metadata`, { 
+        formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
+        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation") 
+	
+        const r = await fetch(`${API_BASE}api/rotate-movie`, { 
             method: 'POST', 
             body: formData 
         });
@@ -455,8 +453,8 @@ async function apply_rotation_and_zip() {
             rotateStatus.text(' (Rotation saved)');
         }
     } catch (e) {
-        rotateStatus.text(' Network error.');
-        console.error(e);
+        rotateStatus.text(' Network error updating rotation.');
+        console.error("Rotation sync failed:", e);
     }
 }
 
