@@ -485,7 +485,11 @@ lambda-resize-lint: install-lambda-deps
 lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-sam-build: $(REQ)
+.PHONY: lambda-resize/src/requirements.txt
+lambda-resize/src/requirements.txt:
+	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+
+sam-build: $(REQ) lambda-resize/src/requirements.txt:
 	@# Refuse to build if there are local changes or unpushed commits.
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
 	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
@@ -510,7 +514,6 @@ sam-build: $(REQ)
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
 	@echo "========================================"
 	@echo "Checking unzipped artifact sizes..."
