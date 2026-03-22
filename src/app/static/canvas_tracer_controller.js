@@ -466,7 +466,14 @@ class TracerController extends MovieController {
                         }
                         return;
                     }
-                    self.tracking_status.text(data.metadata.status);
+		    const last = data.metadata.last_frame_tracked;
+		    if (last != null) {
+			statusText = `Tracing: frame ${last}`;
+			self.tracking_status.text(statusText);
+			$('#status-big').text(statusMsg);
+		    } else {
+			self.tracking_status.text(data.metadata.status || "Tracing starting...");
+                    }
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
                 }
@@ -631,16 +638,18 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 // frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
-    const m = name.match(/frame_(\d+)\.jpg$/i);
+    console.log("name=",name);
+    const m = name.match(/frame_(\d+)\.jpe?g$/i);
     return m ? parseInt(m[1], 10) : 0;
 }
 
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile, metadata_frames, 
-                                  api_key, 
-                                  show_results=true) {
+async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_url,
+				  metadata_frames, api_key, show_results=true) {
+    console.log("trace_movie_frames movie_zipfile_url=",movie_zipfile_url,"metdata_frames=",metadata_frames);
     const movie_frames = [];
-    const {entries} = await unzip(movie_zipfile);
-    const names = Object.keys(entries).filter(name => name.endsWith('.jpg'));
+    const {entries} = await unzip(movie_zipfile_url);
+    console.log("entries=",entries);
+    const names = Object.keys(entries).filter(name => /\.(jpg|jpeg)$/i.test(name));
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
     
     const blobs = await Promise.all(names.map(name => entries[name].blob()));
@@ -655,6 +664,8 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile,
         
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
+
+    console.log("movie_frmes=",movie_frames);
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
@@ -898,7 +909,9 @@ function trace_movie(div_controller, movie_id, api_key) {
           $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
                                 : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.movie_zipfile_url, resp.frames, api_key, showResults);
+	const movie_zipfile_url = resp.metadata.movie_zipfile_url;
+	console.log("1. movie_zipfile_url=",movie_zipfile_url);
+        trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
     });
 }
 
