@@ -49,7 +49,7 @@ def handle_all_exceptions(ex: Exception):
     Catch any unhandled exception, log it, and return it to the frontend
     with a 500 status code and proper CORS headers.
     """
-    LOGGER.exception(f"Unhandled exception caught by global handler: {ex}")
+    LOGGER.error(f"Unhandled exception caught by global handler: {ex}")
 
     # You can return the raw exception string, or a full traceback for debugging
     error_payload = {
