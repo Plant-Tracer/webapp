@@ -109,7 +109,7 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     return MovieInfo(signed_url=signed_url, signed_zipfile_url=None, rotation=rotation)
 
 
-def run_tracing(*, user_id, movie_id, frame_start):
+def run_tracing(*, movie_id, frame_start):
     """Run tracing pipeline and create both zipfile and tracked mp4."""
     ddbo = DDBO()
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
@@ -125,7 +125,7 @@ def run_tracing(*, user_id, movie_id, frame_start):
     if not input_trackpoints:
         raise RuntimeError("Cannot track movie with no trackpoints")
 
-    LOGGER.info("run_tracking user_id=%s movie_id=%s frame_start=%s input_trackpoints=%s",user_id,movie_id,frame_start,input_trackpoints)
+    LOGGER.info("run_tracking movie_id=%s frame_start=%s input_trackpoints=%s",movie_id,frame_start,input_trackpoints)
 
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
