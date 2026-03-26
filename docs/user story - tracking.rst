@@ -45,10 +45,10 @@ User Story
 
 #. The track-movie request (Lambda API) does the following (in **lambda-resize**, not on the VM):
 
-   - [ ]  Lambda runs the tracking pipeline which:
+    - [ ]  Lambda runs the tracking pipeline which:
 
      - [ ] Reads the movie from S3, applies rotation if needed, and runs optical-flow tracking from the given frame.
-     - [ ] Writes trackpoints to DynamoDB per frame and builds the frame zip; writes the zip to S3 and sets ``movie_zipfile_urn`` and metadata (width, height, fps, total_frames, etc.) in DynamoDB.
+     - [ ] Writes trackpoints to DynamoDB per frame and builds the frame zip. The tracker owns the zip archive: for later batches it reads the existing zip from S3, copies the old JPEGs into a new temporary zip, appends the new batch frames, and then writes the updated zip back to S3 and sets ``movie_zipfile_urn`` and metadata (width, height, fps, total_frames, etc.) in DynamoDB.
      - [ ] The VM (Flask) does not run tracking; the client calls the Lambda API and then polls ``get-movie-metadata`` until tracking is complete.
 
 #. When the tracking is done:

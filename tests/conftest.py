@@ -12,6 +12,7 @@ import logging
 from os.path import abspath, dirname, join
 from typing import Generator
 
+import urllib.parse
 import pytest
 from werkzeug.serving import make_server
 from selenium import webdriver
@@ -26,6 +27,8 @@ if _ffmpeg:
     os.environ.setdefault(C.FFMPEG_PATH, _ffmpeg)
 
 from app import flask_app  # pylint: disable=wrong-import-position
+from app import odb_movie_data  # pylint: disable=wrong-import-position
+from app.s3_presigned import s3_client  # pylint: disable=wrong-import-position
 
 # Import fixtures so pytest can discover them (after env/path setup above)
 from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # pylint: disable=wrong-import-position,unused-import
@@ -118,3 +121,15 @@ def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
         driver.quit()
     except WebDriverException as e:
         pytest.skip(f"Chrome/Chromium not available: {e}")
+
+
+def get_movie_bytes(movie_id: str) -> bytes:
+    """Test-only helper: fetch full movie bytes for a given movie_id."""
+    movie = odb_movie_data.DDBO().get_movie(movie_id)
+    urn = movie.get(odb_movie_data.MOVIE_DATA_URN)
+    if not urn:
+        raise RuntimeError(f"Movie {movie_id} has no data URN")
+    o = urllib.parse.urlparse(urn)
+    if o.scheme != "s3":
+        return odb_movie_data.read_object(urn)
+    return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()

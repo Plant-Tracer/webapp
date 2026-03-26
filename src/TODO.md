@@ -1,1 +1,0 @@
-* S3 CORS: Bootstrap runs `python -m app.s3_presigned $PLANTTRACER_S3_BUCKET` so the browser can fetch movie zip URLs from the app origin. If "blocked by CORS policy" appears when loading a tracked movie, apply CORS manually: `poetry run python -m app.s3_presigned <bucket>`.

@@ -9,12 +9,11 @@ import uuid
 import html5validate
 
 from app.paths import STATIC_DIR
-from app import odb
 from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
+from app.odb import API_KEY
 
 # Fixtures are imported in conftest.py
 from app.constants import logger
@@ -141,50 +140,3 @@ def test_templates(client,new_course):
                 assert resp.status_code!=200 # should be an error
             else:
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
-
-
-def test_api_edit_movie(new_movie, client):
-    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
-    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
-    api_key = new_movie[API_KEY]
-    movie_id = new_movie[MOVIE_ID]
-
-    movie = odb.get_movie(movie_id=movie_id)
-    movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie=%s movie_metadata=%s", movie, movie_metadata)
-
-    assert movie[VERSION] == 1  # fixture had data assigned
-    assert movie['user_id'] == new_movie[USER_ID]
-
-    userdict = apikey.user_dict_for_api_key(new_movie[API_KEY])
-    assert userdict[USER_ID] == new_movie[USER_ID], f"userdict={userdict} new_movie={new_movie}"
-
-    # Invalid action
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'bad-action'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id=movie_id)
-    assert movie.get('rotation_steps', 0) == 0
-
-    # Invalid api_key
-    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'action': 'rotate90cw'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
-
-    # Success: rotation_steps omitted => 1 step
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id=movie_id)
-    assert movie.get('rotation_steps') == 1, f"{movie}"
-
-    # Success: rotation_steps=2
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action': 'rotate90cw', 'rotation_steps': '2'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id=movie_id)
-    assert movie.get('rotation_steps') == 2, f"{movie}"
-
-    movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie_metadata2=%s", movie_metadata2)
-    assert movie_metadata2.get('rotation_steps') == 2

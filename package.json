@@ -12,11 +12,12 @@
     "babel-jest": "^29.7.0",
     "babel-plugin-istanbul": "^6.1.1",
     "babel-preset-airbnb": "^5.0.0",
+    "baseline-browser-mapping": "^2.10.10",
     "eslint": "^8.57.0",
     "eslint-formatter-friendly": "^7.0.0",
     "jest": "^29.7.0",
     "jest-canvas-mock": "^2.5.2",
-    "jest-environment-jsdom": "^29.7.0",
+    "jest-environment-jsdom": "^30.3.0",
     "jest-fail-on-console": "^3.3.1",
     "jest-fetch-mock": "^3.0.3",
     "regenerator-runtime": "^0.14.1"
@@ -27,13 +28,31 @@
     "coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --collectCoverage --"
   },
   "jest": {
-    "setupFiles": ["<rootDir>/jstests/setupTests.js", "jest-canvas-mock"],
-    "moduleDirectories": ["node_modules", "src/app/static"],
-    "modulePathIgnorePatterns": ["<rootDir>/.venv", "<rootDir>/lambda-resize/.venv"],
+    "setupFiles": [
+      "<rootDir>/jstests/setupTests.js",
+      "jest-canvas-mock"
+    ],
+    "moduleDirectories": [
+      "node_modules",
+      "src/app/static"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.venv",
+      "<rootDir>/lambda-resize/.venv"
+    ],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",
-    "coverageReporters": ["json", "lcov", "text", "clover"],
-    "transform": {"^.+\\.jsx?$": "babel-jest"},
-    "testMatch": ["**/?(*.)+(spec|test).(mjs|js)"]
+    "coverageReporters": [
+      "json",
+      "lcov",
+      "text",
+      "clover"
+    ],
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    },
+    "testMatch": [
+      "**/?(*.)+(spec|test).(mjs|js)"
+    ]
   }
 }

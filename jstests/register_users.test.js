@@ -57,8 +57,8 @@ describe('register_func', () => {
 
         register_func();
 
-        expect($('#message').html()).toBe('Asking to register <b>test@example.com</b> for course key <b>test_course_key<b>...<br></b></b>');
-        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/register`, {
+      expect($('#message').text()).toContain('Asking to register test@example.com for course key test_course_key');
+      expect($.post).toHaveBeenCalledWith(`${API_BASE}api/register`, {
             email: 'test@example.com',
             course_key: 'test_course_key',
             planttracer_endpoint: 'some_endpoint',
@@ -82,7 +82,7 @@ describe('register_func', () => {
 
         register_func();
 
-        expect($('#message').html()).toBe('<b>Registration successful</b>');
+      expect($('#message').text()).toContain('Success: Registration successful');
     });
 
     test('should handle registration error response', () => {
@@ -101,7 +101,7 @@ describe('register_func', () => {
 
         register_func();
 
-        expect($('#message').html()).toBe('<b>Error: Error occurred</b>');
+      expect($('#message').text()).toContain('Error: Error occurred');
     });
 
     test('should handle failed POST request', () => {

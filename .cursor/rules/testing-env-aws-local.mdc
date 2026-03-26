@@ -1,0 +1,24 @@
+---
+description: Testing commands must use local AWS endpoints
+alwaysApply: true
+---
+
+# Testing Environment for AWS-Backed Tests
+
+- **Use the Makefile for tests**
+  - Prefer `make pytest` and `make check` instead of invoking `pytest` directly.
+  - The Makefile already wires up the correct environment (e.g. vendoring `lambda-resize` and setting local AWS endpoints).
+
+- **If you must run pytest directly**, mirror the Makefile’s environment:
+  - Set `AWS_REGION=local` so tests talk to local DynamoDB/S3, not real AWS:
+    - Example: `AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/movie_test.py`
+  - Ensure `PYTHONPATH` includes both:
+    - `lambda-resize/src` (for `resize_app` and Lambda tests)
+    - `src` (for the main app code)
+
+- **When AWS credential errors appear in tests** (e.g. `MissingAuthenticationToken`, `LoginRefreshRequired`):
+  - **Do not change code or tests** to work around them.
+  - First check that:
+    - The command used `make pytest` / `make check`, **or**
+    - `AWS_REGION=local` and the Lambda `PYTHONPATH` were set correctly.
+

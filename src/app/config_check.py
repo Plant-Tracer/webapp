@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 _UPLOAD_READINESS_CACHE = {}
 _UPLOAD_READINESS_TTL = 60  # seconds
 
-
 def check_dynamodb():
     """
     Verify the app can reach DynamoDB (e.g. list/scan one item).

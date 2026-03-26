@@ -1,37 +1,29 @@
-This directory is for aws-sam.
-
-Key files:
-- `template.yaml` - this is the AWS SAM template that does the magic
-- `samconfig.yaml` - This records the parameters and other functions
-  that change with a deployment.  It does not need to be put into
-  version control.
-- `Makefile` - contains a bunch of targets for people who can't
-  remember the AWS `sam` commands.
-
+This directory is for lambda-resize
 
 Environment variables that you should know about/set:
 
-|Variable|Meaning|
-|--------------|-------------|
-|`AWS_PROFILE` | The profile that you are using (in $HOME/.aws/config) |
-|`AWS_REGION`  | The region you are deploying to. Set to `local` for testing locally with minio and dynamoDBLocal|
-|`STACK`       | The name of the stack that you are deploying to. Must be unique in your AWS account |
-|`STACK_STAGE` | This is legacy, when we actually had a staging stack. Now you stage by just deploying to a different stack name |
-|`DYNAMODB_TABLE_PREFIX` | The prefix for your DynamoDB Table Names. Must be unique in your AWS account.|
-# Core Functionality
-AWS SAM template that uses cloud formations to:
-- Create a new VM
-- Create the necessary DynamoDB tables all with the given prefix.
-- The **bucket is always an existing bucket** (it outlives the stack as the
-  long-term archive of student videos). The Lambda is invoked via its HTTP
-  API; it can move uploaded objects to their final keys as needed, write
-  research/attribution metadata into the MP4 file (so the object remains
-  self-describing when the database is gone), update DynamoDB, and log to
-  the logs table.
+Core Functionality
+=================
+Lambda-resize performs the following functions:
 
-## The created VM
+* Listens on AWS HTTP API for the following commands:
+  - `GET /resize-api/v1/ping` - health check
+  - `GET /resize-api/v1/first-frame` - gets the first frame of a specific movie
+  - `GET /resize-api/v1/trace-movie` - initiates tracing of a plant movie
 
-## The Created Lambda Function
+* When a movie is tracked:
+  * Get the desired rotation from dynamoDB
+  * Get the starting frame number
+  * Download the movie
+  * for each from tracking_start to the end:
+    * If prev_frame is set, track the points from the last frame to
+      the current frame.
+    * Write the frame into the zip file
+    * Remember the trackpoints
+    * Render the points onto the frame
+    * writes the rendered frames to a rendered mpeg
+  * When finished, the rendered mpeg and the zip file are uploaded to
+    s3 and the tracking mode of the movie is turned .
 
 **Video processing:** All rotate, scale, frame extraction, and tracking use **cv2 + Pillow only**. The Lambda does not bundle or use ffmpeg. Any ffmpeg-related code in the repo is legacy (e.g. for local CLI or tests).
 
@@ -62,10 +54,12 @@ Resize code base:
 
 Movies:
 ------
-- Every movie has its mpeg file, its zipfile, and its `keyframe`. Eachg are stored at predictable locations:
+- Every movie has its mpeg file, its zipfile, and its `keyframe`. Each are stored at predictable locations:
   - movie: course_id/movie_id.mpeg
   - zipfile:  course_id/movie_id.zip
   - keyframe: course_id/movie_id.keyframe.jpeg
+
+- The tracking Lambda builds the JPEG animation zip. When tracking continues in later batches, the Lambda reads the existing zip from S3, copies its members into a fresh temporary zip, appends the new batch frames, and then writes the updated zip back to S3.
 
 
 Movie Metadata
@@ -125,3 +119,10 @@ s3.put_object(
     ContentType='application/octet-stream'
 )
 ```
+
+
+Notes:
+=====
+OpenCV reads colors in BGR (Blue, Green, Red) format, while
+Pillow expects RGB. You must swap the colors first, otherwise your
+image will look like a smurf!

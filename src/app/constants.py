@@ -58,8 +58,12 @@ class C:
     TEST_ENDPOINT_URL_S3 = 'http://localhost:9000'
     TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8000'
 
+    # Confs
     DEFAULT_MAX_ENROLLMENT = 100
     LOG_MAX_RECORDS = 1024
+    MOVIE_MAX_WIDTH = 640
+    MOVIE_JPEG_QUALITY = 85
+    API_KEY_COOKIE_MAX_AGE = 60*60*24*180
 
     # Logging
     LOGGING_CONFIG='%(asctime)s  %(filename)s:%(lineno)d %(levelname)s: %(message)s'
@@ -76,7 +80,6 @@ class C:
     FAVICON = 'icon.png'
     API_BASE='API_BASE'
     STATIC_BASE='STATIC_BASE'
-    TRACKING_COMPLETED='TRACKING COMPLETED' # keep case; it's used as a flag
     MAX_FILE_UPLOAD = 1024*1024*256
     MAX_MOVIE_FRAMES = 1e6            # max possible frames in a movie
     NOTIFY_UPDATE_INTERVAL = 5.0
@@ -102,7 +105,6 @@ class C:
     SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'
-    API_KEY_COOKIE_MAX_AGE = 60*60*24*180
 
     # Lambda/health response
     STATUS_OK = 'ok'

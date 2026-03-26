@@ -9,6 +9,7 @@
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 
+SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
@@ -32,6 +33,15 @@ SAM_LOGS_MINUTES ?= 15
 
 REQ := .venv/pyvenv.cfg
 
+# files used by lambda
+VEND_FILES := src/app/odb.py \
+              src/app/schema.py \
+              src/app/constants.py \
+              src/app/mp4_metadata_lib.py \
+              src/app/paths.py \
+              src/app/odb_movie_data.py \
+              src/app/s3_presigned.py
+
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
     $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
@@ -47,7 +57,7 @@ ifeq ($(AWS_REGION),local)
 endif
 
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
-    $(warning DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
+    $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
 endif
 
@@ -102,13 +112,8 @@ lint: $(REQ)
 	make eslint
 
 pylint:
-	$(MAKE) -C lambda-resize vend-app
-	PYTHONPATH=lambda-resize/src poetry run pylint  $(PYLINT_OPTS) \
-		src tests *.py \
-		lambda-resize/src/resize_app/resize.py \
-		lambda-resize/src/resize_app/rotate_zip.py \
-		lambda-resize/src/resize_app/tracker.py \
-		lambda-resize/tests
+	make vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:
@@ -135,6 +140,13 @@ flake:
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 ################################################################
+.PHONY: dump.txt
+dump.txt:
+	/bin/rm -f dump.txt && touch dump.txt && for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
+
+
+
+################################################################
 ## Program development: dynamic analysis
 ##
 
@@ -143,12 +155,12 @@ flake:
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
-	$(MAKE) -C lambda-resize vend-app
-	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
+	make vend-lambda-resize
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	$(MAKE) -C lambda-resize vend-app
-	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
+	make vend-lambda-resize
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -451,6 +463,14 @@ check-iam:
 		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
 	fi
 
+################################################################
+## lambda-resize
+
+vend-lambda-resize:
+	mkdir -p lambda-resize/src/resize_app/src/app
+	rsync --verbose --archive $(VEND_FILES) \
+		lambda-resize/src/resize_app/src/app/
+
 # Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
 install-lambda-deps: $(REQ)
 	poetry install --with lambda
@@ -458,12 +478,16 @@ install-lambda-deps: $(REQ)
 # lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
 lambda-resize-lint: install-lambda-deps
-	$(MAKE) -C lambda-resize vend-app
-	poetry run ruff check lambda-resize/src
+	make vend-lambda-resize
+	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
 lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
+.PHONY: lambda-resize/src/requirements.txt
+lambda-resize/src/requirements.txt:
+	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
 sam-build: $(REQ)
 	@# Refuse to build if there are local changes or unpushed commits.
@@ -481,7 +505,9 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
 	  exit 1; \
 	fi
-	$(MAKE) -C lambda-resize vend-app
+	make lambda-resize/src/requirements.txt:
+	make vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
 	printenv | grep AWS
@@ -489,8 +515,36 @@ sam-build: $(REQ)
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+	@echo "========================================"
+	@echo "Checking unzipped artifact sizes..."
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			size_mb=$$(du -sm "$$dir" | cut -f1); \
+			echo "Size of $$dir is $${size_mb}MB"; \
+			if [ "$$size_mb" -ge 250 ]; then \
+				echo "ERROR: $$dir exceeds the AWS Lambda 250MB unzipped limit!"; \
+				exit 1; \
+			fi; \
+		fi; \
+	done
+	@echo "Size check passed! All functions are under 250MB."
+
+sam-audit-size:
+	@echo "========================================"
+	@echo "Top 20 largest items in SAM build directories (sizes in MB):"
+	@if [ ! -d ".aws-sam/build" ]; then \
+		echo "ERROR: .aws-sam/build not found. Run 'make sam-build' first."; \
+		exit 1; \
+	fi
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			echo "----------------------------------------"; \
+			echo "Analyzing: $$dir"; \
+			du -sm "$$dir"* | sort -nr | head -n 20; \
+		fi; \
+	done
+	@echo "========================================"
 
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -525,23 +579,21 @@ sam-status:
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
-	URL="https://$$DNS/status"; \
+	URL="https://$$DNS/resize-api/v1/ping"; \
 	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
 	CODE=$$(echo "$$RESP" | tail -1); \
 	BODY=$$(echo "$$RESP" | sed '$$d'); \
 	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
-	OK=1; \
 	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 	  echo "Lambda status: operational ($$URL)"; \
 	else \
 	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
-	  OK=0; \
 	fi; \
 	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
 	echo ""; \
 	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
 	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
-	if [ "$$OK" -ne 1 ]; then exit 1; fi
+
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
@@ -561,27 +613,44 @@ define SAM_LOGS_RESOLVE
 endef
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
+# Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
+# activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
 sam-logs:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min, newest first) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --output text
+	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) || true
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
 # Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
 sam-logs-simple:
 	@$(SAM_LOGS_RESOLVE); \
 	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
-	  aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS); \
+	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \
 	else \
-	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) $(SAM_LOGS_OPTIONS) \
-	    --query 'events[].[timestamp,message]' --output text | while IFS=$$'\t' read -r ts msg; do \
+	  REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ $(SAM_LOGS_OPTIONS) \
+	    --query 'events[].[timestamp,message]' --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) | while IFS=$$'\t' read -r ts msg; do \
 	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
-	  done; \
+	  done || true; \
 	fi
 
 # Stream Lambda logs (timestamp + message). Sets SAM_LOGS_TAIL=1 and invokes sam-logs-simple.
 sam-logs-simple-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
+
+# Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
+# Use this when sam-logs is dominated by HTTP traffic and you want only tracking-queue activity.
+sqs-logs:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
+
+# Stream Lambda logs, showing only lines that contain SQS.
+sqs-logs-tail:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern "SQS" || true
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

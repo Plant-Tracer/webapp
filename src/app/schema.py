@@ -9,8 +9,7 @@ from pydantic import (
     BaseModel,
     Field,
     field_validator,
-    TypeAdapter,
-    ValidationError,
+    TypeAdapter
 )
 
 from .constants import C
@@ -36,28 +35,17 @@ class User(BaseModel):
 # from .models import User
 
 
+USER_ADAPTERS = {
+    prop: TypeAdapter(field.annotation)
+    for prop, field in User.model_fields.items()
+}
 def validate_user_field(prop: str, value: Any) -> Any:
     """
     Validates a single value against a specific field type from the User model.
     """
-    field = User.model_fields.get(prop)
-    if field is None:
+    if prop not in USER_ADAPTERS:
         raise AttributeError(f"{prop} is not a valid field of User")
-
-    # Get the type annotation (e.g., str, int, bool)
-    field_type = field.annotation
-
-    try:
-        # 1. Create an adapter for that specific type
-        adapter = TypeAdapter(field_type)
-
-        # 2. Validate the value against the type
-        validated_value = adapter.validate_python(value)
-
-        return validated_value
-
-    except ValidationError as e:
-        raise ValueError(f"Validation error for '{prop}': {e}") from e
+    return USER_ADAPTERS[prop].validate_python(value)
 
 
 class UniqueEmail(BaseModel):
@@ -129,7 +117,7 @@ class Movie(BaseModel):
     attribution_name: str | None = None
 
     # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
-    rotation_steps: Annotated[int, Field(ge=0, le=3)] = 0
+    rotation: Annotated[int, Field(ge=0, lt=360)] = 0
 
 
 def fix_movie_prop_value(prop, value):
@@ -188,25 +176,14 @@ class LogEntry(BaseModel):
 
 
 # Function to validate a single prop and value using the Movie schema
+MOVIE_ADAPTERS = {
+    prop: TypeAdapter(field.annotation)
+    for prop, field in Movie.model_fields.items()
+}
 def validate_movie_field(prop: str, value: Any) -> Any:
     """
     Validates a single value against a specific field type from the Movie model.
     """
-    field = Movie.model_fields.get(prop)
-    if field is None:
+    if prop not in MOVIE_ADAPTERS:
         raise AttributeError(f"{prop} is not a valid field of Movie")
-
-    # Get the type annotation (e.g., str, int, bool)
-    field_type = field.annotation
-
-    try:
-        # 1. Create an adapter for that specific type
-        adapter = TypeAdapter(field_type)
-
-        # 2. Validate the value against the type
-        validated_value = adapter.validate_python(value)
-
-        return validated_value
-
-    except ValidationError as e:
-        raise ValueError(f"Validation error for '{prop}': {e}") from e
+    return MOVIE_ADAPTERS[prop].validate_python(value)

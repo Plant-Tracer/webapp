@@ -65,11 +65,12 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
-MOVIE_DATA_URN = 'movie_data_urn'
-MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
+MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
+MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
+MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 TITLE = 'title'
 DESCRIPTION = 'description'
-STATUS = 'status'
 ORIG_MOVIE = 'orig_movie'
 TOTAL_BYTES = 'total_bytes'
 TOTAL_FRAMES = 'total_frames'
@@ -87,8 +88,13 @@ HEIGHT = 'height'
 RESEARCH_USE = 'research_use'
 CREDIT_BY_NAME = 'credit_by_name'
 ATTRIBUTION_NAME = 'attribution_name'
-ROTATION_STEPS = 'rotation_steps'
+
+# response keys:
+MOVIE_TRACED_URL = 'movie_traced_url'  # response key (signed URL), not stored in DB
 MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
+
+# obsolete:
+ROTATION_STEPS = 'rotation_steps' # no longer used
 # Props that set_movie_metadata (flask_api) can set in bulk from extracted movie metadata
 MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
@@ -97,13 +103,15 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
-PROCESSING_STATE = 'processing_state'
+
 # Values for processing_state (single source of truth)
-PROCESSING_STATE_UPLOADING = 'uploading'
-PROCESSING_STATE_TRACKING = 'tracking'
-PROCESSING_STATE_TRACKED = 'tracked'
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
-TRACKING_STATUS_UPDATED_AT = 'tracking_status_updated_at'
+MOVIE_STATUS = 'status'
+MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_READY      = 'ready'
+MOVIE_STATE_TRACING   = 'tracing'
+MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
+MOVIE_STATE_UPDATED_AT = 'status_updated_at'
 
 USER_ID = 'user_id'
 PRIMARY_COURSE_ID = 'primary_course_id'
@@ -386,12 +394,14 @@ class DDBO:
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
-        response = self.users.query( IndexName='email_idx',
-                                     KeyConditionExpression=Key( EMAIL ).eq(email) )
+        response = self.users.query(
+            IndexName='email_idx',
+            KeyConditionExpression=Key(EMAIL).eq(email),
+        )
         items = response.get('Items', [])
         if items:
             return items[0]
-        logger.debug("email %s not in table %s",email,self.users)
+        logger.debug("email %s not in table %s", email, self.users)
         raise InvalidUser_Email(email)
 
     def put_user(self, user):
@@ -640,7 +650,7 @@ class DDBO:
 
     ### movie management
 
-    def get_movie(self, movie_id) -> dict:
+    def get_movie(self, movie_id, fields: list[str]|None=None) -> dict:
         """Given a movie_id, return the movie object.
 
         Raises:
@@ -649,7 +659,18 @@ class DDBO:
         # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        movie_dict = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        params = {
+            'Key': {MOVIE_ID: movie_id},
+            'ConsistentRead': True
+        }
+
+        if fields:
+            # Map fields to #alias to avoid DynamoDB reserved word conflicts
+            attr_names = {f"#f{i}": field for i, field in enumerate(fields)}
+            params['ProjectionExpression'] = ", ".join(attr_names.keys())
+            params['ExpressionAttributeNames'] = attr_names
+
+        movie_dict = self.movies.get_item(**params).get('Item')
         if isinstance(movie_dict,dict):
             return movie_dict
         raise InvalidMovie_Id(movie_id)
@@ -1297,7 +1318,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     CREDIT_BY_NAME: credit_by_name,
                     ATTRIBUTION_NAME: attribution_name,
                     ROTATION_STEPS: 0,
-                    PROCESSING_STATE: PROCESSING_STATE_UPLOADING,
+                    MOVIE_STATUS: MOVIE_STATE_UPLOADING,
                     })
     return movie_id
 
@@ -1305,19 +1326,17 @@ def get_movie(*, movie_id):
     """Returns the movie's data"""
     return DDBO().get_movie(movie_id)
 
-#def set_movie_metadata(*, movie_id, movie_metadata):
-#    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
-#
-#    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
-#    assert is_movie_id(movie_id)
-#    assert MOVIE_ID not in movie_metadata
-#    assert 'id' not in movie_metadata
-#    if 'fps' in movie_metadata:
-#        movie_metadata = copy.copy(movie_metadata)
-#        movie_metadata['fps'] = str(movie_metadata['fps'])
-#    ddbo = DDBO()
-#    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
-
+def set_movie_metadata(*, movie_id, movie_metadata):
+    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
+    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
+    assert is_movie_id(movie_id)
+    assert MOVIE_ID not in movie_metadata
+    assert 'id' not in movie_metadata
+    if 'fps' in movie_metadata:
+        movie_metadata = copy.copy(movie_metadata)
+        movie_metadata['fps'] = str(movie_metadata['fps'])
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
@@ -1477,13 +1496,13 @@ def last_tracked_movie_frame(*, movie_id):
             break
     return None
 
-def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint]):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
-    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    :param: trackpoints - array of Tractpoints.
     """
     # Remove numpy from trackpoints
-    trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
+    trackpoints = [ tp.model_dump() for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
@@ -1493,14 +1512,14 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
                                    ExpressionAttributeValues={':val':trackpoints})
 
     # update the last frame tracked. This is way, way more expensive than it should be.
-    movie = ddbo.get_movie(movie_id)
+    movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
     if current is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
-        movie[LAST_FRAME_TRACKED] = frame_number
+        lft = frame_number
     else:
-        movie[LAST_FRAME_TRACKED] = max(current, frame_number)
-    ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
+        lft = max(current, frame_number)
+    set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
 
 
 def clear_movie_tracking(movie_id):
@@ -1531,12 +1550,12 @@ def clear_movie_tracking(movie_id):
 
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
-# We kept this, even thoguh we are now just parsing it
+# We kept this, even though we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
     TITLE: 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
     DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
-    STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
     FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
     WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
     HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
