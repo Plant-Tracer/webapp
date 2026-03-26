@@ -505,7 +505,7 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
 	  exit 1; \
 	fi
-	make lambda-resize/src/requirements.txt:
+	make lambda-resize/src/requirements.txt
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
