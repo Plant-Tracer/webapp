@@ -487,7 +487,7 @@ lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 .PHONY: lambda-resize/src/requirements.txt
-lambda-resize/src/requirements.txt
+lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
 sam-build: $(REQ)
@@ -501,7 +501,7 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
 	  exit 1; \
 	fi; \
-	make lambda-resize/src/requirements.txt:
+	make lambda-resize/src/requirements.txt
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
