@@ -142,7 +142,8 @@ flake:
 ################################################################
 .PHONY: dump.txt
 dump.txt:
-	/bin/rm -f dump.txt && touch dump.txt && for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
+	/bin/rm -f dump.txt && touch dump.txt && tree . > dump.txt && \
+	for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
 
 
 
@@ -500,7 +501,6 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
 	  exit 1; \
 	fi; \
-	AHEAD=$$(git rev-list --count "$$UPSTREAM"..HEAD); \
 	make lambda-resize/src/requirements.txt
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src

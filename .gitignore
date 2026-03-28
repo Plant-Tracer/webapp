@@ -210,3 +210,4 @@ samconfig.toml
 .env
 .op
 *.jpeg
+dump.txt
