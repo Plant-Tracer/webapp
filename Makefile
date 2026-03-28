@@ -501,7 +501,7 @@ sam-build: $(REQ)
 	  exit 1; \
 	fi; \
 	AHEAD=$$(git rev-list --count "$$UPSTREAM"..HEAD); \
-	make lambda-resize/src/requirements.txt:
+	make lambda-resize/src/requirements.txt
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
