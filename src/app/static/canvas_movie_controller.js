@@ -106,8 +106,6 @@ class MovieController extends CanvasController {
      *
      */
     goto_frame( frame ) {
-        console.log(`goto_frame(${frame})`);
-
 	// 1. Defend against empty arrays completely
 	if (!this.frames || this.frames.length === 0) {
             console.warn("goto_frame aborted: No frames loaded yet.");
@@ -153,7 +151,6 @@ class MovieController extends CanvasController {
      * It's called by the timer or when the button is pressed
      */
     play(delta) {
-        console.log(`play(${delta})`);
         var next_frame = this.frame_number;
         var next_delta = delta;
         if (this.timer) {
