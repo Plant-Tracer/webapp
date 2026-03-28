@@ -19,13 +19,14 @@ def do_jpeg(args):
     args.output.write_bytes(data)
 
 def do_mpeg(args):
-    if args.first_frame:
+    for rotate in [0,90,180,270]:
+        first_frame = Path(f"jpeg_{rotate}.jpeg")
         url = args.fname
-        data = mpeg_jpeg_zip.get_first_frame_from_url( url, args.rotate)
+        data = mpeg_jpeg_zip.get_first_frame_from_url( url, rotate)
         jpeg = mpeg_jpeg_zip.convert_frame_to_jpeg( data )
-        jpeg = mpeg_jpeg_zip.add_jpeg_comment( jpeg, "test comment" )
-        args.first_frame.write_bytes( jpeg )
-        subprocess.call(['ls','-l',str(args.first_frame)])
+        jpeg = mpeg_jpeg_zip.add_jpeg_comment( jpeg, f"rotated {rotate}" )
+        first_frame.write_bytes( jpeg )
+        subprocess.call(['ls','-l',str(first_frame)])
 
 def do_track(args):
     trackpoints = [Trackpoint(**tp) for tp in json.loads(args.trackpoints)]
@@ -49,12 +50,10 @@ def main():
     jpeg_parser.add_argument("rotate",type=int,default=0)
     jpeg_parser.add_argument("--output",type=Path)
 
-    mpeg_parser = subparsers.add_parser('mpeg', help='Parse an mpeg')
+    mpeg_parser = subparsers.add_parser('mpeg', help='Test mpeg parsing and rotating routines')
     mpeg_parser.set_defaults(func=do_mpeg)
     mpeg_parser.add_argument("fname", help="URL or path", type=str)
-    mpeg_parser.add_argument("--rotate",type=int,default=0)
     mpeg_parser.add_argument("--zipfile",type=Path)
-    mpeg_parser.add_argument("--first_frame",type=Path)
 
     track_parser = subparsers.add_parser("tracker", help="Tracker test. Make the zipfile and track at the same time")
     track_parser.set_defaults(func=do_track)
