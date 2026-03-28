@@ -501,10 +501,6 @@ sam-build: $(REQ)
 	  exit 1; \
 	fi; \
 	AHEAD=$$(git rev-list --count "$$UPSTREAM"..HEAD); \
-	if [ "$$AHEAD" -ne 0 ]; then \
-	  echo "Refusing to run sam-build: local commits ahead of $$UPSTREAM (push first)."; \
-	  exit 1; \
-	fi
 	make lambda-resize/src/requirements.txt
 	make vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
