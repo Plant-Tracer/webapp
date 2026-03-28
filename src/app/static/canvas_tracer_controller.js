@@ -21,7 +21,7 @@ const RETRACE_MOVIE = 'Retrace movie';
 const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
-const STATUS_POLL_MAX_ERROR = 5;
+const STATUS_POLL_MAX_ERRORS = 5;
 const TRACK_MOVIE_RETRY_DELAY_MS = 5000; // if track movie fails
 
 var cell_id_counter = 0;
