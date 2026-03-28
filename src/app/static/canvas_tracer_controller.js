@@ -22,6 +22,7 @@ const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
 const STATUS_POLL_MAX_ERROR = 5;
+const TRACK_MOVIE_RETRY_DELAY_MS = 5000; // if track movie fails
 
 var cell_id_counter = 0;
 
@@ -326,7 +327,6 @@ class TracerController extends MovieController {
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
-        const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
         console.log("track_to_end api_key=",this.api_key);
         console.log("track_to_end body=",body);
 
@@ -454,7 +454,8 @@ class TracerController extends MovieController {
          * Poll the server to see if tracking has ended.
          * On poll error we log to console and only alert after 3 consecutive errors.
          */
-    poll_for_track_end() {
+  poll_for_track_end() {
+    console.log("poll_for_track_end");
         const params = {
             api_key:this.api_key,
             movie_id:this.movie_id,
@@ -463,6 +464,7 @@ class TracerController extends MovieController {
         const self = this;
         $.post(`${API_BASE}api/get-movie-metadata`, params)
             .done((data) => {
+              console.log("poll_for_track_end movie_metadata=",data);
                 if (data.error === false) {
                     self.poll_error_count = 0;
                     if (data.metadata.status === TRACING_COMPLETED_FLAG) {
@@ -643,7 +645,6 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 // frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
-    console.log("name=",name);
     const m = name.match(/frame_(\d+)\.jpe?g$/i);
     return m ? parseInt(m[1], 10) : 0;
 }
