@@ -142,7 +142,8 @@ flake:
 ################################################################
 .PHONY: dump.txt
 dump.txt:
-	/bin/rm -f dump.txt && touch dump.txt && for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
+	/bin/rm -f dump.txt && touch dump.txt && tree . > dump.txt && \
+	for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
 
 
 

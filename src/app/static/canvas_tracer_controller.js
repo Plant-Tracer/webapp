@@ -222,7 +222,7 @@ class TracerController extends MovieController {
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
-                    `<td>${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
+                    `<td id="${obj.table_cell_id}-mm"> ${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -247,6 +247,7 @@ class TracerController extends MovieController {
     // Update the matrix location of the object the moved
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
+        $( "#"+obj.table_cell_id+"-mm" ).text( "n/a" );
         if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
             this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
         }

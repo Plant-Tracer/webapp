@@ -38,7 +38,7 @@ import { $ } from "./utils.js";
  - set_background_image - fetches a background image and resizes the canvas to be the size of the image.
  -
  - delegate    - if set, gets notices
- - delegate.object_did_move( _obj) {} - tells delegate that an object moved.
+ - delegate.object_did_move( _obj) {} - tells delegate that an object moved. Used for updating the matrix of trackpoints
  - delegate.object_move_finished( _obj) {} - tells delegate that object move finished.
 
  CanvasItem - base object class
@@ -85,6 +85,7 @@ class CanvasController {
         this.selected = null;              // the selected object
         this.objects = new Array();       // the objects
         this.zoom = 1;                 // default zoom
+        this.dragging = false;         // not currently dragging
 
         // Register object movement events.
         // We use '=>' rather than lambda because '=>' wraps the current environment (including this),
@@ -188,6 +189,7 @@ class CanvasController {
             }
         }
         this.redraw();
+        this.dragging = true;
     }
 
     moveMarker(e) {
@@ -216,6 +218,7 @@ class CanvasController {
         this.c.style.cursor = 'auto';
         this.redraw();
         this.object_move_finished(obj);
+        this.dragging = false;
     }
 
     // -- Mouse event handlers --
