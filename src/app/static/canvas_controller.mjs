@@ -483,6 +483,10 @@ class WebImage extends CanvasItem {
             if (this.cc) {
                 this.cc.redraw();
                 this.cc.did_onload_callback(this);
+              if (this.cc.canvas) {
+                this.cc.canvas.width = this.width;
+                this.cc.canvas.height = this.height;
+              }
             }
         };
 
