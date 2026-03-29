@@ -70,7 +70,7 @@ def api_ping() -> Dict[str, Any]:
     LOGGER.info("ping")
     return {
         "error": False,
-        "message": "ok",
+        "status": "ok",
         "time": time.time(),
         "path": sys.path
     }
