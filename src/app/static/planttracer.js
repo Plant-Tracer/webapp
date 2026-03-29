@@ -175,7 +175,7 @@ async function checkLambdaStatus() {
     const r = await fetch(LAMBDA_API_BASE + 'resize-api/v1/ping', { method: 'GET' });
     if (!r.ok) return false;
     const data = await r.json();
-    return data && data.message === 'ok';
+    return data && data.status === 'ok';
   } catch (e) {
     console.warn('Lambda status check failed', e);
     return false;
