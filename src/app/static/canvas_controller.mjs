@@ -482,6 +482,7 @@ class WebImage extends CanvasItem {
             // If we are not yet in a canvas controller, redraw
             if (this.cc) {
                 this.cc.resize(this.width, this.height);
+                this.cc.did_onload_callback(this);
             }
         };
 
