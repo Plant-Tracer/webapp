@@ -584,7 +584,10 @@ class TracerController extends MovieController {
         // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
         this.rotate_button.prop(DISABLED, true);
         $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
-        this.movie_rotation = parseInt(this.move_rotation, 10) + 90;
+        if (typeof this.move_rotation === 'string') {
+            this.movie_rotation = parseInt(this.move_rotation, 10)
+        }
+        this.movie_rotation =  + 90;
         const params = {
           api_key: this.api_key,
           movie_id: this.movie_id,
