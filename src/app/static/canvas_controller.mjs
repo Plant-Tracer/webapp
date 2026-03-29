@@ -278,8 +278,8 @@ class CanvasController {
     }
 
     resize(width, height) {
-        this.c.width = this.naturalWidth = width;
-        this.c.height = this.naturalHeight = height;
+        this.oc.width = this.c.width = this.naturalWidth = width;
+        this.oc.width = this.c.height = this.naturalHeight = height;
         this.redraw();
     }
 
@@ -470,7 +470,7 @@ class WebImage extends CanvasItem {
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
-            //console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
+          console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
             if (this.timeout) {
                 clearTimeout(this.timeout);
                 this.timeout = null;
