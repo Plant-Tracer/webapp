@@ -279,7 +279,7 @@ class CanvasController {
 
     resize(width, height) {
         this.oc.width = this.c.width = this.naturalWidth = width;
-        this.oc.width = this.c.height = this.naturalHeight = height;
+        this.oc.height = this.c.height = this.naturalHeight = height;
         this.redraw();
     }
 
@@ -481,12 +481,7 @@ class WebImage extends CanvasItem {
             // If we are already in a canvas controller, as it to redraw.
             // If we are not yet in a canvas controller, redraw
             if (this.cc) {
-                this.cc.redraw();
-                this.cc.did_onload_callback(this);
-              if (this.cc.canvas) {
-                this.cc.canvas.width = this.width;
-                this.cc.canvas.height = this.height;
-              }
+                this.cc.resize(this.width, this.height);
             }
         };
 
