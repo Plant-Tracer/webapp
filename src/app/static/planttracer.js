@@ -941,6 +941,7 @@ $( document ).ready( function() {
 if (typeof module != 'undefined'){
   module.exports = {
     add_func,
+    checkLambdaStatus,
     check_upload_metadata,
     computeSHA256,
     first_frame_url,
