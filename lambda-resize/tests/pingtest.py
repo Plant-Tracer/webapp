@@ -1,6 +1,7 @@
 import sys
 import time
 from unittest.mock import patch
+import logging
 
 import pytest
 
@@ -72,7 +73,6 @@ def test_ping_content_type_is_json():
 
 def test_ping_logs_info(caplog):
     """Endpoint should log 'ping' at INFO level."""
-    import logging
     with caplog.at_level(logging.INFO):
         client.get(ENDPOINT)
     assert any("ping" in record.message for record in caplog.records)
