@@ -25,6 +25,11 @@ function makeFetchMock({ ok, jsonData, jsonThrows = false }) {
 // 3. Tests
 // ---------------------------------------------------------------------------
 describe('checkLambdaStatus()', () => {
+  const LAMBDA_API_BASE = 'https://lambda.planttracer.com/';
+
+  beforeEach(() => {
+      global.LAMBDA_API_BASE = LAMBDA_API_BASE;
+    });
 
   afterEach(() => {
     jest.restoreAllMocks();
