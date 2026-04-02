@@ -125,28 +125,38 @@ describe('CanvasController', () => {
   test('should move marker diagonally and end drag', () => {
     const marker = new Marker(50, 50, 10, 'red', 'black', 'test-marker');
     controller.add_object(marker);
-    
+
     // Start dragging at original position
     const startEvent = { x: 50, y: 50 };
     controller.startMarkerDrag(startEvent);
     expect(controller.selected).toBe(marker);
-    
+
     // Move diagonally up and right in 2-unit increments (5 moves for 10 units total)
     for (let i = 1; i <= 5; i++) {
       const moveEvent = { x: 50 + (i * 2), y: 50 - (i * 2) };
       controller.moveMarker(moveEvent);
     }
-    
+
     // Verify final position (should be at 60, 40)
     expect(marker.x).toBe(60);
     expect(marker.y).toBe(40);
-    
+
     // End the drag
     controller.endMarkerDrag();
-    
+
     // Verify drag is ended
     expect(controller.selected).toBeNull();
     expect(controller.c.style.cursor).toBe('auto');
+  });
+
+  test('resize updates both canvas and offscreen canvas dimensions', () => {
+    controller.resize(320, 240);
+    expect(controller.c.width).toBe(320);
+    expect(controller.c.height).toBe(240);
+    expect(controller.oc.width).toBe(320);
+    expect(controller.oc.height).toBe(240);
+    expect(controller.naturalWidth).toBe(320);
+    expect(controller.naturalHeight).toBe(240);
   });
 
   });
@@ -357,4 +367,28 @@ describe('WebImage', () => {
   });
 });
 
-export {}; 
+describe('WebImage onload', () => {
+  test('calls cc.resize with natural image dimensions', () => {
+    const img = new WebImage(0, 0, 'http://example.com/test.png');
+    const cc = new CanvasController('#test-canvas', null);
+    const resizeSpy = jest.spyOn(cc, 'resize');
+    const callbackSpy = jest.fn();
+    cc.did_onload_callback = callbackSpy;
+    img.cc = cc;
+    Object.defineProperty(img.img, 'naturalWidth', { value: 320, configurable: true });
+    Object.defineProperty(img.img, 'naturalHeight', { value: 240, configurable: true });
+    img.img.onload(null);
+    expect(resizeSpy).toHaveBeenCalledWith(320, 240);
+    expect(callbackSpy).toHaveBeenCalledWith(img);
+  });
+
+  test('does not throw when cc is not set', () => {
+    const img = new WebImage(0, 0, 'http://example.com/test.png');
+    img.cc = null;
+    Object.defineProperty(img.img, 'naturalWidth', { value: 100, configurable: true });
+    Object.defineProperty(img.img, 'naturalHeight', { value: 100, configurable: true });
+    expect(() => img.img.onload(null)).not.toThrow();
+  });
+});
+
+export {};

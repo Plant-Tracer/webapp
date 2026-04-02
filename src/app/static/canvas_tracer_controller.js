@@ -700,6 +700,34 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
     }
 }
 
+function calc_scale(markers) {
+    let scale = 1, pos_units = "pixels";
+    const ruler_markers = markers
+        .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
+        .filter(x => x.number !== null)
+        .sort((a, b) => a.number - b.number);
+
+    if (ruler_markers.length >= 2) {
+        const extract_ruler_start = ruler_markers[0];
+        const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
+        const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
+        const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
+        const x_ruler_start = ruler_start.x;
+        const y_ruler_start = ruler_start.y;
+        const x_ruler_end = ruler_end.x;
+        const y_ruler_end = ruler_end.y;
+        const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
+        const real_distance = extract_ruler_end.number - extract_ruler_start.number;
+        scale = real_distance / pixel_distance;
+        pos_units = "mm";
+    } else {
+        console.log('Two RulerXXmm markers not found. The distance will be in pixels.');
+        scale = 1;
+        pos_units = "pixels";
+    }
+    return { scale: scale, pos_units: pos_units };
+}
+
 function graph_data(cc, frames) {
     const frame_labels = [];
     const x_values_mm = [];
@@ -834,33 +862,6 @@ function graph_data(cc, frames) {
         }
     });
 
-    function calc_scale(markers) {
-        let scale = 1, pos_units = "pixels";
-        const ruler_markers = markers
-            .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
-            .filter(x => x.number !== null)
-            .sort((a, b) => a.number - b.number);
-
-        if (ruler_markers.length >= 2) {
-            const extract_ruler_start = ruler_markers[0];
-            const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
-            const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
-            const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
-            const x_ruler_start = ruler_start.x;
-            const y_ruler_start = ruler_start.y;
-            const x_ruler_end = ruler_end.x;
-            const y_ruler_end = ruler_end.y;
-            const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
-            const real_distance = extract_ruler_end.number - extract_ruler_start.number;
-            scale = real_distance / pixel_distance;
-            pos_units = "mm";
-        } else {
-            console.log('Two RulerXXmm markers not found. The distance will be in pixels.');
-            scale = 1;
-            pos_units = "pixels";
-        }
-        return { scale: scale, pos_units: pos_units };
-    }
 }
 
 /* Main function called when HTML page loads.
@@ -940,4 +941,6 @@ function is_movie_tracked(metadata) {
     return (last != null && total != null && total > 1 && last >= 1);
 }
 
-export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
+export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
+         get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
+         create_default_markers, calc_scale };
