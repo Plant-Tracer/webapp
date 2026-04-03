@@ -1241,8 +1241,12 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     movie = fix_movie(ddbo.get_movie(movie_id)) # fixes the movie schema
 
     # Correcting dimensions based on rotation
-    rotation = movie.get('rotation', 0)
-    if rotation in [90, 270]:
+    rotation_value = movie.get('rotation', 0)
+    try:
+        rotation = int(rotation_value)
+    except (TypeError, ValueError):
+        rotation = 0
+    if rotation in (90, 270):
         # Using the tuple swap you suggested:
         (movie['width'], movie['height']) = (movie.get('height'), movie.get('width'))
 
