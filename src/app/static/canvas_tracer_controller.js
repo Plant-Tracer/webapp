@@ -75,7 +75,7 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
-      this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
+        this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
         // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
         this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
             ? movie_metadata.last_frame_tracked : -1;
@@ -115,11 +115,6 @@ class TracerController extends MovieController {
         this.track_button.on('click', () => {this.track_to_end();});
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
-
-        this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        this.rotate_button.hide();
-        this.rotate_button.prop(DISABLED, true);
-        this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
 
         // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
         const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
@@ -442,11 +437,7 @@ class TracerController extends MovieController {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
             $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
-            this.rotate_button.prop(DISABLED, true);
             return;
-        }
-        if (this.rotate_button.is(':visible')) {
-            this.rotate_button.prop(DISABLED, false);
         }
         this.max_frame_index = this.getMaxViewableFrame();
         super.set_movie_control_buttons(); // otherwise run the super class
@@ -580,26 +571,6 @@ class TracerController extends MovieController {
             });
     }
 
-    rotate_button_pressed() {
-        // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
-        this.rotate_button.prop(DISABLED, true);
-        $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
-        const currentRotation = Number(this.movie_rotation) || 0;
-        this.movie_rotation = (currentRotation + 90) % 360;
-        const params = {
-          api_key: this.api_key,
-          movie_id: this.movie_id,
-          rotation: this.movie_rotation};
-        $.post(`${API_BASE}api/rotate-movie`, params).done((data) => {
-            if (data.error) {
-                alert(data.message);
-                this.rotate_button.prop(DISABLED, false);
-            } else {
-                location.reload(true);
-            }
-        });
-    }
-
 }
 
 
@@ -619,8 +590,6 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
-        cc.rotate_button.show();
-        cc.rotate_button.prop(DISABLED, false);
         if (demo_mode) {
             $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
@@ -688,8 +657,6 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
-        cc.rotate_button.show();
-        cc.rotate_button.prop(DISABLED, false);
     };
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
