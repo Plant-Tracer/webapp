@@ -472,3 +472,42 @@ def test_api_edit_movie(new_movie, client):
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
     logger.debug("movie_metadata2=%s", movie_metadata2)
     assert movie_metadata2.get('rotation') == 180, f"{movie}"
+
+
+def test_get_movie_metadata_rotation_coercion(new_movie):
+    """Verify that get_movie_metadata coerces rotation to int, defaulting to 0 for invalid values,
+    and swaps width/height only when rotation is 90 or 270."""
+    movie_id = new_movie[MOVIE_ID]
+
+    # Seed width and height so we can detect swaps
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'width': 100, 'height': 200})
+
+    # String "90" should be coerced to int 90 → dimensions swapped
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '90'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 200
+    assert meta.get('height') == 100
+
+    # Invalid string → coerced to 0 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': 'invalid'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200
+
+    # None → coerced to 0 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': None})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200
+
+    # String "270" should be coerced to int 270 → dimensions swapped
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '270'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 200
+    assert meta.get('height') == 100
+
+    # String "180" should be coerced to int 180 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '180'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200

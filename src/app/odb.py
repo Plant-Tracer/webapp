@@ -1238,7 +1238,18 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """
     logger.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
-    movie = fix_movie(ddbo.get_movie(movie_id))
+    movie = fix_movie(ddbo.get_movie(movie_id)) # fixes the movie schema
+
+    # Correcting dimensions based on rotation
+    rotation_value = movie.get('rotation', 0)
+    try:
+        rotation = int(rotation_value)
+    except (TypeError, ValueError):
+        rotation = 0
+    if rotation in (90, 270):
+        # Using the tuple swap you suggested:
+        (movie['width'], movie['height']) = (movie.get('height'), movie.get('width'))
+
     if get_last_frame_tracked and movie.get(LAST_FRAME_TRACKED,None) is None:
         movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
     logger.debug("get_movie_metadata: returning movie=%s",movie)

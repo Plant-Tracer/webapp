@@ -49,7 +49,7 @@
       "clover"
     ],
     "transform": {
-      "^.+\\.jsx?$": "babel-jest"
+      "^.+\\.m?jsx?$": "babel-jest"
     },
     "testMatch": [
       "**/?(*.)+(spec|test).(mjs|js)"
