@@ -14,7 +14,13 @@ import boto3
 from aws_lambda_powertools import Logger
 
 from .src.app.schema import Trackpoint
-from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints, LAST_FRAME_TRACKED
+from .src.app.odb import (
+    get_movie_metadata,
+    get_movie_trackpoints,
+    put_frame_trackpoints,
+    clear_movie_tracking_after_frame,
+    LAST_FRAME_TRACKED,
+)
 from .src.app.odb_movie_data import (write_object_from_path )
 from .src.app import mp4_metadata_lib
 from .src.app import s3_presigned
@@ -109,9 +115,25 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     return MovieInfo(signed_url=signed_url, signed_zipfile_url=None, rotation=rotation)
 
 
+def first_frame_to_track(*, source_frame_number:int) -> int:
+    """Translate a user-selected source frame into the first frame to recompute."""
+    if source_frame_number < 0:
+        raise ValueError("source_frame_number must be >= 0")
+    return 1 if source_frame_number == 0 else source_frame_number + 1
+
+
 def run_tracing(*, movie_id, frame_start):
-    """Run tracing pipeline and create both zipfile and tracked mp4."""
+    """Run tracing pipeline and create both zipfile and tracked mp4.
+
+    ``frame_start`` is the frame the user edited and wants to retrace from.
+    That frame remains the source of truth; tracing resumes at ``frame_start + 1``.
+    """
     ddbo = DDBO()
+    source_frame_number = int(frame_start)
+    tracking_frame_start = first_frame_to_track(source_frame_number=source_frame_number)
+    cleared_frames = clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=source_frame_number)
+    LOGGER.info("run_tracing movie_id=%s source_frame=%s tracking_frame_start=%s cleared_frames=%s",
+                movie_id, source_frame_number, tracking_frame_start, cleared_frames)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
     input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
@@ -125,7 +147,8 @@ def run_tracing(*, movie_id, frame_start):
     if not input_trackpoints:
         raise RuntimeError("Cannot track movie with no trackpoints")
 
-    LOGGER.info("run_tracking movie_id=%s frame_start=%s input_trackpoints=%s",movie_id,frame_start,input_trackpoints)
+    LOGGER.info("run_tracking movie_id=%s source_frame=%s tracking_frame_start=%s input_trackpoints=%s",
+                movie_id, source_frame_number, tracking_frame_start, input_trackpoints)
 
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
@@ -152,7 +175,7 @@ def run_tracing(*, movie_id, frame_start):
 
         rotation = movie_record.get(MOVIE_ROTATION,0) or 0
         trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(urn=movie_urn),
-                                             frame_start = frame_start,
+                                             frame_start = tracking_frame_start,
                                              trackpoints = input_trackpoints,
                                              movie_zipfile_path = movie_zipfile_path,
                                              movie_traced_path = movie_traced_path,

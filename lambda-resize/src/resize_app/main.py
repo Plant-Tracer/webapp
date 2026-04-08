@@ -113,7 +113,11 @@ def handle_first_frame() -> Any:
 
 @app.post("/resize-api/v1/trace-movie")
 def handle_post_actions():
-    """Queue the tracing of the movie"""
+    """Queue the tracing of the movie.
+
+    ``frame_start`` is the user-edited source frame. That frame is preserved; PlantTracer
+    invalidates later stored annotations and resumes tracing at the next frame.
+    """
 
     api_key = app.current_event.get_header_value(name="x-api-key")
     if not api_key:

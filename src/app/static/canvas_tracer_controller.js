@@ -18,6 +18,8 @@ const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const RETRACE_MOVIE = 'Retrace movie';
+const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
+const TRACE_MOVIE = 'Trace movie';
 const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
@@ -81,6 +83,7 @@ class TracerController extends MovieController {
             ? movie_metadata.last_frame_tracked : -1;
         this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
             ? movie_metadata.total_frames : 0;
+        this.pending_retrace_to_end = false;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -116,13 +119,7 @@ class TracerController extends MovieController {
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
-        // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
-        const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
-            this.last_tracked_frame >= this.total_frames - 1;
-        if (fullyTraced) {
-            this.track_button.val(RETRACE_MOVIE);
-            this.download_button.show();
-        }
+        this.refreshTrackButtonState();
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
 
         // Remember zoom per movie (movie_id is a GUID); restore from localStorage on load, save on change.
@@ -132,6 +129,37 @@ class TracerController extends MovieController {
     async enableTrackButtonIfAllowed() {
         this.track_button.prop(DISABLED, false);
         this.tracking_status.text('');
+    }
+
+    isFullyTraced() {
+        return this.total_frames > 0 && this.last_tracked_frame >= 0 &&
+            this.last_tracked_frame >= this.total_frames - 1;
+    }
+
+    hasFutureTrackedFrames() {
+        return this.last_tracked_frame != null && this.last_tracked_frame > this.frame_number;
+    }
+
+    markFutureFramesDirty() {
+        if (!this.hasFutureTrackedFrames()) {
+            return;
+        }
+        this.pending_retrace_to_end = true;
+        this.refreshTrackButtonState();
+    }
+
+    refreshTrackButtonState() {
+        if (this.pending_retrace_to_end) {
+            this.track_button.val(RETRACE_TO_END_OF_MOVIE);
+            this.download_button.hide();
+            return;
+        }
+        if (this.isFullyTraced()) {
+            this.track_button.val(RETRACE_MOVIE);
+            this.download_button.show();
+            return;
+        }
+        this.track_button.val(TRACE_MOVIE);
     }
 
 
@@ -172,6 +200,7 @@ class TracerController extends MovieController {
         let color = PLANT_MARKER_COLOR;
         this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
         this.create_marker_table(); // redraw table
+        this.markFutureFramesDirty();
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
     }
@@ -238,6 +267,7 @@ class TracerController extends MovieController {
     del_row(i) {
         this.objects.splice(i,1);
         this.create_marker_table();
+        this.markFutureFramesDirty();
         this.put_markers();
     }
 
@@ -246,6 +276,7 @@ class TracerController extends MovieController {
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
         $( ".obj-mm" ).text( "n/a" ); // set all of the mm classes to be n/a
+        this.markFutureFramesDirty();
 
         if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
             this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
@@ -313,6 +344,7 @@ class TracerController extends MovieController {
         this.tracking_status.text("Asking pipeline to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
+        this.pending_retrace_to_end = false;
         this.poll_error_count = 0;
         this.poll_for_track_end();
         this.set_movie_control_buttons();

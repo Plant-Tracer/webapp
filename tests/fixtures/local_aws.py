@@ -17,7 +17,7 @@ from botocore.exceptions import ClientError
 
 
 from app.constants import C
-from app.s3_presigned import CORS_CONFIGURATION, s3_client
+from app.s3_presigned import s3_client
 from app import odb
 from app import odb_movie_data
 from app import odbmaint
@@ -90,8 +90,7 @@ def local_ddb():
 @pytest.fixture(scope="session")
 def local_s3():
     """
-    When running locally: start MinIO, ensure the bucket exists (create if not),
-    and apply CORS so the app's config check and browser fetches succeed.
+    When running locally: start MinIO and ensure the bucket exists (create if not).
     """
     if os.environ.get(C.AWS_REGION, '') == 'local':
         subprocess.call([os.path.join(ROOT_DIR, 'bin/local_minio_control.bash'), 'start'])
@@ -108,18 +107,6 @@ def local_s3():
                 client.create_bucket(Bucket=bucket)
             else:
                 logging.warning("head_bucket failed: %s", e)
-
-        try:
-            client.put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
-        except ClientError as e:
-            logging.warning("Could not set S3 CORS (non-fatal): %s", e)
-    else:
-        bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
-        if bucket:
-            try:
-                s3_client().put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
-            except ClientError as e:
-                logging.warning("Could not set S3 CORS (non-fatal): %s", e)
 
     yield os.environ[C.PLANTTRACER_S3_BUCKET]
 

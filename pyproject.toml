@@ -14,6 +14,7 @@ dynamic = ["dependencies"]
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
 sqs_cli = "sqs_cli:main"
+planttracer-local-trace = "app.local_trace_cli:main"
 
 [tool.poetry]
 packages = [
@@ -25,7 +26,6 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 apig-wsgi = "^2.20.0"
-fastapi = "^0.135.2"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"
