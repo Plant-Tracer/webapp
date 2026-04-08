@@ -85,7 +85,7 @@
   import { $ } from "{{ url_for('static', filename='utils.js') }}";
   import { CanvasController, CanvasItem, Marker, WebImage } from "{{ url_for('static', filename='canvas_controller.mjs') }}";
   import { MovieController } from "{{ url_for('static', filename='canvas_movie_controller.js') }}";
-  import { TracerController, trace_movie } from "{{ url_for('static', filename='canvas_tracer_controller.js') }}";
+  import { TracerController, trace_movie } from "{{ url_for('static', filename='canvas_tracer_controller.mjs') }}";
   let params = new URLSearchParams(window.location.search);
 
   // When the document loads, run the trace_movie() functions.

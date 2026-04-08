@@ -24,7 +24,7 @@
    // This demo draws three dragable objects and adds some text.
    import { CanvasController, CanvasItem, Marker, WebImage } from "./static/canvas_controller.js";
    import { MovieController } from "./static/canvas_movie_controller.js";
-   import { TracerController, trace_movie_one_frame } from "./static/canvas_tracer_controller.js";
+   import { TracerController, trace_movie_one_frame } from "./static/canvas_tracer_controller.mjs";
    const movie_id = 10;
    const movie_metadata = {'movie_id':movie_id, 'width':512, 'height':512};
    trace_movie_one_frame(-1, 'div#tracer', movie_metadata, 'https://planttracer.com/demo/frame0.jpg', api_key);
