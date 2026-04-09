@@ -146,10 +146,14 @@ const {
     create_default_markers,
     calc_scale,
     TracerController,
+    trace_movie_one_frame,
 } = await import('canvas_tracer_controller.mjs');
 
 // Also grab the mocked Marker/Line classes for use in tests
 const { Marker: MockMarkerClass, Line: MockLineClass } = await import('canvas_controller.mjs');
+
+// Grab MockMovieController so we can spy on its prototype in trace_movie_one_frame tests
+const { MovieController: MockMovieControllerClass } = await import('canvas_movie_controller.js');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function makeMovieMetadata(overrides = {}) {
@@ -427,6 +431,145 @@ describe('TracerController.get_markers', () => {
         tc.objects.push(new MockLineClass(0, 0, 50, 50, 2, 'blue'));
         tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
         expect(tc.get_markers()).toHaveLength(1);
+    });
+});
+
+// ── trace_movie_one_frame ─────────────────────────────────────────────────────
+describe('trace_movie_one_frame', () => {
+    let capturedTc;
+    let loadMovieSpy;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        capturedTc = null;
+        // Spy on load_movie to capture the TracerController instance created inside
+        // trace_movie_one_frame (it is stored in the module-level `cc` variable and
+        // not exported, so this is the only way to reach it).
+        loadMovieSpy = jest.spyOn(MockMovieControllerClass.prototype, 'load_movie')
+            .mockImplementation(function(frames) {
+                capturedTc = this;
+                this.frames = frames;
+            });
+    });
+
+    afterEach(() => {
+        loadMovieSpy.mockRestore();
+        global.demo_mode = false;
+    });
+
+    // Convenience wrapper so every test uses the same URL / api_key.
+    function callTmof(metadata_frames, metaOverrides = {}) {
+        trace_movie_one_frame(
+            'movie-id-123',
+            'div#tracer',
+            makeMovieMetadata(metaOverrides),
+            'http://example.com/frame0.jpg',
+            metadata_frames,
+            'test-api-key'
+        );
+        return capturedTc;
+    }
+
+    // A. Marker selection ─────────────────────────────────────────────────────
+    test('uses metadata_frames[0].markers when present and non-empty', () => {
+        const markers = [{ x: 10, y: 20, label: 'Apex' }];
+        const tc = callTmof({ 0: { markers } });
+        expect(tc.frames[0].markers).toEqual(markers);
+    });
+
+    test('falls back to create_default_markers() when metadata_frames is null', () => {
+        const tc = callTmof(null);
+        expect(tc.frames[0].markers).toEqual(create_default_markers());
+    });
+
+    test('falls back to create_default_markers() when metadata_frames[0].markers is empty', () => {
+        const tc = callTmof({ 0: { markers: [] } });
+        expect(tc.frames[0].markers).toEqual(create_default_markers());
+    });
+
+    test('falls back to create_default_markers() when metadata_frames has no key 0', () => {
+        const tc = callTmof({});
+        expect(tc.frames[0].markers).toEqual(create_default_markers());
+    });
+
+    // B. Frame structure ──────────────────────────────────────────────────────
+    test('load_movie is called with exactly one frame', () => {
+        const tc = callTmof(null);
+        expect(tc.frames).toHaveLength(1);
+    });
+
+    test('frame_url is the supplied frame0_url', () => {
+        const tc = callTmof(null);
+        expect(tc.frames[0].frame_url).toBe('http://example.com/frame0.jpg');
+    });
+
+    // C. Track button and table ───────────────────────────────────────────────
+    test('track button is disabled after call', () => {
+        const tc = callTmof(null);
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
+    test('create_marker_table is called once', () => {
+        const tableSpy = jest.spyOn(TracerController.prototype, 'create_marker_table');
+        callTmof(null);
+        expect(tableSpy).toHaveBeenCalledTimes(1);
+        tableSpy.mockRestore();
+    });
+
+    // D. did_onload_callback — canvas/video resize ────────────────────────────
+    // After calling trace_movie_one_frame we clear all mock call histories so
+    // that only calls made inside the callback are visible, making assertions precise.
+
+    test('resizes canvas and video when metadata has no dimensions and image has valid natural size', () => {
+        const tc = callTmof(null, { width: null, height: null });
+        jest.clearAllMocks();
+        tc.did_onload_callback({ img: { naturalWidth: 320, naturalHeight: 240 } });
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
+        expect(canvasIdx).toBeGreaterThanOrEqual(0);
+        expect(videoIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[canvasIdx].value.attr).toHaveBeenCalledWith('width', 320);
+        expect(mock$.mock.results[videoIdx].value.attr).toHaveBeenCalledWith('height', 240);
+    });
+
+    test('does not resize canvas when metadata already has dimensions', () => {
+        const tc = callTmof(null, { width: 200, height: 150 });
+        jest.clearAllMocks();
+        tc.did_onload_callback({ img: { naturalWidth: 320, naturalHeight: 240 } });
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        expect(canvasIdx).toBe(-1);
+    });
+
+    test('does not resize canvas when image natural dimensions are 0', () => {
+        const tc = callTmof(null, { width: null, height: null });
+        jest.clearAllMocks();
+        tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        expect(canvasIdx).toBe(-1);
+    });
+
+    // E. did_onload_callback — status message and demo mode ───────────────────
+    test('in normal mode: shows ready status and enables track button', () => {
+        const tc = callTmof(null);
+        jest.clearAllMocks();
+        tc.did_onload_callback(null);
+        const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
+        expect(statusIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[statusIdx].value.html)
+            .toHaveBeenCalledWith('Movie ready for initial tracing.');
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('in demo mode: shows demo message and does not enable track button', () => {
+        global.demo_mode = true;
+        const tc = callTmof(null);
+        jest.clearAllMocks();
+        tc.did_onload_callback(null);
+        const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
+        expect(statusIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[statusIdx].value.html)
+            .toHaveBeenCalledWith('Movie cannot be traced in demo mode.');
+        expect(tc.track_button.prop).not.toHaveBeenCalledWith('disabled', false);
     });
 });
 
