@@ -29,6 +29,9 @@ jest.unstable_mockModule('canvas_controller.mjs', () => {
         constructor(x, y, x2, y2, width, color) {
             this.x = x; this.y = y; this.x2 = x2; this.y2 = y2;
             this.width = width; this.color = color;
+            // calculate_scale maps over all objects using .name; give Lines an empty
+            // string so get_ruler_size('') safely returns null and filters them out.
+            this.name = '';
         }
     }
     class MockWebImage {
@@ -1248,6 +1251,517 @@ describe('TracerController.track_to_end', () => {
         await jest.runAllTimersAsync();
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(global.alert).not.toHaveBeenCalled();
+    });
+});
+
+// ── marker_name_changed ───────────────────────────────────────────────────────
+describe('TracerController.marker_name_changed', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        jest.clearAllMocks();
+    });
+
+    test('name shorter than MIN_MARKER_NAME_LEN: shows error, disables add button', () => {
+        tc.marker_name_input.val.mockReturnValue('ab');
+        tc.marker_name_changed();
+        expect(tc.add_marker_status.text).toHaveBeenCalledWith(expect.stringContaining('at least'));
+        expect(tc.add_marker_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
+    test('valid name not in use: clears status, enables add button', () => {
+        tc.marker_name_input.val.mockReturnValue('Apex');
+        tc.marker_name_changed();
+        expect(tc.add_marker_status.text).toHaveBeenCalledWith('');
+        expect(tc.add_marker_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('name already in use: shows "in use" message, disables add button', () => {
+        tc.marker_name_input.val.mockReturnValue('Apex');
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
+        tc.marker_name_changed();
+        expect(tc.add_marker_status.text).toHaveBeenCalledWith(expect.stringContaining('in use'));
+        expect(tc.add_marker_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+});
+
+// ── add_marker_onclick_handler ────────────────────────────────────────────────
+describe('TracerController.add_marker_onclick_handler', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        jest.clearAllMocks();
+    });
+
+    test('name too short: no marker added', () => {
+        tc.marker_name_input.val.mockReturnValue('ab');
+        tc.add_marker_onclick_handler({});
+        expect(tc.objects).toHaveLength(0);
+    });
+
+    test('valid name: adds a Marker object', () => {
+        tc.marker_name_input.val.mockReturnValue('Apex');
+        tc.add_marker_onclick_handler({});
+        expect(tc.objects).toHaveLength(1);
+        expect(tc.objects[0]).toBeInstanceOf(MockMarkerClass);
+        expect(tc.objects[0].name).toBe('Apex');
+    });
+
+    test('valid name: clears the input field', () => {
+        tc.marker_name_input.val.mockReturnValue('Apex');
+        tc.add_marker_onclick_handler({});
+        expect(tc.marker_name_input.val).toHaveBeenCalledWith('');
+    });
+
+    test('valid name: enables the track button', () => {
+        tc.marker_name_input.val.mockReturnValue('Apex');
+        tc.add_marker_onclick_handler({});
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+});
+
+// ── create_marker_table ───────────────────────────────────────────────────────
+describe('TracerController.create_marker_table', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        jest.clearAllMocks();
+        global.demo_mode = false;
+    });
+    afterEach(() => { global.demo_mode = false; });
+
+    test('with no objects: sets tbody html to empty string', () => {
+        tc.create_marker_table();
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        expect(tbodyIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[tbodyIdx].value.html).toHaveBeenCalledWith('');
+    });
+
+    test('with a Marker: builds a row containing the marker name', () => {
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
+        tc.create_marker_table();
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
+        expect(htmlArg).toContain('Apex');
+    });
+
+    test('calls redraw after building the table', () => {
+        const redrawSpy = jest.spyOn(tc, 'redraw');
+        tc.create_marker_table();
+        expect(redrawSpy).toHaveBeenCalledTimes(1);
+        redrawSpy.mockRestore();
+    });
+
+    test('in demo_mode: hides .nodemo elements', () => {
+        global.demo_mode = true;
+        tc.create_marker_table();
+        const nodemoIdx = mock$.mock.calls.findIndex(a => a[0] === '.nodemo');
+        expect(nodemoIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[nodemoIdx].value.hide).toHaveBeenCalled();
+    });
+
+    test('not demo_mode: does not hide .nodemo elements', () => {
+        tc.create_marker_table();
+        const nodemoIdx = mock$.mock.calls.findIndex(a => a[0] === '.nodemo');
+        expect(nodemoIdx).toBe(-1);
+    });
+});
+
+// ── put_markers ───────────────────────────────────────────────────────────────
+describe('TracerController.put_markers', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        jest.clearAllMocks();
+        global.demo_mode = false;
+        global.alert = jest.fn();
+    });
+    afterEach(() => { global.demo_mode = false; });
+
+    test('in demo_mode: shows demo popup and does not POST', () => {
+        global.demo_mode = true;
+        tc.put_markers();
+        const popupIdx = mock$.mock.calls.findIndex(a => a[0] === '#demo-popup');
+        expect(popupIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[popupIdx].value.fadeIn).toHaveBeenCalledWith(300);
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    test('not demo_mode: POSTs to put-frame-trackpoints with api_key and movie_id', () => {
+        tc.put_markers();
+        expect(mockPost).toHaveBeenCalledWith(
+            expect.stringContaining('put-frame-trackpoints'),
+            expect.objectContaining({ api_key: 'api-key', movie_id: 'test-movie-001' })
+        );
+    });
+
+    test('not demo_mode: trackpoints param is JSON of current markers', () => {
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
+        tc.put_markers();
+        const params = mockPost.mock.calls[0][1];
+        const tp = JSON.parse(params.trackpoints);
+        expect(tp).toEqual([{ x: 10, y: 20, label: 'Apex' }]);
+    });
+
+    test('done callback: alerts when server returns error', () => {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => { cb({ error: true, message: 'Save failed' }); return { fail: jest.fn() }; }),
+            fail: jest.fn(),
+        });
+        tc.put_markers();
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
+    });
+
+    test('done callback: no alert on success', () => {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => { cb({ error: false }); return { fail: jest.fn() }; }),
+            fail: jest.fn(),
+        });
+        tc.put_markers();
+        expect(global.alert).not.toHaveBeenCalled();
+    });
+
+    test('fail callback: alerts with response text', () => {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockImplementation(cb => { cb({ responseText: 'Network error' }); }),
+        });
+        tc.put_markers();
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Network error'));
+    });
+});
+
+// ── poll_for_track_end (done/fail callbacks) ──────────────────────────────────
+describe('TracerController.poll_for_track_end', () => {
+    let tc;
+    beforeEach(() => {
+        jest.useFakeTimers();
+        global.alert = jest.fn();
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        tc.tracking = true;
+        jest.clearAllMocks();
+    });
+    afterEach(() => { jest.useRealTimers(); });
+
+    function fireDone(data) {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => { cb(data); return { fail: jest.fn() }; }),
+            fail: jest.fn(),
+        });
+    }
+    function fireFail(xhr, status, err) {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockImplementation(cb => { cb(xhr, status, err); }),
+        });
+    }
+
+    // done: tracing completed path
+    test('done: TRACING COMPLETED + tracking=true → calls movie_tracked', () => {
+        const movieTrackedSpy = jest.spyOn(tc, 'movie_tracked').mockImplementation(() => {});
+        fireDone({ error: false, metadata: { status: 'tracing completed' } });
+        tc.poll_for_track_end();
+        expect(movieTrackedSpy).toHaveBeenCalledTimes(1);
+        movieTrackedSpy.mockRestore();
+    });
+
+    test('done: TRACING COMPLETED + tracking=false → does NOT call movie_tracked', () => {
+        tc.tracking = false;
+        const movieTrackedSpy = jest.spyOn(tc, 'movie_tracked').mockImplementation(() => {});
+        fireDone({ error: false, metadata: { status: 'tracing completed' } });
+        tc.poll_for_track_end();
+        expect(movieTrackedSpy).not.toHaveBeenCalled();
+        movieTrackedSpy.mockRestore();
+    });
+
+    test('done: in-progress with last_frame_tracked → updates status and schedules next poll', () => {
+        fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 5 } });
+        tc.poll_for_track_end();
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing frame 5');
+        expect(tc.timeout).toBeDefined();
+    });
+
+    test('done: in-progress with no last_frame_tracked → shows metadata.status', () => {
+        fireDone({ error: false, metadata: { status: 'Initialising', last_frame_tracked: null } });
+        tc.poll_for_track_end();
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Initialising');
+    });
+
+    test('done: in-progress with no status or last → shows "Tracing starting..."', () => {
+        fireDone({ error: false, metadata: { last_frame_tracked: null } });
+        tc.poll_for_track_end();
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing starting...');
+    });
+
+    test('done: error response → increments poll_error_count', () => {
+        fireDone({ error: true });
+        tc.poll_for_track_end();
+        expect(tc.poll_error_count).toBe(1);
+    });
+
+    test('done: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+        tc.poll_error_count = 4; // one more will hit 5
+        fireDone({ error: true });
+        tc.poll_for_track_end();
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+    });
+
+    test('done: error but tracking=true → schedules next poll', () => {
+        fireDone({ error: true });
+        tc.poll_for_track_end();
+        expect(tc.timeout).toBeDefined();
+    });
+
+    // fail path
+    test('fail: increments poll_error_count', () => {
+        fireFail({}, 500, 'err');
+        tc.poll_for_track_end();
+        expect(tc.poll_error_count).toBe(1);
+    });
+
+    test('fail: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+        tc.poll_error_count = 4;
+        fireFail({}, 500, 'err');
+        tc.poll_for_track_end();
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+    });
+
+    test('fail: tracking=true → schedules next poll', () => {
+        fireFail({}, 500, 'err');
+        tc.poll_for_track_end();
+        expect(tc.timeout).toBeDefined();
+    });
+
+    test('fail: tracking=false → does NOT schedule next poll', () => {
+        tc.tracking = false;
+        tc.timeout = undefined;
+        fireFail({}, 500, 'err');
+        tc.poll_for_track_end();
+        expect(tc.timeout).toBeUndefined();
+    });
+});
+
+// ── movie_tracked ─────────────────────────────────────────────────────────────
+describe('TracerController.movie_tracked', () => {
+    let tc;
+    beforeEach(() => {
+        jest.useFakeTimers();
+        global.alert = jest.fn();
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        tc.tracking = true;
+        jest.clearAllMocks();
+    });
+    afterEach(() => { jest.useRealTimers(); });
+
+    function makeTrackedData(zipUrl = null, framesOverride = {}) {
+        return {
+            metadata: { movie_zipfile_url: zipUrl, movie_id: 'test-movie-001', width: null, height: null, rotation: 0, last_frame_tracked: -1, total_frames: 0 },
+            frames: framesOverride,
+        };
+    }
+
+    test('sets tracking = false', () => {
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        expect(tc.tracking).toBe(false);
+    });
+
+    test('sets tracking_status to "Tracing complete. Loading movie..."', () => {
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing complete. Loading movie...');
+    });
+
+    test('with zip URL: unzip is called with the zip URL', async () => {
+        mockUnzip.mockResolvedValueOnce({ entries: {} });
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        await jest.runAllTimersAsync();
+        expect(mockUnzip).toHaveBeenCalledWith('http://example.com/m.zip');
+    });
+
+    test('with zip URL: removes tracing-dimmed from controller div', async () => {
+        mockUnzip.mockResolvedValueOnce({ entries: {} });
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        await jest.runAllTimersAsync();
+        const dimmedRemoved = mock$.mock.calls.some(
+            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls.some(c => c[0] === 'tracing-dimmed')
+        );
+        expect(dimmedRemoved).toBe(true);
+    });
+
+    test('with zip URL: shows "Press play" status after load', async () => {
+        mockUnzip.mockResolvedValueOnce({ entries: {} });
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        await jest.runAllTimersAsync();
+        const statusIdx = mock$.mock.calls.findLastIndex(a => a[0] === '#status-big');
+        expect(mock$.mock.results[statusIdx].value.html)
+            .toHaveBeenCalledWith(expect.stringContaining('Press play'));
+    });
+
+    test('with zip URL: enables track button', async () => {
+        mockUnzip.mockResolvedValueOnce({ entries: {} });
+        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        await jest.runAllTimersAsync();
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('no zip URL and timeout: alerts and removes tracing-dimmed', async () => {
+        // Each poll fires done with { error: false, metadata: {} } (no zip URL), so
+        // poll() re-schedules itself via setTimeout.  runAllTimersAsync advances fake
+        // time past MAX_ZIP_WAIT_MS (10 000 ms), the deadline check triggers a reject,
+        // and the catch block removes tracing-dimmed and alerts.
+        mockPost.mockImplementation(() => ({
+            done: jest.fn().mockImplementation(cb => {
+                cb({ error: false, metadata: {} });
+                return { fail: jest.fn() };
+            }),
+            fail: jest.fn(),
+        }));
+        tc.movie_tracked(makeTrackedData(null));
+        await jest.runAllTimersAsync();
+        expect(global.alert).toHaveBeenCalled();
+        const dimmedRemoved = mock$.mock.calls.some(
+            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls.some(c => c[0] === 'tracing-dimmed')
+        );
+        expect(dimmedRemoved).toBe(true);
+    });
+});
+
+// ── add_frame_objects ─────────────────────────────────────────────────────────
+describe('TracerController.add_frame_objects', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        tc.frames = [
+            { markers: [{ x: 10, y: 10, label: 'Apex' }, { x: 50, y: 50, label: 'Base' }] },
+            { markers: [{ x: 20, y: 30, label: 'Apex' }, { x: 60, y: 70, label: 'Base' }] },
+        ];
+        jest.clearAllMocks();
+    });
+
+    test('frame=0: no Line objects added', () => {
+        tc.add_frame_objects(0);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines).toHaveLength(0);
+    });
+
+    test('frame=0: Marker objects added for each marker in frame 0', () => {
+        tc.add_frame_objects(0);
+        const markers = tc.objects.filter(o => o instanceof MockMarkerClass);
+        expect(markers).toHaveLength(2);
+    });
+
+    test('frame=1: Line objects added for shared labels across frames', () => {
+        tc.add_frame_objects(1);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines).toHaveLength(2); // Apex line + Base line
+    });
+
+    test('frame=1: Line connects correct coordinates', () => {
+        tc.add_frame_objects(1);
+        const apexLine = tc.objects.find(o => o instanceof MockLineClass && o.x === 10);
+        expect(apexLine).toBeDefined();
+        expect(apexLine.x2).toBe(20);
+        expect(apexLine.y2).toBe(30);
+    });
+
+    test('frame=1: no Line when labels do not match across frames', () => {
+        tc.frames[1].markers = [{ x: 20, y: 30, label: 'Different' }];
+        tc.add_frame_objects(1);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines).toHaveLength(0);
+    });
+
+    test('frame=1: Marker objects added for current frame markers', () => {
+        tc.add_frame_objects(1);
+        const markers = tc.objects.filter(o => o instanceof MockMarkerClass);
+        expect(markers).toHaveLength(2);
+    });
+
+    test('calls create_marker_table', () => {
+        const spy = jest.spyOn(tc, 'create_marker_table').mockImplementation(() => {});
+        tc.add_frame_objects(0);
+        expect(spy).toHaveBeenCalledTimes(1);
+        spy.mockRestore();
+    });
+});
+
+// ── graph_data (via trace_movie_frames with show_results=true) ────────────────
+describe('graph_data', () => {
+    let ChartSpy;
+
+    beforeAll(() => {
+        // Make Chart a spy so we can inspect what data was passed to the constructor
+        ChartSpy = jest.fn().mockImplementation(function () { this.destroy = jest.fn(); });
+        global.Chart = ChartSpy;
+        global.URL.createObjectURL = global.URL.createObjectURL || jest.fn().mockReturnValue('blob:mock');
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockUnzip.mockResolvedValue({ entries: {} }); // default: no frames
+    });
+
+    /** Run trace_movie_frames and flush all async. */
+    async function runWithFrames(entries, metadata_frames = null) {
+        mockUnzip.mockResolvedValueOnce({ entries });
+        await trace_movie_frames('div#tracer', makeMovieMetadata(), 'http://example.com/m.zip',
+            metadata_frames, 'api-key', true);
+    }
+
+    /** Build a minimal entries object with one jpeg frame. */
+    function oneFrame(label = 'frame_0000.jpg') {
+        return { [label]: { blob: jest.fn().mockResolvedValue({}) } };
+    }
+
+    test('creates two Chart instances (x and y)', async () => {
+        await runWithFrames(oneFrame());
+        expect(ChartSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('with no Apex markers: both charts have empty data arrays', async () => {
+        await runWithFrames(oneFrame(), { '0': { markers: [{ x: 10, y: 10, label: 'Base' }] } });
+        const xConfig = ChartSpy.mock.calls[0][1];
+        expect(xConfig.data.datasets[0].data).toEqual([]);
+    });
+
+    test('with Apex marker: x-chart dataset contains offset x value', async () => {
+        global.URL.createObjectURL.mockReturnValue('blob:f0');
+        await runWithFrames(
+            { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
+              'frame_0001.jpg': { blob: jest.fn().mockResolvedValue({}) } },
+            {
+                '0': { markers: [{ x: 10, y: 20, label: 'Apex', frame_number: 0 }] },
+                '1': { markers: [{ x: 30, y: 40, label: 'Apex', frame_number: 1 }] },
+            }
+        );
+        const xConfig = ChartSpy.mock.calls[0][1];
+        // data[0] = frame 0's own offset from itself = 0; data[1] = frame 1's offset
+        expect(xConfig.data.datasets[0].data[1]).toBe(20); // (30-10)*1 pixels
+    });
+
+    test('with fpm set on cc: x-axis title says "minutes"', async () => {
+        // fpm is set on the TracerController; trace_movie_frames creates cc internally.
+        // Easiest way: spy on TracerController constructor to set fpm after creation.
+        const origCtor = TracerController.prototype.constructor;
+        const postCtorSpy = jest.spyOn(MockMovieControllerClass.prototype, 'load_movie')
+            .mockImplementation(function (frames) { this.frames = frames; this.fpm = 2; });
+        await runWithFrames(oneFrame(), { '0': { markers: [{ x: 10, y: 10, label: 'Apex', frame_number: 0 }] } });
+        const xConfig = ChartSpy.mock.calls[0][1];
+        expect(xConfig.options.scales.x.title.text).toContain('minutes');
+        postCtorSpy.mockRestore();
+        void origCtor;
+    });
+
+    test('with ruler markers: x-chart y-axis title says "mm"', async () => {
+        await runWithFrames(
+            { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) } },
+            { '0': { markers: [
+                { x: 10, y: 0,  label: 'Apex', frame_number: 0 },
+                { x: 10, y: 0,  label: 'Ruler 0mm' },
+                { x: 10, y: 100, label: 'Ruler 100mm' },
+            ] } }
+        );
+        const xConfig = ChartSpy.mock.calls[0][1];
+        expect(xConfig.options.scales.y.title.text).toContain('mm');
     });
 });
 
