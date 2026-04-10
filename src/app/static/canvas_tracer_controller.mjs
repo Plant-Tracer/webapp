@@ -51,7 +51,7 @@ let yChartInstance = null;
  */
 function create_default_markers() {
     console.log('[canvas_tracer_controller] Creating default markers (first-time analysis load; frame 0 has no markers yet).');
-    return [...DEFAULT_MARKERS];
+    return DEFAULT_MARKERS.map(m => ({...m}));
 }
 
 // NOTE ./static is needed below but not above!
