@@ -994,4 +994,261 @@ describe('trace_movie', () => {
     });
 });
 
+// ── TracerController.track_to_end ─────────────────────────────────────────────
+describe('TracerController.track_to_end', () => {
+    let tc;
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        global.fetch = jest.fn();
+        global.alert = jest.fn();
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'test-api-key');
+        // Wipe constructor side-effects so assertions only cover track_to_end()
+        jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    /** Mock fetch to resolve once with a given HTTP status and JSON body. */
+    function mockFetchResponse(status, data) {
+        global.fetch.mockResolvedValueOnce({
+            status,
+            json: () => Promise.resolve(data),
+        });
+    }
+
+    /** Mock fetch to reject once with an Error. */
+    function mockFetchNetworkError(message = 'Network failure') {
+        global.fetch.mockRejectedValueOnce(new Error(message));
+    }
+
+    // A. Synchronous immediate effects ────────────────────────────────────────
+    test('sets #status-big to "Movie is being traced..."', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        const idx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
+        expect(idx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith('Movie is being traced...');
+    });
+
+    test('adds tracing-dimmed class to the controller div', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        const idx = mock$.mock.calls.findIndex(args => args[0] === tc.div_selector);
+        expect(idx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[idx].value.addClass).toHaveBeenCalledWith('tracing-dimmed');
+    });
+
+    test('sets tracking_status text to "Asking pipeline to trace movie..."', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Asking pipeline to trace movie...');
+    });
+
+    test('disables the track button immediately', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
+    test('sets this.tracking = true', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        expect(tc.tracking).toBe(true);
+    });
+
+    test('resets poll_error_count to 0', () => {
+        mockFetchResponse(200, {});
+        tc.poll_error_count = 99;
+        tc.track_to_end();
+        expect(tc.poll_error_count).toBe(0);
+    });
+
+    // B. fetch call ────────────────────────────────────────────────────────────
+    test('POSTs to the Lambda resize-api/v1/trace-movie endpoint', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringContaining('resize-api/v1/trace-movie'),
+            expect.objectContaining({ method: 'POST' })
+        );
+    });
+
+    test('sends the api_key in the x-api-key header', () => {
+        mockFetchResponse(200, {});
+        tc.track_to_end();
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                headers: expect.objectContaining({ 'x-api-key': 'test-api-key' }),
+            })
+        );
+    });
+
+    test('body includes movie_id and frame_start matching current frame_number', () => {
+        mockFetchResponse(200, {});
+        tc.frame_number = 7;
+        tc.track_to_end();
+        const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+        expect(body.movie_id).toBe('test-movie-001');
+        expect(body.frame_start).toBe(7);
+    });
+
+    // C. Success (2xx) ─────────────────────────────────────────────────────────
+    test('on 200 success: tracking remains true', async () => {
+        mockFetchResponse(200, { error: false });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(tc.tracking).toBe(true);
+    });
+
+    test('on 200 success: no alert is fired', async () => {
+        mockFetchResponse(200, { error: false });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.alert).not.toHaveBeenCalled();
+    });
+
+    test('on 200 success: tracing-dimmed is NOT removed', async () => {
+        mockFetchResponse(200, { error: false });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        const dimmedRemoved = mock$.mock.calls.some(
+            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
+                .some(c => c[0] === 'tracing-dimmed')
+        );
+        expect(dimmedRemoved).toBe(false);
+    });
+
+    test('on 200 success: fetch is called exactly once (no retry)', async () => {
+        mockFetchResponse(200, { error: false });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    // D. Non-retryable failure (4xx) ───────────────────────────────────────────
+    test('on 400: sets tracking = false', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(tc.tracking).toBe(false);
+    });
+
+    test('on 400: alerts with the server error message', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.alert).toHaveBeenCalledWith('Bad request');
+    });
+
+    test('on 400: removes tracing-dimmed', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        const dimmedRemoved = mock$.mock.calls.some(
+            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
+                .some(c => c[0] === 'tracing-dimmed')
+        );
+        expect(dimmedRemoved).toBe(true);
+    });
+
+    test('on 400: re-enables the track button via enableTrackButtonIfAllowed', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('on 400: only one fetch attempt (no retry for client errors)', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('on 400: sets tracking_status to the error message', async () => {
+        mockFetchResponse(400, { error: true, message: 'Bad request' });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Bad request');
+    });
+
+    // E. Retryable 5xx failure ─────────────────────────────────────────────────
+    test('on 500: retries exactly 3 times total before giving up', async () => {
+        global.fetch.mockResolvedValue({
+            status: 500,
+            json: () => Promise.resolve({ error: true, message: 'Server error' }),
+        });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    test('on 500: alerts after all retries are exhausted', async () => {
+        global.fetch.mockResolvedValue({
+            status: 500,
+            json: () => Promise.resolve({ error: true, message: 'Server error' }),
+        });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.alert).toHaveBeenCalledWith('Server error');
+    });
+
+    test('on 500: sets tracking = false after final failure', async () => {
+        global.fetch.mockResolvedValue({
+            status: 500,
+            json: () => Promise.resolve({ error: true, message: 'Server error' }),
+        });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(tc.tracking).toBe(false);
+    });
+
+    test('on 500 then success: succeeds on second attempt, no alert', async () => {
+        global.fetch
+            .mockResolvedValueOnce({ status: 500, json: () => Promise.resolve({ error: true, message: 'Transient' }) })
+            .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(global.alert).not.toHaveBeenCalled();
+    });
+
+    // F. Network error (.catch path) ───────────────────────────────────────────
+    test('on network error: retries exactly 3 times total', async () => {
+        global.fetch.mockRejectedValue(new Error('Network failure'));
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    test('on network error: alerts with the error message after all retries', async () => {
+        global.fetch.mockRejectedValue(new Error('Network failure'));
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.alert).toHaveBeenCalledWith('Network failure');
+        expect(tc.tracking).toBe(false);
+    });
+
+    test('on network error with no message: alerts with fallback text', async () => {
+        global.fetch.mockRejectedValue(null);
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.alert).toHaveBeenCalledWith('Tracking request failed.');
+    });
+
+    test('on network error then success: succeeds on second attempt, no alert', async () => {
+        global.fetch
+            .mockRejectedValueOnce(new Error('Transient'))
+            .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
+        tc.track_to_end();
+        await jest.runAllTimersAsync();
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(global.alert).not.toHaveBeenCalled();
+    });
+});
+
 export {};
