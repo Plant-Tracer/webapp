@@ -18,9 +18,7 @@ def make_http_event(path: str, query: str) -> dict:
         "routeKey": f"GET {path}",
         "rawPath": path,
         "rawQueryString": query,
-        "queryStringParameters": {
-            key: value for (key, value) in (part.split("=", 1) for part in query.split("&") if part)
-        },
+        "queryStringParameters": dict(part.split("=", 1) for part in query.split("&") if part),
         "headers": {},
         "requestContext": {
             "stage": "$default",

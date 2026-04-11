@@ -6,7 +6,6 @@ Routines for providing access to the movies for the lambda
 import os
 import json
 from typing import NamedTuple
-import urllib
 from pathlib import Path
 import tempfile
 
@@ -41,6 +40,7 @@ from .src.app.odb import (
     USER_ID
 )
 
+from . import local_queue
 from . import tracker
 
 __version__ = "0.1.0"
@@ -94,23 +94,10 @@ def validate_movie_access(*, api_key=None, movie_id=None):
         raise ValueError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
-
-def make_signed_get_url(*, urn: str) -> str:
-    parsed = urllib.parse.urlparse(urn)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise ValueError(f"invalid S3 URN: {urn}")
-    return s3_presigned.s3_client().generate_presigned_url(
-        ClientMethod='get_object',
-        Params={'Bucket': parsed.netloc, 'Key': parsed.path.lstrip("/")},
-        ExpiresIn=300,
-    )
-
 def queue_tracing(api_key:str, movie_id:str, frame_start:int):
     """Send a tracking request through SQS or the local debug queue."""
     msg = {"api_key": api_key, "movie_id": movie_id, "frame_start": frame_start}
     if os.environ.get("TRACKING_QUEUE_MODE", "").strip().lower() == "local":
-        from . import local_queue
-
         LOGGER.info("Enqueuing follow-up local batch: %s", msg)
         local_queue.enqueue_message(msg)
         return {"error": False, "message": msg}
@@ -137,7 +124,7 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
         odb.set_movie_metadata(movie_id=movie_id, movie_metadata={MOVIE_STATUS:MOVIE_STATE_READY})
 
     return MovieInfo(
-        signed_url=make_signed_get_url(urn=urn),
+        signed_url=s3_presigned.make_signed_url(urn=urn, operation='get', expires=300),
         signed_zipfile_url=None,
         rotation=rotation,
     )
@@ -151,8 +138,8 @@ def get_movie_download_urls(*, api_key=None, movie_id=None) -> MovieDownloadInfo
         raise ValueError("MOVIE_DATA_URN not set")
     zip_urn = (movie.get(MOVIE_ZIPFILE_URN) or "").strip() or None
     return MovieDownloadInfo(
-        signed_movie_url=make_signed_get_url(urn=movie_urn),
-        signed_zipfile_url=make_signed_get_url(urn=zip_urn) if zip_urn else None,
+        signed_movie_url=s3_presigned.make_signed_url(urn=movie_urn, operation='get', expires=300),
+        signed_zipfile_url=s3_presigned.make_signed_url(urn=zip_urn, operation='get', expires=300) if zip_urn else None,
     )
 
 

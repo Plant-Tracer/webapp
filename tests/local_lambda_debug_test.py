@@ -1,10 +1,11 @@
 import json
 
 from app import local_lambda_debug
+from app.constants import configure_local_environment
 
 
 def test_local_lambda_bridge_ping():
-    local_lambda_debug.configure_local_environment()
+    configure_local_environment(include_tracking_queue=True)
     client = local_lambda_debug.bridge_app.test_client()
 
     response = client.get("/resize-api/v1/ping")

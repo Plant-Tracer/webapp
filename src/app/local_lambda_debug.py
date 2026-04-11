@@ -16,13 +16,15 @@ from typing import Any
 
 from flask import Flask, Response, request
 
-from app.constants import C, logger
+from resize_app import lambda_tracking_handler
 from resize_app import local_queue
 from resize_app import main as resize_main
 
+from app.constants import configure_local_environment as configure_shared_local_environment
+from app.constants import logger
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9001
-LOCAL_QUEUE_MODE = "local"
 
 bridge_app = Flask(__name__)
 
@@ -34,17 +36,6 @@ class DummyContext:
     aws_request_id = "local-lambda-request"
 
 
-def configure_local_environment():
-    os.environ.setdefault(C.AWS_REGION, "local")
-    os.environ.setdefault(C.AWS_ACCESS_KEY_ID, C.TEST_ACCESS_KEY_ID)
-    os.environ.setdefault(C.AWS_SECRET_ACCESS_KEY, C.TEST_SECRET_ACCESS_KEY)
-    os.environ.setdefault(C.AWS_ENDPOINT_URL_DYNAMODB, C.TEST_ENDPOINT_URL_DYNAMODB)
-    os.environ.setdefault(C.AWS_ENDPOINT_URL_S3, C.TEST_ENDPOINT_URL_S3)
-    os.environ.setdefault(C.PLANTTRACER_S3_BUCKET, "planttracer-local")
-    os.environ.setdefault(C.DYNAMODB_TABLE_PREFIX, "demo-")
-    os.environ.setdefault("TRACKING_QUEUE_MODE", LOCAL_QUEUE_MODE)
-
-
 def build_api_gateway_v2_event() -> dict[str, Any]:
     body_bytes = request.get_data(cache=True)
     try:
@@ -54,7 +45,7 @@ def build_api_gateway_v2_event() -> dict[str, Any]:
         body = base64.b64encode(body_bytes).decode("ascii")
         is_base64 = True
 
-    headers = {key: value for (key, value) in request.headers.items()}
+    headers = dict(request.headers.items())
     query_string = request.query_string.decode("utf-8")
     query_params = request.args.to_dict(flat=True)
     event = {
@@ -108,9 +99,9 @@ def main():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args()
 
-    configure_local_environment()
+    configure_shared_local_environment(include_tracking_queue=True)
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not bridge_app.debug:
-        local_queue.start_worker()
+        local_queue.start_worker(processor=lambda_tracking_handler.process_tracking_message)
         atexit.register(local_queue.stop_worker)
 
     logger.info("Starting local lambda debug server at http://%s:%s", args.host, args.port)

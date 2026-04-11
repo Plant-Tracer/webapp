@@ -6,54 +6,74 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import Any
+from typing import Any, Callable
 
 from aws_lambda_powertools import Logger
 
 LOGGER = Logger(service="planttracer")
-
-_QUEUE: queue.Queue[dict[str, Any] | None] = queue.Queue()
-_WORKER_THREAD: threading.Thread | None = None
-_WORKER_LOCK = threading.Lock()
-_STOP_EVENT = threading.Event()
+TrackingProcessor = Callable[[dict[str, Any]], None]
 
 
-def _worker_main():
-    from . import lambda_tracking_handler
+class LocalTrackingQueue:
+    """Singleton queue manager for local retracing work."""
 
-    LOGGER.info("Local tracking queue worker started")
-    while not _STOP_EVENT.is_set():
-        message = _QUEUE.get()
-        try:
-            if message is None:
-                continue
-            lambda_tracking_handler.process_tracking_message(message)
-        finally:
-            _QUEUE.task_done()
-    LOGGER.info("Local tracking queue worker stopped")
+    def __init__(self) -> None:
+        self._queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+        self._worker_thread: threading.Thread | None = None
+        self._worker_lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._processor: TrackingProcessor | None = None
+
+    def _worker_main(self) -> None:
+        LOGGER.info("Local tracking queue worker started")
+        while not self._stop_event.is_set():
+            message = self._queue.get()
+            try:
+                if message is None:
+                    continue
+                if self._processor is None:
+                    raise RuntimeError("Local tracking queue processor is not configured")
+                self._processor(message)
+            finally:
+                self._queue.task_done()
+        LOGGER.info("Local tracking queue worker stopped")
+
+    def start_worker(self, *, processor: TrackingProcessor | None = None) -> None:
+        with self._worker_lock:
+            if processor is not None:
+                self._processor = processor
+            if self._worker_thread is not None and self._worker_thread.is_alive():
+                return
+            if self._processor is None:
+                raise RuntimeError("Cannot start local tracking queue without a processor")
+            self._stop_event.clear()
+            self._worker_thread = threading.Thread(target=self._worker_main, name="local-tracking-queue", daemon=True)
+            self._worker_thread.start()
+
+    def enqueue_message(self, message: dict[str, Any]) -> None:
+        self.start_worker()
+        self._queue.put(message)
+
+    def stop_worker(self, timeout: float = 2.0) -> None:
+        with self._worker_lock:
+            if self._worker_thread is None:
+                return
+            self._stop_event.set()
+            self._queue.put(None)
+            self._worker_thread.join(timeout=timeout)
+            self._worker_thread = None
 
 
-def start_worker():
-    global _WORKER_THREAD
-    with _WORKER_LOCK:
-        if _WORKER_THREAD is not None and _WORKER_THREAD.is_alive():
-            return
-        _STOP_EVENT.clear()
-        _WORKER_THREAD = threading.Thread(target=_worker_main, name="local-tracking-queue", daemon=True)
-        _WORKER_THREAD.start()
+LOCAL_TRACKING_QUEUE = LocalTrackingQueue()
 
 
-def enqueue_message(message: dict[str, Any]):
-    start_worker()
-    _QUEUE.put(message)
+def start_worker(*, processor: TrackingProcessor | None = None) -> None:
+    LOCAL_TRACKING_QUEUE.start_worker(processor=processor)
 
 
-def stop_worker(timeout: float = 2.0):
-    global _WORKER_THREAD
-    with _WORKER_LOCK:
-        if _WORKER_THREAD is None:
-            return
-        _STOP_EVENT.set()
-        _QUEUE.put(None)
-        _WORKER_THREAD.join(timeout=timeout)
-        _WORKER_THREAD = None
+def enqueue_message(message: dict[str, Any]) -> None:
+    LOCAL_TRACKING_QUEUE.enqueue_message(message)
+
+
+def stop_worker(timeout: float = 2.0) -> None:
+    LOCAL_TRACKING_QUEUE.stop_worker(timeout=timeout)

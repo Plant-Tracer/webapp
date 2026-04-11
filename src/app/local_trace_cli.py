@@ -20,6 +20,7 @@ from app import odb
 from app import odbmaint
 from app import odb_movie_data
 from app.constants import C
+from app.constants import configure_local_environment as configure_shared_local_environment
 from app.odb import (
     COURSE_ID,
     COURSE_KEY,
@@ -34,18 +35,6 @@ from app.odb import (
 )
 from app.s3_presigned import s3_client
 from app.schema import Trackpoint
-
-
-def configure_local_environment() -> None:
-    """Mirror the local defaults from the Makefile so the CLI can run via poetry."""
-    os.environ.setdefault(C.AWS_REGION, "local")
-    if os.environ.get(C.AWS_REGION) == "local":
-        os.environ.setdefault(C.AWS_ACCESS_KEY_ID, C.TEST_ACCESS_KEY_ID)
-        os.environ.setdefault(C.AWS_SECRET_ACCESS_KEY, C.TEST_SECRET_ACCESS_KEY)
-        os.environ.setdefault(C.AWS_ENDPOINT_URL_DYNAMODB, C.TEST_ENDPOINT_URL_DYNAMODB)
-        os.environ.setdefault(C.AWS_ENDPOINT_URL_S3, C.TEST_ENDPOINT_URL_S3)
-        os.environ.setdefault(C.PLANTTRACER_S3_BUCKET, "planttracer-local")
-    os.environ.setdefault(C.DYNAMODB_TABLE_PREFIX, "demo")
 
 
 def ensure_local_backing_services() -> None:
@@ -190,7 +179,7 @@ def write_outputs(*, movie_id: str, output_dir: Path, output_prefix: str, write_
 
 
 def run_local_trace(args: argparse.Namespace) -> int:
-    configure_local_environment()
+    configure_shared_local_environment()
     ensure_local_backing_services()
 
     movie_path = args.movie_file.resolve()
