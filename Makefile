@@ -22,6 +22,9 @@ MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
 LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo-
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
+LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
+LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
+LOCAL_ADMIN_EMAIL=admin@planttracer.com
 FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
@@ -237,16 +240,17 @@ run-local-lambda-debug:
 	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACKING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
 
 run-local-debug:
-	@echo run Flask locally on the demo database, but allow editing
+	@echo run Flask locally against the local demo dataset, but not in demo mode
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_FLASK_ENV) poetry run python $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	$(LOCAL_FLASK_ENV) $(FLASK_DEBUG_RUN)
+	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) --makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
 	@echo run Flask locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
 	$(MAKE) make-local-demo
-	DEMO_COURSE_ID=demo-course $(MAKE) run-local-debug
+	$(MAKE) ensure-local-lambda-debug
+	$(LOCAL_DEMO_ENV) $(FLASK_DEBUG_RUN)
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.

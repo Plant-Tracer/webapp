@@ -22,8 +22,12 @@ from .constants import C,__version__,logger,printable80,log_level
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
-    logger.debug("in_demo_mode: %s",os.environ.get(C.DEMO_COURSE_ID,None))
-    return (C.DEMO_COURSE_ID in os.environ) or ("-demo" in request.host)
+    host = (request.host or "").split(":", 1)[0].lower()
+    host_labels = [label for label in host.split(".") if label]
+    env_demo = C.DEMO_MODE in os.environ
+    host_demo = any(label.endswith("-demo") for label in host_labels)
+    logger.debug("in_demo_mode env_demo=%s host_demo=%s host=%s", env_demo, host_demo, host)
+    return env_demo or host_demo
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.

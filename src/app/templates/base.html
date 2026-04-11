@@ -131,6 +131,7 @@
 
     {% if logged_in %}
     <div>
+      {% if demo_mode %}<b>DEMO MODE:</b> {% endif %}
       Logged in as <b>{{user_name}}</b>. Current course: <b>{{primary_course_name}}</b>.
     </div>
     {% endif %}

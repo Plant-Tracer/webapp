@@ -235,8 +235,8 @@ Relevant Browser Globals
 |                          |                                | ``api_key``.                                  | current user and which controls should be shown.       |
 +--------------------------+--------------------------------+-----------------------------------------------+--------------------------------------------------------+
 | ``demo_mode``            | ``demo_mode``                  | ``in_demo_mode()`` in ``apikey.py``.          | Disables mutating actions in the browser, changes      |
-|                          |                                |                                               | status text, and hides controls that should not be     |
-|                          |                                |                                               | available in demo mode.                                |
+|                          |                                | Enabled when ``DEMO_MODE`` is set or the      | status text, and hides controls that should not be     |
+|                          |                                | request hostname has a ``-demo`` label.       | available in demo mode.                                |
 +--------------------------+--------------------------------+-----------------------------------------------+--------------------------------------------------------+
 | ``user_primary_course_id`` | ``user_primary_course_id``   | The current user's validated record.          | Used by course-scoped browser features such as user    |
 |                          |                                |                                               | management and course movie filtering.                 |
@@ -319,11 +319,19 @@ The intended local commands are:
 ``run-local-debug`` is the main developer entry point for the Flask side of the
 local workflow. Its job is to:
 
-* print the demo login link,
+* ensure demo mode is **off** for this Flask process,
+* print a login link for the local admin user,
 * export ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9001/``,
 * start Flask on ``localhost:8080``,
 * on macOS, try to open a second Terminal or iTerm2 window running
   ``make run-local-lambda-debug``.
+
+``run-local-demo-debug``:
+
+* seeds the local demo dataset if needed,
+* ensures demo mode is **on** for this Flask process,
+* sets ``DEMO_MODE=1`` and ``DEMO_COURSE_ID=demo-course``,
+* starts Flask on ``localhost:8080`` without requiring a login link.
 
 ``run-local-lambda-debug``:
 

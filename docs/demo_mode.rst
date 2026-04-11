@@ -1,97 +1,104 @@
 Demo Mode
 =========
 
-A PlantTracer database consists of several DyanmoDB tables with a given table prefix and an S3 bucket.
+Demo mode is a runtime behavior of the web application. It is distinct from the
+existence of demo data in DynamoDB and S3.
 
-When the database is created, a default course with the ID `demo_course` is created. There are two users: a default course admin and a default demo user. The demo course is then prepopulated with several demo movies from the test data.
+There are two separate concepts:
 
-The demo user is identified with a special API key.
+* ``DEMO_MODE`` controls whether the webapp is running in demo mode.
+* ``DEMO_COURSE_ID`` identifies which course contains the demo dataset.
 
-Demo mode is enabled by sedding the environment variable `DEMO_COURSE_ID` to the course_id of the course that is the demo course. It need not be the demo course that is created as part of the default installation.
+The important rule is:
+
+* ``DEMO_COURSE_ID`` by itself does **not** enable demo mode.
 
 
-Demo Mode Goals
----------------
-
-- Allows anyone on the web to anonymously and securely use some aspects of the Plant Tracer web app
-
-- Allow the anonymous demo user to experience plant movement tracking in the app without requiring the user to create an account in a course or to be aware of the movie lifecycle of upload, track, publish, delete
-
-- Disallow the persistence of modifications to all webapp-managed data while in demo mode
-
-Functions
----------
-
-Demo mode allows
-
-- View the list of movies in a single table
-
-- Play a movie without tracking
-
-- Click on 'analyze' to show the user interface for playing a movie that has a stored trace
-
-- Download a CSV representation of movie trace data
-
-Demo mode restrictions:
-
-  - No uploading of movies
-
-  - No deleting of movies
-
-  - No renaming of titles, descriptions
-
-  - No deleting or adding trackpoints
-
-  - No editing any text
-
-  - No re-tracking of movies
-
-Required in the database
+How Demo Mode Is Enabled
 ------------------------
 
-Every new database is created with a demo user and a few movies.
+PlantTracer runs in demo mode when either of these conditions is true:
 
-- The demo user has a perdefiend API key.
+* the process environment contains ``DEMO_MODE``
+* the incoming request host has a hostname label ending in ``-demo``
 
-- When `DEMO_COURSE_ID` is set, the authentication routines always return the demo mode `api_key`. That is, there is no way to log in or log out.
+Examples:
 
-To edit the movies in the demo course, just run another instance that is attached to the same database and edit the movies in the demo course.
+* ``DEMO_MODE=1`` in the process environment enables demo mode
+* ``simsong-demo.planttracer.com`` enables demo mode because the hostname
+  contains a ``-demo`` label
+* ``simsong.planttracer.com`` is **not** demo mode unless ``DEMO_MODE`` is set
 
-Implementation
---------------
+This allows a deployment such as:
 
-Demo Mode uses the following environment variables:
+* ``simsong.planttracer.com`` for normal mode
+* ``simsong-demo.planttracer.com`` for demo mode
 
-- `DEMO_COURSE_ID`       - The `course_id` of the demo course.  (Created as `demo` by the dbmaint.py script)
-- `DEMO_DYNAMODB_PREFIX` - The table prefix. (Created as `demo-` by the `dbutil.py` script)
+with both names pointing at the same VM.
 
-If we are in demo mode:
 
-- We are always logged in, and always in Demo Mode.
+What ``DEMO_COURSE_ID`` Means
+-----------------------------
 
-- auth.get_user_api_key() always returns an API Key for demo mode.
+``DEMO_COURSE_ID`` identifies the course that contains the demo data. In local
+development the Makefile seeds ``demo-course``.
 
-- `demo_user` JavaScript global variable set to ``true`` (if in demo mode)
+Today the runtime switch for demo behavior is ``DEMO_MODE`` or the ``-demo``
+hostname rule. ``DEMO_COURSE_ID`` is still useful because it names the demo
+course dataset used by local setup and deployment conventions.
 
-- `demo_user` Jinja2 variable will get set to ``True`` (otherwise it is ``False``)
 
-Rendering control:
+Behavior in Demo Mode
+---------------------
 
-  - CSS Class ``demo`` elements display only if in demo mode
-  - CSS Class ``nodemo`` elements display only if not in demo mode
+When the app is in demo mode:
 
-To make changes to the demo course:
+* anonymous users are treated as the demo user
+* ``get_user_api_key()`` returns the fixed demo API key
+* the UI hides mutating actions such as upload and many editing controls
+* Flask passes ``demo_mode=True`` into Jinja templates
+* the browser receives the global JavaScript constant ``demo_mode = true``
 
-- Create another user who is enrolled in `DEMO_COURSE` and another login with the same `DEMO_PREFIX`
+In other words, demo mode is not just "logged in as the demo user." It is a
+separate application mode that changes authentication and UI behavior.
 
-Troubleshooting/Development Note
---------------------------------
 
-Plant-Tracer webapp creates an api_key-<database name> cookie in order to tracker
-the login state of a session. Sometimes this cookie does not clear itself upon logout
-and it is necessary to manually delete the cookie, especially in order to have a valid
-demo mode enabled.
+Local Development
+-----------------
 
-Here is an example of such a cookie:
+The local Make targets intentionally separate "demo data exists" from "the app
+is running in demo mode":
 
-.. image:: media/PlantTracerCookieExample.png
+* ``make make-local-demo``
+  Seeds the local database and bucket with the demo course, demo user, and demo
+  movies.
+
+* ``make run-local-debug``
+  Starts Flask against the local dataset in **non-demo mode**. It explicitly
+  clears ``DEMO_MODE`` and ``DEMO_COURSE_ID`` and prints a login link for the
+  local admin user.
+
+* ``make run-local-demo-debug``
+  Starts Flask in **demo mode**. It sets ``DEMO_MODE=1`` and
+  ``DEMO_COURSE_ID=demo-course`` before starting Flask. No login link is
+  required because demo mode auto-authenticates as the demo user.
+
+
+Rendering and UI
+----------------
+
+The server exposes demo mode to both Jinja and JavaScript:
+
+* Jinja template variable: ``demo_mode``
+* JavaScript global constant: ``demo_mode``
+
+Templates can use Jinja conditionals to render a clear demo-mode indicator.
+Client-side code can use the JavaScript constant to disable or hide controls.
+
+
+Troubleshooting
+---------------
+
+PlantTracer stores login state in an ``api_key`` cookie. If you switch between
+normal mode and demo mode in the same browser session, stale cookies can make
+local testing confusing. If that happens, clear the browser cookie and reload.
