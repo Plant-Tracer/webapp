@@ -75,6 +75,44 @@ def api_ping() -> Dict[str, Any]:
         "path": sys.path
     }
 
+
+def _movie_data_response():
+    api_key = app.current_event.get_query_string_value(name="api_key", default_value=None)
+    movie_id = app.current_event.get_query_string_value(name="movie_id", default_value=None)
+    response_format = app.current_event.get_query_string_value(name="format", default_value="redirect")
+    if not api_key:
+        return Response(status_code=401, body="api_key must be provided")
+    if not movie_id:
+        return Response(status_code=400, body="movie_id must be provided")
+    try:
+        urls = movie_glue.get_movie_download_urls(api_key=api_key, movie_id=movie_id)
+    except ValueError as e:
+        LOGGER.exception("movie-data error=%s", e)
+        return Response(status_code=403, body=str(e.args))
+
+    if response_format == "json":
+        return {
+            "error": False,
+            "movie_id": movie_id,
+            "url": urls.signed_movie_url,
+            "zip_url": urls.signed_zipfile_url,
+        }
+    if response_format == "zip":
+        if not urls.signed_zipfile_url:
+            return Response(status_code=404, body="movie zipfile is not available")
+        return Response(status_code=302, headers={"Location": urls.signed_zipfile_url}, body="")
+    return Response(status_code=302, headers={"Location": urls.signed_movie_url}, body="")
+
+
+@app.get("/api/v1/movie-data")
+def api_movie_data():
+    return _movie_data_response()
+
+
+@app.get("/resize-api/v1/movie-data")
+def api_resize_movie_data():
+    return _movie_data_response()
+
 @app.get("/resize-api/v1/first-frame")
 def handle_first_frame() -> Any:
     """GET /api/v1/first-frame.

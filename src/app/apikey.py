@@ -39,6 +39,9 @@ static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
 
 def get_lambda_api_base():
     """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
+    explicit_base = os.environ.get(C.PLANTTRACER_LAMBDA_API_BASE, "").strip()
+    if explicit_base:
+        return explicit_base if explicit_base.endswith("/") else explicit_base + "/"
     hostname = os.environ.get("HOSTNAME", "").strip()
     domain = os.environ.get("DOMAIN", "").strip()
     return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""

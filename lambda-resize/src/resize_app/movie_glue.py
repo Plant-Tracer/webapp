@@ -47,28 +47,26 @@ __version__ = "0.1.0"
 LOG_ID_STATUS_PING = "lambda-status-ping"
 LOGGER = Logger(service="planttracer")
 
-sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
-
 class MovieInfo(NamedTuple):
     signed_url: str                    #
     signed_zipfile_url: str            # TODO
     rotation: int
 
-def queue_tracing(api_key:str, movie_id:str, frame_start:int):
-    """Send a tracking request through the SQS"""
-    queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
-    if not queue_url:
-        LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
-        raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
-    msg = { "api_key": api_key, "movie_id": movie_id, "frame_start": frame_start }
-    LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
-    sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
-    return {"error":False, "message": msg}
 
-def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
-    """
-    Given an api_key and a movie_id, return a signed URL and the desired movie rotation
-    """
+class MovieDownloadInfo(NamedTuple):
+    signed_movie_url: str
+    signed_zipfile_url: str | None
+
+
+def sqs_client():
+    return boto3.client(
+        "sqs",
+        region_name=os.environ.get("AWS_REGION"),
+        endpoint_url=os.environ.get("AWS_ENDPOINT_URL_SQS"),
+    )
+
+
+def validate_movie_access(*, api_key=None, movie_id=None):
     if not api_key:
         raise ValueError("api_key required")
     if not odb.is_movie_id(movie_id):
@@ -94,6 +92,41 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
         raise ValueError(f"user {user_id} is not authorized to access movie {movie_id}") from e
     except odb.InvalidMovie_Id as e:
         raise ValueError("movie_id is invalid") from e
+    return ddbo, user_id, movie
+
+
+def make_signed_get_url(*, urn: str) -> str:
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        raise ValueError(f"invalid S3 URN: {urn}")
+    return s3_presigned.s3_client().generate_presigned_url(
+        ClientMethod='get_object',
+        Params={'Bucket': parsed.netloc, 'Key': parsed.path.lstrip("/")},
+        ExpiresIn=300,
+    )
+
+def queue_tracing(api_key:str, movie_id:str, frame_start:int):
+    """Send a tracking request through SQS or the local debug queue."""
+    msg = {"api_key": api_key, "movie_id": movie_id, "frame_start": frame_start}
+    if os.environ.get("TRACKING_QUEUE_MODE", "").strip().lower() == "local":
+        from . import local_queue
+
+        LOGGER.info("Enqueuing follow-up local batch: %s", msg)
+        local_queue.enqueue_message(msg)
+        return {"error": False, "message": msg}
+    queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
+    if not queue_url:
+        LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
+        raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
+    LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
+    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
+    return {"error":False, "message": msg}
+
+def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
+    """
+    Given an api_key and a movie_id, return a signed URL and the desired movie rotation
+    """
+    _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
 
     rotation = int(movie.get(MOVIE_ROTATION,0))
     urn = movie.get(MOVIE_DATA_URN)
@@ -103,16 +136,24 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     if movie.get(MOVIE_STATUS,'')==MOVIE_STATE_UPLOADING:
         odb.set_movie_metadata(movie_id=movie_id, movie_metadata={MOVIE_STATUS:MOVIE_STATE_READY})
 
-    parsed = urllib.parse.urlparse(urn)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise ValueError(f"invalid {MOVIE_DATA_URN}: {urn}")
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    s3 = boto3.client('s3')
-    signed_url = s3.generate_presigned_url( ClientMethod='get_object',
-                                            Params={'Bucket': bucket, 'Key': key},
-                                            ExpiresIn=300 )
-    return MovieInfo(signed_url=signed_url, signed_zipfile_url=None, rotation=rotation)
+    return MovieInfo(
+        signed_url=make_signed_get_url(urn=urn),
+        signed_zipfile_url=None,
+        rotation=rotation,
+    )
+
+
+def get_movie_download_urls(*, api_key=None, movie_id=None) -> MovieDownloadInfo:
+    """Return signed URLs for movie playback and optional frame ZIP download."""
+    _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
+    movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+    if not movie_urn:
+        raise ValueError("MOVIE_DATA_URN not set")
+    zip_urn = (movie.get(MOVIE_ZIPFILE_URN) or "").strip() or None
+    return MovieDownloadInfo(
+        signed_movie_url=make_signed_get_url(urn=movie_urn),
+        signed_zipfile_url=make_signed_get_url(urn=zip_urn) if zip_urn else None,
+    )
 
 
 def first_frame_to_track(*, source_frame_number:int) -> int:

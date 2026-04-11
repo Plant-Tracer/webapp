@@ -147,11 +147,11 @@ configuration:
 * ``DYNAMODB_TABLE_PREFIX=demo-`` or another local prefix
 * ``LOG_LEVEL=DEBUG`` during interactive debugging
 
-In addition, Flask should gain an explicit local Lambda override:
+In addition, Flask supports an explicit local Lambda override:
 
 * ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9001/``
 
-Flask should prefer this explicit variable over deriving the Lambda hostname
+Flask prefers this explicit variable over deriving the Lambda hostname
 from ``HOSTNAME`` and ``DOMAIN``. The hostname-based rule is correct for
 deployed stacks, but it is not sufficient for local development.
 
@@ -316,16 +316,16 @@ The intended local commands are:
    # Terminal window 2: Flask UI + Flask API
    make run-local-debug
 
-``run-local-debug`` should become the main developer entry point again, but its
-job changes slightly:
+``run-local-debug`` is the main developer entry point for the Flask side of the
+local workflow. Its job is to:
 
 * print the demo login link,
 * export ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9001/``,
 * start Flask on ``localhost:8080``,
-* optionally, on macOS, open a second Terminal or iTerm2 window running
+* on macOS, try to open a second Terminal or iTerm2 window running
   ``make run-local-lambda-debug``.
 
-``run-local-lambda-debug`` should:
+``run-local-lambda-debug``:
 
 * vendor Lambda-shared app code if needed,
 * set the same local AWS and table-prefix environment variables,
@@ -450,11 +450,11 @@ these cases:
 Current Status
 --------------
 
-At the time this document was written:
+At the time this document was last updated:
 
-* the split Flask/Lambda architecture is the correct design,
-* ``run-local-debug`` by itself is no longer sufficient,
-* the repo needs a dedicated ``run-local-lambda-debug`` workflow,
-* the two-process Mac local testing model described above is the target design.
-
-Until those code changes land, local retracing should be considered incomplete.
+* the split Flask/Lambda architecture is the active design,
+* ``run-local-debug`` starts the Flask side of the local workflow and ensures a
+  local Lambda endpoint is available,
+* the repo includes a dedicated ``run-local-lambda-debug`` workflow, and
+* the two-process Mac local testing model described above is the supported
+  local retracing workflow.

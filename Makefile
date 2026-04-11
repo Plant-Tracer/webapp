@@ -15,11 +15,18 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 LOCAL_BUCKET:=planttracer-local
 LOCAL_HTTP_PORT=8080
-LOG_LEVEL ?= DEBUG		# default to debug unless changed
+LOCAL_LAMBDA_PORT=9001
+LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
+LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo-
+LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
+FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
+LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 export DEBIAN_FRONTEND=noninteractive
+export LOG_LEVEL ?= DEBUG		# default to debug unless changed
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
@@ -89,14 +96,14 @@ all:
 	make run-local
 
 check:
-	make lint
-	make start_local_minio start_local_dynamodb
-	AWS_REGION=local make pytest
-	make jscoverage
+	$(MAKE) lint
+	$(MAKE) start-local-services
+	$(MAKE) AWS_REGION=local pytest
+	$(MAKE) jscoverage
 
 coverage:
-	AWS_REGION=local make pytest-coverage
-	AWS_REGION=local make jscoverage
+	$(MAKE) AWS_REGION=local pytest-coverage
+	$(MAKE) AWS_REGION=local jscoverage
 
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-resize/src/resize_app/*.py
@@ -108,11 +115,11 @@ tags:
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
 lint: $(REQ)
-	make pylint
-	make eslint
+	$(MAKE) pylint
+	$(MAKE) eslint
 
 pylint:
-	make vend-lambda-resize
+	$(MAKE) vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
 
 ## Mypy static analysis
@@ -156,11 +163,11 @@ dump.txt:
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
-	make vend-lambda-resize
+	$(MAKE) vend-lambda-resize
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	make vend-lambda-resize
+	$(MAKE) vend-lambda-resize
 	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
@@ -177,44 +184,76 @@ pytest1:
 ################################################################
 ### Debug targets to develop and run locally.
 
+start-local-services:
+	$(MAKE) -j2 start_local_dynamodb start_local_minio
+
+stop-local-services:
+	$(MAKE) stop_local_dynamodb stop_local_minio
+
 wipe-local:
 	@echo wiping all local artifacts and remaking the local bucket.
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	$(MAKE) stop-local-services
 	/bin/rm -rf var
 	mkdir -p var
-	bin/local_minio_control.bash start
-	bin/local_dynamodb_control.bash start
-	make make-local-bucket
+	$(MAKE) start-local-services
+	$(MAKE) make-local-bucket
 
 delete-local:
 	@echo deleting all local artifacts
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	$(MAKE) stop-local-services
 	/bin/rm -rf var
 
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
-	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	poetry run python $(DBUTIL) --createdb
-	aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+	$(MAKE) start-local-services
+	$(MAKE) make-local-bucket
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) --createdb
+	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+
+ensure-local-lambda-debug:
+	@if $(LOCAL_LAMBDA_PROBE); then \
+		echo "Local lambda debug server already running on $(LOCAL_LAMBDA_BASE)"; \
+	else \
+		if [ "$$(uname -s)" = "Darwin" ]; then \
+			echo "Starting local lambda debug server in a new macOS terminal window..."; \
+			bash etc/open_local_lambda_terminal.sh "$(CURDIR)" "make run-local-lambda-debug"; \
+		else \
+			echo "Please start the local lambda debug server in another shell with: make run-local-lambda-debug"; \
+		fi; \
+		for attempt in $$(seq 1 $(LOCAL_LAMBDA_WAIT_SECONDS)); do \
+			if $(LOCAL_LAMBDA_PROBE); then \
+				exit 0; \
+			fi; \
+			sleep 1; \
+		done; \
+		echo "Local lambda debug server did not start on $(LOCAL_LAMBDA_BASE)."; \
+		echo "Give the new terminal a moment, then run again or start it manually with: make run-local-lambda-debug"; \
+		exit 1; \
+	fi
+
+run-local-lambda-debug:
+	@echo running the local lambda debug server at $(LOCAL_LAMBDA_BASE)
+	$(MAKE) vend-lambda-resize
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACKING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
 
 run-local-debug:
-	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	@echo run Flask locally on the demo database, but allow editing
+	$(MAKE) ensure-local-lambda-debug
+	$(LOCAL_FLASK_ENV) poetry run python $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_FLASK_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
-	@echo run bottle locally in demo mode, using local database and debug mode
+	@echo run Flask locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	$(MAKE) make-local-demo
+	DEMO_COURSE_ID=demo-course $(MAKE) run-local-debug
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(FLASK_DEBUG_RUN)
 
 tracker-debug:
 	@echo just test the tracker...
@@ -222,7 +261,7 @@ tracker-debug:
 	poetry run python tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
 
-.PHONY: wipe-local delete-local make-local-demorun-local-debug run-local-demo-debug debut-dev-api tracker-debug
+.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracker-debug
 
 ################################################################
 ### JavaScript
@@ -278,13 +317,13 @@ stop_local_dynamodb:  bin/DynamoDBLocal.jar
 	bash bin/local_dynamodb_control.bash stop
 
 list-tables:
-	aws dynamodb list-tables
+	$(LOCAL_AWS_ENV) aws dynamodb list-tables
 
 dump-demo-tables:
 	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
 		echo $$tn:; \
-		aws dynamodb describe-table --table-name $$tn ; \
-		aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		$(LOCAL_AWS_ENV) aws dynamodb describe-table --table-name $$tn ; \
+		$(LOCAL_AWS_ENV) aws dynamodb scan --max-items 5 --table-name $$tn ; \
 		done
 
 
@@ -330,17 +369,17 @@ stop_local_minio:  bin/minio
 	bash bin/local_minio_control.bash stop
 
 list-local-buckets:
-	$(AWS_VARS) aws s3 ls
+	$(LOCAL_AWS_ENV) aws s3 ls
 
 make-local-bucket:
-	if $(AWS_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
+	if $(LOCAL_AWS_ENV) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
 	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
 		echo creating s3://$(LOCAL_BUCKET)/ ; \
-		$(AWS_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
+		$(LOCAL_AWS_ENV) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
 	fi
 	echo local buckets:
-	$(AWS_VARS) aws s3 ls
+	$(LOCAL_AWS_ENV) aws s3 ls
 
 .PHONY: start_local_minio stop_local_minio list-local-buckets make-local-bucket
 
@@ -362,7 +401,7 @@ install-ubuntu:
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
 	@# npm deprecation warnings (WARN deprecated) from transitive deps can be ignored
 	npm ci
-	make $(REQ)
+	$(MAKE) $(REQ)
 	@echo install-ubuntu done
 
 
@@ -380,7 +419,7 @@ install-macos:
 	which python3 || brew install python3
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make $(REQ)
+	$(MAKE) $(REQ)
 
 # Includes Windows dependencies
 # restart the shell after installs are done
@@ -394,7 +433,7 @@ install-windows: .venv/pyvenv.cfg
 	choco install -y poetry
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make $(REQ)
+	$(MAKE) $(REQ)
 
 
 ################################################################
@@ -478,7 +517,7 @@ install-lambda-deps: $(REQ)
 # lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
 lambda-resize-lint: install-lambda-deps
-	make vend-lambda-resize
+	$(MAKE) vend-lambda-resize
 	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
@@ -500,8 +539,8 @@ sam-build: $(REQ)
 	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
 	  exit 1; \
 	fi; \
-	make lambda-resize/src/requirements.txt
-	make vend-lambda-resize
+	$(MAKE) lambda-resize/src/requirements.txt
+	$(MAKE) vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
