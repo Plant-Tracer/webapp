@@ -26,7 +26,7 @@ FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port 
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 export DEBIAN_FRONTEND=noninteractive
-export LOG_LEVEL ?= DEBUG		# default to debug unless changed
+export LOG_LEVEL ?= DEBUG
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
