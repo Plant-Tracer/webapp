@@ -58,7 +58,7 @@ The recommended local process layout on macOS is:
 +======================+===========================+===========================================+
 | Flask dev server     | ``http://127.0.0.1:8080`` | HTML pages and Flask API                  |
 +----------------------+---------------------------+-------------------------------------------+
-| Local Lambda server  | ``http://127.0.0.1:9001`` | ``/resize-api/v1/*`` endpoints and async  |
+| Local Lambda server  | ``http://127.0.0.1:9811`` | ``/resize-api/v1/*`` endpoints and async  |
 |                      |                           | retracing worker                          |
 +----------------------+---------------------------+-------------------------------------------+
 | DynamoDB Local       | ``http://127.0.0.1:8000`` | Local metadata store                      |
@@ -66,8 +66,8 @@ The recommended local process layout on macOS is:
 | MinIO                | ``http://127.0.0.1:9000`` | Local S3-compatible object store          |
 +----------------------+---------------------------+-------------------------------------------+
 
-Port ``9001`` is suggested for the local Lambda server because ``9000`` is
-already used by MinIO.
+Port ``9811`` is suggested for the local Lambda server because MinIO already
+uses ``9000`` for its API and ``9001`` for its console.
 
 
 Local Testing Goals
@@ -149,7 +149,7 @@ configuration:
 
 In addition, Flask supports an explicit local Lambda override:
 
-* ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9001/``
+* ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9811/``
 
 Flask prefers this explicit variable over deriving the Lambda hostname
 from ``HOSTNAME`` and ``DOMAIN``. The hostname-based rule is correct for
@@ -321,7 +321,7 @@ local workflow. Its job is to:
 
 * ensure demo mode is **off** for this Flask process,
 * print a login link for the local admin user,
-* export ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9001/``,
+* export ``PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9811/``,
 * start Flask on ``localhost:8080``,
 * on macOS, try to open a second Terminal or iTerm2 window running
   ``make run-local-lambda-debug``.
@@ -337,7 +337,7 @@ local workflow. Its job is to:
 
 * vendor Lambda-shared app code if needed,
 * set the same local AWS and table-prefix environment variables,
-* start the local Lambda HTTP bridge on ``localhost:9001``,
+* start the local Lambda HTTP bridge on ``localhost:9811``,
 * start the in-process local retrace worker,
 * log every request and every tracing step to stdout/stderr.
 
@@ -351,7 +351,7 @@ With the two-process local model, the browser behaves like this:
 2. Read the browser globals emitted by ``base.html``.
 
    * ``API_BASE`` should point at Flask.
-   * ``LAMBDA_API_BASE`` should point to ``http://127.0.0.1:9001/`` in local
+   * ``LAMBDA_API_BASE`` should point to ``http://127.0.0.1:9811/`` in local
      mode.
    * ``api_key`` should contain the current login token.
 

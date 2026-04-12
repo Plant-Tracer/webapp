@@ -59,11 +59,11 @@ jobs:
 
       - name: Create default AWS credentials and Validate local DynamoDB endpoint
         run: |
-          bin/local_dynamodb_control.bash start
+          python3 bin/local_services.py dynamodb start
 
       - name: Validate local minio/S3 endpoint and make sure we have buckets
         run: |
-          bin/local_minio_control.bash start
+          python3 bin/local_services.py minio start
           make make-local-bucket
 
       - name: Make a demo course, user and upload the demo movies

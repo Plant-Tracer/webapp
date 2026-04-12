@@ -28,8 +28,8 @@ npm run test-debug # JS tests with verbose output
 AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/endpoint_test.py -v
 
 # Local development
-bin/local_minio_control.bash start       # Start Minio (S3 emulator, port 9000)
-bin/local_dynamodb_control.bash start    # Start DynamoDB Local (port 8000)
+python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
+python3 bin/local_services.py dynamodb start    # Start DynamoDB Local (port 8000)
 make make-local-bucket                   # Create local S3 bucket
 make make-local-demo                     # Create demo course and DB tables
 make run-local-debug                     # Flask dev server at localhost:8080

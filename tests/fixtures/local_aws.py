@@ -57,7 +57,7 @@ def local_ddb():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
     """
-    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_dynamodb_control.bash'),'start'])
+    subprocess.call(["python3", os.path.join(ROOT_DIR, "bin/local_services.py"), "dynamodb", "start"])
 
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
@@ -93,7 +93,7 @@ def local_s3():
     When running locally: start MinIO and ensure the bucket exists (create if not).
     """
     if os.environ.get(C.AWS_REGION, '') == 'local':
-        subprocess.call([os.path.join(ROOT_DIR, 'bin/local_minio_control.bash'), 'start'])
+        subprocess.call(["python3", os.path.join(ROOT_DIR, "bin/local_services.py"), "minio", "start"])
         os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
         if not os.environ.get(C.PLANTTRACER_S3_BUCKET):
             os.environ[C.PLANTTRACER_S3_BUCKET] = 'planttracer-local'
