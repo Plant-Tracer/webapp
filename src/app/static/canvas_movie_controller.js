@@ -80,7 +80,6 @@ class MovieController extends CanvasController {
         // frames[0] is the first element.
         // frames[0].frame_url - the URL of the first frame
         // frames[0].markers[] - an array of marker objects e.g. [{'x':10,'y':20,'label':30},...]
-        console.log('load_movie:', Array.isArray(frames) ? frames.length + ' frames' : frames);
         this.frames = frames;
 
         /* Now preload all of the images, downloading new ones as necessary.
@@ -148,7 +147,7 @@ class MovieController extends CanvasController {
 
     // override this in your subclass to add things that annotate the movie.
     add_frame_objects( frame ){
-        console.log(`add_frame_objects(${frame})`);
+        void frame;
     }
 
     /** play is using for playing (delta=+1) and reversing (delta=-1).
