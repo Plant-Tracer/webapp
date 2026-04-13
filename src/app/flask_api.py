@@ -414,7 +414,8 @@ def api_get_movie_metadata():
             url_name = urn_name.replace("urn","url")
             movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
 
-    ret = {C.API_KEY_ERROR: False, C.API_KEY_METADATA: movie_metadata}
+    ret = {C.API_KEY_ERROR: False,
+           C.API_KEY_METADATA: movie_metadata}
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -555,7 +556,7 @@ def api_put_frame_trackpoints():
     movie_id = get_movie_id()
     frame_number = get_int('frame_number')
     raw_trackpoints = get_json('trackpoints')
-    trackpoints = [odb.Trackpoint(**tp) for tp in raw_trackpoints] 
+    trackpoints = [odb.Trackpoint(**tp) for tp in raw_trackpoints]
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     if log_level=='DEBUG':
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)

@@ -35,7 +35,8 @@ You will also want to set these variables:
 You may optionally set these variables:
 |Variable|Value set for `make pytest` in Github actions|Purpose|
 |--------|-----|----|
-|`DEMO_COURSE_ID`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst) and `DEMO_COURSE_ID` specifies the course that is viewed.|
+|`DEMO_MODE`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst).|
+|`DEMO_COURSE_ID`|not set|Identifies which course contains the demo dataset. It does not by itself enable demo mode.|
 |`LOG_LEVEL`|`DEBUG`|If set, all logging is at this log level|
 
 Note that there are multiple ways that a single service can be sliced or partitioned:
@@ -45,7 +46,7 @@ Note that there are multiple ways that a single service can be sliced or partiti
 * Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing with `pytest`, tables are created with the randomized prefix `test-????` where `????` is a randomly hexadecimal string.
 * Within each web app instance, there can be one or more courses, each with its own course identifier (name).
 
-Note that any course can be come a demo course. What makes it a demo course is that the web app instance has the `DEMO_COURSE_ID` environment variable set. This allows the same course to be accessed for non-demo purposes and demo purposes. When you access a web app instance that has the `DEMO_COURSE_ID` environment variable set, you are automatically authenticated as the demo user and can only access that user's movies and public movies.
+Note that any course can become a demo course. What makes the web app run in demo mode is either the `DEMO_MODE` environment variable or a hostname ending in `-demo`. `DEMO_COURSE_ID` identifies which course contains the demo dataset. This allows the same course to be accessed for non-demo purposes and demo purposes depending on how the web app instance is started.
 
 # Mac Configuration
 ## Prep your mac
@@ -293,7 +294,7 @@ Now connect to `http://127.0.0.1:8080`:
 Alternatively, we could run in demo mode:
 
 ```
-AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_MODE=1 DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
 ```
 
 And now if we go to `http://127.0.0.1:8080` we see:

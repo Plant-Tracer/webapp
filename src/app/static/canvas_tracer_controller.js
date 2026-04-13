@@ -17,9 +17,14 @@ const MARKER_RADIUS = 10;           // default radius of the marker
 const PLANT_MARKER_COLOR = 'red';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
-const STATUS_POLL_MSEC = 10000;
 const RETRACE_MOVIE = 'Retrace movie';
-const MAX_FRAMES = 1000000;
+const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
+const TRACE_MOVIE = 'Trace movie';
+const MAX_FRAMES = 10000;
+const STATUS_POLL_MSEC = 500;
+const MAX_ZIP_WAIT_MS = 10000;
+const STATUS_POLL_MAX_ERRORS = 5;
+const TRACK_MOVIE_RETRY_DELAY_MS = 5000; // if track movie fails
 
 var cell_id_counter = 0;
 
@@ -72,12 +77,13 @@ class TracerController extends MovieController {
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
-      this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
+        this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
         // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
         this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
             ? movie_metadata.last_frame_tracked : -1;
         this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
             ? movie_metadata.total_frames : 0;
+        this.pending_retrace_to_end = false;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -113,18 +119,7 @@ class TracerController extends MovieController {
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
-        this.rotate_button = $(this.div_selector + " input.rotate_movie");
-        this.rotate_button.hide();
-        this.rotate_button.prop(DISABLED, true);
-        this.rotate_button.on('click', (_event) => {this.rotate_button_pressed();});
-
-        // Only show "Retrace" and download when the movie has been fully traced (last_frame_tracked set and at end).
-        const fullyTraced = this.total_frames > 0 && this.last_tracked_frame >= 0 &&
-            this.last_tracked_frame >= this.total_frames - 1;
-        if (fullyTraced) {
-            this.track_button.val(RETRACE_MOVIE);
-            this.download_button.show();
-        }
+        this.refreshTrackButtonState();
         this.tracking_status = $(this.div_selector + ' span.add_marker_status');
 
         // Remember zoom per movie (movie_id is a GUID); restore from localStorage on load, save on change.
@@ -134,6 +129,37 @@ class TracerController extends MovieController {
     async enableTrackButtonIfAllowed() {
         this.track_button.prop(DISABLED, false);
         this.tracking_status.text('');
+    }
+
+    isFullyTraced() {
+        return this.total_frames > 0 && this.last_tracked_frame >= 0 &&
+            this.last_tracked_frame >= this.total_frames - 1;
+    }
+
+    hasFutureTrackedFrames() {
+        return this.last_tracked_frame != null && this.last_tracked_frame > this.frame_number;
+    }
+
+    markFutureFramesDirty() {
+        if (!this.hasFutureTrackedFrames()) {
+            return;
+        }
+        this.pending_retrace_to_end = true;
+        this.refreshTrackButtonState();
+    }
+
+    refreshTrackButtonState() {
+        if (this.pending_retrace_to_end) {
+            this.track_button.val(RETRACE_TO_END_OF_MOVIE);
+            this.download_button.hide();
+            return;
+        }
+        if (this.isFullyTraced()) {
+            this.track_button.val(RETRACE_MOVIE);
+            this.download_button.show();
+            return;
+        }
+        this.track_button.val(TRACE_MOVIE);
     }
 
 
@@ -174,6 +200,7 @@ class TracerController extends MovieController {
         let color = PLANT_MARKER_COLOR;
         this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
         this.create_marker_table(); // redraw table
+        this.markFutureFramesDirty();
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
     }
@@ -222,7 +249,7 @@ class TracerController extends MovieController {
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
                     `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
-                    `<td>${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
+                    `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -240,6 +267,7 @@ class TracerController extends MovieController {
     del_row(i) {
         this.objects.splice(i,1);
         this.create_marker_table();
+        this.markFutureFramesDirty();
         this.put_markers();
     }
 
@@ -247,6 +275,9 @@ class TracerController extends MovieController {
     // Update the matrix location of the object the moved
     object_did_move(obj) {
         $( "#"+obj.table_cell_id ).text( obj.loc() );
+        $( ".obj-mm" ).text( "n/a" ); // set all of the mm classes to be n/a
+        this.markFutureFramesDirty();
+
         if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
             this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
         }
@@ -313,6 +344,7 @@ class TracerController extends MovieController {
         this.tracking_status.text("Asking pipeline to trace movie...");
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
+        this.pending_retrace_to_end = false;
         this.poll_error_count = 0;
         this.poll_for_track_end();
         this.set_movie_control_buttons();
@@ -324,7 +356,6 @@ class TracerController extends MovieController {
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
-        const TRACK_MOVIE_RETRY_DELAY_MS = 5000;
         console.log("track_to_end api_key=",this.api_key);
         console.log("track_to_end body=",body);
 
@@ -438,11 +469,7 @@ class TracerController extends MovieController {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
             $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
-            this.rotate_button.prop(DISABLED, true);
             return;
-        }
-        if (this.rotate_button.is(':visible')) {
-            this.rotate_button.prop(DISABLED, false);
         }
         this.max_frame_index = this.getMaxViewableFrame();
         super.set_movie_control_buttons(); // otherwise run the super class
@@ -452,7 +479,8 @@ class TracerController extends MovieController {
          * Poll the server to see if tracking has ended.
          * On poll error we log to console and only alert after 3 consecutive errors.
          */
-    poll_for_track_end() {
+  poll_for_track_end() {
+    console.log("poll_for_track_end");
         const params = {
             api_key:this.api_key,
             movie_id:this.movie_id,
@@ -461,6 +489,7 @@ class TracerController extends MovieController {
         const self = this;
         $.post(`${API_BASE}api/get-movie-metadata`, params)
             .done((data) => {
+              console.log("poll_for_track_end movie_metadata=",data);
                 if (data.error === false) {
                     self.poll_error_count = 0;
                     if (data.metadata.status === TRACING_COMPLETED_FLAG) {
@@ -482,8 +511,8 @@ class TracerController extends MovieController {
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
-                if (self.poll_error_count >= 10) {
-                    alert('Status check failed 10 times in a row. You can refresh the page to try again.');
+                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
+                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
@@ -492,8 +521,8 @@ class TracerController extends MovieController {
             .fail((_xhr, status, err) => {
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
-                if (self.poll_error_count >= 10) {
-                    alert('Status check failed 10 times in a row (e.g. network or server issue). You can refresh the page to try again.');
+                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
+                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
@@ -508,7 +537,7 @@ class TracerController extends MovieController {
         this.tracking_status.text('Tracing complete. Loading movie...');
         const self = this;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
-        const maxZipWaitMs = 5000;
+        const maxZipWaitMs = MAX_ZIP_WAIT_MS;
         const zipPollMs = STATUS_POLL_MSEC;
 
         /** Resolves with { zipUrl, metadata, frames } when zip is available, or rejects after maxZipWaitMs. */
@@ -574,25 +603,6 @@ class TracerController extends MovieController {
             });
     }
 
-    rotate_button_pressed() {
-        // Rotate: server clears tracking, updates rotation_steps, triggers Lambda. Reload when done.
-        this.rotate_button.prop(DISABLED, true);
-        $('#status-big').html(`Asking server to rotate movie 90º clockwise. Please stand by...`);
-      this.movie_rotation += 90;
-        const params = {
-          api_key: this.api_key,
-          movie_id: this.movie_id,
-          rotation: this.movie_rotation};
-        $.post(`${API_BASE}api/rotate-movie`, params).done((data) => {
-            if (data.error) {
-                alert(data.message);
-                this.rotate_button.prop(DISABLED, false);
-            } else {
-                location.reload(true);
-            }
-        });
-    }
-
 }
 
 
@@ -612,8 +622,6 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
-        cc.rotate_button.show();
-        cc.rotate_button.prop(DISABLED, false);
         if (demo_mode) {
             $('#status-big').html('Movie cannot be traced in demo mode.');
         } else {
@@ -641,7 +649,6 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 // frame has no markers we use [].
 /** Extract frame index from zip entry name (e.g. frame_0000.jpg -> 0) for stable sort. */
 function frame_index_from_zip_name(name) {
-    console.log("name=",name);
     const m = name.match(/frame_(\d+)\.jpe?g$/i);
     return m ? parseInt(m[1], 10) : 0;
 }
@@ -682,8 +689,6 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
-        cc.rotate_button.show();
-        cc.rotate_button.prop(DISABLED, false);
     };
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
@@ -693,6 +698,34 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
         $('#analysis-results').show();
         graph_data(cc, movie_frames);
     }
+}
+
+function calc_scale(markers) {
+    let scale = 1, pos_units = "pixels";
+    const ruler_markers = markers
+        .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
+        .filter(x => x.number !== null)
+        .sort((a, b) => a.number - b.number);
+
+    if (ruler_markers.length >= 2) {
+        const extract_ruler_start = ruler_markers[0];
+        const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
+        const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
+        const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
+        const x_ruler_start = ruler_start.x;
+        const y_ruler_start = ruler_start.y;
+        const x_ruler_end = ruler_end.x;
+        const y_ruler_end = ruler_end.y;
+        const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
+        const real_distance = extract_ruler_end.number - extract_ruler_start.number;
+        scale = real_distance / pixel_distance;
+        pos_units = "mm";
+    } else {
+        console.log('Two RulerXXmm markers not found. The distance will be in pixels.');
+        scale = 1;
+        pos_units = "pixels";
+    }
+    return { scale: scale, pos_units: pos_units };
 }
 
 function graph_data(cc, frames) {
@@ -829,33 +862,6 @@ function graph_data(cc, frames) {
         }
     });
 
-    function calc_scale(markers) {
-        let scale = 1, pos_units = "pixels";
-        const ruler_markers = markers
-            .map(marker => ({ label: marker.label, number: get_ruler_size(marker.label) }))
-            .filter(x => x.number !== null)
-            .sort((a, b) => a.number - b.number);
-
-        if (ruler_markers.length >= 2) {
-            const extract_ruler_start = ruler_markers[0];
-            const extract_ruler_end = ruler_markers[ruler_markers.length - 1];
-            const ruler_start = markers.find(marker => marker.label === extract_ruler_start.label);
-            const ruler_end = markers.find(marker => marker.label === extract_ruler_end.label);
-            const x_ruler_start = ruler_start.x;
-            const y_ruler_start = ruler_start.y;
-            const x_ruler_end = ruler_end.x;
-            const y_ruler_end = ruler_end.y;
-            const pixel_distance = Math.sqrt(Math.pow(x_ruler_end - x_ruler_start, 2) + Math.pow(y_ruler_end - y_ruler_start, 2));
-            const real_distance = extract_ruler_end.number - extract_ruler_start.number;
-            scale = real_distance / pixel_distance;
-            pos_units = "mm";
-        } else {
-            console.log('Two RulerXXmm markers not found. The distance will be in pixels.');
-            scale = 1;
-            pos_units = "pixels";
-        }
-        return { scale: scale, pos_units: pos_units };
-    }
 }
 
 /* Main function called when HTML page loads.
@@ -935,4 +941,6 @@ function is_movie_tracked(metadata) {
     return (last != null && total != null && total > 1 && last >= 1);
 }
 
-export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames };
+export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
+         get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
+         create_default_markers, calc_scale };
