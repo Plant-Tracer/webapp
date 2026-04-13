@@ -12,7 +12,7 @@ Code
 
 The application consists of two parts, both of which are contained in this repo:
 
-1. A web client written in JavaScript using a custom lightweight DOM utility (jQuery has been completely eliminated). Most of the app is located in [deploy/app/static/](deploy/app/static/), although these JavaScript files require some variables set on the HTML pages served out of [deploy/app/templates/](deploy/app/templates/) to function.
+1. A web client written in JavaScript. jQuery is loaded globally for browser pages, and ES modules import `$` from `src/app/static/utils.js`, which re-exports the global jQuery instance. Most of the app is located in [deploy/app/static/](deploy/app/static/), although these JavaScript files require some variables set on the HTML pages served out of [deploy/app/templates/](deploy/app/templates/) to function.
 
 2. A back-end application written in Python using the Flask framework. This application can be served using an Apache webserver with the `gunicorn` application server, or using Amazon Lambda or another serverless framework.
 

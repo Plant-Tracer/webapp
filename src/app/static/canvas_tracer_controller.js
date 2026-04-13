@@ -105,17 +105,17 @@ class TracerController extends MovieController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
-        this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
-        this.marker_name_input.on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
+        this.marker_name_input.off('input').on('input',   (_) => { this.marker_name_changed();});
+        this.marker_name_input.off('keydown').on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
         this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(this.div_selector + " input.add_marker_button");
-        this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
+        this.add_marker_button.off('click').on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
-        this.track_button.on('click', () => {this.track_to_end();});
+        this.track_button.off('click').on('click', () => {this.track_to_end();});
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
@@ -468,7 +468,7 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
+            $(this.div_selector + ' input').prop(DISABLED,true); // disable all the inputs
             return;
         }
         this.max_frame_index = this.getMaxViewableFrame();

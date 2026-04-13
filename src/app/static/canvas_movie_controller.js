@@ -31,16 +31,20 @@ class MovieController extends CanvasController {
         this.bounce = false;    // when playing, bounce off the ends
         this.loop = false;    // when playing, Loop from end to beginning
 
+        this.bind_movie_controls(div_selector);
+    }
+
+    bind_movie_controls(div_selector) {
         // set up movie controls  (manipulations are all done with CSS classes)
         // pressing a button calls either play() or goto_frame()
-        $(div_selector + " input.first_button").on('click', () => {this.goto_frame(0);});
-        $(div_selector + " input.play_reverse").on('click', () => {this.play(-1);});
-        $(div_selector + " input.play_forward").on('click', () => {this.play(+1);});
-        $(div_selector + " input.pause_button").on('click', () => {this.stop_button_pressed();});
-        $(div_selector + " input.last_button").on('click', () => {this.goto_frame(1e10);});
-        $(div_selector + " input.next_frame").on('click',  () => {this.goto_frame(this.frame_number+1);});
-        $(div_selector + " input.prev_frame").on('click',  () => {this.goto_frame(this.frame_number-1);});
-        $(div_selector + " input.frame_number_field").on('input', () => {
+        $(div_selector + " input.first_button").off('click').on('click', () => {this.goto_frame(0);});
+        $(div_selector + " input.play_reverse").off('click').on('click', () => {this.play(-1);});
+        $(div_selector + " input.play_forward").off('click').on('click', () => {this.play(+1);});
+        $(div_selector + " input.pause_button").off('click').on('click', () => {this.stop_button_pressed();});
+        $(div_selector + " input.last_button").off('click').on('click', () => {this.goto_frame(1e10);});
+        $(div_selector + " input.next_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number+1);});
+        $(div_selector + " input.prev_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number-1);});
+        $(div_selector + " input.frame_number_field").off('input').on('input', () => {
             let new_frame = this.frame_number_field.val();
             if (new_frame=='') {            // turn '' into a "0"
                 this.frame_number_field.val('0');
