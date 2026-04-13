@@ -14,6 +14,7 @@ dynamic = ["dependencies"]
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
 sqs_cli = "sqs_cli:main"
+planttracer-local-trace = "app.local_trace_cli:main"
 
 [tool.poetry]
 packages = [

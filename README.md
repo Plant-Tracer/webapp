@@ -24,6 +24,9 @@ Server-side storage is provided by Amazon S3 and Amazon DynamoDB. For local deve
 
 **Course data**, **account data**, and **movie frame annotations** are stored in Amazon DynamoDB.
 
+The DynamoDB storage model is documented for future tooling in
+`instructions-for-llms/planttracer-storage.md`.
+
 Client-side storage:
 
 **Authentication tokens** are stored in a client cookie called `api_key`.
@@ -96,6 +99,22 @@ If that works, you can try the full-blown experience with:
 make run-local
 ```
 At this point is is probably a good idea to read the entire Makefile
+
+Local tracing CLI
+-----------------
+You can run the tracing pipeline locally against DynamoDB Local and MinIO with:
+
+```bash
+poetry run python -m app.local_trace_cli MOVIE_FILE TRACKPOINTS_JSON --output-dir OUTPUT_DIR
+```
+
+Notes:
+
+- The CLI assumes the local services from the `Makefile` are already running.
+- The input JSON must be an array of `movie_frames`-style DynamoDB records, each with a `frame_number` and `trackpoints`.
+- By default, the CLI treats the highest input `frame_number` as the source frame and retraces from the next frame.
+- The CLI exports a traced MP4 and trackpoint JSON, and also exports the generated frame ZIP unless `--no-output-zip` is given.
+- Temporary DynamoDB and MinIO data are cleaned up automatically unless `--no-cleanup` is given.
 
 Linux and macOS Prerequisites
 ----------------------------

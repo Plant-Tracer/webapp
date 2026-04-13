@@ -1238,7 +1238,18 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """
     logger.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
-    movie = fix_movie(ddbo.get_movie(movie_id))
+    movie = fix_movie(ddbo.get_movie(movie_id)) # fixes the movie schema
+
+    # Correcting dimensions based on rotation
+    rotation_value = movie.get('rotation', 0)
+    try:
+        rotation = int(rotation_value)
+    except (TypeError, ValueError):
+        rotation = 0
+    if rotation in (90, 270):
+        # Using the tuple swap you suggested:
+        (movie['width'], movie['height']) = (movie.get('height'), movie.get('width'))
+
     if get_last_frame_tracked and movie.get(LAST_FRAME_TRACKED,None) is None:
         movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
     logger.debug("get_movie_metadata: returning movie=%s",movie)
@@ -1513,6 +1524,34 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     else:
         lft = max(current, frame_number)
     set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
+
+
+def clear_movie_tracking_after_frame(*, movie_id, frame_number:int):
+    """Remove trackpoints for frames strictly after ``frame_number``.
+
+    This is used when the user edits frame ``N`` and requests a retrace: frame ``N``
+    remains the source of truth, while frames ``N+1`` through the end of the movie
+    are invalidated and must be recomputed.
+
+    Returns the count of frame records whose ``trackpoints`` attribute was removed.
+    """
+    assert is_movie_id(movie_id)
+    assert frame_number >= 0
+    ddbo = DDBO()
+    deleted = 0
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None or int(fn) <= frame_number or 'trackpoints' not in frame:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+        deleted += 1
+
+    # Preserve the edited frame as the new frontier for any subsequent retrace.
+    set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: frame_number})
+    return deleted
 
 
 def clear_movie_tracking(movie_id):

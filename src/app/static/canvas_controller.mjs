@@ -38,7 +38,7 @@ import { $ } from "./utils.js";
  - set_background_image - fetches a background image and resizes the canvas to be the size of the image.
  -
  - delegate    - if set, gets notices
- - delegate.object_did_move( _obj) {} - tells delegate that an object moved.
+ - delegate.object_did_move( _obj) {} - tells delegate that an object moved. Used for updating the matrix of trackpoints
  - delegate.object_move_finished( _obj) {} - tells delegate that object move finished.
 
  CanvasItem - base object class
@@ -85,6 +85,7 @@ class CanvasController {
         this.selected = null;              // the selected object
         this.objects = new Array();       // the objects
         this.zoom = 1;                 // default zoom
+        this.dragging = false;         // not currently dragging
 
         // Register object movement events.
         // We use '=>' rather than lambda because '=>' wraps the current environment (including this),
@@ -188,6 +189,7 @@ class CanvasController {
             }
         }
         this.redraw();
+        this.dragging = true;
     }
 
     moveMarker(e) {
@@ -216,6 +218,7 @@ class CanvasController {
         this.c.style.cursor = 'auto';
         this.redraw();
         this.object_move_finished(obj);
+        this.dragging = false;
     }
 
     // -- Mouse event handlers --
@@ -275,8 +278,8 @@ class CanvasController {
     }
 
     resize(width, height) {
-        this.c.width = this.naturalWidth = width;
-        this.c.height = this.naturalHeight = height;
+        this.oc.width = this.c.width = this.naturalWidth = width;
+        this.oc.height = this.c.height = this.naturalHeight = height;
         this.redraw();
     }
 
@@ -467,7 +470,7 @@ class WebImage extends CanvasItem {
 
         // Overwrite the Image's onload method so that when the image is loaded, draw the entire stack again.
         this.img.onload = (_) => {
-            //console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
+          //console.log(`image loaded ${this.url} ${this.img.naturalWidth}x${this.img.naturalHeight}`);
             if (this.timeout) {
                 clearTimeout(this.timeout);
                 this.timeout = null;
@@ -478,7 +481,7 @@ class WebImage extends CanvasItem {
             // If we are already in a canvas controller, as it to redraw.
             // If we are not yet in a canvas controller, redraw
             if (this.cc) {
-                this.cc.redraw();
+                this.cc.resize(this.width, this.height);
                 this.cc.did_onload_callback(this);
             }
         };
