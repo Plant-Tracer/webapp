@@ -33,7 +33,9 @@ Tracking is requested by POSTing to `LAMBDA_API_BASE + 'api/v1'` with JSON body:
 - `action`: `"track-movie"`
 - `api_key`: from the logged-in user (same as other API calls)
 - `movie_id`: movie to track
-- `frame_start`: frame index to start from (0-based)
+- `frame_start`: the edited source frame (0-based). PlantTracer preserves this frame,
+  deletes stored annotations for `frame_start + 1 ... end`, and resumes tracing at the
+  following frame.
 
 The Lambda validates `api_key`, resolves `user_id`, then runs tracking (writes trackpoints and zip to DynamoDB/S3). The client then polls for completion (e.g. via Flask `get-movie-metadata` with `get_all_if_tracking_completed`) and updates the UI.
 

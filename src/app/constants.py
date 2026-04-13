@@ -40,7 +40,9 @@ class C:
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
-    DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # run in demo mode with this course_id
+    PLANTTRACER_LAMBDA_API_BASE='PLANTTRACER_LAMBDA_API_BASE'
+    DEMO_MODE = 'DEMO_MODE'
+    DEMO_COURSE_ID = 'DEMO_COURSE_ID'                         # identifies the demo course data set
     FFMPEG_PATH = 'FFMPEG_PATH'
     AWS_ACCESS_KEY_ID = 'AWS_ACCESS_KEY_ID'
     AWS_SECRET_ACCESS_KEY = 'AWS_SECRET_ACCESS_KEY'
@@ -57,6 +59,9 @@ class C:
     TEST_SECRET_ACCESS_KEY = 'minioadmin'
     TEST_ENDPOINT_URL_S3 = 'http://localhost:9000'
     TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8000'
+    DEFAULT_LOCAL_BUCKET = 'planttracer-local'
+    DEFAULT_LOCAL_TABLE_PREFIX = 'demo-'
+    LOCAL_TRACKING_QUEUE_MODE = 'local'
 
     # Confs
     DEFAULT_MAX_ENROLLMENT = 100
@@ -125,6 +130,20 @@ class C:
         'date_uploaded', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
     )
     MOVIE_PROPS_STR = ('fps',)
+
+
+def configure_local_environment(*, include_tracking_queue=False):
+    """Apply local DynamoDB/MinIO defaults unless the caller already set them."""
+    os.environ.setdefault(C.AWS_REGION, "local")
+    if os.environ.get(C.AWS_REGION) == "local":
+        os.environ.setdefault(C.AWS_ACCESS_KEY_ID, C.TEST_ACCESS_KEY_ID)
+        os.environ.setdefault(C.AWS_SECRET_ACCESS_KEY, C.TEST_SECRET_ACCESS_KEY)
+        os.environ.setdefault(C.AWS_ENDPOINT_URL_DYNAMODB, C.TEST_ENDPOINT_URL_DYNAMODB)
+        os.environ.setdefault(C.AWS_ENDPOINT_URL_S3, C.TEST_ENDPOINT_URL_S3)
+        os.environ.setdefault(C.PLANTTRACER_S3_BUCKET, C.DEFAULT_LOCAL_BUCKET)
+    os.environ.setdefault(C.DYNAMODB_TABLE_PREFIX, C.DEFAULT_LOCAL_TABLE_PREFIX)
+    if include_tracking_queue:
+        os.environ.setdefault("TRACKING_QUEUE_MODE", C.LOCAL_TRACKING_QUEUE_MODE)
 
 class MIME:
     """MIME Types"""

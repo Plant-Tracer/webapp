@@ -6,7 +6,6 @@ Routines for providing access to the movies for the lambda
 import os
 import json
 from typing import NamedTuple
-import urllib
 from pathlib import Path
 import tempfile
 
@@ -14,7 +13,13 @@ import boto3
 from aws_lambda_powertools import Logger
 
 from .src.app.schema import Trackpoint
-from .src.app.odb import get_movie_metadata, get_movie_trackpoints, put_frame_trackpoints, LAST_FRAME_TRACKED
+from .src.app.odb import (
+    get_movie_metadata,
+    get_movie_trackpoints,
+    put_frame_trackpoints,
+    clear_movie_tracking_after_frame,
+    LAST_FRAME_TRACKED,
+)
 from .src.app.odb_movie_data import (write_object_from_path )
 from .src.app import mp4_metadata_lib
 from .src.app import s3_presigned
@@ -35,34 +40,33 @@ from .src.app.odb import (
     USER_ID
 )
 
+from . import local_queue
 from . import tracker
 
 __version__ = "0.1.0"
 LOG_ID_STATUS_PING = "lambda-status-ping"
 LOGGER = Logger(service="planttracer")
 
-sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
-
 class MovieInfo(NamedTuple):
     signed_url: str                    #
     signed_zipfile_url: str            # TODO
     rotation: int
 
-def queue_tracing(api_key:str, movie_id:str, frame_start:int):
-    """Send a tracking request through the SQS"""
-    queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
-    if not queue_url:
-        LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
-        raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
-    msg = { "api_key": api_key, "movie_id": movie_id, "frame_start": frame_start }
-    LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
-    sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
-    return {"error":False, "message": msg}
 
-def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
-    """
-    Given an api_key and a movie_id, return a signed URL and the desired movie rotation
-    """
+class MovieDownloadInfo(NamedTuple):
+    signed_movie_url: str
+    signed_zipfile_url: str | None
+
+
+def sqs_client():
+    return boto3.client(
+        "sqs",
+        region_name=os.environ.get("AWS_REGION"),
+        endpoint_url=os.environ.get("AWS_ENDPOINT_URL_SQS"),
+    )
+
+
+def validate_movie_access(*, api_key=None, movie_id=None):
     if not api_key:
         raise ValueError("api_key required")
     if not odb.is_movie_id(movie_id):
@@ -88,6 +92,28 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
         raise ValueError(f"user {user_id} is not authorized to access movie {movie_id}") from e
     except odb.InvalidMovie_Id as e:
         raise ValueError("movie_id is invalid") from e
+    return ddbo, user_id, movie
+
+def queue_tracing(api_key:str, movie_id:str, frame_start:int):
+    """Send a tracking request through SQS or the local debug queue."""
+    msg = {"api_key": api_key, "movie_id": movie_id, "frame_start": frame_start}
+    if os.environ.get("TRACKING_QUEUE_MODE", "").strip().lower() == "local":
+        LOGGER.info("Enqueuing follow-up local batch: %s", msg)
+        local_queue.enqueue_message(msg)
+        return {"error": False, "message": msg}
+    queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
+    if not queue_url:
+        LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
+        raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
+    LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
+    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
+    return {"error":False, "message": msg}
+
+def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
+    """
+    Given an api_key and a movie_id, return a signed URL and the desired movie rotation
+    """
+    _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
 
     rotation = int(movie.get(MOVIE_ROTATION,0))
     urn = movie.get(MOVIE_DATA_URN)
@@ -97,21 +123,45 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     if movie.get(MOVIE_STATUS,'')==MOVIE_STATE_UPLOADING:
         odb.set_movie_metadata(movie_id=movie_id, movie_metadata={MOVIE_STATUS:MOVIE_STATE_READY})
 
-    parsed = urllib.parse.urlparse(urn)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
-        raise ValueError(f"invalid {MOVIE_DATA_URN}: {urn}")
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    s3 = boto3.client('s3')
-    signed_url = s3.generate_presigned_url( ClientMethod='get_object',
-                                            Params={'Bucket': bucket, 'Key': key},
-                                            ExpiresIn=300 )
-    return MovieInfo(signed_url=signed_url, signed_zipfile_url=None, rotation=rotation)
+    return MovieInfo(
+        signed_url=s3_presigned.make_signed_url(urn=urn, operation='get', expires=300),
+        signed_zipfile_url=None,
+        rotation=rotation,
+    )
+
+
+def get_movie_download_urls(*, api_key=None, movie_id=None) -> MovieDownloadInfo:
+    """Return signed URLs for movie playback and optional frame ZIP download."""
+    _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
+    movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+    if not movie_urn:
+        raise ValueError("MOVIE_DATA_URN not set")
+    zip_urn = (movie.get(MOVIE_ZIPFILE_URN) or "").strip() or None
+    return MovieDownloadInfo(
+        signed_movie_url=s3_presigned.make_signed_url(urn=movie_urn, operation='get', expires=300),
+        signed_zipfile_url=s3_presigned.make_signed_url(urn=zip_urn, operation='get', expires=300) if zip_urn else None,
+    )
+
+
+def first_frame_to_track(*, source_frame_number:int) -> int:
+    """Translate a user-selected source frame into the first frame to recompute."""
+    if source_frame_number < 0:
+        raise ValueError("source_frame_number must be >= 0")
+    return 1 if source_frame_number == 0 else source_frame_number + 1
 
 
 def run_tracing(*, movie_id, frame_start):
-    """Run tracing pipeline and create both zipfile and tracked mp4."""
+    """Run tracing pipeline and create both zipfile and tracked mp4.
+
+    ``frame_start`` is the frame the user edited and wants to retrace from.
+    That frame remains the source of truth; tracing resumes at ``frame_start + 1``.
+    """
     ddbo = DDBO()
+    source_frame_number = int(frame_start)
+    tracking_frame_start = first_frame_to_track(source_frame_number=source_frame_number)
+    cleared_frames = clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=source_frame_number)
+    LOGGER.info("run_tracing movie_id=%s source_frame=%s tracking_frame_start=%s cleared_frames=%s",
+                movie_id, source_frame_number, tracking_frame_start, cleared_frames)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
     input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
@@ -125,7 +175,8 @@ def run_tracing(*, movie_id, frame_start):
     if not input_trackpoints:
         raise RuntimeError("Cannot track movie with no trackpoints")
 
-    LOGGER.info("run_tracking movie_id=%s frame_start=%s input_trackpoints=%s",movie_id,frame_start,input_trackpoints)
+    LOGGER.info("run_tracking movie_id=%s source_frame=%s tracking_frame_start=%s input_trackpoints=%s",
+                movie_id, source_frame_number, tracking_frame_start, input_trackpoints)
 
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
@@ -152,7 +203,7 @@ def run_tracing(*, movie_id, frame_start):
 
         rotation = movie_record.get(MOVIE_ROTATION,0) or 0
         trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(urn=movie_urn),
-                                             frame_start = frame_start,
+                                             frame_start = tracking_frame_start,
                                              trackpoints = input_trackpoints,
                                              movie_zipfile_path = movie_zipfile_path,
                                              movie_traced_path = movie_traced_path,
