@@ -106,7 +106,11 @@ def get_user_api_key():
     """
     # If we are in demo mode, get the demo mode api_key
     if log_level=='DEBUG':
-        logger.debug("get_user_api_key. request.values=%s request.cookies=%s",printable80(request.values),dict(request.cookies))
+        logger.debug(
+            "get_user_api_key. request.values=%s request.cookie_names=%s",
+            printable80(request.values),
+            list(request.cookies.keys()),
+        )
 
     if in_demo_mode():
         return C.DEMO_MODE_API_KEY
@@ -119,7 +123,7 @@ def get_user_api_key():
     # Then check the cookie
     api_key_cookie = request.cookies.get(cookie_name(), None)
     if api_key_cookie:
-        logger.debug("api_key from request.cookies cookie_name=%s api_key=%s", cookie_name(), api_key_cookie)
+        logger.debug("api_key from request.cookies cookie_name=%s", cookie_name())
         return api_key_cookie
 
     # No API key
@@ -133,7 +137,7 @@ def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
     logger.debug("get_user_dict")
     api_key = get_user_api_key()
-    logger.debug("get_user_dict api_key=%s",api_key)
+    logger.debug("get_user_dict api_key_present=%s", api_key is not None)
     if api_key is None:
         logger.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
@@ -144,8 +148,7 @@ def get_user_dict():
     # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
     userdict = user_dict_for_api_key(api_key)
     if userdict is None:
-        logger.info("api_key %s is invalid  ipaddr=%s request.url=%s",
-                     api_key,request.remote_addr,request.url)
+        logger.info("api_key is invalid ipaddr=%s request.url=%s", request.remote_addr, request.url)
         raise InvalidAPI_Key("get_user_dict 2")
     return userdict
 
@@ -166,7 +169,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     logger.debug("page_dict(title=%s,require_auth=%s,logout=%s,lookup=%s)",title,require_auth,logout,lookup)
     if lookup:
         api_key = get_user_api_key()
-        logger.debug("get_user_api_key=%s",api_key)
+        logger.debug("get_user_api_key present=%s", api_key is not None)
         if api_key is None and require_auth is True:
             logger.debug("api_key is None and require_auth is True")
             raise InvalidAPI_Key("page_dict")

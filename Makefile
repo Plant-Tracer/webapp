@@ -15,7 +15,7 @@ TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 LOCAL_BUCKET:=planttracer-local
 LOCAL_HTTP_PORT=8080
-LOCAL_LAMBDA_PORT=9001
+LOCAL_LAMBDA_PORT=9811
 LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
@@ -315,10 +315,10 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 
 # operation:
 start_local_dynamodb: bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash start
+	python3 bin/local_services.py dynamodb start
 
 stop_local_dynamodb:  bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash stop
+	python3 bin/local_services.py dynamodb stop
 
 list-tables:
 	$(LOCAL_AWS_ENV) aws dynamodb list-tables
@@ -367,10 +367,10 @@ bin/minio:
 
 # operation:
 start_local_minio: bin/minio
-	bash bin/local_minio_control.bash start
+	python3 bin/local_services.py minio start
 
 stop_local_minio:  bin/minio
-	bash bin/local_minio_control.bash stop
+	python3 bin/local_services.py minio stop
 
 list-local-buckets:
 	$(LOCAL_AWS_ENV) aws s3 ls

@@ -347,13 +347,13 @@ class DDBO:
 
     def put_api_key_dict(self,api_key_dict):
         # no ConditionExpression - it's okay if the key already exists
-        logger.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
+        logger.debug("put_api_key_dict(user_id=%s enabled=%s)", api_key_dict.get(USER_ID), api_key_dict.get(ENABLED))
         return self.api_keys.put_item(Item = api_key_dict)
 
     def get_api_key_dict(self,api_key):
         try:
             ret =  self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
-            logger.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
+            logger.debug("get_api_key_dict(found=%s)", ret is not None)
             return ret
         except Exception as e:
             logger.error("table=%s error=%s",self.api_keys.name, e)

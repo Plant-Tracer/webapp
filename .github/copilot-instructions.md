@@ -66,8 +66,8 @@ Local runs use Minio (S3) and DynamoDB Local unless `AWS_REGION` is set to a rea
 
 ```bash
 # One-time: start Minio + DynamoDB Local, create local bucket
-bin/local_minio_control.bash start
-bin/local_dynamodb_control.bash start
+python3 bin/local_services.py minio start
+python3 bin/local_services.py dynamodb start
 make make-local-bucket
 
 # Create demo course and DB tables

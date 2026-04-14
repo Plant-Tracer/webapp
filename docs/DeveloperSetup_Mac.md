@@ -203,7 +203,7 @@ make start_local_minio
 Here's what it looks like when it runs:
 ```
 (venv) simsong@Seasons-2 webapp % make start_local_dynamodb
-bash bin/local_dynamodb_control.bash start
+python3 bin/local_services.py dynamodb start
 Starting DynamoDB Local...
   Waiting for DynamoDBLocal to be ready (1)...
   Waiting for DynamoDBLocal to be ready (2)...
@@ -211,7 +211,7 @@ DynamoDB Local is ready.
 DynamoDB Local started in the background (PID: 12336).
 DynamoDB Local endpoint: http://localhost:8000
 (venv) simsong@Seasons-2 webapp % make start_local_minio
-bash bin/local_minio_control.bash start
+python3 bin/local_services.py minio start
 Starting Minio ...
 Minio Local started in the background (PID: 12428).
   Waiting for MinIO to be ready (1)...

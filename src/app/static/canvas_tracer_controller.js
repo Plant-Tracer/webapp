@@ -52,7 +52,6 @@ let yChartInstance = null;
  * if frame 0 has no markers there, use [] so we don't overwrite user positions with defaults.
  */
 function create_default_markers() {
-    console.log('[canvas_tracer_controller] Creating default markers (first-time analysis load; frame 0 has no markers yet).');
     return [...DEFAULT_MARKERS];
 }
 
@@ -84,6 +83,7 @@ class TracerController extends MovieController {
         this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
             ? movie_metadata.total_frames : 0;
         this.pending_retrace_to_end = false;
+        this.pending_trace_start_frame = null;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -105,17 +105,17 @@ class TracerController extends MovieController {
 
         // marker_name_input is the text field for the marker name
         this.marker_name_input = $(this.div_selector + " .marker_name_input");
-        this.marker_name_input.on('input',   (_) => { this.marker_name_changed();});
-        this.marker_name_input.on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
+        this.marker_name_input.off('input').on('input',   (_) => { this.marker_name_changed();});
+        this.marker_name_input.off('keydown').on('keydown', (e) => { if (e.key === 'Enter') this.add_marker_onclick_handler(e);});
         this.add_marker_status = $(this.div_selector + ' .add_marker_status');
 
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(this.div_selector + " input.add_marker_button");
-        this.add_marker_button.on('click', (event) => { this.add_marker_onclick_handler(event);});
+        this.add_marker_button.off('click').on('click', (event) => { this.add_marker_onclick_handler(event);});
 
         // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
-        this.track_button.on('click', () => {this.track_to_end();});
+        this.track_button.off('click').on('click', () => {this.track_to_end();});
 
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
@@ -225,7 +225,6 @@ class TracerController extends MovieController {
             scale = real_distance / pixel_distance;
             pos_units = "mm";
         } else {
-            console.log('calculate_scale: Two ruler markers not found. The distance will be in pixels.');
             scale = 1;
             pos_units = "pixels";
         }
@@ -313,9 +312,6 @@ class TracerController extends MovieController {
             frame_number : this.frame_number,
             trackpoints  : JSON.stringify(this.get_markers()) // markers as a JSON string because we do POST as a form, not as REST
         };
-        for (let tp of this.get_markers()) {
-            console.log("frame=",this.frame_number,"tp=",tp);
-        }
         $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
@@ -323,7 +319,7 @@ class TracerController extends MovieController {
                 }
             })
             .fail( (res) => {
-                console.log("error:",res);
+                console.error("put-frame-trackpoints failed", res);
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
     }
@@ -339,14 +335,16 @@ class TracerController extends MovieController {
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
     track_to_end() {
-        $('#status-big').html('Movie is being traced...');
+        const retraceStartFrame = this.frame_number;
+        const traceVerb = retraceStartFrame > 0 ? 'Retracing' : 'Tracing';
+        $('#status-big').text(`${traceVerb} from frame ${retraceStartFrame}...`);
         $(this.div_selector).addClass('tracing-dimmed');
-        this.tracking_status.text("Asking pipeline to trace movie...");
+        this.tracking_status.text(`${traceVerb} from frame ${retraceStartFrame}...`);
         this.track_button.prop(DISABLED, true);
         this.tracking = true;
         this.pending_retrace_to_end = false;
+        this.pending_trace_start_frame = retraceStartFrame;
         this.poll_error_count = 0;
-        this.poll_for_track_end();
         this.set_movie_control_buttons();
 
         const url = `${LAMBDA_API_BASE}resize-api/v1/trace-movie`;
@@ -356,8 +354,6 @@ class TracerController extends MovieController {
         });
         const self = this;
         const TRACK_MOVIE_MAX_ATTEMPTS = 3;
-        console.log("track_to_end api_key=",this.api_key);
-        console.log("track_to_end body=",body);
 
         function tryTrackMovie(attempt) {
             attempt = attempt || 1;
@@ -372,6 +368,7 @@ class TracerController extends MovieController {
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
                     if (status >= 200 && status < 300 && !(data && data.error)) {
+                        self.poll_for_track_end();
                         return;
                     }
                     const msg = (data && data.message) ? data.message : `Tracking request failed (${status}).`;
@@ -384,13 +381,15 @@ class TracerController extends MovieController {
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
+                    self.pending_trace_start_frame = null;
                     self.tracking_status.text(msg);
                     console.error('[track-movie] final failure (HTTP):', {
                         status,
                         data,
                         attempt,
                         url,
-                        body: body,
+                        movie_id: self.movie_id,
+                        frame_start: self.pending_trace_start_frame,
                     });
                     alert(msg);
                 })
@@ -403,13 +402,15 @@ class TracerController extends MovieController {
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
+                    self.pending_trace_start_frame = null;
                     const msg = err && err.message ? err.message : "Tracking request failed.";
                     self.tracking_status.text(msg);
                     console.error('[track-movie] final failure (network):', {
                         attempt,
                         error: err && err.message,
                         url,
-                        body: body,
+                        movie_id: self.movie_id,
+                        frame_start: self.pending_trace_start_frame,
                     });
                     alert(msg);
                 });
@@ -468,7 +469,7 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_controller + ' input').prop(DISABLED,true); // disable all the inputs
+            $(this.div_selector + ' input').prop(DISABLED,true); // disable all the inputs
             return;
         }
         this.max_frame_index = this.getMaxViewableFrame();
@@ -480,7 +481,6 @@ class TracerController extends MovieController {
          * On poll error we log to console and only alert after 3 consecutive errors.
          */
   poll_for_track_end() {
-    console.log("poll_for_track_end");
         const params = {
             api_key:this.api_key,
             movie_id:this.movie_id,
@@ -489,7 +489,6 @@ class TracerController extends MovieController {
         const self = this;
         $.post(`${API_BASE}api/get-movie-metadata`, params)
             .done((data) => {
-              console.log("poll_for_track_end movie_metadata=",data);
                 if (data.error === false) {
                     self.poll_error_count = 0;
                     if (data.metadata.status === TRACING_COMPLETED_FLAG) {
@@ -536,6 +535,7 @@ class TracerController extends MovieController {
         this.set_movie_control_buttons();
         this.tracking_status.text('Tracing complete. Loading movie...');
         const self = this;
+        const focusFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
         const maxZipWaitMs = MAX_ZIP_WAIT_MS;
         const zipPollMs = STATUS_POLL_MSEC;
@@ -586,15 +586,24 @@ class TracerController extends MovieController {
         waitForZip()
             .then(({ zipUrl, metadata, frames }) => {
                 $(div).removeClass('tracing-dimmed');
-                trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true);
+                trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true, { initialFrame: focusFrame });
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
                 self.track_button.prop(DISABLED, false);
                 self.download_button.show();
-                $('#status-big').html('Press play <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.');
+                const endFrame = (metadata.last_frame_tracked != null && metadata.last_frame_tracked !== undefined)
+                    ? metadata.last_frame_tracked
+                    : ((metadata.total_frames != null && metadata.total_frames > 0) ? metadata.total_frames - 1 : focusFrame);
+                const completionMessage = (focusFrame > 0)
+                    ? `Retraced from frame ${focusFrame} to frame ${endFrame}.`
+                    : `Traced from frame 0 to frame ${endFrame}.`;
+                self.tracking_status.text(completionMessage);
+                $('#status-big').html(`${completionMessage} Press play <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
+                self.pending_trace_start_frame = null;
             })
             .catch((err) => {
                 $(div).removeClass('tracing-dimmed');
                 self.tracking_status.text('');
+                self.pending_trace_start_frame = null;
                 if (!$('#status-big').text()) {
                     $('#status-big').text('Tracing complete, but ZIP file did not become available. Please refresh and try again.');
                 }
@@ -654,11 +663,9 @@ function frame_index_from_zip_name(name) {
 }
 
 async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_url,
-                                  metadata_frames, api_key, show_results=true) {
-    console.log("trace_movie_frames movie_zipfile_url=",movie_zipfile_url,"metdata_frames=",metadata_frames);
+                                  metadata_frames, api_key, show_results=true, options={}) {
     const movie_frames = [];
     const {entries} = await unzip(movie_zipfile_url);
-    console.log("entries=",entries);
     const names = Object.keys(entries).filter(name => /\.(jpg|jpeg)$/i.test(name));
     names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
 
@@ -675,8 +682,6 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
         movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
     });
 
-    console.log("movie_frmes=",movie_frames);
-
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
         if (imgStack && imgStack.img && (cc.movie_metadata.width == null || cc.movie_metadata.height == null)) {
@@ -692,6 +697,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
     };
     cc.set_movie_control_buttons();
     cc.load_movie(movie_frames);
+    if (options.initialFrame != null) {
+        cc.goto_frame(options.initialFrame);
+    }
     cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
@@ -721,7 +729,6 @@ function calc_scale(markers) {
         scale = real_distance / pixel_distance;
         pos_units = "mm";
     } else {
-        console.log('Two RulerXXmm markers not found. The distance will be in pixels.');
         scale = 1;
         pos_units = "pixels";
     }
@@ -898,7 +905,6 @@ function trace_movie(div_controller, movie_id, api_key) {
         frame_count: MAX_FRAMES
     };
     $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
-        console.log("get-movie-metadata=",resp)
         if (resp.error==true) {
             alert(resp.message);
             return;
@@ -927,7 +933,6 @@ function trace_movie(div_controller, movie_id, api_key) {
                                 : 'Movie ready for tracing. Place markers and click Trace movie.');
         }
         const movie_zipfile_url = resp.metadata.movie_zipfile_url;
-        console.log("1. movie_zipfile_url=",movie_zipfile_url);
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
     });
 }

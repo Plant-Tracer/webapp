@@ -97,17 +97,37 @@ def validate_movie_access(*, api_key=None, movie_id=None):
 def queue_tracing(api_key:str, movie_id:str, frame_start:int):
     """Send a tracking request through SQS or the local debug queue."""
     msg = {"api_key": api_key, "movie_id": movie_id, "frame_start": frame_start}
+    safe_msg = {"movie_id": movie_id, "frame_start": frame_start}
     if os.environ.get("TRACKING_QUEUE_MODE", "").strip().lower() == "local":
-        LOGGER.info("Enqueuing follow-up local batch: %s", msg)
+        LOGGER.info("Enqueuing follow-up local batch: %s", safe_msg)
         local_queue.enqueue_message(msg)
-        return {"error": False, "message": msg}
+        return {"error": False, "message": safe_msg}
     queue_url = os.environ.get("TRACKING_QUEUE_URL", "").strip()
     if not queue_url:
         LOGGER.error("TRACKING_QUEUE_URL not configured for follow-up batch")
         raise RuntimeError("TRACKING_QUEUE_URL not configured for follow-up batch")
-    LOGGER.info("Enqueuing follow-up SQS batch: %s", msg)
+    LOGGER.info("Enqueuing follow-up SQS batch: %s", safe_msg)
     sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
-    return {"error":False, "message": msg}
+    return {"error":False, "message": safe_msg}
+
+
+def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int) -> dict:
+    """Validate access and mark the movie as retracing before queueing work.
+
+    This closes the UI race where the browser polls before the worker has had
+    a chance to flip the movie state away from ``tracing completed``.
+    """
+    ddbo, _user_id, _movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
+    source_frame_number = int(frame_start)
+    cleared_frames = clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=source_frame_number)
+    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
+    LOGGER.info(
+        "Prepared tracing request: movie_id=%s source_frame=%s cleared_frames=%s",
+        movie_id,
+        source_frame_number,
+        cleared_frames,
+    )
+    return {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames}
 
 def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     """

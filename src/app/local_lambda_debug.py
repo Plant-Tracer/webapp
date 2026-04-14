@@ -24,7 +24,7 @@ from app.constants import configure_local_environment as configure_shared_local_
 from app.constants import logger
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 9001
+DEFAULT_PORT = 9811
 
 bridge_app = Flask(__name__)
 

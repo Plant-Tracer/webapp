@@ -4,7 +4,7 @@ This document describes how to test the `canvas_movie_controller.js` functionali
 
 ## Overview
 
-After removing jQuery from `canvas_movie_controller.js`, it's important to verify that the movie controller still works correctly in a real browser environment. These tests use Selenium with Chromium to automate browser testing with a live Flask server running in a background thread.
+`canvas_movie_controller.js` now runs with the same globally loaded jQuery instance that the browser pages use. These tests verify that the movie controller still works correctly in a real browser environment. They use Selenium with Chromium to automate browser testing with a live Flask server running in a background thread.
 
 ## Prerequisites
 

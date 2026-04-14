@@ -172,10 +172,15 @@ def handle_post_actions():
 
     frame_start = body.get("frame_start", 0)
     LOGGER.info("trace-movie. movie_id=%s", movie_id)
-    return movie_glue.queue_tracing(api_key, movie_id, frame_start)
+    try:
+        movie_glue.prepare_tracing_request(api_key=api_key, movie_id=movie_id, frame_start=frame_start)
+        return movie_glue.queue_tracing(api_key, movie_id, frame_start)
+    except ValueError as e:
+        LOGGER.exception("trace-movie rejected: %s", e)
+        return Response(status_code=403, body=str(e.args))
 
 
-@LOGGER.inject_lambda_context(log_event=True)
+@LOGGER.inject_lambda_context(log_event=False)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
     if isinstance(event, dict) and "Records" in event:
