@@ -6,6 +6,7 @@ import sys
 import configparser
 import uuid
 import json
+import runpy
 import os
 
 from app import clogging
@@ -79,6 +80,10 @@ def dump_movie(movie_id):
     print(json.dumps(movie,indent=4,default=str))
     trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
     print(json.dumps(trackpoints,indent=4,default=str))
+
+
+def main():
+    runpy.run_path(__file__, run_name="__main__")
 
 
 if __name__ == "__main__":
