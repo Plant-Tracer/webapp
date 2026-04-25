@@ -50,7 +50,11 @@ export ADMIN_EMAIL COURSE_ID ADMIN_NAME COURSE_NAME SERVER_EMAIL LAMBDA_RESIZE_A
 if ! run_section 1 "Shell config (.bashrc, .bash_profile)"; then
   if ! grep -q planttracer "$HOME/.bashrc" 2>/dev/null; then
     echo '# source planttracer
-. "/etc/environment.d/10-planttracer.conf" && export $(cut -d= -f1 "/etc/environment.d/10-planttracer.conf" | grep -v "^#")
+# Prefer pipx-installed tools like Poetry over distro packages in /usr/bin.
+export PATH="$HOME/.local/bin:$PATH"
+set -a
+source /etc/environment.d/10-planttracer.conf
+set +a
 ' >> "$HOME/.bashrc"
   fi
   if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
@@ -76,19 +80,20 @@ BASHPROFILE
   end_section 1
 fi
 
+# Make pipx-installed tools visible for this bootstrap run.
+export PATH="$HOME/.local/bin:$PATH"
+
 # --- Section 2: pipx and poetry ---
 if ! run_section 2 "pipx and poetry"; then
   sudo apt-get update -y
   sudo apt-get install -y python3-pip pipx
   pipx ensurepath
-  export PATH="$HOME/.local/bin:$PATH"
   sudo apt-get remove --purge -y poetry 2>/dev/null || true
   pipx install poetry --force 2>/dev/null || pipx upgrade poetry
   poetry --version
   poetry self add poetry-plugin-export
   end_section 2
 fi
-export PATH="$HOME/.local/bin:$PATH"
 
 # --- Section 3: nginx and hostname ---
 if ! run_section 3 "nginx and hostname"; then
