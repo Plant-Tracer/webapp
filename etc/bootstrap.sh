@@ -61,6 +61,9 @@ echo "  View webserver log:  journalctl -u planttracer.service -f"
 echo "  Enable gunicorn auto-reload:    cd /opt/webapp && make gunicorn-reload"
 echo "tail /var/log/user-data.log"
 tail /var/log/user-data.log
+if [ -f ~/.bashrc ]; then
+  . ~/.bashrc
+fi
 BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
   fi
