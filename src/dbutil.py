@@ -11,6 +11,7 @@ from email.message import EmailMessage
 from app import clogging
 from app import odb
 from app import odbmaint
+from app import apikey
 from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
@@ -171,11 +172,17 @@ def register_student(args):
 
 def send_test_mail(email, *, debug=False):
     from_addr = mailer.get_server_email()
+    branch = apikey.git_branch().strip()
+    commit = apikey.git_last_commit().strip()
     msg = EmailMessage()
     msg["Subject"] = "Plant Tracer test email"
     msg["From"] = from_addr
     msg["To"] = email
-    msg.set_content("This is a Plant Tracer test email.\n")
+    msg.set_content(
+        "This is a Plant Tracer test email.\n"
+        f"Git branch: {branch}\n"
+        f"Git commit: {commit}\n"
+    )
     mailer.send_message(
         from_addr=from_addr,
         to_addrs=[email],
