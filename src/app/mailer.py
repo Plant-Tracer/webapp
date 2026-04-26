@@ -51,7 +51,8 @@ class NoMailerConfiguration(Exception):
 
 def get_server_email():
     """Return the From address for outgoing mail (env SERVER_EMAIL or default)."""
-    return os.environ.get(C.SERVER_EMAIL, 'admin@planttracer.com')
+    email = os.environ.get(C.SERVER_EMAIL, 'admin@planttracer.com')
+    return email.strip().strip(chr(34) + chr(39))
 
 
 def get_smtp_config():
