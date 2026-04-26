@@ -176,18 +176,12 @@ def send_test_mail(email, *, debug=False):
     msg["From"] = from_addr
     msg["To"] = email
     msg.set_content("This is a Plant Tracer test email.\n")
-    raw_msg = msg.as_string()
-    if debug:
-        region = os.environ.get(C.AWS_REGION, "us-east-1")
-        print("SendRawEmail parameters:")
-        print({"Source": from_addr, "Destinations": [email], "Region": region})
-        print("\nRaw MIME message:")
-        print(raw_msg)
     mailer.send_message(
         from_addr=from_addr,
         to_addrs=[email],
-        msg=raw_msg,
+        msg=msg.as_string(),
         smtp_config=mailer.get_smtp_config(),
+        debug=debug,
     )
     print(f"test email sent to {email} from {from_addr}")
 

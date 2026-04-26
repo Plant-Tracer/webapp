@@ -82,12 +82,15 @@ def get_smtp_config():
     return ret
 
 
-def _send_via_ses(*, from_addr: str, to_addrs: list, msg: str):
+def _send_via_ses(*, from_addr: str, to_addrs: list, msg: str, debug: bool = False):
     """Send raw MIME message via AWS SES. Uses AWS_REGION (single-region)."""
     region = os.environ.get(C.AWS_REGION, 'us-east-1')
     client = boto3.client('ses', region_name=region)
     raw = msg.encode('utf-8')
     logger.info("sending mail to %s via SES (region=%s)", ",".join(to_addrs), region)
+    if debug:
+        print("SendRawEmail parameters:")
+        print({"Source": from_addr, "Destinations": to_addrs, "RawMessage": {"Data": msg}})
     client.send_raw_email(
         Source=from_addr,
         Destinations=to_addrs,
@@ -100,7 +103,8 @@ def send_message(*,
                  to_addrs: list,
                  msg: str,
                  dry_run: bool = False,
-                 smtp_config: dict = None):
+                 smtp_config: dict = None,
+                 debug: bool = False):
     """Send an email. Uses SMTP if smtp_config is provided, otherwise SES."""
     assert isinstance(from_addr, str)
     for to_addr in to_addrs:
@@ -127,7 +131,7 @@ def send_message(*,
             smtp.sendmail(from_addr, to_addrs, msg.encode('utf-8'))
     else:
         try:
-            _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg)
+            _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg, debug=debug)
         except ClientError as e:
             raise InvalidMailerConfiguration(str(e)) from e
 
@@ -167,6 +171,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
             smtp_config=smtp_config,
             dry_run=dry_run,
             msg=msg,
+            debug=debug,
         )
     except smtplib.SMTPAuthenticationError as e:
         raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
