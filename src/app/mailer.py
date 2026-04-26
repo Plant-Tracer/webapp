@@ -21,6 +21,7 @@ from jinja2.nativetypes import NativeEnvironment
 from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
 from .constants import C, logger
+from . import apikey, odb
 
 
 # pylint: disable=invalid-name
@@ -185,18 +186,25 @@ def send_course_created_email(*,
                               course_id: str,
                               planttracer_endpoint: str,
                               api_key: str,
+                              course_key: str = None,
                               from_addr: str = None):
     """Send course-created verification email with magic link. Uses SMTP or SES."""
     if from_addr is None:
         from_addr = get_server_email()
+    if course_key is None:
+        course = odb.lookup_course_by_id(course_id=course_id) or {}
+        course_key = course.get(odb.COURSE_KEY, "")
     msg = _render_mime_template(
         C.COURSE_CREATED_EMAIL_TEMPLATE_FNAME,
         to_addrs=to_addr,
         from_addr=from_addr,
         course_name=course_name,
         course_id=course_id,
+        course_key=course_key,
         planttracer_endpoint=planttracer_endpoint,
         api_key=api_key,
+        git_branch=apikey.git_branch().strip(),
+        git_version=apikey.git_last_commit().strip(),
     )
     smtp_config = get_smtp_config()
     send_message(
