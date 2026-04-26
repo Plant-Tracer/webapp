@@ -6,6 +6,7 @@ import sys
 import uuid
 import json
 import os
+import csv
 from email.message import EmailMessage
 
 from app import clogging
@@ -151,23 +152,66 @@ def print_report():
     print_course_report(ddbo)
 
 
-def register_student(args):
+def register_one_student(*, course_key, student_name, student_email, debug=False):
     user = odb.register_email(
-        args.student_email,
-        args.student_name,
-        course_key=args.course_key,
+        student_email,
+        student_name,
+        course_key=course_key,
     )
     api_key = odb.make_new_api_key_for_user_id(user_id=user[USER_ID])
     endpoint = planttracer_endpoint()
     mailer.send_links(
-        email=args.student_email,
+        email=student_email,
         planttracer_endpoint=endpoint,
         new_api_key=api_key,
-        debug=args.debug,
+        debug=debug,
     )
     delim = "" if endpoint.endswith("/") else "/"
-    print(f"registered {args.student_email} for course key {args.course_key}")
+    print(f"registered {student_email} for course key {course_key}")
     print(f"login link: {endpoint}{delim}list?api_key={api_key}")
+
+
+def csv_has_header(row):
+    if len(row) < 2:
+        return False
+    return row[0].strip().lower() == "name" and row[1].strip().lower() == "email"
+
+
+def register_csv(args):
+    count = 0
+    with open(args.csv_file, newline="", encoding="utf-8") as f:
+        rows = csv.reader(f)
+        for row_number, row in enumerate(rows, 1):
+            if row_number == 1 and csv_has_header(row):
+                continue
+            if not row or not any(field.strip() for field in row):
+                continue
+            if len(row) != 2:
+                raise ValueError(f"{args.csv_file}:{row_number}: expected name,email")
+            student_name, student_email = (field.strip() for field in row)
+            register_one_student(
+                course_key=args.course_key,
+                student_name=student_name,
+                student_email=student_email,
+                debug=args.debug,
+            )
+            count += 1
+    print(f"total students registered: {count}")
+
+
+def register_student(args):
+    if args.csv_file:
+        register_csv(args)
+        return
+    if not args.student_name or not args.student_email:
+        raise ValueError("register requires --student_name and --student_email, or --csv")
+    register_one_student(
+        course_key=args.course_key,
+        student_name=args.student_name,
+        student_email=args.student_email,
+        debug=args.debug,
+    )
+    print("total students registered: 1")
 
 
 def send_test_mail(email, *, debug=False):
@@ -206,8 +250,9 @@ def build_parser():
 
     register = subparsers.add_parser("register", help="Register a student and send a login link")
     register.add_argument("--course_key", required=True, help="Course registration key")
-    register.add_argument("--student_name", required=True, help="Student name")
-    register.add_argument("--student_email", required=True, help="Student email address")
+    register.add_argument("--student_name", help="Student name")
+    register.add_argument("--student_email", help="Student email address")
+    register.add_argument("--csv", dest="csv_file", help="CSV file with name,email rows")
     register.add_argument("--debug", help="Enable debug output for email sending", action="store_true")
 
     test_mail = subparsers.add_parser("test-mail", help="Send a simple test email")
