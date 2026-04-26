@@ -18,7 +18,7 @@ from flask import request
 
 from . import odb
 from .paths import STATIC_DIR
-from .constants import C,__version__,logger,printable80,log_level
+from .constants import C,__version__,logger,printable80,log_level,env_value
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
@@ -43,11 +43,11 @@ static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
 
 def get_lambda_api_base():
     """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
-    explicit_base = os.environ.get(C.PLANTTRACER_LAMBDA_API_BASE, "").strip()
+    explicit_base = env_value(C.PLANTTRACER_LAMBDA_API_BASE, "")
     if explicit_base:
         return explicit_base if explicit_base.endswith("/") else explicit_base + "/"
-    hostname = os.environ.get("HOSTNAME", "").strip()
-    domain = os.environ.get("DOMAIN", "").strip()
+    hostname = env_value("HOSTNAME", "")
+    domain = env_value("DOMAIN", "")
     return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
 
 @functools.cache

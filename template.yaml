@@ -248,18 +248,18 @@ Resources:
               # Create the environment variables
               mkdir -p /etc/environment.d
               touch /etc/environment.d/10-planttracer.conf
-              echo "LOG_LEVEL=\"${LogLevel}\""                 >> /etc/environment.d/10-planttracer.conf
-              echo "HOSTNAME=\"${AWS::StackName}\""           >> /etc/environment.d/10-planttracer.conf
-              echo "DOMAIN=\"${BaseDomain}\""                  >> /etc/environment.d/10-planttracer.conf
-              echo "ADMIN_EMAIL=\"${AdminEmail}\""             >> /etc/environment.d/10-planttracer.conf
-              echo "COURSE_ID=\"${CourseId}\""                 >> /etc/environment.d/10-planttracer.conf
-              echo "ADMIN_NAME=\"${AdminName}\""               >> /etc/environment.d/10-planttracer.conf
-              echo "COURSE_NAME=\"${CourseName}\""             >> /etc/environment.d/10-planttracer.conf
-              echo "DYNAMODB_TABLE_PREFIX=\"${AWS::StackName}-\"" >> /etc/environment.d/10-planttracer.conf
-              echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"" >> /etc/environment.d/10-planttracer.conf
-              echo "LAMBDA_RESIZE_ARN=\"${LambdaResizeArn}\""   >> /etc/environment.d/10-planttracer.conf
+              echo "LOG_LEVEL=${LogLevel}"                 >> /etc/environment.d/10-planttracer.conf
+              echo "HOSTNAME=${AWS::StackName}"           >> /etc/environment.d/10-planttracer.conf
+              echo "DOMAIN=${BaseDomain}"                  >> /etc/environment.d/10-planttracer.conf
+              echo "ADMIN_EMAIL=${AdminEmail}"             >> /etc/environment.d/10-planttracer.conf
+              echo "COURSE_ID=${CourseId}"                 >> /etc/environment.d/10-planttracer.conf
+              echo "ADMIN_NAME=${AdminName}"               >> /etc/environment.d/10-planttracer.conf
+              echo "COURSE_NAME=${CourseName}"             >> /etc/environment.d/10-planttracer.conf
+              echo "DYNAMODB_TABLE_PREFIX=${AWS::StackName}-" >> /etc/environment.d/10-planttracer.conf
+              echo "PLANTTRACER_S3_BUCKET=${ImageBucketName}" >> /etc/environment.d/10-planttracer.conf
+              echo "LAMBDA_RESIZE_ARN=${LambdaResizeArn}"   >> /etc/environment.d/10-planttracer.conf
               # SERVER_EMAIL is the From address for outgoing mail; configured as verified sender in SES
-              echo "SERVER_EMAIL=\"admin@planttracer.com\""    >> /etc/environment.d/10-planttracer.conf
+              echo "SERVER_EMAIL=admin@planttracer.com"    >> /etc/environment.d/10-planttracer.conf
 
               # Install essentials
               export DEBIAN_FRONTEND=noninteractive
