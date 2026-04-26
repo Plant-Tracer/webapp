@@ -19,7 +19,7 @@ from app.odb import (
     DDBO, InvalidCourse_Id,
 )
 from app.odb_movie_data import set_movie_data
-from app.constants import C
+from app.constants import C, env_value
 from tabulate import tabulate
 
 DEMO_COURSE_ID='demo-course'
@@ -136,10 +136,6 @@ def print_course_report(ddbo):
             for student in students
         ]
         print(tabulate(student_rows, headers=["student name", "email", "user ID"]))
-
-
-def env_value(name):
-    return os.environ[name].strip().strip(chr(34) + chr(39))
 
 
 def planttracer_endpoint():

@@ -11,6 +11,7 @@ import imaplib
 import os
 import json
 import configparser
+import time
 from email.parser import BytesParser
 from email import policy
 
@@ -20,7 +21,7 @@ from jinja2.nativetypes import NativeEnvironment
 
 from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
-from .constants import C, logger
+from .constants import C, logger, env_value
 from . import apikey, odb
 
 
@@ -34,6 +35,7 @@ SMTP_PORT = 'SMTP_PORT'
 SMTP_PORT_DEFAULT = 587
 SMTP_NO_TLS = 'SMTP_NO_TLS'
 SMTP_DEBUG = False
+last_send_time = None
 
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
@@ -52,8 +54,7 @@ class NoMailerConfiguration(Exception):
 
 def get_server_email():
     """Return the From address for outgoing mail (env SERVER_EMAIL or default)."""
-    email = os.environ.get(C.SERVER_EMAIL, 'admin@planttracer.com')
-    return email.strip().strip(chr(34) + chr(39))
+    return env_value(C.SERVER_EMAIL, 'admin@planttracer.com')
 
 
 def get_smtp_config():
@@ -118,6 +119,8 @@ def send_message(*,
             file=sys.stderr)
         return
 
+    throttle_send()
+
     if smtp_config:
         port = smtp_config.get(SMTP_PORT, SMTP_PORT_DEFAULT)
         debug = SMTP_DEBUG or smtp_config.get('SMTP_DEBUG', '')[0:1] == 'Y'
@@ -136,6 +139,17 @@ def send_message(*,
             _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg, debug=debug)
         except ClientError as e:
             raise InvalidMailerConfiguration(str(e)) from e
+
+
+def throttle_send():
+    global last_send_time # pylint: disable=global-statement
+    now = time.monotonic()
+    if last_send_time is not None:
+        wait_time = C.MIN_SEND_INTERVAL - (now - last_send_time)
+        if wait_time > 0:
+            time.sleep(wait_time)
+            now = time.monotonic()
+    last_send_time = now
 
 
 def _render_mime_template(template_name: str, **kwargs):
