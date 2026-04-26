@@ -57,6 +57,14 @@ jobs:
         run: |
           make install-windows
 
+      - name: Inspect local service binaries
+        run: |
+          uname -a
+          arch
+          find bin -maxdepth 1 -type f -ls
+          file bin/minio
+          if [ -f bin/mc ]; then file bin/mc; fi
+
       - name: Create default AWS credentials and Validate local DynamoDB endpoint
         run: |
           python3 bin/local_services.py dynamodb start
