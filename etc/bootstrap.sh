@@ -70,6 +70,11 @@ if [ -f ~/.bashrc ]; then
 fi
 BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
+    mkdir -p /home/ubuntu/.ssh
+    touch /home/ubuntu/.ssh/authorized_keys
+    cat $ROOT/etc/authorized_keys.add >> /home/ubuntu/.ssh/authorized_keys
+    chmod 700 /home/ubuntu/.ssh
+    chmod 600 /home/ubuntu/.ssh/authorized_keys
   fi
 
   touch $HOME/.bash_history

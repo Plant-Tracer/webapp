@@ -14,9 +14,13 @@ from app import odb
 from app import odbmaint
 from app import mailer
 from app.paths import TEST_DATA_DIR
-from app.odb import DDBO, InvalidCourse_Id, USER_ID
+from app.odb import (
+    COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
+    DDBO, InvalidCourse_Id,
+)
 from app.odb_movie_data import set_movie_data
 from app.constants import C
+from tabulate import tabulate
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
@@ -80,6 +84,58 @@ def dump_movie(movie_id):
     print(json.dumps(movie,indent=4,default=str))
     trackpoints = odb.get_movie_trackpoints(movie_id=movie_id)
     print(json.dumps(trackpoints,indent=4,default=str))
+
+
+def scan_all(table):
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_evaluated_key = response.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            return items
+        scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+
+
+def print_course_report(ddbo):
+    courses = sorted(scan_all(ddbo.courses), key=lambda c: c.get(COURSE_NAME, ""))
+    users_by_id = {user[USER_ID]: user for user in scan_all(ddbo.users)}
+
+    course_rows = []
+    course_students = []
+    for course in courses:
+        course_id = course[COURSE_ID]
+        movie_count = len(ddbo.get_movies_for_course_id(course_id))
+        student_ids = odb.course_enrollments(course_id)
+        students = [users_by_id.get(user_id, {USER_ID: user_id}) for user_id in student_ids]
+        students.sort(key=lambda user: (user.get(USER_NAME, ""), user.get(EMAIL, ""), user.get(USER_ID, "")))
+        course_students.append((course, students))
+        course_rows.append([
+            course.get(COURSE_NAME, ""),
+            course.get(COURSE_KEY, ""),
+            course_id,
+            movie_count,
+            len(students),
+        ])
+
+    print("\nCourses")
+    print(tabulate(
+        course_rows,
+        headers=["course name", "course key", "course ID", "movies", "students"],
+    ))
+
+    for course, students in course_students:
+        print(f"\nStudents for {course.get(COURSE_NAME, course[COURSE_ID])} ({course[COURSE_ID]})")
+        student_rows = [
+            [
+                student.get(USER_NAME, ""),
+                student.get(EMAIL, ""),
+                student.get(USER_ID, ""),
+            ]
+            for student in students
+        ]
+        print(tabulate(student_rows, headers=["student name", "email", "user ID"]))
 
 
 def main():
@@ -247,5 +303,7 @@ if __name__ == "__main__":
     ## Maintenance
 
     if args.report:
-        odbmaint.report(DDBO())
+        ddbo = DDBO()
+        odbmaint.report(ddbo)
+        print_course_report(ddbo)
         sys.exit(0)
