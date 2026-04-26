@@ -150,8 +150,6 @@ def _render_mime_template(template_name: str, **kwargs):
 def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     """Send login/magic-link email. Uses SMTP if configured, else SES."""
 
-    logger.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
     to_addrs = [email]
     from_addr = get_server_email()
     msg = _render_mime_template(

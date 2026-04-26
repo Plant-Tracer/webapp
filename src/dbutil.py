@@ -138,11 +138,15 @@ def print_course_report(ddbo):
         print(tabulate(student_rows, headers=["student name", "email", "user ID"]))
 
 
+def env_value(name):
+    return os.environ[name].strip().strip(chr(34) + chr(39))
+
+
 def planttracer_endpoint():
     missing = [name for name in ("HOSTNAME", "DOMAIN") if not os.environ.get(name)]
     if missing:
         raise RuntimeError("Missing environment variable(s): " + ", ".join(missing))
-    return "https://{}.{}".format(os.environ["HOSTNAME"], os.environ["DOMAIN"])
+    return "https://{}.{}".format(env_value("HOSTNAME"), env_value("DOMAIN"))
 
 
 def print_report():
