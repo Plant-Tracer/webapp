@@ -1056,14 +1056,10 @@ def validate_api_key(api_key):
             return user
     raise InvalidAPI_Key()
 
-def make_new_api_key(*, email, demo_user=False):
-    """Create a new api_key for an email that is registered
-    :param email:  the email
-    :param demo_user:  If true, then use the demo user API key, and not a random API key
-    :return: api_key - the api_key
-    """
+def make_new_api_key_for_user_id(*, user_id, demo_user=False):
+    """Create a new api_key for a registered, enabled user_id."""
     ddbo = DDBO()
-    user = ddbo.get_user_email(email)
+    user = ddbo.get_user(user_id)
     if user[ ENABLED ] == 1:
         if demo_user:
             api_key = C.DEMO_MODE_API_KEY
@@ -1071,11 +1067,21 @@ def make_new_api_key(*, email, demo_user=False):
             api_key = new_api_key()
         ddbo.put_api_key_dict({API_KEY:api_key,
                                ENABLED:1,
-                               USER_ID :user[ USER_ID ],
+                               USER_ID :user_id,
                                USE_COUNT:0,
                                CREATED:int(time.time()) })
         return api_key
-    raise InvalidUser_Email(email)
+    raise InvalidUser_id(user_id)
+
+
+def make_new_api_key(*, email, demo_user=False):
+    """Create a new api_key for an email that is registered
+    :param email:  the email
+    :param demo_user:  If true, then use the demo user API key, and not a random API key
+    :return: api_key - the api_key
+    """
+    user = DDBO().get_user_email(email)
+    return make_new_api_key_for_user_id(user_id=user[ USER_ID ], demo_user=demo_user)
 
 
 def get_user(user_id):
