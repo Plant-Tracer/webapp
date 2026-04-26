@@ -2,12 +2,15 @@
 dbutil.py - CLI for dbmaint module.
 """
 
+import argparse
 import sys
 import uuid
 import json
 import os
 import csv
 from email.message import EmailMessage
+
+from tabulate import tabulate
 
 from app import clogging
 from app import odb
@@ -17,11 +20,10 @@ from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
     COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO, InvalidCourse_Id,
+    DDBO,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, env_value
-from tabulate import tabulate
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
@@ -49,8 +51,8 @@ def populate_demo_user():
                            ok_if_exists = True)
 
     # Create the demo user to own the demo movies
-    odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
-    odb.make_new_api_key(email=DEMO_USER_EMAIL, demo_user=True)        # Give the demo user an API key
+    user = odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
+    odb.make_new_api_key_for_user_id(user_id=user[USER_ID], demo_user=True)
 
 
 def populate_demo_movies():
@@ -143,13 +145,19 @@ def planttracer_endpoint():
     missing = [name for name in ("HOSTNAME", "DOMAIN") if not os.environ.get(name)]
     if missing:
         raise RuntimeError("Missing environment variable(s): " + ", ".join(missing))
-    return "https://{}.{}".format(env_value("HOSTNAME"), env_value("DOMAIN"))
+    return f"https://{env_value('HOSTNAME')}.{env_value('DOMAIN')}"
 
 
 def print_report():
     ddbo = DDBO()
     odbmaint.report(ddbo)
     print_course_report(ddbo)
+
+
+def create_demo():
+    odbmaint.create_tables(ignore_table_exists=True)
+    populate_demo_user()
+    populate_demo_movies()
 
 
 def register_one_student(*, course_key, student_name, student_email, debug=False):
@@ -238,7 +246,6 @@ def send_test_mail(email, *, debug=False):
 
 
 def build_parser():
-    import argparse
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -247,6 +254,7 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
+    subparsers.add_parser("create-demo", help="Create local tables and populate the demo course")
 
     register = subparsers.add_parser("register", help="Register a student and send a login link")
     register.add_argument("--course_key", required=True, help="Course registration key")
@@ -272,6 +280,9 @@ def main():
 
     if args.command == "report":
         print_report()
+        return 0
+    if args.command == "create-demo":
+        create_demo()
         return 0
     if args.command == "register":
         register_student(args)

@@ -210,7 +210,7 @@ make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) --createdb
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:

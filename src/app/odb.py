@@ -1071,7 +1071,7 @@ def make_new_api_key_for_user_id(*, user_id, demo_user=False):
                                USE_COUNT:0,
                                CREATED:int(time.time()) })
         return api_key
-    raise InvalidUser_id(user_id)
+    raise InvalidUser_Id(user_id)
 
 
 def make_new_api_key(*, email, demo_user=False):
