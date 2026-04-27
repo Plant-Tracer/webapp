@@ -52,13 +52,24 @@ if ! run_section 1 "Shell config (.bashrc, .bash_profile)"; then
     echo '# source planttracer
 # Prefer pipx-installed tools like Poetry over distro packages in /usr/bin.
 export PATH="$HOME/.local/bin:$PATH"
+# get specific environment variables
 set -a
-source /etc/environment.d/10-planttracer.conf
+eval $(grep /etc/environment.d/10-planttracer.conf DYNAMODB_TABLE_PREFIX)
+eval $(grep /etc/environment.d/10-planttracer.conf PLANTTRACER_S3_BUCKET)
+eval $(grep /etc/environment.d/10-planttracer.conf AWS_REGION)
 set +a
 ' >> "$HOME/.bashrc"
   fi
   if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
     sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
+
+# PlantTracer environment:
+# Keep this before the log tail and .bashrc source so login shells, including
+# non-interactive `bash -lc`, get the deployment environment.
+export PATH="$HOME/.local/bin:$PATH"
+set -a
+source /etc/environment.d/10-planttracer.conf
+set +a
 
 # PlantTracer dev hints:
 echo "  View webserver log:  journalctl -u planttracer.service -f"
@@ -188,7 +199,7 @@ fi
 # --- Section 10: create_course (idempotent) ---
 if ! run_section 10 "create_course"; then
   if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
-    poetry run python src/dbutil.py --create_course \
+    poetry run python src/dbutil.py create-course \
       --course_id "$COURSE_ID" \
       --course_name "$COURSE_NAME" \
       --admin_email "$ADMIN_EMAIL" \
