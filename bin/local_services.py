@@ -77,6 +77,8 @@ def process_exists(pid: int) -> bool:
         return False
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True
     except OSError:
         return False
     return True
@@ -117,7 +119,7 @@ def port_pids(port: int) -> set[int]:
     if lsof is None:
         return set()
     result = subprocess.run(
-        [lsof, "-ti", f"-iTCP:{port}", "-sTCP:LISTEN"],
+        [lsof, "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
         capture_output=True,
         text=True,
         check=False,
@@ -129,6 +131,34 @@ def port_pids(port: int) -> set[int]:
             continue
         try:
             pids.add(int(line))
+        except ValueError:
+            continue
+    return pids
+
+
+def pids_matching_pattern_from_ps(pattern: str) -> set[int]:
+    ps = shutil.which("ps")
+    if ps is None:
+        return set()
+    try:
+        result = subprocess.run(
+            [ps, "-axo", "pid=,command="],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return set()
+    pids: set[int] = set()
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        pid_text, _, command = stripped.partition(" ")
+        if pattern not in command:
+            continue
+        try:
+            pids.add(int(pid_text))
         except ValueError:
             continue
     return pids
@@ -137,13 +167,13 @@ def port_pids(port: int) -> set[int]:
 def pids_matching_pattern(pattern: str) -> set[int]:
     pgrep = shutil.which("pgrep")
     if pgrep is None:
-        return set()
-    result = subprocess.run(
-        [pgrep, "-f", pattern],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+        return pids_matching_pattern_from_ps(pattern)
+    try:
+        result = subprocess.run([pgrep, "-f", pattern], capture_output=True, text=True, check=False)
+    except OSError:
+        return pids_matching_pattern_from_ps(pattern)
+    if result.returncode not in (0, 1):
+        return pids_matching_pattern_from_ps(pattern)
     pids: set[int] = set()
     for line in result.stdout.splitlines():
         line = line.strip()
@@ -154,6 +184,18 @@ def pids_matching_pattern(pattern: str) -> set[int]:
         except ValueError:
             continue
     return pids
+
+
+def common_port_pid(config: ServiceConfig) -> int | None:
+    common_pids: set[int] | None = None
+    for port in config.ports:
+        pids = {pid for pid in port_pids(port) if process_exists(pid)}
+        if not pids:
+            return None
+        common_pids = pids if common_pids is None else common_pids & pids
+    if not common_pids:
+        return None
+    return min(common_pids)
 
 
 def discover_running_service_pid(config: ServiceConfig) -> int | None:
@@ -163,7 +205,7 @@ def discover_running_service_pid(config: ServiceConfig) -> int | None:
     for pattern in config.process_patterns:
         matching_pids.update(pid for pid in pids_matching_pattern(pattern) if process_exists(pid))
     if not matching_pids:
-        return None
+        return common_port_pid(config)
     for port in config.ports:
         if not (port_pids(port) & matching_pids):
             return None

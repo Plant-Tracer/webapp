@@ -20,7 +20,7 @@ from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
     COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO,
+    DDBO, InvalidCourse_Id,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, env_value
@@ -148,10 +148,26 @@ def planttracer_endpoint():
     return f"https://{env_value('HOSTNAME')}.{env_value('DOMAIN')}"
 
 
+def endpoint_from_args(args):
+    if getattr(args, "planttracer_endpoint", None):
+        return args.planttracer_endpoint
+    return planttracer_endpoint()
+
+
 def print_report():
     ddbo = DDBO()
     odbmaint.report(ddbo)
     print_course_report(ddbo)
+
+
+def create_db():
+    odbmaint.create_tables()
+    populate_demo_user()
+    populate_demo_movies()
+
+
+def drop_db():
+    odbmaint.drop_tables()
 
 
 def create_demo():
@@ -160,14 +176,115 @@ def create_demo():
     populate_demo_movies()
 
 
-def register_one_student(*, course_key, student_name, student_email, debug=False):
+def make_link(email, planttracer_endpoint):
+    new_api_key = odb.make_new_api_key(email=email)
+    delim = "" if planttracer_endpoint.endswith("/") else "/"
+    print(f"\n*****\n***** Login with {planttracer_endpoint}{delim}list?api_key={new_api_key}\n*****")
+    return new_api_key
+
+
+def send_link(email, planttracer_endpoint, *, debug=False):
+    mailer.send_links(
+        email=email,
+        planttracer_endpoint=planttracer_endpoint,
+        new_api_key=odb.make_new_api_key(email=email),
+        debug=debug,
+    )
+
+
+def create_course(args, parser):
+    missing = [
+        name
+        for name in ["course_id", "course_name", "admin_email", "admin_name"]
+        if getattr(args, name) is None
+    ]
+    if missing:
+        parser.error(
+            "create-course requires --course_name, --course_id, --admin_email and "
+            f"--admin_name. Missing: {','.join('--' + m for m in missing)}"
+        )
+    try:
+        odb.lookup_course_by_id(course_id=args.course_id)
+        print(f"course {args.course_id} already exists")
+    except InvalidCourse_Id:
+        print("creating course...")
+        course_key = str(uuid.uuid4())[9:18]
+        odbmaint.create_course(
+            course_id=args.course_id,
+            course_key=course_key,
+            course_name=args.course_name,
+            admin_email=args.admin_email,
+            admin_name=args.admin_name,
+            max_enrollment=args.max_enrollment,
+            ok_if_exists=False,
+        )
+        print(f"created {args.course_id}")
+    course = odb.lookup_course_by_id(course_id=args.course_id)
+    print(json.dumps(course, indent=4, default=str))
+
+    if args.send_email:
+        admin = odb.get_user_email(args.admin_email)
+        api_key = odb.get_first_api_key_for_user(admin[USER_ID])
+        if api_key is None:
+            api_key = odb.make_new_api_key(email=args.admin_email)
+        mailer.send_course_created_email(
+            to_addr=args.admin_email,
+            course_name=course.get(COURSE_NAME, args.course_id),
+            course_id=args.course_id,
+            planttracer_endpoint=endpoint_from_args(args),
+            api_key=api_key,
+        )
+        print(f"verification email sent to {args.admin_email}")
+
+
+def delete_course(args, parser):
+    if not args.course_id:
+        parser.error("delete-course requires --course_id")
+    odbmaint.delete_course(course_id=args.course_id)
+
+
+def add_admin(args, parser):
+    if not args.admin_email:
+        parser.error("add-admin requires --admin_email")
+    if not args.course_id:
+        parser.error("add-admin requires --course_id")
+    print("adding admin to course...")
+    try:
+        user = DDBO().get_user_email(args.admin_email)
+        if not user.get(USER_ID):
+            parser.error(f"User {args.admin_email} does not exist")
+        odb.lookup_course_by_id(course_id=args.course_id)
+        admin_id = odb.get_user_email(args.admin_email)[USER_ID]
+        odb.add_course_admin(admin_id=admin_id, course_id=args.course_id)
+    except InvalidCourse_Id:
+        print(f"Course with id {args.course_id} does not exist.", file=sys.stderr)
+        return 1
+    return 0
+
+
+def remove_admin(args, parser):
+    if not args.admin_email:
+        parser.error("remove-admin requires --admin_email")
+    if not args.course_id:
+        parser.error("remove-admin requires --course_id")
+    admin_id = odb.get_user_email(args.admin_email)[USER_ID]
+    odb.remove_course_admin(admin_id=admin_id, course_id=args.course_id)
+
+
+def purge_all_movies(args, parser):
+    if not args.course_id:
+        parser.error("purge-all-movies requires --course_id")
+    odbmaint.purge_all_movies(DDBO())
+
+
+def register_one_student(*, course_key, student_name, student_email, planttracer_endpoint, debug=False):
     user = odb.register_email(
         student_email,
         student_name,
         course_key=course_key,
     )
     api_key = odb.make_new_api_key_for_user_id(user_id=user[USER_ID])
-    endpoint = planttracer_endpoint()
+    endpoint = planttracer_endpoint
     mailer.send_links(
         email=student_email,
         planttracer_endpoint=endpoint,
@@ -187,6 +304,7 @@ def csv_has_header(row):
 
 def register_csv(args):
     count = 0
+    endpoint = endpoint_from_args(args)
     with open(args.csv_file, newline="", encoding="utf-8") as f:
         rows = csv.reader(f)
         for row_number, row in enumerate(rows, 1):
@@ -201,6 +319,7 @@ def register_csv(args):
                 course_key=args.course_key,
                 student_name=student_name,
                 student_email=student_email,
+                planttracer_endpoint=endpoint,
                 debug=args.debug,
             )
             count += 1
@@ -217,6 +336,7 @@ def register_student(args):
         course_key=args.course_key,
         student_name=args.student_name,
         student_email=args.student_email,
+        planttracer_endpoint=endpoint_from_args(args),
         debug=args.debug,
     )
     print("total students registered: 1")
@@ -254,13 +374,86 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
-    subparsers.add_parser("create-demo", help="Create local tables and populate the demo course")
+    subparsers.add_parser("createdb", help="Create tables and populate the demo course")
+    subparsers.add_parser("dropdb", help="Drop all configured DynamoDB tables")
+    subparsers.add_parser(
+        "create-demo",
+        aliases=["create_demos"],
+        help="Create local tables if needed and populate the demo course",
+    )
+
+    makelink = subparsers.add_parser("makelink", help="Make a login link for an existing email address")
+    makelink.add_argument("email", help="Email address")
+    makelink.add_argument("--planttracer_endpoint", required=True, help="Plant Tracer https:// endpoint")
+
+    sendlink = subparsers.add_parser("sendlink", help="Send a login link to an existing email address")
+    sendlink.add_argument("email", help="Email address")
+    sendlink.add_argument("--planttracer_endpoint", required=True, help="Plant Tracer https:// endpoint")
+    sendlink.add_argument("--debug", help="Enable debug output for email sending", action="store_true")
+
+    create_course_parser = subparsers.add_parser(
+        "create-course",
+        aliases=["create_course"],
+        help="Create a course and register its first administrator",
+    )
+    create_course_parser.add_argument("--course_id", help="course id")
+    create_course_parser.add_argument("--course_name", help="course name")
+    create_course_parser.add_argument("--admin_email", help="course administrator email")
+    create_course_parser.add_argument("--admin_name", help="course administrator name")
+    create_course_parser.add_argument("--max_enrollment", help="Max enrollment for course", type=int, default=50)
+    create_course_parser.add_argument(
+        "--send-email",
+        help="Send verification email to admin with magic link after ensuring course exists",
+        action="store_true",
+    )
+    create_course_parser.add_argument(
+        "--planttracer_endpoint",
+        help="Plant Tracer https:// endpoint for --send-email; defaults to HOSTNAME.DOMAIN",
+    )
+
+    delete_course_parser = subparsers.add_parser(
+        "delete-course",
+        aliases=["delete_course"],
+        help="Delete a course",
+    )
+    delete_course_parser.add_argument("--course_id", help="course id")
+
+    add_admin_parser = subparsers.add_parser(
+        "add-admin",
+        aliases=["add_admin"],
+        help="Add an existing user as a course administrator",
+    )
+    add_admin_parser.add_argument("--admin_email", help="course administrator email")
+    add_admin_parser.add_argument("--course_id", help="course id")
+
+    remove_admin_parser = subparsers.add_parser(
+        "remove-admin",
+        aliases=["remove_admin"],
+        help="Remove a course administrator",
+    )
+    remove_admin_parser.add_argument("--admin_email", help="course administrator email")
+    remove_admin_parser.add_argument("--course_id", help="course id")
+
+    dump_movie_parser = subparsers.add_parser(
+        "dump-movie",
+        aliases=["dump_movie"],
+        help="Dump movie metadata and trackpoints as JSON",
+    )
+    dump_movie_parser.add_argument("movie_id", help="movie id")
+
+    purge_movies_parser = subparsers.add_parser(
+        "purge-all-movies",
+        aliases=["purge_all_movies"],
+        help="Remove all movie rows from the database. Requires --course_id.",
+    )
+    purge_movies_parser.add_argument("--course_id", help="course id")
 
     register = subparsers.add_parser("register", help="Register a student and send a login link")
     register.add_argument("--course_key", required=True, help="Course registration key")
     register.add_argument("--student_name", help="Student name")
     register.add_argument("--student_email", help="Student email address")
     register.add_argument("--csv", dest="csv_file", help="CSV file with name,email rows")
+    register.add_argument("--planttracer_endpoint", help="Plant Tracer https:// endpoint; defaults to HOSTNAME.DOMAIN")
     register.add_argument("--debug", help="Enable debug output for email sending", action="store_true")
 
     test_mail = subparsers.add_parser("test-mail", help="Send a simple test email")
@@ -281,8 +474,37 @@ def main():
     if args.command == "report":
         print_report()
         return 0
-    if args.command == "create-demo":
+    if args.command == "createdb":
+        create_db()
+        return 0
+    if args.command == "dropdb":
+        drop_db()
+        return 0
+    if args.command in ("create-demo", "create_demos"):
         create_demo()
+        return 0
+    if args.command == "makelink":
+        make_link(args.email, args.planttracer_endpoint)
+        return 0
+    if args.command == "sendlink":
+        send_link(args.email, args.planttracer_endpoint, debug=args.debug)
+        return 0
+    if args.command in ("create-course", "create_course"):
+        create_course(args, parser)
+        return 0
+    if args.command in ("delete-course", "delete_course"):
+        delete_course(args, parser)
+        return 0
+    if args.command in ("add-admin", "add_admin"):
+        return add_admin(args, parser)
+    if args.command in ("remove-admin", "remove_admin"):
+        remove_admin(args, parser)
+        return 0
+    if args.command in ("dump-movie", "dump_movie"):
+        dump_movie(args.movie_id)
+        return 0
+    if args.command in ("purge-all-movies", "purge_all_movies"):
+        purge_all_movies(args, parser)
         return 0
     if args.command == "register":
         register_student(args)

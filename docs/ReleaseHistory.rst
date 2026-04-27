@@ -64,7 +64,7 @@ Release Notes
 0.9.4 Summary
 *************
 
-    * dbmaint: add --add_admin and --remove_admin commands
+    * dbmaint: add ``add-admin`` and ``remove-admin`` commands
 
 0.9.3 Summary
 *************

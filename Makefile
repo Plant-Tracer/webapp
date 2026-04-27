@@ -242,7 +242,7 @@ run-local-lambda-debug:
 run-local-debug:
 	@echo run Flask locally against the local demo dataset, but not in demo mode
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) --makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
