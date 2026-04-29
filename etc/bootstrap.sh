@@ -54,9 +54,9 @@ if ! run_section 1 "Shell config (.bashrc, .bash_profile)"; then
 export PATH="$HOME/.local/bin:$PATH"
 # get specific environment variables
 set -a
-eval $(grep /etc/environment.d/10-planttracer.conf DYNAMODB_TABLE_PREFIX)
-eval $(grep /etc/environment.d/10-planttracer.conf PLANTTRACER_S3_BUCKET)
-eval $(grep /etc/environment.d/10-planttracer.conf AWS_REGION)
+eval $(grep DYNAMODB_TABLE_PREFIX/etc/environment.d/10-planttracer.conf)
+eval $(grep PLANTTRACER_S3_BUCKET /etc/environment.d/10-planttracer.conf)
+eval $(grep AWS_REGION /etc/environment.d/10-planttracer.conf)
 set +a
 ' >> "$HOME/.bashrc"
   fi
