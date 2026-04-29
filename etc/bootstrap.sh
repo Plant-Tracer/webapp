@@ -182,9 +182,9 @@ if ! run_section 7 "app install (make install-ubuntu, poetry install)"; then
   end_section 7
 fi
 
-# --- Section 8: demos (dbutil --create_demos) ---
-if ! run_section 8 "demos (dbutil --create_demos)"; then
-  poetry run python src/dbutil.py --create_demos
+# --- Section 8: demos (dbutil create_demos) ---
+if ! run_section 8 "demos (dbutil create_demos)"; then
+  poetry run python src/dbutil.py create_demos
   end_section 8
 fi
 
