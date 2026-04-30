@@ -15,11 +15,13 @@ dynamic = ["dependencies"]
 sam-config-tool = "sam_config_tool:main"
 sqs_cli = "sqs_cli:main"
 planttracer-local-trace = "app.local_trace_cli:main"
+dbutil = "dbutil:main"
 
 [tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
+    { include = "dbutil.py", from = "src" },
     { include = "sqs_cli.py", from = "lambda-resize/src" },
 ]
 

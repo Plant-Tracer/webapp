@@ -86,19 +86,19 @@ Setup Steps
 
 #. Create your first course!:
 
-   * --course_name "My Course Name" is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
+   * ``--course_name "My Course Name"`` is the name of the course you are creating. A course in PlantTracer is for a specific delivery of a course, or perhaps a section of a course. PlantTracer assets published in a course are available to all course members.
 
-   * --course_id is a simple unique identfier for the course. (--course_name is more descriptive)
+   * ``--course_id`` is a simple unique identfier for the course. ``--course_name`` is more descriptive.
 
-   * --admin-email is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is joecool@company.com, then an admin email address might be joecool+admin@company.com
+   * ``--admin_email`` is the email address for the first course administrator. It is useful to have a unique email address for the administrator role. For example, if your email address is joecool@company.com, then an admin email address might be joecool+admin@company.com
 
-   * --admin-name "Your Name" should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
+   * ``--admin_name "Your Name"`` should be unique for each admin registration. This is not absolutely necessary but it is helpful to tell under which account you have logged in when using PlantTracer.
 
    * Set up the environment as in the command below
 
    .. code-block::
 
-    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini venv/bin/python dbutil.py --create_course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
+    DYNAMODB_TABLE_PREFIX=demo- AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local PLANTTRACER_CREDENTIALS=src/etc/credentials-localhost.ini poetry run python src/dbutil.py create-course --course_name "Test Course" --course_id "test" --admin_email sbarber2+admin@gmail.com --admin_name "Steve Admin Barber"
 
 #. The information for the new course will be output and look something like this:
 

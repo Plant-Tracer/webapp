@@ -50,7 +50,7 @@ Installation
 
    .. code-block::
 
-    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini python dbutil.py --create_course "My Course Name" --course_id "Plant101" --admin_email your_admin_email@company.com --admin_name "Your Name"
+    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini poetry run python src/dbutil.py create-course --course_name "My Course Name" --course_id "Plant101" --admin_email your_admin_email@company.com --admin_name "Your Name"
     course_key: leact-skio-proih
 
 #. You now have a course key!

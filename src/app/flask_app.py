@@ -29,7 +29,6 @@ from . import config_check
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
-MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 CACHE_MAX_AGE = 5               # for debugging; change to 360 for production

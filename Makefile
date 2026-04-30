@@ -210,7 +210,7 @@ make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) --createdb
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -242,7 +242,7 @@ run-local-lambda-debug:
 run-local-debug:
 	@echo run Flask locally against the local demo dataset, but not in demo mode
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) --makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
@@ -338,31 +338,34 @@ dump-demo-tables:
 
 # Sources:
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
-LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64/
+LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64
 LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
-LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64/
+LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64
 MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
 	uname -a
+	arch
 	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
-		echo Linux amd64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux amd64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
-		echo Linux x86_64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux x86_64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
-		echo Linux aarch64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+		echo Linux aarch64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
-		echo Linux arm64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
-	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
+		echo Linux arm64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl -fL $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
 	else \
 		echo unknown os/architecture; exit 1; \
 	fi
 	chmod +x bin/minio
 	ls -l bin/minio
+	file bin/minio
 	if [ "$$(uname -s)" = "Linux" ] ; then \
 		chmod +x bin/mc ; \
 		ls -l bin/mc ; \
+		file bin/mc ; \
 	fi
 
 # operation:
