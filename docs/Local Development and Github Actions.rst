@@ -214,7 +214,7 @@ Relevant Browser Globals
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 +--------------------------+--------------------------------+-----------------------------------------------+--------------------------------------------------------+
-| JavaScript constant      | Dictionary key from Flask      | Where Flask gets it                            | How the browser uses it                                |
+| JavaScript constant      | Dictionary key from Flask      | Where Flask gets it                            | How the browser uses it                               |
 +==========================+================================+===============================================+========================================================+
 | ``API_BASE``             | ``C.API_BASE`` / ``API_BASE``  | ``PLANTTRACER_API_BASE`` env var, else ``''`` | Prefix for Flask API calls such as register, resend,   |
 |                          |                                |                                               | list movies, get metadata, save trackpoints, and       |
