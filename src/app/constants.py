@@ -21,6 +21,13 @@ def printable80(d):
     return values
 
 
+def env_value(name, default=None):
+    value = os.environ.get(name, default)
+    if value is None:
+        return None
+    return value.strip().strip(chr(34) + chr(39))
+
+
 # but these are:
 GET=['GET']
 POST=['POST']
@@ -69,6 +76,7 @@ class C:
     MOVIE_MAX_WIDTH = 640
     MOVIE_JPEG_QUALITY = 85
     API_KEY_COOKIE_MAX_AGE = 60*60*24*180
+    MIN_SEND_INTERVAL = 0.25
 
     # Logging
     LOGGING_CONFIG='%(asctime)s  %(filename)s:%(lineno)d %(levelname)s: %(message)s'

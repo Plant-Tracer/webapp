@@ -50,19 +50,42 @@ export ADMIN_EMAIL COURSE_ID ADMIN_NAME COURSE_NAME SERVER_EMAIL LAMBDA_RESIZE_A
 if ! run_section 1 "Shell config (.bashrc, .bash_profile)"; then
   if ! grep -q planttracer "$HOME/.bashrc" 2>/dev/null; then
     echo '# source planttracer
-. "/etc/environment.d/10-planttracer.conf" && export $(cut -d= -f1 "/etc/environment.d/10-planttracer.conf" | grep -v "^#")
+# Prefer pipx-installed tools like Poetry over distro packages in /usr/bin.
+export PATH="$HOME/.local/bin:$PATH"
+# get specific environment variables
+set -a
+eval $(grep DYNAMODB_TABLE_PREFIX/etc/environment.d/10-planttracer.conf)
+eval $(grep PLANTTRACER_S3_BUCKET /etc/environment.d/10-planttracer.conf)
+eval $(grep AWS_REGION /etc/environment.d/10-planttracer.conf)
+set +a
 ' >> "$HOME/.bashrc"
   fi
   if ! grep -q "PlantTracer dev hints" /home/ubuntu/.bash_profile 2>/dev/null; then
     sudo tee -a /home/ubuntu/.bash_profile << 'BASHPROFILE'
+
+# PlantTracer environment:
+# Keep this before the log tail and .bashrc source so login shells, including
+# non-interactive `bash -lc`, get the deployment environment.
+export PATH="$HOME/.local/bin:$PATH"
+set -a
+source /etc/environment.d/10-planttracer.conf
+set +a
 
 # PlantTracer dev hints:
 echo "  View webserver log:  journalctl -u planttracer.service -f"
 echo "  Enable gunicorn auto-reload:    cd /opt/webapp && make gunicorn-reload"
 echo "tail /var/log/user-data.log"
 tail /var/log/user-data.log
+if [ -f ~/.bashrc ]; then
+  . ~/.bashrc
+fi
 BASHPROFILE
     sudo chown ubuntu:ubuntu /home/ubuntu/.bash_profile
+    mkdir -p /home/ubuntu/.ssh
+    touch /home/ubuntu/.ssh/authorized_keys
+    cat $ROOT/etc/authorized_keys.add >> /home/ubuntu/.ssh/authorized_keys
+    chmod 700 /home/ubuntu/.ssh
+    chmod 600 /home/ubuntu/.ssh/authorized_keys
   fi
 
   touch $HOME/.bash_history
@@ -73,19 +96,20 @@ BASHPROFILE
   end_section 1
 fi
 
+# Make pipx-installed tools visible for this bootstrap run.
+export PATH="$HOME/.local/bin:$PATH"
+
 # --- Section 2: pipx and poetry ---
 if ! run_section 2 "pipx and poetry"; then
   sudo apt-get update -y
   sudo apt-get install -y python3-pip pipx
   pipx ensurepath
-  export PATH="$HOME/.local/bin:$PATH"
   sudo apt-get remove --purge -y poetry 2>/dev/null || true
   pipx install poetry --force 2>/dev/null || pipx upgrade poetry
   poetry --version
   poetry self add poetry-plugin-export
   end_section 2
 fi
-export PATH="$HOME/.local/bin:$PATH"
 
 # --- Section 3: nginx and hostname ---
 if ! run_section 3 "nginx and hostname"; then
@@ -158,9 +182,9 @@ if ! run_section 7 "app install (make install-ubuntu, poetry install)"; then
   end_section 7
 fi
 
-# --- Section 8: demos (dbutil --create_demos) ---
-if ! run_section 8 "demos (dbutil --create_demos)"; then
-  poetry run python src/dbutil.py --create_demos
+# --- Section 8: demos (dbutil create_demos) ---
+if ! run_section 8 "demos (dbutil create_demos)"; then
+  poetry run python src/dbutil.py create_demos
   end_section 8
 fi
 
@@ -175,7 +199,7 @@ fi
 # --- Section 10: create_course (idempotent) ---
 if ! run_section 10 "create_course"; then
   if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
-    poetry run python src/dbutil.py --create_course \
+    poetry run python src/dbutil.py create-course \
       --course_id "$COURSE_ID" \
       --course_name "$COURSE_NAME" \
       --admin_email "$ADMIN_EMAIL" \
