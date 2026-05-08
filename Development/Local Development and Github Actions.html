@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Local Development and GitHub Actions &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Installation" href="Installation.html" />
+    <link rel="prev" title="Windows Developer Setup Notes" href="WindowsDevSetup.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="local-development-and-github-actions">
+<h1>Local Development and GitHub Actions<a class="headerlink" href="#local-development-and-github-actions" title="Link to this heading">¶</a></h1>
+<p>This document describes the local testing model for PlantTracer after the move
+to <code class="docutils literal notranslate"><span class="pre">lambda-resize</span></code>.</p>
+<p>The short version is:</p>
+<ul class="simple">
+<li><p>Flask remains the local HTML and metadata server.</p></li>
+<li><p>A second local process runs the Lambda HTTP API.</p></li>
+<li><p>DynamoDB Local and MinIO remain the local data stores.</p></li>
+<li><p>Local retracing is asynchronous, but it does <strong>not</strong> require a real SQS
+service.</p></li>
+</ul>
+<p>This document is Mac-first. That is the supported local developer workflow for
+now.</p>
+<section id="why-this-document-exists">
+<h2>Why This Document Exists<a class="headerlink" href="#why-this-document-exists" title="Link to this heading">¶</a></h2>
+<p>The old local workflow assumed that <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run-local-debug</span></code> was enough by
+itself. That was true when the VM handled first-frame extraction and tracking.
+It is no longer true now that:</p>
+<ul class="simple">
+<li><p>HTML is served by Flask,</p></li>
+<li><p>metadata writes are served by Flask API, and</p></li>
+<li><p>frame extraction and tracing live in <code class="docutils literal notranslate"><span class="pre">lambda-resize</span></code>.</p></li>
+</ul>
+<p>As a result, local retracing is currently broken unless a second local Lambda
+endpoint is also running.</p>
+</section>
+<section id="architecture-summary">
+<h2>Architecture Summary<a class="headerlink" href="#architecture-summary" title="Link to this heading">¶</a></h2>
+<p>PlantTracer now has a split runtime:</p>
+<ul class="simple">
+<li><p><strong>Flask app</strong> serves HTML and the metadata API.</p></li>
+<li><p><strong>Lambda API</strong> serves frame and tracing operations.</p></li>
+<li><p><strong>DynamoDB Local</strong> stores metadata and trackpoints.</p></li>
+<li><p><strong>MinIO</strong> stores uploaded movies, traced movies, and frame ZIP files.</p></li>
+</ul>
+<p>This matches the design rules in <a class="reference internal" href="ArchitectureDesign.html"><span class="doc">Architecture design principles</span></a>:</p>
+<ul class="simple">
+<li><p>frames and video processing live in Lambda,</p></li>
+<li><p>HTML lives in Flask,</p></li>
+<li><p>metadata lives in Flask API.</p></li>
+</ul>
+</section>
+<section id="local-topology">
+<h2>Local Topology<a class="headerlink" href="#local-topology" title="Link to this heading">¶</a></h2>
+<p>The recommended local process layout on macOS is:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Process</p></th>
+<th class="head"><p>Default endpoint</p></th>
+<th class="head"><p>Responsibility</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Flask dev server</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8080</span></code></p></td>
+<td><p>HTML pages and Flask API</p></td>
+</tr>
+<tr class="row-odd"><td><p>Local Lambda server</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:9811</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/resize-api/v1/*</span></code> endpoints and async
+retracing worker</p></td>
+</tr>
+<tr class="row-even"><td><p>DynamoDB Local</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8000</span></code></p></td>
+<td><p>Local metadata store</p></td>
+</tr>
+<tr class="row-odd"><td><p>MinIO</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:9000</span></code></p></td>
+<td><p>Local S3-compatible object store</p></td>
+</tr>
+</tbody>
+</table>
+<p>Port <code class="docutils literal notranslate"><span class="pre">9811</span></code> is suggested for the local Lambda server because MinIO already
+uses <code class="docutils literal notranslate"><span class="pre">9000</span></code> for its API and <code class="docutils literal notranslate"><span class="pre">9001</span></code> for its console.</p>
+</section>
+<section id="local-testing-goals">
+<h2>Local Testing Goals<a class="headerlink" href="#local-testing-goals" title="Link to this heading">¶</a></h2>
+<p>The local workflow must let a developer:</p>
+<ul class="simple">
+<li><p>run the browser UI against local Flask,</p></li>
+<li><p>upload a movie into local MinIO,</p></li>
+<li><p>fetch first frames through the local Lambda endpoint,</p></li>
+<li><p>save marker edits through Flask,</p></li>
+<li><p>retrace from the current frame,</p></li>
+<li><p>watch Lambda debug output in a separate Terminal or iTerm2 window,</p></li>
+<li><p>use the same DynamoDB Local and MinIO state from both processes.</p></li>
+</ul>
+</section>
+<section id="design-decision-use-a-second-native-python-process">
+<h2>Design Decision: Use a Second Native Python Process<a class="headerlink" href="#design-decision-use-a-second-native-python-process" title="Link to this heading">¶</a></h2>
+<p>The recommended approach is a dedicated local Lambda debug server, started in a
+second Terminal window.</p>
+<p>That server should:</p>
+<ul class="simple">
+<li><p>expose the same HTTP routes as deployed Lambda, currently
+<code class="docutils literal notranslate"><span class="pre">/resize-api/v1/ping</span></code>, <code class="docutils literal notranslate"><span class="pre">/resize-api/v1/first-frame</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">/resize-api/v1/trace-movie</span></code>,</p></li>
+<li><p>translate incoming local HTTP requests into API Gateway v2 style events,</p></li>
+<li><p>call the real <code class="docutils literal notranslate"><span class="pre">resize_app.main.lambda_handler()</span></code>,</p></li>
+<li><p>print all stdout, stderr, and logger output in that Terminal window,</p></li>
+<li><p>run a local async worker for retrace jobs.</p></li>
+</ul>
+<p>The goal is to keep local behavior as close as possible to deployed Lambda while
+still being easy to run and easy to debug on a Mac.</p>
+</section>
+<section id="design-decision-do-not-require-a-real-local-sqs-service">
+<h2>Design Decision: Do Not Require a Real Local SQS Service<a class="headerlink" href="#design-decision-do-not-require-a-real-local-sqs-service" title="Link to this heading">¶</a></h2>
+<p>For local development we do <strong>not</strong> need a full SQS emulator shared across
+processes.</p>
+<p>Production uses SQS so the HTTP trace request can return quickly while the
+tracking job continues in the background. Locally, we can preserve that
+behavior more simply:</p>
+<ul class="simple">
+<li><p>the local Lambda HTTP process accepts <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/resize-api/v1/trace-movie</span></code>,</p></li>
+<li><p>it queues the work into an in-process local queue,</p></li>
+<li><p>a background worker thread in that same process drains the queue and runs the
+tracing pipeline,</p></li>
+<li><p>the browser continues polling Flask metadata exactly as it does in
+production.</p></li>
+</ul>
+<p>This gives us the important behavior:</p>
+<ul class="simple">
+<li><p>HTTP request returns immediately,</p></li>
+<li><p>tracing is asynchronous,</p></li>
+<li><p>all tracing logs are visible in one dedicated window,</p></li>
+<li><p>no extra queue service needs to be installed or orchestrated.</p></li>
+</ul>
+<p>If we later want higher-fidelity AWS emulation, we can add a SAM or Finch mode
+separately. It is not required for the primary Mac workflow.</p>
+</section>
+<section id="environment-variables">
+<h2>Environment Variables<a class="headerlink" href="#environment-variables" title="Link to this heading">¶</a></h2>
+<p>The Flask and local Lambda processes should share the same local storage
+configuration:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">AWS_REGION=local</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AWS_ACCESS_KEY_ID=minioadmin</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AWS_SECRET_ACCESS_KEY=minioadmin</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AWS_ENDPOINT_URL_DYNAMODB=http://127.0.0.1:8000/</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000/</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PLANTTRACER_S3_BUCKET=planttracer-local</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DYNAMODB_TABLE_PREFIX=demo-</span></code> or another local prefix</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LOG_LEVEL=DEBUG</span></code> during interactive debugging</p></li>
+</ul>
+<p>In addition, Flask supports an explicit local Lambda override:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9811/</span></code></p></li>
+</ul>
+<p>Flask prefers this explicit variable over deriving the Lambda hostname
+from <code class="docutils literal notranslate"><span class="pre">HOSTNAME</span></code> and <code class="docutils literal notranslate"><span class="pre">DOMAIN</span></code>. The hostname-based rule is correct for
+deployed stacks, but it is not sufficient for local development.</p>
+<p>These are <strong>process environment variables</strong>. They are visible to Flask and the
+local Lambda server, but they are <strong>not</strong> automatically visible to JavaScript in
+the browser.</p>
+<p>For browser-side JavaScript to see any of this information, Flask must:</p>
+<ul class="simple">
+<li><p>read the process environment,</p></li>
+<li><p>place selected values into the template dictionary returned by
+<code class="docutils literal notranslate"><span class="pre">page_dict()</span></code>,</p></li>
+<li><p>render those values into HTML,</p></li>
+<li><p>let the browser execute the resulting inline JavaScript.</p></li>
+</ul>
+</section>
+<section id="javascript-runtime-variables">
+<h2>JavaScript Runtime Variables<a class="headerlink" href="#javascript-runtime-variables" title="Link to this heading">¶</a></h2>
+<p>When this document says that a value is “injected by Flask”, it means the
+following pipeline:</p>
+<ol class="arabic simple">
+<li><p>A route in <code class="docutils literal notranslate"><span class="pre">flask_app.py</span></code> calls <code class="docutils literal notranslate"><span class="pre">render_template(...,</span> <span class="pre">**page_dict(...))</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">page_dict()</span></code> in <code class="docutils literal notranslate"><span class="pre">src/app/apikey.py</span></code> builds a Python dictionary named
+<code class="docutils literal notranslate"><span class="pre">ret</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">base.html</span></code> reads selected dictionary entries through Jinja template
+substitution.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">base.html</span></code> emits an inline <code class="docutils literal notranslate"><span class="pre">&lt;script&gt;</span></code> block that creates browser-global
+JavaScript constants.</p></li>
+<li><p>Frontend JavaScript reads those constants during normal runtime.</p></li>
+</ol>
+<p>In other words, the data path is:</p>
+<p><code class="docutils literal notranslate"><span class="pre">Flask</span> <span class="pre">environment/config</span> <span class="pre">-&gt;</span> <span class="pre">page_dict()</span> <span class="pre">-&gt;</span> <span class="pre">Jinja</span> <span class="pre">template</span> <span class="pre">variables</span> <span class="pre">-&gt;</span> <span class="pre">inline</span> <span class="pre">JavaScript</span> <span class="pre">constants</span> <span class="pre">-&gt;</span> <span class="pre">browser</span> <span class="pre">runtime</span></code></p>
+<p>The base template currently emits these globals:</p>
+<div class="highlight-html notranslate"><div class="highlight"><pre><span></span><span class="p">&lt;</span><span class="nt">script</span><span class="p">&gt;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">API_BASE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{{API_BASE}}&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">LAMBDA_API_BASE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{{ lambda_api_base }}&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">api_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{{api_key}}&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">user_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{{user_id}}&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">demo_mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">true_or_false</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">user_primary_course_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;{{user_primary_course_id}}&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">MAX_FILE_UPLOAD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{</span><span class="nx">MAX_FILE_UPLOAD</span><span class="p">}};</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">admin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">true_or_false</span><span class="p">;</span>
+<span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+</pre></div>
+</div>
+<p>Although <code class="docutils literal notranslate"><span class="pre">planttracer.js</span></code> is loaded earlier in <code class="docutils literal notranslate"><span class="pre">base.html</span></code> using
+<code class="docutils literal notranslate"><span class="pre">type=&quot;module&quot;</span></code>, module scripts are deferred by the browser until HTML parsing
+finishes. That means the inline constants above are in place before the module
+code runs.</p>
+<p>Only the globals that matter to the browser runtime are discussed below.</p>
+<section id="relevant-browser-globals">
+<h3>Relevant Browser Globals<a class="headerlink" href="#relevant-browser-globals" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>JavaScript constant</p></th>
+<th class="head"><p>Dictionary key from Flask</p></th>
+<th class="head" colspan="2"><p>Where Flask gets it                            | How the browser uses it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">API_BASE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">C.API_BASE</span></code> / <code class="docutils literal notranslate"><span class="pre">API_BASE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PLANTTRACER_API_BASE</span></code> env var, else <code class="docutils literal notranslate"><span class="pre">''</span></code></p></td>
+<td><p>Prefix for Flask API calls such as register, resend,
+list movies, get metadata, save trackpoints, and
+rotate movie.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LAMBDA_API_BASE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lambda_api_base</span></code></p></td>
+<td><p>Currently <code class="docutils literal notranslate"><span class="pre">get_lambda_api_base()</span></code> in
+<code class="docutils literal notranslate"><span class="pre">apikey.py</span></code>. In deployed stacks this is
+derived from <code class="docutils literal notranslate"><span class="pre">HOSTNAME</span></code> and <code class="docutils literal notranslate"><span class="pre">DOMAIN</span></code>. For
+local debugging the intended source is an
+explicit override such as
+<code class="docutils literal notranslate"><span class="pre">PLANTTRACER_LAMBDA_API_BASE</span></code>.</p></td>
+<td><p>Prefix for Lambda HTTP API calls such as
+<code class="docutils literal notranslate"><span class="pre">/resize-api/v1/ping</span></code>, first-frame fetch,
+retrace requests, and playback URLs served by
+Lambda.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api_key</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">api_key</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_user_api_key()</span></code> using URL parameter or
+cookie, then validated through the current
+user session.</p></td>
+<td><p>Authorization token sent by frontend code to both
+Flask and Lambda APIs. Without this, most logged-in
+operations fail.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">user_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">user_id</span></code></p></td>
+<td><p>The validated user record for the current
+<code class="docutils literal notranslate"><span class="pre">api_key</span></code>.</p></td>
+<td><p>Lets the frontend identify which movies belong to the
+current user and which controls should be shown.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">demo_mode</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">demo_mode</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">in_demo_mode()</span></code> in <code class="docutils literal notranslate"><span class="pre">apikey.py</span></code>.
+Enabled when <code class="docutils literal notranslate"><span class="pre">DEMO_MODE</span></code> is set or the
+request hostname has a <code class="docutils literal notranslate"><span class="pre">-demo</span></code> label.</p></td>
+<td><p>Disables mutating actions in the browser, changes
+status text, and hides controls that should not be
+available in demo mode.</p></td>
+</tr>
+<tr class="row-odd"><td colspan="2"><dl>
+<dt><code class="docutils literal notranslate"><span class="pre">user_primary_course_id</span></code> | <code class="docutils literal notranslate"><span class="pre">user_primary_course_id</span></code></dt><dd><div class="line-block">
+<div class="line"><br /></div>
+</div>
+</dd>
+</dl>
+</td>
+<td><p>The current user’s validated record.</p></td>
+<td><p>Used by course-scoped browser features such as user
+management and course movie filtering.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">admin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">admin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">odb.check_course_admin(...)</span></code> for the
+current user, except in demo mode.</p></td>
+<td><p>Enables admin-only browser behavior such as bulk
+registration and broader movie-management controls.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MAX_FILE_UPLOAD</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MAX_FILE_UPLOAD</span></code></p></td>
+<td><p>Constant from <code class="docutils literal notranslate"><span class="pre">app.constants.C</span></code>.</p></td>
+<td><p>Client-side upload size check before the browser
+attempts the S3 upload.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="where-each-variable-is-used">
+<h3>Where Each Variable Is Used<a class="headerlink" href="#where-each-variable-is-used" title="Link to this heading">¶</a></h3>
+<p>The most important runtime uses are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">API_BASE</span></code></p>
+<ul>
+<li><p>Used throughout <code class="docutils literal notranslate"><span class="pre">src/app/static/planttracer.js</span></code> for Flask endpoints such
+as <code class="docutils literal notranslate"><span class="pre">api/new-movie</span></code>, <code class="docutils literal notranslate"><span class="pre">api/get-movie-metadata</span></code>, <code class="docutils literal notranslate"><span class="pre">api/rotate-movie</span></code>,
+<code class="docutils literal notranslate"><span class="pre">api/list-movies</span></code>, and <code class="docutils literal notranslate"><span class="pre">api/set-metadata</span></code>.</p></li>
+<li><p>Used in <code class="docutils literal notranslate"><span class="pre">src/app/static/canvas_tracer_controller.js</span></code> for
+<code class="docutils literal notranslate"><span class="pre">api/put-frame-trackpoints</span></code> and <code class="docutils literal notranslate"><span class="pre">api/get-movie-metadata</span></code>.</p></li>
+<li><p>Used in <code class="docutils literal notranslate"><span class="pre">src/app/static/audit.js</span></code> and <code class="docutils literal notranslate"><span class="pre">src/app/static/users.js</span></code> for
+audit and user-management calls.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LAMBDA_API_BASE</span></code></p>
+<ul>
+<li><p>Used in <code class="docutils literal notranslate"><span class="pre">src/app/static/planttracer.js</span></code> for Lambda health checks and
+first-frame URL construction.</p></li>
+<li><p>Used in <code class="docutils literal notranslate"><span class="pre">src/app/static/canvas_tracer_controller.js</span></code> for
+<code class="docutils literal notranslate"><span class="pre">/resize-api/v1/trace-movie</span></code> and for initial frame loading on the Analyze
+page.</p></li>
+<li><p>This is the variable that must point at the local Lambda debug process when
+we are debugging retracing on a Mac.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">api_key</span></code></p>
+<ul>
+<li><p>Sent on almost every authenticated request from the browser.</p></li>
+<li><p>Included in Flask form posts and in Lambda calls such as retrace and
+first-frame fetch.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user_id</span></code>, <code class="docutils literal notranslate"><span class="pre">demo_mode</span></code>, <code class="docutils literal notranslate"><span class="pre">user_primary_course_id</span></code>, <code class="docutils literal notranslate"><span class="pre">admin</span></code></p>
+<ul>
+<li><p>Used by the browser to decide which controls to show, which actions are
+allowed, and which movies belong in each UI section.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_FILE_UPLOAD</span></code></p>
+<ul>
+<li><p>Used by the upload UI to reject oversized files before upload begins.</p></li>
+</ul>
+</li>
+</ul>
+<p>Two values defined in <code class="docutils literal notranslate"><span class="pre">base.html</span></code> are intentionally not discussed further
+here:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">STATIC_BASE</span></code> is currently defined but not meaningfully used by the runtime
+JavaScript in this repo.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">version</span></code> is useful for display/debugging in rendered pages, but not for
+the operational browser logic discussed in this document.</p></li>
+</ul>
+</section>
+</section>
+<section id="recommended-make-targets">
+<h2>Recommended Make Targets<a class="headerlink" href="#recommended-make-targets" title="Link to this heading">¶</a></h2>
+<p>The intended local commands are:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>start_local_dynamodb
+make<span class="w"> </span>start_local_minio
+make<span class="w"> </span>make-local-bucket
+make<span class="w"> </span>make-local-demo
+
+<span class="c1"># Terminal window 1: local Lambda logs</span>
+make<span class="w"> </span>run-local-lambda-debug
+
+<span class="c1"># Terminal window 2: Flask UI + Flask API</span>
+make<span class="w"> </span>run-local-debug
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">run-local-debug</span></code> is the main developer entry point for the Flask side of the
+local workflow. Its job is to:</p>
+<ul class="simple">
+<li><p>ensure demo mode is <strong>off</strong> for this Flask process,</p></li>
+<li><p>print a login link for the local admin user,</p></li>
+<li><p>export <code class="docutils literal notranslate"><span class="pre">PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9811/</span></code>,</p></li>
+<li><p>start Flask on <code class="docutils literal notranslate"><span class="pre">localhost:8080</span></code>,</p></li>
+<li><p>on macOS, try to open a second Terminal or iTerm2 window running
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run-local-lambda-debug</span></code>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">run-local-demo-debug</span></code>:</p>
+<ul class="simple">
+<li><p>seeds the local demo dataset if needed,</p></li>
+<li><p>ensures demo mode is <strong>on</strong> for this Flask process,</p></li>
+<li><p>sets <code class="docutils literal notranslate"><span class="pre">DEMO_MODE=1</span></code> and <code class="docutils literal notranslate"><span class="pre">DEMO_COURSE_ID=demo-course</span></code>,</p></li>
+<li><p>starts Flask on <code class="docutils literal notranslate"><span class="pre">localhost:8080</span></code> without requiring a login link.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">run-local-lambda-debug</span></code>:</p>
+<ul class="simple">
+<li><p>vendor Lambda-shared app code if needed,</p></li>
+<li><p>set the same local AWS and table-prefix environment variables,</p></li>
+<li><p>start the local Lambda HTTP bridge on <code class="docutils literal notranslate"><span class="pre">localhost:9811</span></code>,</p></li>
+<li><p>start the in-process local retrace worker,</p></li>
+<li><p>log every request and every tracing step to stdout/stderr.</p></li>
+</ul>
+</section>
+<section id="browser-request-flow">
+<h2>Browser Request Flow<a class="headerlink" href="#browser-request-flow" title="Link to this heading">¶</a></h2>
+<p>With the two-process local model, the browser behaves like this:</p>
+<ol class="arabic simple">
+<li><p>Load HTML from Flask at <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8080</span></code>.</p></li>
+<li><p>Read the browser globals emitted by <code class="docutils literal notranslate"><span class="pre">base.html</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">API_BASE</span></code> should point at Flask.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LAMBDA_API_BASE</span></code> should point to <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:9811/</span></code> in local
+mode.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">api_key</span></code> should contain the current login token.</p></li>
+</ul>
+</li>
+<li><p>Request first frame from the local Lambda endpoint.</p></li>
+<li><p>Save marker edits through Flask <code class="docutils literal notranslate"><span class="pre">/api/put-frame-trackpoints</span></code>.</p></li>
+<li><p>Request retrace through local Lambda <code class="docutils literal notranslate"><span class="pre">/resize-api/v1/trace-movie</span></code>.</p></li>
+<li><p>Poll Flask <code class="docutils literal notranslate"><span class="pre">/api/get-movie-metadata</span></code> until tracing completes.</p></li>
+<li><p>Fetch the generated ZIP or traced movie from MinIO through signed URLs.</p></li>
+</ol>
+<p>This keeps the browser contract aligned with production:</p>
+<ul class="simple">
+<li><p>Flask owns HTML and metadata APIs.</p></li>
+<li><p>Lambda owns frame and tracing APIs.</p></li>
+</ul>
+</section>
+<section id="local-retrace-flow">
+<h2>Local Retrace Flow<a class="headerlink" href="#local-retrace-flow" title="Link to this heading">¶</a></h2>
+<p>When the user retraces from frame <code class="docutils literal notranslate"><span class="pre">N</span></code> locally:</p>
+<ol class="arabic simple">
+<li><p>The browser sends <code class="docutils literal notranslate"><span class="pre">movie_id</span></code> and <code class="docutils literal notranslate"><span class="pre">frame_start=N</span></code> to the local Lambda
+endpoint.</p></li>
+<li><p>The local Lambda HTTP handler validates the request and enqueues a local
+retrace job.</p></li>
+<li><p>The local worker removes stored trackpoints for frames <code class="docutils literal notranslate"><span class="pre">N+1..end</span></code>.</p></li>
+<li><p>The worker resumes tracing at frame <code class="docutils literal notranslate"><span class="pre">N+1</span></code>.</p></li>
+<li><p>Trackpoints are written back to DynamoDB Local.</p></li>
+<li><p>The traced MP4 and frame ZIP are written to MinIO.</p></li>
+<li><p>Flask metadata polling sees the updated movie status and URLs.</p></li>
+</ol>
+<p>This is the same retrace semantics described in
+<code class="docutils literal notranslate"><span class="pre">instructions-for-llms/planttracer-storage.md</span></code>.</p>
+</section>
+<section id="why-not-make-flask-pretend-to-be-lambda">
+<h2>Why Not Make Flask Pretend To Be Lambda<a class="headerlink" href="#why-not-make-flask-pretend-to-be-lambda" title="Link to this heading">¶</a></h2>
+<p>It is tempting to add Lambda routes directly to Flask for local use. We do not
+want to do that.</p>
+<p>Keeping Lambda in its own local process has several advantages:</p>
+<ul class="simple">
+<li><p>it preserves the deployment boundary,</p></li>
+<li><p>it keeps Lambda-only imports and dependencies out of the Flask runtime path,</p></li>
+<li><p>it gives us a dedicated debugging window for retrace logs,</p></li>
+<li><p>it reduces the chance that local-only shortcuts hide production bugs.</p></li>
+</ul>
+</section>
+<section id="why-native-python-first-instead-of-sam-local">
+<h2>Why Native Python First Instead of SAM Local<a class="headerlink" href="#why-native-python-first-instead-of-sam-local" title="Link to this heading">¶</a></h2>
+<p>AWS SAM local emulation may still be useful later, especially for deployment
+parity. It is not the preferred primary workflow for day-to-day Mac debugging.</p>
+<p>Native Python is better for the first local retrace workflow because:</p>
+<ul class="simple">
+<li><p>it starts faster,</p></li>
+<li><p>it is easier to debug interactively,</p></li>
+<li><p>stdout and stderr are simpler to watch,</p></li>
+<li><p>the current problem is architectural split, not container fidelity,</p></li>
+<li><p>SQS behavior is easier to model with an in-process queue than with a second
+emulator.</p></li>
+</ul>
+<p>If we later add a containerized mode using Finch, it should be an additional
+option, not the only local testing path.</p>
+</section>
+<section id="github-actions">
+<h2>GitHub Actions<a class="headerlink" href="#github-actions" title="Link to this heading">¶</a></h2>
+<p>GitHub Actions should continue to use local infrastructure only:</p>
+<ul class="simple">
+<li><p>DynamoDB Local,</p></li>
+<li><p>MinIO,</p></li>
+<li><p>direct Python tests,</p></li>
+<li><p>JavaScript tests,</p></li>
+<li><p>Lambda handler unit and integration tests.</p></li>
+</ul>
+<p>GitHub Actions does <strong>not</strong> need the macOS two-window workflow. CI should focus
+on:</p>
+<ul class="simple">
+<li><p>Flask tests against local services,</p></li>
+<li><p>Lambda unit tests that call <code class="docutils literal notranslate"><span class="pre">lambda_handler</span></code> directly,</p></li>
+<li><p>end-to-end local tracing tests that run the tracing pipeline against MinIO and
+DynamoDB Local,</p></li>
+<li><p>browser tests only where they provide unique value.</p></li>
+</ul>
+</section>
+<section id="planned-verification">
+<h2>Planned Verification<a class="headerlink" href="#planned-verification" title="Link to this heading">¶</a></h2>
+<p>Once the local Lambda server is implemented, local testing should cover at least
+these cases:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/resize-api/v1/ping</span></code> returns <code class="docutils literal notranslate"><span class="pre">status=ok</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/resize-api/v1/first-frame</span></code> returns a JPEG for a movie in MinIO.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/resize-api/v1/trace-movie</span></code> returns quickly and starts background
+tracing.</p></li>
+<li><p>Flask <code class="docutils literal notranslate"><span class="pre">/api/get-movie-metadata</span></code> eventually reports tracing completion.</p></li>
+<li><p>A browser-driven local retrace updates later frames after the user edits frame
+<code class="docutils literal notranslate"><span class="pre">N</span></code>.</p></li>
+</ul>
+</section>
+<section id="current-status">
+<h2>Current Status<a class="headerlink" href="#current-status" title="Link to this heading">¶</a></h2>
+<p>At the time this document was last updated:</p>
+<ul class="simple">
+<li><p>the split Flask/Lambda architecture is the active design,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run-local-debug</span></code> starts the Flask side of the local workflow and ensures a
+local Lambda endpoint is available,</p></li>
+<li><p>the repo includes a dedicated <code class="docutils literal notranslate"><span class="pre">run-local-lambda-debug</span></code> workflow, and</p></li>
+<li><p>the two-process Mac local testing model described above is the supported
+local retracing workflow.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup on Amazon Linux 2023 on AWS EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant-Tracer webapp on Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html#mac-configuration">Mac Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html#developing-locally">Developing locally</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying to EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture design principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">PlantTracer Movie Processing Phases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web app theory of design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / possibly-missing dict keys – codebase scan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Design of the movie player</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload and Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="WindowsDevSetup.html" title="previous chapter">Windows Developer Setup Notes</a></li>
+      <li>Next: <a href="Installation.html" title="next chapter">Installation</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2025 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/Local Development and Github Actions.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
