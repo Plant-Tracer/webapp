@@ -1028,12 +1028,12 @@ describe('TracerController.track_to_end', () => {
     }
 
     // A. Synchronous immediate effects ────────────────────────────────────────
-    test('sets #status-big to "Movie is being traced..."', () => {
+    test('sets #status-big to "Tracing from frame 0..."', () => {
         mockFetchResponse(200, {});
         tc.track_to_end();
         const idx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
         expect(idx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith('Movie is being traced...');
+        expect(mock$.mock.results[idx].value.text).toHaveBeenCalledWith('Tracing from frame 0...');
     });
 
     test('adds tracing-dimmed class to the controller div', () => {
@@ -1044,10 +1044,10 @@ describe('TracerController.track_to_end', () => {
         expect(mock$.mock.results[idx].value.addClass).toHaveBeenCalledWith('tracing-dimmed');
     });
 
-    test('sets tracking_status text to "Asking pipeline to trace movie..."', () => {
+    test('sets tracking_status text to "Tracing from frame 0..."', () => {
         mockFetchResponse(200, {});
         tc.track_to_end();
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Asking pipeline to trace movie...');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing from frame 0...');
     });
 
     test('disables the track button immediately', () => {
@@ -1443,19 +1443,26 @@ describe('TracerController.poll_for_track_end', () => {
     });
     afterEach(() => { jest.useRealTimers(); });
 
+// Lines 1446-1457, update to:
     function fireDone(data) {
         mockPost.mockReturnValueOnce({
-            done: jest.fn().mockImplementation(cb => { cb(data); return { fail: jest.fn() }; }),
+            done: jest.fn().mockImplementation(cb => { 
+                cb(data); 
+                return { fail: jest.fn() }; 
+            }),
             fail: jest.fn(),
         });
     }
+
     function fireFail(xhr, status, err) {
         mockPost.mockReturnValueOnce({
             done: jest.fn().mockReturnThis(),
-            fail: jest.fn().mockImplementation(cb => { cb(xhr, status, err); }),
+            fail: jest.fn().mockImplementation(cb => { 
+                cb(xhr, status, err); 
+            }),
         });
     }
-
+    
     // done: tracing completed path
     test('done: TRACING COMPLETED + tracking=true → calls movie_tracked', () => {
         const movieTrackedSpy = jest.spyOn(tc, 'movie_tracked').mockImplementation(() => {});
