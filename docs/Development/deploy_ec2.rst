@@ -1,3 +1,6 @@
+Deploying to EC2
+================
+
 AWS console
 
 ssh to server with private key
