@@ -14,6 +14,11 @@
           integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" >  <!-- possibly remove -->
 
+    <!-- Outfit font (matches planttracer.com) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+
     <script src="{{ url_for('static', filename='jquery-3.7.1.min.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='planttracer.js') }}"></script>
 
@@ -58,8 +63,40 @@
 
     <style>
       html {
-      margin-left: 20px;
-      margin-right: 20px;
+        margin-left: 20px;
+        margin-right: 20px;
+      }
+      body {
+        font-family: 'Outfit', sans-serif;
+        color: #606061;
+      }
+      .pure-menu.pure-menu-horizontal {
+        background: linear-gradient(to right, rgb(53,181,147), rgb(161,210,68));
+        padding: 0 10px;
+      }
+      .pure-menu-heading.pure-menu-link {
+        color: white !important;
+        font-size: 150%;
+        font-weight: 600;
+        font-family: 'Outfit', sans-serif;
+        padding: 20px 1em;
+        text-transform: none;
+        letter-spacing: normal;
+      }
+      .pure-menu-link {
+        color: white !important;
+        font-family: 'Outfit', sans-serif;
+        padding: 20px 1em;
+      }
+      .pure-menu-link:hover,
+      .pure-menu-link:focus {
+        background: transparent !important;
+        color: white !important;
+        text-shadow: 1px 1px 3px #9dff2e;
+      }
+      .pure-menu-item.pure-menu-selected > .pure-menu-link {
+        background: transparent !important;
+        text-shadow: 2px 2px 5px #9dff2e;
       }
     </style>
 
@@ -79,7 +116,7 @@
              doesn't happen when deploying in a AWS Lambda domain followed
              by a prefix such as Prod/ or Test/.
           -->
-        <a href="." class="pure-menu-heading pure-menu-link">PlantTracer</a>
+        <a href="." class="pure-menu-heading pure-menu-link">Plant Tracer</a>
         <ul class="pure-menu-list">
           {% if logged_in %}
           <li class="pure-menu-item">
