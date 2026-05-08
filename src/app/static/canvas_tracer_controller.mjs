@@ -52,7 +52,8 @@ let yChartInstance = null;
  * if frame 0 has no markers there, use [] so we don't overwrite user positions with defaults.
  */
 function create_default_markers() {
-    return [...DEFAULT_MARKERS];
+    console.log('[canvas_tracer_controller] Creating default markers (first-time analysis load; frame 0 has no markers yet).');
+    return DEFAULT_MARKERS.map(m => ({...m}));
 }
 
 // NOTE ./static is needed below but not above!
