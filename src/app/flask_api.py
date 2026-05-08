@@ -167,7 +167,7 @@ def api_register():
     user_name = request.values.get('name')
     user = odb.register_email(email=email, course_key=course_key, user_name=user_name)
     user_id = user[USER_ID]
-    new_api_key = odb.make_new_api_key(email=email)
+    new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
     if not new_api_key:
         logger.info("email not in database: %s",email)
         return E.INVALID_EMAIL
@@ -233,8 +233,10 @@ def api_bulk_register():
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
             user = odb.register_email(email=email, course_id=course_id, user_name="")
-            send_link(email=email, planttracer_endpoint=planttracer_endpoint)
-            user_ids.append(user[USER_ID])
+            user_id = user[USER_ID]
+            new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
+            mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+            user_ids.append(user_id)
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
     except mailer.NoMailerConfiguration:

@@ -347,13 +347,13 @@ class DDBO:
 
     def put_api_key_dict(self,api_key_dict):
         # no ConditionExpression - it's okay if the key already exists
-        logger.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
+        logger.debug("put_api_key_dict(user_id=%s enabled=%s)", api_key_dict.get(USER_ID), api_key_dict.get(ENABLED))
         return self.api_keys.put_item(Item = api_key_dict)
 
     def get_api_key_dict(self,api_key):
         try:
             ret =  self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
-            logger.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
+            logger.debug("get_api_key_dict(found=%s)", ret is not None)
             return ret
         except Exception as e:
             logger.error("table=%s error=%s",self.api_keys.name, e)
@@ -1056,14 +1056,10 @@ def validate_api_key(api_key):
             return user
     raise InvalidAPI_Key()
 
-def make_new_api_key(*, email, demo_user=False):
-    """Create a new api_key for an email that is registered
-    :param email:  the email
-    :param demo_user:  If true, then use the demo user API key, and not a random API key
-    :return: api_key - the api_key
-    """
+def make_new_api_key_for_user_id(*, user_id, demo_user=False):
+    """Create a new api_key for a registered, enabled user_id."""
     ddbo = DDBO()
-    user = ddbo.get_user_email(email)
+    user = ddbo.get_user(user_id)
     if user[ ENABLED ] == 1:
         if demo_user:
             api_key = C.DEMO_MODE_API_KEY
@@ -1071,11 +1067,21 @@ def make_new_api_key(*, email, demo_user=False):
             api_key = new_api_key()
         ddbo.put_api_key_dict({API_KEY:api_key,
                                ENABLED:1,
-                               USER_ID :user[ USER_ID ],
+                               USER_ID :user_id,
                                USE_COUNT:0,
                                CREATED:int(time.time()) })
         return api_key
-    raise InvalidUser_Email(email)
+    raise InvalidUser_Id(user_id)
+
+
+def make_new_api_key(*, email, demo_user=False):
+    """Create a new api_key for an email that is registered
+    :param email:  the email
+    :param demo_user:  If true, then use the demo user API key, and not a random API key
+    :return: api_key - the api_key
+    """
+    user = DDBO().get_user_email(email)
+    return make_new_api_key_for_user_id(user_id=user[ USER_ID ], demo_user=demo_user)
 
 
 def get_user(user_id):
@@ -1524,6 +1530,34 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     else:
         lft = max(current, frame_number)
     set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
+
+
+def clear_movie_tracking_after_frame(*, movie_id, frame_number:int):
+    """Remove trackpoints for frames strictly after ``frame_number``.
+
+    This is used when the user edits frame ``N`` and requests a retrace: frame ``N``
+    remains the source of truth, while frames ``N+1`` through the end of the movie
+    are invalidated and must be recomputed.
+
+    Returns the count of frame records whose ``trackpoints`` attribute was removed.
+    """
+    assert is_movie_id(movie_id)
+    assert frame_number >= 0
+    ddbo = DDBO()
+    deleted = 0
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None or int(fn) <= frame_number or 'trackpoints' not in frame:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+        deleted += 1
+
+    # Preserve the edited frame as the new frontier for any subsequent retrace.
+    set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: frame_number})
+    return deleted
 
 
 def clear_movie_tracking(movie_id):

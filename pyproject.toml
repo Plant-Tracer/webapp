@@ -14,18 +14,20 @@ dynamic = ["dependencies"]
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
 sqs_cli = "sqs_cli:main"
+planttracer-local-trace = "app.local_trace_cli:main"
+dbutil = "dbutil:main"
 
 [tool.poetry]
 packages = [
     { include = "app", from = "src" },
     { include = "sam_config_tool.py", from = "etc" },
+    { include = "dbutil.py", from = "src" },
     { include = "sqs_cli.py", from = "lambda-resize/src" },
 ]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 apig-wsgi = "^2.20.0"
-fastapi = "^0.135.2"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"

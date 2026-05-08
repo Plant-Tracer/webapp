@@ -9,9 +9,21 @@ Content-Type: text/plain; charset=UTF-8
 
 Your Plant Tracer course "{{ course_name }}" ({{ course_id }}) has been created.
 
+Course key: {{ course_key }}
+
 Log in to manage your course and students:
 
 {{ planttracer_endpoint }}/list?api_key={{ api_key }}
+
+Students can register at:
+
+{{ planttracer_endpoint }}/register
+
+Ask students to enter the course key {{ course_key }} and their email address.
+
+--
+Git branch: {{ git_branch }}
+Git version: {{ git_version }}
 
 --{{ boundary }}
 Content-Type: text/html; charset=UTF-8
@@ -21,8 +33,12 @@ Content-Type: text/html; charset=UTF-8
 <head><meta charset="UTF-8"><title>Plant Tracer: Course ready</title></head>
 <body>
 <p>Your Plant Tracer course <strong>{{ course_name }}</strong> ({{ course_id }}) has been created.</p>
+<p><strong>Course key:</strong> {{ course_key }}</p>
 <p>Log in to manage your course and students:</p>
 <p><a ses:no-track href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}">{{ planttracer_endpoint }}/list?api_key={{ api_key }}</a></p>
+<p>Students can register at <a ses:no-track href="{{ planttracer_endpoint }}/register">{{ planttracer_endpoint }}/register</a> by entering the course key <strong>{{ course_key }}</strong> and their email address.</p>
+<hr>
+<p>Git branch: {{ git_branch }}<br>Git version: {{ git_version }}</p>
 </body>
 </html>
 

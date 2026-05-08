@@ -35,7 +35,8 @@ You will also want to set these variables:
 You may optionally set these variables:
 |Variable|Value set for `make pytest` in Github actions|Purpose|
 |--------|-----|----|
-|`DEMO_COURSE_ID`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst) and `DEMO_COURSE_ID` specifies the course that is viewed.|
+|`DEMO_MODE`|not set|If set, Plant Tracer runs in [demo mode](demo_mode.rst).|
+|`DEMO_COURSE_ID`|not set|Identifies which course contains the demo dataset. It does not by itself enable demo mode.|
 |`LOG_LEVEL`|`DEBUG`|If set, all logging is at this log level|
 
 Note that there are multiple ways that a single service can be sliced or partitioned:
@@ -45,7 +46,7 @@ Note that there are multiple ways that a single service can be sliced or partiti
 * Each web app instance stores its metadata in a set of DynamoDB tables that have a specific prefix. When testing with `pytest`, tables are created with the randomized prefix `test-????` where `????` is a randomly hexadecimal string.
 * Within each web app instance, there can be one or more courses, each with its own course identifier (name).
 
-Note that any course can be come a demo course. What makes it a demo course is that the web app instance has the `DEMO_COURSE_ID` environment variable set. This allows the same course to be accessed for non-demo purposes and demo purposes. When you access a web app instance that has the `DEMO_COURSE_ID` environment variable set, you are automatically authenticated as the demo user and can only access that user's movies and public movies.
+Note that any course can become a demo course. What makes the web app run in demo mode is either the `DEMO_MODE` environment variable or a hostname ending in `-demo`. `DEMO_COURSE_ID` identifies which course contains the demo dataset. This allows the same course to be accessed for non-demo purposes and demo purposes depending on how the web app instance is started.
 
 # Mac Configuration
 ## Prep your mac
@@ -202,7 +203,7 @@ make start_local_minio
 Here's what it looks like when it runs:
 ```
 (venv) simsong@Seasons-2 webapp % make start_local_dynamodb
-bash bin/local_dynamodb_control.bash start
+python3 bin/local_services.py dynamodb start
 Starting DynamoDB Local...
   Waiting for DynamoDBLocal to be ready (1)...
   Waiting for DynamoDBLocal to be ready (2)...
@@ -210,7 +211,7 @@ DynamoDB Local is ready.
 DynamoDB Local started in the background (PID: 12336).
 DynamoDB Local endpoint: http://localhost:8000
 (venv) simsong@Seasons-2 webapp % make start_local_minio
-bash bin/local_minio_control.bash start
+python3 bin/local_services.py minio start
 Starting Minio ...
 Minio Local started in the background (PID: 12428).
   Waiting for MinIO to be ready (1)...
@@ -240,7 +241,7 @@ Notice that below we set all of the environment variables first. You might want 
     AWS_REGION=local \
     PLANTTRACER_S3_BUCKET=planttracer-local \
     DYNAMODB_TABLE_PREFIX=dev- \
-    LOG_LEVEL=DEBUG python dbutil.py --createdb
+    LOG_LEVEL=DEBUG poetry run python src/dbutil.py createdb
 2025-08-10 09:43:16,090  odb.py:376 WARNING: NOTE: create_user does not check to make sure user admin@planttracer.com's course demo-course exists
 Transaction succeeded: user inserted.
 2025-08-10 09:43:16,131  odb.py:376 WARNING: NOTE: create_user does not check to make sure user demouser@planttracer.com's course demo-course exists
@@ -293,7 +294,7 @@ Now connect to `http://127.0.0.1:8080`:
 Alternatively, we could run in demo mode:
 
 ```
-AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=DEBUG DEMO_MODE=1 DEMO_COURSE_ID=demo-course venv/bin/flask --debug --app deploy.app.bottle_app:app run --port 8080 --with-threads
 ```
 
 And now if we go to `http://127.0.0.1:8080` we see:
@@ -308,11 +309,11 @@ Click on the link and you see:
 ## Creating a course and a user
 While the application is running, open another window.
 
-We will first use the `--report` option to see what is in the database:
+We will first use the `report` command to see what is in the database:
 ```
 simsong@Seasons-2 ~ % cd gits/webapp
 simsong@Seasons-2 webapp % source venv/bin/activate
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO poetry run python src/dbutil.py report
 2025-08-10 09:53:21,580  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-api_keys')
 2025-08-10 09:53:21,583  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-users')
 2025-08-10 09:53:21,586  odbmaint.py:347 WARNING: scan table dynamodb.Table(name='dev-movies')
@@ -333,9 +334,9 @@ dev-logs                      0                      0
 ```
 Notice that our code automatically generates a WARNING of every table scan operaiton, as these operaitons are typically expensive in DynamoDB. This is just for development purposes.  (The report option will be expanded over time.)
 
-Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the `--makelink` option for the admin user.
+Notice that there is only one API_KEY but there are two users. This means that one of the users cannot log in. To facilitate local developiong, we want to use the `makelink` command for the admin user.
 
-Courses can be created the with `dbutil --create_course` command. Please review the source code in `dbutil.py`. You will see that this option requires the following arguments:
+Courses can be created with the `dbutil create-course` command. Please review the source code in `src/dbutil.py`. You will see that this command requires the following arguments:
 
 https://github.com/Plant-Tracer/webapp/blob/e46ac75396755687c50d4dc87f2358e9206031e1/dbutil.py#L127-L144
 
@@ -347,7 +348,7 @@ https://github.com/Plant-Tracer/webapp/blob/e46ac75396755687c50d4dc87f2358e92060
 
 Let's try it:
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --create_course --course_id PLANT101 --course_name "Introduction to Plant Movement" --admin_email "simsong@gmail
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO poetry run python src/dbutil.py create-course --course_id PLANT101 --course_name "Introduction to Plant Movement" --admin_email "simsong@gmail
 .com" --admin_name "Simson Garfinkel"
 creating course...
 2025-08-10 10:40:25,248  odb.py:376 WARNING: NOTE: create_user does not check to make sure user simsong@gmail.com's course PLANT101 exists
@@ -367,7 +368,7 @@ created PLANT101
 
 Now let's try the report:
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --report
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO poetry run python src/dbutil.py report
 (venv) simsong@Seasons-2 webapp %
 ```
 Notice:
@@ -378,7 +379,7 @@ Notice:
 To log in we will need a magic link that works with our existing endpoint (http://localhost:8080):
 
 ```
-(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO python dbutil.py --makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
+(venv) simsong@Seasons-2 webapp % AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000/ AWS_ENDPOINT_URL_S3=http://localhost:9000/ AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_REGION=us-east-1 PLANTTRACER_S3_BUCKET=planttracer-local DYNAMODB_TABLE_PREFIX=dev- LOG_LEVEL=INFO poetry run python src/dbutil.py makelink simsong@gmail.com --planttracer_endpoint http://localhost:8080/
 
 *****
 ***** Login with http://localhost:8080/list?api_key=a71358e5d3c6f453cb363d0aa69ce5664

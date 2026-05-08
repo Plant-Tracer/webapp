@@ -211,3 +211,4 @@ samconfig.toml
 .op
 *.jpeg
 dump.txt
+etc/planttracer-nginx-patch.*

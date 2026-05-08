@@ -3,15 +3,18 @@ Plant Tracer Web App Tutorial
 
 Welcome and Registration
 -------------------------
-- Go to `app.planttracer.com/register`.
+
+- If this is your first time using Plant Tracer, you will need to register for an account, unless your course administrator has registered an account for you in advance. To register:
+
+- Go to `prod.planttracer.com/register`.
 - Register for an account using your Name, Email Address, and Course Key.
-- If you are using Plant Tracer with a specific course or project, you can enter your course Keyey provided by your instructor or project leader.
-- Alternately, you can register for the Web course whose course key is 389f-4163
+- If you are using Plant Tracer with a specific course or project, you can enter your course Key provided by your course administrator (your instructor should be able to help you here).
+- Alternately, you can register for the Web course whose course key is 2c01-48cd
 
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer Registration
 
-- Look for an email from `admin@planttracer.com`. Click on the second link to view movies. The first link will allow you to upload movies.
+- Once you are registered, look for an email from `admin@planttracer.com`. Click on the Log in to Plant Tracer link to log in to the app. There are two links on the login/welcome page, and from there you can upload movies or get a list of existing movies to work with.
 
 .. image:: tutorial_images/admin_email_link.png
     :alt: email from Plant Tracer

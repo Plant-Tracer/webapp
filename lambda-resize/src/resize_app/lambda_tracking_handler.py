@@ -23,6 +23,23 @@ def _safe_int(value, default=0):
     except (TypeError, ValueError):
         return default
 
+def process_tracking_message(body: dict):
+    movie_id = body.get("movie_id")
+    frame_start = _safe_int(body.get("frame_start", 0))
+
+    if not movie_id:
+        raise ValueError("movie_id is required in SQS message")
+
+    t0 = time.time()
+    LOGGER.info("SQS Start tracking batch: movie_id=%s frame_start=%s ", movie_id, frame_start)
+    movie_glue.run_tracing(movie_id=movie_id, frame_start=frame_start)
+    LOGGER.info(
+        "SQS Completed tracking batch: movie_id=%s frame_start=%s elapsed_time=%s",
+        movie_id,
+        frame_start,
+        time.time() - t0,
+    )
+
 def process_tracking_record(record: SQSRecord):
     """
     Process a single SQS message.
@@ -33,16 +50,4 @@ def process_tracking_record(record: SQSRecord):
     except json.JSONDecodeError as exc:
         LOGGER.error("Invalid JSON in SQS body: %s", exc)
         raise
-
-    movie_id = body.get("movie_id")
-    frame_start = _safe_int(body.get("frame_start", 0))
-
-    if not movie_id:
-        raise ValueError("movie_id is required in SQS message")
-
-    t0 = time.time()
-    LOGGER.info( "SQS Start tracking batch: movie_id=%s frame_start=%s ",
-                 movie_id, frame_start)
-    movie_glue.run_tracing( movie_id=movie_id, frame_start=frame_start)
-    LOGGER.info( "SQS Completed tracking batch: movie_id=%s frame_start=%s elapsed_time=%s",
-                 movie_id, frame_start, time.time()-t0)
+    process_tracking_message(body)

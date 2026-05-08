@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Plant Tracer is a Flask-based web application for uploading, managing, and annotating plant growth time-lapse videos at https://app.planttracer.com/. It has a Python/Flask backend, a JavaScript frontend (custom DOM utilities; jQuery has been completely removed), DynamoDB for structured data, and S3 for video/frame storage.
+Plant Tracer is a Flask-based web application for uploading, managing, and annotating plant growth time-lapse videos at https://app.planttracer.com/. It has a Python/Flask backend, a JavaScript frontend (jQuery loaded globally, with ES modules importing `$` from `utils.js`), DynamoDB for structured data, and S3 for video/frame storage.
 
 ## Common Commands
 
@@ -28,8 +28,8 @@ npm run test-debug # JS tests with verbose output
 AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/endpoint_test.py -v
 
 # Local development
-bin/local_minio_control.bash start       # Start Minio (S3 emulator, port 9000)
-bin/local_dynamodb_control.bash start    # Start DynamoDB Local (port 8000)
+python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
+python3 bin/local_services.py dynamodb start    # Start DynamoDB Local (port 8000)
 make make-local-bucket                   # Create local S3 bucket
 make make-local-demo                     # Create demo course and DB tables
 make run-local-debug                     # Flask dev server at localhost:8080
@@ -52,7 +52,7 @@ make run-local-debug                     # Flask dev server at localhost:8080
 Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_presigned.py`, etc.
 
 ### Frontend (`src/app/static/`, `src/app/templates/`)
-`$` is **not jQuery** — it is the custom lightweight helper from `utils.js`. Before writing any JavaScript, read `utils.js` to understand what `$` and `$$` actually support. Use only methods defined there.
+`$` is jQuery. Browser pages load jQuery globally, and ES modules import `$` from `utils.js`, which re-exports the global jQuery instance.
 
 ### Data Storage
 - **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/MOVIE_METADATA.rst`).
@@ -84,7 +84,7 @@ Tests run against **real local services** (DynamoDB Local + Minio), not mocks. F
 - `pyproject.toml` uses PEP 621 `[project]` table — do not use deprecated `[tool.poetry]` keys for name/version/description/authors/scripts.
 
 ### JavaScript
-- Always check `src/app/static/utils.js` before writing JS — use only methods defined there.
+- `src/app/static/utils.js` is a shim that re-exports the global jQuery instance for ES modules.
 - `make eslint` lints `src/app/static/` and `src/app/templates/`.
 - Jest tests live in `jstests/`; run with `NODE_PATH=src/app/static`.
 

@@ -16,7 +16,9 @@ Required
 
 Optional for Demo Mode
 ----------------------
-`DEMO_COURSE_ID` - Run in demo mode with this course. The Makefile creates a demo course called `demo`.
+`DEMO_MODE` - Enables demo mode for this process.
+
+`DEMO_COURSE_ID` - Identifies the course that contains the demo dataset. This does not itself enable demo mode.
 
 `DEMO_DYNAMODB_PREFIX` - Use tables with this prefix. The Makefile creates tables with a prefix `demo`.
 

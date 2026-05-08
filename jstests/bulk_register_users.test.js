@@ -33,34 +33,47 @@ describe('bulk_register_users_func', () => {
 
 
     test('should handle successful registration response', () => {
-        fetch.mockResponseOnce(JSON.stringify({ error: false, message: "Registered 1 email addresses" }));
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: function (callback) {
+                callback({ error: false, message: "Registered 1 email addresses" });
+                return this;
+            },
+            fail: jest.fn().mockReturnThis(),
+        }));
 
         $('#br_email_addresses').val('test@example.com');
 
         bulk_register_users_func();
 
-        expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, expect.objectContaining({
-            method: 'POST',
-            body: expect.any(FormData),
-        }));
-
-        const formData = fetch.mock.calls[0][1].body;
-        expect(formData.get("api_key")).toBe(api_key);
-        expect(formData.get("course_id")).toBe(user_primary_course_id + "");
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'test@example.com',
+        });
+        expect($('#message').html()).toBe('Registered 1 email addresses');
     });
 
     test('should handle invalid email response', () => {
-        fetch.mockResponseOnce(JSON.stringify({ error: false, message: "Invalid email address" }));
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: function (callback) {
+                callback({ error: true, message: "Invalid email address" });
+                return this;
+            },
+            fail: jest.fn().mockReturnThis(),
+        }));
 
         $('#br_email_addresses').val('missingdomain@.com');
 
         bulk_register_users_func();
 
-        //ToDo: expect($('#message').html()).toBe('error: Invalid email address');
-        expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, expect.objectContaining({
-            method: 'POST',
-            body: expect.any(FormData),
-        }));
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'missingdomain@.com',
+        });
+        expect($('#message').html()).toBe('error: Invalid email address');
     });
 
 });

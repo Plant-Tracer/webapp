@@ -2,7 +2,6 @@ Notes on Deploying to SAM
 =========================
 
 * https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html
-* https://github.com/tzelleke/aws-sam-fastapi
 
 `sam build` takes what's in the requirements.txt file, installs it into the directory `.aws-sam/build/HandlerFunction`, makes it into a
 ZIP file, and uploads the ZIP file to S3.  The ZIP file needs to be unzipped when the lambda does a cold-start.

@@ -13,29 +13,7 @@ Welcome to Plant Tracer Web Application's documentation!
    UserTutorial
    VideoResizing
    ReleaseHistory
-   demo_mode
-   DeveloperSetup
-   DevSetupAmazonLinuxEC2
-   DevSetupUbuntu
-   DeveloperSetup_Mac
-   WindowsDevSetup
-   Local Development and Github Actions
-   EnvironmentVariables
-   DynamoDB
-   S3
-   Installation
-   THEORY_OF_DESIGN
-   gallery
-   gallery_learning_plan
-   movie_player
-   resources
-   user story - tracking
-   NOTES_ON_SIMPLIFYING
-   configuring_aws
-   README_SAM
-   sam_notes
-   mv1
-   notes_on_resizing
+   Development/index
 
 Indices and tables
 ==================

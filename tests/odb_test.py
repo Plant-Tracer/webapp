@@ -199,3 +199,66 @@ def test_odb(local_ddb):
 
     # Delete the user's course
     odb.delete_course(course_id=TEST_COURSE_ID)
+
+
+def test_clear_movie_tracking_after_frame(local_ddb):
+    ddbo = local_ddb
+    course_id = f"retrace-course-{rand8()}"
+    course_name = f"Retrace Course {rand8()}"
+    course_key = f"retrace-key-{uuid.uuid4().hex[:16]}"
+    user_email = f"retrace-{uuid.uuid4().hex[:8]}@example.com"
+    user_name = "Retrace User"
+    movie_id = odb.new_movie_id()
+    user_id = odb.new_user_id()
+
+    ddbo.put_course({
+        COURSE_ID: course_id,
+        'course_name': course_name,
+        'course_key': course_key,
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+    ddbo.put_user({
+        USER_ID: user_id,
+        'email': user_email,
+        'user_name': user_name,
+        'created': int(time.time()),
+        'enabled': 1,
+        'admin_for_courses': [],
+        'courses': [course_id],
+        'primary_course_id': course_id,
+        'primary_course_name': course_name,
+    })
+    ddbo.put_movie({
+        MOVIE_ID: movie_id,
+        COURSE_ID: course_id,
+        USER_ID: user_id,
+        'user_name': user_name,
+        'title': 'Retrace test movie',
+        'published': 0,
+        'deleted': 0,
+        'description': 'Retrace semantics test.',
+        'movie_zipfile_urn': 's3://bogus/retrace.zip',
+        'movie_data_urn': 's3://bogus/retrace.mov',
+        LAST_FRAME_TRACKED: 2,
+        'created_at': int(time.time()),
+        'date_uploaded': int(time.time()),
+        'fps': "29.92",
+        'total_frames': 10,
+        'total_bytes': 100,
+    })
+
+    for frame_number, label in enumerate(["frame0", "frame1", "frame2"]):
+        ddbo.put_movie_frame({"movie_id": movie_id, "frame_number": frame_number, "frame_urn": f"s3://bogus/{frame_number}.jpg"})
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label=label)],
+        )
+
+    deleted = odb.clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=0)
+    assert deleted == 2
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 0
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'frame0'}
+    ]
