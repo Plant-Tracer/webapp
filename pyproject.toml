@@ -177,5 +177,6 @@ markers = [
 
 env = [
     "PYTEST=1",
-    "AWS_REGION=local"
+    "AWS_REGION=local",
+    "AWS_CONFIG_FILE=/dev/null"
     ]

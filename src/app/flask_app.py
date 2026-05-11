@@ -24,7 +24,9 @@ from .flask_api import api_bp
 from .constants import __version__, GET, GET_POST, C, log_level, logger
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
-from .odb import InvalidAPI_Key, InvalidUser_Email
+from .odb import (InvalidAPI_Key, InvalidUser_Email,
+                  MOVIE_STATE_UPLOADING, MOVIE_STATE_READY,
+                  MOVIE_STATE_TRACING, MOVIE_STATE_TRACING_COMPLETED)
 from . import config_check
 
 DEFAULT_OFFSET = 0
@@ -170,6 +172,15 @@ def _run_config_checks():
     _CONFIG_CHECK_CACHE["r_msg"] = r_msg
     return (d_ok, d_msg, c_ok, c_msg, r_ok, r_msg)
 
+
+@app.context_processor
+def _inject_movie_states():
+    return {'movie_states': {
+        'uploading':         MOVIE_STATE_UPLOADING,
+        'ready':             MOVIE_STATE_READY,
+        'tracing':           MOVIE_STATE_TRACING,
+        'tracing_completed': MOVIE_STATE_TRACING_COMPLETED,
+    }}
 
 @app.before_request
 def _before_request_config_check():

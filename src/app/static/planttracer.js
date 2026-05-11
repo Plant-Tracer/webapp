@@ -744,12 +744,7 @@ function list_movies_data( movies ) {
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
       rows += "<td> Status: "; // #7
-      let statusLabel = '';
-      if (m.status) {
-        statusLabel = m.status;
-      } else {
-        statusLabel = 'N/A';
-      }
+      let statusLabel = m.status || '';
       if (statusLabel) {
         rows += `<span class='processing-state'>${statusLabel}</span> `;
       }
