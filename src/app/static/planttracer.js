@@ -640,7 +640,7 @@ function action_button_clicked( e ) {
 //                           #1          #2               #3               #4              #5                 #6                #7
 const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
-// Phase 3: list shows processing_state. Eventually this list should be server-rendered (Jinja2).
+// Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
   const PUBLISHED = 'published';
   const UNPUBLISHED = 'unpublished';
@@ -744,12 +744,9 @@ function list_movies_data( movies ) {
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
       rows += "<td> Status: "; // #7
-      // Prefer tracking status when available; otherwise fall back to processing_state.
       let statusLabel = '';
       if (m.status) {
-        statusLabel = (m.status === 'TRACKING COMPLETED') ? 'tracked' : 'tracking';
-      } else if (m.processing_state) {
-        statusLabel = m.processing_state;
+        statusLabel = (m.status === 'tracing completed') ? 'tracked' : 'tracking';
       }
       if (statusLabel) {
         rows += `<span class='processing-state'>${statusLabel}</span> `;

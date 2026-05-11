@@ -96,7 +96,7 @@ FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
-# Values for processing_state (single source of truth)
+# Values for the movie status field (single source of truth)
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
 MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
