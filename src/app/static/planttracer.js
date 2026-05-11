@@ -746,7 +746,9 @@ function list_movies_data( movies ) {
       rows += "<td> Status: "; // #7
       let statusLabel = '';
       if (m.status) {
-        statusLabel = (m.status === 'tracing completed') ? 'tracked' : 'tracking';
+        statusLabel = m.status;
+      } else {
+        statusLabel = 'N/A';
       }
       if (statusLabel) {
         rows += `<span class='processing-state'>${statusLabel}</span> `;
