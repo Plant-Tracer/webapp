@@ -705,7 +705,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
         $('#analysis-results').show();
-        graph_data(cc, movie_frames);
+        requestAnimationFrame(() => graph_data(cc, movie_frames));
     }
 }
 

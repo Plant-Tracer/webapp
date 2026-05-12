@@ -1700,6 +1700,8 @@ describe('graph_data', () => {
         ChartSpy = jest.fn().mockImplementation(function () { this.destroy = jest.fn(); });
         global.Chart = ChartSpy;
         global.URL.createObjectURL = global.URL.createObjectURL || jest.fn().mockReturnValue('blob:mock');
+        // graph_data() is deferred via requestAnimationFrame; make it synchronous in tests
+        global.requestAnimationFrame = (cb) => cb(performance.now());
     });
 
     beforeEach(() => {
