@@ -148,6 +148,11 @@ def api_get_logs():
         if val:
             kwargs[kw] = val
 
+    # get_logs requires at least one index key (log_user_id, course_id, or ipaddr).
+    # Default to the current user so the audit page shows their own logs.
+    if not any(k in kwargs for k in ('log_user_id', 'course_id', 'ipaddr')):
+        kwargs['log_user_id'] = get_user_id()
+
     logs    = odb.get_logs(user_id=get_user_id(),**kwargs)
     return {'error':False, 'logs': logs}
 
