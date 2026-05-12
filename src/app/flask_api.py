@@ -227,6 +227,7 @@ def api_bulk_register():
     planttracer_endpoint = request.values.get('planttracer_endpoint') # for emails
     email_addresses      = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
     user_ids             = []
+    email_error          = None
     try:
         for email in email_addresses:
             email = email.strip()
@@ -235,17 +236,25 @@ def api_bulk_register():
             user = odb.register_email(email=email, course_id=course_id, user_name="")
             user_id = user[USER_ID]
             new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
-            mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
             user_ids.append(user_id)
+            try:
+                mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+            except mailer.NoMailerConfiguration:
+                logger.error("no mailer configuration")
+                email_error = "No mailer configured on server; users were registered but login links could not be sent."
+                break
+            except mailer.InvalidMailerConfiguration as e:
+                logger.error("invalid mailer configuration: %s", e)
+                email_error = "Mailer misconfigured on server; users were registered but login links could not be sent."
+                break
     except EmailNotInDatabase:
         return E.INVALID_EMAIL
-    except mailer.NoMailerConfiguration:
-        logger.error("no mailer configuration")
-        return E.NO_MAILER_CONFIGURATION
-    except mailer.InvalidMailerConfiguration as e:
-        logger.error("invalid mailer configuration: %s",e)
-        return E.INVALID_MAILER_CONFIGURATION
-    return {'error':False, 'message':f'Registered {len(email_addresses)} email addresses', 'user_ids':user_ids}
+    count = len(user_ids)
+    if email_error:
+        message = f'Registered {count} user(s), but email delivery failed: {email_error}'
+    else:
+        message = f'Registered {count} email address(es) and sent login links.'
+    return {'error': False, 'message': message, 'user_ids': user_ids}
 
 ################################################################
 ##
