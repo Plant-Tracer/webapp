@@ -99,6 +99,13 @@
         background: transparent !important;
         text-shadow: 2px 2px 5px #9dff2e;
       }
+      #message:not(:empty) {
+        margin-top: 1em;
+        padding: 0.5em 1em 0.5em 1.5em;
+        background-color: rgb(242, 222, 161);
+        display: inline-block;
+        border-radius: 4px;
+      }
     </style>
 
     {% block head %}{% endblock %}
@@ -174,7 +181,7 @@
     </div>
     {% endif %}
 
-    <div id='message' class='alert'><b>{{message}}</b></div>
+    <div id='message' class='alert'>{% if message and message != 'null' %}<b>{{message}}</b>{% endif %}</div>
 
     <div class='content'>
       {% block body %}
