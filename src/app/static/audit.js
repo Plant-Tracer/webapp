@@ -168,4 +168,6 @@ $(document).ready(function() {
     build_audit_table();
 });
 
-module.exports = {build_audit_table}
+if (typeof module != 'undefined') {
+    module.exports = {build_audit_table};
+}
