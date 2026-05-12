@@ -570,7 +570,7 @@ function row_pencil_clicked( e ) {
   console.log('row_pencil_clicked e=',e);
   const target = e.getAttribute('x-target-id'); // name of the target
   console.log('target=',target);
-  const t = $(target).get(0);       // element of the target
+  const t = $(`#${target}`).get(0); // element of the target
   console.log('t=',t);
   const user_id  = t.getAttribute('x-user_id'); // property we are changing
   const movie_id = t.getAttribute('x-movie_id'); // property we are changing
