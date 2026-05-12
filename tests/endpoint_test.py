@@ -19,7 +19,7 @@ from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
 from app.constants import __version__,logger
 
 # Fixtures are imported in conftest.py
-from app.odb import API_KEY, COURSE_ID, USER_ID
+from app.odb import API_KEY, COURSE_ID, USER_ID, USER_NAME
 from .constants import ADMIN_EMAIL
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
@@ -94,6 +94,78 @@ def test_bulk_register_invalid_email(client, new_course, mailer_config):
     """
     # TODO: test body
     assert True
+
+def test_bulk_register_with_names(client, new_course, mailer_config):
+    """Verify that names submitted with bulk-register are stored as user_name values."""
+    email_address = 'named_user@example.com'
+    user_name     = 'Alice Example'
+    course_id     = new_course[COURSE_ID]
+    api_key       = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    assert is_api_key(api_key)
+
+    r = client.post('/api/bulk-register',
+                    data={'api_key': api_key,
+                          'course_id': str(course_id),
+                          'email-addresses': email_address,
+                          'names': user_name,
+                          'planttracer-endpoint': 'https://example.com/',
+                         })
+    res = r.json
+    assert res['error'] is False
+    assert res['message'].startswith('Registered 1')
+    registered_user = odb.get_user(user_id=res['user_ids'][0])
+    assert registered_user[USER_NAME] == user_name
+    odb.delete_user(user_id=res['user_ids'][0], purge_movies=True)
+
+
+def test_bulk_register_no_names(client, new_course, mailer_config):
+    """Verify that omitting the names list results in empty string user_name values."""
+    email_address = 'noname_user@example.com'
+    course_id     = new_course[COURSE_ID]
+    api_key       = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    assert is_api_key(api_key)
+
+    r = client.post('/api/bulk-register',
+                    data={'api_key': api_key,
+                          'course_id': str(course_id),
+                          'email-addresses': email_address,
+                          'planttracer-endpoint': 'https://example.com/',
+                         })
+    res = r.json
+    assert res['error'] is False
+    assert res['message'].startswith('Registered 1')
+    registered_user = odb.get_user(user_id=res['user_ids'][0])
+    assert registered_user[USER_NAME] == ''
+    odb.delete_user(user_id=res['user_ids'][0], purge_movies=True)
+
+
+def test_bulk_register_partial_names(client, new_course, mailer_config):
+    """Verify that a names list shorter than email-addresses fills provided names and
+    leaves remaining registrations with empty string user_name values."""
+    email1    = 'partial_named@example.com'
+    email2    = 'partial_noname@example.com'
+    user_name = 'Bob Partial'
+    course_id = new_course[COURSE_ID]
+    api_key   = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    assert is_api_key(api_key)
+
+    r = client.post('/api/bulk-register',
+                    data={'api_key': api_key,
+                          'course_id': str(course_id),
+                          'email-addresses': f'{email1}\n{email2}',
+                          'names': user_name,
+                          'planttracer-endpoint': 'https://example.com/',
+                         })
+    res = r.json
+    assert res['error'] is False
+    assert res['message'].startswith('Registered 2')
+    user0 = odb.get_user(user_id=res['user_ids'][0])
+    user1 = odb.get_user(user_id=res['user_ids'][1])
+    assert user0[USER_NAME] == user_name
+    assert user1[USER_NAME] == ''
+    odb.delete_user(user_id=res['user_ids'][0], purge_movies=True)
+    odb.delete_user(user_id=res['user_ids'][1], purge_movies=True)
+
 
 # TODO: api/bulk-register: invalid course id
 # TODO: api/bulk-register: no mailer configuration

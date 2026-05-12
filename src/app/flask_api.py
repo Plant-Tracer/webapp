@@ -231,14 +231,17 @@ def api_bulk_register():
 
     planttracer_endpoint = request.values.get('planttracer_endpoint') # for emails
     email_addresses      = request.values.get('email-addresses').replace(","," ").replace(";"," ").replace(" ","\n").split("\n")
+    names_raw            = request.values.get('names', '')
+    names                = [n.strip() for n in names_raw.split('\n')] if names_raw.strip() else []
     user_ids             = []
     email_error          = None
     try:
-        for email in email_addresses:
+        for idx, email in enumerate(email_addresses):
             email = email.strip()
             if not validate_email(email, check_mx=C.CHECK_MX):
                 return E.INVALID_EMAIL
-            user = odb.register_email(email=email, course_id=course_id, user_name="")
+            user_name = names[idx] if idx < len(names) else ""
+            user = odb.register_email(email=email, course_id=course_id, user_name=user_name)
             user_id = user[USER_ID]
             new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
             user_ids.append(user_id)

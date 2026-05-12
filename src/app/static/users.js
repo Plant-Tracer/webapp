@@ -20,8 +20,6 @@ function bulk_register_users() {
         "email-addresses": email_addresses
     };
 
-    console.log("before fetch");
-
     $.post(`${API_BASE}api/bulk-register`, payload)
         .done((data) => {
             if (data.error !== false) {
@@ -37,7 +35,6 @@ function bulk_register_users() {
             console.error("Bulk register error:", error);
         });
 
-    console.log("after fetch initiated");
 }
 
 function bulk_register_setup() {
