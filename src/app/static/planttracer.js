@@ -570,7 +570,7 @@ function row_pencil_clicked( e ) {
   console.log('row_pencil_clicked e=',e);
   const target = e.getAttribute('x-target-id'); // name of the target
   console.log('target=',target);
-  const t = $(target).get(0);       // element of the target
+  const t = $(`#${target}`).get(0); // element of the target
   console.log('t=',t);
   const user_id  = t.getAttribute('x-user_id'); // property we are changing
   const movie_id = t.getAttribute('x-movie_id'); // property we are changing
@@ -640,7 +640,7 @@ function action_button_clicked( e ) {
 //                           #1          #2               #3               #4              #5                 #6                #7
 const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
 
-// Phase 3: list shows processing_state. Eventually this list should be server-rendered (Jinja2).
+// Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
   const PUBLISHED = 'published';
   const UNPUBLISHED = 'unpublished';
@@ -744,13 +744,7 @@ function list_movies_data( movies ) {
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
       rows += "<td> Status: "; // #7
-      // Prefer tracking status when available; otherwise fall back to processing_state.
-      let statusLabel = '';
-      if (m.status) {
-        statusLabel = (m.status === 'TRACKING COMPLETED') ? 'tracked' : 'tracking';
-      } else if (m.processing_state) {
-        statusLabel = m.processing_state;
-      }
+      let statusLabel = m.status || '';
       if (statusLabel) {
         rows += `<span class='processing-state'>${statusLabel}</span> `;
       }
@@ -914,8 +908,9 @@ window.helpers = {
   analyze_clicked,
   row_pencil_clicked,
   action_button_clicked};
-// Expose page-ready functions so inline scripts in list.html and upload.html can call them
+// Expose page-ready functions so inline scripts in list.html, upload.html and users.html can call them
 window.list_ready_function = list_ready_function;
+window.list_users = list_users;
 window.upload_ready_function = upload_ready_function;
 window.check_upload_metadata = check_upload_metadata;
 window.sync_attribution_ui = sync_attribution_ui;

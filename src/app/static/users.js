@@ -44,6 +44,8 @@ function bulk_register_setup() {
     $('#register-emails-button').on('click', () => { bulk_register_users(); });
 }
 
+window.bulk_register_setup = bulk_register_setup;
+
 if (typeof module != 'undefined'){
     module.exports = { bulk_register_setup, bulk_register_users }
 }

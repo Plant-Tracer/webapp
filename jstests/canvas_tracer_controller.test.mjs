@@ -533,7 +533,7 @@ describe('trace_movie_one_frame', () => {
         const tc = callTmof(null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 320, naturalHeight: 240 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
         expect(canvasIdx).toBeGreaterThanOrEqual(0);
         expect(videoIdx).toBeGreaterThanOrEqual(0);
@@ -545,7 +545,7 @@ describe('trace_movie_one_frame', () => {
         const tc = callTmof(null, { width: 200, height: 150 });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 320, naturalHeight: 240 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
     });
 
@@ -553,7 +553,7 @@ describe('trace_movie_one_frame', () => {
         const tc = callTmof(null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
     });
 
@@ -743,7 +743,7 @@ describe('trace_movie_frames', () => {
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
         expect(canvasIdx).toBeGreaterThanOrEqual(0);
         expect(videoIdx).toBeGreaterThanOrEqual(0);
@@ -755,7 +755,7 @@ describe('trace_movie_frames', () => {
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: 200, height: 150 });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
     });
 
@@ -763,7 +763,7 @@ describe('trace_movie_frames', () => {
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
     });
 
@@ -771,7 +771,7 @@ describe('trace_movie_frames', () => {
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback(null);
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' canvas'));
+        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
     });
 });
@@ -872,7 +872,7 @@ describe('trace_movie', () => {
         trace_movie('div#tracer', 'movie-123', 'api-key');
         // trace_movie uses .prop(); TracerController constructor uses .attr() — distinguishable
         const idx = mock$.mock.calls.findIndex(
-            (args, i) => args[0] === 'div#tracer canvas' &&
+            (args, i) => args[0] === 'div#tracer #canvas-id' &&
                 mock$.mock.results[i].value.prop.mock.calls.some(c => c[0] === 'width' && c[1] === 320)
         );
         expect(idx).toBeGreaterThanOrEqual(0);
@@ -882,7 +882,7 @@ describe('trace_movie', () => {
         mockApiResponse(makeResp({ width: null, height: null }));
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const propResizeCalled = mock$.mock.calls.some(
-            (args, i) => args[0] === 'div#tracer canvas' &&
+            (args, i) => args[0] === 'div#tracer #canvas-id' &&
                 mock$.mock.results[i].value.prop.mock.calls.some(c => c[0] === 'width')
         );
         expect(propResizeCalled).toBe(false);
@@ -1700,6 +1700,8 @@ describe('graph_data', () => {
         ChartSpy = jest.fn().mockImplementation(function () { this.destroy = jest.fn(); });
         global.Chart = ChartSpy;
         global.URL.createObjectURL = global.URL.createObjectURL || jest.fn().mockReturnValue('blob:mock');
+        // graph_data() is deferred via requestAnimationFrame; make it synchronous in tests
+        global.requestAnimationFrame = (cb) => cb(performance.now());
     });
 
     beforeEach(() => {

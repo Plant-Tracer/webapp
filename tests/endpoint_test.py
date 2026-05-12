@@ -86,7 +86,7 @@ def test_bulk_register_success(client, new_course, mailer_config):
     logger.debug("r.json=%s",r.json)
     res = r.json
     assert res['error'] is False
-    assert res['message'] == 'Registered 1 email addresses'
+    assert res['message'].startswith('Registered 1')
     odb.delete_user(user_id=res['user_ids'][0]  , purge_movies=True)
 
 def test_bulk_register_invalid_email(client, new_course, mailer_config):

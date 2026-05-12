@@ -36,6 +36,7 @@
       const API_BASE = "{{API_BASE}}";
       const STATIC_BASE = "{{STATIC_BASE}}";
       const LAMBDA_API_BASE = "{{ lambda_api_base }}";
+      const MOVIE_STATE = {{ movie_states | tojson }};
       {% if logged_in %}
       const api_key = "{{api_key}}";
       const user_id = "{{user_id}}";
@@ -97,6 +98,13 @@
       .pure-menu-item.pure-menu-selected > .pure-menu-link {
         background: transparent !important;
         text-shadow: 2px 2px 5px #9dff2e;
+      }
+      #message:not(:empty) {
+        margin-top: 1em;
+        padding: 0.5em 1em 0.5em 1.5em;
+        background-color: rgb(242, 222, 161);
+        display: inline-block;
+        border-radius: 4px;
       }
     </style>
 
@@ -173,7 +181,7 @@
     </div>
     {% endif %}
 
-    <div id='message' class='alert'><b>{{message}}</b></div>
+    <div id='message' class='alert'>{% if message and message != 'null' %}<b>{{message}}</b>{% endif %}</div>
 
     <div class='content'>
       {% block body %}

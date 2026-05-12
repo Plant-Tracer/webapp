@@ -20,7 +20,7 @@ from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
     COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO, InvalidCourse_Id,
+    DDBO, InvalidCourse_Id, MOVIE_STATUS, MOVIE_STATE_READY,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, env_value
@@ -73,6 +73,7 @@ def populate_demo_movies():
                                             title=DEMO_MOVIE_TITLE.format(ct=ct),
                                             description=DEMO_MOVIE_DESCRIPTION)
             set_movie_data(movie_id=movie_id, movie_data=f.read())
+            DDBO().update_table(DDBO().movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.
         base, _ = os.path.splitext(fn)
         _trackpoints_path = os.path.join(TEST_DATA_DIR, base + '_trackpoints.json')

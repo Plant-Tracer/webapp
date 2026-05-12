@@ -64,10 +64,11 @@ def local_ddb():
 
     if os.environ.get(C.AWS_REGION,'local') == "local":
 
-        # Running locally.
-
+        # Running locally. Point AWS_CONFIG_FILE to /dev/null so botocore does not
+        # pick up SSO/login_session profiles from ~/.aws/config and try to refresh them.
         os.environ[ C.AWS_REGION ]    = 'local'
-        os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
+        os.environ[ 'AWS_CONFIG_FILE' ] = '/dev/null'
+        os.environ[ C.AWS_ENDPOINT_URL_DYNAMODB ] = C.TEST_ENDPOINT_URL_DYNAMODB
         os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
         os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
