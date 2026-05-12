@@ -16,7 +16,7 @@ from email.parser import BytesParser
 from email import policy
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from jinja2.nativetypes import NativeEnvironment
 
 from .auth import get_aws_secret_for_arn
@@ -137,7 +137,7 @@ def send_message(*,
     else:
         try:
             _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg, debug=debug)
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             raise InvalidMailerConfiguration(str(e)) from e
 
 
