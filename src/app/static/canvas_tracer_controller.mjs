@@ -93,7 +93,7 @@ class TracerController extends MovieController {
         this.dl_api_key.attr("value", api_key);
         this.dl_movie_id = $("#dl_movie_id");
         this.dl_movie_id.attr("value", this.movie_id);
-        this.download_button = $("#download_button");
+        this.download_button = $(".download_button");
         this.download_button.hide(); // Hide the download link until we track or retrack
 
         // Size the canvas and video from metadata when present; else leave default until first frame loads.
