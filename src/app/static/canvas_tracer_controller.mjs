@@ -100,7 +100,7 @@ class TracerController extends MovieController {
         const w = this.movie_metadata.width;
         const h = this.movie_metadata.height;
         if (w != null && h != null && w > 0 && h > 0) {
-            $(this.div_selector + " canvas").attr('width', w).attr('height', h);
+            $(this.div_selector + " #canvas-id").attr('width', w).attr('height', h);
             $(this.div_selector + " video").attr('width', w).attr('height', h);
         }
 
@@ -628,7 +628,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             if (nw > 0 && nh > 0) {
                 cc.movie_metadata.width = nw;
                 cc.movie_metadata.height = nh;
-                $(cc.div_selector + ' canvas').attr('width', nw).attr('height', nh);
+                $(cc.div_selector + ' #canvas-id').attr('width', nw).attr('height', nh);
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
@@ -691,7 +691,7 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
             if (nw > 0 && nh > 0) {
                 cc.movie_metadata.width = nw;
                 cc.movie_metadata.height = nh;
-                $(cc.div_selector + ' canvas').attr('width', nw).attr('height', nh);
+                $(cc.div_selector + ' #canvas-id').attr('width', nw).attr('height', nh);
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
@@ -913,7 +913,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         const width = resp.metadata.width;
         const height = resp.metadata.height;
         if (width != null && height != null && width > 0 && height > 0) {
-            $(div_controller + ' canvas').prop('width', width).prop('height', height);
+            $(div_controller + ' #canvas-id').prop('width', width).prop('height', height);
         }
         if (!resp.metadata.movie_zipfile_url) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
