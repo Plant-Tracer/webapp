@@ -908,8 +908,9 @@ window.helpers = {
   analyze_clicked,
   row_pencil_clicked,
   action_button_clicked};
-// Expose page-ready functions so inline scripts in list.html and upload.html can call them
+// Expose page-ready functions so inline scripts in list.html, upload.html and users.html can call them
 window.list_ready_function = list_ready_function;
+window.list_users = list_users;
 window.upload_ready_function = upload_ready_function;
 window.check_upload_metadata = check_upload_metadata;
 window.sync_attribution_ui = sync_attribution_ui;
