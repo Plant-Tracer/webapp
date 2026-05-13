@@ -872,7 +872,8 @@ function list_users_data( users, course_array ) {
       if (current_course !== null) {
         ret += '</tbody></table>\n';
       }
-      ret += `<p><b>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</b></p>\n`;
+      const course_label = (user.primary_course_id === user_primary_course_id) ? 'Primary course' : 'Course';
+      ret += `<p><b>${course_label}: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</b></p>\n`;
       ret += '<table><tbody>\n';
       ret += '<tr><th>Name</th><th>Email</th><th>ID</th><th>First Seen</th><th>Last Seen</th></tr>\n';
       current_course = user.primary_course_id;

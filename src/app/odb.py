@@ -953,6 +953,9 @@ def list_users_courses(*, user_id):
             course_ids.add(u[PRIMARY_COURSE_ID])
     courses_list = [c for c in (ddbo.get_course(cid) for cid in course_ids) if c]
 
+    # Sort by primary_course_id so the JS grouping logic produces one section per course
+    users_list.sort(key=lambda u: u.get(PRIMARY_COURSE_ID, ''))
+
     return {USERS: users_list, COURSES: courses_list}
 
 

@@ -24,6 +24,7 @@ beforeAll(() => {
 describe('list_users_data', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.user_primary_course_id = 1;
     document.body.innerHTML = '<div id="your-users"></div>';
   });
 
@@ -92,5 +93,47 @@ describe('list_users_data', () => {
 
     const html = document.getElementById('your-users').innerHTML;
     expect(html).not.toContain('Click here to invite a user');
+  });
+
+  test('should label primary course as "Primary course" and others as "Course"', () => {
+    const course_array = {
+      1: { course_id: 1, course_name: 'Primary Course' },
+      2: { course_id: 2, course_name: 'Other Course' },
+    };
+    global.user_primary_course_id = 1;
+    const users = [
+      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', primary_course_id: 1, first: null, last: null },
+      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   primary_course_id: 2, first: null, last: null },
+    ];
+
+    list_users_data(users, course_array);
+
+    const html = document.getElementById('your-users').innerHTML;
+    expect(html).toContain('Primary course: Primary Course');
+    expect(html).toContain('Course: Other Course');
+    expect(html).not.toContain('Primary course: Other Course');
+  });
+
+  test('should not duplicate course sections when users are sorted by primary_course_id', () => {
+    const course_array = {
+      1: { course_id: 1, course_name: 'Course One' },
+      2: { course_id: 2, course_name: 'Course Two' },
+    };
+    global.user_primary_course_id = 1;
+    // Users already sorted by primary_course_id (as the backend now guarantees)
+    const users = [
+      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', primary_course_id: 1, first: null, last: null },
+      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   primary_course_id: 2, first: null, last: null },
+      { user_id: 30, user_name: 'Carol', email: 'carol@example.com', primary_course_id: 2, first: null, last: null },
+    ];
+
+    list_users_data(users, course_array);
+
+    const html = document.getElementById('your-users').innerHTML;
+    // Each course heading should appear exactly once
+    const matches1 = (html.match(/Course One/g) || []).length;
+    const matches2 = (html.match(/Course Two/g) || []).length;
+    expect(matches1).toBe(1);
+    expect(matches2).toBe(1);
   });
 });
