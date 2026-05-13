@@ -1,6 +1,20 @@
 <!-- -*- mode: html -*- -->
 {% extends 'base.html' %}
 
+{% block head %}
+<style>
+  #your-users table {
+    border-collapse: collapse;
+  }
+  #your-users th,
+  #your-users td {
+    border: 1px solid #ccc;
+    padding: 4px 8px;
+    text-align: left;
+  }
+</style>
+{% endblock %}
+
 {% block body %}
 
 <h2>Users</h2>

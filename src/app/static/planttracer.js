@@ -879,7 +879,7 @@ function list_users_data( users, course_array ) {
     return ret;
   }
   users.forEach( user => ( h+= user_html(user) ));
-  h += '</tbody>';
+  h += '</tbody></table>';
   div.html(h);
 }
 
