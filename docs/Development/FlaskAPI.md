@@ -26,7 +26,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 All endpoints return JSON. Successful responses always include `"error": false`. Error
 responses always include `"error": true` and a `"message"` string explaining the problem.
 
-```json
+```text
 { "error": false, ... }
 { "error": true, "message": "Human-readable reason" }
 ```
@@ -36,8 +36,6 @@ responses always include `"error": true` and a `"message"` string explaining the
 ## Endpoints
 
 ### User & Registration
-
----
 
 #### `POST /api/register`
 
@@ -118,15 +116,13 @@ Validate an API key and return the associated user record.
 
 **Response**
 
-```json
+```text
 { "error": false, "userinfo": { "user_id": "u...", "email": "...", ... } }
 ```
 
 ---
 
 ### User Listing
-
----
 
 #### `POST /api/list-users`
 #### `POST /api/list-users-courses`
@@ -141,7 +137,7 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 **Response**
 
-```json
+```text
 {
   "error": false,
   "users": [
@@ -169,8 +165,6 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 ### Movies
 
----
-
 #### `POST /api/new-movie`
 
 Create a movie record and obtain a presigned S3 POST URL for uploading the video file.
@@ -190,7 +184,7 @@ After uploading to S3, call the Lambda `start-processing` endpoint.
 
 **Response**
 
-```json
+```text
 {
   "error": false,
   "movie_id": "m...",
@@ -209,7 +203,7 @@ List all movies visible to the caller (their own movies and published movies in 
 
 **Response**
 
-```json
+```text
 { "error": false, "movies": [ { "movie_id": "m...", "title": "...", ... } ] }
 ```
 
@@ -231,7 +225,7 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 
 **Response**
 
-```json
+```text
 {
   "error": false,
   "metadata": { "movie_id": "m...", "title": "...", "status": "...", ... },
@@ -341,8 +335,6 @@ Set a single metadata property on a movie or user record.
 
 ### Logging
 
----
-
 #### `POST /api/get-logs`
 #### `POST /api/get-log`
 
@@ -356,7 +348,7 @@ if none is provided, defaults to the caller's own logs.
 
 **Response**
 
-```json
+```text
 { "error": false, "logs": [ { "log_id": "...", "time_t": 1714000000, ... } ] }
 ```
 
@@ -364,15 +356,13 @@ if none is provided, defaults to the caller's own logs.
 
 ### Infrastructure
 
----
-
 #### `GET /api/ver`
 
 Return the application version. No authentication required.
 
 **Response**
 
-```json
+```text
 { "error": false, "version": "0.9.7", ... }
 ```
 
