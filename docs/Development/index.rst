@@ -21,6 +21,7 @@ Developer Documentation
    MOVIE_METADATA
    ArchitectureDesign
    ClientLambdaAPI
+   FlaskAPI
    ProcessingPhases
    THEORY_OF_DESIGN
    NOTES_ON_SIMPLIFYING
