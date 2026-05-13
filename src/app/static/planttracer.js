@@ -872,10 +872,10 @@ function list_users_data( users, course_array ) {
     if (current_course != user.primary_course_id) {
       ret += `<tr><td colspan='4'>&nbsp;</td></tr>\n`;
       ret += `<tr><th colspan='4'>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</th></tr>\n`;
-      ret += '<tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>\n';
+      ret += '<tr><th>Name</th><th>Email</th><th>ID</th><th>First Seen</th><th>Last Seen</th></tr>\n';
       current_course = user.primary_course_id;
     }
-    ret +=  `<tr><td>${user.user_name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
+    ret +=  `<tr><td>${user.user_name}</td><td>${user.email}</td><td>${user.user_id}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
     return ret;
   }
   users.forEach( user => ( h+= user_html(user) ));

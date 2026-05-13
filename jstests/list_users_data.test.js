@@ -43,7 +43,7 @@ describe('list_users_data', () => {
     list_users_data(users, course_array);
 
     const html = document.getElementById('your-users').innerHTML;
-    expect(html).toContain(`<td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td>`);
+    expect(html).toContain(`<td>${userData.user1.name}</td><td>${userData.user1.email}</td><td>${userData.user1.user_id}</td>`);
   });
 
   test('should correctly classify and display inactive users', () => {
@@ -70,8 +70,8 @@ describe('list_users_data', () => {
     list_users_data(users, course_array);
 
     const html = document.getElementById('your-users').innerHTML;
-    expect(html).toContain(`<td>${userData.user1.name} (${userData.user1.user_id}) </td><td>${userData.user1.email}</td>`);
-    expect(html).toContain(`<td>${userData.user2.name} (${userData.user2.user_id}) </td><td>${userData.user2.email}</td>`);
+    expect(html).toContain(`<td>${userData.user1.name}</td><td>${userData.user1.email}</td><td>${userData.user1.user_id}</td>`);
+    expect(html).toContain(`<td>${userData.user2.name}</td><td>${userData.user2.email}</td><td>${userData.user2.user_id}</td>`);
   });
 
   test('should display a link to invite users for admins', () => {
