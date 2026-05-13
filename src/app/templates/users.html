@@ -20,11 +20,9 @@
 <h2>Users</h2>
 
 {% if admin %}
-Below is a list of all of the users in all of the courses in which you
-are an admin.
+Below is a list of all of the users in all of the courses in which you are an admin.
 {% else %}
-Below is a list of all users registered on this system for your course
-{{ primary_course_name }}.
+Below is your user information for course {{ primary_course_name }}.
 {% endif %}
 
 <div id='your-users'></div>
