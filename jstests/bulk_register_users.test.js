@@ -50,6 +50,7 @@ describe('bulk_register_users_func', () => {
             planttracer_endpoint: window.origin + "",
             course_id: user_primary_course_id,
             "email-addresses": 'test@example.com',
+            "names": '',
         });
         expect($('#message').html()).toBe('Registered 1 email addresses');
     });
@@ -72,8 +73,66 @@ describe('bulk_register_users_func', () => {
             planttracer_endpoint: window.origin + "",
             course_id: user_primary_course_id,
             "email-addresses": 'missingdomain@.com',
+            "names": '',
         });
         expect($('#message').html()).toBe('error: Invalid email address');
+    });
+
+    test('should parse email,name line and send both fields', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        }));
+
+        $('#br_email_addresses').val('alice@example.com,Alice Smith');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com',
+            "names": 'Alice Smith',
+        });
+    });
+
+    test('should parse multiple lines with mixed name presence', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        }));
+
+        $('#br_email_addresses').val('alice@example.com, Alice Smith\nbob@example.com\ncharlie@example.com, Charlie Darwin');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com\nbob@example.com\ncharlie@example.com',
+            "names": 'Alice Smith\n\nCharlie Darwin',
+        });
+    });
+
+    test('should skip blank lines when parsing input', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        }));
+
+        $('#br_email_addresses').val('alice@example.com\n\nbob@example.com');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com\nbob@example.com',
+            "names": '\n',
+        });
     });
 
 });
