@@ -370,6 +370,33 @@ class DDBO:
         items = response.get('Items', [])
         return items[0][API_KEY] if items else None
 
+    def get_user_login_times(self, user_id):
+        """Return (first_used_at, last_used_at) for a user by aggregating across all their api_keys.
+        Returns (None, None) if the user has no api_keys or none have been used yet."""
+        last_evaluated_key = None
+        first_used = None
+        last_used = None
+        while True:
+            kwargs = {
+                'IndexName': 'user_id_idx',
+                'KeyConditionExpression': Key(USER_ID).eq(user_id),
+                'ProjectionExpression': 'first_used_at, last_used_at',
+            }
+            if last_evaluated_key:
+                kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**kwargs)
+            for item in response.get('Items', []):
+                f = item.get('first_used_at')
+                l = item.get('last_used_at')
+                if f is not None:
+                    first_used = f if first_used is None else min(first_used, f)
+                if l is not None:
+                    last_used = l if last_used is None else max(last_used, l)
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return first_used, last_used
+
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
                                   ConditionExpression = 'attribute_exists(api_key)' )
@@ -899,6 +926,9 @@ def list_users_courses(*, user_id):
     admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
 
     if not admin_for_courses:
+        first, last = ddbo.get_user_login_times(user_id)
+        user['first'] = first
+        user['last'] = last
         return {USERS: [user],
                 COURSES: [ddbo.get_course(course_id) for course_id in user.get(COURSES, [])]}
 
@@ -911,6 +941,9 @@ def list_users_courses(*, user_id):
                 seen_user_ids.add(enrolled_user_id)
                 enrolled_user = ddbo.get_user(enrolled_user_id)
                 if enrolled_user:
+                    first, last = ddbo.get_user_login_times(enrolled_user_id)
+                    enrolled_user['first'] = first
+                    enrolled_user['last'] = last
                     users_list.append(enrolled_user)
 
     # Include all admin courses plus any primary courses referenced by the returned users

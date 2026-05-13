@@ -125,6 +125,21 @@ def test_course_list(client, new_course):
     assert users1[0]['user_name'] == users2[0]['user_name']
 
 
+def test_first_last_login_times(client, new_course):
+    """first/last fields in list-users response should be populated after a user has authenticated."""
+    admin_email = new_course[ADMIN_EMAIL]
+    admin_id    = new_course['admin_id']
+
+    # Give the admin an api_key and use it (triggers first_used_at / last_used_at recording)
+    admin_api_key = odb.make_new_api_key(email=admin_email)
+    odb.validate_api_key(admin_api_key)   # simulates a login
+
+    recs = odb.list_users_courses(user_id=admin_id)
+    admin_user = next(u for u in recs['users'] if u[USER_ID] == admin_id)
+    assert admin_user.get('first') is not None, "first should be set after login"
+    assert admin_user.get('last') is not None, "last should be set after login"
+
+
 def test_admin_sees_all_enrolled_users(client, new_course):
     """An admin calling list-users should see every user enrolled in their course,
     not just themselves (regression test for issue #955)."""
