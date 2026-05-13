@@ -163,3 +163,55 @@ def test_admin_sees_all_enrolled_users(client, new_course):
     http_ids = {u['user_id'] for u in res['users']}
     assert admin_id in http_ids
     assert user_id in http_ids
+
+
+def test_admin_two_courses(client, new_course):
+    """An admin for two courses should see all users from both courses,
+    and both courses should appear in the courses list."""
+    admin_id    = new_course['admin_id']
+    admin_email = new_course[ADMIN_EMAIL]
+    user1_id    = new_course[USER_ID]        # enrolled in course 1 via fixture
+
+    # Create a second course and enroll a distinct user in it
+    course2_id  = 'TestCourse2-' + str(uuid.uuid4())[0:8]
+    course2_key = 'key2-' + str(uuid.uuid4())[0:8]
+    odb.create_course(course_id=course2_id, course_name='Second Course', course_key=course2_key)
+
+    user2_dict  = odb.register_email(email=f'user2-{uuid.uuid4()!s:.8}@example.com',
+                                     user_name='Course2 User',
+                                     course_id=course2_id)
+    user2_id    = user2_dict[USER_ID]
+
+    # Make the fixture admin an admin of the second course too
+    odb.add_course_admin(admin_id=admin_id, course_id=course2_id)
+
+    try:
+        recs         = odb.list_users_courses(user_id=admin_id)
+        returned_ids = {u[USER_ID] for u in recs['users']}
+        course_ids   = {c['course_id'] for c in recs['courses']}
+
+        # All three users (admin + one per course) should be present
+        assert admin_id in returned_ids, "admin should see themselves"
+        assert user1_id in returned_ids, "admin should see user from course 1"
+        assert user2_id in returned_ids, "admin should see user from course 2"
+
+        # Both courses should be in the courses list
+        assert new_course[COURSE_ID] in course_ids, "course 1 should be in courses list"
+        assert course2_id in course_ids,             "course 2 should be in courses list"
+
+        # Verify via the HTTP endpoint too
+        admin_api_key = odb.make_new_api_key(email=admin_email)
+        response  = client.post('/api/list-users', data={'api_key': admin_api_key})
+        res       = response.get_json()
+        assert res['error'] is False
+        http_ids      = {u['user_id'] for u in res['users']}
+        http_course_ids = {c['course_id'] for c in res['courses']}
+        assert admin_id in http_ids
+        assert user1_id in http_ids
+        assert user2_id in http_ids
+        assert course2_id in http_course_ids
+
+    finally:
+        odb.remove_course_admin(admin_id=admin_id, course_id=course2_id)
+        odb.delete_user(user_id=user2_id, purge_movies=True)
+        odb.delete_course(course_id=course2_id)
