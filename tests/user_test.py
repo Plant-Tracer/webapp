@@ -8,7 +8,7 @@ import copy
 from app import odb
 from app import odbmaint
 from app.constants import C,logger
-from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY
+from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY, USER_ID
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 # Fixtures are imported in conftest.py
@@ -120,6 +120,31 @@ def test_course_list(client, new_course):
     assert res['error'] is False
     users2 = res['users']
 
-    # There is only an admin in the course. Make sure it is the same
-    assert len(users2) in [1]
+    # Regular user is not an admin: they see only themselves
+    assert len(users2) == 1
     assert users1[0]['user_name'] == users2[0]['user_name']
+
+
+def test_admin_sees_all_enrolled_users(client, new_course):
+    """An admin calling list-users should see every user enrolled in their course,
+    not just themselves (regression test for issue #955)."""
+    admin_id    = new_course['admin_id']
+    admin_email = new_course[ADMIN_EMAIL]
+    user_id     = new_course[USER_ID]
+
+    # Give the admin an API key so they can call the endpoint
+    admin_api_key = odb.make_new_api_key(email=admin_email)
+
+    # list_users_courses via the ODB layer
+    recs = odb.list_users_courses(user_id=admin_id)
+    returned_ids = {u[USER_ID] for u in recs['users']}
+    assert admin_id in returned_ids, "admin should see themselves"
+    assert user_id in returned_ids, "admin should see the enrolled regular user"
+
+    # Verify the same through the HTTP endpoint
+    response = client.post('/api/list-users', data={'api_key': admin_api_key})
+    res = response.get_json()
+    assert res['error'] is False
+    http_ids = {u['user_id'] for u in res['users']}
+    assert admin_id in http_ids
+    assert user_id in http_ids
