@@ -72,13 +72,12 @@ def local_ddb():
         os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
         os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
-    # If no prefix is specified, create a random test prefix
-    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') == '':
-        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
-
-    # Wipe and recreate the tables if running locally
+    # Wipe and recreate the tables if running locally.
+    # Always generate a fresh random prefix so tests never touch demo- or any
+    # other existing tables that may be running alongside the test suite.
     created_test_tables = False
     if os.environ[ C.AWS_REGION ] == 'local':
+        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
         odbmaint.drop_tables(silent_warnings=True)
         odbmaint.create_tables()
         created_test_tables = True

@@ -863,23 +863,30 @@ function list_ready_function() {
 function list_users_data( users, course_array ) {
   let current_course = null;
   let div = $('#your-users');
-  let h = '<table>';
-  h += '<tbody>';
+  let h = '';
   function user_html(user) {
     let d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
     let d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
     let ret = '';
     if (current_course != user.primary_course_id) {
-      ret += `<tr><td colspan='4'>&nbsp;</td></tr>\n`;
-      ret += `<tr><th colspan='4'>Primary course: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</th></tr>\n`;
-      ret += '<tr><th>Name</th><th>Email</th><th>First Seen</th><th>Last Seen</th></tr>\n';
+      if (current_course !== null) {
+        ret += '</tbody></table>\n';
+      }
+      const course_label = (user.primary_course_id === user_primary_course_id) ? 'Primary course' : 'Course';
+      ret += `<p><b>${course_label}: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</b></p>\n`;
+      ret += '<table><tbody>\n';
+      ret += '<tr><th>Name</th><th>Email</th><th>ID</th><th>First Seen</th><th>Last Seen</th></tr>\n';
       current_course = user.primary_course_id;
     }
-    ret +=  `<tr><td>${user.user_name} (${user.user_id}) </td><td>${user.email}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
+    ret +=  `<tr><td>${user.user_name}</td><td>${user.email}</td><td>${user.user_id}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
     return ret;
   }
   users.forEach( user => ( h+= user_html(user) ));
-  h += '</tbody>';
+  if (current_course !== null) {
+    h += '</tbody></table>';
+  } else {
+    h += '<table><tbody></tbody></table>';
+  }
   div.html(h);
 }
 

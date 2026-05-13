@@ -370,6 +370,33 @@ class DDBO:
         items = response.get('Items', [])
         return items[0][API_KEY] if items else None
 
+    def get_user_login_times(self, user_id):
+        """Return (first_used_at, last_used_at) for a user by aggregating across all their api_keys.
+        Returns (None, None) if the user has no api_keys or none have been used yet."""
+        last_evaluated_key = None
+        first_used = None
+        last_used = None
+        while True:
+            kwargs = {
+                'IndexName': 'user_id_idx',
+                'KeyConditionExpression': Key(USER_ID).eq(user_id),
+                'ProjectionExpression': 'first_used_at, last_used_at',
+            }
+            if last_evaluated_key:
+                kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**kwargs)
+            for item in response.get('Items', []):
+                f = item.get('first_used_at')
+                l = item.get('last_used_at')
+                if f is not None:
+                    first_used = f if first_used is None else min(first_used, f)
+                if l is not None:
+                    last_used = l if last_used is None else max(last_used, l)
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return first_used, last_used
+
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
                                   ConditionExpression = 'attribute_exists(api_key)' )
@@ -891,13 +918,49 @@ def list_users_courses(*, user_id):
     'courses' - all of the courses to which the user has access, and all the people in them.
     :param: user_id - the user doing the listing (determines what they can see)
 
-    NOTE: With MySQL users could only see the course list if they were admins.
-    With DynamoDB, users can see the full course list for all of their courses.
+    Admins see every user enrolled in each of their admin courses.
+    Non-admins see only themselves.
     """
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
-    return {USERS: [user],
-            COURSES :  [ddbo.get_course(course_id) for course_id in user[ COURSES ] ] }
+    admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
+
+    if not admin_for_courses:
+        first, last = ddbo.get_user_login_times(user_id)
+        user['first'] = first
+        user['last'] = last
+        return {USERS: [user],
+                COURSES: [ddbo.get_course(course_id) for course_id in user.get(COURSES, [])]}
+
+    # Collect all users enrolled in any course this user admins (deduplicated)
+    seen_user_ids = set()
+    users_list = []
+    for course_id in admin_for_courses:
+        for enrolled_user_id in course_enrollments(course_id):
+            if enrolled_user_id not in seen_user_ids:
+                seen_user_ids.add(enrolled_user_id)
+                try:
+                    enrolled_user = ddbo.get_user(enrolled_user_id)
+                except InvalidUser_Id:
+                    logger.warning("course_enrollments returned unknown user_id %s for course %s — skipping",
+                                   enrolled_user_id, course_id)
+                    continue
+                first, last = ddbo.get_user_login_times(enrolled_user_id)
+                enrolled_user['first'] = first
+                enrolled_user['last'] = last
+                users_list.append(enrolled_user)
+
+    # Include all admin courses plus any primary courses referenced by the returned users
+    course_ids = set(admin_for_courses)
+    for u in users_list:
+        if u.get(PRIMARY_COURSE_ID):
+            course_ids.add(u[PRIMARY_COURSE_ID])
+    courses_list = [c for c in (ddbo.get_course(cid) for cid in course_ids) if c]
+
+    # Sort by primary_course_id so the JS grouping logic produces one section per course
+    users_list.sort(key=lambda u: u.get(PRIMARY_COURSE_ID, ''))
+
+    return {USERS: users_list, COURSES: courses_list}
 
 
 def list_admins():

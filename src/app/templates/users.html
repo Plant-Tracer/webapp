@@ -1,16 +1,28 @@
 <!-- -*- mode: html -*- -->
 {% extends 'base.html' %}
 
+{% block head %}
+<style>
+  #your-users table {
+    border-collapse: collapse;
+  }
+  #your-users th,
+  #your-users td {
+    border: 1px solid #ccc;
+    padding: 4px 8px;
+    text-align: left;
+  }
+</style>
+{% endblock %}
+
 {% block body %}
 
 <h2>Users</h2>
 
 {% if admin %}
-Below is a list of all of the users in all of the courses in which you
-are an admin.
+Below is a list of all of the users in all of the courses in which you are an admin.
 {% else %}
-Below is a list of all users registered on this system for your course
-{{ primary_course_name }}.
+Below is your user information for course {{ primary_course_name }}.
 {% endif %}
 
 <div id='your-users'></div>
@@ -22,15 +34,18 @@ Below is a list of all users registered on this system for your course
   <form id="bulk_register_form" class="pure-form pure-form-aligned" action="javascript:void(0)">
     <input id="br_course_id" type="hidden" name="course_id" value="{{user_primary_course_id}}">
 
-    <p>You can register students for your class by entering their email
-      addresses into the text box below.</p>
+    <p>You can register students for your class by entering their information
+      into the text box below.</p>
 
-    <p>Please put each email address on
-      its own line, or separate the email addresses with spaces, commas or
-      semicolons.</p>
+    <p>Put one entry per line. Each line should be an email address optionally
+      followed by a comma and the student's name, for example:</p>
+    <pre>agnes@example.com,Agnes Arber
+brigitte@example.com
+charlie@example.com,Charlie Darwin</pre>
+    <p>The name is optional. If omitted, the student's name will be left blank.</p>
 
-    <label for='email-addresses'>Email Addresses:</label>
-    <textarea id="br_email_addresses" name='email-addresses' rows=10 cols=50></textarea>
+    <label for='email-addresses'>Email Addresses (and optional names):</label>
+    <textarea id="br_email_addresses" name='email-addresses' rows=10 cols=60></textarea>
 
     <div class='pure-controls'>
       <input id='register-emails-button'
