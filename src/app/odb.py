@@ -939,12 +939,16 @@ def list_users_courses(*, user_id):
         for enrolled_user_id in course_enrollments(course_id):
             if enrolled_user_id not in seen_user_ids:
                 seen_user_ids.add(enrolled_user_id)
-                enrolled_user = ddbo.get_user(enrolled_user_id)
-                if enrolled_user:
-                    first, last = ddbo.get_user_login_times(enrolled_user_id)
-                    enrolled_user['first'] = first
-                    enrolled_user['last'] = last
-                    users_list.append(enrolled_user)
+                try:
+                    enrolled_user = ddbo.get_user(enrolled_user_id)
+                except InvalidUser_Id:
+                    logger.warning("course_enrollments returned unknown user_id %s for course %s — skipping",
+                                   enrolled_user_id, course_id)
+                    continue
+                first, last = ddbo.get_user_login_times(enrolled_user_id)
+                enrolled_user['first'] = first
+                enrolled_user['last'] = last
+                users_list.append(enrolled_user)
 
     # Include all admin courses plus any primary courses referenced by the returned users
     course_ids = set(admin_for_courses)
