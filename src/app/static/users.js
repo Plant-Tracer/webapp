@@ -43,8 +43,7 @@ function bulk_register_users() {
                 $('#message').html('error: ' + data.message);
             } else {
                 $('#message').html(data.message);
-                // Safe to reload here since the request is fully completed
-                // window.location.reload();
+                list_users();
             }
         })
         .fail((error) => {

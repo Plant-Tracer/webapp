@@ -14,6 +14,7 @@ describe('bulk_register_users_func', () => {
         global.API_BASE = 'http://example.com/'
         global.api_key = 'test_api_key';
         global.user_primary_course_id = 1;
+        global.list_users = jest.fn();
 
       // Add the mock DOM elements the function expects to find
 
@@ -53,6 +54,7 @@ describe('bulk_register_users_func', () => {
             "names": '',
         });
         expect($('#message').html()).toBe('Registered 1 email addresses');
+        expect(global.list_users).toHaveBeenCalledTimes(1);
     });
 
     test('should handle invalid email response', () => {
