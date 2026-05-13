@@ -10,6 +10,8 @@ Plant Tracer is a Flask-based web application for uploading, managing, and annot
 
 Never commit or push directly to the `main` branch. All changes must go through a feature branch and be merged via Pull Request. Only proceed with a direct commit to `main` if the user explicitly says to override this rule.
 
+Every commit message must reference a GitHub Issue number (e.g. `fixes #123` or `refs #123`). If no Issue exists for the current change, generate a proposed Issue title and description, ask the user to confirm or edit it, and only create the Issue (via `gh issue create`) after receiving approval.
+
 ## Common Commands
 
 ```bash
