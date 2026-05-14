@@ -20,7 +20,8 @@ LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
-LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo-
+MAILPIT_SMTP_CONFIG={"SMTP_HOST":"127.0.0.1","SMTP_PORT":"1025","SMTP_NO_TLS":"1","SMTP_USERNAME":"","SMTP_PASSWORD":""}
+LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
 LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
 LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
@@ -58,7 +59,7 @@ ifeq ($(AWS_REGION),)
     export AWS_REGION                ?= local
 endif
 ifeq ($(AWS_REGION),local)
-    REQ := $(REQ) bin/DynamoDBLocal.jar bin/minio
+    REQ := $(REQ) bin/DynamoDBLocal.jar bin/minio bin/mailpit
     export AWS_ACCESS_KEY_ID         := minioadmin
     export AWS_SECRET_ACCESS_KEY     := minioadmin
     export AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
@@ -188,10 +189,10 @@ pytest1:
 ### Debug targets to develop and run locally.
 
 start-local-services:
-	$(MAKE) -j2 start_local_dynamodb start_local_minio
+	$(MAKE) -j3 start_local_dynamodb start_local_minio start_local_mailpit
 
 stop-local-services:
-	$(MAKE) stop_local_dynamodb stop_local_minio
+	$(MAKE) stop_local_dynamodb stop_local_minio stop_local_mailpit
 
 wipe-local:
 	@echo wiping all local artifacts and remaking the local bucket.
@@ -332,6 +333,44 @@ dump-demo-tables:
 
 
 .PHONY: start_local_dynamodb stop_local_dynamodb list-tables dump-demo-tables
+################################################################
+# Mailpit (local SMTP catcher -- see: https://github.com/axllent/mailpit)
+# Accepts SMTP on port 1025; web UI at http://localhost:8025
+
+MAILPIT_VERSION=latest
+MAILPIT_LINUX_AMD64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz
+MAILPIT_LINUX_ARM64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-arm64.tar.gz
+MAILPIT_DARWIN_ARM64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-darwin-arm64.tar.gz
+MAILPIT_DARWIN_AMD64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-darwin-amd64.tar.gz
+
+bin/mailpit:
+	@echo downloading and installing mailpit
+	mkdir -p bin
+	uname -a
+	arch
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" -o "$$(uname -m)" = "x86_64" ] ; then \
+		echo Linux amd64/x86_64 ; curl -fL $(MAILPIT_LINUX_AMD64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" -o "$$(uname -m)" = "arm64" ] ; then \
+		echo Linux arm64 ; curl -fL $(MAILPIT_LINUX_ARM64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		echo Darwin arm64 ; curl -fL $(MAILPIT_DARWIN_ARM64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then \
+		echo Darwin amd64 ; curl -fL $(MAILPIT_DARWIN_AMD64) | tar -xz -C bin mailpit ; \
+	else \
+		echo unknown os/architecture; exit 1; \
+	fi
+	chmod +x bin/mailpit
+	ls -l bin/mailpit
+	file bin/mailpit
+
+start_local_mailpit: bin/mailpit
+	python3 bin/local_services.py mailpit start
+
+stop_local_mailpit: bin/mailpit
+	python3 bin/local_services.py mailpit stop
+
+.PHONY: start_local_mailpit stop_local_mailpit
+
 ################################################################
 # Minio (S3 clone -- see: https://min.io/)
 # Installations are used by the CI pipeline and by local developers

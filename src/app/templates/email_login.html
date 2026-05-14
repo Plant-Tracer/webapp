@@ -20,17 +20,59 @@ Content-Type: text/html; charset=UTF-8
 
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Plant Tracer Login Information</title></head>
-<body>
-<p>Hi! Welcome to Plant Tracer.</p>
-<p>You are receiving this email because someone (probably you) entered your email address {{ to_addrs }}
-  at the Plant Tracer website (<a ses:no-track href="{{ planttracer_endpoint }}">{{ planttracer_endpoint }}</a>).
-</p>
-<p>Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.</p>
-<ul>
-<li>Log in to Plant Tracer: <a ses:no-track href="{{ planttracer_endpoint }}/login?api_key={{ api_key }}">{{ planttracer_endpoint }}/login?api_key={{ api_key }}</a></li>
-</ul>
-<p>After logging in you can upload a new movie or list and edit your movies.</p>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Tracer Login Information</title>
+</head>
+<body bgcolor="#f4f4f4">
+  <!-- Outer wrapper -->
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f4f4f4">
+    <tr>
+      <td align="center" style="padding:24px 8px;">
+        <!-- Content card -->
+        <table width="600" border="0" cellpadding="0" cellspacing="0" bgcolor="#ffffff">
+          <tr>
+            <td style="padding:32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222222;line-height:1.6;">
+
+              <p>Hi! Welcome to Plant Tracer.</p>
+
+              <p>You are receiving this email because someone (probably you) entered your email address
+                <strong>{{ to_addrs }}</strong> at the Plant Tracer website
+                (<a ses:no-track href="{{ planttracer_endpoint }}" style="color:#2a6496;">{{ planttracer_endpoint }}</a>).
+              </p>
+
+              <p>Keep this email message! You can use it to upload plant movies to the website and edit the movies that you have uploaded.</p>
+
+              <!-- CTA button -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 24px 0;">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td bgcolor="#2a6496" align="center" style="padding:12px 28px;">
+                          <a ses:no-track href="{{ planttracer_endpoint }}/login?api_key={{ api_key }}"
+                             style="color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;">Log in to Plant Tracer</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Fallback URL -->
+              <p style="font-size:13px;color:#666666;">
+                If the button above does not work, copy and paste this link into your browser:<br>
+                <a ses:no-track href="{{ planttracer_endpoint }}/login?api_key={{ api_key }}"
+                   style="color:#2a6496;">{{ planttracer_endpoint }}/login?api_key={{ api_key }}</a>
+              </p>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 

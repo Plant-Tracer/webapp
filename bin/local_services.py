@@ -19,6 +19,8 @@ HOST = "127.0.0.1"
 MINIO_API_PORT = 9000
 MINIO_CONSOLE_PORT = 9001
 DYNAMODB_PORT = 8000
+MAILPIT_SMTP_PORT = 1025
+MAILPIT_HTTP_PORT = 8025
 READY_TIMEOUT_SECONDS = 30
 SHUTDOWN_TIMEOUT_SECONDS = 2.0
 
@@ -39,14 +41,6 @@ LOG_DIR = ROOT_DIR / "logs"
 DATA_DIR = ROOT_DIR / "var"
 
 SERVICES = {
-    "minio": ServiceConfig(
-        name="MinIO",
-        pidfile=DATA_DIR / "minio.pid",
-        stdout_log=LOG_DIR / "minio.stdout",
-        stderr_log=LOG_DIR / "minio.stderr",
-        ports=(MINIO_API_PORT, MINIO_CONSOLE_PORT),
-        process_patterns=("minio server",),
-    ),
     "dynamodb": ServiceConfig(
         name="DynamoDB Local",
         pidfile=DATA_DIR / "dynamodb_local.pid",
@@ -54,6 +48,22 @@ SERVICES = {
         stderr_log=LOG_DIR / "dynamodb_local.stderr",
         ports=(DYNAMODB_PORT,),
         process_patterns=("DynamoDBLocal.jar",),
+    ),
+    "mailpit": ServiceConfig(
+        name="Mailpit",
+        pidfile=DATA_DIR / "mailpit.pid",
+        stdout_log=LOG_DIR / "mailpit.stdout",
+        stderr_log=LOG_DIR / "mailpit.stderr",
+        ports=(MAILPIT_SMTP_PORT, MAILPIT_HTTP_PORT),
+        process_patterns=("mailpit",),
+    ),
+    "minio": ServiceConfig(
+        name="MinIO",
+        pidfile=DATA_DIR / "minio.pid",
+        stdout_log=LOG_DIR / "minio.stdout",
+        stderr_log=LOG_DIR / "minio.stderr",
+        ports=(MINIO_API_PORT, MINIO_CONSOLE_PORT),
+        process_patterns=("minio server",),
     ),
 }
 
@@ -207,7 +217,7 @@ def discover_running_service_pid(config: ServiceConfig) -> int | None:
     if not matching_pids:
         return common_port_pid(config)
     for port in config.ports:
-        if not (port_pids(port) & matching_pids):
+        if not port_pids(port) & matching_pids:
             return None
     return min(matching_pids)
 
@@ -249,6 +259,15 @@ def dynamodb_env() -> dict[str, str]:
 
 
 def service_command(service: str) -> tuple[list[str], dict[str, str]]:
+    if service == "mailpit":
+        command = [
+            str(SCRIPT_DIR / "mailpit"),
+            "--smtp",
+            f"{HOST}:{MAILPIT_SMTP_PORT}",
+            "--listen",
+            f"{HOST}:{MAILPIT_HTTP_PORT}",
+        ]
+        return command, os.environ.copy()
     if service == "minio":
         command = [
             str(SCRIPT_DIR / "minio"),
@@ -349,7 +368,7 @@ def start_service(service: str) -> None:
     for port in config.ports:
         print(f"  {HOST}:{port}")
     with config.stdout_log.open("w") as stdout_file, config.stderr_log.open("w") as stderr_file:
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # pylint: disable=consider-using-with
             command,
             stdout=stdout_file,
             stderr=stderr_file,
