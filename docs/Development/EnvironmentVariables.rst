@@ -36,6 +36,8 @@ Optional for sending mail
 -------------------------
 `PLANTTRACER_CREDENTIALS` - A configuration file that has email credentials
 
+`MAILER_DRY_RUN` - Set to ``true`` to log email content to stderr instead of sending it. Useful for local development when no SMTP credentials or SES are configured — the magic link will appear in the Flask dev server log.
+
 
 Optional for Local Development
 ------------------------------

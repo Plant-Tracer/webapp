@@ -141,6 +141,11 @@ def send_message(*,
             raise InvalidMailerConfiguration(str(e)) from e
 
 
+def is_dry_run():
+    """Return True if MAILER_DRY_RUN=true, causing emails to be logged rather than sent."""
+    return os.environ.get('MAILER_DRY_RUN', '').lower() == 'true'
+
+
 def throttle_send():
     global last_send_time # pylint: disable=global-statement
     now = time.monotonic()
@@ -177,7 +182,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     smtp_config = get_smtp_config()
     if smtp_config:
         smtp_config['SMTP_DEBUG'] = 'YES' if (SMTP_DEBUG or debug) else ''
-    dry_run = False
+    dry_run = is_dry_run()
     try:
         send_message(
             from_addr=from_addr,
@@ -223,7 +228,7 @@ def send_course_created_email(*,
         from_addr=from_addr,
         to_addrs=[to_addr],
         smtp_config=smtp_config,
-        dry_run=False,
+        dry_run=is_dry_run(),
         msg=msg,
     )
 
