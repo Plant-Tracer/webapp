@@ -231,35 +231,6 @@ Data Consistency Notes
   ``list_users_courses()`` aggregates them per user via the ``user_id_idx`` GSI.
 
 
-Local Development
------------------
-
-Use DynamoDB Local (JAR version, port 8000) during development::
-
-    python3 bin/local_services.py dynamodb start
-
-Tables are created with::
-
-    make make-local-demo
-
-or from the ``dbutil`` CLI::
-
-    python3 src/dbutil.py createdb
-
-The table prefix for local development defaults to ``demo-`` unless overridden by
-``DYNAMODB_TABLE_PREFIX``. Test fixtures always generate a fresh ``test-xxxx`` prefix to avoid
-interfering with the demo dataset.
-
-
-EC2 Development Environment
----------------------------
-
-When running on AWS, you can use real DynamoDB and S3. You will need to:
-
-- Create a DynamoDB set of tables for use with Plant Tracer (``make make-local-demo`` or ``dbutil createdb``).
-- Create an S3 bucket for use with Plant Tracer.
-
-
 Schema and Naming Changes
 -------------------------
 
