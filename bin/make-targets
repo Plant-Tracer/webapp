@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Show the targets defined in the Makefile in the current directory.
+set -euo pipefail
+
+if [ ! -f Makefile ]; then
+    echo "No Makefile found in the current directory." >&2
+    exit 1
+fi
+
+grep -E '^[a-zA-Z0-9_-]+[^=]*:([^=]|$)' Makefile \
+    | grep -v '^\.PHONY' \
+    | sed 's/:.*//' \
+    | sort -u
