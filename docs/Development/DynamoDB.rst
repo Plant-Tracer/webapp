@@ -251,8 +251,8 @@ The table prefix for local development defaults to ``demo-`` unless overridden b
 interfering with the demo dataset.
 
 
-Amazon Linux 2023 Development Environment (EC2)
------------------------------------------------
+EC2 Development Environment
+---------------------------
 
 When running on AWS, you can use real DynamoDB and S3. You will need to:
 
