@@ -93,7 +93,7 @@ Register multiple users at once. Requires the caller to be a course admin.
 | `api_key` | Yes | Must belong to an admin of `course_id` |
 | `course_id` | Yes | Target course |
 | `email-addresses` | Yes | Newline-delimited list of email addresses. Also accepts comma- or semicolon-delimited values. |
-| `names` | No | Newline-delimited list of display names, positionally matched to `email-addresses`. Added in #714. |
+| `names` | No | Newline-delimited list of display names, positionally matched to `email-addresses`. |
 | `planttracer_endpoint` | No | Base URL for login links in emails |
 
 **Response**
@@ -159,7 +159,7 @@ Both routes are equivalent. Return users and courses visible to the caller.
 ```
 
 `first` and `last` are Unix epoch seconds of the user's first and most recent login, respectively
-(aggregated across all their API keys). Both are `null` if the user has never logged in. Added in #960.
+(aggregated across all their API keys). Both are `null` if the user has never logged in.
 
 ---
 
