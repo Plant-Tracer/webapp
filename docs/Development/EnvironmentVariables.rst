@@ -36,6 +36,8 @@ Optional for sending mail
 -------------------------
 `PLANTTRACER_CREDENTIALS` - A configuration file that has email credentials
 
+`SMTPCONFIG_JSON` - SMTP configuration as a JSON object with keys ``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USERNAME``, ``SMTP_PASSWORD``, and optionally ``SMTP_NO_TLS`` (set to any value to disable TLS). Used for local development with Mailpit: the local Makefile sets this automatically when running with ``AWS_REGION=local``.
+
 `MAILER_DRY_RUN` - Set to ``true`` to log email content to stderr instead of sending it. Useful for local development when no SMTP credentials or SES are configured — the magic link will appear in the Flask dev server log.
 
 

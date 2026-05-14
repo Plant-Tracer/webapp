@@ -132,7 +132,8 @@ def send_message(*,
             if SMTP_NO_TLS not in smtp_config:
                 smtp.starttls()
             smtp.ehlo()
-            smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
+            if smtp_config.get(SMTP_USERNAME):
+                smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
             smtp.sendmail(from_addr, to_addrs, msg.encode('utf-8'))
     else:
         try:
