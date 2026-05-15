@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Plant Tracer is a Flask-based web application for uploading, managing, and annotating plant growth time-lapse videos at https://app.planttracer.com/. It has a Python/Flask backend, a JavaScript frontend (jQuery loaded globally, with ES modules importing `$` from `utils.js`), DynamoDB for structured data, and S3 for video/frame storage.
+Plant Tracer is a Flask-based web application for uploading, managing, and annotating plant growth time-lapse videos at https://prod.planttracer.com/. It has a Python/Flask backend, a JavaScript frontend (jQuery loaded globally, with ES modules importing `$` from `utils.js`), DynamoDB for structured data, and S3 for video/frame storage.
 
 ## Git Workflow
 

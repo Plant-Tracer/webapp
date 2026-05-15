@@ -14,14 +14,13 @@ Welcome and Registration
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer Registration
 
-- Once you are registered, look for an email from `admin@planttracer.com`. Click on the Log in to Plant Tracer link to log in to the app. There are two links on the login/welcome page, and from there you can upload movies or get a list of existing movies to work with.
+- Once you are registered, look for an email from `admin@planttracer.com`. Click the **Log in to Plant Tracer** button to log in. From there you can upload movies or view a list of existing movies to work with.
 
 .. image:: tutorial_images/admin_email_link.png
     :alt: email from Plant Tracer
 
 Viewing movies
 --------------
-- The second link in the email will bring you to the Welcome page.
 - Click on "Movies" in the menu bar at the top of the page to see a list of movies to analyze.
 
 .. image:: tutorial_images/welcome_page.png
