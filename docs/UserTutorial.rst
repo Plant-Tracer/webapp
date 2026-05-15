@@ -33,8 +33,8 @@ Viewing movies
 
 Uploading Movies (optional)
 ---------------------------
-- Ensure that your video is of a size that works well with PlantTracer. You may have to resize it before uploading. The movement tracking algorithm(s) PlantTracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1000 frames per movie. Your movie file must be 256MB or less or you won't be able to upload it all. Eventually, PlantTracer will automatically resize (downsample) uploaded movies, but for now, the user must do this prior to upload. See :doc:`VideoResizing` for some ways to resize videos.
-- PlantTracer will accept videos in most well-known video file formats, but MP4 is probably best.
+- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading. The movement tracking algorithm(s) Plant Tracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1000 frames per movie. Your movie file must be 256MB or less or you won't be able to upload it all. Eventually, Plant Tracer will automatically resize (downsample) uploaded movies, but for now, the user must do this prior to upload. See :doc:`VideoResizing` for some ways to resize videos.
+- Plant Tracer will accept videos in most well-known video file formats, but MP4 is probably best.
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
 - Choose a file to upload.
@@ -50,14 +50,14 @@ Tracking the Uploaded Movie
    :alt: Tracking uploaded movie on Plant Tracer
 
 - On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking.
-- PlantTracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
-- PlantTracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
+- Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
+- Plant Tracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
 - You may use the Marker Table to add and delete markers whose names have meaning for your motion analysis. There may be any number of markers. Markers may not be renamed, so if you want to rename a marker, delete it and add another with the name you want.
-- PlantTracer will attempt to track the motion related to every marker.
+- Plant Tracer will attempt to track the motion related to every marker.
 - Typically, the apex of some part of the plant is tracked. So, to do that, move the Apex marker, for example, to the top of the vertical stem.
-- Marker that have names of the form RulerXXmm are special. XX is any non-negative integer. These markers are intended to be used for distance calibration. Using the default Ruler markers, if the image has a ruler in it, move the Ruler0mm marker to the beginning of the ruler in the image, and move the Ruler10mm marker to the 10mm mark on the ruler. In this way, PlantTracer can report analysis results in millimeters rather than numbers of pixels in the image.
-- There can be any number of RulerXXmm markers, but PlantTracer will only use the RulerXXmm markers with the lowest and highest XX values in its calculations, and ignores any intermediate RulerXXmm markers for purposes of distance calculations. PlantTracer only uses mm distances.
+- Marker that have names of the form RulerXXmm are special. XX is any non-negative integer. These markers are intended to be used for distance calibration. Using the default Ruler markers, if the image has a ruler in it, move the Ruler0mm marker to the beginning of the ruler in the image, and move the Ruler10mm marker to the 10mm mark on the ruler. In this way, Plant Tracer can report analysis results in millimeters rather than numbers of pixels in the image.
+- There can be any number of RulerXXmm markers, but Plant Tracer will only use the RulerXXmm markers with the lowest and highest XX values in its calculations, and ignores any intermediate RulerXXmm markers for purposes of distance calculations. Plant Tracer only uses mm distances.
 - If there are fewer than two RulerXXmm markers on a given analysis, then analysis results are calclulated and presented using units of pixels.
 
 .. image:: tutorial_images/moving_marker.png
