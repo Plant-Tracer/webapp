@@ -44,12 +44,12 @@ Uploading Movies (optional)
 
 Tracking the Uploaded Movie
 ---------------------------
-- Once the file is uploaded, you can choose to track it.
-- In the bottom left of the page, click on the button labeled "Track the uploaded movie".
+- Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The "Track the uploaded movie" link goes to the same place.)
 
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Tracking uploaded movie on Plant Tracer
 
+- On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking.
 - PlantTracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
 - PlantTracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
