@@ -33,10 +33,11 @@ Viewing movies
 
 Uploading Movies (optional)
 ---------------------------
-- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading. The movement tracking algorithm(s) Plant Tracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1000 frames per movie. Your movie file must be 256MB or less or you won't be able to upload it all. Eventually, Plant Tracer will automatically resize (downsample) uploaded movies, but for now, the user must do this prior to upload. See :doc:`VideoResizing` for some ways to resize videos.
+- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading, either by trimming its length or reducing its resolution. The movement tracking algorithm(s) Plant Tracer use(s) actually work better with fairly low resolution, so no need to be concerned about losing any detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maxiumum of 1,000 frames per movie, though we permit a maximum of 10,000 frames. Your movie file must be 256MB or less or you won't be able to upload it all. Plant Tracer will automatically resize (downsample) uploaded movies to a width of 640 pixels, if the movies have a resolution higher than that. See :doc:`VideoResizing` for some ways to resize videos.
 - Plant Tracer will accept videos in most well-known video file formats, but MP4 is probably best.
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
+- If you would like to permit your uploaded movie to be used in academic research, check the box "The uploaded movie may be used in academic research." You will then be asked whether you want to be credited for this contribution and what name you want to be credited with.
 - Choose a file to upload.
 
 .. image:: tutorial_images/upload_movie.png
@@ -44,7 +45,8 @@ Uploading Movies (optional)
 
 Tracking the Uploaded Movie
 ---------------------------
-- Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The "Track the uploaded movie" link goes to the same place.)
+- Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The **Track the uploaded movie** link goes to the same place.)
+- There's an opportunity to rotate the movie 90° clockwise as many times as necessary to orient the movie properly if it's not. Note that once you proceed to the Analyze page, you won't be able to rotate the movie anymore.
 
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Tracking uploaded movie on Plant Tracer
@@ -70,10 +72,10 @@ Tracking the Uploaded Movie
 
 Viewing the trace of a Movie
 ----------------------------
-- Once the tracked movie has loaded you will see the image of the first frame, the data table and the graphs of the movement.
+- Once the tracked movie has loaded you will see the image of the first frame, the marker table and graphs of the trackedmovement.
 
 .. image:: tutorial_images/analyzed_movie.png
-   :alt: Viewing the tracked movie, data and graphs on Plant Tracer
+   :alt: Viewing the tracked movie, marker table, and graphs on Plant Tracer
 
 - Click on the play button to view the movement of the apex in all frames of the movie.
 
