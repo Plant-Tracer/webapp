@@ -12,24 +12,24 @@ Welcome and Registration
 - Alternately, you can register for the Web course whose course key is 2c01-48cd
 
 .. image:: tutorial_images/register.png
-   :alt: Plant Tracer Registration
+   :alt: Plant Tracer registration form with Name, Email Address, and Course Key input fields and a Register button
 
 - Once you are registered, look for an email from `admin@planttracer.com`. Click the **Log in to Plant Tracer** button to log in. From there you can upload movies or view a list of existing movies to work with.
 
 .. image:: tutorial_images/admin_email_link.png
-    :alt: email from Plant Tracer
+    :alt: Plant Tracer login email highlighting the Log in to Plant Tracer button
 
 Viewing movies
 --------------
 - Click on "Movies" in the menu bar at the top of the page to see a list of movies to analyze.
 
 .. image:: tutorial_images/welcome_page.png
-   :alt: Selecting a sample movie on Plant Tracer
+   :alt: Plant Tracer Movies page listing available movies with title, description, and Analyze buttons
 
 - Click on the analyze button to see the tracked movie.
 
 .. image:: tutorial_images/choose_analyze.png
-   :alt: Selecting a sample movie on Plant Tracer
+   :alt: Close-up of the Plant Tracer movie list showing the Analyze button for a movie
 
 Uploading Movies (optional)
 ---------------------------
@@ -41,7 +41,7 @@ Uploading Movies (optional)
 - Choose a file to upload.
 
 .. image:: tutorial_images/upload_movie.png
-   :alt: Uploading Movies on Plant Tracer
+   :alt: Plant Tracer Upload page with fields for movie title, description, research consent checkbox, and file chooser
 
 Tracking the Uploaded Movie
 ---------------------------
@@ -49,7 +49,7 @@ Tracking the Uploaded Movie
 - There's an opportunity to rotate the movie 90° clockwise as many times as necessary to orient the movie properly if it's not. Note that once you proceed to the Analyze page, you won't be able to rotate the movie anymore.
 
 .. image:: tutorial_images/track_uploaded_movie.png
-   :alt: Tracking uploaded movie on Plant Tracer
+   :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links
 
 - On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking.
 - Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
@@ -63,19 +63,19 @@ Tracking the Uploaded Movie
 - If there are fewer than two RulerXXmm markers on a given analysis, then analysis results are calclulated and presented using units of pixels.
 
 .. image:: tutorial_images/moving_marker.png
-   :alt: Tracking uploaded movie on Plant Tracer
+   :alt: Plant Tracer Analyze page showing three markers stacked at the left edge of the frame in their initial positions, with a Trace movie button
 
 - The Apex and ruler markers need to be moved to the appropriate location.
 
 .. image:: tutorial_images/placed_markers.png
-   :alt: Tracking uploaded movie on Plant Tracer
+   :alt: Plant Tracer Analyze page with the Apex marker positioned at the top of the plant stem and ruler markers placed along a ruler in the frame
 
 Viewing the trace of a Movie
 ----------------------------
-- Once the tracked movie has loaded you will see the image of the first frame, the marker table and graphs of the trackedmovement.
+- Once the tracked movie has loaded you will see the image of the first frame, the marker table and graphs of the tracked movement.
 
 .. image:: tutorial_images/analyzed_movie.png
-   :alt: Viewing the tracked movie, marker table, and graphs on Plant Tracer
+   :alt: Plant Tracer Analyze page showing the tracked movie at frame 0, a marker position table, and x and y position graphs
 
 - Click on the play button to view the movement of the apex in all frames of the movie.
 
@@ -84,28 +84,28 @@ Interpreting and Reading Results
 - Use the arrow buttons just below the tracked movie to play, or navigate to a particular frame.
 - The Position Graphs visualize the change in the non-RulerXX markers'horizontal (x position) and vertical (y position) since frame 0.
 - When tracking is complete, you can press the "Download Trackpoints" button to get the tracking data in CSV format.
-- At this point, you are ready to use a spreadsheet to furtheranalyze and graph the data.
+- At this point, you are ready to use a spreadsheet to further analyze and graph the data.
 
 .. image:: tutorial_images/download_trackpoints.png
-   :alt: Reading Results in Plant Tracer
+   :alt: Plant Tracer results page showing the tracked movie, data table, and a Download Trackpoints button for exporting tracking data as CSV
 
 Further Adjustments to Tracking
 -------------------------------
 - You can enlarge the image of the movie to better view the markers and tracing.
 
 .. image:: tutorial_images/movie_size_adjustment.png
-   :alt: Adjusting the Zoom in Plant Tracer
+   :alt: Plant Tracer movie size controls showing a zoom dropdown for enlarging the movie display
 
 - You have the option of re-tracking the movie from that frame.
 
 .. image:: tutorial_images/fall_off_apex.png
-   :alt: Other Adjustments in Plant Tracer
+   :alt: Plant Tracer Analyze page showing the Apex marker drifted away from the plant tip at a later frame, indicating lost tracking
 
 - Use the arrow buttons just below the original movie to navigate to the frame where tracking was lost.
 - Then move the apex marker to the correct position. Now press the button "re-track movie".
 
 .. image:: tutorial_images/retrack_movie.png
-   :alt: Retrack Movie in Plant Tracer
+   :alt: Plant Tracer Analyze page with the Apex marker manually repositioned on the plant tip and a Retrace movie button to restart tracking from this frame
 
 Converting Frames to Time
 -------------------------
@@ -125,7 +125,7 @@ For example if the period FP = 2 minutes, then:
 
 If you have a frame rate (frames per unit of time) rather than a frame period, the frame rate is just the inverse of the period. If the frame period is 2 seconds, the frame rate is 1 frame/2 seconds or 0.5 frames/second.
 
-Let FR be the frame rate. The time t[n] at frame[n] is therefore (N * (1/FR)).
+Let FR be the frame rate. The time t[n] at frame[n] is therefore (n * (1/FR)).
 
 For example, if FR = 0.5, then:
 
