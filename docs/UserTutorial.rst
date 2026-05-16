@@ -65,7 +65,7 @@ Tracking the Uploaded Movie
 .. image:: tutorial_images/moving_marker.png
    :alt: Tracking uploaded movie on Plant Tracer
 
-- The Apex marker, and ruler markers need to be moved to the appropriate location.
+- The Apex and ruler markers need to be moved to the appropriate location.
 
 .. image:: tutorial_images/placed_markers.png
    :alt: Tracking uploaded movie on Plant Tracer
@@ -79,15 +79,12 @@ Viewing the trace of a Movie
 
 - Click on the play button to view the movement of the apex in all frames of the movie.
 
-.. image:: tutorial_images/play_button.png
-   :alt: Viewing the traced movie on Plant Tracer
-
 Interpreting and Reading Results
 --------------------------------
 - Use the arrow buttons just below the tracked movie to play, or navigate to a particular frame.
-- Graphs help visualize the horizontal (x position) and vertical (y position).
-- When you are satisfied with the tracking, you can press the button "Download Trackpoints".
-- At this point, you are ready to use a spreadsheet to analyze and graph the data.
+- The Position Graphs visualize the change in the non-RulerXX markers'horizontal (x position) and vertical (y position) since frame 0.
+- When tracking is complete, you can press the "Download Trackpoints" button to get the tracking data in CSV format.
+- At this point, you are ready to use a spreadsheet to furtheranalyze and graph the data.
 
 .. image:: tutorial_images/download_trackpoints.png
    :alt: Reading Results in Plant Tracer
