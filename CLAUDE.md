@@ -153,6 +153,30 @@ When asked to prepare a milestone for a new release, given a previous release ta
    gh api repos/Plant-Tracer/webapp/milestones --jq '.[] | {title: .title, open: .open_issues, closed: .closed_issues}'
    ```
 
+## Creating a GitHub Release
+
+After tagging, create a GitHub release from the tagged commit. The release title is the date formatted as `Month-DD-YYYY` (e.g., `May-16-2026`).
+
+**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. To generate them:
+
+1. Fetch all closed items in the milestone via `gh api`.
+2. **Include all Issues** in the milestone.
+3. For each **PR** in the milestone:
+   - Parse the PR body and title for issue references (`fixes #N`, `closes #N`, `resolves #N`, `refs #N`, bare `#N`, etc.).
+   - **No issue references** → include the PR (standalone work).
+   - **Has issue references** → read the PR body against the referenced issues' bodies/titles. If the PR describes changes not covered by any referenced issue, include it (or flag it for human review if uncertain). If fully covered, omit it.
+4. Present the draft list to the user for approval before creating the release.
+5. Create the release:
+   ```bash
+   gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
+   ```
+
+Each line in the release notes should include the issue/PR number and title, e.g.:
+```
+- #930 Documentation: Update UserTutorial to current prod functionality
+- #966 Fix ESLint no-undef error: list_users called bare in users.js
+```
+
 ## Tagging a Release
 
 Version tagging is done directly on `main` (not via a PR). Once all PRs for the milestone are merged:
