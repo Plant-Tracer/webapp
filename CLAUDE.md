@@ -171,10 +171,10 @@ After tagging, create a GitHub release from the tagged commit. The release title
    gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
    ```
 
-Each line in the release notes should include the issue/PR number and title, e.g.:
+Each line in the release notes should be a Markdown link to the issue/PR, e.g.:
 ```
-- #930 Documentation: Update UserTutorial to current prod functionality
-- #966 Fix ESLint no-undef error: list_users called bare in users.js
+- [#930](https://github.com/Plant-Tracer/webapp/issues/930) Documentation: Update UserTutorial to current prod functionality
+- [#966](https://github.com/Plant-Tracer/webapp/issues/966) Fix ESLint no-undef error: list_users called bare in users.js
 ```
 
 ## Tagging a Release
@@ -188,9 +188,9 @@ Version tagging is done directly on `main` (not via a PR). Once all PRs for the 
      --milestone "<milestone-name>"
    ```
 
-2. **Tag and push**:
+2. **Tag and push** (always use an annotated tag so the tag carries a message referencing the issue):
    ```bash
-   git tag <tag-name> main
+   git tag -a <tag-name> -m "refs #<issue-number>: tag main as <tag-name>"
    git push origin <tag-name>
    ```
 
