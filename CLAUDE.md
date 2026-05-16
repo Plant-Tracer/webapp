@@ -152,3 +152,27 @@ When asked to prepare a milestone for a new release, given a previous release ta
    ```bash
    gh api repos/Plant-Tracer/webapp/milestones --jq '.[] | {title: .title, open: .open_issues, closed: .closed_issues}'
    ```
+
+## Tagging a Release
+
+Version tagging is done directly on `main` (not via a PR). Once all PRs for the milestone are merged:
+
+1. **Create a GitHub Issue** for the tag (so the tag commit references an issue, per project convention):
+   ```bash
+   gh issue create --title "Tag main branch as <tag-name>" \
+     --body "All PRs for <milestone> merged. Tag main with \`<tag-name>\`." \
+     --milestone "<milestone-name>"
+   ```
+
+2. **Tag and push**:
+   ```bash
+   git tag <tag-name> main
+   git push origin <tag-name>
+   ```
+
+3. **Close the issue** referencing the tag:
+   ```bash
+   gh issue close <issue-number> --comment "Tagged as \`<tag-name>\`."
+   ```
+
+Tag names follow the pattern `ver-X.Y.Z`.
