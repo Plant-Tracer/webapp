@@ -117,3 +117,86 @@ See `docs/EnvironmentVariables.rst` for the full list.
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` runs lint, pytest, and JS tests on push/PR to main/dev, on both macOS and Ubuntu with Python 3.12. Local equivalent: `make check`.
+
+## Prepare Milestone for Release
+
+When asked to prepare a milestone for a new release, given a previous release tag (e.g. `ver-X.Y.Z`) and a new milestone name (e.g. `Version-X.Y.Z+1`):
+
+1. **Create the milestone** (`gh` has no `milestone` subcommand; use the API):
+   ```bash
+   gh api repos/Plant-Tracer/webapp/milestones --method POST -f title="<new-milestone-name>"
+   # Note the "number" field in the response.
+   ```
+
+2. **Get the previous tag's commit timestamp**:
+   ```bash
+   sha=$(gh api repos/Plant-Tracer/webapp/git/refs/tags/<prev-tag> --jq '.object.sha')
+   gh api repos/Plant-Tracer/webapp/git/commits/$sha --jq '.committer.date'
+   ```
+
+3. **Find all issues/PRs closed strictly after that timestamp**:
+   ```bash
+   gh api "repos/Plant-Tracer/webapp/issues?state=closed&since=<timestamp>&per_page=100" \
+     --jq '.[] | {number: .number, title: .title, closed_at: .closed_at, milestone: .milestone.title}'
+   ```
+   Filter results by `closed_at` > tag timestamp. Exclude the version-bump PR for the previous release (it closes at essentially the same instant as the tag).
+
+4. **Assign all qualifying items to the new milestone** (this automatically clears any previous milestone):
+   ```bash
+   for num in <numbers>; do
+     gh api repos/Plant-Tracer/webapp/issues/$num --method PATCH -f milestone=<milestone-number> --jq '.number'
+   done
+   ```
+
+5. **Verify**:
+   ```bash
+   gh api repos/Plant-Tracer/webapp/milestones --jq '.[] | {title: .title, open: .open_issues, closed: .closed_issues}'
+   ```
+
+## Creating a GitHub Release
+
+After tagging, create a GitHub release from the tagged commit. The release title is the date formatted as `Month-DD-YYYY` (e.g., `May-16-2026`).
+
+**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. To generate them:
+
+1. Fetch all closed items in the milestone via `gh api`.
+2. **Include all Issues** in the milestone.
+3. For each **PR** in the milestone:
+   - Parse the PR body and title for issue references (`fixes #N`, `closes #N`, `resolves #N`, `refs #N`, bare `#N`, etc.).
+   - **No issue references** → include the PR (standalone work).
+   - **Has issue references** → read the PR body against the referenced issues' bodies/titles. If the PR describes changes not covered by any referenced issue, include it (or flag it for human review if uncertain). If fully covered, omit it.
+4. Present the draft list to the user for approval before creating the release.
+5. Create the release:
+   ```bash
+   gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
+   ```
+
+Each line in the release notes should include the issue/PR number and title, e.g.:
+```
+- #930 Documentation: Update UserTutorial to current prod functionality
+- #966 Fix ESLint no-undef error: list_users called bare in users.js
+```
+
+## Tagging a Release
+
+Version tagging is done directly on `main` (not via a PR). Once all PRs for the milestone are merged:
+
+1. **Create a GitHub Issue** for the tag (so the tag commit references an issue, per project convention):
+   ```bash
+   gh issue create --title "Tag main branch as <tag-name>" \
+     --body "All PRs for <milestone> merged. Tag main with \`<tag-name>\`." \
+     --milestone "<milestone-name>"
+   ```
+
+2. **Tag and push**:
+   ```bash
+   git tag <tag-name> main
+   git push origin <tag-name>
+   ```
+
+3. **Close the issue** referencing the tag:
+   ```bash
+   gh issue close <issue-number> --comment "Tagged as \`<tag-name>\`."
+   ```
+
+Tag names follow the pattern `ver-X.Y.Z`.
