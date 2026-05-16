@@ -117,3 +117,38 @@ See `docs/EnvironmentVariables.rst` for the full list.
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` runs lint, pytest, and JS tests on push/PR to main/dev, on both macOS and Ubuntu with Python 3.12. Local equivalent: `make check`.
+
+## Prepare Milestone for Release
+
+When asked to prepare a milestone for a new release, given a previous release tag (e.g. `ver-X.Y.Z`) and a new milestone name (e.g. `Version-X.Y.Z+1`):
+
+1. **Create the milestone** (`gh` has no `milestone` subcommand; use the API):
+   ```bash
+   gh api repos/Plant-Tracer/webapp/milestones --method POST -f title="<new-milestone-name>"
+   # Note the "number" field in the response.
+   ```
+
+2. **Get the previous tag's commit timestamp**:
+   ```bash
+   sha=$(gh api repos/Plant-Tracer/webapp/git/refs/tags/<prev-tag> --jq '.object.sha')
+   gh api repos/Plant-Tracer/webapp/git/commits/$sha --jq '.committer.date'
+   ```
+
+3. **Find all issues/PRs closed strictly after that timestamp**:
+   ```bash
+   gh api "repos/Plant-Tracer/webapp/issues?state=closed&since=<timestamp>&per_page=100" \
+     --jq '.[] | {number: .number, title: .title, closed_at: .closed_at, milestone: .milestone.title}'
+   ```
+   Filter results by `closed_at` > tag timestamp. Exclude the version-bump PR for the previous release (it closes at essentially the same instant as the tag).
+
+4. **Assign all qualifying items to the new milestone** (this automatically clears any previous milestone):
+   ```bash
+   for num in <numbers>; do
+     gh api repos/Plant-Tracer/webapp/issues/$num --method PATCH -f milestone=<milestone-number> --jq '.number'
+   done
+   ```
+
+5. **Verify**:
+   ```bash
+   gh api repos/Plant-Tracer/webapp/milestones --jq '.[] | {title: .title, open: .open_issues, closed: .closed_issues}'
+   ```
