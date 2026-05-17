@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Plant Tracer is a Flask-based web application for uploading, managing, and annotating plant growth time-lapse videos at https://prod.planttracer.com/. It has a Python/Flask backend, a JavaScript frontend (jQuery loaded globally, with ES modules importing `$` from `utils.js`), DynamoDB for structured data, and S3 for video/frame storage.
 
+## Documentation
+
+When completing work on any Issue or PR, always review whether documentation under `docs/` needs to be updated to reflect the change. This includes:
+- User-facing docs (`UserTutorial.rst`, etc.)
+- Developer docs (`FlaskAPI.md`, `DynamoDB.rst`, `THEORY_OF_DESIGN.rst`, etc.)
+- Release history (`ReleaseHistory.rst`)
+
+If any screenshots in `docs/tutorial_images/` may be affected, flag them for the user rather than updating them automatically.
+
+After editing any file under `docs/`, always build and verify: `poetry run sphinx-build -W --keep-going -b html docs docs/_build/html`
+
 ## Git Workflow
 
 Never commit or push directly to the `main` branch. All changes must go through a feature branch and be merged via Pull Request. Only proceed with a direct commit to `main` if the user explicitly says to override this rule.
@@ -169,6 +180,11 @@ After tagging, create a GitHub release from the tagged commit. The release title
 5. Create the release:
    ```bash
    gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
+   ```
+
+**Release titles must be unique.** If more than one release is made on the same day, append a count starting at `-2` (e.g., `May-16-2026`, `May-16-2026-2`, `May-16-2026-3`). Check existing titles first:
+   ```bash
+   gh release list --repo Plant-Tracer/webapp
    ```
 
 Each line in the release notes should be a Markdown link to the issue/PR, e.g.:
