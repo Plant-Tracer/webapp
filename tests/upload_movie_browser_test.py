@@ -54,7 +54,7 @@ def _wait_for_movie_id(driver):
 def _section_contains_title(driver, title):
     """Helper for WebDriverWait to confirm the uploaded title renders on /list."""
     try:
-        section = driver.find_element(By.ID, "your-unpublished-movies")
+        section = driver.find_element(By.ID, "your-published-movies")
         return title in section.get_attribute("innerHTML")
     except Exception:  # pylint: disable=broad-exception-caught
         return False
@@ -118,7 +118,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
 
     # Confirm movie shows up in the UI list (client-side render)
     chrome_driver.get(f"{live_server}/list")
-    wait.until(EC.presence_of_element_located((By.ID, "your-unpublished-movies")))
+    wait.until(EC.presence_of_element_located((By.ID, "your-published-movies")))
     try:
         assert wait.until(lambda d: _section_contains_title(d, title))
     except TimeoutException:

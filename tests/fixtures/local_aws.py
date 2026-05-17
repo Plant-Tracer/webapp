@@ -178,7 +178,7 @@ def new_movie(new_course):
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[USER_ID] == cfg[USER_ID]
     assert movie[DELETED] == 0
-    assert movie[PUBLISHED] == 0
+    assert movie[PUBLISHED] == 1
     assert movie[VERSION] == 1
 
     cfg[MOVIE_ID] = movie_id
