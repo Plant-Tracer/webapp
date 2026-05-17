@@ -199,7 +199,7 @@ After uploading to S3, call the Lambda `start-processing` endpoint.
 
 #### `POST /api/list-movies`
 
-List all movies visible to the caller (their own movies and published movies in their course).
+List all movies visible to the caller (their own movies and published movies in their course; admins additionally see unpublished movies from other users in their course).
 
 **Response**
 

@@ -1377,7 +1377,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     TITLE: title,
                     DESCRIPTION: description,
                     ORIG_MOVIE: orig_movie,
-                    PUBLISHED: 0,
+                    PUBLISHED: 1,
                     DELETED: 0,
                     MOVIE_ZIPFILE_URN: None,
                     MOVIE_DATA_URN: None,

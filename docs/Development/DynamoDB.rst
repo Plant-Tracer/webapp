@@ -198,7 +198,7 @@ movies
 
 One record per uploaded movie. Key attributes:
 
-``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1),
+``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
 ``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1), ``credit_by_name`` (0/1), ``attribution_name``,

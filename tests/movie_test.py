@@ -115,13 +115,13 @@ def test_new_movie(client, new_movie):
     count = 0
     logger.debug("movies=%s",movies)
     for movie in movies:
-        if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
+        if (movie['deleted'] == 0) and (movie['published'] == 1) and (movie['title'] == movie_title):
             count += 1
             logger.debug("found movie: %s",movie)
         else:
             logger.debug("skip deleted=%s published=%s title=%s ",
                           movie['deleted']==0,
-                          movie['published']==0,
+                          movie['published']==1,
                           movie['title']==movie_title)
     assert count==1
 
@@ -237,8 +237,8 @@ def test_movie_update_metadata(client, new_movie):
     logger.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
     assert movie['deleted'] == 0
 
-    # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(client, api_key, movie_id)['published'] == 0
+    # Movies are published by default; verify and confirm owner can set published state
+    assert get_movie(client, api_key, movie_id)['published'] == 1
     resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
