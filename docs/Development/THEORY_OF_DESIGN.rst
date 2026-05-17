@@ -57,7 +57,7 @@ Faculty interface
   * Each faculty member can be in any number of sections
   * Shows all students assigned to each of their section, and all unassigned students.
   * Allows students to be moved between sections and unassigned.
-  * Shows all uploaded movies for each section and allows them to be publisehd or unpublished.
+  * Shows all uploaded movies for each section and allows them to be published or unpublished. Admins can publish or unpublish any movie; non-admin users can unpublish their own movies.
 
 
 API
