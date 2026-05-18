@@ -129,16 +129,15 @@ function sync_attribution_ui() {
     if (creditVal === '1') {
       $('#attribution-name-group').show();
       nameInput.prop('disabled', false);
-      nameInput.attr('placeholder', '');
     } else {
       $('#attribution-name-group').hide();
-      nameInput.val('').prop('disabled', true).attr('placeholder', 'In the text');
+      nameInput.prop('disabled', true);
     }
   } else {
     $('#attribution-group').hide();
     $('#attribution-name-group').hide();
     $('input[name="credit_by_name"]').prop('checked', false);
-    $('#attribution-name').val('').prop('disabled', true).attr('placeholder', 'In the text');
+    $('#attribution-name').prop('disabled', true);
   }
 }
 
