@@ -28,6 +28,7 @@ Developer Documentation
    notes_on_resizing
    optional-dict-keys-scan
    CODING_STANDARDS
+   ReleaseProcess
    gallery
    gallery_learning_plan
    movie_player
