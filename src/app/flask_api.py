@@ -615,6 +615,39 @@ def api_get_log():
 ################################################################
 ## Metdata Management (movies and users, it's a common API!)
 
+@api_bp.route('/set-research-metadata', methods=POST)
+def api_set_research_metadata():
+    """Set research_use (and cascade-clear credit_by_name when not Yes) for a movie.
+    Only the movie's uploader may call this.
+
+    :param api_key: authorization key
+    :param movie_id: the movie to update
+    :param research_use: '1', '0', or absent (None)
+    :param credit_by_name: '1', '0', or absent (None); only applied when research_use == '1'
+    :return: {error: false}
+    """
+    def _parse_tristate(raw):
+        if raw == '1':
+            return 1
+        if raw == '0':
+            return 0
+        return None
+
+    movie_id = get_movie_id()
+    user_id = get_user_id(allow_demo=False)
+    research_use = _parse_tristate(get('research_use'))
+    odb.set_research_use(user_id=user_id, movie_id=movie_id, research_use=research_use)
+
+    # If research is allowed, also update credit_by_name when explicitly provided
+    if research_use == 1:
+        credit_raw = get('credit_by_name')
+        if credit_raw in ('0', '1'):
+            credit_by_name = _parse_tristate(credit_raw)
+            odb.set_metadata(user_id=user_id, set_movie_id=movie_id,
+                             prop='credit_by_name', value=credit_by_name)
+    return {'error': False}
+
+
 @api_bp.route('/set-metadata', methods=POST)
 def api_set_metadata():
     """ set some aspect of the metadata

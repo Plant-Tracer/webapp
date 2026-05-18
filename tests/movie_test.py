@@ -26,7 +26,7 @@ from app.constants import logger
 from .conftest import get_movie_bytes
 
 # Get constants from fixtures (fixtures themselves are in conftest.py)
-from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE, ADMIN_EMAIL
 
 
 
@@ -448,6 +448,67 @@ def test_new_movie_attribution_paths(client, new_course, local_s3):
     resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id3})
     assert resp.get_json()["error"] is False
     odb_movie_data.purge_movie(movie_id=movie_id3)
+
+
+def test_set_research_metadata(client, new_course):
+    """Verify /api/set-research-metadata sets research_use, cascades to clear credit_by_name,
+    and blocks non-owners (including admins of other users' movies)."""
+    cfg = copy.copy(new_course)
+    api_key_user = cfg[API_KEY]
+
+    # Create a movie with research_use=1 and credit_by_name=1
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data = f.read()
+    sha256 = s3_presigned.sha256_hash(movie_data)
+    resp = client.post("/api/new-movie", data={
+        "api_key": api_key_user,
+        "title": f"research-test-{uuid.uuid4()}",
+        "description": "test",
+        "movie_data_sha256": sha256,
+        "research_use": "1",
+        "credit_by_name": "1",
+    })
+    res = resp.get_json()
+    assert res["error"] is False
+    movie_id = res["movie_id"]
+
+    # Owner sets research_use to 0 — credit_by_name should be cleared
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id, "research_use": "0",
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m["research_use"] == 0
+    assert m.get("credit_by_name") is None  # cascade cleared
+
+    # Owner sets research_use=1 and credit_by_name=1 together
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id,
+        "research_use": "1", "credit_by_name": "1",
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m["research_use"] == 1
+    assert m["credit_by_name"] == 1
+
+    # Owner sets research_use to N/A (omitted) — credit_by_name should be cleared
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id,
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m.get("research_use") is None
+    assert m.get("credit_by_name") is None
+
+    # Non-owner (admin of the course) cannot change research metadata
+    admin_api_key = odb.make_new_api_key(email=cfg[ADMIN_EMAIL])
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": admin_api_key, "movie_id": movie_id, "research_use": "1",
+    })
+    assert r.get_json()["error"] is True
+
+    odb_movie_data.purge_movie(movie_id=movie_id)
+    odb_movie_data.delete_movie(movie_id=movie_id)
 
 
 def test_api_edit_movie(new_movie, client):
