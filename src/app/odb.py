@@ -1350,7 +1350,7 @@ def can_access_movie(*, user_id, movie_id):
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
-                     research_use=0, credit_by_name=0, attribution_name=None):
+                     research_use=None, credit_by_name=None, attribution_name=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -1358,8 +1358,8 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param title: - title of movie. Stored in movies table
     :param description: - description of movie
     :param orig_movie: - if presented, the movie_id of the movie on which this is based
-    :param research_use: - 1 if movie may be used in academic research, else 0
-    :param credit_by_name: - 1 if user wants credit by name in research, else 0
+    :param research_use: - 1 if movie may be used in research, 0 if not, None if not yet answered
+    :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
     :return: movie_id of the created movie
 
@@ -1394,6 +1394,22 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     MOVIE_STATUS: MOVIE_STATE_UPLOADING,
                     })
     return movie_id
+
+def set_research_use(*, user_id, movie_id, research_use):
+    """Set research_use for a movie (owner only). If research_use is not 1, also clears credit_by_name.
+
+    :param user_id: - user making the change; must be the movie owner
+    :param movie_id: - the movie to update
+    :param research_use: - 1, 0, or None
+    """
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    if movie[USER_ID] != user_id:
+        raise UnauthorizedUser(f"user {user_id} is not the owner of movie {movie_id}")
+    update = {RESEARCH_USE: research_use}
+    if research_use != 1:
+        update[CREDIT_BY_NAME] = None
+    ddbo.update_table(ddbo.movies, movie_id, update)
 
 def get_movie(*, movie_id):
     """Returns the movie's data"""
@@ -1673,6 +1689,10 @@ SET_MOVIE_METADATA = {
 
     # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
     ROTATION_STEPS: 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
+
+    # Research attribution — only the uploader may change these, not admins of other users' movies.
+    RESEARCH_USE: 'update movies set research_use=%s where id=%s and @is_owner',
+    CREDIT_BY_NAME: 'update movies set credit_by_name=%s where id=%s and @is_owner',
 }
 
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):

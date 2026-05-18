@@ -178,9 +178,9 @@ After uploading to S3, call the Lambda `start-processing` endpoint.
 | `title` | No | Movie title |
 | `description` | No | Movie description |
 | `movie_data_sha256` | Yes | SHA-256 hex digest of the video file (64 chars) |
-| `research_use` | No | `"1"` to allow research use |
-| `credit_by_name` | No | `"1"` to allow attribution by name |
-| `attribution_name` | No | Attribution name (only used if `credit_by_name=1`) |
+| `research_use` | No | `"1"` = yes, `"0"` = no, omit = not answered |
+| `credit_by_name` | No | `"1"` = yes, `"0"` = no, omit = not answered (only meaningful when `research_use=1`) |
+| `attribution_name` | No | Attribution name (only stored when `credit_by_name=1`) |
 
 **Response**
 
@@ -312,6 +312,27 @@ Delete or undelete a movie.
 **Response**
 
 ```json
+{ "error": false }
+```
+
+---
+
+#### `POST /api/set-research-metadata`
+
+Set `research_use` (and optionally `credit_by_name`) for a movie. Only the movie's uploader may call this endpoint — course admins are not permitted to change another user's research metadata. When `research_use` is set to anything other than `"1"`, `credit_by_name` is automatically cleared server-side; `attribution_name` is left intact.
+
+**Parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `api_key` | Yes | Must belong to the movie's uploader |
+| `movie_id` | Yes | Movie to update |
+| `research_use` | No | `"1"` = yes, `"0"` = no, omit = not answered |
+| `credit_by_name` | No | `"1"` = yes, `"0"` = no; only applied when `research_use=1` |
+
+**Response**
+
+```text
 { "error": false }
 ```
 

@@ -30,11 +30,26 @@ that the object remains self-describing even if the DynamoDB database is gone.
 The two main choices are:
 
 1. **Research use** — Whether the uploaded movie may be used in academic
-   research. If not selected, the video is for course use only and is not
-   intended for research.
+   research.
 2. **Credit by name** — If research use is allowed, whether the student wants
    to be credited by name. If yes, a "Name for attribution" value is stored.
    If no, the video may still be used in research but anonymously.
+
+Three-state model
+-----------------
+
+Each of ``research_use`` and ``credit_by_name`` is a three-state value:
+
+- ``1`` — explicitly **Yes**
+- ``0`` — explicitly **No**
+- ``None`` — **not yet answered** (the user did not select a radio button,
+  or the record predates the radio-button UI)
+
+The sentinel string ``"not-answered"`` is used when either field has not been
+answered in S3 object metadata and MP4 embedded metadata (where ``None`` cannot
+be stored directly). Legacy records with ``0`` stored before the radio-button UI
+was introduced are treated as an explicit *No* (the original checkbox was
+visible to the user and they chose not to check it).
 
 Implementation
 ==============
@@ -42,18 +57,14 @@ Implementation
 Upload form
 -----------
 
-- **Checkbox 1:** "The uploaded movie may be used in academic research."
-  When unchecked, the video is not for research use; the second checkbox and
-  name field are hidden.
+- **Research use** — Yes/No radio group. Neither option is pre-selected,
+  leaving the value as *not answered* until the student makes a choice.
 
-- **Checkbox 2:** Shown only when checkbox 1 is checked. "I would like credit
-  by name for the use of this video in research." If unchecked, the video may
-  be used in research anonymously; the "Name for attribution" field is disabled
-  and shows the placeholder "In the text."
+- **Credit by name** — Yes/No radio group. Shown only when research use is
+  **Yes**. Neither option is pre-selected by default.
 
-- **Name for attribution:** Text field, shown when research use is allowed.
-  Enabled only when "credit by name" is checked; otherwise disabled with
-  placeholder "In the text."
+- **Name for attribution:** Text field. Shown and enabled only when both
+  research use is **Yes** and credit by name is **Yes**.
 
 UI logic is implemented in ``sync_attribution_ui()`` in ``src/app/static/planttracer.js``,
 with the form markup in ``src/app/templates/upload.html``.
@@ -62,44 +73,45 @@ API and database
 ----------------
 
 - **Endpoint:** ``POST /api/new-movie`` accepts (in addition to existing
-  parameters) form fields: ``research_use`` (``"1"`` or omitted), ``credit_by_name``
-  (``"1"`` or omitted), and ``attribution_name`` (string).
+  parameters) form fields: ``research_use`` (``"1"``, ``"0"``, or omitted),
+  ``credit_by_name`` (``"1"``, ``"0"``, or omitted), and ``attribution_name``
+  (string). Omitted fields are stored as ``None`` in DynamoDB.
 
 - **Storage:** The movie record in DynamoDB (see ``schema.Movie`` and
   ``odb.create_new_movie``) stores:
 
-  - ``research_use``: 0 or 1
-  - ``credit_by_name``: 0 or 1
+  - ``research_use``: 1, 0, or None
+  - ``credit_by_name``: 1, 0, or None
   - ``attribution_name``: string or null (only meaningful when ``credit_by_name == 1``)
 
-- **Validation:** ``credit_by_name == 0`` forces ``attribution_name`` to
-  null on the server. Existing movies without these fields are treated as
-  default 0 / null (see ``schema.Movie`` defaults and ``fix_movie_prop_value``).
+- **Validation:** ``credit_by_name != 1`` forces ``attribution_name`` to
+  null on the server.
 
 Presigned S3 upload and object metadata
 ---------------------------------------
 
 - **Presigned post:** ``s3_presigned.make_presigned_post()`` takes
-  ``research_use``, ``credit_by_name``, and ``attribution_name`` (as strings
-  for the form). These are added to both ``Fields`` and ``Conditions`` so that
-  the presigned POST signature binds the client to those exact values.
+  ``research_use``, ``credit_by_name``, and ``attribution_name`` (as strings).
+  These are added to both ``Fields`` and ``Conditions`` so that the presigned
+  POST signature binds the client to those exact values.
 
-- **S3 object metadata:** The same values are sent as S3 user metadata in the
-  POST body using the keys:
+- **S3 object metadata:** The same values are sent as S3 user metadata using
+  the keys:
 
-  - ``x-amz-meta-research-use`` (e.g. ``"0"`` or ``"1"``)
-  - ``x-amz-meta-credit-by-name`` (e.g. ``"0"`` or ``"1"``)
-  - ``x-amz-meta-attribution-name`` (string; empty when not attributed by name)
+  - ``x-amz-meta-research-use`` — ``"1"``, ``"0"``, or ``"not-answered"``
+  - ``x-amz-meta-credit-by-name`` — ``"1"``, ``"0"``, or ``"not-answered"``
+  - ``x-amz-meta-attribution-name`` — name string, or empty string
 
   Because they are in the presigned ``Fields``, the client must send these
   exact values when uploading; the object in S3 therefore carries the same
   research and attribution metadata as the DynamoDB record.
 
 - **Client:** ``upload_movie_post()`` in ``planttracer.js`` sends
-  ``research_use``, ``credit_by_name``, and ``attribution_name`` to
-  ``/api/new-movie``. The API returns a presigned post whose ``fields``
-  already contain the signed metadata; the client posts those fields (and the
-  file) to S3 without modifying them.
+  ``research_use`` and ``credit_by_name`` only when a radio button has been
+  selected (omits the field entirely when *not answered*), and sends
+  ``attribution_name`` to ``/api/new-movie``. The API returns a presigned post
+  whose ``fields`` already contain the signed metadata; the client posts those
+  fields (and the file) to S3 without modifying them.
 
 Traceability
 ------------

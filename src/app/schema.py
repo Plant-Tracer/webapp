@@ -112,8 +112,9 @@ class Movie(BaseModel):
     version: Annotated[int | None, Field(ge=0)] = None
 
     # Research use and attribution (see docs/MOVIE_METADATA)
-    research_use: Annotated[int, Field(ge=0, le=1)] = 0
-    credit_by_name: Annotated[int, Field(ge=0, le=1)] = 0
+    # None means the user was never asked (legacy or upload without the radio buttons answered).
+    research_use: Annotated[int, Field(ge=0, le=1)] | None = None
+    credit_by_name: Annotated[int, Field(ge=0, le=1)] | None = None
     attribution_name: str | None = None
 
     # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.

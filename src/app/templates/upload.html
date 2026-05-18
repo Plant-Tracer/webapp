@@ -36,22 +36,22 @@
         <input id='movie-file' type="file" onchange='check_upload_metadata()'>
         <span class="pure-form-message-inline">required</span>
       </div>
-      <div class='pure-control-group'>
-        <label>
-          <input type='checkbox' id='research-use-checkbox' name='research_use' value='1' onchange='sync_attribution_ui()'>
-          The uploaded movie may be used in academic research.
-        </label>
+      <div style='margin: 0.4em 0 0.2em 1em'>
+        <small>Please review the <a href='tos#contributor-agreement' target='_blank'>Contributor Agreement</a> before answering.</small>
       </div>
-      <div class='pure-control-group' id='attribution-group' style='display:none'>
-        <label>
-          <input type='checkbox' id='credit-by-name-checkbox' name='credit_by_name' value='1' onchange='sync_attribution_ui()'>
-          I would like credit by name for the use of this video in research.
-        </label>
-        <span class="pure-form-message-inline">If unchecked, video will be used anonymously.</span>
+      <div style='margin: 0.2em 0 0.4em 1em'>
+        May this movie be used in academic research?
+        <label style='margin-left:0.75em'><input type='radio' name='research_use' value='1' onchange='sync_attribution_ui()'> Yes</label>
+        <label style='margin-left:0.5em'><input type='radio' name='research_use' value='0' onchange='sync_attribution_ui()'> No</label>
+      </div>
+      <div id='attribution-group' style='display:none; margin: 0.4em 0 0.4em 1em'>
+        Would you like credit by name for the use of this video in research?
+        <label style='margin-left:0.75em'><input type='radio' name='credit_by_name' value='1' onchange='sync_attribution_ui()'> Yes</label>
+        <label style='margin-left:0.5em'><input type='radio' name='credit_by_name' value='0' onchange='sync_attribution_ui()'> No (video used anonymously)</label>
       </div>
       <div class='pure-control-group' id='attribution-name-group' style='display:none'>
         <label for='attribution-name'>Name for attribution:</label>
-        <input type='text' id='attribution-name' name='attribution_name' placeholder='In the text' disabled>
+        <input type='text' id='attribution-name' name='attribution_name' value='{{user_name}}' disabled>
       </div>
       <div class='pure-control-group'>
         <label for='submit-button'>Click to upload:</label>

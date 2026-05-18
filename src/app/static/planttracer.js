@@ -118,27 +118,26 @@ function check_upload_metadata()
 }
 
 function sync_attribution_ui() {
-  if ($('#research-use-checkbox').get(0) == null) {
+  if ($('input[name="research_use"]').length === 0) {
     return;
   }
-  const researchChecked = $('#research-use-checkbox').prop('checked');
-  if (researchChecked) {
+  const researchVal = $('input[name="research_use"]:checked').val(); // '1', '0', or undefined
+  if (researchVal === '1') {
     $('#attribution-group').show();
-    $('#attribution-name-group').show();
-    const creditChecked = $('#credit-by-name-checkbox').prop('checked');
+    const creditVal = $('input[name="credit_by_name"]:checked').val(); // '1', '0', or undefined
     const nameInput = $('#attribution-name');
-    if (creditChecked) {
+    if (creditVal === '1') {
+      $('#attribution-name-group').show();
       nameInput.prop('disabled', false);
-      nameInput.attr('placeholder', '');
     } else {
+      $('#attribution-name-group').hide();
       nameInput.prop('disabled', true);
-      nameInput.attr('placeholder', 'In the text');
     }
   } else {
     $('#attribution-group').hide();
     $('#attribution-name-group').hide();
-    $('#credit-by-name-checkbox').prop('checked', false);
-    $('#attribution-name').val('').prop('disabled', true).attr('placeholder', 'In the text');
+    $('input[name="credit_by_name"]').prop('checked', false);
+    $('#attribution-name').prop('disabled', true);
   }
 }
 
@@ -218,8 +217,8 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
   formData.append("description", description);
   formData.append("movie_data_sha256",  movie_data_sha256);
   formData.append("movie_data_length",  movieFile.size);
-  formData.append("research_use", research_use ? "1" : "0");
-  formData.append("credit_by_name", credit_by_name ? "1" : "0");
+  if (research_use !== null) { formData.append("research_use", research_use); }
+  if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
   formData.append("attribution_name", attribution_name || "");
   const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
   const obj = await r.json();
@@ -351,9 +350,9 @@ function upload_movie()
   const description = $('#movie-description').val();
   const movieFileInput = $('#movie-file');
   const movieFile = movieFileInput.prop('files')[0];
-  const research_use = $('#research-use-checkbox').prop('checked');
-  const credit_by_name = $('#credit-by-name-checkbox').prop('checked');
-  const attribution_name = research_use && credit_by_name ? ($('#attribution-name').val() || '').trim() : '';
+  const research_use = $('input[name="research_use"]:checked').val() || null;   // '1', '0', or null
+  const credit_by_name = $('input[name="credit_by_name"]:checked').val() || null; // '1', '0', or null
+  const attribution_name = (research_use === '1' && credit_by_name === '1') ? ($('#attribution-name').val() || '').trim() : '';
 
   if (movie_title.length < 3) {
     $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -554,6 +553,44 @@ function set_property(user_id, movie_id, property, value)
 }
 
 
+// Called when a research_use or credit_by_name dropdown changes.
+// Sends both values to /api/set-research-metadata and redraws.
+function research_metadata_changed( e ) {
+  const movie_id  = e.getAttribute('x-movie_id');
+  const property  = e.getAttribute('x-property');
+  const rawVal    = e.value; // 'n/a', '1', or '0'
+
+  // Find the sibling select for the other field (both carry x-movie_id)
+  function selectVal(prop) {
+    const el = document.querySelector(`select[x-movie_id='${movie_id}'][x-property='${prop}']`);
+    return el ? el.value : 'n/a';
+  }
+
+  const researchRaw = property === 'research_use' ? rawVal : selectVal('research_use');
+  const creditRaw   = property === 'credit_by_name' ? rawVal : selectVal('credit_by_name');
+
+  // Guard: ignore placeholder value (should never be selectable, but be safe)
+  if (!researchRaw && property === 'research_use') { return; }
+  if (!creditRaw   && property === 'credit_by_name') { return; }
+
+  const formData = new FormData();
+  formData.append('api_key', api_key);
+  formData.append('movie_id', movie_id);
+  if (researchRaw) { formData.append('research_use', researchRaw); }
+  if (creditRaw)   { formData.append('credit_by_name', creditRaw); }
+
+  fetch(`${API_BASE}api/set-research-metadata`, { method: 'POST', body: formData })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.error !== false) {
+        $('#message').html('error: ' + data.message);
+      } else {
+        list_ready_function();
+      }
+    })
+    .catch(console.error);
+}
+
 // This is called when a checkbox in a movie table is checked. It gets the movie_id and the property and
 // the old value and asks for a change. the value 'checked' is the new value, so we just send it to the server
 // and then do a repaint.
@@ -637,8 +674,8 @@ function action_button_clicked( e ) {
 // It's called with a list of movies
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 
-//                           #1          #2               #3               #4              #5                 #6                #7
-const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> </tr>";
+//                           #1          #2               #3               #4              #5                 #6                #7              #8            #9
+const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> <th>research use</th> <th>credit</th> </tr>";
 
 // Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
@@ -686,6 +723,34 @@ function list_movies_data( movies ) {
       // This products the HTML for each <td> that has a checkbox.
       // Clicking the checkbox calls row_checkbox_clicked(this) to change the property on the server
       // and initiate a redraw
+      // Returns "Yes", "No", or "N/A" for a tristate int|null value
+      function tristate_label(value) {
+        if (value === 1) { return 'Yes'; }
+        if (value === 0) { return 'No'; }
+        return 'N/A';
+      }
+
+      // Produces a <td> for a tristate field.
+      // Owners get a Yes/No <select>; everyone else gets read-only text.
+      // N/A is never an option — when the current value is N/A a disabled placeholder
+      // "—" is shown as the selected item so the user can only move forward to Yes or No.
+      function make_td_tristate(property, value, disabled) {
+        tid += 1;
+        const label = tristate_label(value);
+        if (m.user_id === user_id && !demo_mode && !disabled) {
+          const sel1 = value === 1 ? 'selected' : '';
+          const sel0 = value === 0 ? 'selected' : '';
+          const placeholder = (value !== 1 && value !== 0)
+            ? `<option value='' disabled selected>—</option>` : '';
+          return `<td><select id='${tid}' x-movie_id='${movie_id}' x-property='${property}' onchange='research_metadata_changed(this)'>` +
+            placeholder +
+            `<option value='1' ${sel1}>Yes</option>` +
+            `<option value='0' ${sel0}>No</option>` +
+            `</select></td>\n`;
+        }
+        return `<td>${label}</td>\n`;
+      }
+
       function _make_td_checkbox(property, value) {
         // for debugging:
         // return `<td> ${property} = ${value} </td>`;
@@ -779,11 +844,20 @@ function list_movies_data( movies ) {
           rows += make_action_button( DELETE_BUTTON );
         }
       }
-      rows += "</td></tr>\n"; // #7 end, <tr>
+      rows += "</td>"; // #7 end (status)
+
+      // #8 Research Use — dropdown for owner, text for others
+      rows += make_td_tristate('research_use', m.research_use, false);
+
+      // #9 Credit — dropdown for owner only when research_use==1; otherwise read-only
+      const creditDisabled = (m.research_use !== 1);
+      rows += make_td_tristate('credit_by_name', creditDisabled ? null : m.credit_by_name, creditDisabled);
+
+      rows += "</tr>\n";
 
       // Now make the player row
       rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
-        `<td    class='movie_player' id='td-${rowid}' colspan='7' ></td>` +
+        `<td    class='movie_player' id='td-${rowid}' colspan='8' ></td>` +
         `</tr>\n`;
       return rows;
     }
@@ -798,7 +872,7 @@ function list_movies_data( movies ) {
 
     // Offer to upload movies if not in demo mode.
     if (!demo_mode) {
-      h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
+      h += '<tr><td colspan="8"><a href="/upload">Click here to upload a movie</a></td></tr>';
     }
 
     h += "</tbody>";
@@ -929,6 +1003,7 @@ window.play_clicked = play_clicked;
 window.analyze_clicked = analyze_clicked;
 window.row_pencil_clicked = row_pencil_clicked;
 window.action_button_clicked = action_button_clicked;
+window.research_metadata_changed = research_metadata_changed;
 window.hide_clicked = hide_clicked;
 
 // Wire up whatever happens to be present
@@ -953,6 +1028,7 @@ if (typeof module != 'undefined'){
     purge_movie,
     register_func,
     resend_func,
+    research_metadata_changed,
     row_checkbox_clicked,
     set_property,
     upload_movie_post,

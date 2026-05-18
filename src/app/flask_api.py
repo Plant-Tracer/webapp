@@ -311,12 +311,20 @@ def api_new_movie():
 
     ret = {'error': False}
 
-    research_use = 1 if get('research_use') == '1' else 0
-    credit_by_name = 1 if get('credit_by_name') == '1' else 0
+    def _parse_tristate(raw):
+        """Return 1, 0, or None from a form string value ('1', '0', or absent/other)."""
+        if raw == '1':
+            return 1
+        if raw == '0':
+            return 0
+        return None
+
+    research_use = _parse_tristate(get('research_use'))
+    credit_by_name = _parse_tristate(get('credit_by_name'))
     attribution_name = (request.values.get('attribution_name') or '').strip() or None
     if attribution_name is not None:
         attribution_name = attribution_name[:256]
-    if credit_by_name == 0:
+    if credit_by_name != 1:
         attribution_name = None
 
     ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
@@ -335,12 +343,18 @@ def api_new_movie():
 
     # Always upload to final key
     upload_urn = movie_data_urn
+    def _tristate_to_str(val):
+        """Convert tristate int|None to S3 metadata string."""
+        if val is None:
+            return 'not-answered'
+        return str(val)
+
     ret['presigned_post'] = make_presigned_post(
         urn=upload_urn,
         mime_type='video/mp4',
         sha256=movie_data_sha256,
-        research_use=str(research_use),
-        credit_by_name=str(credit_by_name),
+        research_use=_tristate_to_str(research_use),
+        credit_by_name=_tristate_to_str(credit_by_name),
         attribution_name=attribution_name or '')
     return ret
 
@@ -600,6 +614,39 @@ def api_get_log():
 
 ################################################################
 ## Metdata Management (movies and users, it's a common API!)
+
+@api_bp.route('/set-research-metadata', methods=POST)
+def api_set_research_metadata():
+    """Set research_use (and cascade-clear credit_by_name when not Yes) for a movie.
+    Only the movie's uploader may call this.
+
+    :param api_key: authorization key
+    :param movie_id: the movie to update
+    :param research_use: '1', '0', or absent (None)
+    :param credit_by_name: '1', '0', or absent (None); only applied when research_use == '1'
+    :return: {error: false}
+    """
+    def _parse_tristate(raw):
+        if raw == '1':
+            return 1
+        if raw == '0':
+            return 0
+        return None
+
+    movie_id = get_movie_id()
+    user_id = get_user_id(allow_demo=False)
+    research_use = _parse_tristate(get('research_use'))
+    odb.set_research_use(user_id=user_id, movie_id=movie_id, research_use=research_use)
+
+    # If research is allowed, also update credit_by_name when explicitly provided
+    if research_use == 1:
+        credit_raw = get('credit_by_name')
+        if credit_raw in ('0', '1'):
+            credit_by_name = _parse_tristate(credit_raw)
+            odb.set_metadata(user_id=user_id, set_movie_id=movie_id,
+                             prop='credit_by_name', value=credit_by_name)
+    return {'error': False}
+
 
 @api_bp.route('/set-metadata', methods=POST)
 def api_set_metadata():

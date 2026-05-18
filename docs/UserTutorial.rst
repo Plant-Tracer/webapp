@@ -37,11 +37,11 @@ Uploading Movies (optional)
 - Plant Tracer will accept videos in most well-known video file formats, but MP4 is probably best.
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
-- If you would like to permit your uploaded movie to be used in academic research, check the box "The uploaded movie may be used in academic research." You will then be asked whether you want to be credited for this contribution and what name you want to be credited with.
+- The upload form asks whether your movie may be used in academic research. Before answering, review the `Contributor Agreement <tos#contributor-agreement>`_ linked on the form. Select **Yes** or **No**. If you select **Yes**, you will also be asked whether you want to be credited by name; your display name is pre-filled as the attribution name, which you can edit.
 - Choose a file to upload.
 
 .. image:: tutorial_images/upload_movie.png
-   :alt: Plant Tracer Upload page with fields for movie title, description, research consent checkbox, and file chooser
+   :alt: Plant Tracer Upload page with fields for movie title, description, research use radio buttons, and file chooser
 
 Tracking the Uploaded Movie
 ---------------------------
