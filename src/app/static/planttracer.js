@@ -123,6 +123,7 @@ function sync_attribution_ui() {
   }
   const researchVal = $('input[name="research_use"]:checked').val(); // '1', '0', or undefined
   if (researchVal === '1') {
+    $('#contributor-agreement-notice').show();
     $('#attribution-group').show();
     const creditVal = $('input[name="credit_by_name"]:checked').val(); // '1', '0', or undefined
     const nameInput = $('#attribution-name');
@@ -135,6 +136,7 @@ function sync_attribution_ui() {
       nameInput.val('').prop('disabled', true).attr('placeholder', 'In the text');
     }
   } else {
+    $('#contributor-agreement-notice').hide();
     $('#attribution-group').hide();
     $('#attribution-name-group').hide();
     $('input[name="credit_by_name"]').prop('checked', false);
