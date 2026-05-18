@@ -569,11 +569,15 @@ function research_metadata_changed( e ) {
   const researchRaw = property === 'research_use' ? rawVal : selectVal('research_use');
   const creditRaw   = property === 'credit_by_name' ? rawVal : selectVal('credit_by_name');
 
+  // Guard: ignore placeholder value (should never be selectable, but be safe)
+  if (!researchRaw && property === 'research_use') { return; }
+  if (!creditRaw   && property === 'credit_by_name') { return; }
+
   const formData = new FormData();
   formData.append('api_key', api_key);
   formData.append('movie_id', movie_id);
-  if (researchRaw !== 'n/a') { formData.append('research_use', researchRaw); }
-  if (creditRaw   !== 'n/a') { formData.append('credit_by_name', creditRaw); }
+  if (researchRaw) { formData.append('research_use', researchRaw); }
+  if (creditRaw)   { formData.append('credit_by_name', creditRaw); }
 
   fetch(`${API_BASE}api/set-research-metadata`, { method: 'POST', body: formData })
     .then((r) => r.json())
@@ -727,19 +731,21 @@ function list_movies_data( movies ) {
       }
 
       // Produces a <td> for a tristate field.
-      // Owners get a <select> dropdown; everyone else gets read-only text.
-      // The <select> carries x-movie_id and x-property for the change handler.
+      // Owners get a Yes/No <select>; everyone else gets read-only text.
+      // N/A is never an option — when the current value is N/A a disabled placeholder
+      // "—" is shown as the selected item so the user can only move forward to Yes or No.
       function make_td_tristate(property, value, disabled) {
         tid += 1;
         const label = tristate_label(value);
         if (m.user_id === user_id && !demo_mode && !disabled) {
           const sel1 = value === 1 ? 'selected' : '';
           const sel0 = value === 0 ? 'selected' : '';
-          const selN = (value === null || value === undefined) ? 'selected' : '';
+          const placeholder = (value !== 1 && value !== 0)
+            ? `<option value='' disabled selected>—</option>` : '';
           return `<td><select id='${tid}' x-movie_id='${movie_id}' x-property='${property}' onchange='research_metadata_changed(this)'>` +
-            `<option value='n/a' ${selN}>N/A</option>` +
-            `<option value='1'   ${sel1}>Yes</option>` +
-            `<option value='0'   ${sel0}>No</option>` +
+            placeholder +
+            `<option value='1' ${sel1}>Yes</option>` +
+            `<option value='0' ${sel0}>No</option>` +
             `</select></td>\n`;
         }
         return `<td>${label}</td>\n`;
