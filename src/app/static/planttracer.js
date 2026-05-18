@@ -675,7 +675,7 @@ function action_button_clicked( e ) {
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video
 
 //                           #1          #2               #3               #4              #5                 #6                #7              #8            #9
-const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> <th>Research Use</th> <th>Credit</th> </tr>";
+const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> <th>research use</th> <th>credit</th> </tr>";
 
 // Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
@@ -872,7 +872,7 @@ function list_movies_data( movies ) {
 
     // Offer to upload movies if not in demo mode.
     if (!demo_mode) {
-      h += '<tr><td colspan="6"><a href="/upload">Click here to upload a movie</a></td></tr>';
+      h += '<tr><td colspan="8"><a href="/upload">Click here to upload a movie</a></td></tr>';
     }
 
     h += "</tbody>";
