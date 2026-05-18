@@ -1350,7 +1350,7 @@ def can_access_movie(*, user_id, movie_id):
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
-                     research_use=0, credit_by_name=0, attribution_name=None):
+                     research_use=None, credit_by_name=None, attribution_name=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -1358,8 +1358,8 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param title: - title of movie. Stored in movies table
     :param description: - description of movie
     :param orig_movie: - if presented, the movie_id of the movie on which this is based
-    :param research_use: - 1 if movie may be used in academic research, else 0
-    :param credit_by_name: - 1 if user wants credit by name in research, else 0
+    :param research_use: - 1 if movie may be used in research, 0 if not, None if not yet answered
+    :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
     :return: movie_id of the created movie
 

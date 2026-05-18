@@ -351,7 +351,12 @@ def test_new_movie_api(client, new_course):
 
 
 def test_new_movie_attribution_paths(client, new_course, local_s3):
-    """Test the three attribution paths: no research use, research anonymous, research with attribution."""
+    """Test the four attribution paths:
+    Path 0 — neither field submitted (not-answered)
+    Path 1 — explicitly no research use
+    Path 2 — research allowed but anonymously
+    Path 3 — research with named attribution
+    """
     cfg = copy.copy(new_course)
     api_key = cfg[API_KEY]
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
@@ -364,27 +369,44 @@ def test_new_movie_attribution_paths(client, new_course, local_s3):
         "movie_data_sha256": movie_data_sha256,
     }
 
-    # Path 1: May not be used in research (no research use)
-    resp1 = client.post("/api/new-movie", data={**base_data, "title": f"path1-{uuid.uuid4()}"})
+    # Path 0: Neither radio answered — research_use and credit_by_name absent from POST
+    resp0 = client.post("/api/new-movie", data={**base_data, "title": f"path0-{uuid.uuid4()}"})
+    res0 = resp0.get_json()
+    assert res0["error"] is False
+    movie_id0 = res0["movie_id"]
+    movie0 = odb.get_movie(movie_id=movie_id0)
+    assert movie0["research_use"] is None
+    assert movie0["credit_by_name"] is None
+    assert movie0.get("attribution_name") is None
+    pp0 = res0["presigned_post"]
+    assert pp0["fields"].get("x-amz-meta-research-use") == "not-answered"
+    assert pp0["fields"].get("x-amz-meta-credit-by-name") == "not-answered"
+    assert pp0["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id0})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id0)
+
+    # Path 1: May not be used in research (research_use explicitly "0")
+    resp1 = client.post("/api/new-movie", data={**base_data, "title": f"path1-{uuid.uuid4()}", "research_use": "0"})
     res1 = resp1.get_json()
     assert res1["error"] is False
     movie_id1 = res1["movie_id"]
     movie1 = odb.get_movie(movie_id=movie_id1)
     assert movie1["research_use"] == 0
-    assert movie1["credit_by_name"] == 0
+    assert movie1["credit_by_name"] is None
     assert movie1.get("attribution_name") is None
     pp1 = res1["presigned_post"]
     assert pp1["fields"].get("x-amz-meta-research-use") == "0"
-    assert pp1["fields"].get("x-amz-meta-credit-by-name") == "0"
+    assert pp1["fields"].get("x-amz-meta-credit-by-name") == "not-answered"
     assert pp1["fields"].get("x-amz-meta-attribution-name") == ""
     resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id1})
     assert resp.get_json()["error"] is False
     odb_movie_data.purge_movie(movie_id=movie_id1)
 
-    # Path 2: May be used in research but anonymously
+    # Path 2: May be used in research but anonymously (credit_by_name explicitly "0")
     resp2 = client.post(
         "/api/new-movie",
-        data={**base_data, "title": f"path2-{uuid.uuid4()}", "research_use": "1"},
+        data={**base_data, "title": f"path2-{uuid.uuid4()}", "research_use": "1", "credit_by_name": "0"},
     )
     res2 = resp2.get_json()
     assert res2["error"] is False

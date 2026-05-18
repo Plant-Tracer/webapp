@@ -311,12 +311,20 @@ def api_new_movie():
 
     ret = {'error': False}
 
-    research_use = 1 if get('research_use') == '1' else 0
-    credit_by_name = 1 if get('credit_by_name') == '1' else 0
+    def _parse_tristate(raw):
+        """Return 1, 0, or None from a form string value ('1', '0', or absent/other)."""
+        if raw == '1':
+            return 1
+        if raw == '0':
+            return 0
+        return None
+
+    research_use = _parse_tristate(get('research_use'))
+    credit_by_name = _parse_tristate(get('credit_by_name'))
     attribution_name = (request.values.get('attribution_name') or '').strip() or None
     if attribution_name is not None:
         attribution_name = attribution_name[:256]
-    if credit_by_name == 0:
+    if credit_by_name != 1:
         attribution_name = None
 
     ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
@@ -335,12 +343,18 @@ def api_new_movie():
 
     # Always upload to final key
     upload_urn = movie_data_urn
+    def _tristate_to_str(val):
+        """Convert tristate int|None to S3 metadata string."""
+        if val is None:
+            return 'not-answered'
+        return str(val)
+
     ret['presigned_post'] = make_presigned_post(
         urn=upload_urn,
         mime_type='video/mp4',
         sha256=movie_data_sha256,
-        research_use=str(research_use),
-        credit_by_name=str(credit_by_name),
+        research_use=_tristate_to_str(research_use),
+        credit_by_name=_tristate_to_str(credit_by_name),
         attribution_name=attribution_name or '')
     return ret
 

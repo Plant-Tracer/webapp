@@ -115,7 +115,7 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
         ExpiresIn=expires)
 
 def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
-                        research_use='0', credit_by_name='0', attribution_name=''):
+                        research_use='not-answered', credit_by_name='not-answered', attribution_name=''):
     """Returns a dictionary with 'url' and 'fields'.
     research_use, credit_by_name, attribution_name are included in the signature and set as S3 object metadata.
     Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection

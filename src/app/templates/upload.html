@@ -37,17 +37,22 @@
         <span class="pure-form-message-inline">required</span>
       </div>
       <div class='pure-control-group'>
-        <label>
-          <input type='checkbox' id='research-use-checkbox' name='research_use' value='1' onchange='sync_attribution_ui()'>
-          The uploaded movie may be used in academic research.
+        <label>May this movie be used in academic research?</label>
+        <label class='pure-radio'>
+          <input type='radio' name='research_use' value='1' onchange='sync_attribution_ui()'> Yes
+        </label>
+        <label class='pure-radio'>
+          <input type='radio' name='research_use' value='0' onchange='sync_attribution_ui()'> No
         </label>
       </div>
       <div class='pure-control-group' id='attribution-group' style='display:none'>
-        <label>
-          <input type='checkbox' id='credit-by-name-checkbox' name='credit_by_name' value='1' onchange='sync_attribution_ui()'>
-          I would like credit by name for the use of this video in research.
+        <label>Would you like credit by name for the use of this video in research?</label>
+        <label class='pure-radio'>
+          <input type='radio' name='credit_by_name' value='1' onchange='sync_attribution_ui()'> Yes
         </label>
-        <span class="pure-form-message-inline">If unchecked, video will be used anonymously.</span>
+        <label class='pure-radio'>
+          <input type='radio' name='credit_by_name' value='0' onchange='sync_attribution_ui()'> No (video used anonymously)
+        </label>
       </div>
       <div class='pure-control-group' id='attribution-name-group' style='display:none'>
         <label for='attribution-name'>Name for attribution:</label>

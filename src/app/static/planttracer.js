@@ -118,26 +118,26 @@ function check_upload_metadata()
 }
 
 function sync_attribution_ui() {
-  if ($('#research-use-checkbox').get(0) == null) {
+  if ($('input[name="research_use"]').length === 0) {
     return;
   }
-  const researchChecked = $('#research-use-checkbox').prop('checked');
-  if (researchChecked) {
+  const researchVal = $('input[name="research_use"]:checked').val(); // '1', '0', or undefined
+  if (researchVal === '1') {
     $('#attribution-group').show();
-    $('#attribution-name-group').show();
-    const creditChecked = $('#credit-by-name-checkbox').prop('checked');
+    const creditVal = $('input[name="credit_by_name"]:checked').val(); // '1', '0', or undefined
     const nameInput = $('#attribution-name');
-    if (creditChecked) {
+    if (creditVal === '1') {
+      $('#attribution-name-group').show();
       nameInput.prop('disabled', false);
       nameInput.attr('placeholder', '');
     } else {
-      nameInput.prop('disabled', true);
-      nameInput.attr('placeholder', 'In the text');
+      $('#attribution-name-group').hide();
+      nameInput.val('').prop('disabled', true).attr('placeholder', 'In the text');
     }
   } else {
     $('#attribution-group').hide();
     $('#attribution-name-group').hide();
-    $('#credit-by-name-checkbox').prop('checked', false);
+    $('input[name="credit_by_name"]').prop('checked', false);
     $('#attribution-name').val('').prop('disabled', true).attr('placeholder', 'In the text');
   }
 }
@@ -218,8 +218,8 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
   formData.append("description", description);
   formData.append("movie_data_sha256",  movie_data_sha256);
   formData.append("movie_data_length",  movieFile.size);
-  formData.append("research_use", research_use ? "1" : "0");
-  formData.append("credit_by_name", credit_by_name ? "1" : "0");
+  if (research_use !== null) { formData.append("research_use", research_use); }
+  if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
   formData.append("attribution_name", attribution_name || "");
   const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
   const obj = await r.json();
@@ -351,9 +351,9 @@ function upload_movie()
   const description = $('#movie-description').val();
   const movieFileInput = $('#movie-file');
   const movieFile = movieFileInput.prop('files')[0];
-  const research_use = $('#research-use-checkbox').prop('checked');
-  const credit_by_name = $('#credit-by-name-checkbox').prop('checked');
-  const attribution_name = research_use && credit_by_name ? ($('#attribution-name').val() || '').trim() : '';
+  const research_use = $('input[name="research_use"]:checked').val() || null;   // '1', '0', or null
+  const credit_by_name = $('input[name="credit_by_name"]:checked').val() || null; // '1', '0', or null
+  const attribution_name = (research_use === '1' && credit_by_name === '1') ? ($('#attribution-name').val() || '').trim() : '';
 
   if (movie_title.length < 3) {
     $('#message').html('<b>Movie title must be at least 3 characters long');
