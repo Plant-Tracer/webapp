@@ -8,6 +8,7 @@ const path = require('path');
 
 const module = require('planttracer');
 const list_movies_data = module.list_movies_data;
+const dtInstances = module.dtInstances;
 
 global.Audio = function() {
   this.play = jest.fn();
@@ -38,6 +39,14 @@ describe('list_movies_data', () => {
     global.TABLE_HEAD = globalData.TABLE_HEAD;
     global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
 
+    // Mock DataTables so planttracer.js can call $.fn.DataTable() without a real browser
+    const mockDtInstance = {
+      destroy: jest.fn(),
+      row: jest.fn(),
+    };
+    $.fn.DataTable = jest.fn(() => mockDtInstance);
+    $.fn.DataTable.isDataTable = jest.fn(() => false);
+
     // Mock document.querySelector to return mock elements with innerHTML setter
     mockElements = {};
     document.querySelector = jest.fn((selector) => {
@@ -47,7 +56,7 @@ describe('list_movies_data', () => {
       return mockElements[selector];
     });
 
-    // Mock document.querySelectorAll for hiding movie players
+    // Mock document.querySelectorAll (kept for safety; no longer called by movies code)
     document.querySelectorAll = jest.fn(() => []);
   });
 
@@ -140,6 +149,59 @@ describe('list_movies_data', () => {
 
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).not.toContain('Click here to upload a movie');
+  });
+
+  // DataTables initialisation tests
+
+  test('should initialise DataTables when movies are present', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+      }
+    ];
+
+    list_movies_data(movies);
+    // DataTable() should have been called at least once (for the published table)
+    expect($.fn.DataTable).toHaveBeenCalled();
+    // The DataTables config should disable sorting on column 5 (status and action)
+    const dtConfig = $.fn.DataTable.mock.calls[0][0];
+    expect(dtConfig.columnDefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ orderable: false, targets: 5 })
+      ])
+    );
+    // Default sort should be column 1 (uploaded), descending
+    expect(dtConfig.order).toEqual([[1, 'desc']]);
+  });
+
+  test('should not initialise DataTables when the movie list is empty', () => {
+    list_movies_data([]);
+    expect($.fn.DataTable).not.toHaveBeenCalled();
+  });
+
+  test('should store DataTables instance in dtInstances keyed by divSelector', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+      }
+    ];
+
+    list_movies_data(movies);
+    expect(dtInstances['#your-published-movies']).toBeDefined();
   });
 
   // Action Button Tests
