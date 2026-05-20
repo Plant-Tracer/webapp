@@ -884,13 +884,12 @@ function list_movies_data( movies ) {
       h += '<tr><td><i>No movies</i></td></tr>';
     }
 
-    // Offer to upload movies if not in demo mode.
-    if (!demo_mode) {
-      h += '<tr><td colspan="8"><a href="/upload">Click here to upload a movie</a></td></tr>';
-    }
-
     h += "</tbody>";
     h += "</table>";
+    // Offer to upload movies if not in demo mode (outside the table so DataTables doesn't count it).
+    if (!demo_mode) {
+      h += '<p><a href="/upload">Click here to upload a movie</a></p>';
+    }
     const divElement = document.querySelector(divSelector);
     if (divElement) {
       divElement.innerHTML = h;
