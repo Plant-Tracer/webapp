@@ -882,15 +882,18 @@ function list_movies_data( movies ) {
       divElement.innerHTML = h;
     }
   }
+  // Sort newest-first by date_uploaded (movies with no date sort to the end)
+  const byNewest = (a, b) => (Number(b.date_uploaded) || 0) - (Number(a.date_uploaded) || 0);
+
   // Create the four tables
   movies_fill_div( '#your-published-movies',
-                   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)));
+                   PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)).sort(byNewest));
   movies_fill_div( '#your-unpublished-movies',
-                   UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)));
+                   UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
   movies_fill_div( '#course-movies',
-                   COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin))));
+                   COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin))).sort(byNewest));
   movies_fill_div( '#your-deleted-movies',
-                   DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)));
+                   DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)).sort(byNewest));
   document.querySelectorAll('.movie_player').forEach(el => el.style.display = 'none');
 }
 
