@@ -84,7 +84,7 @@ describe('list_movies_data', () => {
 
     // Check that the published movies div was populated
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
-    expect(publishedHtml).toContain("<table>");
+    expect(publishedHtml).toContain("pure-table");
     expect(publishedHtml).toContain("Movie Title");
   });
 
@@ -125,7 +125,7 @@ describe('list_movies_data', () => {
 
     // Check that course movies are shown in the right section
     const courseHtml = mockElements['#course-movies'].innerHTML;
-    expect(courseHtml).toContain('<table>');
+    expect(courseHtml).toContain('pure-table');
   });
 
   test('should display a link to upload movies for non-demo users', () => {

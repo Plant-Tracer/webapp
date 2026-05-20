@@ -709,7 +709,7 @@ function list_movies_data( movies ) {
   // This fills in the given table with a given list
   function movies_fill_div( divSelector, which, mlist) {
     // Top of table
-    let h = "<table>";
+    let h = "<table class='pure-table pure-table-horizontal pure-table-striped'>";
     if (mlist.length > 0 ){
       h += "<thead>" + TABLE_HEAD + "</thead>";
     }

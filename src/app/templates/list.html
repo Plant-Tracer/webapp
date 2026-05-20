@@ -2,7 +2,6 @@
 {% extends 'base.html' %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 {% endblock %}
 
@@ -10,39 +9,27 @@
 <div id='load_message'><b>{{load_message}}</b></div>
 
 <style>
-  tr.you {
-  color: blue;
+  /* Highlight the logged-in user's own movies */
+  tr.you td {
+    color: blue;
   }
 
-  div.mtable table {
-  border:1px solid black;
-  border-collapse:collapse;
-  }
-
-  div.mtable input[type=checkbox] {
-  color:black;
-  background-color: yellow;
-  padding: 3px;
-  }
-
-  /* table headers for the movie tables. */
-  div.mtable th {
-  }
-
-  div.mtable td {
-  border:1px solid blue;
-  padding: 3px;
-  }
+  /* DataTables sort-direction indicators (replaces the DataTables stylesheet) */
+  table.dataTable thead th.sorting,
+  table.dataTable thead th.sorting_asc,
+  table.dataTable thead th.sorting_desc { cursor: pointer; }
+  table.dataTable thead th.sorting::after      { content: " \21D5"; opacity: 0.4; }
+  table.dataTable thead th.sorting_asc::after  { content: " \2191"; }
+  table.dataTable thead th.sorting_desc::after { content: " \2193"; }
 
   div.mtable td.check {
-  text-align:center;
+    text-align: center;
   }
 
   input[type=checkbox] {
-  width: 20px;
-  height: 20px;
+    width: 20px;
+    height: 20px;
   }
-
 </style>
 
 <div class='demo'>
