@@ -1061,6 +1061,8 @@ if (typeof module != 'undefined'){
     purge_movie,
     register_func,
     resend_func,
+    hide_clicked,
+    play_clicked,
     research_metadata_changed,
     row_checkbox_clicked,
     set_property,
