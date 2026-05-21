@@ -53,6 +53,14 @@
     },
     "testMatch": [
       "**/?(*.)+(spec|test).(mjs|js)"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 68,
+        "branches": 62,
+        "functions": 62,
+        "lines": 69
+      }
+    }
   }
 }
