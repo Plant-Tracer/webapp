@@ -471,17 +471,21 @@ function upload_ready_function() {
 function play_clicked( e ) {
   const movie_id = e.getAttribute('x-movie_id');
   const rowid = e.getAttribute('x-rowid');
+  const divSelector = e.getAttribute('x-div-selector');
   const base = (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) ? LAMBDA_API_BASE.replace(/\/$/, '') : '';
   if (!base) {
+    return;
+  }
+  const dt = divSelector ? dtInstances[divSelector] : null;
+  if (!dt) {
     return;
   }
   // ask the movie-data service for JSON information about the movie,
   // which will be a signed S3 GET URL
   const apiUrl = `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
-  $(`#tr-${rowid}`).show();
-  const td = $(`#td-${rowid}`);
-  td.html('<span class="loading">Loading…</span>');
-  td.show();
+  const tr = e.closest('tr');
+  const row = dt.row(tr);
+  row.child('<td colspan="8"><span class="loading">Loading…</span></td>').show();
 
   fetch(apiUrl)
     .then(function (resp) {
@@ -500,26 +504,37 @@ function play_clicked( e ) {
       if (!url) {
         throw new Error('No URL in response');
       }
-      td.html('');
-      td.html(`<video class='movie_player' id='video-${rowid}' controls playsinline><source src='${url}' type='video/mp4'></video>` +
-              `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' type='button' value='hide' onclick='hide_clicked(this)'>`);
-      td.show();
-      const video = $(`#video-${rowid}`);
-      const videoEl = video.get(0);
+      row.child(
+        `<td colspan="8"><video class='movie_player' id='video-${rowid}' controls playsinline>` +
+        `<source src='${url}' type='video/mp4'></video>` +
+        `<input class='hide' x-movie_id='${movie_id}' x-rowid='${rowid}' x-div-selector='${divSelector}' ` +
+        `type='button' value='hide' onclick='hide_clicked(this)'></td>`
+      ).show();
+      const videoEl = document.getElementById(`video-${rowid}`);
       if (videoEl) {
         videoEl.play();
       }
     })
     .catch(function (err) {
-      td.html('<span class="error">' + (err.message || 'Playback failed') + '</span>');
+      row.child('<td colspan="8"><span class="error">' + (err.message || 'Playback failed') + '</span></td>').show();
     });
 }
 
 function hide_clicked( e ) {
-  let rowid = e.getAttribute('x-rowid');
-  $(`#video-${rowid}`).hide();
-  $(`#tr-${rowid}`).hide();
-  $(`#td-${rowid}`).hide();
+  const rowid = e.getAttribute('x-rowid');
+  const divSelector = e.getAttribute('x-div-selector');
+  const videoEl = document.getElementById(`video-${rowid}`);
+  if (videoEl) {
+    videoEl.pause();
+  }
+  const dt = divSelector ? dtInstances[divSelector] : null;
+  if (dt) {
+    const childTr = e.closest('tr');
+    const parentTr = childTr ? childTr.previousElementSibling : null;
+    if (parentTr) {
+      dt.row(parentTr).child(false);
+    }
+  }
 }
 
 function analyze_clicked( e ) {
@@ -677,6 +692,9 @@ function action_button_clicked( e ) {
 //                           #1          #2               #3               #4              #5                 #6                #7              #8            #9
 const TABLE_HEAD = "<tr> <th>user</th>  <th>uploaded</th> <th>title</th> <th>description</th> <th>size</th> <th>status and action</th> <th>research use</th> <th>credit</th> </tr>";
 
+// DataTables instances keyed by divSelector — used by play_clicked / hide_clicked
+const dtInstances = {};
+
 // Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
   const PUBLISHED = 'published';
@@ -691,7 +709,7 @@ function list_movies_data( movies ) {
   // This fills in the given table with a given list
   function movies_fill_div( divSelector, which, mlist) {
     // Top of table
-    let h = "<table>";
+    let h = "<table class='pure-table pure-table-horizontal pure-table-striped'>";
     if (mlist.length > 0 ){
       h += "<thead>" + TABLE_HEAD + "</thead>";
     }
@@ -737,18 +755,19 @@ function list_movies_data( movies ) {
       function make_td_tristate(property, value, disabled) {
         tid += 1;
         const label = tristate_label(value);
+        const sortVal = value === 1 ? 1 : value === 0 ? 0 : -1;
         if (m.user_id === user_id && !demo_mode && !disabled) {
           const sel1 = value === 1 ? 'selected' : '';
           const sel0 = value === 0 ? 'selected' : '';
           const placeholder = (value !== 1 && value !== 0)
             ? `<option value='' disabled selected>—</option>` : '';
-          return `<td><select id='${tid}' x-movie_id='${movie_id}' x-property='${property}' onchange='research_metadata_changed(this)'>` +
+          return `<td data-order='${sortVal}'><select id='${tid}' x-movie_id='${movie_id}' x-property='${property}' onchange='research_metadata_changed(this)'>` +
             placeholder +
             `<option value='1' ${sel1}>Yes</option>` +
             `<option value='0' ${sel0}>No</option>` +
             `</select></td>\n`;
         }
-        return `<td>${label}</td>\n`;
+        return `<td data-order='${sortVal}'>${label}</td>\n`;
       }
 
       function _make_td_checkbox(property, value) {
@@ -787,11 +806,11 @@ function list_movies_data( movies ) {
       const dateSec = m.date_uploaded && Number(m.date_uploaded);
       const movieDate = dateSec ? new Date(dateSec * 1000) : null;
       const up_down   = movieDate ? movieDate.toLocaleString().replace(' ','<br>').replace(',','') : '—';
-      const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
+      const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
       let playt = '';
       let analyze_label = 'analyze';
       if (m.tracked_movie_id){
-        playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this)'>`;
+        playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this)'>`;
         analyze_label = 're-analyze';
       }
       const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
@@ -803,9 +822,9 @@ function list_movies_data( movies ) {
       const framesStr = (m.total_frames != null) ? m.total_frames : '—';
 
       let rows = `<tr class='${you_class}'>` +
-          `<td class='${you_class}'> ${m.user_name} </td> <td> ${up_down} </td>` + // #1, #2, #3
+          `<td class='${you_class}'> ${m.user_name} </td> <td data-order='${dateSec || 0}'> ${up_down} </td>` + // #1, #2, #3
           make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
-          `<td> frame: ${frameStr} Kbytes: ${kbytesStr} ` +
+          `<td data-order='${m.total_bytes || 0}'> frame: ${frameStr} Kbytes: ${kbytesStr} ` +
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
       rows += "<td> Status: "; // #7
@@ -854,11 +873,6 @@ function list_movies_data( movies ) {
       rows += make_td_tristate('credit_by_name', creditDisabled ? null : m.credit_by_name, creditDisabled);
 
       rows += "</tr>\n";
-
-      // Now make the player row
-      rows += `<tr    class='movie_player' id='tr-${rowid}'> `+
-        `<td    class='movie_player' id='td-${rowid}' colspan='8' ></td>` +
-        `</tr>\n`;
       return rows;
     }
 
@@ -870,16 +884,32 @@ function list_movies_data( movies ) {
       h += '<tr><td><i>No movies</i></td></tr>';
     }
 
-    // Offer to upload movies if not in demo mode.
-    if (!demo_mode) {
-      h += '<tr><td colspan="8"><a href="/upload">Click here to upload a movie</a></td></tr>';
-    }
-
     h += "</tbody>";
     h += "</table>";
+    // Offer to upload movies if not in demo mode (outside the table so DataTables doesn't count it).
+    if (!demo_mode) {
+      h += '<p><a href="/upload">Click here to upload a movie</a></p>';
+    }
     const divElement = document.querySelector(divSelector);
     if (divElement) {
       divElement.innerHTML = h;
+      // Initialize DataTables for column sorting (only when there are rows to sort)
+      if ($.fn && $.fn.DataTable && mlist.length > 0) {
+        const tableEl = $(`${divSelector} table`);
+        if ($.fn.DataTable.isDataTable(tableEl)) {
+          tableEl.DataTable().destroy();
+        }
+        dtInstances[divSelector] = tableEl.DataTable({
+          paging: false,
+          searching: false,
+          info: false,
+          order: [[1, 'desc']],       // default: uploaded column, newest first
+          columnDefs: [
+            { orderable: false, targets: 5 },            // status and action — not sortable
+            { type: 'num', targets: [1, 4, 6, 7] }      // numeric sort for these columns
+          ]
+        });
+      }
     }
   }
   // Sort newest-first by date_uploaded (movies with no date sort to the end)
@@ -894,7 +924,6 @@ function list_movies_data( movies ) {
                    COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin))).sort(byNewest));
   movies_fill_div( '#your-deleted-movies',
                    DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)).sort(byNewest));
-  document.querySelectorAll('.movie_player').forEach(el => el.style.display = 'none');
 }
 
 // Gets the list from the server of every movie we can view and displays it in the HTML element
@@ -1024,6 +1053,7 @@ if (typeof module != 'undefined'){
     checkLambdaStatus,
     check_upload_metadata,
     computeSHA256,
+    dtInstances,
     first_frame_url,
     list_movies_data,
     list_users,
@@ -1031,6 +1061,8 @@ if (typeof module != 'undefined'){
     purge_movie,
     register_func,
     resend_func,
+    hide_clicked,
+    play_clicked,
     research_metadata_changed,
     row_checkbox_clicked,
     set_property,
