@@ -1,37 +1,35 @@
-This directory is for aws-sam.
-
-Key files:
-- `template.yaml` - this is the AWS SAM template that does the magic
-- `samconfig.yaml` - This records the parameters and other functions
-  that change with a deployment.  It does not need to be put into
-  version control.
-- `Makefile` - contains a bunch of targets for people who can't
-  remember the AWS `sam` commands.
-
+This directory is for lambda-resize
 
 Environment variables that you should know about/set:
 
-|Variable|Meaning|
-|--------------|-------------|
-|`AWS_PROFILE` | The profile that you are using (in $HOME/.aws/config) |
-|`AWS_REGION`  | The region you are deploying to. Set to `local` for testing locally with minio and dynamoDBLocal|
-|`STACK`       | The name of the stack that you are deploying to. Must be unique in your AWS account |
-|`STACK_STAGE` | This is legacy, when we actually had a staging stack. Now you stage by just deploying to a different stack name |
-|`DYNAMODB_TABLE_PREFIX` | The prefix for your DynamoDB Table Names. Must be unique in your AWS account.|
-# Core Functionality
-AWS SAM template that uses cloud formations to:
-- Create a new VM
-- Create the necessary DynamoDB tables all with the given prefix.
-- Create a lambda function that watches the S3 bucket in the /uploads
-  prefix, resizes as necessary, and moves the object to the correct location.
+Core Functionality
+=================
+Lambda-resize performs the following functions:
 
-## The created VM
+* Listens on AWS HTTP API for the following commands:
+  - `GET /resize-api/v1/ping` - health check
+  - `GET /resize-api/v1/first-frame` - gets the first frame of a specific movie
+  - `GET /resize-api/v1/trace-movie` - initiates tracing of a plant movie
 
-## The Created Lambda Function
+* When a movie is tracked:
+  * Get the desired rotation from dynamoDB
+  * Get the starting frame number
+  * Download the movie
+  * for each from tracking_start to the end:
+    * If prev_frame is set, track the points from the last frame to
+      the current frame.
+    * Write the frame into the zip file
+    * Remember the trackpoints
+    * Render the points onto the frame
+    * writes the rendered frames to a rendered mpeg
+  * When finished, the rendered mpeg and the zip file are uploaded to
+    s3 and the tracking mode of the movie is turned .
+
+**Video processing:** All rotate, scale, frame extraction, and tracking use **cv2 + Pillow only**. The Lambda does not bundle or use ffmpeg. Any ffmpeg-related code in the repo is legacy (e.g. for local CLI or tests).
 
 Core functionality:
-- Watches AWS S3. When a movie is uploaded:
-  - Process (see below)
+- Invoked via HTTP API. When processing is requested (e.g. after upload), can process (see below).
+- **Rotate-and-zip**: POST ``action=rotate-and-zip`` with ``movie_id`` and ``rotation_steps`` (1–3). Rotates the movie using PyAV + Pillow only (no ffmpeg binary; keeps deployment small), uploads the rotated movie back to S3, builds a zip of all frames, uploads the zip, and updates DynamoDB with full metadata (width, height, fps, total_frames, total_bytes; width/height are swapped for 90°/270°). The VM does not rotate or build zip; it only updates ``rotation_steps`` and triggers this Lambda.
 - Accepts resize requests with an S3 URL
   - Process
 - Process an AWS URL:
@@ -56,10 +54,12 @@ Resize code base:
 
 Movies:
 ------
-- Every movie has its mpeg file, its zipfile, and its `keyframe`. Eachg are stored at predictable locations:
+- Every movie has its mpeg file, its zipfile, and its `keyframe`. Each are stored at predictable locations:
   - movie: course_id/movie_id.mpeg
   - zipfile:  course_id/movie_id.zip
   - keyframe: course_id/movie_id.keyframe.jpeg
+
+- The tracking Lambda builds the JPEG animation zip. When tracking continues in later batches, the Lambda reads the existing zip from S3, copies its members into a fresh temporary zip, appends the new batch frames, and then writes the updated zip back to S3.
 
 
 Movie Metadata
@@ -119,3 +119,10 @@ s3.put_object(
     ContentType='application/octet-stream'
 )
 ```
+
+
+Notes:
+=====
+OpenCV reads colors in BGR (Blue, Green, Red) format, while
+Pillow expects RGB. You must swap the colors first, otherwise your
+image will look like a smurf!

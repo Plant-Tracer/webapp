@@ -30,7 +30,7 @@ webapp/
 │   │   ├── tracker.py          # Plant motion tracking
 │   │   ├── templates/         # Jinja2 HTML + MIME email templates
 │   │   └── static/            # CSS, JavaScript, images
-│   ├── dbutil.py               # CLI: --createdb, --makelink, course creation, etc.
+│   ├── dbutil.py               # CLI: createdb, makelink, course creation, etc.
 │   ├── demo.py                 # Demo mode helpers
 │   └── lambda_handler.py       # Lambda entry (if used)
 ├── lambda-resize/              # Optional Lambda for image resizing (separate Poetry project)
@@ -66,8 +66,8 @@ Local runs use Minio (S3) and DynamoDB Local unless `AWS_REGION` is set to a rea
 
 ```bash
 # One-time: start Minio + DynamoDB Local, create local bucket
-bin/local_minio_control.bash start
-bin/local_dynamodb_control.bash start
+python3 bin/local_services.py minio start
+python3 bin/local_services.py dynamodb start
 make make-local-bucket
 
 # Create demo course and DB tables
@@ -113,7 +113,7 @@ Tests are pytest function-style (`def test_*()`); no test classes. Fixtures from
 
 ### Database
 
-- **DynamoDB**: Tables are prefixed with `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema and creation in `src/app/schema.py` and `src/app/odbmaint.py`. CLI: `src/dbutil.py` (e.g. `--createdb`, `--makelink`).
+- **DynamoDB**: Tables are prefixed with `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema and creation in `src/app/schema.py` and `src/app/odbmaint.py`. CLI: `src/dbutil.py` (e.g. `createdb`, `makelink`).
 - **S3**: Bucket in `PLANTTRACER_S3_BUCKET`; presigned URLs and uploads via `src/app/s3_presigned.py`.
 - No SQL schema file; DynamoDB is schema-in-code.
 

@@ -14,28 +14,43 @@ import urllib.parse
 import hashlib
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from .constants import C
 
-MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
-FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
+# Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
+UPLOAD_STAGING_PREFIX = "uploads/"
 
 logger = logging.getLogger(__name__)
 
+_S3_CLIENTS = {}
 SUPPORTED_SCHEMES = [ C.SCHEME_S3 ]
 S3 = 's3'
 
 def s3_client():
     # Note: the os.environ.get() cannot be in the def above because then it is executed at compile-time,
     # not at object creation time.
-
     region_name = os.environ.get(C.AWS_REGION, None)
     endpoint_url = os.environ.get(C.AWS_ENDPOINT_URL_S3, None)
+    logger.info("s3_client region=%s endpoint_url=%s ", region_name, endpoint_url)
+    cache_key = f"{region_name}_{endpoint_url}"
+    if cache_key not in _S3_CLIENTS:
+        _S3_CLIENTS[cache_key] = boto3.client('s3', region_name=region_name, endpoint_url=endpoint_url)
+    return _S3_CLIENTS[cache_key]
 
-    logger.info("s3_client region=%s endpoint_url=%s ",region_name,endpoint_url)
 
-    return boto3.Session().client( 's3', region_name = region_name, endpoint_url=endpoint_url)
+def _get_bucket_region(bucket):
+    """Return the bucket's region (e.g. 'us-east-1'). Skips when using local S3."""
+    if os.environ.get(C.AWS_REGION) == "local":
+        return None
+    if os.environ.get(C.AWS_ENDPOINT_URL_S3):
+        return None
+    try:
+        loc = s3_client().get_bucket_location(Bucket=bucket)
+        return (loc.get("LocationConstraint") or "").strip() or "us-east-1"
+    except ClientError:
+        return None
 
 CORS_CONFIGURATION = {
     'CORSRules': [{
@@ -61,8 +76,8 @@ def make_object_name(*,course_id,movie_id,frame_number=None, ext):
     that uses course_id, movie_id, and frame_number. URNs are deterministic.
     """
     if frame_number is None:
-        return MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id,ext=ext)
-    return FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number,ext=ext)
+        return C.MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
+    return C.FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
 
 
 def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
@@ -79,50 +94,82 @@ def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
     logger.debug("make_urn urn=%s",ret)
     return ret
 
-def make_signed_url(*,urn,operation=C.GET, expires=3600):
-    assert isinstance(urn,str)
-    logger.debug("make_signed_url urn=%s",urn)
-    o = urllib.parse.urlparse(urn)
-    if o.scheme==C.SCHEME_S3:
-        op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
-        return s3_client().generate_presigned_url(
-            op,
-            Params={'Bucket': o.netloc,
-                    'Key': o.path[1:]},
-            ExpiresIn=expires)
-    raise RuntimeError(f"Unknown scheme: {o.scheme} for urn=%s")
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4',sha256=None, expires=3600):
-    """Returns a dictionary with 'url' and 'fields'"""
+def parse_s3_urn(*, urn):
+    assert isinstance(urn, str)
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != C.SCHEME_S3:
+        raise RuntimeError(f"Unknown scheme: {parsed.scheme} for urn={urn}")
+    if not parsed.netloc or not parsed.path or parsed.path == "/":
+        raise ValueError(f"Invalid S3 URN: {urn}")
+    return parsed.netloc, parsed.path[1:]
+
+
+def make_signed_url(*,urn,operation=C.GET, expires=3600):
+    logger.debug("make_signed_url urn=%s",urn)
+    bucket, key = parse_s3_urn(urn=urn)
+    op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
+    return s3_client().generate_presigned_url(
+        op,
+        Params={'Bucket': bucket, 'Key': key},
+        ExpiresIn=expires)
+
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
+                        research_use='not-answered', credit_by_name='not-answered', attribution_name=''):
+    """Returns a dictionary with 'url' and 'fields'.
+    research_use, credit_by_name, attribution_name are included in the signature and set as S3 object metadata.
+    Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
+    reset in the browser when POST body is not re-sent on redirect).
+    """
     logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
-                 urn,maxsize,mime_type,sha256,expires)
-    o = urllib.parse.urlparse(urn)
-    if o.scheme==C.SCHEME_S3:
-        return s3_client().generate_presigned_post(
-            Bucket=o.netloc,
-            Key=o.path[1:],
-            Conditions=[
-                {"Content-Type": mime_type}, # Explicitly allow Content-Type header
-                ["content-length-range", 1, maxsize], # Example condition: limit size between 1 and 10 MB
-            ],
-            Fields= { 'Content-Type':mime_type },
-            ExpiresIn=expires)
-    raise RuntimeError(f"Unknown scheme: {o.scheme}")
+                 urn, maxsize, mime_type, sha256, expires)
+    bucket, key = parse_s3_urn(urn=urn)
+    region = _get_bucket_region(bucket)
+    if region:
+        endpoint_url = f"https://s3.{region}.amazonaws.com"
+        client = boto3.Session().client(
+            's3',
+            region_name=region,
+            endpoint_url=endpoint_url,
+            config=Config(s3={'addressing_style': 'virtual'})
+        )
+    else:
+        client = s3_client()
+    meta_research = 'x-amz-meta-research-use'
+    meta_credit = 'x-amz-meta-credit-by-name'
+    meta_attribution = 'x-amz-meta-attribution-name'
+    attribution_safe = (attribution_name or '')[:256]
+    fields = {
+        'Content-Type': mime_type,
+        meta_research: research_use,
+        meta_credit: credit_by_name,
+        meta_attribution: attribution_safe,
+    }
+    conditions = [
+        {"Content-Type": mime_type},
+        ["content-length-range", 1, maxsize],
+        {meta_research: research_use},
+        {meta_credit: credit_by_name},
+        {meta_attribution: attribution_safe},
+    ]
+    return client.generate_presigned_post(
+        Bucket=bucket,
+        Key=key,
+        Conditions=conditions,
+        Fields=fields,
+        ExpiresIn=expires)
 
 def object_exists(urn):
     assert len(urn) > 0
-    o = urllib.parse.urlparse(urn)
-    logger.debug("urn=%s o=%s",urn,o)
-    if o.scheme==C.SCHEME_S3:
-        try:
-            s3_client().head_object(Bucket=o.netloc, Key=o.path[1:])
-            return True
-        except ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                return False
-            raise
-    else:
-        raise RuntimeError(f"Unknown scheme: {o.scheme}")
+    bucket, key = parse_s3_urn(urn=urn)
+    logger.debug("urn=%s bucket=%s key=%s", urn, bucket, key)
+    try:
+        s3_client().head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            return False
+        raise
 
 if __name__ == "__main__":
     import argparse

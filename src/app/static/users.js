@@ -1,6 +1,5 @@
 "use strict";
 /* jshint esversion: 8 */
-/* global user_primary_course_id */
 import { $ } from "./utils.js";
 
 
@@ -8,39 +7,58 @@ import { $ } from "./utils.js";
 // page: /users
 
 function bulk_register_users() {
-    const email_addresses = $('#br_email_addresses').val();
-    if (email_addresses.trim() == '') {
+    const raw_input = $('#br_email_addresses').val() || "";
+    if (raw_input.trim() == '') {
         $('#message').html("<b>Please provide a list of email addresses</b>");
         return;
     }
-    let formData = new FormData();
-    formData.append("api_key",  api_key); // on the upload form
-    // ToDo: planttracers_endpoint value should be a parameter or something so we can unit test this function
-    formData.append("planttracer_endpoint", window.origin + "");
-    formData.append("course_id", user_primary_course_id);
-    formData.append("email-addresses", email_addresses);
-    console.log("before fetch");
-    fetch(`${API_BASE}api/bulk-register`, { method: "POST", body: formData })
-        .then((response) => response.json())
-        .then((data) => {
-            if (data.error != false){
-                $('#message').html('error: '+ data.message);
-                return;
+
+    // Parse each line as "email" or "email, name"; split only on the first comma
+    const emails = [];
+    const names = [];
+    for (const line of raw_input.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) { continue; }
+        const comma_idx = trimmed.indexOf(',');
+        if (comma_idx === -1) {
+            emails.push(trimmed);
+            names.push('');
+        } else {
+            emails.push(trimmed.slice(0, comma_idx).trim());
+            names.push(trimmed.slice(comma_idx + 1).trim());
+        }
+    }
+
+    const payload = {
+        "api_key": api_key,
+        "planttracer_endpoint": window.origin + "",
+        "course_id": user_primary_course_id,
+        "email-addresses": emails.join('\n'),
+        "names": names.join('\n')
+    };
+
+    $.post(`${API_BASE}api/bulk-register`, payload)
+        .done((data) => {
+            if (data.error !== false) {
+                $('#message').html('error: ' + data.message);
             } else {
                 $('#message').html(data.message);
+                window.list_users();
             }
-        }
-    );
-    console.log("after fetch");
-    //TODO: seems to hang jest testing: window.location.reload();
-    console.log("after reload");
+        })
+        .fail((error) => {
+            $('#message').html('error: ' + (error.responseText || 'Network error'));
+            console.error("Bulk register error:", error);
+        });
+
 }
 
 function bulk_register_setup() {
-    $('#register-emails-button').on('click', () => {bulk_register_users();});
+    $('#register-emails-button').on('click', () => { bulk_register_users(); });
 }
 
-// export {}
+window.bulk_register_setup = bulk_register_setup;
+
 if (typeof module != 'undefined'){
-    module.exports = { bulk_register_setup, bulk_register_users}
-    }
+    module.exports = { bulk_register_setup, bulk_register_users }
+}

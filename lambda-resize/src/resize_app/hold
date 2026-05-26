@@ -1,0 +1,191 @@
+def get_frames_from_url_and_zip(url: str, rotation: int) -> int:  # pylint: disable=too-many-branches
+    """
+    Generator.
+    yields a sequence of rotated and scaled JPEGs
+    """
+    movie_id = (payload.get("movie_id") or "").strip()
+    if not odb.is_movie_id(movie_id):
+        return resp_json(400, {"error": True, "message": "movie_id missing or invalid"})
+    try:
+        steps = int(payload.get("rotation_steps", 1))
+    except (TypeError, ValueError):
+        steps = 1
+    # Allow 0 = zip-only (no rotation); 1–3 = rotate then zip.
+    steps = max(0, min(3, steps))
+    build_zip = payload.get("build_zip", True)
+    if isinstance(build_zip, str):
+        build_zip = build_zip.lower() not in ("false", "0", "no")
+
+    ddbo = DDBO()
+    try:
+        movie = ddbo.get_movie(movie_id)
+    except odb.InvalidMovie_Id:
+        return resp_json(404, {"error": True, "message": "movie not found"})
+    urn = movie.get(MOVIE_DATA_URN)
+    if not urn or not urn.strip():
+        return resp_json(400, {"error": True, "message": "movie has no movie_data_urn"})
+    parsed = urllib.parse.urlparse(urn)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path:
+        return resp_json(400, {"error": True, "message": "invalid movie_data_urn"})
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+    course_id = movie.get("course_id") or ""
+    s3 = _s3_client()
+
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        data = obj["Body"].read()
+    except ClientError as e:
+        LOGGER.warning("rotate_and_zip get_object failed: %s %s %s", bucket, key, e)
+        return resp_json(503, {"error": True, "message": "failed to download movie from S3"})
+
+    # If steps == 0, skip rotation and keep original bytes; otherwise rotate and overwrite movie.
+    if steps > 0:
+        try:
+            rotated = rotate_video_av(data, steps)
+        except (ValueError, RuntimeError) as e:
+            LOGGER.exception("rotate_video_av failed: %s", e)
+            return resp_json(500, {"error": True, "message": "rotation failed"})
+
+        try:
+            s3.put_object(Bucket=bucket, Key=key, Body=rotated, ContentType="video/mp4")
+        except ClientError as e:
+            LOGGER.warning("rotate_and_zip put_object (movie) failed: %s", e)
+            return resp_json(503, {"error": True, "message": "failed to upload rotated movie"})
+
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {TOTAL_BYTES: len(rotated), "processing_state": "processing"},
+        )
+        movie_bytes_for_zip = rotated
+    else:
+        # No rotation requested; use original bytes but still build zip.
+        movie_bytes_for_zip = data
+        ddbo.update_table(
+            ddbo.movies,
+            movie_id,
+            {"processing_state": "processing"},
+        )
+
+    # Rotate-only (e.g. from upload page): update metadata and return; zip is built when user opens Analyze.
+    if not build_zip:
+        meta = extract_movie_metadata(movie_bytes_for_zip)
+        update_payload = {"processing_state": "ready"}
+        for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+            if key in meta and meta[key] is not None:
+                update_payload[attr] = meta[key]
+        try:
+            ddbo.update_table(ddbo.movies, movie_id, update_payload)
+        except ClientError as exc:
+            LOGGER.debug("rotate_only metadata update failed for %s: %s", movie_id, exc)
+        write_log(f"rotate_only movie_id={movie_id} steps={steps}", course_id=course_id)
+        LOGGER.info("rotate_only movie_id=%s steps=%s (zip deferred)", movie_id, steps)
+        return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})
+
+    def _zip_progress(current: int, total: int) -> None:
+        """Best-effort progress updates in DynamoDB; safe to fail silently."""
+        # Only write every 5 frames (and always for the final frame) to avoid excessive writes.
+        if total <= 0:
+            return
+        if current % 5 != 0 and current != total:
+            return
+        try:
+            ddbo.update_table(
+                ddbo.movies,
+                movie_id,
+                {
+                    "zip_frame_processing": {
+                        "total": int(total),
+                        "current": int(current),
+                    },
+                    "processing_state": "processing-zip",
+                },
+            )
+        except ClientError as exc:
+            LOGGER.debug("zip progress update failed for %s: %s", movie_id, exc)
+
+    try:
+        zip_bytes = video_frames_to_zip_av(
+            movie_bytes_for_zip,
+            progress_cb=_zip_progress,
+            target_wh=(C.ANALYSIS_FRAME_MAX_WIDTH, C.ANALYSIS_FRAME_MAX_HEIGHT),
+        )
+    except (ValueError, RuntimeError) as e:
+        LOGGER.exception("video_frames_to_zip_av failed: %s", e)
+        return resp_json(500, {"error": True, "message": "zip build failed"})
+
+    zip_key = f"{course_id}/{movie_id}{C.ZIP_MOVIE_EXTENSION}"
+    zip_urn = f"s3://{bucket}/{zip_key}"
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=zip_key,
+            Body=zip_bytes,
+            ContentType="application/zip",
+        )
+    except ClientError as e:
+        LOGGER.warning("rotate_and_zip put_object (zip) failed: %s", e)
+        return resp_json(503, {"error": True, "message": "failed to upload zip"})
+
+    # Final state: zip finished. Optionally shrink big movies into a processed MP4 and point MOVIE_DATA_URN at it,
+    # then mark ready and write full metadata from the final movie (processed if created, otherwise original/rotated).
+    meta = extract_movie_metadata(movie_bytes_for_zip)
+    width = int(meta.get("width") or 0)
+    height = int(meta.get("height") or 0)
+    needs_shrink = width > C.ANALYSIS_FRAME_MAX_WIDTH or height > C.ANALYSIS_FRAME_MAX_HEIGHT
+
+    final_movie_bytes = movie_bytes_for_zip
+    if needs_shrink:
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=True) as in_tf, tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".mp4", delete=True
+            ) as out_tf:
+                in_tf.write(movie_bytes_for_zip)
+                in_tf.flush()
+                rotate_zip.prepare_movie_for_tracking_cv2(
+                    in_tf.name,
+                    out_tf.name,
+                    0,  # rotation already applied above if needed
+                    C.ANALYSIS_FRAME_MAX_WIDTH,
+                    C.ANALYSIS_FRAME_MAX_HEIGHT,
+                )
+                out_tf.flush()
+                with open(out_tf.name, "rb") as f:
+                    final_movie_bytes = f.read()
+
+            processed_key = f"{course_id}/{movie_id}{C.MOVIE_PROCESSED_EXTENSION}"
+            processed_urn = f"s3://{bucket}/{processed_key}"
+            s3.put_object(
+                Bucket=bucket,
+                Key=processed_key,
+                Body=final_movie_bytes,
+                ContentType="video/mp4",
+            )
+            meta = extract_movie_metadata(final_movie_bytes)
+            meta["total_bytes"] = len(final_movie_bytes)
+            ddbo.update_table(
+                ddbo.movies,
+                movie_id,
+                {
+                    MOVIE_DATA_URN: processed_urn,
+                    TOTAL_BYTES: len(final_movie_bytes),
+                },
+            )
+        except (ValueError, RuntimeError, ClientError, OSError) as exc:
+            LOGGER.debug("processed movie generation failed for %s: %s", movie_id, exc)
+
+    update_payload = {
+        "movie_zipfile_urn": zip_urn,
+        "processing_state": "ready",
+    }
+    for key, attr in (("width", WIDTH), ("height", HEIGHT), ("fps", FPS), ("total_frames", TOTAL_FRAMES), ("total_bytes", TOTAL_BYTES)):
+        if key in meta and meta[key] is not None:
+            update_payload[attr] = meta[key]
+    try:
+        ddbo.update_table(ddbo.movies, movie_id, update_payload)
+    except ClientError as exc:
+        LOGGER.debug("final zip state update failed for %s: %s", movie_id, exc)
+    write_log(f"rotate_and_zip movie_id={movie_id} steps={steps}", course_id=course_id)
+    LOGGER.info("rotate_and_zip movie_id=%s steps=%s", movie_id, steps)
+    return resp_json(200, {"error": False, "movie_id": movie_id, "rotation_steps": steps})

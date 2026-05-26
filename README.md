@@ -12,7 +12,7 @@ Code
 
 The application consists of two parts, both of which are contained in this repo:
 
-1. A web client written in JavaScript using a custom lightweight DOM utility (jQuery has been completely eliminated). Most of the app is located in [deploy/app/static/](deploy/app/static/), although these JavaScript files require some variables set on the HTML pages served out of [deploy/app/templates/](deploy/app/templates/) to function.
+1. A web client written in JavaScript. jQuery is loaded globally for browser pages, and ES modules import `$` from `src/app/static/utils.js`, which re-exports the global jQuery instance. Most of the app is located in [deploy/app/static/](deploy/app/static/), although these JavaScript files require some variables set on the HTML pages served out of [deploy/app/templates/](deploy/app/templates/) to function.
 
 2. A back-end application written in Python using the Flask framework. This application can be served using an Apache webserver with the `gunicorn` application server, or using Amazon Lambda or another serverless framework.
 
@@ -23,6 +23,9 @@ Server-side storage is provided by Amazon S3 and Amazon DynamoDB. For local deve
 **Movies**, **individual movie frames**, and **zip files containing movie frames** are stored in Amazon S3.
 
 **Course data**, **account data**, and **movie frame annotations** are stored in Amazon DynamoDB.
+
+The DynamoDB storage model is documented for future tooling in
+`instructions-for-llms/planttracer-storage.md`.
 
 Client-side storage:
 
@@ -41,12 +44,33 @@ The remaining static and dynamic content is downloaded from the server to the cl
 
 This design makes it easy to move from the server-based architecture to the AWS Lambda-based architecture, as Lambda limits HTTP GET and POST responses to 6MB and uploads to around 256KB. In a pure Lambda deployment, static content should probably be moved to a CDN.
 
+Installation with AWS SAM
+=========================
+
+AWS SAM template that uses cloud formations to:
+- Create a new VM
+- Create the necessary DynamoDB tables all with the given prefix.
+- The **bucket is always an existing bucket** (it outlives the stack as the
+  long-term archive of student videos). The Lambda is invoked via its HTTP
+  API; it can move uploaded objects to their final keys as needed, write
+  research/attribution metadata into the MP4 file (so the object remains
+  self-describing when the database is gone), update DynamoDB, and log to
+  the logs table.
+
+
+
 Installation
 ============
 
 Installation on a Virtual Machine
 ---------------------------------
-This repo is designed to be checked out to `$HOME/webapp` in the service account of the user that is running the application. The application runs out of the git repo. On a typical Amazon EC2 VM this will be `/home/ec2-user/webapp`.
+This repo is designed to be checked out to a directory such as
+/opt/webap or `$HOME/webapp` in the service account of the user that
+is running the application. The application runs out of the git
+repo.
+
+For the stand-alone server built from the template, the checkout
+location is /opt/webapp.
 
 Once it is checked out, be sure to set the (environment variables)[docs/EnvironmentVariables.rst].
 
@@ -74,8 +98,23 @@ If that works, you can try the full-blown experience with:
 ```
 make run-local
 ```
-
 At this point is is probably a good idea to read the entire Makefile
+
+Local tracing CLI
+-----------------
+You can run the tracing pipeline locally against DynamoDB Local and MinIO with:
+
+```bash
+poetry run python -m app.local_trace_cli MOVIE_FILE TRACKPOINTS_JSON --output-dir OUTPUT_DIR
+```
+
+Notes:
+
+- The CLI assumes the local services from the `Makefile` are already running.
+- The input JSON must be an array of `movie_frames`-style DynamoDB records, each with a `frame_number` and `trackpoints`.
+- By default, the CLI treats the highest input `frame_number` as the source frame and retraces from the next frame.
+- The CLI exports a traced MP4 and trackpoint JSON, and also exports the generated frame ZIP unless `--no-output-zip` is given.
+- Temporary DynamoDB and MinIO data are cleaned up automatically unless `--no-cleanup` is given.
 
 Linux and macOS Prerequisites
 ----------------------------
@@ -92,7 +131,20 @@ To install prerequisites:
 
 Environment Variables
 ---------------------
-These variables are specific to Planttracer and _must_ be set:
+Please see (Makefile)[Makefile] for the variables that need to be
+set. The critical ones that matter are:
+
+|Variable|Meaning|
+|--------------|-------------|
+|`AWS_PROFILE` | The profile that you are using (in $HOME/.aws/config) |
+|`AWS_REGION`  | The region you are deploying to. Set to `local` for testing locally with minio and dynamoDBLocal|
+|`STACK`       | The name of the stack that you are deploying to. Must be unique in your AWS account |
+|`STACK_STAGE` | This is legacy, when we actually had a staging stack. Now you stage by just deploying to a different stack name |
+|`DYNAMODB_TABLE_PREFIX` | The prefix for your DynamoDB Table Names. Must be unique in your AWS account.|
+
+`AWS_REGION` - Set to `local` to use minio and localDynamoDB for testing.
+
+Other environment variables you may wish to set:
 
 `PLANTTRACER_S3_BUCKET` - The S3 bucket to use, e.g. `s3://planttrancer-demo`
 
@@ -113,3 +165,13 @@ Planttracer also uses these AWS environment variables, which are set to the loca
 `AWS_ENDPOINT_URL_S3`
 
 `AWS_ENDPOINT_URL_DYNAMODB`
+
+
+Key Files
+===========
+- `Makefile` - contains a bunch of targets for people who can't
+  remember the AWS `sam` commands.
+- `template.yaml` - this is the AWS SAM template that does the magic
+- `samconfig.yaml` - This records the parameters and other functions
+  that change with a deployment.  It does not need to be put into
+  version control.

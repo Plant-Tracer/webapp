@@ -18,21 +18,43 @@ from app import odb
 from app import odb_movie_data
 from app.constants import logger
 from app.odb import API_KEY
+from .conftest import get_movie_bytes
 from .selenium_utils import authenticate_browser
 
 TEST_MOVIE_PATH = Path(__file__).resolve().parent / "data" / "2019-07-12 circumnutation.mp4"
 
 
 def _wait_for_movie_id(driver):
-    """Helper for WebDriverWait: returns movie_id text once populated."""
-    text = driver.find_element(By.ID, "movie_id").text.strip()
-    return text if text else False
+    """Helper for WebDriverWait: returns movie_id text once populated.
+
+    Supports both the legacy upload preview (span#movie_id) and the new
+    /processing page (p#processing_movie_id with 'Movie ID: <id>').
+    """
+    # Legacy upload preview: span with id="movie_id"
+    try:
+        text = driver.find_element(By.ID, "movie_id").text.strip()
+        if text:
+            return text
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+    # New processing page: paragraph with id="processing_movie_id"
+    try:
+        ptext = driver.find_element(By.ID, "processing_movie_id").text.strip()
+        if not ptext:
+            return False
+        # Expected format: "Movie ID: <id>"
+        parts = ptext.split(":", 1)
+        movie_id = parts[1].strip() if len(parts) == 2 else ptext
+        return movie_id or False
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
 
 
 def _section_contains_title(driver, title):
     """Helper for WebDriverWait to confirm the uploaded title renders on /list."""
     try:
-        section = driver.find_element(By.ID, "your-unpublished-movies")
+        section = driver.find_element(By.ID, "your-published-movies")
         return title in section.get_attribute("innerHTML")
     except Exception:  # pylint: disable=broad-exception-caught
         return False
@@ -87,7 +109,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert movie["deleted"] == 0
 
     # Verify MinIO object exists and matches file length
-    movie_bytes = odb_movie_data.get_movie_data(movie_id=movie_id)
+    movie_bytes = get_movie_bytes(movie_id)
     assert len(movie_bytes) == TEST_MOVIE_PATH.stat().st_size
 
     source_hash = hashlib.sha256(TEST_MOVIE_PATH.read_bytes()).hexdigest()
@@ -96,7 +118,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
 
     # Confirm movie shows up in the UI list (client-side render)
     chrome_driver.get(f"{live_server}/list")
-    wait.until(EC.presence_of_element_located((By.ID, "your-unpublished-movies")))
+    wait.until(EC.presence_of_element_located((By.ID, "your-published-movies")))
     try:
         assert wait.until(lambda d: _section_contains_title(d, title))
     except TimeoutException:

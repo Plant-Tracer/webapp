@@ -3,7 +3,6 @@ Main Flask application for planttracer.
 """
 
 # pylint: disable=too-many-lines
-# pylint: disable=too-many-return-statements
 
 import sys
 import os
@@ -25,12 +24,13 @@ from .flask_api import api_bp
 from .constants import __version__, GET, GET_POST, C, log_level, logger
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
-from .odb import InvalidAPI_Key, InvalidUser_Email
+from .odb import (InvalidAPI_Key, InvalidUser_Email,
+                  MOVIE_STATE_UPLOADING, MOVIE_STATE_READY,
+                  MOVIE_STATE_TRACING, MOVIE_STATE_TRACING_COMPLETED)
 from . import config_check
 
 DEFAULT_OFFSET = 0
 DEFAULT_SEARCH_ROW_COUNT = 1000
-MIN_SEND_INTERVAL = 60
 DEFAULT_CAPABILITIES = ""
 LOAD_MESSAGE = "Error: JavaScript did not execute. Please open JavaScript console and report a bug."
 CACHE_MAX_AGE = 5               # for debugging; change to 360 for production
@@ -72,9 +72,9 @@ fix_boto_log_level()
 
 
 
-################################################################
+#######################################################################
 ### Error Handling. An exception automatically generates this response.
-################################################################
+#######################################################################
 
 @app.errorhandler(NotFound)
 def not_found(e: NotFound) -> tuple[str, int]:
@@ -122,7 +122,6 @@ def handle_email_error(e: InvalidUser_Email) -> tuple[str, int]:
 _CONFIG_CHECK_CACHE = {}
 _CONFIG_CHECK_TTL = 60  # seconds
 
-
 def _config_error_page_context(error_title: str, error_message: str):
     """Build template context for config_error.html without touching the DB."""
     ret = {
@@ -157,7 +156,7 @@ def _config_error_page_context(error_title: str, error_message: str):
 
 
 def _run_config_checks():
-    """Run DynamoDB and S3 CORS checks; return (dynamodb_ok, dynamodb_msg, cors_ok, cors_msg)."""
+    """Run DynamoDB, S3 CORS, and S3 bucket region checks; return (d_ok, d_msg, c_ok, c_msg, r_ok, r_msg)."""
     now = time.monotonic()
     cached = _CONFIG_CHECK_CACHE.get("result")
     if cached is not None and (now - _CONFIG_CHECK_CACHE.get("ts", 0)) < _CONFIG_CHECK_TTL:
@@ -165,30 +164,39 @@ def _run_config_checks():
     d_ok, d_msg = config_check.check_dynamodb()
     origin = f"{request.scheme}://{request.host}"
     c_ok, c_msg = config_check.check_s3_cors(origin)
-    _CONFIG_CHECK_CACHE["result"] = (d_ok, d_msg, c_ok, c_msg)
+    r_ok, r_msg = config_check.check_s3_bucket_region()
+    _CONFIG_CHECK_CACHE["result"] = (d_ok, d_msg, c_ok, c_msg, r_ok, r_msg)
     _CONFIG_CHECK_CACHE["ts"] = now
     _CONFIG_CHECK_CACHE["d_msg"] = d_msg
     _CONFIG_CHECK_CACHE["c_msg"] = c_msg
-    return (d_ok, d_msg, c_ok, c_msg)
+    _CONFIG_CHECK_CACHE["r_msg"] = r_msg
+    return (d_ok, d_msg, c_ok, c_msg, r_ok, r_msg)
 
+
+@app.context_processor
+def _inject_movie_states():
+    return {'movie_states': {
+        'uploading':         MOVIE_STATE_UPLOADING,
+        'ready':             MOVIE_STATE_READY,
+        'tracing':           MOVIE_STATE_TRACING,
+        'tracing_completed': MOVIE_STATE_TRACING_COMPLETED,
+    }}
 
 @app.before_request
 def _before_request_config_check():
-    """If DynamoDB or S3 CORS is broken, redirect to the configuration error page."""
+    """If DynamoDB, S3 CORS, or S3 bucket region is broken, redirect to the configuration error page."""
     path = request.path
     if path == "/config-error" or path.startswith("/static/") or path.startswith("/api/"):
         return None
-    if path in ("/ping", "/ver", "/health"):
+    if path in ("/ping", "/ver", "/health", "/status"):
         return None
-    try:
-        d_ok, _, c_ok, _ = _run_config_checks()
-        if not d_ok:
-            return redirect("/config-error?reason=dynamodb")
-        if not c_ok:
-            return redirect("/config-error?reason=cors")
-    except Exception:  # pylint: disable=broad-exception-caught
-        # Do not block the app if the check itself fails (e.g. import error)
-        pass
+    d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
+    if not d_ok:
+        return redirect("/config-error?reason=dynamodb")
+    if not c_ok:
+        return redirect("/config-error?reason=cors")
+    if not r_ok:
+        return redirect("/config-error?reason=region")
     return None
 
 
@@ -211,10 +219,21 @@ def func_config_error():
     elif reason == "cors":
         error_title = "S3 CORS misconfigured"
         error_message = (
-            "The S3 bucket CORS policy does not allow this site to load movie data. "
+            "The S3 bucket CORS policy does not allow this site to load or upload movie data. "
             "Run on the server: poetry run python -m app.s3_presigned <bucket>"
         )
         last_msg = _CONFIG_CHECK_CACHE.get("c_msg")
+        if last_msg:
+            error_message += f" Details: {last_msg}"
+        if custom_message:
+            error_message += f" {custom_message}"
+    elif reason == "region":
+        error_title = "S3 bucket region mismatch"
+        error_message = (
+            "The S3 bucket is in a different region than the app (AWS_REGION). "
+            "Browser uploads will fail with connection reset. Set AWS_REGION to the bucket's region."
+        )
+        last_msg = _CONFIG_CHECK_CACHE.get("r_msg")
         if last_msg:
             error_message += f" Details: {last_msg}"
         if custom_message:
@@ -232,7 +251,6 @@ def func_config_error():
 # HTML Pages served with template system
 ################################################################
 
-################
 ## These mostly do forms or static content
 
 @app.route('/', methods=GET)
@@ -269,6 +287,14 @@ def func_analyze() -> str:
 ##
 @app.route('/login', methods=GET_POST)
 def func_login():
+    """Login/welcome: with api_key in URL, set cookie and show welcome page; else show register/resend."""
+    if request.values.get('api_key', '').strip() and request.values.get('api_key') != 'undefined':
+        response = make_response(render_template(
+            'welcome.html',
+            **page_dict('Welcome to Plant Tracer', require_auth=True),
+        ))
+        apikey.add_cookie(response)
+        return response
     return render_template('login.html', **page_dict('Login'))
 
 @app.route('/logout', methods=GET_POST)
@@ -279,7 +305,13 @@ def func_logout():
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "ok", "message": "pong"})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK, C.API_KEY_MESSAGE: "pong"})
+
+
+@app.route("/status")
+def status():
+    """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
+    return jsonify({C.KEY_STATUS: C.STATUS_OK})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():
@@ -317,6 +349,8 @@ def func_users():
 # These are the two links that might have an ?apikey=; if we got that, set the cookie
 @app.route('/list', methods=GET)
 def func_list():
+    # NOTE: This page should eventually be re-architected around server-side rendering
+    # with Jinja2; for now it relies on the existing JSON APIs and client-side rendering.
     response = make_response(render_template('list.html',
                                              **page_dict('List Movies',
                                                          require_auth=True)))
@@ -330,6 +364,15 @@ def func_upload():
     logger.debug("/upload require_auth=True")
     response = make_response(render_template('upload.html',
                                          **page_dict('Upload a Movie',
+                                                     require_auth=True)))
+    apikey.add_cookie(response)
+    return response
+
+@app.route('/processing', methods=GET)
+def func_processing():
+    """Show processing status for a specific movie_id (not linked from menus)."""
+    response = make_response(render_template('processing.html',
+                                         **page_dict('Processing',
                                                      require_auth=True)))
     apikey.add_cookie(response)
     return response
@@ -366,6 +409,3 @@ def func_ver():
                                              sys_version= sys.version))
     response.headers['Content-Type'] = 'text/plain'
     return response
-
-################################################################
-## Finally, if we are running under flask, run this.

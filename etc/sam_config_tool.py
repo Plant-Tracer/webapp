@@ -37,7 +37,11 @@ def _parse_parameter_overrides(overrides_str: str) -> dict[str, str]:
 
 
 def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
-    """Load samconfig.toml and return (stack_name, region, hostname, host_label)."""
+    """Load samconfig.toml and return (stack_name, region, hostname, host_label).
+
+    Hostname is derived from stack name: stack_name.base_domain (e.g. mystack.planttracer.com).
+    host_label is the stack_name (for callers that expect a label).
+    """
     path = Path(config_path)
     if not path.exists():
         sys.exit(f"Config file not found: {config_path}")
@@ -66,13 +70,9 @@ def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
         sys.exit("parameter_overrides not found in deploy.parameters")
 
     overrides = _parse_parameter_overrides(overrides_str)
-    host_label = overrides.get("HostLabel", "").strip()
-    base_domain = overrides.get("BaseDomain", "").strip()
-    if not host_label or not base_domain:
-        sys.exit("HostLabel or BaseDomain missing in parameter_overrides")
-
-    hostname = f"{host_label}.{base_domain}"
-    return (stack_name, region, hostname, host_label)
+    base_domain = overrides.get("BaseDomain", "planttracer.com").strip() or "planttracer.com"
+    hostname = f"{stack_name}.{base_domain}"
+    return (stack_name, region, hostname, stack_name)
 
 
 def cmd_ssh_clean(config_path: str) -> None:
@@ -80,7 +80,6 @@ def cmd_ssh_clean(config_path: str) -> None:
     _stack, _region, hostname, _ = load_sam_config(config_path)
     if not hostname:
         return
-    print(f"Removing old SSH host key for {hostname}...", flush=True)
     result = subprocess.run(
         ["ssh-keygen", "-R", hostname],
         capture_output=True,
@@ -88,7 +87,11 @@ def cmd_ssh_clean(config_path: str) -> None:
         check=False,
     )
     if result.returncode != 0 and "not found" not in (result.stderr or "").lower():
+        print("No previous key in .ssh/known_hosts:")
         print(result.stderr or result.stdout, file=sys.stderr, end="")
+    print(f"Removed old SSH host key for {hostname}...", flush=True)
+    print("")
+    print(f"Access with ssh ubuntu@{hostname}")
 
 
 def _get_instance_id(config_path: str) -> tuple[str, str]:

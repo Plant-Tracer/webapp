@@ -65,24 +65,53 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
-MOVIE_DATA_URN = 'movie_data_urn'
-MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'
+MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
+MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
+MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
+MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 TITLE = 'title'
-TOTAL_BYTES='total_bytes'
-TOTAL_FRAMES='total_frames'
-DATE_UPLOADED='date_uploaded'
+DESCRIPTION = 'description'
+ORIG_MOVIE = 'orig_movie'
+TOTAL_BYTES = 'total_bytes'
+TOTAL_FRAMES = 'total_frames'
+DATE_UPLOADED = 'date_uploaded'
 VERSION = 'version'
 DELETED = 'deleted'
 PUBLISHED = 'published'
 CREATED = 'created'
+CREATED_AT = 'created_at'
 EMAIL = 'email'
 NAME = 'name'
+FPS = 'fps'
+WIDTH = 'width'
+HEIGHT = 'height'
+RESEARCH_USE = 'research_use'
+CREDIT_BY_NAME = 'credit_by_name'
+ATTRIBUTION_NAME = 'attribution_name'
+
+# response keys:
+MOVIE_TRACED_URL = 'movie_traced_url'  # response key (signed URL), not stored in DB
+MOVIE_ZIPFILE_URL = 'movie_zipfile_url'  # response key (signed URL), not stored in DB
+
+# obsolete:
+ROTATION_STEPS = 'rotation_steps' # no longer used
+# Props that set_movie_metadata (flask_api) can set in bulk from extracted movie metadata
+MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
 # movie_frames table - currently stores metadata.
 # Needs to be move dinto movies table
 FRAME_NUMBER = 'frame_number'
 FRAME_URN = 'frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
+
+# Values for the movie status field (single source of truth)
+# When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
+MOVIE_STATUS = 'status'
+MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_READY      = 'ready'
+MOVIE_STATE_TRACING   = 'tracing'
+MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
+MOVIE_STATE_UPDATED_AT = 'status_updated_at'
 
 USER_ID = 'user_id'
 PRIMARY_COURSE_ID = 'primary_course_id'
@@ -233,10 +262,12 @@ class DDBO:
             if 'FLASK_ENV' in os.environ:
                 raise RuntimeError("FLASK_ENV is set but DYNAMODB_TABLE_PREFIX is not set")
             table_prefix = ''
+        # Ensure one trailing dash so table names are prefix-base (e.g. simson2 -> simson2-api_keys)
+        self.table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
+        table_prefix = self.table_prefix
 
         # Set up the tables
         logger.info("table_prefix=%s",table_prefix)
-        self.table_prefix = table_prefix
         self.api_keys  = self.dynamodb.Table( table_prefix + API_KEYS )
         self.users     = self.dynamodb.Table( table_prefix + USERS )
         self.unique_emails = self.dynamodb.Table( table_prefix + UNIQUE_EMAILS )
@@ -323,13 +354,13 @@ class DDBO:
 
     def put_api_key_dict(self,api_key_dict):
         # no ConditionExpression - it's okay if the key already exists
-        logger.debug("put_api_key_dict(api_key_dict=%s)",api_key_dict)
+        logger.debug("put_api_key_dict(user_id=%s enabled=%s)", api_key_dict.get(USER_ID), api_key_dict.get(ENABLED))
         return self.api_keys.put_item(Item = api_key_dict)
 
     def get_api_key_dict(self,api_key):
         try:
             ret =  self.api_keys.get_item(Key = { API_KEY :api_key}).get('Item',None)
-            logger.debug("get_api_key_dict(api_key=%s) = %s",api_key,ret)
+            logger.debug("get_api_key_dict(found=%s)", ret is not None)
             return ret
         except Exception as e:
             logger.error("table=%s error=%s",self.api_keys.name, e)
@@ -345,6 +376,33 @@ class DDBO:
         )
         items = response.get('Items', [])
         return items[0][API_KEY] if items else None
+
+    def get_user_login_times(self, user_id):
+        """Return (first_used_at, last_used_at) for a user by aggregating across all their api_keys.
+        Returns (None, None) if the user has no api_keys or none have been used yet."""
+        last_evaluated_key = None
+        first_used = None
+        last_used = None
+        while True:
+            kwargs = {
+                'IndexName': 'user_id_idx',
+                'KeyConditionExpression': Key(USER_ID).eq(user_id),
+                'ProjectionExpression': 'first_used_at, last_used_at',
+            }
+            if last_evaluated_key:
+                kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**kwargs)
+            for item in response.get('Items', []):
+                f = item.get('first_used_at')
+                l = item.get('last_used_at')
+                if f is not None:
+                    first_used = f if first_used is None else min(first_used, f)
+                if l is not None:
+                    last_used = l if last_used is None else max(last_used, l)
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        return first_used, last_used
 
     def del_api_key(self, api_key):
         self.api_keys.delete_item(Key = { API_KEY :api_key},
@@ -363,12 +421,14 @@ class DDBO:
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
-        response = self.users.query( IndexName='email_idx',
-                                     KeyConditionExpression=Key( EMAIL ).eq(email) )
+        response = self.users.query(
+            IndexName='email_idx',
+            KeyConditionExpression=Key(EMAIL).eq(email),
+        )
         items = response.get('Items', [])
         if items:
             return items[0]
-        logger.debug("email %s not in table %s",email,self.users)
+        logger.debug("email %s not in table %s", email, self.users)
         raise InvalidUser_Email(email)
 
     def put_user(self, user):
@@ -617,7 +677,7 @@ class DDBO:
 
     ### movie management
 
-    def get_movie(self, movie_id) -> dict:
+    def get_movie(self, movie_id, fields: list[str]|None=None) -> dict:
         """Given a movie_id, return the movie object.
 
         Raises:
@@ -626,14 +686,25 @@ class DDBO:
         # NOTE: Make more efficient by specifying which attributes of the Item to return.
         if not is_movie_id(movie_id):
             raise InvalidMovie_Id(movie_id)
-        movie_dict = self.movies.get_item(Key = {MOVIE_ID:movie_id},ConsistentRead=True).get('Item')
+        params = {
+            'Key': {MOVIE_ID: movie_id},
+            'ConsistentRead': True
+        }
+
+        if fields:
+            # Map fields to #alias to avoid DynamoDB reserved word conflicts
+            attr_names = {f"#f{i}": field for i, field in enumerate(fields)}
+            params['ProjectionExpression'] = ", ".join(attr_names.keys())
+            params['ExpressionAttributeNames'] = attr_names
+
+        movie_dict = self.movies.get_item(**params).get('Item')
         if isinstance(movie_dict,dict):
             return movie_dict
         raise InvalidMovie_Id(movie_id)
 
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
-        assert 'movie_zipfile_url' not in moviedict
+        assert MOVIE_ZIPFILE_URL not in moviedict
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
@@ -854,13 +925,49 @@ def list_users_courses(*, user_id):
     'courses' - all of the courses to which the user has access, and all the people in them.
     :param: user_id - the user doing the listing (determines what they can see)
 
-    NOTE: With MySQL users could only see the course list if they were admins.
-    With DynamoDB, users can see the full course list for all of their courses.
+    Admins see every user enrolled in each of their admin courses.
+    Non-admins see only themselves.
     """
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
-    return {USERS: [user],
-            COURSES :  [ddbo.get_course(course_id) for course_id in user[ COURSES ] ] }
+    admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
+
+    if not admin_for_courses:
+        first, last = ddbo.get_user_login_times(user_id)
+        user['first'] = first
+        user['last'] = last
+        return {USERS: [user],
+                COURSES: [ddbo.get_course(course_id) for course_id in user.get(COURSES, [])]}
+
+    # Collect all users enrolled in any course this user admins (deduplicated)
+    seen_user_ids = set()
+    users_list = []
+    for course_id in admin_for_courses:
+        for enrolled_user_id in course_enrollments(course_id):
+            if enrolled_user_id not in seen_user_ids:
+                seen_user_ids.add(enrolled_user_id)
+                try:
+                    enrolled_user = ddbo.get_user(enrolled_user_id)
+                except InvalidUser_Id:
+                    logger.warning("course_enrollments returned unknown user_id %s for course %s — skipping",
+                                   enrolled_user_id, course_id)
+                    continue
+                first, last = ddbo.get_user_login_times(enrolled_user_id)
+                enrolled_user['first'] = first
+                enrolled_user['last'] = last
+                users_list.append(enrolled_user)
+
+    # Include all admin courses plus any primary courses referenced by the returned users
+    course_ids = set(admin_for_courses)
+    for u in users_list:
+        if u.get(PRIMARY_COURSE_ID):
+            course_ids.add(u[PRIMARY_COURSE_ID])
+    courses_list = [c for c in (ddbo.get_course(cid) for cid in course_ids) if c]
+
+    # Sort by primary_course_id so the JS grouping logic produces one section per course
+    users_list.sort(key=lambda u: u.get(PRIMARY_COURSE_ID, ''))
+
+    return {USERS: users_list, COURSES: courses_list}
 
 
 def list_admins():
@@ -970,7 +1077,6 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     return {USER_ID:user_id}
 
 
-@log
 def unregister_from_course(*, course_id, user_id):
     """Remove user_id from course_id, but do not make other changes."""
     ddbo = DDBO()
@@ -982,7 +1088,6 @@ def unregister_from_course(*, course_id, user_id):
         pass
     ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:user_id})
 
-@log
 def delete_user(*, user_id, purge_movies=False):
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
@@ -1021,14 +1126,10 @@ def validate_api_key(api_key):
             return user
     raise InvalidAPI_Key()
 
-def make_new_api_key(*, email, demo_user=False):
-    """Create a new api_key for an email that is registered
-    :param email:  the email
-    :param demo_user:  If true, then use the demo user API key, and not a random API key
-    :return: api_key - the api_key
-    """
+def make_new_api_key_for_user_id(*, user_id, demo_user=False):
+    """Create a new api_key for a registered, enabled user_id."""
     ddbo = DDBO()
-    user = ddbo.get_user_email(email)
+    user = ddbo.get_user(user_id)
     if user[ ENABLED ] == 1:
         if demo_user:
             api_key = C.DEMO_MODE_API_KEY
@@ -1036,14 +1137,23 @@ def make_new_api_key(*, email, demo_user=False):
             api_key = new_api_key()
         ddbo.put_api_key_dict({API_KEY:api_key,
                                ENABLED:1,
-                               USER_ID :user[ USER_ID ],
+                               USER_ID :user_id,
                                USE_COUNT:0,
                                CREATED:int(time.time()) })
         return api_key
-    raise InvalidUser_Email(email)
+    raise InvalidUser_Id(user_id)
 
 
-@log
+def make_new_api_key(*, email, demo_user=False):
+    """Create a new api_key for an email that is registered
+    :param email:  the email
+    :param demo_user:  If true, then use the demo user API key, and not a random API key
+    :return: api_key - the api_key
+    """
+    user = DDBO().get_user_email(email)
+    return make_new_api_key_for_user_id(user_id=user[ USER_ID ], demo_user=demo_user)
+
+
 def get_user(user_id):
     return DDBO().get_user(user_id)
 
@@ -1060,15 +1170,12 @@ def get_first_api_key_for_user(user_id):
 ### Course Management ###
 #########################
 
-@log
 def lookup_course_by_id(*, course_id):
     return DDBO().get_course(course_id)
 
-@log
 def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
 
-@log
 def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT, ok_if_exists=False):
     """Create a new course
     """
@@ -1079,13 +1186,11 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
                         MAX_ENROLLMENT:max_enrollment},
                       ok_if_exists=ok_if_exists)
 
-@log
 def delete_course(*,course_id):
     """Delete a course.
     """
     DDBO().del_course(course_id)
 
-@log
 def add_course_admin(*, admin_id, course_id):
     """Promotes the user to be an administrator and makes them an administrator of a specific course.
     :param email: email address of the administrator
@@ -1112,7 +1217,6 @@ def add_course_admin(*, admin_id, course_id):
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
 
-@log
 def remove_course_admin(*, course_id, admin_id):
     """Removes email from the course admin list and takes them out of the course."""
     ddbo = DDBO()
@@ -1157,7 +1261,6 @@ def remove_course_admin(*, course_id, admin_id):
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
 
 
-@log
 def check_course_admin(*, user_id, course_id):
     """Return True if user_id is an admin in course_id"""
     logger.info("TODO: Make get_user more efficient by just getting the attribute ADMIN_FOR_COURSES")
@@ -1167,13 +1270,11 @@ def check_course_admin(*, user_id, course_id):
     logger.debug("user=%s",user)
     return course_id in user[ ADMIN_FOR_COURSES ]
 
-@log
 def validate_course_key(*, course_key):
     if DDBO().get_course_by_course_key(course_key):
         return True
     return False
 
-@log
 def remaining_course_registrations(*,course_key):
     ddbo = DDBO()
     course = ddbo.get_course_by_course_key(course_key)
@@ -1183,7 +1284,6 @@ def remaining_course_registrations(*,course_key):
     enrolled = course_enrollments(course_id)
     return course['max_enrollment'] - len(enrolled)
 
-@log
 def course_enrollments(course_id):
     """Return a list of all those enrolled in the course (including staff)
     Gets all the movie frames"""
@@ -1206,7 +1306,6 @@ def course_enrollments(course_id):
 
 
 
-@log
 def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """Gets the metadata for a single movie.
     :param movie_id: the movie for which we need data.
@@ -1215,14 +1314,24 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     """
     logger.info("get_movie_metadata(movie_id=%s, get_last_frame_tracked=%s",movie_id, get_last_frame_tracked)
     ddbo = DDBO()
-    movie = fix_movie(ddbo.get_movie(movie_id))
+    movie = fix_movie(ddbo.get_movie(movie_id)) # fixes the movie schema
+
+    # Correcting dimensions based on rotation
+    rotation_value = movie.get('rotation', 0)
+    try:
+        rotation = int(rotation_value)
+    except (TypeError, ValueError):
+        rotation = 0
+    if rotation in (90, 270):
+        # Using the tuple swap you suggested:
+        (movie['width'], movie['height']) = (movie.get('height'), movie.get('width'))
+
     if get_last_frame_tracked and movie.get(LAST_FRAME_TRACKED,None) is None:
         movie[LAST_FRAME_TRACKED] = last_tracked_movie_frame(movie_id = movie_id)
     logger.debug("get_movie_metadata: returning movie=%s",movie)
     return movie
 
 
-@log
 def can_access_movie(*, user_id, movie_id):
     """
     Checks to see if the user is allowed to access the movie:
@@ -1247,16 +1356,18 @@ def can_access_movie(*, user_id, movie_id):
         return movie
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
-@log
-def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None):
+def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
+                     research_use=None, credit_by_name=None, attribution_name=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
     :param user_id: - person creating movie. Stored in movies table.
     :param title: - title of movie. Stored in movies table
     :param description: - description of movie
-    :param movie_metadata: - if presented, metadata for the movie. Stored in movies SQL table.
     :param orig_movie: - if presented, the movie_id of the movie on which this is based
+    :param research_use: - 1 if movie may be used in research, 0 if not, None if not yet answered
+    :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
+    :param attribution_name: - name for attribution when credit_by_name is 1, else None
     :return: movie_id of the created movie
 
     """
@@ -1266,43 +1377,62 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     if course_id is None:
         course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
-    ddbo.put_movie({MOVIE_ID:movie_id,
+    ddbo.put_movie({MOVIE_ID: movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
                     USER_NAME: user[USER_NAME],
-                    TITLE:title,
-                    'description':description,
-                    'orig_movie':orig_movie,
-                    PUBLISHED: 0,
+                    TITLE: title,
+                    DESCRIPTION: description,
+                    ORIG_MOVIE: orig_movie,
+                    PUBLISHED: 1,
                     DELETED: 0,
-                    'movie_zipfile_urn':None,
-                    MOVIE_DATA_URN:None,
-                    LAST_FRAME_TRACKED:None,
-                    'created_at':int(time.time()),
-                    'date_uploaded':None,
-                    TOTAL_FRAMES:None, # will be set later
-                    TOTAL_BYTES:None,  # will be set later
-                    VERSION:0  # will be set to 1 with set_movie_data
+                    MOVIE_ZIPFILE_URN: None,
+                    MOVIE_DATA_URN: None,
+                    LAST_FRAME_TRACKED: None,
+                    CREATED_AT: int(time.time()),
+                    DATE_UPLOADED: int(time.time()),
+                    TOTAL_FRAMES: None,
+                    TOTAL_BYTES: None,
+                    VERSION: 0,
+                    RESEARCH_USE: research_use,
+                    CREDIT_BY_NAME: credit_by_name,
+                    ATTRIBUTION_NAME: attribution_name,
+                    ROTATION_STEPS: 0,
+                    MOVIE_STATUS: MOVIE_STATE_UPLOADING,
                     })
     return movie_id
+
+def set_research_use(*, user_id, movie_id, research_use):
+    """Set research_use for a movie (owner only). If research_use is not 1, also clears credit_by_name.
+
+    :param user_id: - user making the change; must be the movie owner
+    :param movie_id: - the movie to update
+    :param research_use: - 1, 0, or None
+    """
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    if movie[USER_ID] != user_id:
+        raise UnauthorizedUser(f"user {user_id} is not the owner of movie {movie_id}")
+    update = {RESEARCH_USE: research_use}
+    if research_use != 1:
+        update[CREDIT_BY_NAME] = None
+    ddbo.update_table(ddbo.movies, movie_id, update)
 
 def get_movie(*, movie_id):
     """Returns the movie's data"""
     return DDBO().get_movie(movie_id)
 
-#def set_movie_metadata(*, movie_id, movie_metadata):
-#    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
-#
-#    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
-#    assert is_movie_id(movie_id)
-#    assert MOVIE_ID not in movie_metadata
-#    assert 'id' not in movie_metadata
-#    if 'fps' in movie_metadata:
-#        movie_metadata = copy.copy(movie_metadata)
-#        movie_metadata['fps'] = str(movie_metadata['fps'])
-#    ddbo = DDBO()
-#    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
-
+def set_movie_metadata(*, movie_id, movie_metadata):
+    """Set the movie_metadata from a dictionary. If fps is present, turn to a string because DynamoDB cannot store floats"""
+    logger.debug("movie_id=%s movie_metadata=%s",movie_id,movie_metadata)
+    assert is_movie_id(movie_id)
+    assert MOVIE_ID not in movie_metadata
+    assert 'id' not in movie_metadata
+    if 'fps' in movie_metadata:
+        movie_metadata = copy.copy(movie_metadata)
+        movie_metadata['fps'] = str(movie_metadata['fps'])
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
 
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
@@ -1351,18 +1481,19 @@ def course_id_for_movie_id(movie_id):
 
 @functools.lru_cache(maxsize=128)
 def movie_data_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_DATA_URN]
+    """Return movie_data_urn for movie_id, or None if not yet set (e.g. before upload/processing)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_DATA_URN)
 
 
 @functools.lru_cache(maxsize=128)
 def movie_zipfile_urn_for_movie_id(movie_id):
-    # note: make more efficient by modifying get_movie to return just movie_id.course_id when requested
-    return DDBO().get_movie(movie_id)[MOVIE_ZIPFILE_URN]
+    """Return movie_zipfile_urn for movie_id, or None if not yet set (e.g. before zip is built)."""
+    movie = DDBO().get_movie(movie_id)
+    return movie.get(MOVIE_ZIPFILE_URN)
 
 
 
-@log
 def get_frame_urn(*, movie_id, frame_number):
     """Get a frame_urn by movie_id and frame number.
     :param: movie_id - the movie_id wanted
@@ -1461,13 +1592,13 @@ def last_tracked_movie_frame(*, movie_id):
             break
     return None
 
-def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict]):
+def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint]):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
-    :param: trackpoints - array of dicts where each dict has an x, y and label. Other fields are ignored.
+    :param: trackpoints - array of Tractpoints.
     """
     # Remove numpy from trackpoints
-    trackpoints = [ Trackpoint(**tp).model_dump() for tp in trackpoints ]
+    trackpoints = [ tp.model_dump() for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
@@ -1477,13 +1608,63 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
                                    ExpressionAttributeValues={':val':trackpoints})
 
     # update the last frame tracked. This is way, way more expensive than it should be.
-    movie = ddbo.get_movie(movie_id)
-    if movie['last_frame_tracked'] is None:
+    movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
+    current = movie.get(LAST_FRAME_TRACKED, None)
+    if current is None:
         assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
-        movie['last_frame_tracked'] = frame_number
+        lft = frame_number
     else:
-        movie['last_frame_tracked'] = max(movie['last_frame_tracked'],frame_number)
-    ddbo.put_movie(movie)        # put it back. NOTE - we should just update the last_frame_tracked
+        lft = max(current, frame_number)
+    set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
+
+
+def clear_movie_tracking_after_frame(*, movie_id, frame_number:int):
+    """Remove trackpoints for frames strictly after ``frame_number``.
+
+    This is used when the user edits frame ``N`` and requests a retrace: frame ``N``
+    remains the source of truth, while frames ``N+1`` through the end of the movie
+    are invalidated and must be recomputed.
+
+    Returns the count of frame records whose ``trackpoints`` attribute was removed.
+    """
+    assert is_movie_id(movie_id)
+    assert frame_number >= 0
+    ddbo = DDBO()
+    deleted = 0
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None or int(fn) <= frame_number or 'trackpoints' not in frame:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+        deleted += 1
+
+    # Preserve the edited frame as the new frontier for any subsequent retrace.
+    set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: frame_number})
+    return deleted
+
+
+def clear_movie_tracking(movie_id):
+    """Remove all trackpoints and last_frame_tracked for a movie (e.g. after rotation).
+    Frames keep frame_number/urn; only trackpoints attribute is removed per frame.
+    """
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
+    for frame in ddbo.get_frames(movie_id):
+        fn = frame.get(FRAME_NUMBER)
+        if fn is None:
+            continue
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+            UpdateExpression='REMOVE trackpoints',
+        )
+    # Clear stored last_frame_tracked on the movie so next get_movie_metadata computes correctly.
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression='REMOVE last_frame_tracked',
+    )
 
 
 ################################################################
@@ -1493,28 +1674,34 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[dict])
 
 # set movie metadata privileges array:
 # columns indicate WHAT is being set, WHO can set it, and HOW to set it
-# We kept this, even thoguh we are now just parsing it
+# We kept this, even though we are now just parsing it
 SET_MOVIE_METADATA = {
     # these can be changed by the owner or an admin
-    'title': 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
-    'description': 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
-    'status': 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
-    'fps': 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
-    'width': 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
-    'height': 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
-    'total_frames': 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
-    'total_bytes': 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
-    'version':'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
-    'movie_zipfile_urn':'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
+    TITLE: 'update movies set title=%s where id=%s and (@is_owner or @is_admin)',
+    DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
+    FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
+    HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_FRAMES: 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',
+    TOTAL_BYTES: 'update movies set total_bytes=%s where id=%s and (@is_owner or @is_admin)',
+    VERSION: 'update movies set version=%s where id=%s and (@is_owner or @is_admin)',
+    MOVIE_ZIPFILE_URN: 'update movies set movie_zipfile_urn=%s where id=%s and (@is_owner or @is_admin)',
 
     # the user can delete or undelete movies; the admin can only delete them
     DELETED: 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
 
     # the admin can publish or unpublish movies; the user can only unpublish them
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
+
+    # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
+    ROTATION_STEPS: 'update movies set rotation_steps=%s where id=%s and (@is_owner or @is_admin)',
+
+    # Research attribution — only the uploader may change these, not admins of other users' movies.
+    RESEARCH_USE: 'update movies set research_use=%s where id=%s and @is_owner',
+    CREDIT_BY_NAME: 'update movies set credit_by_name=%s where id=%s and @is_owner',
 }
 
-@log
 def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
     """We tried doing this in a single statement and it failed
     :param user_id: - user doing the setting. 0 for root

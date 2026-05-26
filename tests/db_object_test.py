@@ -19,13 +19,11 @@ def test_object_name():
     assert s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
     assert s3_presigned.make_object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
 
-# pylint: disable=unused-argument
 def test_make_urn(local_s3):
     name = s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.txt')
     a = s3_presigned.make_urn(object_name=name)
     assert a.endswith(".txt")
 
-# pylint: disable=unused-argument
 def test_write_read_delete_object(local_s3):
     DATA = str(uuid.uuid4()).encode('utf-8')
     hasher = hashlib.sha256()

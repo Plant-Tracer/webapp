@@ -9,20 +9,92 @@ Content-Type: text/plain; charset=UTF-8
 
 Your Plant Tracer course "{{ course_name }}" ({{ course_id }}) has been created.
 
+Course key: {{ course_key }}
+
 Log in to manage your course and students:
 
 {{ planttracer_endpoint }}/list?api_key={{ api_key }}
+
+Students can register at:
+
+{{ planttracer_endpoint }}/register
+
+Ask students to enter the course key {{ course_key }} and their email address.
+
+--
+Git branch: {{ git_branch }}
+Git version: {{ git_version }}
 
 --{{ boundary }}
 Content-Type: text/html; charset=UTF-8
 
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Plant Tracer: Course ready</title></head>
-<body>
-<p>Your Plant Tracer course <strong>{{ course_name }}</strong> ({{ course_id }}) has been created.</p>
-<p>Log in to manage your course and students:</p>
-<p><a href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}">{{ planttracer_endpoint }}/list?api_key={{ api_key }}</a></p>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Tracer: Course ready</title>
+</head>
+<body bgcolor="#f4f4f4">
+  <!-- Outer wrapper -->
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f4f4f4">
+    <tr>
+      <td align="center" style="padding:24px 8px;">
+        <!-- Content card -->
+        <table width="600" border="0" cellpadding="0" cellspacing="0" bgcolor="#ffffff">
+          <tr>
+            <td style="padding:32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222222;line-height:1.6;">
+
+              <p>Your Plant Tracer course <strong>{{ course_name }}</strong> ({{ course_id }}) has been created.</p>
+
+              <!-- Course key highlight -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td bgcolor="#f0f0f0" style="padding:12px 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222222;">
+                    <strong>Course key:</strong>&nbsp;&nbsp;<code>{{ course_key }}</code>
+                  </td>
+                </tr>
+              </table>
+
+              <p>Log in to manage your course and students:</p>
+
+              <!-- CTA button -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 24px 0;">
+                    <table border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td bgcolor="#2a6496" align="center" style="padding:12px 28px;">
+                          <a ses:no-track href="{{ planttracer_endpoint }}/list?api_key={{ api_key }}"
+                             style="color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;">Manage Course</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p>Students can register at
+                <a ses:no-track href="{{ planttracer_endpoint }}/register" style="color:#2a6496;">{{ planttracer_endpoint }}/register</a>
+                by entering the course key <code>{{ course_key }}</code> and their email address.
+              </p>
+
+              <!-- Divider -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-top:1px solid #dddddd;padding-top:16px;font-size:12px;color:#999999;font-family:Arial,Helvetica,sans-serif;">
+                    Git branch: {{ git_branch }}<br>
+                    Git version: {{ git_version }}
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 

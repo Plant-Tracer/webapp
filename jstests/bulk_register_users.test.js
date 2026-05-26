@@ -7,24 +7,21 @@ const module = require('users')
 const bulk_register_users_func = module.bulk_register_users
 
 describe('bulk_register_users_func', () => {
-    const api_key = 'test_api_key';
-    const user_primary_course_id = 1;
 
     beforeEach(() => {
-        document.body.innerHTML = `
-            <input id="br_email_addresses" value="" />
-            <div id="message"></div>
-        `;
         jest.clearAllMocks();
-        const location = new URL('http://example.com/');
-        delete window.location;
-        window.location = location;
-
         global.planttracer_endpoint = 'some_endpoint'
         global.API_BASE = 'http://example.com/'
-        global.api_key = api_key;
-        global.user_primary_course_id = user_primary_course_id;
-    });
+        global.api_key = 'test_api_key';
+        global.user_primary_course_id = 1;
+        global.list_users = jest.fn();
+
+      // Add the mock DOM elements the function expects to find
+
+        document.body.innerHTML = `
+            <textarea id="br_email_addresses"></textarea>
+            <div id="message"></div>
+        `;    });
 
     test('should show message if no email adressess are provided', () => {
 
@@ -37,40 +34,107 @@ describe('bulk_register_users_func', () => {
 
 
     test('should handle successful registration response', () => {
-        fetch.mockResponseOnce(JSON.stringify({ error: false, message: "Registered 1 email addresses" }));
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: function (callback) {
+                callback({ error: false, message: "Registered 1 email addresses" });
+                return this;
+            },
+            fail: jest.fn().mockReturnThis(),
+        }));
 
         $('#br_email_addresses').val('test@example.com');
 
         bulk_register_users_func();
 
-//        expect($('#message').html()).toBe('Registered 1 email addresses');
-
-        expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, expect.objectContaining({
-            method: 'POST',
-            body: expect.any(FormData),
-        }));
-
-        const formData = fetch.mock.calls[0][1].body;
-        expect(formData.get("api_key")).toBe(api_key);
-        expect(formData.get("course_id")).toBe(user_primary_course_id + "");
-/*
-        ToDo: how to test this window.origin stuff?
-        expect(formData.get("planttracer_endpoint")).toBe(window.origin + "");
-*/
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'test@example.com',
+            "names": '',
+        });
+        expect($('#message').html()).toBe('Registered 1 email addresses');
+        expect(global.list_users).toHaveBeenCalledTimes(1);
     });
 
     test('should handle invalid email response', () => {
-        fetch.mockResponseOnce(JSON.stringify({ error: false, message: "Invalid email address" }));
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: function (callback) {
+                callback({ error: true, message: "Invalid email address" });
+                return this;
+            },
+            fail: jest.fn().mockReturnThis(),
+        }));
 
         $('#br_email_addresses').val('missingdomain@.com');
 
         bulk_register_users_func();
 
-        //ToDo: expect($('#message').html()).toBe('error: Invalid email address');
-        expect(fetch).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, expect.objectContaining({
-            method: 'POST',
-            body: expect.any(FormData),
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'missingdomain@.com',
+            "names": '',
+        });
+        expect($('#message').html()).toBe('error: Invalid email address');
+    });
+
+    test('should parse email,name line and send both fields', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
         }));
+
+        $('#br_email_addresses').val('alice@example.com,Alice Smith');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com',
+            "names": 'Alice Smith',
+        });
+    });
+
+    test('should parse multiple lines with mixed name presence', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        }));
+
+        $('#br_email_addresses').val('alice@example.com, Alice Smith\nbob@example.com\ncharlie@example.com, Charlie Darwin');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com\nbob@example.com\ncharlie@example.com',
+            "names": 'Alice Smith\n\nCharlie Darwin',
+        });
+    });
+
+    test('should skip blank lines when parsing input', () => {
+        $.post = jest.fn().mockImplementation((_url, _payload) => ({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        }));
+
+        $('#br_email_addresses').val('alice@example.com\n\nbob@example.com');
+
+        bulk_register_users_func();
+
+        expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
+            api_key,
+            planttracer_endpoint: window.origin + "",
+            course_id: user_primary_course_id,
+            "email-addresses": 'alice@example.com\nbob@example.com',
+            "names": '\n',
+        });
     });
 
 });

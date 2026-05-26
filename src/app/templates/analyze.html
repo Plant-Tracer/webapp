@@ -22,7 +22,7 @@
   }
 </style>
 
-<h2 id='firsth2'>Movie Loading...</h2>
+<h2 id='status-big'>Movie Loading...</h2>
 
 {% include 'tracer_app.html' %}
 
@@ -42,8 +42,12 @@
   <p>To analyze the motion of the plant in the video:</p>
   <ul>
     <li>Place the Apex marker on the plant's apex</li>
-    <li>Move the Ruler markers to the corresponding parts of the ruler in the video (if there is a ruler in the video)</li>
-    <li>Press the <i>Trace movie</i> or <i>Re-trace movie</i> button to initiate tracing</li>
+    <li>Move the Ruler markers to the corresponding parts of the ruler in the video (if there is a ruler in the video).
+        The default markers are named <i>Ruler 0mm</i> and <i>Ruler 10mm</i>, but <b>the number should match the
+        actual markings on your ruler</b> — for example, use <i>Ruler 0mm</i> and <i>Ruler 30mm</i> if your ruler
+        is 30mm long. To use a different value, delete the default marker and add a new one with the correct name
+        (e.g. <i>Ruler 30mm</i>) using the Marker Table.</li>
+    <li>Press the <i>Trace movie</i> or <i>Retrace to end of movie</i> button to initiate tracing</li>
   </ul>
 
   <p>You may add additional markers to trace additional points of interest.</p>
@@ -56,8 +60,9 @@
 
   <p>
     If you notice that tracing a given marker has not been successful for the entire length of
-    the movie, go find the frame where tracing is lost, re-position the marker, and press <i>Re-trace movie</i>
-    to re-trace from that point forward. You may have to repeat this process.
+    the movie, go find the frame where tracing is lost, re-position the marker, and press <i>Retrace to end of movie</i>
+    to retrace from that point forward. This keeps all annotations up to the current frame and discards the successful
+    annotations for every later frame before tracing resumes. You may have to repeat this process.
   </p>
 
   <h3>Units and Conventions</h3>
@@ -85,7 +90,7 @@
   import { $ } from "{{ url_for('static', filename='utils.js') }}";
   import { CanvasController, CanvasItem, Marker, WebImage } from "{{ url_for('static', filename='canvas_controller.mjs') }}";
   import { MovieController } from "{{ url_for('static', filename='canvas_movie_controller.js') }}";
-  import { TracerController, trace_movie } from "{{ url_for('static', filename='canvas_tracer_controller.js') }}";
+  import { TracerController, trace_movie } from "{{ url_for('static', filename='canvas_tracer_controller.mjs') }}";
   let params = new URLSearchParams(window.location.search);
 
   // When the document loads, run the trace_movie() functions.

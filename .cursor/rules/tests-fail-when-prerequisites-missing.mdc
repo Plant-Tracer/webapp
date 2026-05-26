@@ -1,0 +1,14 @@
+---
+description: Tests must fail when prerequisites are missing; never skip or pass by default
+alwaysApply: true
+---
+
+# Tests: Fail When Prerequisites Are Missing
+
+- **Tests must FAIL** when things they need are not present (fixtures, data files, env, services). Do **not** make tests skip or pass when prerequisites are missing.
+- **The project owner decides** whether a test should skip, pass, or fail in a given situation. Do not add logic that skips or passes "so the test runs" or "so CI is green" unless the user explicitly asks for it.
+- **Do not introduce covert patches** that change test behavior (e.g., turning a missing fixture into a skip instead of a failure). That introduces technical debt and wastes the user's time. If in doubt, make the test fail loudly.
+
+When writing or modifying tests:
+- Missing fixture/file → **assert or fail**, not skip.
+- Missing env/service → **fail** with a clear error, unless the user has explicitly asked for skip/pass behavior.

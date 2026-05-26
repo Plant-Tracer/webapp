@@ -209,3 +209,6 @@ samconfig.toml
 .envrc
 .env
 .op
+*.jpeg
+dump.txt
+etc/planttracer-nginx-patch.*

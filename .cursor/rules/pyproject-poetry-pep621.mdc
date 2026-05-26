@@ -1,0 +1,33 @@
+---
+description: Use PEP 621 [project] in pyproject.toml; avoid deprecated Poetry keys
+globs: pyproject.toml
+alwaysApply: false
+---
+
+# pyproject.toml: Use [project], Not Deprecated [tool.poetry] Keys
+
+When editing `pyproject.toml`, use the standard PEP 621 `[project]` table and **do not** use deprecated Poetry-only keys for metadata or scripts.
+
+## Use [project] for metadata
+
+- **Name:** `[project]` → `name = "..."` (not `[tool.poetry].name`)
+- **Version:** `[project]` → `version = "..."` (not `[tool.poetry].version`; if dynamic, add `version` to `[project.dynamic]`)
+- **Description:** `[project]` → `description = "..."` (not `[tool.poetry].description`)
+- **Readme:** `[project]` → `readme = "README.md"` (not `[tool.poetry].readme`; if dynamic, add `readme` to `[project.dynamic]`)
+- **License:** `[project]` → use a valid SPDX license expression string (e.g. `license = "GPL-3.0-or-later"`), not `[tool.poetry].license` or the deprecated table form
+- **Authors:** `[project]` → `authors = ["Name <email>", ...]` (not `[tool.poetry].authors`)
+
+## Use [project.scripts] for console scripts
+
+- **Console entry points:** `[project.scripts]` → e.g. `script-name = "module:callable"` (not `[tool.poetry.scripts]`). Use `[tool.poetry.scripts]` only for scripts of type `file` if needed.
+
+## Also in [project]
+
+- **requires-python:** Set `requires-python = ">=3.12,<3.13"` (or your range) in `[project]` so it is not only in `[tool.poetry.dependencies]`.
+- **dynamic:** If using Poetry dependency groups, add `dynamic = ["dependencies"]` to `[project]` so Poetry can keep providing dependencies from `[tool.poetry.dependencies]` and groups without triggering warnings.
+
+## Keep in [tool.poetry] only
+
+- `packages`, `[tool.poetry.dependencies]`, `[tool.poetry.group.*]`, `[tool.poetry.requires-plugins]`, and other Poetry-specific options that have no PEP 621 equivalent.
+
+This keeps the file aligned with modern Poetry and avoids deprecation warnings.

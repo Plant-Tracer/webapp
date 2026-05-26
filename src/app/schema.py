@@ -9,9 +9,10 @@ from pydantic import (
     BaseModel,
     Field,
     field_validator,
-    TypeAdapter,
-    ValidationError,
+    TypeAdapter
 )
+
+from .constants import C
 
 
 class User(BaseModel):
@@ -34,28 +35,17 @@ class User(BaseModel):
 # from .models import User
 
 
+USER_ADAPTERS = {
+    prop: TypeAdapter(field.annotation)
+    for prop, field in User.model_fields.items()
+}
 def validate_user_field(prop: str, value: Any) -> Any:
     """
     Validates a single value against a specific field type from the User model.
     """
-    field = User.model_fields.get(prop)
-    if field is None:
+    if prop not in USER_ADAPTERS:
         raise AttributeError(f"{prop} is not a valid field of User")
-
-    # Get the type annotation (e.g., str, int, bool)
-    field_type = field.annotation
-
-    try:
-        # 1. Create an adapter for that specific type
-        adapter = TypeAdapter(field_type)
-
-        # 2. Validate the value against the type
-        validated_value = adapter.validate_python(value)
-
-        return validated_value
-
-    except ValidationError as e:
-        raise ValueError(f"Validation error for '{prop}': {e}") from e
+    return USER_ADAPTERS[prop].validate_python(value)
 
 
 class UniqueEmail(BaseModel):
@@ -113,18 +103,30 @@ class Movie(BaseModel):
 
     movie_data_urn: str | None = None
     movie_zipfile_urn: str | None = None
+    first_frame_urn: str | None = None
+    processing_state: str | None = None  # unused legacy field; superseded by the status field in odb.py
+    zip_frame_processing: dict | None = None  # {"total": int, "current": int}
 
     last_frame_tracked: Annotated[int | None, Field(ge=0)] = None
 
     version: Annotated[int | None, Field(ge=0)] = None
 
+    # Research use and attribution (see docs/MOVIE_METADATA)
+    # None means the user was never asked (legacy or upload without the radio buttons answered).
+    research_use: Annotated[int, Field(ge=0, le=1)] | None = None
+    credit_by_name: Annotated[int, Field(ge=0, le=1)] | None = None
+    attribution_name: str | None = None
+
+    # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
+    rotation: Annotated[int, Field(ge=0, lt=360)] = 0
+
 
 def fix_movie_prop_value(prop, value):
     if value is None:
         return None
-    if prop in ["published", "deleted", "version", "last_frame_tracked"]:
+    if prop in C.MOVIE_PROPS_INT:
         return int(value)
-    if prop in ["fps"]:
+    if prop in C.MOVIE_PROPS_STR:
         return str(value)
     return value
 
@@ -175,25 +177,14 @@ class LogEntry(BaseModel):
 
 
 # Function to validate a single prop and value using the Movie schema
+MOVIE_ADAPTERS = {
+    prop: TypeAdapter(field.annotation)
+    for prop, field in Movie.model_fields.items()
+}
 def validate_movie_field(prop: str, value: Any) -> Any:
     """
     Validates a single value against a specific field type from the Movie model.
     """
-    field = Movie.model_fields.get(prop)
-    if field is None:
+    if prop not in MOVIE_ADAPTERS:
         raise AttributeError(f"{prop} is not a valid field of Movie")
-
-    # Get the type annotation (e.g., str, int, bool)
-    field_type = field.annotation
-
-    try:
-        # 1. Create an adapter for that specific type
-        adapter = TypeAdapter(field_type)
-
-        # 2. Validate the value against the type
-        validated_value = adapter.validate_python(value)
-
-        return validated_value
-
-    except ValidationError as e:
-        raise ValueError(f"Validation error for '{prop}': {e}") from e
+    return MOVIE_ADAPTERS[prop].validate_python(value)

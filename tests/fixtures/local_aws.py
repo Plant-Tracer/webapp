@@ -17,7 +17,7 @@ from botocore.exceptions import ClientError
 
 
 from app.constants import C
-from app.s3_presigned import CORS_CONFIGURATION, s3_client
+from app.s3_presigned import s3_client
 from app import odb
 from app import odb_movie_data
 from app import odbmaint
@@ -57,27 +57,27 @@ def local_ddb():
     """Create an empty DynamoDB locally.
     Starts the database if it is not running.
     """
-    subprocess.call( [os.path.join(ROOT_DIR,'bin/local_dynamodb_control.bash'),'start'])
+    subprocess.call(["python3", os.path.join(ROOT_DIR, "bin/local_services.py"), "dynamodb", "start"])
 
     # Make a random prefix for this run.
     # Make sure that the tables don't exist, then create them
 
     if os.environ.get(C.AWS_REGION,'local') == "local":
 
-        # Running locally.
-
+        # Running locally. Point AWS_CONFIG_FILE to /dev/null so botocore does not
+        # pick up SSO/login_session profiles from ~/.aws/config and try to refresh them.
         os.environ[ C.AWS_REGION ]    = 'local'
-        os.environ[ C.AWS_ENDPOINT_URL ]      = C.TEST_ENDPOINT_URL_DYNAMODB
+        os.environ[ 'AWS_CONFIG_FILE' ] = '/dev/null'
+        os.environ[ C.AWS_ENDPOINT_URL_DYNAMODB ] = C.TEST_ENDPOINT_URL_DYNAMODB
         os.environ[ C.AWS_ACCESS_KEY_ID ] = C.TEST_ACCESS_KEY_ID
         os.environ[ C.AWS_SECRET_ACCESS_KEY ]    = C.TEST_SECRET_ACCESS_KEY
 
-    # If no prefix is specified, create a random test prefix
-    if os.environ.get(C.DYNAMODB_TABLE_PREFIX,'') == '':
-        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
-
-    # Wipe and recreate the tables if running locally
+    # Wipe and recreate the tables if running locally.
+    # Always generate a fresh random prefix so tests never touch demo- or any
+    # other existing tables that may be running alongside the test suite.
     created_test_tables = False
     if os.environ[ C.AWS_REGION ] == 'local':
+        os.environ[ C.DYNAMODB_TABLE_PREFIX ] = 'test-'+str(uuid.uuid4())[0:4]
         odbmaint.drop_tables(silent_warnings=True)
         odbmaint.create_tables()
         created_test_tables = True
@@ -90,11 +90,10 @@ def local_ddb():
 @pytest.fixture(scope="session")
 def local_s3():
     """
-    When running locally: start MinIO, ensure the bucket exists (create if not),
-    and apply CORS so the app's config check and browser fetches succeed.
+    When running locally: start MinIO and ensure the bucket exists (create if not).
     """
     if os.environ.get(C.AWS_REGION, '') == 'local':
-        subprocess.call([os.path.join(ROOT_DIR, 'bin/local_minio_control.bash'), 'start'])
+        subprocess.call(["python3", os.path.join(ROOT_DIR, "bin/local_services.py"), "minio", "start"])
         os.environ[C.AWS_ENDPOINT_URL_S3] = C.TEST_ENDPOINT_URL_S3
         if not os.environ.get(C.PLANTTRACER_S3_BUCKET):
             os.environ[C.PLANTTRACER_S3_BUCKET] = 'planttracer-local'
@@ -108,18 +107,6 @@ def local_s3():
                 client.create_bucket(Bucket=bucket)
             else:
                 logging.warning("head_bucket failed: %s", e)
-
-        try:
-            client.put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
-        except ClientError as e:
-            logging.warning("Could not set S3 CORS (non-fatal): %s", e)
-    else:
-        bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
-        if bucket:
-            try:
-                s3_client().put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
-            except ClientError as e:
-                logging.warning("Could not set S3 CORS (non-fatal): %s", e)
 
     yield os.environ[C.PLANTTRACER_S3_BUCKET]
 
@@ -191,7 +178,7 @@ def new_movie(new_course):
     movie = odb.get_movie(movie_id = movie_id)
     assert movie[USER_ID] == cfg[USER_ID]
     assert movie[DELETED] == 0
-    assert movie[PUBLISHED] == 0
+    assert movie[PUBLISHED] == 1
     assert movie[VERSION] == 1
 
     cfg[MOVIE_ID] = movie_id

@@ -3,3 +3,6 @@ src/requirements.txt
 src/resize_app/src
 samconfig.toml
 requirements.txt
+.aws-sam
+.ruff_cache.
+.venv

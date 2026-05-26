@@ -159,18 +159,18 @@ pytest-selenium: $(PYR)
 
 wipe-local: $(DYR) $(SYR)
 	@echo wiping all local artifacts and remaking the local bucket.
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	python3 bin/local_services.py minio stop
+	python3 bin/local_services.py dynamodb stop
 	/bin/rm -rf var
 	mkdir -p var
-	bin/local_minio_control.bash start
-	bin/local_dynamodb_control.bash start
+	python3 bin/local_services.py minio start
+	python3 bin/local_services.py dynamodb start
 	make make-local-bucket
 
 delete-local: $(DYR) $(SYR)
 	@echo deleting all local artifacts
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	python3 bin/local_services.py minio stop
+	python3 bin/local_services.py dynamodb stop
 	/bin/rm -rf var
 
 FUNCTION_NAME ?= MyLambdaFunction
@@ -244,10 +244,10 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 	touch bin/DynamoDBLocal.jar
 
 start_local_dynamodb: bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash start
+	python3 bin/local_services.py dynamodb start
 
 stop_local_dynamodb:  bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash stop
+	python3 bin/local_services.py dynamodb stop
 .PHONY: start_local_dynamodb stop_local_dynamodb
 ################################################################
 
@@ -279,10 +279,10 @@ bin/minio:
 	fi
 
 start_local_minio: bin/minio
-	bash bin/local_minio_control.bash start
+	python3 bin/local_services.py minio start
 
 stop_local_minio:  bin/minio
-	bash bin/local_minio_control.bash stop
+	python3 bin/local_services.py minio stop
 .PHONY: start_local_minio stop_local_minio
 ###############################################################
 ## S3/DynamoDB controls

@@ -8,24 +8,25 @@ import copy
 import re
 import urllib
 from urllib.parse import quote
+import json
 
 import requests
 import filetype
 import pytest
 
 from app import odb
-from app import flask_api
-from app import tracker
 from app import s3_presigned
 from app import odb_movie_data
+from app import apikey
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
-from app.constants import E,MIME
+from app.constants import MIME
 from app.s3_presigned import s3_client
 from app.constants import logger
+from .conftest import get_movie_bytes
 
 # Get constants from fixtures (fixtures themselves are in conftest.py)
-from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE
+from .constants import TEST_PLANTMOVIE_PATH, MOVIE_TITLE, ADMIN_EMAIL
 
 
 
@@ -93,10 +94,15 @@ def data_from_redirect(url, the_client):
 
 # Test for edge cases
 def test_edge_case(new_movie):
-    with pytest.raises(odb.InvalidMovie_Id):
-        odb_movie_data.get_movie_data(movie_id = 3)
     with pytest.raises(ValueError):
         s3_presigned.make_urn(object_name="xxx",scheme='xxx')
+
+class DummyContext:
+    def __init__(self):
+        self.function_name = "test_movie_function"
+        self.memory_limit_in_mb = 128
+        self.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
+        self.aws_request_id = "52fdfc07-2182-154f-163f-5f0f9a621d72"
 
 def test_new_movie(client, new_movie):
     cfg = copy.copy(new_movie)
@@ -109,13 +115,13 @@ def test_new_movie(client, new_movie):
     count = 0
     logger.debug("movies=%s",movies)
     for movie in movies:
-        if (movie['deleted'] == 0) and (movie['published'] == 0) and (movie['title'] == movie_title):
+        if (movie['deleted'] == 0) and (movie['published'] == 1) and (movie['title'] == movie_title):
             count += 1
             logger.debug("found movie: %s",movie)
         else:
             logger.debug("skip deleted=%s published=%s title=%s ",
                           movie['deleted']==0,
-                          movie['published']==0,
+                          movie['published']==1,
                           movie['title']==movie_title)
     assert count==1
 
@@ -125,29 +131,27 @@ def test_new_movie(client, new_movie):
                                    'movie_id': movie_id})
     assert resp.status_code == 403
 
-    # Make sure that we can get data for the movie
-    resp = client.post('/api/get-movie-data',
+    # Make sure that we can get the metadata
+    resp = client.post('/api/get-movie-metadata',
                            data = {'api_key': api_key,
-                                   'movie_id': movie_id,
-                                   'redirect_inline':True})
-    logger.debug("test_new_movie: resp.data[0:10]=%s len=%s",resp.data[0:10],len(resp.data))
-    if resp.data[0:10] == b"#REDIRECT ":
-        movie_data = data_from_redirect(resp.text, client)
-    else:
-        movie_data = resp.data
+                                   'movie_id': movie_id})
+    res = resp.get_json()
+    logger.debug('json res=%s',json.dumps(res,indent=2))
+    assert res['error'] is False
+    assert res['metadata']['title'] == movie_title
+    assert len(res['metadata']['movie_data_urn']) > 0 # should have a urn!
+
+    movie_data_url = res['metadata']['movie_data_url']
+    logger.debug("movie_data_url=%s",movie_data_url)
+    assert movie_data_url is not None
+    r = requests.get(movie_data_url, timeout=GET_TIMEOUT)
+    movie_data = r.content
 
     # movie_data is now a movie. We should validate it.
     logger.debug("len(movie_data)=%s first 1024:%s",len(movie_data),movie_data[0:1024])
     assert len(movie_data)>0
     assert is_mp4(movie_data)
 
-    # Make sure that we can get the metadata
-    resp = client.post('/api/get-movie-metadata',
-                           data = {'api_key': api_key,
-                                   'movie_id': movie_id})
-    res = resp.get_json()
-    assert res['error'] is False
-    assert res['metadata']['title'] == movie_title
 
 def test_movie_upload_presigned_post(client, new_course, local_s3):
     """This tests a movie upload by getting the signed URL and then posting to it. It forces the object store"""
@@ -233,8 +237,8 @@ def test_movie_update_metadata(client, new_movie):
     logger.debug("get_movie(%s,%s,%s)=%s",client,api_key,movie_id,movie)
     assert movie['deleted'] == 0
 
-    # Try to publish the movie under the user's API key. This should not work
-    assert get_movie(client, api_key, movie_id)['published'] == 0
+    # Movies are published by default; verify and confirm owner can set published state
+    assert get_movie(client, api_key, movie_id)['published'] == 1
     resp = client.post('/api/set-metadata',
                            data = {'api_key': api_key,
                                    'set_movie_id': movie_id,
@@ -246,105 +250,6 @@ def test_movie_update_metadata(client, new_movie):
     logger.debug("movie=%s",movie)
     assert movie[MOVIE_ID] == movie_id
     assert movie['published'] == 1
-
-def test_movie_extract1(client, new_movie):
-    """Check single frame extarct and error handling"""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
-
-    # Check for insufficient arguments
-    # Should produce http403
-    resp = client.post('/api/get-frame')
-    assert resp.status_code == 403
-    r = resp.get_json()
-    assert r == E.INVALID_API_KEY
-
-    # Check for invalid frame_number
-    logger.debug("test_movie_extract1: point1")
-    resp = client.post('/api/get-frame',
-                           data = {'api_key': api_key,
-                                   'movie_id': str(movie_id),
-                                   'frame_number': '-1'})
-    assert resp.status_code == 400
-    r = resp.get_json()
-    assert r==E.INVALID_FRAME_NUMBER
-
-    # Check for getting by frame_number
-    # should produce a redirect.
-    # Getting data from the redirect should produce a JPEG...
-    logger.debug("test_movie_extract1: point2")
-    resp = client.post('/api/get-frame',
-                           data = {'api_key': api_key,
-                                   'movie_id': str(movie_id),
-                                   'frame_number': '0' })
-
-    assert resp.status_code == 302
-    # Follow the redirect manually
-    redirect_url = resp.headers['Location']
-    redirect_resp = requests.get(redirect_url,timeout=30)
-
-    # Get the data
-    data = redirect_resp.content
-    if data is None:
-        logger.error("resp=%s redirect_resp=%s",resp,redirect_resp)
-        assert data is not None
-    assert is_jpeg(data)
-
-    # Make sure that the URN was properly created
-    urn = flask_api.api_get_frame_urn(movie_id=movie_id, frame_number=0)
-    assert urn.startswith('s3:/')
-
-def test_movie_extract2(client, new_movie):
-    """Try extracting individual movie frames"""
-    cfg = copy.copy(new_movie)
-    movie_id = cfg[MOVIE_ID]
-    #movie_title = cfg[MOVIE_TITLE]
-    api_key = cfg[API_KEY]
-    #user_id = cfg[USER_ID]
-
-    movie_data = odb_movie_data.get_movie_data(movie_id = movie_id)
-    assert is_mp4(movie_data)
-
-    # Grab three frames with the tracker and make sure they are different
-    def get_movie_data_jpeg(frame_number):
-        data =  tracker.extract_frame(movie_data=movie_data,frame_number=frame_number,fmt='jpeg')
-        logger.debug("len(data)=%s",len(data))
-        assert is_jpeg(data)
-        return data
-
-    frames = {}
-    for n in (0,1,2):
-        frames[n] = get_movie_data_jpeg(n)
-
-    if (frames[0] != frames[1]) or (frames[0]!= frames[2]):
-        for n in (0,1,2):
-            with open(f"/tmp/frame{n}","wb") as f:
-                f.write(frames[n])
-        raise RuntimeError("did not get 3 different frames for frames[0], frames[1], frames[2]")
-
-    # Grab three frames with the API and see if they are different
-    def get_jpeg_frame_redirect(number):
-        resp = client.post('/api/get-frame',
-                               data = {'api_key': api_key,
-                                       'movie_id': str(movie_id),
-                                       'frame_number': str(number) })
-        assert resp.status_code==302
-        assert resp.location is not None
-        return resp.location
-
-    jpeg0_url = get_jpeg_frame_redirect(0)
-    jpeg1_url = get_jpeg_frame_redirect(1)
-    jpeg2_url = get_jpeg_frame_redirect(2)
-    assert jpeg0_url != jpeg1_url != jpeg2_url
-
-    # Now grab the data from each make sure that they are JPEGs.
-    for url in [jpeg0_url,jpeg1_url,jpeg2_url]:
-        r = requests.get(url,timeout=30)
-        assert is_jpeg(r.content)
-
 
 @pytest.mark.skip(reason='logging disabled on move to DynamoDB')
 def test_log_search_movie(new_movie):
@@ -429,7 +334,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logger.debug("new_movie fixture: movie uploaded")
-    retrieved_movie_data = odb_movie_data.get_movie_data(movie_id=movie_id)
+    retrieved_movie_data = get_movie_bytes(movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
 
@@ -443,3 +348,249 @@ def test_new_movie_api(client, new_course):
     logger.debug("new_movie fixture: Purge the movie that we have deleted")
     odb_movie_data.purge_movie(movie_id=movie_id)
     logger.debug("new_movie fixture: done")
+
+
+def test_new_movie_attribution_paths(client, new_course, local_s3):
+    """Test the four attribution paths:
+    Path 0 — neither field submitted (not-answered)
+    Path 1 — explicitly no research use
+    Path 2 — research allowed but anonymously
+    Path 3 — research with named attribution
+    """
+    cfg = copy.copy(new_course)
+    api_key = cfg[API_KEY]
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data = f.read()
+    movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
+    base_data = {
+        "api_key": api_key,
+        "title": f"attribution-test-{uuid.uuid4()}",
+        "description": "test description",
+        "movie_data_sha256": movie_data_sha256,
+    }
+
+    # Path 0: Neither radio answered — research_use and credit_by_name absent from POST
+    resp0 = client.post("/api/new-movie", data={**base_data, "title": f"path0-{uuid.uuid4()}"})
+    res0 = resp0.get_json()
+    assert res0["error"] is False
+    movie_id0 = res0["movie_id"]
+    movie0 = odb.get_movie(movie_id=movie_id0)
+    assert movie0["research_use"] is None
+    assert movie0["credit_by_name"] is None
+    assert movie0.get("attribution_name") is None
+    pp0 = res0["presigned_post"]
+    assert pp0["fields"].get("x-amz-meta-research-use") == "not-answered"
+    assert pp0["fields"].get("x-amz-meta-credit-by-name") == "not-answered"
+    assert pp0["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id0})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id0)
+
+    # Path 1: May not be used in research (research_use explicitly "0")
+    resp1 = client.post("/api/new-movie", data={**base_data, "title": f"path1-{uuid.uuid4()}", "research_use": "0"})
+    res1 = resp1.get_json()
+    assert res1["error"] is False
+    movie_id1 = res1["movie_id"]
+    movie1 = odb.get_movie(movie_id=movie_id1)
+    assert movie1["research_use"] == 0
+    assert movie1["credit_by_name"] is None
+    assert movie1.get("attribution_name") is None
+    pp1 = res1["presigned_post"]
+    assert pp1["fields"].get("x-amz-meta-research-use") == "0"
+    assert pp1["fields"].get("x-amz-meta-credit-by-name") == "not-answered"
+    assert pp1["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id1})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id1)
+
+    # Path 2: May be used in research but anonymously (credit_by_name explicitly "0")
+    resp2 = client.post(
+        "/api/new-movie",
+        data={**base_data, "title": f"path2-{uuid.uuid4()}", "research_use": "1", "credit_by_name": "0"},
+    )
+    res2 = resp2.get_json()
+    assert res2["error"] is False
+    movie_id2 = res2["movie_id"]
+    movie2 = odb.get_movie(movie_id=movie_id2)
+    assert movie2["research_use"] == 1
+    assert movie2["credit_by_name"] == 0
+    assert movie2.get("attribution_name") is None
+    pp2 = res2["presigned_post"]
+    assert pp2["fields"].get("x-amz-meta-research-use") == "1"
+    assert pp2["fields"].get("x-amz-meta-credit-by-name") == "0"
+    assert pp2["fields"].get("x-amz-meta-attribution-name") == ""
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id2})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id2)
+
+    # Path 3: May be used in research with attribution to "Alyssa P. Hacker"
+    resp3 = client.post(
+        "/api/new-movie",
+        data={
+            **base_data,
+            "title": f"path3-{uuid.uuid4()}",
+            "research_use": "1",
+            "credit_by_name": "1",
+            "attribution_name": "Alyssa P. Hacker",
+        },
+    )
+    res3 = resp3.get_json()
+    assert res3["error"] is False
+    movie_id3 = res3["movie_id"]
+    movie3 = odb.get_movie(movie_id=movie_id3)
+    assert movie3["research_use"] == 1
+    assert movie3["credit_by_name"] == 1
+    assert movie3.get("attribution_name") == "Alyssa P. Hacker"
+    pp3 = res3["presigned_post"]
+    assert pp3["fields"].get("x-amz-meta-research-use") == "1"
+    assert pp3["fields"].get("x-amz-meta-credit-by-name") == "1"
+    assert pp3["fields"].get("x-amz-meta-attribution-name") == "Alyssa P. Hacker"
+    resp = client.post("/api/delete-movie", data={"api_key": api_key, "movie_id": movie_id3})
+    assert resp.get_json()["error"] is False
+    odb_movie_data.purge_movie(movie_id=movie_id3)
+
+
+def test_set_research_metadata(client, new_course):
+    """Verify /api/set-research-metadata sets research_use, cascades to clear credit_by_name,
+    and blocks non-owners (including admins of other users' movies)."""
+    cfg = copy.copy(new_course)
+    api_key_user = cfg[API_KEY]
+
+    # Create a movie with research_use=1 and credit_by_name=1
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data = f.read()
+    sha256 = s3_presigned.sha256_hash(movie_data)
+    resp = client.post("/api/new-movie", data={
+        "api_key": api_key_user,
+        "title": f"research-test-{uuid.uuid4()}",
+        "description": "test",
+        "movie_data_sha256": sha256,
+        "research_use": "1",
+        "credit_by_name": "1",
+    })
+    res = resp.get_json()
+    assert res["error"] is False
+    movie_id = res["movie_id"]
+
+    # Owner sets research_use to 0 — credit_by_name should be cleared
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id, "research_use": "0",
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m["research_use"] == 0
+    assert m.get("credit_by_name") is None  # cascade cleared
+
+    # Owner sets research_use=1 and credit_by_name=1 together
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id,
+        "research_use": "1", "credit_by_name": "1",
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m["research_use"] == 1
+    assert m["credit_by_name"] == 1
+
+    # Owner sets research_use to N/A (omitted) — credit_by_name should be cleared
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": api_key_user, "movie_id": movie_id,
+    })
+    assert r.get_json()["error"] is False
+    m = odb.get_movie(movie_id=movie_id)
+    assert m.get("research_use") is None
+    assert m.get("credit_by_name") is None
+
+    # Non-owner (admin of the course) cannot change research metadata
+    admin_api_key = odb.make_new_api_key(email=cfg[ADMIN_EMAIL])
+    r = client.post("/api/set-research-metadata", data={
+        "api_key": admin_api_key, "movie_id": movie_id, "research_use": "1",
+    })
+    assert r.get_json()["error"] is True
+
+    odb_movie_data.purge_movie(movie_id=movie_id)
+    odb_movie_data.delete_movie(movie_id=movie_id)
+
+
+def test_api_edit_movie(new_movie, client):
+    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
+    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+
+    movie = odb.get_movie(movie_id=movie_id)
+    movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
+    logger.debug("movie=%s movie_metadata=%s", movie, movie_metadata)
+
+    assert movie['user_id'] == new_movie[USER_ID]
+
+    userdict = apikey.user_dict_for_api_key(new_movie[API_KEY])
+    assert userdict[USER_ID] == new_movie[USER_ID], f"userdict={userdict} new_movie={new_movie}"
+
+    # Invalid action
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '500'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation', 0) == 0
+
+    # Invalid api_key
+    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'rotation': '0'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
+
+    # Success: rotation_steps omitted => 1 step
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '90'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation') == 90, f"{movie}"
+
+    # Success: rotation_steps=2
+    data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '180'}
+    resp = client.post('/api/rotate-movie', data=data)
+    assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie.get('rotation') == 180, f"{movie}"
+
+    movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
+    logger.debug("movie_metadata2=%s", movie_metadata2)
+    assert movie_metadata2.get('rotation') == 180, f"{movie}"
+
+
+def test_get_movie_metadata_rotation_coercion(new_movie):
+    """Verify that get_movie_metadata coerces rotation to int, defaulting to 0 for invalid values,
+    and swaps width/height only when rotation is 90 or 270."""
+    movie_id = new_movie[MOVIE_ID]
+
+    # Seed width and height so we can detect swaps
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'width': 100, 'height': 200})
+
+    # String "90" should be coerced to int 90 → dimensions swapped
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '90'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 200
+    assert meta.get('height') == 100
+
+    # Invalid string → coerced to 0 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': 'invalid'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200
+
+    # None → coerced to 0 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': None})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200
+
+    # String "270" should be coerced to int 270 → dimensions swapped
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '270'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 200
+    assert meta.get('height') == 100
+
+    # String "180" should be coerced to int 180 → no swap
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '180'})
+    meta = odb.get_movie_metadata(movie_id=movie_id)
+    assert meta.get('width') == 100
+    assert meta.get('height') == 200

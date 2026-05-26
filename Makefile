@@ -9,21 +9,49 @@
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 
+SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
 TS_FILES := $(wildcard *.ts */*.ts)
 JS_FILES := $(TS_FILES:.ts=.js)
 LOCAL_BUCKET:=planttracer-local
 LOCAL_HTTP_PORT=8080
-LOG_LEVEL ?= DEBUG		# default to debug unless changed
+LOCAL_LAMBDA_PORT=9811
+LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
+MAILPIT_SMTP_CONFIG={"SMTP_HOST":"127.0.0.1","SMTP_PORT":"1025","SMTP_NO_TLS":"1","SMTP_USERNAME":"","SMTP_PASSWORD":""}
+LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
+LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
+LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
+LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
+LOCAL_ADMIN_EMAIL=admin@planttracer.com
+FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
+LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 export DEBIAN_FRONTEND=noninteractive
+export LOG_LEVEL ?= DEBUG
+
+SAM_CONFIG ?= samconfig.toml
+STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+
+# Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
+SAM_LOGS_LIMIT ?= 1000
+SAM_LOGS_MINUTES ?= 15
 
 # all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
 
 REQ := .venv/pyvenv.cfg
+
+# files used by lambda
+VEND_FILES := src/app/odb.py \
+              src/app/schema.py \
+              src/app/constants.py \
+              src/app/mp4_metadata_lib.py \
+              src/app/paths.py \
+              src/app/odb_movie_data.py \
+              src/app/s3_presigned.py
 
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
@@ -31,7 +59,7 @@ ifeq ($(AWS_REGION),)
     export AWS_REGION                ?= local
 endif
 ifeq ($(AWS_REGION),local)
-    REQ := $(REQ) bin/DynamoDBLocal.jar bin/minio
+    REQ := $(REQ) bin/DynamoDBLocal.jar bin/minio bin/mailpit
     export AWS_ACCESS_KEY_ID         := minioadmin
     export AWS_SECRET_ACCESS_KEY     := minioadmin
     export AWS_ENDPOINT_URL_DYNAMODB := $(DYNAMODB_LOCAL_ENDPOINT)
@@ -40,7 +68,7 @@ ifeq ($(AWS_REGION),local)
 endif
 
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
-    $(warning DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
+    $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
 endif
 
@@ -72,16 +100,17 @@ all:
 	make run-local
 
 check:
-	make lint
-	AWS_REGION=local make pytest
-	make jscoverage
+	$(MAKE) lint
+	$(MAKE) start-local-services
+	$(MAKE) AWS_REGION=local pytest
+	$(MAKE) jscoverage
 
 coverage:
-	AWS_REGION=local make pytest-coverage
-	AWS_REGION=local make jscoverage
+	$(MAKE) AWS_REGION=local pytest-coverage
+	$(MAKE) AWS_REGION=local jscoverage
 
-ptags:
-	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js
+tags:
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-resize/src/resize_app/*.py
 
 ################################################################
 ## Program development: static analysis tools
@@ -90,11 +119,12 @@ ptags:
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
 lint: $(REQ)
-	make pylint
-	make eslint
+	$(MAKE) pylint
+	$(MAKE) eslint
 
 pylint:
-	poetry run pylint  $(PYLINT_OPTS) src tests *.py
+	$(MAKE) vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:
@@ -121,18 +151,28 @@ flake:
 	flake8 . --count --exit-zero --max-complexity=55 --max-line-length=127 --statistics --ignore F403,F405,E203,E231,E252,W503
 
 ################################################################
+.PHONY: dump.txt
+dump.txt:
+	/bin/rm -f dump.txt && touch dump.txt && tree . > dump.txt && \
+	for fn in Makefile template.yaml lambda-resize/src/resize_app/*.py src/app/*.py src/app/*/{*.js,*.html}; do echo "== $$fn ==" >> dump.txt ; cat $$fn >> dump.txt; done
+
+
+
+################################################################
 ## Program development: dynamic analysis
 ##
 
-## These tests now use fixtures that automatically create in-memory configurations and DynamoDB databases.
-## No environment variables need to be set.
-## set LOG_LEVEL at start of CLI to change the  log level
+## These tests use fixtures that create DynamoDB Local and MinIO (when AWS_REGION=local, the default).
+## PYTHONPATH includes lambda-resize/src so tests that use resize_app (tracker, lambda_tracking_handler) can load it.
+## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests
+	$(MAKE) vend-lambda-resize
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
 pytest-coverage: $(REQ)
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests
+	$(MAKE) vend-lambda-resize
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -140,53 +180,85 @@ pytest-selenium:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 # Set these during development to speed testing of the one function you care about:
-TEST1MODULE=tests/test_trackpoint_drag.py
-#TEST1FUNCTION="-k test_trackpoint_drag_and_database_update"
+TEST1MODULE=tests/endpoint_test.py
+#TEST1FUNCTION="-k test_ver1"
 pytest1:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
 
+start-local-services:
+	$(MAKE) -j3 start_local_dynamodb start_local_minio start_local_mailpit
+
+stop-local-services:
+	$(MAKE) stop_local_dynamodb stop_local_minio stop_local_mailpit
+
 wipe-local:
 	@echo wiping all local artifacts and remaking the local bucket.
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	$(MAKE) stop-local-services
 	/bin/rm -rf var
 	mkdir -p var
-	bin/local_minio_control.bash start
-	bin/local_dynamodb_control.bash start
-	make make-local-bucket
+	$(MAKE) start-local-services
+	$(MAKE) make-local-bucket
 
 delete-local:
 	@echo deleting all local artifacts
-	bin/local_minio_control.bash stop
-	bin/local_dynamodb_control.bash stop
+	$(MAKE) stop-local-services
 	/bin/rm -rf var
 
 make-local-demo:
 	@echo creating a local course called demo-course with the prefix demo-
-	@echo assumes miniodb and dynamodb are running and the make-local-bucket already ran
-	poetry run python $(DBUTIL) --createdb
-	aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+	$(MAKE) start-local-services
+	$(MAKE) make-local-bucket
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo
+	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
+
+ensure-local-lambda-debug:
+	@if $(LOCAL_LAMBDA_PROBE); then \
+		echo "Local lambda debug server already running on $(LOCAL_LAMBDA_BASE)"; \
+	else \
+		if [ "$$(uname -s)" = "Darwin" ]; then \
+			echo "Starting local lambda debug server in a new macOS terminal window..."; \
+			bash etc/open_local_lambda_terminal.sh "$(CURDIR)" "make run-local-lambda-debug"; \
+		else \
+			echo "Please start the local lambda debug server in another shell with: make run-local-lambda-debug"; \
+		fi; \
+		for attempt in $$(seq 1 $(LOCAL_LAMBDA_WAIT_SECONDS)); do \
+			if $(LOCAL_LAMBDA_PROBE); then \
+				exit 0; \
+			fi; \
+			sleep 1; \
+		done; \
+		echo "Local lambda debug server did not start on $(LOCAL_LAMBDA_BASE)."; \
+		echo "Give the new terminal a moment, then run again or start it manually with: make run-local-lambda-debug"; \
+		exit 1; \
+	fi
+
+run-local-lambda-debug:
+	@echo running the local lambda debug server at $(LOCAL_LAMBDA_BASE)
+	$(MAKE) vend-lambda-resize
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACKING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
 
 run-local-debug:
-	@echo run bottle locally on the demo database, but allow editing.
-	LOG_LEVEL=$(LOG_LEVEL) poetry run python  $(DBUTIL) --makelink demouser@planttracer.com --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=$(LOG_LEVEL) poetry run flask  --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	@echo run Flask locally against the local demo dataset, but not in demo mode
+	$(MAKE) ensure-local-lambda-debug
+	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
-	@echo run bottle locally in demo mode, using local database and debug mode
+	@echo run Flask locally in demo mode, using local database and debug mode
 	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	LOG_LEVEL=$(LOG_LEVEL) DEMO_COURSE_ID=demo-course poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
-
+	$(MAKE) make-local-demo
+	$(MAKE) ensure-local-lambda-debug
+	$(LOCAL_DEMO_ENV) $(FLASK_DEBUG_RUN)
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
 	@echo This makes it easy to modify the JavaScript locally with the remote API support
 	@echo And we should not require any of the variables -but we enable them just in case
-	PLANTTRACER_API_BASE=https://dev.planttracer.com/ LOG_LEVEL=$(LOG_LEVEL)  poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+	PLANTTRACER_API_BASE=https://dev.planttracer.com/ $(FLASK_DEBUG_RUN)
 
 tracker-debug:
 	@echo just test the tracker...
@@ -194,7 +266,7 @@ tracker-debug:
 	poetry run python tracker.py --moviefile="tests/data/2019-07-12 circumnutation.mp4" --outfile=outfile.mp4
 	open outfile.mp4
 
-.PHONY: wipe-local delete-local make-local-demorun-local-debug run-local-demo-debug debut-dev-api tracker-debug
+.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracker-debug
 
 ################################################################
 ### JavaScript
@@ -244,75 +316,116 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 
 # operation:
 start_local_dynamodb: bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash start
+	python3 bin/local_services.py dynamodb start
 
 stop_local_dynamodb:  bin/DynamoDBLocal.jar
-	bash bin/local_dynamodb_control.bash stop
+	python3 bin/local_services.py dynamodb stop
 
 list-tables:
-	aws dynamodb list-tables
+	$(LOCAL_AWS_ENV) aws dynamodb list-tables
 
 dump-demo-tables:
 	for tn in "demo-api_keys" "demo-course_users" "demo-courses" "demo-logs" "demo-movie_frames" "demo-movies" "demo-unique_emails" "demo-users" ; do\
 		echo $$tn:; \
-		aws dynamodb describe-table --table-name $$tn ; \
-		aws dynamodb scan --max-items 5 --table-name $$tn ; \
+		$(LOCAL_AWS_ENV) aws dynamodb describe-table --table-name $$tn ; \
+		$(LOCAL_AWS_ENV) aws dynamodb scan --max-items 5 --table-name $$tn ; \
 		done
 
 
 .PHONY: start_local_dynamodb stop_local_dynamodb list-tables dump-demo-tables
+################################################################
+# Mailpit (local SMTP catcher -- see: https://github.com/axllent/mailpit)
+# Accepts SMTP on port 1025; web UI at http://localhost:8025
+
+MAILPIT_VERSION=latest
+MAILPIT_LINUX_AMD64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz
+MAILPIT_LINUX_ARM64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-arm64.tar.gz
+MAILPIT_DARWIN_ARM64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-darwin-arm64.tar.gz
+MAILPIT_DARWIN_AMD64=https://github.com/axllent/mailpit/releases/latest/download/mailpit-darwin-amd64.tar.gz
+
+bin/mailpit:
+	@echo downloading and installing mailpit
+	mkdir -p bin
+	uname -a
+	arch
+	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" -o "$$(uname -m)" = "x86_64" ] ; then \
+		echo Linux amd64/x86_64 ; curl -fL $(MAILPIT_LINUX_AMD64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" -o "$$(uname -m)" = "arm64" ] ; then \
+		echo Linux arm64 ; curl -fL $(MAILPIT_LINUX_ARM64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		echo Darwin arm64 ; curl -fL $(MAILPIT_DARWIN_ARM64) | tar -xz -C bin mailpit ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then \
+		echo Darwin amd64 ; curl -fL $(MAILPIT_DARWIN_AMD64) | tar -xz -C bin mailpit ; \
+	else \
+		echo unknown os/architecture; exit 1; \
+	fi
+	chmod +x bin/mailpit
+	ls -l bin/mailpit
+	file bin/mailpit
+
+start_local_mailpit: bin/mailpit
+	python3 bin/local_services.py mailpit start
+
+stop_local_mailpit: bin/mailpit
+	python3 bin/local_services.py mailpit stop
+
+.PHONY: start_local_mailpit stop_local_mailpit
+
 ################################################################
 # Minio (S3 clone -- see: https://min.io/)
 # Installations are used by the CI pipeline and by local developers
 
 # Sources:
 LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
-LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64/
+LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64
 LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
-LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64/
+LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64
 MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
 	uname -a
+	arch
 	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
-		echo Linux amd64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux amd64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
-		echo Linux x86_64 ; curl $(LINUX_BASE)/minio -o bin/minio ; curl $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux x86_64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
-		echo Linux aarch64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+		echo Linux aarch64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
-		echo Linux arm64 ; curl $(LINUX_ARM_BASE)/minio -o bin/minio ; curl $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
-	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
+		echo Linux arm64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl -fL $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
 	else \
 		echo unknown os/architecture; exit 1; \
 	fi
 	chmod +x bin/minio
 	ls -l bin/minio
+	file bin/minio
 	if [ "$$(uname -s)" = "Linux" ] ; then \
 		chmod +x bin/mc ; \
 		ls -l bin/mc ; \
+		file bin/mc ; \
 	fi
 
 # operation:
 start_local_minio: bin/minio
-	bash bin/local_minio_control.bash start
+	python3 bin/local_services.py minio start
 
 stop_local_minio:  bin/minio
-	bash bin/local_minio_control.bash stop
+	python3 bin/local_services.py minio stop
 
 list-local-buckets:
-	$(AWS_VARS) aws s3 ls
+	$(LOCAL_AWS_ENV) aws s3 ls
 
 make-local-bucket:
-	if $(AWS_VARS) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
+	if $(LOCAL_AWS_ENV) aws s3 ls s3://$(LOCAL_BUCKET)/ >/dev/null 2>&1; then \
 	 	echo $(LOCAL_BUCKET) exists ; \
 	else \
 		echo creating s3://$(LOCAL_BUCKET)/ ; \
-		$(AWS_VARS) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
+		$(LOCAL_AWS_ENV) aws s3 mb s3://$(LOCAL_BUCKET)/ ; \
 	fi
 	echo local buckets:
-	$(AWS_VARS) aws s3 ls
+	$(LOCAL_AWS_ENV) aws s3 ls
 
 .PHONY: start_local_minio stop_local_minio list-local-buckets make-local-bucket
 
@@ -332,8 +445,9 @@ install-ubuntu:
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless
+	@# npm deprecation warnings (WARN deprecated) from transitive deps can be ignored
 	npm ci
-	make $(REQ)
+	$(MAKE) $(REQ)
 	@echo install-ubuntu done
 
 
@@ -342,7 +456,7 @@ install-ubuntu:
 install-macos:
 	brew update
 	which aws || brew install awscli
-	which chromium || brew install chromium --no-quarantine
+	which chromium || brew install chromium
 	which ffmpeg || brew install ffmpeg
 	which lsof || brew install lsof
 	which node || brew install node
@@ -351,7 +465,7 @@ install-macos:
 	which python3 || brew install python3
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make $(REQ)
+	$(MAKE) $(REQ)
 
 # Includes Windows dependencies
 # restart the shell after installs are done
@@ -365,7 +479,7 @@ install-windows: .venv/pyvenv.cfg
 	choco install -y poetry
 	npm ci
 	npm install -g typescript webpack webpack-cli
-	make $(REQ)
+	$(MAKE) $(REQ)
 
 
 ################################################################
@@ -434,15 +548,83 @@ check-iam:
 		echo "You are not using an assumed role. Check your AWS_PROFILE."; \
 	fi
 
+################################################################
+## lambda-resize
+
+vend-lambda-resize:
+	mkdir -p lambda-resize/src/resize_app/src/app
+	rsync --verbose --archive $(VEND_FILES) \
+		lambda-resize/src/resize_app/src/app/
+
+# Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
+install-lambda-deps: $(REQ)
+	poetry install --with lambda
+
+# lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
+# install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
+lambda-resize-lint: install-lambda-deps
+	$(MAKE) vend-lambda-resize
+	poetry run ruff check --fix lambda-resize/src
+	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
+
+lambda-resize-check: lambda-resize-lint
+	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
+.PHONY: lambda-resize/src/requirements.txt
+lambda-resize/src/requirements.txt:
+	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
 sam-build: $(REQ)
+	@# Refuse to build if there are local changes or unpushed commits.
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
+	  exit 1; \
+	fi
+	@UPSTREAM=$$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true); \
+	if [ -z "$$UPSTREAM" ]; then \
+	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
+	  exit 1; \
+	fi; \
+	$(MAKE) lambda-resize/src/requirements.txt
+	$(MAKE) vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
+	poetry check
+	poetry lock
 	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	poetry export --only main,lambda --format=requirements.txt --output lambda-resize/requirements.txt --without-hashes
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+	@echo "========================================"
+	@echo "Checking unzipped artifact sizes..."
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			size_mb=$$(du -sm "$$dir" | cut -f1); \
+			echo "Size of $$dir is $${size_mb}MB"; \
+			if [ "$$size_mb" -ge 250 ]; then \
+				echo "ERROR: $$dir exceeds the AWS Lambda 250MB unzipped limit!"; \
+				exit 1; \
+			fi; \
+		fi; \
+	done
+	@echo "Size check passed! All functions are under 250MB."
+
+sam-audit-size:
+	@echo "========================================"
+	@echo "Top 20 largest items in SAM build directories (sizes in MB):"
+	@if [ ! -d ".aws-sam/build" ]; then \
+		echo "ERROR: .aws-sam/build not found. Run 'make sam-build' first."; \
+		exit 1; \
+	fi
+	@for dir in .aws-sam/build/*/ ; do \
+		if [ -d "$$dir" ]; then \
+			echo "----------------------------------------"; \
+			echo "Analyzing: $$dir"; \
+			du -sm "$$dir"* | sort -nr | head -n 20; \
+		fi; \
+	done
+	@echo "========================================"
 
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -451,6 +633,7 @@ endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	$(MAKE) sam-status
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -468,14 +651,92 @@ endif
 	git branch -v
 	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	$(MAKE) sam-status
 
 
-SAM_CONFIG ?= samconfig.toml
-STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+# After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
+sam-status:
+	@echo "Checking Lambda status..."
+	@sleep 5; \
+	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
+	URL="https://$$DNS/resize-api/v1/ping"; \
+	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
+	CODE=$$(echo "$$RESP" | tail -1); \
+	BODY=$$(echo "$$RESP" | sed '$$d'); \
+	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
+	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda status: operational ($$URL)"; \
+	else \
+	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
+	fi; \
+	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
+	echo ""; \
+	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
+
+
+# Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
+# Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
+define SAM_LOGS_RESOLVE
+	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+	if [ -z "$$FUNC" ]; then \
+	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	fi; \
+	if [ -z "$$FUNC" ]; then \
+	  for NESTED in $$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text 2>/dev/null); do \
+	    FUNC=$$(aws cloudformation describe-stack-resources --stack-name "$$NESTED" --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	    [ -n "$$FUNC" ] && break; \
+	  done; \
+	fi; \
+	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
+	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000
+endef
+
+# Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
+# Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
+# activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
+sam-logs:
+	@$(SAM_LOGS_RESOLVE); \
+	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) || true
+
+# Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
+# Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
+sam-logs-simple:
+	@$(SAM_LOGS_RESOLVE); \
+	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
+	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \
+	else \
+	  REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
+	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ $(SAM_LOGS_OPTIONS) \
+	    --query 'events[].[timestamp,message]' --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) | while IFS=$$'\t' read -r ts msg; do \
+	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
+	  done || true; \
+	fi
+
+# Stream Lambda logs (timestamp + message). Sets SAM_LOGS_TAIL=1 and invokes sam-logs-simple.
+sam-logs-simple-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
+
+# Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
+# Use this when sam-logs is dominated by HTTP traffic and you want only tracking-queue activity.
+sqs-logs:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
+
+# Stream Lambda logs, showing only lines that contain SQS.
+sqs-logs-tail:
+	@$(SAM_LOGS_RESOLVE); \
+	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern "SQS" || true
 
 sam-delete:
+	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
+	sleep 10
 	@echo "Deleting stack: $(STACK_NAME)..."
-	sam delete --stack-name $(STACK_NAME)
+	sam delete --stack-name $(STACK_NAME) --no-prompts
 	@echo "Waiting for deletion to complete..."
 	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
 	@echo "Stack $(STACK_NAME) deleted successfully."
@@ -483,6 +744,10 @@ sam-delete:
 # Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
 	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
+
+sam-reload:
+	@echo reload the VM
+	ssh ubuntu@$(STACK_NAME).planttracer.com -i $$HOME/.ssh/plantadmin.pem 'cd /opt/webapp;git pull; sudo systemctl restart planttracer'
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done

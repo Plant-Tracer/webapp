@@ -11,16 +11,18 @@ import imaplib
 import os
 import json
 import configparser
+import time
 from email.parser import BytesParser
 from email import policy
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from jinja2.nativetypes import NativeEnvironment
 
 from .auth import get_aws_secret_for_arn
 from .paths import TEMPLATE_DIR
-from .constants import C, logger
+from .constants import C, logger, env_value
+from . import apikey, odb
 
 
 # pylint: disable=invalid-name
@@ -33,6 +35,7 @@ SMTP_PORT = 'SMTP_PORT'
 SMTP_PORT_DEFAULT = 587
 SMTP_NO_TLS = 'SMTP_NO_TLS'
 SMTP_DEBUG = False
+last_send_time = None
 
 class InvalidEmail(RuntimeError):
     """Exception thrown in email is invalid"""
@@ -51,7 +54,7 @@ class NoMailerConfiguration(Exception):
 
 def get_server_email():
     """Return the From address for outgoing mail (env SERVER_EMAIL or default)."""
-    return os.environ.get(C.SERVER_EMAIL, 'admin@planttracer.com')
+    return env_value(C.SERVER_EMAIL, 'admin@planttracer.com')
 
 
 def get_smtp_config():
@@ -82,12 +85,15 @@ def get_smtp_config():
     return ret
 
 
-def _send_via_ses(*, from_addr: str, to_addrs: list, msg: str):
+def _send_via_ses(*, from_addr: str, to_addrs: list, msg: str, debug: bool = False):
     """Send raw MIME message via AWS SES. Uses AWS_REGION (single-region)."""
     region = os.environ.get(C.AWS_REGION, 'us-east-1')
     client = boto3.client('ses', region_name=region)
     raw = msg.encode('utf-8')
     logger.info("sending mail to %s via SES (region=%s)", ",".join(to_addrs), region)
+    if debug:
+        print("SendRawEmail parameters:")
+        print({"Source": from_addr, "Destinations": to_addrs, "RawMessage": {"Data": msg}})
     client.send_raw_email(
         Source=from_addr,
         Destinations=to_addrs,
@@ -100,7 +106,8 @@ def send_message(*,
                  to_addrs: list,
                  msg: str,
                  dry_run: bool = False,
-                 smtp_config: dict = None):
+                 smtp_config: dict = None,
+                 debug: bool = False):
     """Send an email. Uses SMTP if smtp_config is provided, otherwise SES."""
     assert isinstance(from_addr, str)
     for to_addr in to_addrs:
@@ -111,6 +118,8 @@ def send_message(*,
             f"==== Will not send this message: ====\n{msg}\n====================\n",
             file=sys.stderr)
         return
+
+    throttle_send()
 
     if smtp_config:
         port = smtp_config.get(SMTP_PORT, SMTP_PORT_DEFAULT)
@@ -123,13 +132,30 @@ def send_message(*,
             if SMTP_NO_TLS not in smtp_config:
                 smtp.starttls()
             smtp.ehlo()
-            smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
+            if smtp_config.get(SMTP_USERNAME):
+                smtp.login(smtp_config[SMTP_USERNAME], smtp_config[SMTP_PASSWORD])
             smtp.sendmail(from_addr, to_addrs, msg.encode('utf-8'))
     else:
         try:
-            _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg)
-        except ClientError as e:
+            _send_via_ses(from_addr=from_addr, to_addrs=to_addrs, msg=msg, debug=debug)
+        except (ClientError, BotoCoreError) as e:
             raise InvalidMailerConfiguration(str(e)) from e
+
+
+def is_dry_run():
+    """Return True if MAILER_DRY_RUN=true, causing emails to be logged rather than sent."""
+    return os.environ.get('MAILER_DRY_RUN', '').lower() == 'true'
+
+
+def throttle_send():
+    global last_send_time # pylint: disable=global-statement
+    now = time.monotonic()
+    if last_send_time is not None:
+        wait_time = C.MIN_SEND_INTERVAL - (now - last_send_time)
+        if wait_time > 0:
+            time.sleep(wait_time)
+            now = time.monotonic()
+    last_send_time = now
 
 
 def _render_mime_template(template_name: str, **kwargs):
@@ -144,8 +170,6 @@ def _render_mime_template(template_name: str, **kwargs):
 def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     """Send login/magic-link email. Uses SMTP if configured, else SES."""
 
-    logger.warning("TK: Insert delay for MIN_SEND_INTERVAL")
-
     to_addrs = [email]
     from_addr = get_server_email()
     msg = _render_mime_template(
@@ -159,7 +183,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
     smtp_config = get_smtp_config()
     if smtp_config:
         smtp_config['SMTP_DEBUG'] = 'YES' if (SMTP_DEBUG or debug) else ''
-    dry_run = False
+    dry_run = is_dry_run()
     try:
         send_message(
             from_addr=from_addr,
@@ -167,6 +191,7 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
             smtp_config=smtp_config,
             dry_run=dry_run,
             msg=msg,
+            debug=debug,
         )
     except smtplib.SMTPAuthenticationError as e:
         raise InvalidMailerConfiguration(str(dict(smtp_config))) from e
@@ -179,25 +204,32 @@ def send_course_created_email(*,
                               course_id: str,
                               planttracer_endpoint: str,
                               api_key: str,
+                              course_key: str = None,
                               from_addr: str = None):
     """Send course-created verification email with magic link. Uses SMTP or SES."""
     if from_addr is None:
         from_addr = get_server_email()
+    if course_key is None:
+        course = odb.lookup_course_by_id(course_id=course_id) or {}
+        course_key = course.get(odb.COURSE_KEY, "")
     msg = _render_mime_template(
         C.COURSE_CREATED_EMAIL_TEMPLATE_FNAME,
         to_addrs=to_addr,
         from_addr=from_addr,
         course_name=course_name,
         course_id=course_id,
+        course_key=course_key,
         planttracer_endpoint=planttracer_endpoint,
         api_key=api_key,
+        git_branch=apikey.git_branch().strip(),
+        git_version=apikey.git_last_commit().strip(),
     )
     smtp_config = get_smtp_config()
     send_message(
         from_addr=from_addr,
         to_addrs=[to_addr],
         smtp_config=smtp_config,
-        dry_run=False,
+        dry_run=is_dry_run(),
         msg=msg,
     )
 

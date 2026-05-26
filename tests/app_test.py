@@ -9,12 +9,11 @@ import uuid
 import html5validate
 
 from app.paths import STATIC_DIR
-from app import odb
 from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import VERSION, API_KEY, MOVIE_ID, USER_ID
+from app.odb import API_KEY
 
 # Fixtures are imported in conftest.py
 from app.constants import logger
@@ -141,47 +140,3 @@ def test_templates(client,new_course):
                 assert resp.status_code!=200 # should be an error
             else:
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
-
-
-def test_api_edit_movie(new_movie, client):
-    """verify that new_movie fixture is set up properly and that we can use edit-movie"""
-    api_key = new_movie[API_KEY]
-    movie_id = new_movie[MOVIE_ID]
-
-    movie = odb.get_movie(movie_id = movie_id)
-    movie_metadata = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie=%s movie_metadata=%s",movie,movie_metadata)
-
-    assert movie[VERSION] == 1  # because it had data assigned to it
-    assert movie['user_id'] == new_movie[USER_ID]
-
-    userdict = apikey.user_dict_for_api_key(new_movie[API_KEY])
-    assert userdict[USER_ID]==new_movie[USER_ID],f"userdict={userdict} new_movie={new_movie}"
-
-
-    ### This one should fail
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action' : 'bad-action'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 1  # because it was not updated
-
-    ### This one should also
-    data = {'api_key': "bad-api-key", 'movie_id': movie_id, 'action' : 'rotate90cw'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is True,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 1  # because it was not updated
-
-    ### This one should be successful
-    data = {'api_key': api_key, 'movie_id': movie_id, 'action' : 'rotate90cw'}
-    resp = client.post('/api/edit-movie', data=data)
-    assert resp.json['error'] is False,f"resp.json={resp.json} data={data}"
-    movie = odb.get_movie(movie_id = movie_id)
-    assert movie[VERSION] == 2,f"{movie}"  # because it was edited
-
-    # Now test the user access
-    movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
-    logger.debug("movie_metadata=%s movie_metadata2=%s",movie_metadata,movie_metadata2)
-    # Make sure that the version number incremented
-    assert movie_metadata['version'] +1 == movie_metadata2['version'],f"{movie_metadata} / {movie_metadata2}"

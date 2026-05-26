@@ -240,6 +240,7 @@ def create_tables(*,ignore_table_exists = False):
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
     if table_prefix is None:
         raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
+    table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
     dynamodb = DDBO.resource()
     for table_config in TABLE_CONFIGURATIONS:
         # prepend the prefix to the table name before creating it
@@ -301,6 +302,7 @@ def drop_tables(silent_warnings=False):
     table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
     if table_prefix is None:
         raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
+    table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
     dynamodb = DDBO.resource()
     tables_to_drop = [ table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
     for table_name in tables_to_drop:
@@ -332,10 +334,10 @@ def create_course(*, course_id, course_key, course_name, admin_email,
                       max_enrollment = max_enrollment,
                       ok_if_exists = ok_if_exists)
 
-    # set up the admin
-    odb.register_email(email=admin_email, course_id=course_id, user_name=admin_name)
-    admin = odb.get_user_email(admin_email)
-    admin_id = admin[USER_ID]
+    # set up the admin; register_email returns {USER_ID: ...}, so we can avoid an
+    # immediate read by email (and any read-after-write inconsistency).
+    admin_result = odb.register_email(email=admin_email, course_id=course_id, user_name=admin_name)
+    admin_id = admin_result[USER_ID]
     odb.add_course_admin(admin_id=admin_id, course_id=course_id)
     logger.info("generated course_key=%s  admin_email=%s admin_id=%s",course_key,admin_email,admin_id)
 

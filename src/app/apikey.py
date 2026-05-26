@@ -17,13 +17,17 @@ from os.path import join
 from flask import request
 
 from . import odb
-from .paths import ETC_DIR
-from .constants import C,__version__,logger,printable80,log_level
+from .paths import STATIC_DIR
+from .constants import C,__version__,logger,printable80,log_level,env_value
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
-    logger.debug("in_demo_mode: %s",os.environ.get(C.DEMO_COURSE_ID,None))
-    return (C.DEMO_COURSE_ID in os.environ) or ("-demo" in request.host)
+    host = (request.host or "").split(":", 1)[0].lower()
+    host_labels = [label for label in host.split(".") if label]
+    env_demo = C.DEMO_MODE in os.environ
+    host_demo = any(label.endswith("-demo") for label in host_labels)
+    logger.debug("in_demo_mode env_demo=%s host_demo=%s host=%s", env_demo, host_demo, host)
+    return env_demo or host_demo
 
 # Specify the base for the API and for the static files by Environment variables.
 # This allows them to be served from different web servers.
@@ -35,6 +39,16 @@ def in_demo_mode():
 
 api_base    = os.getenv(C.PLANTTRACER_API_BASE,'')
 static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
+
+
+def get_lambda_api_base():
+    """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
+    explicit_base = env_value(C.PLANTTRACER_LAMBDA_API_BASE, "")
+    if explicit_base:
+        return explicit_base if explicit_base.endswith("/") else explicit_base + "/"
+    hostname = env_value("HOSTNAME", "")
+    domain = env_value("DOMAIN", "")
+    return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
 
 @functools.cache
 def git_head_time():
@@ -70,11 +84,13 @@ def cookie_name():
 
 
 def add_cookie(response):
-    """Add the cookie if the apikey was in the get value"""
+    """Add the cookie if the api_key was in the query string. When setting from URL, clear any
+    existing api_key cookie first so the new key takes effect (avoids old cookie triggering logout)."""
     api_key = request.values.get('api_key', None)
-    if api_key:
+    if api_key and api_key != 'undefined':
+        response.set_cookie(cookie_name(), '', expires=0, path='/')
         response.set_cookie(cookie_name(), api_key,
-                            max_age = C.API_KEY_COOKIE_MAX_AGE)
+                            max_age=C.API_KEY_COOKIE_MAX_AGE)
 
 def get_user_api_key():
     """Gets the user APIkey from either the URL or the cookie or the
@@ -90,24 +106,25 @@ def get_user_api_key():
     """
     # If we are in demo mode, get the demo mode api_key
     if log_level=='DEBUG':
-        logger.debug("get_user_api_key. request.values=%s request.cookies=%s",printable80(request.values),dict(request.cookies))
+        logger.debug(
+            "get_user_api_key. request.values=%s request.cookie_names=%s",
+            printable80(request.values),
+            list(request.cookies.keys()),
+        )
 
     if in_demo_mode():
         return C.DEMO_MODE_API_KEY
 
-    # First check the cookie
-    api_key_cookie = request.cookies.get(cookie_name(), None)
-    if api_key_cookie:
-        logger.debug("api_key from request.cookies cookie_name=%s api_key=%s",cookie_name(),api_key_cookie)
-        return api_key_cookie
-
-    # See if the value was manually provided
-    # NOTE - the frontend currently sends the parameter "api_key" as the string "undefined"
-    # when the value is not set, due to the elimination of JQuery. This workaround should be removed
-    # once the frontend is fixed to omit the parameter entirely when undefined.
+    # Prefer api_key from URL so emailed links work even when user has an old cookie (add_cookie will clear it).
     api_key_get = request.values.get('api_key', None)
     if (api_key_get is not None) and (api_key_get != 'undefined'):
         return api_key_get
+
+    # Then check the cookie
+    api_key_cookie = request.cookies.get(cookie_name(), None)
+    if api_key_cookie:
+        logger.debug("api_key from request.cookies cookie_name=%s", cookie_name())
+        return api_key_cookie
 
     # No API key
     return None
@@ -120,7 +137,7 @@ def get_user_dict():
     """Returns the user dict from the database of the currently logged in user, or throws a response"""
     logger.debug("get_user_dict")
     api_key = get_user_api_key()
-    logger.debug("get_user_dict api_key=%s",api_key)
+    logger.debug("get_user_dict api_key_present=%s", api_key is not None)
     if api_key is None:
         logger.info("api_key is none or invalid. request=%s",request.full_path)
         # Check if we were running under an API. All calls under /api must be authenticated.
@@ -131,14 +148,13 @@ def get_user_dict():
     # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
     userdict = user_dict_for_api_key(api_key)
     if userdict is None:
-        logger.info("api_key %s is invalid  ipaddr=%s request.url=%s",
-                     api_key,request.remote_addr,request.url)
+        logger.info("api_key is invalid ipaddr=%s request.url=%s", request.remote_addr, request.url)
         raise InvalidAPI_Key("get_user_dict 2")
     return userdict
 
 @lru_cache(maxsize=1)
 def favicon_base64():
-    with open( join( ETC_DIR, C.FAVICON), 'rb') as f:
+    with open( join( STATIC_DIR, C.FAVICON), 'rb') as f:
         return base64.b64encode(f.read()).decode('utf-8')
 
 # pylint: disable=too-many-locals
@@ -153,7 +169,7 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     logger.debug("page_dict(title=%s,require_auth=%s,logout=%s,lookup=%s)",title,require_auth,logout,lookup)
     if lookup:
         api_key = get_user_api_key()
-        logger.debug("get_user_api_key=%s",api_key)
+        logger.debug("get_user_api_key present=%s", api_key is not None)
         if api_key is None and require_auth is True:
             logger.debug("api_key is None and require_auth is True")
             raise InvalidAPI_Key("page_dict")
@@ -186,9 +202,13 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
+    # Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and start-processing
+    lambda_api_base = get_lambda_api_base()
+
     ret= {
         C.API_BASE: api_base,
         C.STATIC_BASE: static_base,
+        'lambda_api_base': lambda_api_base,
         'favicon_base64':favicon_base64(),
         'api_key': api_key,     # the API key that is currently active
         'user_id': user_id,     # the user_id that is active

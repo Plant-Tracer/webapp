@@ -32,16 +32,17 @@ You must have docker or finch installed and running (I'm recommending finch).
 AWS SAM template that uses cloud formations to:
 - Create a new VM
 - Create the necessary DynamoDB tables all with the given prefix.
-- Create a lambda function that watches the S3 bucket in the /uploads
-  prefix, resizes as necessary, and moves the object to the correct location.
+- Create a Lambda function **invoked via its HTTP API** (the **S3 bucket is
+  always an existing bucket** and must outlive the stack as the long-term
+  archive of student videos). The Lambda can process uploads and write
+  metadata into the MP4 file and update DynamoDB when invoked via HTTP.
 
 ## The created VM
 
 ## The Created Lambda Function
 
 Core functionality:
-- Watches AWS S3. When a movie is uploaded:
-  - Process (see below)
+- Invoked via HTTP API (no S3 event trigger). Can process uploads when requested via API.
 - Accepts resize requests with an S3 URL
   - Process
 - Process an AWS URL:

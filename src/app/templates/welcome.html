@@ -1,0 +1,16 @@
+<!-- -*- mode: html -*- -->
+{% extends 'base.html' %}
+
+{% block title %}Welcome to Plant Tracer{% endblock %}
+
+{% block body %}
+<h2>Welcome to Plant Tracer</h2>
+
+<p>You are logged in. You can:</p>
+<ul>
+  <li><a href="{{ url_for('func_upload') }}">Upload a new movie</a></li>
+  <li><a href="{{ url_for('func_list') }}">List or edit your movies</a></li>
+</ul>
+
+<p>Visit the Plant Tracer website at <a href="https://www.planttracer.com">www.planttracer.com</a>.</p>
+{% endblock %}

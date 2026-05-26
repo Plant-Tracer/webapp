@@ -23,18 +23,32 @@ Release History
      - 0.9.4
      - December ??, 2024
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3ADec2024>`__
-   * - Mar2024
+   * - Mar2025
      - 0.9.5
      - March 22, 2025
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AMar2025>`__
-   * - Apr2024
+   * - Apr2025
      - 0.9.6
      - April 30, 2025
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/issues?q=is%3Aissue+is%3Aclosed+milestone%3AApr2025>`__
-
+   * - April2026
+     - 0.9.7
+     - April 26, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7>`__
 
 Release Notes
 -------------
+
+0.9.7 Summary
+*************
+    * Upload/Analyze: move Rotate Movie function to Upload page; fix bugs
+    * Upload/Analyze: resize movie to 640x480 (max in either dimension) on upload
+    * dbutil: convert to DynamoDB; add report and test-mail functions; improve register
+    * Infra: move tracking code to AWS Lambda function
+    * Infra: replace MySQL with Amazon DynamoDB
+    * Infra: build and deploy using AWS Cloud Formation and SAM
+    * Infra: make local development environment easier to work with
+    * Infra: migrate to poetry and improve test coverage
 
 0.9.6 Summary
 *************
@@ -64,7 +78,7 @@ Release Notes
 0.9.4 Summary
 *************
 
-    * dbmaint: add --add_admin and --remove_admin commands
+    * dbmaint: add ``add-admin`` and ``remove-admin`` commands
 
 0.9.3 Summary
 *************

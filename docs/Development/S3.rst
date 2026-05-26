@@ -1,0 +1,10 @@
+S3 and Plant Tracer
+===================
+
+We **always deploy to an existing S3 bucket**; the bucket is not created by the stack. The bucket must **outlive the stack** because it is the long-term archive of all student-uploaded videos. Stacks and DynamoDB may be torn down or migrated; the bucket is the durable store. For this reason, all metadata that must survive (research-use, attribution) is stored **in the MP4 file** as well as in DynamoDB (see :doc:`MOVIE_METADATA`).
+
+The Lambda that processes uploads is invoked via its HTTP API; we no longer rely on S3 → Lambda bucket notifications or a special ``uploads/`` prefix. The bucket name is provided to both the VM and the Lambda via environment variables, and both read/write objects under ``course_id/movie_id/...`` keys.
+
+Local Development and GitHub Actions
+------------------------------------
+For local development (and for running in GitHub Actions) the local S3 simulator minio is used. According to (this stackoverflow posting)[https://stackoverflow.com/questions/23991694/aws-s3-local-server-for-integration-testing], minio provides local persistance with the open source version, unlike localstack.
