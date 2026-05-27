@@ -22,12 +22,14 @@ Ensure all Issues and PRs intended for this release are merged to ``main`` and C
 Step 2 — Bump the Version Number
 ---------------------------------
 
-The version number must be updated before tagging. Update it in **two files** (do not update ``lambda-resize``; its version is generated):
+The version number **must** be updated via a normal feature branch + PR and merged to ``main`` before the tag is created (Step 4). Do not skip this step — two releases shipped with a stale version number because it was omitted.
+
+Update exactly **two files** (do not update ``lambda-resize``; its version is generated automatically):
 
 - ``pyproject.toml`` — ``version = "X.Y.Z"``
 - ``src/app/constants.py`` — ``__version__ = 'X.Y.Z'``
 
-Open a PR for this change, referencing an Issue. Merge to ``main`` before proceeding.
+Create an Issue for the bump, branch off ``main``, commit the changes referencing the issue, open a PR, and merge it before proceeding to Step 4.
 
 Step 3 — Prepare the GitHub Milestone
 --------------------------------------
@@ -81,10 +83,10 @@ Version tagging is done directly on ``main`` (not via a PR).
      --body "All PRs for Version-X.Y.Z merged. Tag main with \`ver-X.Y.Z\`." \
      --milestone "Version-X.Y.Z"
 
-   # 2. Switch to main and pull
+   # 2. Switch to main and pull (version bump PR must already be merged)
    git checkout main && git pull
 
-   # 3. Create an annotated tag (always use -a so the tag carries a message)
+   # 3. Create an annotated tag on the already-bumped main (always use -a)
    git tag -a ver-X.Y.Z -m "refs #<issue-number>: tag main as ver-X.Y.Z"
    git push origin ver-X.Y.Z
 
