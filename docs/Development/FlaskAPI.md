@@ -251,7 +251,7 @@ Download all trackpoints for a movie as CSV (default) or JSON.
 | `movie_id` | Yes | |
 | `format` | No | `"json"` for JSON; omit for CSV |
 
-**Response:** CSV with columns `frame_number`, `<label> x`, `<label> y` for each marker label.
+**Response:** CSV with columns `frame_number`, `<label> x`, `<label> y` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
 With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }`.
 
 ---
