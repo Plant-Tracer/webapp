@@ -363,6 +363,20 @@ describe('TracerController constructor', () => {
         expect(tc.total_frames).toBe(42);
         expect(tc.last_tracked_frame).toBe(41);
     });
+
+    test('download button is hidden on construction when not fully traced', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({ total_frames: 0, last_frame_tracked: -1 }), 'k');
+        expect(tc.download_button.hide).toHaveBeenCalled();
+        expect(tc.download_button.show).not.toHaveBeenCalled();
+    });
+
+    test('download button is shown and enabled on construction when fully traced', () => {
+        // Regression test for #1019: download button must be prop('disabled', false)
+        // after tracing completes, not merely shown (show() does not clear disabled state).
+        const tc = new TracerController('div#tc', makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4 }), 'k');
+        expect(tc.download_button.show).toHaveBeenCalled();
+        expect(tc.download_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
 });
 
 // ── TracerController.getMaxViewableFrame ─────────────────────────────────────

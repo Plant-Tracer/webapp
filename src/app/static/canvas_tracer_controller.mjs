@@ -157,6 +157,7 @@ class TracerController extends MovieController {
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
+            this.download_button.prop('disabled', false);
             this.download_button.show();
             return;
         }
