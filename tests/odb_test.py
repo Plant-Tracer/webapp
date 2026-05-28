@@ -262,3 +262,28 @@ def test_clear_movie_tracking_after_frame(local_ddb):
     assert odb.get_movie_trackpoints(movie_id=movie_id) == [
         {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'frame0'}
     ]
+
+
+def test_delete_user_removes_course_enrollment(local_ddb):
+    ddbo = local_ddb
+    course_id = f"delete-course-{rand8()}"
+    course_name = f"Delete Course {rand8()}"
+    course_key = f"delete-key-{uuid.uuid4().hex[:16]}"
+    user_email = f"delete-user-{uuid.uuid4().hex[:8]}@example.com"
+    user_name = "Delete User"
+
+    ddbo.put_course({
+        COURSE_ID: course_id,
+        'course_name': course_name,
+        'course_key': course_key,
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+
+    user_id = odb.register_email(user_email, user_name, course_id=course_id)[USER_ID]
+    assert user_id in odb.course_enrollments(course_id=course_id)
+
+    ddbo.delete_user(user_id, purge_movies=True)
+
+    assert user_id not in odb.course_enrollments(course_id=course_id)
+    odb.delete_course(course_id=course_id)
