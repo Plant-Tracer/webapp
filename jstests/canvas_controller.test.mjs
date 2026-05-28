@@ -149,7 +149,7 @@ describe('CanvasController', () => {
     expect(controller.c.style.cursor).toBe('auto');
   });
 
-  test('resize updates both canvas and offscreen canvas dimensions', () => {
+  test('resize updates both canvas and offscreen canvas dimensions at default zoom (1)', () => {
     controller.resize(320, 240);
     expect(controller.c.width).toBe(320);
     expect(controller.c.height).toBe(240);
@@ -157,6 +157,19 @@ describe('CanvasController', () => {
     expect(controller.oc.height).toBe(240);
     expect(controller.naturalWidth).toBe(320);
     expect(controller.naturalHeight).toBe(240);
+  });
+
+  test('resize preserves current zoom — regression for #1020', () => {
+    // When a new background image loads after tracing (e.g. the traced video),
+    // resize() must apply the current zoom so the canvas stays at 200%, not 100%.
+    controller.set_zoom(2);
+    controller.resize(320, 240);
+    expect(controller.naturalWidth).toBe(320);
+    expect(controller.naturalHeight).toBe(240);
+    expect(controller.c.width).toBe(640);   // 320 * 2
+    expect(controller.c.height).toBe(480);  // 240 * 2
+    expect(controller.oc.width).toBe(640);
+    expect(controller.oc.height).toBe(480);
   });
 
   });

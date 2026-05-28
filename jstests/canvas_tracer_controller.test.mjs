@@ -363,6 +363,24 @@ describe('TracerController constructor', () => {
         expect(tc.total_frames).toBe(42);
         expect(tc.last_tracked_frame).toBe(41);
     });
+
+    test('download button is hidden on construction when not fully traced', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({ total_frames: 0, last_frame_tracked: -1 }), 'k');
+        expect(tc.download_button.hide).toHaveBeenCalled();
+        expect(tc.download_button.show).not.toHaveBeenCalled();
+    });
+
+    test('download button is shown and enabled on construction when fully traced', () => {
+        // Regression test for #1019: download button must be prop('disabled', false)
+        // after tracing completes, not merely shown (show() does not clear disabled state).
+        // Regression test for #918: hidden form inputs must also be re-enabled so they
+        // are included in the POST body (disabled inputs are excluded by HTML spec).
+        const tc = new TracerController('div#tc', makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4 }), 'k');
+        expect(tc.download_button.show).toHaveBeenCalled();
+        expect(tc.download_button.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.dl_api_key.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
+    });
 });
 
 // ── TracerController.getMaxViewableFrame ─────────────────────────────────────
@@ -739,15 +757,17 @@ describe('trace_movie_frames', () => {
     });
 
     // G. did_onload_callback ───────────────────────────────────────────────────
-    test('resizes canvas and video when metadata has no dimensions and image has valid natural size', async () => {
+    test('resizes video (not canvas) when metadata has no dimensions and image has valid natural size', async () => {
+        // Regression for #1020: canvas attr('width') must NOT be set directly — that bypasses
+        // zoom and resets the canvas to 100%. resize() in WebImage.onload already applies zoom.
+        // Only the video element layout dimensions are set here.
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
         const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
-        expect(canvasIdx).toBeGreaterThanOrEqual(0);
+        expect(canvasIdx).toBe(-1);  // canvas must NOT be touched directly — zoom would be lost
         expect(videoIdx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[canvasIdx].value.attr).toHaveBeenCalledWith('width', 640);
         expect(mock$.mock.results[videoIdx].value.attr).toHaveBeenCalledWith('height', 480);
     });
 

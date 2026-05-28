@@ -519,7 +519,8 @@ def api_get_movie_trackpoints():
             frame_dicts[frame]['frame_number'] = frame
             writer.writerow(frame_dicts[frame])
         response = make_response(f.getvalue())
-        response.headers['Content-Type'] =  'text/csv'
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
         return response
 
 
