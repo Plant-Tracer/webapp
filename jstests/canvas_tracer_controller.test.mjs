@@ -373,9 +373,13 @@ describe('TracerController constructor', () => {
     test('download button is shown and enabled on construction when fully traced', () => {
         // Regression test for #1019: download button must be prop('disabled', false)
         // after tracing completes, not merely shown (show() does not clear disabled state).
+        // Regression test for #918: hidden form inputs must also be re-enabled so they
+        // are included in the POST body (disabled inputs are excluded by HTML spec).
         const tc = new TracerController('div#tc', makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4 }), 'k');
         expect(tc.download_button.show).toHaveBeenCalled();
         expect(tc.download_button.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.dl_api_key.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
     });
 });
 

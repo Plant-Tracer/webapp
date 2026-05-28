@@ -159,6 +159,11 @@ class TracerController extends MovieController {
             this.track_button.val(RETRACE_MOVIE);
             this.download_button.prop('disabled', false);
             this.download_button.show();
+            // Re-enable the hidden form inputs so they are included in the POST body.
+            // set_movie_control_buttons() disables all inputs during tracking,
+            // and disabled inputs are excluded from HTML form submission.
+            this.dl_api_key.prop('disabled', false);
+            this.dl_movie_id.prop('disabled', false);
             return;
         }
         this.track_button.val(TRACE_MOVIE);
