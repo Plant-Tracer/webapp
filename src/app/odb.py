@@ -574,7 +574,7 @@ class DDBO:
         # Get the email address. We should just get the userdict with some fancy projection...
         email = user.get(EMAIL)
         if not email:
-            raise RuntimeError("%s not in %s",EMAIL,user)
+            raise RuntimeError(f"{EMAIL} not in {user}")
 
         # Finally delete the user and the unique email
         client = self.dynamodb.meta.client
