@@ -271,6 +271,7 @@ def test_delete_user_removes_course_enrollment(local_ddb):
     course_key = f"delete-key-{uuid.uuid4().hex[:16]}"
     user_email = f"delete-user-{uuid.uuid4().hex[:8]}@example.com"
     user_name = "Delete User"
+    movie_id = odb.new_movie_id()
 
     ddbo.put_course({
         COURSE_ID: course_id,
@@ -282,8 +283,31 @@ def test_delete_user_removes_course_enrollment(local_ddb):
 
     user_id = odb.register_email(user_email, user_name, course_id=course_id)[USER_ID]
     assert user_id in odb.course_enrollments(course_id=course_id)
+    ddbo.put_movie({
+        MOVIE_ID: movie_id,
+        COURSE_ID: course_id,
+        USER_ID: user_id,
+        'user_name': user_name,
+        'title': 'Delete-user test movie',
+        'published': 0,
+        'deleted': 0,
+        'description': 'Delete-user purge test.',
+        'movie_zipfile_urn': 's3://bogus/delete.zip',
+        'movie_data_urn': 's3://bogus/delete.mov',
+        LAST_FRAME_TRACKED: 0,
+        'created_at': int(time.time()),
+        'date_uploaded': int(time.time()),
+        'fps': "29.92",
+        'total_frames': 1,
+        'total_bytes': 100,
+    })
+    assert len(ddbo.get_movies_for_user_id(user_id)) == 1
+
+    with pytest.raises(RuntimeError, match=r'.* has 1 outstanding movie.*'):
+        ddbo.delete_user(user_id)
 
     ddbo.delete_user(user_id, purge_movies=True)
 
+    assert ddbo.get_movies_for_user_id(user_id) == []
     assert user_id not in odb.course_enrollments(course_id=course_id)
     odb.delete_course(course_id=course_id)
