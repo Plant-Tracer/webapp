@@ -697,7 +697,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
             if (nw > 0 && nh > 0) {
                 cc.movie_metadata.width = nw;
                 cc.movie_metadata.height = nh;
-                $(cc.div_selector + ' #canvas-id').attr('width', nw).attr('height', nh);
+                // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
+                // resets the canvas to natural (100%) size. resize() in WebImage.onload
+                // already ran before this callback and correctly applied cc.zoom.
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }

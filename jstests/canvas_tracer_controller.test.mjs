@@ -757,15 +757,17 @@ describe('trace_movie_frames', () => {
     });
 
     // G. did_onload_callback ───────────────────────────────────────────────────
-    test('resizes canvas and video when metadata has no dimensions and image has valid natural size', async () => {
+    test('resizes video (not canvas) when metadata has no dimensions and image has valid natural size', async () => {
+        // Regression for #1020: canvas attr('width') must NOT be set directly — that bypasses
+        // zoom and resets the canvas to 100%. resize() in WebImage.onload already applies zoom.
+        // Only the video element layout dimensions are set here.
         const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
         jest.clearAllMocks();
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
         const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
-        expect(canvasIdx).toBeGreaterThanOrEqual(0);
+        expect(canvasIdx).toBe(-1);  // canvas must NOT be touched directly — zoom would be lost
         expect(videoIdx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[canvasIdx].value.attr).toHaveBeenCalledWith('width', 640);
         expect(mock$.mock.results[videoIdx].value.attr).toHaveBeenCalledWith('height', 480);
     });
 
