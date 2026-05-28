@@ -535,20 +535,21 @@ class DDBO:
         # secondary index so we might not get them all, but we
         # probably will.
 
-        paginator = self.api_keys.meta.client.get_paginator('query')
-
-        # We must use string names for the client instead of boto3.dynamodb.conditions.Key
-        page_iterator = paginator.paginate(
-            TableName=self.api_keys.name,
-            IndexName='user_id_idx',
-            KeyConditionExpression='#uid = :uid',
-            ExpressionAttributeNames={'#uid': USER_ID},
-            ExpressionAttributeValues={':uid': user_id},
-            ProjectionExpression=API_KEY
-        )
         api_keys = []
-        for page in page_iterator:
-            api_keys.extend(item[API_KEY] for item in page.get('Items', []))
+        last_evaluated_key = None
+        while True:
+            kwargs = {
+                'IndexName': 'user_id_idx',
+                'KeyConditionExpression': Key(USER_ID).eq(user_id),
+                'ProjectionExpression': API_KEY,
+            }
+            if last_evaluated_key:
+                kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**kwargs)
+            api_keys.extend(item[API_KEY] for item in response.get('Items', []))
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
 
         # Now batch delete the API keys
         with self.api_keys.batch_writer() as batch:
