@@ -21,6 +21,7 @@ from app import apikey
 
 from app.odb import API_KEY,MOVIE_ID,USER_ID
 from app.constants import MIME
+from app.schema import Trackpoint
 from app.s3_presigned import s3_client
 from app.constants import logger
 from .conftest import get_movie_bytes
@@ -577,6 +578,7 @@ def test_get_movie_metadata_rotation_coercion(new_movie):
     assert meta.get('width') == 100
     assert meta.get('height') == 200
 
+
     # None → coerced to 0 → no swap
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': None})
     meta = odb.get_movie_metadata(movie_id=movie_id)
@@ -594,3 +596,25 @@ def test_get_movie_metadata_rotation_coercion(new_movie):
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
+
+
+def test_get_movie_trackpoints_content_disposition(client, new_movie):
+    """Regression test for #918: get-movie-trackpoints must return Content-Disposition: attachment
+    so the browser downloads the file rather than displaying it inline."""
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+
+    # Store a trackpoint so the CSV has a data row
+    tp = Trackpoint(x=10, y=20, label='plant', frame_number=0)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[tp])
+
+    resp = client.post('/api/get-movie-trackpoints', data={'api_key': api_key, 'movie_id': movie_id})
+    assert resp.status_code == 200
+    assert 'text/csv' in resp.headers['Content-Type']
+    assert 'attachment' in resp.headers['Content-Disposition']
+
+    # CSV body must contain a header row and at least one data row
+    body = resp.data.decode('utf-8')
+    lines = [line for line in body.splitlines() if line.strip()]
+    assert len(lines) >= 2, f"Expected header + data row, got: {body!r}"
+    assert 'frame_number' in lines[0]

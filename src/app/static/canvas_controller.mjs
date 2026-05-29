@@ -278,8 +278,10 @@ class CanvasController {
     }
 
     resize(width, height) {
-        this.oc.width = this.c.width = this.naturalWidth = width;
-        this.oc.height = this.c.height = this.naturalHeight = height;
+        this.naturalWidth = width;
+        this.naturalHeight = height;
+        this.oc.width = this.c.width = width * this.zoom;
+        this.oc.height = this.c.height = height * this.zoom;
         this.redraw();
     }
 

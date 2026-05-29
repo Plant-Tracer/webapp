@@ -157,7 +157,13 @@ class TracerController extends MovieController {
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
+            this.download_button.prop('disabled', false);
             this.download_button.show();
+            // Re-enable the hidden form inputs so they are included in the POST body.
+            // set_movie_control_buttons() disables all inputs during tracking,
+            // and disabled inputs are excluded from HTML form submission.
+            this.dl_api_key.prop('disabled', false);
+            this.dl_movie_id.prop('disabled', false);
             return;
         }
         this.track_button.val(TRACE_MOVIE);
@@ -691,7 +697,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
             if (nw > 0 && nh > 0) {
                 cc.movie_metadata.width = nw;
                 cc.movie_metadata.height = nh;
-                $(cc.div_selector + ' #canvas-id').attr('width', nw).attr('height', nh);
+                // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
+                // resets the canvas to natural (100%) size. resize() in WebImage.onload
+                // already ran before this callback and correctly applied cc.zoom.
                 $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
             }
         }
