@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from app import odb
-from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID
+from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID,EMAIL,API_KEY
 from app.constants import logger
 from app.schema import Trackpoint
 
@@ -309,5 +309,71 @@ def test_delete_user_removes_course_enrollment(local_ddb):
     ddbo.delete_user(user_id, purge_movies=True)
 
     assert ddbo.get_movies_for_user_id(user_id) == []
+    assert user_id not in odb.course_enrollments(course_id=course_id)
+    odb.delete_course(course_id=course_id)
+
+
+def test_delete_user_raises_if_no_email(local_ddb):
+    """delete_user raises RuntimeError when the user record has no email attribute (line 577 coverage)."""
+    ddbo = local_ddb
+    course_id = f"noemail-course-{rand8()}"
+    course_key = f"noemail-key-{uuid.uuid4().hex[:16]}"
+    user_email = f"noemail-user-{uuid.uuid4().hex[:8]}@example.com"
+
+    ddbo.put_course({
+        COURSE_ID: course_id,
+        'course_name': f"NoEmail Course {rand8()}",
+        'course_key': course_key,
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+
+    user_id = odb.register_email(user_email, "NoEmail User", course_id=course_id)[USER_ID]
+
+    # Strip the email attribute directly from the users table to exercise the defensive check
+    ddbo.users.update_item(
+        Key={USER_ID: user_id},
+        UpdateExpression='REMOVE #e',
+        ExpressionAttributeNames={'#e': EMAIL},
+    )
+
+    with pytest.raises(RuntimeError, match=EMAIL):
+        ddbo.delete_user(user_id)
+
+    # Cleanup: delete_user raised before the transaction, so user and unique_emails still exist
+    ddbo.users.delete_item(Key={USER_ID: user_id})
+    ddbo.unique_emails.delete_item(Key={EMAIL: user_email})
+    odb.delete_course(course_id=course_id)
+
+
+def test_delete_user_api_keys_pagination(local_ddb, mocker):
+    """delete_user handles DynamoDB pagination in the API keys query (line 547 coverage)."""
+    ddbo = local_ddb
+    course_id = f"paginate-course-{rand8()}"
+    course_key = f"paginate-key-{uuid.uuid4().hex[:16]}"
+    user_email = f"paginate-user-{uuid.uuid4().hex[:8]}@example.com"
+
+    ddbo.put_course({
+        COURSE_ID: course_id,
+        'course_name': f"Paginate Course {rand8()}",
+        'course_key': course_key,
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+
+    user_id = odb.register_email(user_email, "Paginate User", course_id=course_id)[USER_ID]
+
+    # Mock query to return a fake LastEvaluatedKey on the first call, forcing the pagination
+    # branch (line 547: kwargs['ExclusiveStartKey'] = last_evaluated_key).
+    def mock_query(**kwargs):
+        if 'ExclusiveStartKey' not in kwargs:
+            # First call: simulate a paginated result with no items on this page
+            return {'Items': [], 'Count': 0, 'LastEvaluatedKey': {API_KEY: 'pagination-sentinel'}}
+        # Second call (pagination branch exercised): empty final page
+        return {'Items': [], 'Count': 0}
+
+    mocker.patch.object(ddbo.api_keys, 'query', side_effect=mock_query)
+
+    ddbo.delete_user(user_id)
     assert user_id not in odb.course_enrollments(course_id=course_id)
     odb.delete_course(course_id=course_id)
