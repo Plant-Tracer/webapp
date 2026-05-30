@@ -43,6 +43,7 @@ SAM_LOGS_MINUTES ?= 15
 # See below for the rules
 
 REQ := .venv/pyvenv.cfg
+LOCAL_TEST_REQ := .venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio bin/mailpit
 
 # files used by lambda
 VEND_FILES := src/app/odb.py \
@@ -166,13 +167,13 @@ dump.txt:
 ## PYTHONPATH includes lambda-resize/src so tests that use resize_app (tracker, lambda_tracking_handler) can load it.
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
-pytest: $(REQ)
+pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
 
-pytest-coverage: $(REQ)
+pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -183,7 +184,7 @@ pytest-selenium:
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.

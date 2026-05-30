@@ -523,29 +523,34 @@ class DDBO:
         logger.debug("delete_user user_id = %s purge_movies=%s",user_id,purge_movies)
         assert is_user_id(user_id)
         movies = self.get_movies_for_user_id(user_id)
-        if purge_movies:
-            self.batch_delete_movie_ids( [movie[MOVIE_ID] for movie in movies] )
-        else:
-            if movies:
+        if movies:
+            if purge_movies:
+                self.batch_delete_movie_ids( [movie[MOVIE_ID] for movie in movies] )
+            else:
                 raise RuntimeError(f"user {user_id} has {len(movies)} outstanding movies.")
 
         # Now delete all of the API keys for this user
-        # First get the API keys
+        #
+        # First get the API keys. Note that user_id_idx is a global
+        # secondary index so we might not get them all, but we
+        # probably will.
+
         api_keys = []
         last_evaluated_key = None
         while True:
-            query_kwargs = {
+            kwargs = {
                 'IndexName': 'user_id_idx',
-                'KeyConditionExpression': Key( USER_ID ).eq(user_id),
-                'ProjectionExpression':  API_KEY
+                'KeyConditionExpression': Key(USER_ID).eq(user_id),
+                'ProjectionExpression': API_KEY,
             }
             if last_evaluated_key:
-                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
-            response = self.api_keys.query(**query_kwargs)
-            api_keys.extend(item[ API_KEY ] for item in response['Items'])
+                kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.api_keys.query(**kwargs)
+            api_keys.extend(item[API_KEY] for item in response.get('Items', []))
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
+
         # Now batch delete the API keys
         with self.api_keys.batch_writer() as batch:
             for api_key in api_keys:
@@ -562,9 +567,16 @@ class DDBO:
             except ValueError:
                 pass            # looks like this user wasn't in the list
 
+        # Remove the user from the course_users enrollment table for every course they belong to
+        for course_id in user.get(COURSES, []):
+            self.course_users.delete_item(Key={COURSE_ID: course_id, USER_ID: user_id})
+
         # Get the email address. We should just get the userdict with some fancy projection...
+        email = user.get(EMAIL)
+        if not email:
+            raise RuntimeError(f"{EMAIL} not in {user}")
+
         # Finally delete the user and the unique email
-        email = self.users.get_item(Key={ USER_ID :user_id},ConsistentRead=True)['Item'][ EMAIL ]
         client = self.dynamodb.meta.client
         logger.warning("Does not require the email exists in unique_emails. When we did that, it did not work.")
         client.transact_write_items(
@@ -584,6 +596,7 @@ class DDBO:
                     }
                 }
             ])
+        logger.info("User %s %s deleted",user_id,email)
 
 
     ### course management
@@ -1285,7 +1298,10 @@ def course_enrollments(course_id):
     last_evaluated_key = None
 
     while True:
-        query_kwargs = { 'KeyConditionExpression': Key( COURSE_ID ).eq( course_id ) }
+        query_kwargs = {
+            'KeyConditionExpression': Key( COURSE_ID ).eq( course_id ),
+            'ConsistentRead': True
+        }
 
         if last_evaluated_key:
             query_kwargs['ExclusiveStartKey'] = last_evaluated_key
