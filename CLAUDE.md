@@ -201,20 +201,25 @@ Before tagging, the version number **must** be updated via a normal feature bran
    - `src/app/constants.py` — `__version__ = 'X.Y.Z'`
    - `pyproject.toml` — `version = "X.Y.Z"`
 
-2. **Create a GitHub Issue** for the tag (so the tag references an issue, per project convention):
+2. **Run the full CI check** and confirm it passes:
+   ```bash
+   make check
+   ```
+
+3. **Create a GitHub Issue** for the tag (so the tag references an issue, per project convention):
    ```bash
    gh issue create --title "Tag main branch as <tag-name>" \
      --body "All PRs for <milestone> merged. Tag main with \`<tag-name>\`." \
      --milestone "<milestone-name>"
    ```
 
-3. **Tag and push** the already-bumped main (always use an annotated tag):
+4. **Tag and push** the already-bumped main (always use an annotated tag):
    ```bash
    git tag -a <tag-name> -m "refs #<issue-number>: tag main as <tag-name>"
    git push origin <tag-name>
    ```
 
-4. **Close the issue** referencing the tag:
+5. **Close the issue** referencing the tag:
    ```bash
    gh issue close <issue-number> --comment "Tagged as \`<tag-name>\`."
    ```
