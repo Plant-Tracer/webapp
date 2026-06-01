@@ -35,9 +35,91 @@ Release History
      - 0.9.7
      - April 26, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7>`__
+   * - May062026
+     - 0.9.7.3
+     - May 8, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.3>`__
+   * - May122026
+     - 0.9.7.4
+     - May 12, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.4>`__
+   * - May-16-2026
+     - 0.9.7.5
+     - May 16, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.5>`__
+   * - May-16-2026-2
+     - 0.9.7.5.1
+     - May 16, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.5.1>`__
+   * - May-27-2026
+     - 0.9.7.6
+     - May 27, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.6>`__
+   * - May-28-2026
+     - 0.9.7.6.2
+     - May 28, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.6.2>`__
 
 Release Notes
 -------------
+
+0.9.7.6.2 Summary
+*****************
+    * Analyze: fix Download Trackpoints CSV — was nearly empty and opened in a browser tab instead of downloading
+    * Analyze: Download Trackpoints button now correctly enabled after tracing completes
+    * Analyze: movie canvas no longer resets to 100% zoom after tracing completes
+
+0.9.7.6 Summary
+****************
+    * Movies: fix bug where all students could see unpublished movies of other students
+    * Movies: new uploads are now Published by default
+    * Movies: movie tables now sorted newest-first by default
+    * Movies: sortable columns via DataTables; table style matches Marker table on Analyze page
+    * Movies: added Research Use and Credit columns, editable by uploader
+    * Upload: research permission changed from checkbox to Yes/No radio buttons
+    * Upload: research use option now references a Contributor Agreement
+    * Upload: attribution name field pre-filled with user's display name
+    * Analyze: clarified RulerXXmm marker naming rules on page and in tutorial
+    * Developer: Jest coverage threshold enforced locally via ``npm run coverage``
+    * Developer docs: added Release Process documentation
+    * Process: documentation review required when completing any Issue or PR
+
+0.9.7.5.1 Summary
+******************
+    * Process: document annotated tag convention and linked issue numbers in release notes
+    * Process: improve release process documentation in CLAUDE.md
+
+0.9.7.5 Summary
+***************
+    * Users: fix several regressions — listing, formatting, duplicate sections, First/Last Seen columns
+    * Users: add names support to bulk registration
+    * Users: fix HTTP 500 error when registering a user
+    * Documentation: update User Tutorial to current prod functionality
+    * Documentation: update DynamoDB schema documentation; create Flask API endpoint reference
+    * Email: improve login email template HTML for better client compatibility
+    * Dev: add MAILER_DRY_RUN env variable and Mailpit local SMTP catcher for local email testing
+    * Dev: add PostToolUse hook to auto-check Sphinx docs build after editing docs/
+    * Process: document release process (milestone prep, tagging, release notes) in CLAUDE.md
+
+0.9.7.4 Summary
+***************
+    * Movies: fix exceptions when editing movie name or user fields
+    * Movies: show accurate movie status values
+    * Users: fix ReferenceError for bulk_register_setup
+    * Users: fix HTTP 500 error when registering a user
+    * Analyze: fix Download Trackpoints button not enabled
+    * Analyze: fix position graphs not taking up full canvas size
+    * Audit: fix Internal Server Error and ReferenceError
+    * Alerts: show with more spacing and yellow background
+    * Copyright: extend to 2026
+    * Research permission: update privacy policy
+
+0.9.7.3 Summary
+***************
+    * Documentation: update User Tutorial for new instance
+    * UI: match webapp look and feel to planttracer.com
+    * Developer docs: move to docs/Development/ subfolder
+    * Test: add canvas_tracer_controller.js unit tests
 
 0.9.7 Summary
 *************
