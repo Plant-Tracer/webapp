@@ -168,16 +168,17 @@ When asked to prepare a milestone for a new release, given a previous release ta
 
 After tagging, create a GitHub release from the tagged commit. The release title is the date formatted as `Month-DD-YYYY` (e.g., `May-16-2026`).
 
-**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. To generate them:
+**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. Generate them with:
 
-1. Fetch all closed items in the milestone via `gh api`.
-2. **Include all Issues** in the milestone.
-3. For each **PR** in the milestone:
-   - Parse the PR body and title for issue references (`fixes #N`, `closes #N`, `resolves #N`, `refs #N`, bare `#N`, etc.).
-   - **No issue references** → include the PR (standalone work).
-   - **Has issue references** → read the PR body against the referenced issues' bodies/titles. If the PR describes changes not covered by any referenced issue, include it (or flag it for human review if uncertain). If fully covered, omit it.
-4. Present the draft list to the user for approval before creating the release.
-5. Create the release:
+```bash
+python3 bin/make_release_notes.py [--since-tag <previous-tag>]
+```
+
+The script finds all PRs merged to `main` since the previous release tag, includes all referenced Issues and any standalone PRs (no issue references), silently omits version-bump PRs, and flags other PRs that reference issues with `# REVIEW:` lines for human inspection. Review the output and resolve any `# REVIEW:` items before proceeding.
+
+1. Run the script and review its output.
+2. Present the draft list to the user for approval before creating the release.
+3. Create the release:
    ```bash
    gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
    ```
