@@ -474,8 +474,10 @@ def api_get_movie_metadata():
                 frame[C.API_KEY_MARKERS] = []
             frame[C.API_KEY_MARKERS].append(tpt)
 
-    logger.debug("get_movie_metadata returns: %s",ret)
-    return jsonify(ret)
+    r = jsonify(ret)
+    logger.debug("get_movie_metadata returns keys %s and %d frames total length %d bytes",
+                 list(ret.keys()),len(ret.get('frames',[])),len(r))
+    return r
 
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
