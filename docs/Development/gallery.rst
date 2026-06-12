@@ -1,29 +1,29 @@
-Gallery of Plant Videos
+Gallery Of Plant Videos
 =======================
 
-- The webpage would appear as a grid of images. Each thumbnail would be one frame of the video. When clicking on the thumbnail the video would play.
+This is a future feature note.
 
 Purpose
 -------
 
-- The gallery would allow user to easily select videos to view. The user would be able to search the database for videos based on various criteria (author, date range).
+A gallery would let users browse course-visible or public movies by title,
+uploader, course, date, and research-use status. Thumbnails should come from
+lambda-resize first-frame responses, and playback should use signed S3 URLs.
 
-Requirements
-------------
+Current Storage Model
+---------------------
 
-- access to database with a video as one field of a table
+* Movie metadata is in DynamoDB ``movies`` rows.
+* Original movies and generated artifacts are in S3/MinIO.
+* Flask should return searchable metadata.
+* lambda-resize should return first-frame thumbnails and signed playback URLs.
+* Flask should not stream movie bytes.
 
-- access to database with thumbnail as one field of a table
+Implementation Direction
+------------------------
 
-Implementation Plan
--------------------
-
-- Implement REST API to get a list of public videos with certain search criteria (date range, keyword, author, etc.). (Returns a cookie for each video)
-- Implement REST API to get metadata for a video (given a cookie)
-- Implement REST API to get an arbitrary frame of a video
-- Implement REST API to download a video assembled from frames.
-- Implement an HTML web page with associated JavaScript that, when loads, gets a list of the videos and displays their names and a frame from the videos.
-- Make the videos play when you click their frame.
-
-Testing Plan
-------------
+* Add or extend a Flask metadata API for gallery search.
+* Reuse ``/resize-api/v1/first-frame`` for thumbnails.
+* Reuse ``/resize-api/v1/movie-data?format=json`` for playback URLs.
+* Respect the same access rules as ``/api/list-movies`` and direct movie access.
+* Add meaningful tests against DynamoDB Local and MinIO.

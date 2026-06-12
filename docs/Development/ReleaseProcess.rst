@@ -1,7 +1,7 @@
 Release Process
 ===============
 
-This page documents the end-to-end process for creating a Plant Tracer release. The process is designed to be carried out with Claude Code assistance. All steps assume you are working in the ``webapp`` repository root and are authenticated with ``gh``.
+This page documents the end-to-end process for creating a Plant Tracer release. The process is designed to be carried out with coding-agent assistance. All steps assume you are working in the ``webapp`` repository root and are authenticated with ``gh``.
 
 See `Issue #992 <https://github.com/Plant-Tracer/webapp/issues/992>`_ for known gaps and open questions in this process.
 
