@@ -42,8 +42,9 @@ Local development uses MinIO for S3 and DynamoDB Local for DynamoDB.
 Install dependencies:
 
 ```bash
-make install-macos
-make install-ubuntu
+make install-macos   # macOS
+# or
+make install-ubuntu  # Ubuntu
 ```
 
 Start local services and seed demo data:
