@@ -1,58 +1,130 @@
 Environment Variables
 =====================
 
-See https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html. Also:
-
-
+This page lists runtime variables used by the current Flask app, local services,
+mailer, and lambda-resize code. The Makefile supplies the local defaults for
+normal development and testing.
 
 Required
 --------
 
-`DYNAMODB_TABLE_PREFIX` - The prefix to add to all DynamoDB tables.
+``DYNAMODB_TABLE_PREFIX``
+   Prefix added to every DynamoDB table name. Local defaults use ``demo-``.
 
-* This is required because the table namespace is top-level within an AWS account; unlike SQL, there is no higher-level *DATABASE* namespace.
+``PLANTTRACER_S3_BUCKET``
+   Existing S3 bucket name. Do not include ``s3://``. For local MinIO the
+   Makefile uses ``planttracer-local``.
 
-* For testing, a random prefix is created, tables are created with this prefix, and the tables are deleted if the tests conclude successfully.
+AWS And Local Service Selection
+-------------------------------
 
-Optional for Demo Mode
-----------------------
-`DEMO_MODE` - Enables demo mode for this process.
+``AWS_REGION``
+   AWS region. Use ``local`` for DynamoDB Local and MinIO.
 
-`DEMO_COURSE_ID` - Identifies the course that contains the demo dataset. This does not itself enable demo mode.
+``AWS_DEFAULT_REGION``
+   Optional AWS SDK default region. Local Make targets set this to ``local``.
 
-`DEMO_DYNAMODB_PREFIX` - Use tables with this prefix. The Makefile creates tables with a prefix `demo`.
+``AWS_ACCESS_KEY_ID`` / ``AWS_SECRET_ACCESS_KEY``
+   AWS credentials. Local MinIO uses ``minioadmin`` / ``minioadmin``.
 
-`DEMO_USER_EMAIL` - Identifies the demo user. The Makefile creates a user with the email `demouser@planttracer.com`.
+``AWS_ENDPOINT_URL_DYNAMODB``
+   DynamoDB endpoint override. Local default: ``http://localhost:8000/``.
 
-Optional for using AWS
-----------------------
-Region selection:
+``AWS_ENDPOINT_URL_S3``
+   S3 endpoint override. Local default: ``http://localhost:9000/``.
 
-`AWS_REGION` - The AWS region you are using.
+``AWS_ENDPOINT_URL_SQS``
+   Optional SQS endpoint override for lambda-resize if testing against an SQS
+   emulator.
 
-`AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` and `$HOME/.aws/config` the webapp will use.
+``AWS_PROFILE``
+   Optional AWS profile for deployed or administrative commands.
 
-Optional for sending mail
--------------------------
-`PLANTTRACER_CREDENTIALS` - A configuration file that has email credentials
+Application URLs
+----------------
 
-`SMTPCONFIG_JSON` - SMTP configuration as a JSON object with keys ``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USERNAME``, ``SMTP_PASSWORD``, and optionally ``SMTP_NO_TLS`` (set to any value to disable TLS). Used for local development with Mailpit: the local Makefile sets this automatically when running with ``AWS_REGION=local``.
+``PLANTTRACER_API_BASE``
+   Optional Flask API base injected into browser pages as ``API_BASE``. Empty
+   means same-origin.
 
-`MAILER_DRY_RUN` - Set to ``true`` to log email content to stderr instead of sending it. Useful for local development when no SMTP credentials or SES are configured — the magic link will appear in the Flask dev server log.
+``PLANTTRACER_STATIC_BASE``
+   Optional static asset base injected as ``STATIC_BASE``.
 
+``PLANTTRACER_LAMBDA_API_BASE``
+   Explicit lambda-resize HTTP API base injected as ``LAMBDA_API_BASE``. Local
+   default from the Makefile is ``http://127.0.0.1:9811/``.
 
-Optional for Local Development
-------------------------------
+``HOSTNAME`` / ``DOMAIN``
+   If ``PLANTTRACER_LAMBDA_API_BASE`` is absent, Flask derives
+   ``https://{HOSTNAME}-lambda.{DOMAIN}/``.
 
-`AWS_REGION` - The AWS region you are using.
+Demo Mode
+---------
 
-`AWS_PROFILE` - Which profile in the `$HOME/.aws/credentials` the webapp will use. Should be `minio` when using minio (assuming profile is installed)
+``DEMO_MODE``
+   Enables demo mode when present.
 
-`AWS_ENDPOINT_URL_DYNAMODB` - For local development, this must be set to the localhost and the port on which **DynamoDBlocal** is listening. It is typically `http://localhost:8000`.
+``DEMO_COURSE_ID``
+   Identifies the course containing demo data. This does not enable demo mode by
+   itself.
 
-`AWS_ENDPOINT_URL_S3` - For local development, this must be set to the localhost and the port on which **minIO** is listening. It is typically `http://localhost:9000`.
+Mail
+----
 
+``SERVER_EMAIL``
+   Sender address for outgoing mail. Defaults to ``admin@planttracer.com``.
 
-For local usage:
+``PLANTTRACER_CREDENTIALS``
+   Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections.
 
-* Minio - If you are using minio, either `AWS_PROFILE` should be `minio` (and the minio profile should be installed) or both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_KEY` should be `minioadmin`.
+``SMTPCONFIG_JSON``
+   JSON SMTP configuration. Local Make targets set this for Mailpit.
+
+``SMTPCONFIG_ARN``
+   AWS Secrets Manager ARN containing SMTP configuration.
+
+``MAILER_DRY_RUN``
+   Set to ``true`` to log email content instead of sending it.
+
+Lambda Queue
+------------
+
+``TRACKING_QUEUE_MODE``
+   Set to ``local`` to use the in-process local retrace queue.
+
+``TRACKING_QUEUE_URL``
+   SQS queue URL used by deployed lambda-resize tracking.
+
+Development And Diagnostics
+---------------------------
+
+``LOG_LEVEL``
+   Logging level. Local Make targets default to ``DEBUG``.
+
+``FFMPEG_PATH``
+   Optional path used by legacy/local tooling.
+
+``COLLECT_JS_COVERAGE``
+   When true, Flask serves instrumented static files from
+   ``static-instrumented`` if present.
+
+``DISABLE_PROXYFIX``
+   When true, disables Flask ``ProxyFix`` handling for forwarded headers.
+
+``AWS_EC2_METADATA_DISABLED``
+   Local Make targets set this to ``true`` to avoid AWS metadata lookups.
+
+Local Makefile Defaults
+-----------------------
+
+The primary local environment is defined by ``LOCAL_AWS_ENV`` and
+``LOCAL_FLASK_ENV`` in the root Makefile. Prefer these targets over hand-built
+commands:
+
+.. code-block:: bash
+
+   make start-local-services
+   make make-local-demo
+   make run-local-debug
+   make run-local-demo-debug
+   make run-local-lambda-debug

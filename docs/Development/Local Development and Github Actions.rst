@@ -19,16 +19,17 @@ now.
 Why This Document Exists
 ------------------------
 
-The old local workflow assumed that ``make run-local-debug`` was enough by
-itself. That was true when the VM handled first-frame extraction and tracking.
-It is no longer true now that:
+The old local workflow assumed that Flask alone was enough. That was true when
+the VM handled first-frame extraction and tracking. The current local workflow
+uses Flask plus a local lambda-resize HTTP bridge because:
 
 * HTML is served by Flask,
 * metadata writes are served by Flask API, and
 * frame extraction and tracing live in ``lambda-resize``.
 
-As a result, local retracing is currently broken unless a second local Lambda
-endpoint is also running.
+As a result, local retracing requires the local Lambda endpoint. The
+``run-local-debug`` Make target checks for that endpoint and, on macOS, attempts
+to start it in a second terminal.
 
 
 Architecture Summary
@@ -440,11 +441,10 @@ on:
 * browser tests only where they provide unique value.
 
 
-Planned Verification
+Verification Targets
 --------------------
 
-Once the local Lambda server is implemented, local testing should cover at least
-these cases:
+Local testing should cover at least these cases:
 
 * ``GET /resize-api/v1/ping`` returns ``status=ok``.
 * ``GET /resize-api/v1/first-frame`` returns a JPEG for a movie in MinIO.

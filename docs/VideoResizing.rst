@@ -10,12 +10,16 @@ Modern digital cameras tend to produce videos with much higher resolution than P
 
 PlantTracer puts a limit on the size of the uploaded movies in part to save on storage space and costs, and also to keep down the processing time needed to analyze an image.
 
-One day, we hope that PlantTracer will automatically resize videos upon upload. But until that day, we ask users to make sure their videos are of a size that PlantTracer can easily handle.
+Plant Tracer keeps the uploaded original movie in S3. During analysis, the
+lambda-resize service scales extracted frames to the analysis size used by the
+tracker. Users should still upload compact videos because smaller files upload
+faster, cost less to store, and process faster.
 
 PlantTracer video size limits and guidelines
 --------------------------------------------
 
-File size: The size of all uploaded video files must be 256 megabytes or less. Files larger than this will be rejected.
+File size: The size of all uploaded video files must be 256 megabytes or less.
+Files larger than this will be rejected.
 
 Image size: PlantTracer prefers videos in standard definition (480p) and recommends selecting that option when recording or exporting your video. As a general guideline, ensure that the largest dimension of your video is 640 pixels. As an example, a typical 480p video is 640 pixels wide by 480 pixels high. It is important to preserve the aspect ratio of the video when resizing it so that distance calculations remain accurate as items move in both the x and y dimensions of the video.
 
