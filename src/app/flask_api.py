@@ -474,7 +474,8 @@ def api_get_movie_metadata():
                 frame[C.API_KEY_MARKERS] = []
             frame[C.API_KEY_MARKERS].append(tpt)
 
-    logger.debug("get_movie_metadata returns: %s",ret)
+    logger.debug("get_movie_metadata returns keys %s and %d frames total length %d bytes",
+                 list(ret.keys()),len(ret.get('frames',[])),len(ret))
     return jsonify(ret)
 
 
