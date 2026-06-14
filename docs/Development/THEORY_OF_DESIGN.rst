@@ -1,85 +1,74 @@
-Web app theory of design
+Web App Theory Of Design
 ========================
 
-S3 bucket and long-term archive
--------------------------------
+Storage
+-------
 
-We **always deploy to an existing S3 bucket**. The bucket is not created by the stack and must **outlive the stack**, because it is the long-term archive of all student-uploaded videos. Stacks (and thus DynamoDB tables) may be torn down or migrated; the bucket is the durable store.
+Plant Tracer always deploys to an existing S3 bucket. The bucket is not created
+by the stack and must outlive the stack because it is the long-term archive of
+student-uploaded videos.
 
-Because the S3 bucket will outlive the DynamoDB database, **all metadata that must survive (research-use, attribution) is stored in the MP4 file itself** (see ``docs/MOVIE_METADATA.rst`` and ``etc/mp4_metadata.py``). The object remains self-describing even if the application database is gone. The Lambda that processes uploads is invoked via its HTTP API; we no longer depend on S3 → Lambda triggers on the ``uploads/`` prefix.
+DynamoDB stores application metadata: users, courses, API keys, movie metadata,
+frame trackpoints, and audit logs. Because DynamoDB tables may be rebuilt, any
+metadata that must survive with the video, such as research-use and attribution,
+is also written into the MP4 file.
 
 Authentication
 --------------
 
-Users are authenticated with an `api_key`:
+Users authenticate with an ``api_key``. API keys are issued per user, stored in
+the ``api_keys`` table, and sent to users in login links. Browser pages keep the
+active key in the ``api_key`` cookie and expose it to JavaScript as the
+``api_key`` global.
 
-* Generated server-side with `to_base64(rand())` and stored in the users table.
+Demo mode is separate from normal login. When ``DEMO_MODE`` is set or the host
+contains a ``-demo`` label, the server uses the fixed demo API key and hides
+mutating UI actions.
 
-* New ones can be requested by entering an email address on a web form. The key and several URLs with the key embedded are sent to the email address.
+Service Boundaries
+------------------
 
-* Generating a new api_key kills the old one.
+* Flask ``flask_app.py`` serves HTML and injects browser globals.
+* Flask ``flask_api.py`` serves metadata APIs.
+* lambda-resize serves first-frame, playback URL, and retrace APIs.
+* S3/MinIO serves movie and ZIP bytes through signed URLs.
+* DynamoDB/DynamoDB Local stores structured metadata and trackpoints.
 
-* api_keys expire after 6 months.
-
-* api_keys are embedded in HTML pages using the template system, making the key accessible to JavaScript running on the page. The global variable is `pt_api_key`.
-
-Use Stories
+Upload Flow
 -----------
 
-Upload a file
-^^^^^^^^^^^^^
+1. User opens ``/upload`` through a login link or cookie-authenticated session.
+2. Browser validates title, description, file size, research-use, and
+   attribution fields.
+3. Browser computes the file SHA-256.
+4. Browser posts metadata to ``POST /api/new-movie``.
+5. Flask creates the movie row and returns a presigned S3 POST for the final
+   object key.
+6. Browser uploads directly to S3/MinIO.
+7. Browser requests the first frame from lambda-resize and links to Analyze.
 
-1 - User goes to https://app.digitalcorpora.org/ and enters their email address into a text field. This sends them a new API key and a set of URLs. One of the URL is `upload a plant movie`. Another is `view uploaded movies.`
+Analyze Flow
+------------
 
-  - Requies the ability to send mail from the server that won't be trapped by anti-spam.
+1. Analyze page loads movie metadata from Flask.
+2. Frame 0 comes from lambda-resize.
+3. User places or edits markers.
+4. Browser saves trackpoints through Flask.
+5. Browser asks lambda-resize to retrace from the edited frame.
+6. Browser polls Flask metadata until tracking completes.
+7. Browser displays tracked frames, graphs, and CSV download controls.
 
-  - Eventually, we will also be able to log in with Google and then see the page with the URLs.
+Movie List Flow
+---------------
 
-2 - User clicks the `upload a plant movie` url. This brings the user to another page that has a HTML FORM Upload with the api_key as one of the parameters. This should work for uploading any movie under 10MB. It won't give a nice progress bar unless we use a clever JavaScript uploader.
+``/list`` is currently rendered as a page that loads movie data from
+``POST /api/list-movies`` and builds tables in JavaScript. It separates a
+user's published, unpublished, deleted, and course-visible movies. This page is
+a known candidate for future server-side rendering or a componentized frontend.
 
-View/Edit/Delete upload files
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Faculty/Admin Flow
+------------------
 
-1 - User clicks on link with embedded API key
-
-2 - Web page is generated server-side with template engine.
-    * Upload new movie link
-    * pop-up with the section that the student is in.
-    * Section showing movies, with a note if it is 'playable' or 'needs review'
-    * Section showing deleted movies, with days until movie is purged.
-
-  - To delete a movie, click a check that says "delete." This moves the movie to the "deleted" section. Movies in the deleted section can't be played and are automatically deleted in 7 days, but they can be undelted as well.
-
-  - Movie metadata is in text fields. To change it, just change the text. Making a change to the text enables a "save" button at the end of the line. If you try to navigate away from the page without saving, you get a warning. (JavaScript)
-
-Faculty interface
-^^^^^^^^^^^^^^^^^
-  * Each faculty member can be in any number of sections
-  * Shows all students assigned to each of their section, and all unassigned students.
-  * Allows students to be moved between sections and unassigned.
-  * Shows all uploaded movies for each section and allows them to be published or unpublished. Admins can publish or unpublish any movie; non-admin users can unpublish their own movies.
-
-
-API
----
-
-Upload a file
-^^^^^^^^^^^^^
-
-1 - User goes to app.digitalcorpora.org/upload
-
-2 - User fills out form with movie title, description, and chooses movie.
-
-3 - Form 'onchange' fires.
-
-  3a - JavaScript hashes movie.
-
-  3b - /api/movie-upload-start gets api_key, title, description, sha256, movie length
-
-  3c - bottle_app.movie_upload_start() calls db.create_movie which creats the movie entry with this sha256.
-
-  3d - if the sha256 already exists, return to the client with 'movie_id' and 'upload_url' equal to '' and 'movie_url' being the final movie URL.
-
-  3e - If the sha256 does not exist, return to the client with 'movie_id' and a 'upload_url' being a presigned s3 upload URL and 'movie_url' being the final movie URL.
-
-  Now, if the client has an upload_url, it starts the upload with a POST.
+Course admins can list users in their administered courses, bulk-register users,
+and publish/unpublish visible course movies. Movie research-use and attribution
+choices remain owner-controlled.

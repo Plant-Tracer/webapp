@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -22,6 +22,16 @@ After editing any file under `docs/`, always build and verify: `poetry run sphin
 Never commit or push directly to the `main` branch. All changes must go through a feature branch and be merged via Pull Request. Only proceed with a direct commit to `main` if the user explicitly says to override this rule.
 
 Every commit message must reference a GitHub Issue number (e.g. `fixes #123` or `refs #123`). If no Issue exists for the current change, generate a proposed Issue title and description, ask the user to confirm or edit it, and only create the Issue (via `gh issue create`) after receiving approval.
+
+All commits must be GPG-signed with the repository signing key
+matching the user who is running CODEX. Use `git commit -S` and do not
+substitute a different signing key unless the user explicitly requests
+it.
+
+Human | Codex GPG Key
+|-----|-------------|
+| @simsong | 00neumann-kjbp-superJumbo.webp |
+
 
 ## Common Commands
 
@@ -168,17 +178,16 @@ When asked to prepare a milestone for a new release, given a previous release ta
 
 After tagging, create a GitHub release from the tagged commit. The release title is the date formatted as `Month-DD-YYYY` (e.g., `May-16-2026`).
 
-**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. Generate them with:
+**Release notes** are a single flat list of Issues and any PRs whose work is not fully captured by Issues. To generate them:
 
-```bash
-python3 bin/make_release_notes.py [--since-tag <previous-tag>]
-```
-
-The script finds all PRs merged to `main` since the previous release tag, includes all referenced Issues and any standalone PRs (no issue references), silently omits version-bump PRs, and flags other PRs that reference issues with `# REVIEW:` lines for human inspection. Review the output and resolve any `# REVIEW:` items before proceeding.
-
-1. Run the script and review its output.
-2. Present the draft list to the user for approval before creating the release.
-3. Create the release:
+1. Fetch all closed items in the milestone via `gh api`.
+2. **Include all Issues** in the milestone.
+3. For each **PR** in the milestone:
+   - Parse the PR body and title for issue references (`fixes #N`, `closes #N`, `resolves #N`, `refs #N`, bare `#N`, etc.).
+   - **No issue references** → include the PR (standalone work).
+   - **Has issue references** → read the PR body against the referenced issues' bodies/titles. If the PR describes changes not covered by any referenced issue, include it (or flag it for human review if uncertain). If fully covered, omit it.
+4. Present the draft list to the user for approval before creating the release.
+5. Create the release:
    ```bash
    gh release create <tag> --title "<Month-DD-YYYY>" --notes "<notes>"
    ```
@@ -194,15 +203,6 @@ Each line in the release notes should be a Markdown link to the issue/PR, e.g.:
 - [#966](https://github.com/Plant-Tracer/webapp/issues/966) Fix ESLint no-undef error: list_users called bare in users.js
 ```
 
-## Updating ReleaseHistory After a Release
-
-After creating the GitHub release, open a PR to update `docs/ReleaseHistory.rst`:
-
-1. Add a row to the release table at the top of the file (Name, Version, Date, link to the GitHub release tag).
-2. Add a summary section for the new release (above the previous release's summary), with a bullet per significant change derived from the release notes. The act of updating ReleaseHistory itself need not be mentioned in the summary.
-
-This PR should reference the tagging Issue (e.g. `refs #N`) so the work is traceable. It does **not** need its own separate GitHub Issue.
-
 ## Tagging a Release
 
 Before tagging, the version number **must** be updated via a normal feature branch + PR and merged to `main`. Once the version bump PR is merged:
@@ -211,25 +211,20 @@ Before tagging, the version number **must** be updated via a normal feature bran
    - `src/app/constants.py` — `__version__ = 'X.Y.Z'`
    - `pyproject.toml` — `version = "X.Y.Z"`
 
-2. **Run the full CI check** and confirm it passes:
-   ```bash
-   make check
-   ```
-
-3. **Create a GitHub Issue** for the tag (so the tag references an issue, per project convention):
+2. **Create a GitHub Issue** for the tag (so the tag references an issue, per project convention):
    ```bash
    gh issue create --title "Tag main branch as <tag-name>" \
      --body "All PRs for <milestone> merged. Tag main with \`<tag-name>\`." \
      --milestone "<milestone-name>"
    ```
 
-4. **Tag and push** the already-bumped main (always use an annotated tag):
+3. **Tag and push** the already-bumped main (always use an annotated tag):
    ```bash
    git tag -a <tag-name> -m "refs #<issue-number>: tag main as <tag-name>"
    git push origin <tag-name>
    ```
 
-5. **Close the issue** referencing the tag:
+4. **Close the issue** referencing the tag:
    ```bash
    gh issue close <issue-number> --comment "Tagged as \`<tag-name>\`."
    ```

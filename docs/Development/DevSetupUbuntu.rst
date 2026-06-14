@@ -1,48 +1,53 @@
-Setting Up Plant-Tracer webapp on Ubuntu 24.04
-==============================================
+Setting Up Plant Tracer On Ubuntu 24.04
+=======================================
 
-- Install ubuntu server (example from `ARM 24.04.2 LTS <https://cdimage.ubuntu.com/releases/24.04/release/>` (on UTM on MacOS)) then::
+Install OS packages:
 
-    sudo apt update
-    sudo apt upgrade
-    sudo apt install git gh python3.11 python3.11-venv make openjdk-17-jdk awscli
-    git config --global --edit #set Git name and username/email for commits
-    gh auth login # generate Personal Access Token if necessary
-    git clone https://github.com/Plant-Tracer/webapp.git webapp
-    cd webapp
-    make install-ubuntu
+.. code-block:: bash
 
-- You might install these for making your developer time easier::
+   sudo apt update
+   sudo apt upgrade
+   sudo apt install git gh make curl lsof nodejs npm zip chromium-browser chromium-chromedriver openjdk-21-jre-headless ffmpeg
 
-    sudo apt install zsh
-    sudo apt-get install -y nodejs
-    sudo apt install net-tools
-    sudo apt install spice-vdagent
-    sudo apt install chromium-browser
-    sudo apt-get install lynx
-    sudo apt install slim
-    sudo apt install ubuntu-desktop
-    # Ubuntu 24.01 ships with python3.10. We need python 3.11 or greater.
+Install Poetry if it is not already available, then clone and install:
 
--  Add [client] and [smtp] and [imap] sections to src/etc/credential-localhost.ini then::
+.. code-block:: bash
 
-    export PLANTTRACER_CREDENTIALS=src/etc/credential-localhost.ini
-    make start_local_minio
-    make start_local_dynamodb
-    make make-local-bucket
-    make make-local-demo
-    make run-local-debug
+   git clone https://github.com/Plant-Tracer/webapp.git webapp
+   cd webapp
+   make install-ubuntu
 
-- This will output a URL to login to the demo course that allows editing -- of the form::
+Local Run
+---------
 
-    *****
-    ***** Login with http://localhost:8080/list?api_key=ab3bc1e2673a647e08d8b1283e8484293
-    *****
+.. code-block:: bash
 
-- To stop the Plant Tracer server, Ctrl-C out of it.
+   make start-local-services
+   make make-local-demo
+   make run-local-lambda-debug
+   make run-local-debug
 
-- To stop the local DynamoDB and Minio, and delete the database entirely::
+``run-local-debug`` prints a login link for the local admin user and starts
+Flask on ``http://localhost:8080``. Keep ``run-local-lambda-debug`` running in a
+second terminal for first-frame, playback URL, and retrace endpoints.
 
-    make delete-local
+Validation
+----------
 
-- There is some more information in :doc:`DeveloperSetup` document.
+.. code-block:: bash
+
+   make lint
+   make pytest
+   make jscoverage
+   make check
+
+Cleanup
+-------
+
+.. code-block:: bash
+
+   make stop-local-services
+   make delete-local
+
+See :doc:`DeveloperSetup` and :doc:`Local Development and Github Actions` for
+the complete local architecture.

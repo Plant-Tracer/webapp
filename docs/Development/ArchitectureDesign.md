@@ -1,24 +1,58 @@
-# Architecture design principles
+# Architecture Design Principles
 
-Three principles govern where logic lives:
+Three principles govern where logic lives.
 
-1. **All frames and video processing → lambda-resize**  
-   Operations that need full frames or video (get-frame, tracking, rotate-and-zip, start-processing) run only in the Lambda (lambda-resize). The VM (Flask/gunicorn) does not decode video, extract frames, or run tracking.
+## Frames And Video: lambda-resize
 
-2. **All HTML → flask_app**  
-   All HTML pages and templates are served by the Flask app (`flask_app.py`). There is no other HTTP server serving HTML for the main app.
+Operations that need full frames or video run in `lambda-resize`.
 
-3. **All metadata → flask_api**  
-   Movie and user metadata (get-movie-metadata, put-frame-trackpoints, edit-movie, set-metadata, list movies, etc.) go through the Flask API (`flask_api.py`). The VM owns DynamoDB writes for metadata; Lambda writes metadata only as a result of its own processing (e.g. after rotate-and-zip or tracking).
+Current HTTP routes:
 
-## Get-movie-data and new-frame on Lambda
+- `GET /resize-api/v1/ping`
+- `GET /resize-api/v1/first-frame`
+- `GET /resize-api/v1/movie-data`
+- `POST /resize-api/v1/trace-movie`
 
-**get-movie-data** (GET `/api/v1/movie-data`) returns a 302 redirect to a signed S3 URL for the movie (or zip if `format=zip`). For video playback the client uses `format=json` and gets 200 JSON `{ "movie_id", "url", "zip_url" }` (url = MP4, zip_url = zip if present), then sets the video element’s `src` to `url` so the browser loads the stream directly from S3 (redirects are not followed for cross-origin media).
+The Flask VM does not decode video, extract frames, run tracking, or serve
+movie playback bytes. It may create signed S3 upload POST data.
 
-**new-frame** (POST `/api/v1` with `action: "new-frame"`) accepts client-supplied frame image data (base64) and writes it to S3 and DynamoDB for a future “create your own timelapse” flow. The VM does not serve this; Lambda handles it for consistency.
+## HTML: flask_app
+
+HTML pages and templates are served by `src/app/flask_app.py`. Routes render
+Jinja templates with values from `apikey.page_dict()`, including browser globals
+such as `API_BASE`, `LAMBDA_API_BASE`, `api_key`, `user_id`, and `demo_mode`.
+
+## Metadata: flask_api
+
+Movie, user, course, and audit metadata endpoints live in `src/app/flask_api.py`
+and use `src/app/odb.py` / `src/app/odb_movie_data.py` for persistence.
+
+Examples:
+
+- `POST /api/new-movie`
+- `POST /api/get-movie-metadata`
+- `POST /api/put-frame-trackpoints`
+- `POST /api/rotate-movie`
+- `POST /api/set-metadata`
+- `POST /api/list-movies`
+
+Lambda writes DynamoDB metadata only as part of video processing or tracking,
+for example setting `status`, `total_frames`, `movie_zipfile_urn`, and
+`movie_traced_urn` after tracing.
+
+## Storage Boundary
+
+- S3 stores original movies, traced movies, and ZIP/JPEG artifacts.
+- DynamoDB stores users, courses, API keys, movie metadata, frame trackpoints,
+  and audit logs.
+- The S3 bucket is pre-existing and outlives the CloudFormation stack.
+- Research and attribution metadata must also be embedded in the MP4 so the S3
+  archive remains self-describing if DynamoDB is rebuilt.
 
 ## References
 
-- **Client → Lambda:** [ClientLambdaAPI.md](ClientLambdaAPI.md)
-- **Processing flow:** [ProcessingPhases.rst](ProcessingPhases.rst)
-- **Movie metadata and first frame:** [movie_player.rst](movie_player.rst)
+- [Client Lambda API](ClientLambdaAPI.md)
+- [Flask API Reference](FlaskAPI.md)
+- [DynamoDB](DynamoDB.rst)
+- [S3](S3.rst)
+- [Movie Metadata](MOVIE_METADATA.rst)
