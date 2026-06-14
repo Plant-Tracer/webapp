@@ -1,12 +1,17 @@
-Deploying to EC2
+Deploying To EC2
 ================
 
-AWS console
+EC2 deployment is not the primary documented release path. Prefer the current
+AWS SAM/Makefile deployment flow in the root ``Makefile`` and
+``template.yaml``.
 
-ssh to server with private key
+If an EC2 developer VM is needed, see :doc:`DevSetupAmazonLinuxEC2`.
 
-~/bin/ssh-aws-2
+Operational notes:
 
-~/.ssh/id_ed255*_2
-
-ls -l /etc/httpd/conf.d/
+* Do not store private keys, instance IDs, public IPs, or one-off hostnames in
+  this repository.
+* Keep DNS, TLS certificates, and Route 53 changes in the deployment runbook or
+  issue/PR that performs the deployment.
+* Validate the application with ``make check`` before deploying code from an EC2
+  checkout.

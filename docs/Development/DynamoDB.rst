@@ -186,11 +186,10 @@ the two key attributes: ``course_id`` (partition key) and ``user_id`` (sort key)
 Querying ``course_users`` by ``course_id`` returns all enrolled user IDs efficiently — this is used
 by ``course_enrollments(course_id)`` in ``odb.py``.
 
-.. note::
-
-   ``delete_user()`` does not currently remove ``course_users`` rows for the deleted user,
-   which can leave stale enrollment records. ``list_users_courses()`` handles this defensively
-   by catching ``InvalidUser_Id`` and logging a warning. See issue #968 for the planned fix.
+``delete_user()`` removes the user's ``course_users`` rows for every course
+listed on the user record. ``list_users_courses()`` still handles unknown
+``course_users`` rows defensively because old or manually edited tables may
+contain stale enrollment records.
 
 
 movies
@@ -225,8 +224,8 @@ Data Consistency Notes
 * **Course admin list** (``admins_for_course`` on the course record) is kept in sync with
   ``admin_for_courses`` on the user record by ``add_course_admin()`` and
   ``remove_course_admin()``.
-* **Enrollment** (``course_users`` rows) is added by ``register_email()`` but is *not* removed
-  by ``delete_user()``. See issue #968.
+* **Enrollment** (``course_users`` rows) is added by ``register_email()`` and
+  removed by ``delete_user()`` for the courses listed on the user record.
 * **Login times** (``first_used_at``, ``last_used_at``) live on ``api_keys``, not ``users``.
   ``list_users_courses()`` aggregates them per user via the ``user_id_idx`` GSI.
 
