@@ -1,92 +1,85 @@
 Installation
 ============
 
-Requirements and Preparation
-----------------------------
-* Ensure that python3.11 installed. Verify that typing 'python' gives you python3.11. If it doesn't, make sure that your PATH is up-to-date.
+This page covers a local or VM checkout. AWS deployment details live in the SAM
+targets in the root Makefile and related deployment docs.
 
-  - Python is installed automatically using brew on MacOS if not present, using the steps in this document.
+Repository Checkout
+-------------------
 
-Installation
-------------
+.. code-block:: bash
 
-#. Log into the user on the web provider and move the hosting directory into a different directory; we will be replacing it. In this case our directory is `demo.plantracer.com`::
+   git clone https://github.com/Plant-Tracer/webapp.git webapp
+   cd webapp
 
-    $ mv demo.planttracer.com demo-old
+Install Dependencies
+--------------------
 
-#. Clone the planttracer web app into the hosting directory, for example demo.planttracer.com::
+Use the Makefile target for your platform:
 
-    $ git clone --recurse-submodules https://github.com/Plant-Tracer/webapp.git demo.planttracer.com
+.. code-block:: bash
 
-#. Change to the local repository directory::
+   make install-ubuntu
+   make install-macos
 
-    $ cd demo.planttracer.com
+The Makefile installs Python dependencies with Poetry into ``.venv`` and runs
+``npm ci`` for JavaScript dependencies.
 
-#. Make Python Virtual Environment (venv)::
+Local Application
+-----------------
 
-   $ make venv
+.. code-block:: bash
 
-#. Activate the venv::
+   make start-local-services
+   make make-local-demo
+   make run-local-debug
 
-   $ . venv/bin/activate
+Flask runs on ``http://localhost:8080``. lambda-resize runs locally on
+``http://127.0.0.1:9811`` when started by ``make run-local-lambda-debug`` or by
+``make run-local-debug`` on macOS.
 
-#. Install the prerequisites with make install-<your-os>, e.g.::
+Non-Demo Course
+---------------
 
-    $ make install-ubuntu
+Create a course with ``dbutil``:
 
-#. Copy etc/credential_template.ini to etc/credentials.ini and fill in the fields for ``[client]``, ``[dbreader]`` and ``[`dbwriter]``.
+.. code-block:: bash
 
-   * Do not add any other .ini files to the repo. etc/credentials.ini is blocked by the .gitignore file, but it can be overridden.
+   AWS_REGION=local poetry run python src/dbutil.py create-course \
+     --course_name "My Course Name" \
+     --course_id "Plant101" \
+     --admin_email your_admin_email@example.com \
+     --admin_name "Your Name"
 
-#. Create DynamoDB tables with a `demo-` prefix for demos and testing::
+``dbutil`` prints the generated course key. Give that key to students so they
+can register.
 
-   $ make make-local-demo
+Mailer Configuration
+--------------------
 
-#. Run the self-tests::
+Local development uses Mailpit through ``SMTPCONFIG_JSON`` set by the Makefile.
+For a real mailer, provide one of:
 
-   $ PLANTTRACER_CREDENTIALS=etc/credentials.ini make pytest-quiet
+* ``PLANTTRACER_CREDENTIALS`` pointing at an INI file with ``[smtp]``.
+* ``SMTPCONFIG_JSON`` with SMTP settings.
+* ``SMTPCONFIG_ARN`` pointing at an AWS Secrets Manager secret.
 
-#. Create your first course! If you want, give it a demo account too:
+Example INI section:
 
-   .. code-block::
+.. code-block:: ini
 
-    $ PLANTTRACER_CREDENTIALS=etc/credentials.ini poetry run python src/dbutil.py create-course --course_name "My Course Name" --course_id "Plant101" --admin_email your_admin_email@company.com --admin_name "Your Name"
-    course_key: leact-skio-proih
+   [smtp]
+   SMTP_USERNAME=plantadmin@example.com
+   SMTP_PASSWORD=secret
+   SMTP_PORT=587
+   SMTP_HOST=smtp.example.com
 
-#. You now have a course key!
+Validation
+----------
 
-#. In order run a non-demo instance, a mailer must be configured in the credentials ini file, for example:
+.. code-block:: bash
 
-   .. code-block::
-
-    [smtp]
-    SMTP_USERNAME=plantadmin@mycompany.com
-    SMTP_PASSWORD=MyPassword
-    SMTP_PORT=587
-    SMTP_HOST=smtp.mycompany.com
-
-    [imap]
-    IMAP_USERNAME=plantadmin@mycompany.com
-    IMAP_PASSWORD=MyPassword
-    IMAP_HOST=imap.mycompany.com
-    IMAP_PORT=993
-
-Push to Lambda
---------------
-
-.. code-block::
-
-    cd gits/webapp
-    source venv/bin/activate
-    zappa status dev
-    make update-dev
-
-
-* If this is the first time the zappa function was published, update the DNS to point to the new API Gateway URL.
-
-  For example, this `zappa status dev` shows that dev.planttracer.com should be a CNAME for uga7dh2bxj.execute-api.us-east-1.amazonaws.com.
-
-.. code-block::
-
-	API Gateway URL:      https://uga7dh2bxj.execute-api.us-east-1.amazonaws.com/dev
-	Domain URL:           https://dev.planttracer.com
+   make lint
+   make pytest
+   make jscoverage
+   make check
