@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Release Process &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Gallery Of Plant Videos" href="gallery.html" />
+    <link rel="prev" title="Technical Debt Review" href="TechDebt.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="release-process">
+<h1>Release Process<a class="headerlink" href="#release-process" title="Link to this heading">¶</a></h1>
+<p>This page documents the end-to-end process for creating a Plant Tracer release. The process is designed to be carried out with coding-agent assistance. All steps assume you are working in the <code class="docutils literal notranslate"><span class="pre">webapp</span></code> repository root and are authenticated with <code class="docutils literal notranslate"><span class="pre">gh</span></code>.</p>
+<p>See <a class="reference external" href="https://github.com/Plant-Tracer/webapp/issues/992">Issue #992</a> for known gaps and open questions in this process.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Merge all feature PRs for the release</p></li>
+<li><p>Bump the version number (PR)</p></li>
+<li><p>Prepare the GitHub milestone</p></li>
+<li><p>Tag the release</p></li>
+<li><p>Generate release notes and create the GitHub release</p></li>
+</ol>
+</section>
+<section id="step-1-merge-feature-prs">
+<h2>Step 1 — Merge Feature PRs<a class="headerlink" href="#step-1-merge-feature-prs" title="Link to this heading">¶</a></h2>
+<p>Ensure all Issues and PRs intended for this release are merged to <code class="docutils literal notranslate"><span class="pre">main</span></code> and CI is green (<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">check</span></code>).</p>
+</section>
+<section id="step-2-bump-the-version-number">
+<h2>Step 2 — Bump the Version Number<a class="headerlink" href="#step-2-bump-the-version-number" title="Link to this heading">¶</a></h2>
+<p>The version number <strong>must</strong> be updated via a normal feature branch + PR and merged to <code class="docutils literal notranslate"><span class="pre">main</span></code> before the tag is created (Step 4). Do not skip this step — two releases shipped with a stale version number because it was omitted.</p>
+<p>Update exactly <strong>two files</strong> (do not update <code class="docutils literal notranslate"><span class="pre">lambda-resize</span></code>; its version is generated automatically):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> — <code class="docutils literal notranslate"><span class="pre">version</span> <span class="pre">=</span> <span class="pre">&quot;X.Y.Z&quot;</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">src/app/constants.py</span></code> — <code class="docutils literal notranslate"><span class="pre">__version__</span> <span class="pre">=</span> <span class="pre">'X.Y.Z'</span></code></p></li>
+</ul>
+<p>Create an Issue for the bump, branch off <code class="docutils literal notranslate"><span class="pre">main</span></code>, commit the changes referencing the issue, open a PR, and merge it before proceeding to Step 4.</p>
+</section>
+<section id="step-3-prepare-the-github-milestone">
+<h2>Step 3 — Prepare the GitHub Milestone<a class="headerlink" href="#step-3-prepare-the-github-milestone" title="Link to this heading">¶</a></h2>
+<p>Create a milestone named <code class="docutils literal notranslate"><span class="pre">Version-X.Y.Z</span></code> and populate it with all Issues and PRs closed since the previous release tag.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">gh</span></code> has no <code class="docutils literal notranslate"><span class="pre">milestone</span></code> subcommand; use <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">api</span></code> directly.</p>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Create the milestone; note the &quot;number&quot; in the response</span>
+gh<span class="w"> </span>api<span class="w"> </span>repos/Plant-Tracer/webapp/milestones<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--method<span class="w"> </span>POST<span class="w"> </span>-f<span class="w"> </span><span class="nv">title</span><span class="o">=</span><span class="s2">&quot;Version-X.Y.Z&quot;</span>
+
+<span class="c1"># 2. Get the previous tag&#39;s commit timestamp</span>
+<span class="nv">sha</span><span class="o">=</span><span class="k">$(</span>gh<span class="w"> </span>api<span class="w"> </span>repos/Plant-Tracer/webapp/git/refs/tags/ver-X.Y.Z-prev<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>--jq<span class="w"> </span><span class="s1">&#39;.object.sha&#39;</span><span class="k">)</span>
+gh<span class="w"> </span>api<span class="w"> </span>repos/Plant-Tracer/webapp/git/commits/<span class="nv">$sha</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.committer.date&#39;</span>
+
+<span class="c1"># 3. Find all issues/PRs closed strictly after that timestamp</span>
+gh<span class="w"> </span>api<span class="w"> </span><span class="s2">&quot;repos/Plant-Tracer/webapp/issues?state=closed&amp;since=&lt;timestamp&gt;&amp;per_page=100&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.[] | {number: .number, title: .title, closed_at: .closed_at, milestone: .milestone.title}&#39;</span>
+</pre></div>
+</div>
+<p>Filter the results by <code class="docutils literal notranslate"><span class="pre">closed_at</span></code> &gt; tag timestamp. <strong>Exclude</strong> the version-bump PR for the <em>previous</em> release (it closes at essentially the same instant as the previous tag).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 4. Assign all qualifying items to the new milestone</span>
+<span class="c1">#    (this automatically removes them from any previous milestone)</span>
+<span class="k">for</span><span class="w"> </span>num<span class="w"> </span><span class="k">in</span><span class="w"> </span>&lt;numbers&gt;<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>gh<span class="w"> </span>api<span class="w"> </span>repos/Plant-Tracer/webapp/issues/<span class="nv">$num</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>PATCH<span class="w"> </span>-f<span class="w"> </span><span class="nv">milestone</span><span class="o">=</span>&lt;milestone-number&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.number&#39;</span>
+<span class="k">done</span>
+
+<span class="c1"># 5. Verify</span>
+gh<span class="w"> </span>api<span class="w"> </span>repos/Plant-Tracer/webapp/milestones<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--jq<span class="w"> </span><span class="s1">&#39;.[] | {title: .title, open: .open_issues, closed: .closed_issues}&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="step-4-tag-the-release">
+<h2>Step 4 — Tag the Release<a class="headerlink" href="#step-4-tag-the-release" title="Link to this heading">¶</a></h2>
+<p>Version tagging is done directly on <code class="docutils literal notranslate"><span class="pre">main</span></code> (not via a PR).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Create a tracking Issue and add it to the milestone</span>
+gh<span class="w"> </span>issue<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--title<span class="w"> </span><span class="s2">&quot;Tag main branch as ver-X.Y.Z&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--body<span class="w"> </span><span class="s2">&quot;All PRs for Version-X.Y.Z merged. Tag main with \`ver-X.Y.Z\`.&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--milestone<span class="w"> </span><span class="s2">&quot;Version-X.Y.Z&quot;</span>
+
+<span class="c1"># 2. Switch to main and pull (version bump PR must already be merged)</span>
+git<span class="w"> </span>checkout<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull
+
+<span class="c1"># 3. Create an annotated tag on the already-bumped main (always use -a)</span>
+git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>ver-X.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;refs #&lt;issue-number&gt;: tag main as ver-X.Y.Z&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>ver-X.Y.Z
+
+<span class="c1"># 4. Close the tracking Issue</span>
+gh<span class="w"> </span>issue<span class="w"> </span>close<span class="w"> </span>&lt;issue-number&gt;<span class="w"> </span>--comment<span class="w"> </span><span class="s2">&quot;Tagged main as \`ver-X.Y.Z\`.&quot;</span>
+</pre></div>
+</div>
+<p>Tag names follow the pattern <code class="docutils literal notranslate"><span class="pre">ver-X.Y.Z</span></code>.</p>
+</section>
+<section id="step-5-generate-release-notes-and-create-the-release">
+<h2>Step 5 — Generate Release Notes and Create the Release<a class="headerlink" href="#step-5-generate-release-notes-and-create-the-release" title="Link to this heading">¶</a></h2>
+<p>Release notes are a single flat list of Issues and any PRs whose work is not fully captured by referenced Issues.</p>
+<p><strong>Generating the list:</strong></p>
+<ol class="arabic simple">
+<li><p>Fetch all closed items in the milestone via <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">api</span></code>.</p></li>
+<li><p><strong>Include all Issues</strong> in the milestone.</p></li>
+<li><p>For each <strong>PR</strong> in the milestone:</p>
+<ul class="simple">
+<li><p>Parse the PR body and title for issue references (<code class="docutils literal notranslate"><span class="pre">fixes</span> <span class="pre">#N</span></code>, <code class="docutils literal notranslate"><span class="pre">closes</span> <span class="pre">#N</span></code>, <code class="docutils literal notranslate"><span class="pre">resolves</span> <span class="pre">#N</span></code>, <code class="docutils literal notranslate"><span class="pre">refs</span> <span class="pre">#N</span></code>, bare <code class="docutils literal notranslate"><span class="pre">#N</span></code>, etc.).</p></li>
+<li><p><strong>No issue references</strong> → include the PR (standalone work).</p></li>
+<li><p><strong>Has issue references</strong> → read the PR body against the referenced issues’ bodies/titles. If the PR describes changes not covered by any referenced issue, include it (or flag for human review if uncertain). If fully covered, omit it.</p></li>
+</ul>
+</li>
+<li><p>Present the draft list for approval before creating the release.</p></li>
+</ol>
+<p><strong>Format:</strong></p>
+<p>Each line should be a Markdown link:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="p">[</span><span class="c1">#930](https://github.com/Plant-Tracer/webapp/issues/930) Documentation: Update UserTutorial to current prod functionality</span>
+</pre></div>
+</div>
+<p>Add a short descriptive summary sentence at the top (not part of the list), followed by a blank line.</p>
+<p><strong>Creating the release:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>gh<span class="w"> </span>release<span class="w"> </span>create<span class="w"> </span>ver-X.Y.Z<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--title<span class="w"> </span><span class="s2">&quot;&lt;Month-DD-YYYY&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--notes<span class="w"> </span><span class="s2">&quot;&lt;notes&gt;&quot;</span>
+</pre></div>
+</div>
+<p><strong>Release title rules:</strong></p>
+<ul class="simple">
+<li><p>Format: <code class="docutils literal notranslate"><span class="pre">Month-DD-YYYY</span></code> (e.g., <code class="docutils literal notranslate"><span class="pre">May-16-2026</span></code>)</p></li>
+<li><p>Titles must be unique. If more than one release is made on the same day, append a count starting at <code class="docutils literal notranslate"><span class="pre">-2</span></code> (e.g., <code class="docutils literal notranslate"><span class="pre">May-16-2026-2</span></code>).</p></li>
+<li><p>Check existing titles before creating: <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">release</span> <span class="pre">list</span> <span class="pre">--repo</span> <span class="pre">Plant-Tracer/webapp</span></code></p></li>
+</ul>
+</section>
+<section id="known-gaps">
+<h2>Known Gaps<a class="headerlink" href="#known-gaps" title="Link to this heading">¶</a></h2>
+<p>See <a class="reference external" href="https://github.com/Plant-Tracer/webapp/issues/992">Issue #992</a> for the current list of known gaps in this process, including:</p>
+<ul class="simple">
+<li><p>Ensuring the version bump is never forgotten</p></li>
+<li><p>Updating <code class="docutils literal notranslate"><span class="pre">ReleaseHistory.rst</span></code> as part of each release</p></li>
+<li><p>Confirming CI is green before tagging</p></li>
+<li><p>Handling PRs that arrive after milestone prep</p></li>
+<li><p>Potential for scripting the release notes generation</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="TechDebt.html" title="previous chapter">Technical Debt Review</a></li>
+      <li>Next: <a href="gallery.html" title="next chapter">Gallery Of Plant Videos</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/ReleaseProcess.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

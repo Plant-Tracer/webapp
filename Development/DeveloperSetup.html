@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Developer Setup &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Developer Setup On Amazon Linux 2023 EC2" href="DevSetupAmazonLinuxEC2.html" />
+    <link rel="prev" title="Developer Documentation" href="index.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="developer-setup">
+<h1>Developer Setup<a class="headerlink" href="#developer-setup" title="Link to this heading">¶</a></h1>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Python 3.12</p></li>
+<li><p>Poetry</p></li>
+<li><p>Node.js and npm</p></li>
+<li><p>Java runtime for DynamoDB Local</p></li>
+<li><p>Git and GitHub CLI (<code class="docutils literal notranslate"><span class="pre">gh</span></code>)</p></li>
+<li><p>Chrome or Chromium for browser tests</p></li>
+<li><p>Make</p></li>
+</ul>
+<p>Use the platform-specific setup pages for OS package details:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="DeveloperSetup_Mac.html"><span class="doc">Developer Setup Mac</span></a></p></li>
+<li><p><a class="reference internal" href="DevSetupUbuntu.html"><span class="doc">Setting Up Plant Tracer On Ubuntu 24.04</span></a></p></li>
+<li><p><a class="reference internal" href="WindowsDevSetup.html"><span class="doc">Windows Developer Setup Notes</span></a></p></li>
+</ul>
+</section>
+<section id="clone-and-install">
+<h2>Clone And Install<a class="headerlink" href="#clone-and-install" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Plant-Tracer/webapp.git<span class="w"> </span>webapp
+<span class="nb">cd</span><span class="w"> </span>webapp
+make<span class="w"> </span>install-macos<span class="w">      </span><span class="c1"># macOS</span>
+make<span class="w"> </span>install-ubuntu<span class="w">     </span><span class="c1"># Ubuntu</span>
+</pre></div>
+</div>
+<p>The Makefile creates an in-project Poetry environment at <code class="docutils literal notranslate"><span class="pre">.venv</span></code>.</p>
+</section>
+<section id="local-services">
+<h2>Local Services<a class="headerlink" href="#local-services" title="Link to this heading">¶</a></h2>
+<p>Start all local services:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>start-local-services
+</pre></div>
+</div>
+<p>This starts:</p>
+<ul class="simple">
+<li><p>DynamoDB Local on <code class="docutils literal notranslate"><span class="pre">http://localhost:8000/</span></code></p></li>
+<li><p>MinIO on <code class="docutils literal notranslate"><span class="pre">http://localhost:9000/</span></code></p></li>
+<li><p>Mailpit on <code class="docutils literal notranslate"><span class="pre">http://localhost:8025/</span></code> for the web UI and port <code class="docutils literal notranslate"><span class="pre">1025</span></code> for SMTP</p></li>
+</ul>
+<p>Seed local data:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>make-local-demo
+</pre></div>
+</div>
+</section>
+<section id="run-locally">
+<h2>Run Locally<a class="headerlink" href="#run-locally" title="Link to this heading">¶</a></h2>
+<p>Normal local development uses two processes:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>run-local-lambda-debug
+make<span class="w"> </span>run-local-debug
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">run-local-debug</span></code> starts Flask on <code class="docutils literal notranslate"><span class="pre">http://localhost:8080</span></code> in non-demo mode
+and prints a local admin login link. On macOS it also attempts to open the
+local Lambda debug process automatically.</p>
+<p>Demo mode:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>run-local-demo-debug
+</pre></div>
+</div>
+</section>
+<section id="validation">
+<h2>Validation<a class="headerlink" href="#validation" title="Link to this heading">¶</a></h2>
+<p>Use the Makefile entry points:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>lint
+make<span class="w"> </span>pytest
+make<span class="w"> </span>jscoverage
+make<span class="w"> </span>check
+</pre></div>
+</div>
+<p>Do not bypass the Makefile for normal testing. The Makefile sets the local AWS,
+DynamoDB, MinIO, Mailpit, and Python path environment needed by tests.</p>
+</section>
+<section id="create-a-course">
+<h2>Create A Course<a class="headerlink" href="#create-a-course" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">AWS_REGION</span><span class="o">=</span><span class="nb">local</span><span class="w"> </span>poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>src/dbutil.py<span class="w"> </span>create-course<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--course_name<span class="w"> </span><span class="s2">&quot;Test Course&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--course_id<span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--admin_email<span class="w"> </span>admin@example.com<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--admin_name<span class="w"> </span><span class="s2">&quot;Admin User&quot;</span>
+</pre></div>
+</div>
+<p>For most local development, prefer <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">make-local-demo</span></code> and the login link
+printed by <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run-local-debug</span></code>.</p>
+</section>
+<section id="cleanup">
+<h2>Cleanup<a class="headerlink" href="#cleanup" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>stop-local-services
+make<span class="w"> </span>delete-local
+make<span class="w"> </span>wipe-local
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">delete-local</span></code> stops services and removes local artifacts. <code class="docutils literal notranslate"><span class="pre">wipe-local</span></code>
+removes local artifacts, restarts services, and recreates the local bucket.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Developer Documentation</a></li>
+      <li>Next: <a href="DevSetupAmazonLinuxEC2.html" title="next chapter">Developer Setup On Amazon Linux 2023 EC2</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/DeveloperSetup.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
