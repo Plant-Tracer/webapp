@@ -10,11 +10,18 @@ For the Lambda (frame/video processing) endpoints, see [ClientLambdaAPI.md](Clie
 
 ## Authentication
 
-All endpoints (except `/api/ver` and `/api/config-check`) require an `api_key` parameter.
-Pass it as a POST body field or a query-string parameter.
+Most endpoints require an `api_key` parameter. Pass it as a POST body field or
+a query-string parameter.
 
-- Valid key → request proceeds, user identity resolved from the key.
-- Invalid or missing key → `{"error": true, "message": "InvalidAPI_Key"}` with HTTP 200.
+Unauthenticated endpoints:
+
+- `GET|POST /api/ver`
+- `GET|POST /api/config-check`
+- `GET|POST /api/register`
+- `GET|POST /api/resend-link`
+
+- Valid key -> request proceeds, user identity resolved from the key.
+- Invalid or missing key on authenticated API routes -> `{"error": true, "message": "Invalid api_key"}` with HTTP 403.
 
 API keys are issued per-user and stored in the `api_keys` DynamoDB table. A user may hold
 multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie after first login.
@@ -23,8 +30,11 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 
 ## Response Envelope
 
-All endpoints return JSON. Successful responses always include `"error": false`. Error
-responses always include `"error": true` and a `"message"` string explaining the problem.
+Most endpoints return JSON with `"error": false` on success or `"error": true`
+plus `"message"` on failure. Exceptions:
+
+- `/api/ver` returns `{"__version__": "...", "sys_version": "..."}`.
+- `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
 { "error": false, ... }
@@ -167,8 +177,9 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 #### `POST /api/new-movie`
 
-Create a movie record and obtain a presigned S3 POST URL for uploading the video file.
-After uploading to S3, call the Lambda `start-processing` endpoint.
+Create a movie record and obtain a presigned S3 POST URL for uploading the
+video file directly to its final S3 key. After upload, the browser requests the
+first frame from lambda-resize and links the user to Analyze.
 
 **Parameters**
 
@@ -347,9 +358,9 @@ Set a single metadata property on a movie or user record.
 | Name | Required | Description |
 |------|----------|-------------|
 | `api_key` | Yes | |
-| `set_movie_id` | Cond. | Movie to update (provide this or `user_id`) |
-| `user_id` | Cond. | User to update (provide this or `set_movie_id`) |
-| `prop` | Yes | Property name to set |
+| `set_movie_id` | Cond. | Movie to update (provide this or `set_user_id`) |
+| `set_user_id` | Cond. | User to update (provide this or `set_movie_id`) |
+| `property` | Yes | Property name to set |
 | `value` | Yes | New value |
 
 ---
@@ -357,10 +368,10 @@ Set a single metadata property on a movie or user record.
 ### Logging
 
 #### `POST /api/get-logs`
-#### `POST /api/get-log`
 
-Return audit log entries. At least one filter is required (`log_user_id`, `course_id`, or `ipaddr`);
-if none is provided, defaults to the caller's own logs.
+Return audit log entries. At least one index filter is required by the database
+layer (`log_user_id`, `course_id`, or `ipaddr`). If the request provides none,
+the API defaults to the caller's own `log_user_id`.
 
 **Parameters** (all optional filters)
 
@@ -373,23 +384,29 @@ if none is provided, defaults to the caller's own logs.
 { "error": false, "logs": [ { "log_id": "...", "time_t": 1714000000, ... } ] }
 ```
 
+#### `POST /api/get-log`
+
+Legacy route that calls `odb.get_logs(user_id=get_user_id())` with no request
+filters. Because the database function requires an index filter, prefer
+`/api/get-logs`.
+
 ---
 
 ### Infrastructure
 
-#### `GET /api/ver`
+#### `GET|POST /api/ver`
 
 Return the application version. No authentication required.
 
 **Response**
 
 ```text
-{ "error": false, "version": "0.9.7", ... }
+{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ..." }
 ```
 
 ---
 
-#### `GET /api/config-check`
+#### `GET|POST /api/config-check`
 
 Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No authentication required.
 

@@ -5,6 +5,23 @@ We **always deploy to an existing S3 bucket**; the bucket is not created by the 
 
 The Lambda that processes uploads is invoked via its HTTP API; we no longer rely on S3 → Lambda bucket notifications or a special ``uploads/`` prefix. The bucket name is provided to both the VM and the Lambda via environment variables, and both read/write objects under ``course_id/movie_id/...`` keys.
 
+Object Layout
+-------------
+
+Objects use predictable course/movie keys:
+
+* original movie: ``course_id/movie_id.mov``
+* per-frame JPEGs: ``course_id/movie_id/frame_number.jpg`` when written
+* traced movie and ZIP artifacts: derived from the movie URN during
+  lambda-resize tracking
+
+The browser uploads original movies directly to the final key through a
+presigned POST returned by ``/api/new-movie``.
+
 Local Development and GitHub Actions
 ------------------------------------
-For local development (and for running in GitHub Actions) the local S3 simulator minio is used. According to (this stackoverflow posting)[https://stackoverflow.com/questions/23991694/aws-s3-local-server-for-integration-testing], minio provides local persistance with the open source version, unlike localstack.
+
+For local development and GitHub Actions, the local S3 simulator MinIO is used.
+The Makefile starts it on ``http://localhost:9000/`` and creates the
+``planttracer-local`` bucket with ``make make-local-bucket``. MinIO provides
+local persistence for integration tests without using real AWS S3.
