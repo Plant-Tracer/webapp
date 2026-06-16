@@ -23,16 +23,6 @@ Never commit or push directly to the `main` branch. All changes must go through 
 
 Every commit message must reference a GitHub Issue number (e.g. `fixes #123` or `refs #123`). If no Issue exists for the current change, generate a proposed Issue title and description, ask the user to confirm or edit it, and only create the Issue (via `gh issue create`) after receiving approval.
 
-All commits must be GPG-signed with the repository signing key
-matching the user who is running CODEX. Use `git commit -S` and do not
-substitute a different signing key unless the user explicitly requests
-it.
-
-Human | Codex GPG Key
-|-----|-------------|
-| @simsong | 00neumann-kjbp-superJumbo.webp |
-
-
 ## Common Commands
 
 ```bash
