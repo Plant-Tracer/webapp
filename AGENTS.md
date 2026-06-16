@@ -72,7 +72,7 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 `$` is jQuery. Browser pages load jQuery globally, and ES modules import `$` from `utils.js`, which re-exports the global jQuery instance.
 
 ### Data Storage
-- **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/MOVIE_METADATA.rst`).
+- **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/Development/MOVIE_METADATA.rst`).
 - **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `src/dbutil.py` (`--createdb`, `--makelink`, etc.).
 - Lambda is invoked via its HTTP API, **not** via S3 bucket notifications.
 
