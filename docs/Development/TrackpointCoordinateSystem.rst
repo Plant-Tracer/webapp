@@ -60,37 +60,66 @@ that movie:
 
 .. code-block:: python
 
-   trackpoint_origin: Literal["top-left", "bottom-left"] = "top-left"
+   trackpoint_origin: Literal["bottom-left"] | None = None
 
 Rules:
 
-* Missing ``trackpoint_origin`` means legacy ``"top-left"`` storage.
-* New movies are created with ``trackpoint_origin = "bottom-left"``.
+* Missing or ``None`` ``trackpoint_origin`` means legacy ``"top-left"``
+  storage. The implementation must not write ``"top-left"`` to new movie rows.
+* ``trackpoint_origin = "bottom-left"`` means all stored frame trackpoints for
+  that movie use the lower-left-origin contract.
+* New movies are created with ``trackpoint_origin = "bottom-left"`` in
+  ``odb.create_new_movie()``. ``POST /api/new-movie`` calls this function before
+  returning the presigned upload form, and local tooling that creates movies
+  should use the same function.
 * A movie must not contain mixed-origin frame trackpoints.
 * Once a movie's stored frame trackpoints are converted, the movie row is updated
   to ``trackpoint_origin = "bottom-left"``.
 * Future trackpoint writes for a ``"bottom-left"`` movie store lower-left-origin
   values directly.
 
-The field belongs on the movie row, not on each frame or trackpoint. Per-frame
-or per-trackpoint origin would create mixed-origin data and unnecessary DynamoDB
-payload growth.
+``schema.Movie`` does not currently contain this field. The implementation must
+add the field to the Pydantic model and define a named string constant for the
+DynamoDB attribute instead of hard-coding the attribute name at each use.
+
+The permanent coordinate contract belongs on the movie row, not on each frame or
+trackpoint. Temporary per-frame migration markers are allowed only as internal
+rollback/retry machinery during lazy migration; they must not become the public
+coordinate contract.
 
 Legacy Migration
 ----------------
 
 Existing movies without ``trackpoint_origin`` contain top-left-origin
-trackpoints. The implementation must choose one of these migration paths before
-allowing new bottom-left writes to those movies:
+trackpoints. The selected migration strategy is server-side lazy migration of a
+complete movie before the first operation that exposes or writes trackpoints
+under the new contract.
 
-* Run a one-time DynamoDB migration that converts every stored trackpoint using
-  the analysis-frame height and then sets ``trackpoint_origin`` to
-  ``"bottom-left"``.
-* Lazily migrate a complete movie before its first edit, retrace, or CSV export
-  under the new coordinate contract.
+The lazy migration trigger points are:
+
+* ``POST /api/get-movie-metadata`` when the request returns frame markers.
+* ``POST /api/get-movie-trackpoints`` before CSV or JSON export.
+* ``POST /api/put-frame-trackpoints`` before accepting edited markers.
+* Lambda retracing before reading existing seed trackpoints for optical flow.
 
 Partial migration is not allowed. Saving one edited frame as bottom-left while
 other frames remain top-left would corrupt the movie's trackpoint sequence.
+Because a movie can have more frame records than DynamoDB can update in one
+transaction, lazy migration must not be a naive in-place batch rewrite.
+
+Migration must be resumable or fail closed:
+
+* Determine the analysis-frame height before any write. If it cannot be
+  determined, return an error and leave the movie unchanged.
+* Serialize migration for a single movie, for example with a conditional
+  movie-row migration state or lock.
+* Convert frames using an idempotent progress marker or equivalent backup plan
+  so a retry never double-flips frames already converted by a failed attempt.
+* Set ``trackpoint_origin = "bottom-left"`` only after every frame with
+  trackpoints has been converted and verified.
+* While a movie is in an incomplete migration state, editing, retracing, and
+  exporting trackpoints must wait, retry, or return an error rather than expose
+  mixed-origin data.
 
 Browser Responsibilities
 ------------------------
@@ -100,7 +129,8 @@ trackpoints and canvas objects.
 
 When loading frame markers:
 
-* Read ``metadata.trackpoint_origin``.
+* Read ``metadata.trackpoint_origin`` from the ``metadata`` object returned by
+  ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
 * For legacy ``"top-left"`` movies that have not yet been migrated, use stored
@@ -129,15 +159,24 @@ Flask API Responsibilities
 --------------------------
 
 ``POST /api/put-frame-trackpoints`` receives trackpoint coordinates. For
-``"bottom-left"`` movies, Flask stores those values unchanged.
+legacy movies, Flask first runs the lazy migration. For ``"bottom-left"`` movies,
+Flask stores those values unchanged.
 
-``POST /api/get-movie-metadata`` returns frame marker coordinates in the movie's
-stored coordinate contract. For fully migrated movies this means bottom-left
-trackpoint coordinates.
+``POST /api/get-movie-metadata`` returns the movie-row
+``trackpoint_origin`` inside ``metadata.trackpoint_origin``. The endpoint already
+returns the dictionary from ``odb.get_movie_metadata()`` inside the ``metadata``
+response key, so the field is exposed once it exists on ``schema.Movie`` and is
+present in the movie row. The field is not in the current schema or response
+before this implementation.
 
-``POST /api/get-movie-trackpoints`` exports stored trackpoint values directly.
-For ``"bottom-left"`` movies, the CSV is therefore automatically lower-left
-origin without a separate CSV-only flip.
+When ``POST /api/get-movie-metadata`` returns frame marker coordinates, Flask
+first runs the lazy migration if ``metadata.trackpoint_origin`` is missing or
+``None``. Returned frame markers therefore use the movie's stored coordinate
+contract, which is bottom-left after migration.
+
+``POST /api/get-movie-trackpoints`` first runs the lazy migration and then
+exports stored trackpoint values directly. The CSV and JSON exports are
+therefore automatically lower-left origin without a separate export-only flip.
 
 Lambda Tracking Responsibilities
 --------------------------------
@@ -170,12 +209,18 @@ Substantive tests for the implementation should cover:
   drawing.
 * Graphing: Y deltas use bottom-left values and do not rely on reversed chart
   axes.
+* ODB creation: ``odb.create_new_movie()`` stores
+  ``trackpoint_origin = "bottom-left"`` for a new movie.
+* Flask metadata: ``POST /api/get-movie-metadata`` exposes the movie-row field
+  as ``metadata.trackpoint_origin``.
 * Flask CSV export: for a bottom-left movie, exported CSV values match stored
   trackpoints.
 * Lambda tracking: input bottom-left trackpoints are converted before optical
   flow and converted back before persistence.
 * Migration: a legacy top-left movie is converted completely and marked
   ``trackpoint_origin = "bottom-left"``.
+* Migration retry: a failed lazy migration cannot double-flip already converted
+  frames or expose a mixed-origin movie.
 
 Documentation Follow-up
 -----------------------
