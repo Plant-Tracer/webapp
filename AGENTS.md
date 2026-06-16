@@ -21,7 +21,10 @@ After editing any file under `docs/`, always build and verify: `poetry run sphin
 
 Never commit or push directly to the `main` branch. All changes must go through a feature branch and be merged via Pull Request. Only proceed with a direct commit to `main` if the user explicitly says to override this rule.
 
-Every commit message must reference a GitHub Issue number (e.g. `fixes #123` or `refs #123`). If no Issue exists for the current change, generate a proposed Issue title and description, ask the user to confirm or edit it, and only create the Issue (via `gh issue create`) after receiving approval.
+Every commit message should reference a GitHub Issue number (preferred) or PR number (e.g. `fixes #123`, `refs #123`, or `refs PR #456`).
+
+- **Automated commits** (Claude, Codex): always include a reference. If no relevant Issue or PR exists, ask the user — and commit without a reference only if the user explicitly approves.
+- **Human commits**: before merging a PR, inspect all commits for missing references. If any are found, leave a PR review comment flagging them for the reviewer before merge.
 
 ## Common Commands
 
