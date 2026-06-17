@@ -78,7 +78,8 @@ TEST_MOVIE_DATA = {
     'date_uploaded':int(time.time()),
     'fps':"29.92",
     'total_frames':10,
-    'total_bytes':100
+    'total_bytes':100,
+    odb.TRACKPOINT_ORIGIN: odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT,
 }
 
 TEST_MOVIE_FRAME_DATA = {
@@ -246,6 +247,7 @@ def test_clear_movie_tracking_after_frame(local_ddb):
         'fps': "29.92",
         'total_frames': 10,
         'total_bytes': 100,
+        odb.TRACKPOINT_ORIGIN: odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT,
     })
 
     for frame_number, label in enumerate(["frame0", "frame1", "frame2"]):

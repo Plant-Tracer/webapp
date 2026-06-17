@@ -184,8 +184,10 @@ def run_tracing(*, movie_id, frame_start):
                 movie_id, source_frame_number, tracking_frame_start, cleared_frames)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
-    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
     movie_record = get_movie_metadata(movie_id=movie_id)
+    frame_height = odb.trackpoint_frame_height(movie_record)
+    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
+    tracker_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
     research_comment = mp4_metadata_lib.build_comment(
         movie_record.get("research_use", 0) or 0,
         movie_record.get("credit_by_name", 0) or 0,
@@ -196,7 +198,7 @@ def run_tracing(*, movie_id, frame_start):
         raise RuntimeError("Cannot track movie with no trackpoints")
 
     LOGGER.info("run_tracking movie_id=%s source_frame=%s tracking_frame_start=%s input_trackpoints=%s",
-                movie_id, source_frame_number, tracking_frame_start, input_trackpoints)
+                movie_id, source_frame_number, tracking_frame_start, tracker_input_trackpoints)
 
     # Derive true movie dimensions from the file so shrink/rotate decisions are
     # based on the real stream size, not any analysis/display size that may have
@@ -215,16 +217,17 @@ def run_tracing(*, movie_id, frame_start):
             movie_traced_path = Path(tf.name)
 
         def tracker_callback(obj:tracker.TrackerCallbackArg):
-            LOGGER.info("tracker_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints))
+            LOGGER.info("tracker_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints or []))
             if obj.frame_trackpoints:
+                frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
-                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=obj.frame_trackpoints)
+                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
         rotation = movie_record.get(MOVIE_ROTATION,0) or 0
         trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(urn=movie_urn),
                                              frame_start = tracking_frame_start,
-                                             trackpoints = input_trackpoints,
+                                             trackpoints = tracker_input_trackpoints,
                                              movie_zipfile_path = movie_zipfile_path,
                                              movie_traced_path = movie_traced_path,
                                              rotation = rotation,

@@ -78,9 +78,8 @@ Rules:
 * Future trackpoint writes for a ``"bottom-left"`` movie store lower-left-origin
   values directly.
 
-``schema.Movie`` does not currently contain this field. The implementation must
-add the field to the Pydantic model and define a named string constant for the
-DynamoDB attribute instead of hard-coding the attribute name at each use.
+``schema.Movie`` contains this field, and ``odb.TRACKPOINT_ORIGIN`` is the named
+string constant for the DynamoDB attribute.
 
 The permanent coordinate contract belongs on the movie row, not on each frame or
 trackpoint. Temporary per-frame migration markers are allowed only as internal

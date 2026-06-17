@@ -77,11 +77,11 @@ class Localmail():
         logging.info("*************** LAUNCHED LOCALMAIL *************")
 
     def dump_mailbox(self):
-        logging.info("== BEGIN MAIL TRANSCRIPT ==")
+        logging.debug("== BEGIN MAIL TRANSCRIPT ==")
         with open( self.mailbox,"r") as f:
             for line in f:
-                logging.info(line.strip())
-        logging.info("== END MAIL TRANSCRIPT ==")
+                logging.debug(line.strip())
+        logging.debug("== END MAIL TRANSCRIPT ==")
 
     def clear_mailbox(self):
         with open( self.mailbox,"w") as f:

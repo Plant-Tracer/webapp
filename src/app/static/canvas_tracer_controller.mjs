@@ -25,6 +25,7 @@ const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
 const STATUS_POLL_MAX_ERRORS = 5;
 const TRACK_MOVIE_RETRY_DELAY_MS = 5000; // if track movie fails
+const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
 
 var cell_id_counter = 0;
 
@@ -212,6 +213,47 @@ class TracerController extends MovieController {
         this.track_button.prop(DISABLED,false);
     }
 
+    uses_bottom_left_trackpoints() {
+        return this.movie_metadata && this.movie_metadata.trackpoint_origin === TRACKPOINT_ORIGIN_BOTTOM_LEFT;
+    }
+
+    analysis_frame_height() {
+        const height = this.movie_metadata ? this.movie_metadata.height : null;
+        const fallbackHeight = this.naturalHeight || (this.c ? this.c.height : null);
+        const value = Number((height != null) ? height : fallbackHeight);
+        return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    trackpoint_to_canvas(trackpoint) {
+        const canvasPoint = {...trackpoint, x: Number(trackpoint.x), y: Number(trackpoint.y)};
+        const frameHeight = this.analysis_frame_height();
+        if (this.uses_bottom_left_trackpoints() && frameHeight != null) {
+            canvasPoint.y = frameHeight - canvasPoint.y;
+        }
+        return canvasPoint;
+    }
+
+    canvas_marker_to_trackpoint(marker) {
+        const frameHeight = this.analysis_frame_height();
+        const trackpoint = {x: Number(marker.x), y: Number(marker.y), label: marker.name || marker.label};
+        if (this.uses_bottom_left_trackpoints() && frameHeight != null) {
+            trackpoint.y = frameHeight - trackpoint.y;
+        }
+        return trackpoint;
+    }
+
+    format_coordinate(value) {
+        return String(Number(value));
+    }
+
+    format_trackpoint_location(trackpoint) {
+        return `(${this.format_coordinate(trackpoint.x)},${this.format_coordinate(trackpoint.y)})`;
+    }
+
+    marker_location(marker) {
+        return this.format_trackpoint_location(this.canvas_marker_to_trackpoint(marker));
+    }
+
     // TODO: refactor to eliminate redundancy this.graphdata.calc_scale()
     calculate_scale(markers) {
         let scale = 1, pos_units = "pixels";
@@ -246,15 +288,16 @@ class TracerController extends MovieController {
             const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
+                const trackpoint = this.canvas_marker_to_trackpoint(obj);
                 if (calculations.pos_units == 'mm') {
-                    obj.loc_mm = "("+ Math.round(obj.x * calculations.scale) + ", " + Math.round(obj.y * calculations.scale) + ")";
+                    obj.loc_mm = "("+ Math.round(trackpoint.x * calculations.scale) + ", " + Math.round(trackpoint.y * calculations.scale) + ")";
                 } else {
                     obj.loc_mm = "n/a";
                 }
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
-                    `<td id="${obj.table_cell_id}">${obj.loc()}</td>` +
+                    `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
                     `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
             }
         }
@@ -280,7 +323,7 @@ class TracerController extends MovieController {
     // Subclassed methods
     // Update the matrix location of the object the moved
     object_did_move(obj) {
-        $( "#"+obj.table_cell_id ).text( obj.loc() );
+        $( "#"+obj.table_cell_id ).text( this.marker_location(obj) );
         $( ".obj-mm" ).text( "n/a" ); // set all of the mm classes to be n/a
         this.markFutureFramesDirty();
 
@@ -300,7 +343,7 @@ class TracerController extends MovieController {
         for (let i=0;i<this.objects.length;i++){
             const obj = this.objects[i];
             if (obj.constructor.name == Marker.name){
-                markers.push( {x:obj.x, y:obj.y, label:obj.name} );
+                markers.push( this.canvas_marker_to_trackpoint(obj) );
             }
         }
         return markers;
@@ -442,7 +485,9 @@ class TracerController extends MovieController {
                 // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
                 for (let st of starts){
                     if (ends[st.label]){
-                        this.add_object( new Line(st.x, st.y, ends[st.label].x, ends[st.label].y, 2, "red"));
+                        const canvasStart = this.trackpoint_to_canvas(st);
+                        const canvasEnd = this.trackpoint_to_canvas(ends[st.label]);
+                        this.add_object( new Line(canvasStart.x, canvasStart.y, canvasEnd.x, canvasEnd.y, 2, "red"));
                     }
                 }
             }
@@ -451,7 +496,8 @@ class TracerController extends MovieController {
         // Add the markers for this frame if this frame has markers
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
-                this.add_object( new Marker(tp.x, tp.y, 10, 'red', 'red', tp.label ));
+                const canvasPoint = this.trackpoint_to_canvas(tp);
+                this.add_object( new Marker(canvasPoint.x, canvasPoint.y, 10, 'red', 'red', tp.label ));
             }
         }
         this.create_marker_table();
@@ -648,9 +694,10 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
 
     // DECISION: Default markers only when frame 0 has no markers yet (first-time analysis load).
     // If the server already has markers for frame 0, use those. Otherwise create defaults once.
-    const frame0Markers = (metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length)
+    const frame0HasServerMarkers = metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length;
+    const frame0Markers = frame0HasServerMarkers
         ? metadata_frames[0].markers
-        : create_default_markers();
+        : create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
     var frames = [{'frame_url': frame0_url, 'markers': frame0Markers}];
 
     cc.load_movie(frames);      // all the frames - we just have one for now

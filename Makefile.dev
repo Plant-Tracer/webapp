@@ -103,7 +103,7 @@ install-playright:
 ################################################################
 ## Program development: static analysis tools
 ##
-.PHONY: pylint mypy black-reformat black-check
+.PHONY: pylint mypy
 
 ## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
@@ -114,20 +114,6 @@ pylint: $(PYR)
 ## Mypy static analysis
 mypy: $(PYR)
 	poetry run mypy --show-error-codes --pretty --ignore-missing-imports --strict src tests
-
-black-reformat: $(PYR)
-	poetry run black --line-length 127 .
-
-black-check: $(PYR)
-	poetry run black --line-length 127 . --check
-	@echo "If this fails, simply run: make black"
-
-isort: $(PYR)
-	@echo reordering and sorting import statement
-	poetry run isort . --profile=black
-
-isort-check: $(PYR)
-	poetry run isort --check . --profile=black
 
 flake: $(PYR)
 	poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics

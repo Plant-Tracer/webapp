@@ -131,21 +131,6 @@ pylint:
 mypy:
 	mypy --show-error-codes --pretty --ignore-missing-imports --strict src tests
 
-## black static analysis
-black:
-	black --line-length 127 .
-
-black-check:
-	black --line-length 127 . --check
-	@echo "If this fails, simply run: make black"
-
-## isort
-isort:
-	isort . --profile=black
-
-isort-check:
-	isort --check . --profile=black
-
 ## flake
 flake:
 	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics

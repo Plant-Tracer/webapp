@@ -453,11 +453,43 @@ describe('TracerController.get_markers', () => {
         expect(markers[0]).toMatchObject({ x: 10, y: 20, label: 'Apex' });
     });
 
+    test('bottom-left movie returns trackpoint coordinates, not canvas coordinates', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        tc.objects.push(new MockMarkerClass(10, 30, 5, 'red', 'red', 'Apex'));
+        expect(tc.get_markers()).toEqual([{ x: 10, y: 120, label: 'Apex' }]);
+    });
+
     test('ignores non-Marker objects', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.objects.push(new MockLineClass(0, 0, 50, 50, 2, 'blue'));
         tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
         expect(tc.get_markers()).toHaveLength(1);
+    });
+});
+
+// ── TracerController.object_did_move ─────────────────────────────────────────
+describe('TracerController.object_did_move', () => {
+    test('bottom-left movie updates the marker table with trackpoint coordinates while preserving canvas y', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        const marker = new MockMarkerClass(10, 30, 5, 'red', 'red', 'Apex');
+        marker.table_cell_id = 'cell-apex';
+        tc.objects.push(marker);
+        jest.clearAllMocks();
+
+        tc.object_did_move(marker);
+
+        const cellIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex');
+        expect(cellIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[cellIdx].value.text).toHaveBeenCalledWith('(10,120)');
+        expect(marker.y).toBe(30);
     });
 });
 
@@ -1365,6 +1397,20 @@ describe('TracerController.create_marker_table', () => {
         expect(htmlArg).toContain('Apex');
     });
 
+    test('bottom-left movie displays trackpoint coordinates, not canvas coordinates', () => {
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'api-key'
+        );
+        jest.clearAllMocks();
+        tc.objects.push(new MockMarkerClass(10, 30, 5, 'red', 'red', 'Apex'));
+        tc.create_marker_table();
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
+        expect(htmlArg).toContain('(10,120)');
+    });
+
     test('calls redraw after building the table', () => {
         const redrawSpy = jest.spyOn(tc, 'redraw');
         tc.create_marker_table();
@@ -1676,6 +1722,22 @@ describe('TracerController.add_frame_objects', () => {
         expect(markers).toHaveLength(2);
     });
 
+    test('bottom-left movie converts stored markers to canvas coordinates when drawing frame markers', () => {
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'api-key'
+        );
+        tc.frames = [
+            { markers: [{ x: 10, y: 120, label: 'Apex' }] },
+        ];
+        jest.clearAllMocks();
+        tc.add_frame_objects(0);
+        const marker = tc.objects.find(o => o instanceof MockMarkerClass);
+        expect(marker.x).toBe(10);
+        expect(marker.y).toBe(30);
+    });
+
     test('frame=1: Line objects added for shared labels across frames', () => {
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
@@ -1688,6 +1750,22 @@ describe('TracerController.add_frame_objects', () => {
         expect(apexLine).toBeDefined();
         expect(apexLine.x2).toBe(20);
         expect(apexLine.y2).toBe(30);
+    });
+
+    test('bottom-left movie converts line endpoints to canvas coordinates without flipping the movie', () => {
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'api-key'
+        );
+        tc.frames = [
+            { markers: [{ x: 10, y: 120, label: 'Apex' }] },
+            { markers: [{ x: 20, y: 100, label: 'Apex' }] },
+        ];
+        jest.clearAllMocks();
+        tc.add_frame_objects(1);
+        const apexLine = tc.objects.find(o => o instanceof MockLineClass);
+        expect(apexLine).toMatchObject({ x: 10, y: 30, x2: 20, y2: 50 });
     });
 
     test('frame=1: no Line when labels do not match across frames', () => {
