@@ -26,6 +26,8 @@ const MAX_ZIP_WAIT_MS = 10000;
 const STATUS_POLL_MAX_ERRORS = 5;
 const TRACK_MOVIE_RETRY_DELAY_MS = 5000; // if track movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
+const TRACKING_START_TIMEOUT_MS = 15000;
+const BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE = 'backend lambda is unresponsive. Please report.';
 
 var cell_id_counter = 0;
 
@@ -86,6 +88,7 @@ class TracerController extends MovieController {
             ? movie_metadata.total_frames : 0;
         this.pending_retrace_to_end = false;
         this.pending_trace_start_frame = null;
+        this.tracking_start_deadline_ms = null;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -224,6 +227,29 @@ class TracerController extends MovieController {
         return Number.isFinite(value) && value > 0 ? value : null;
     }
 
+    movie_metadata_has_dimensions() {
+        if (!this.movie_metadata) {
+            return false;
+        }
+        const width = Number(this.movie_metadata.width);
+        const height = Number(this.movie_metadata.height);
+        return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+    }
+
+    set_missing_dimensions_from_image(imgStack) {
+        if (!imgStack || !imgStack.img || this.movie_metadata_has_dimensions()) {
+            return false;
+        }
+        const width = Number(imgStack.img.naturalWidth);
+        const height = Number(imgStack.img.naturalHeight);
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return false;
+        }
+        this.movie_metadata.width = width;
+        this.movie_metadata.height = height;
+        return true;
+    }
+
     trackpoint_to_canvas(trackpoint) {
         const canvasPoint = {...trackpoint, x: Number(trackpoint.x), y: Number(trackpoint.y)};
         const frameHeight = this.analysis_frame_height();
@@ -239,11 +265,13 @@ class TracerController extends MovieController {
         if (this.uses_bottom_left_trackpoints() && frameHeight != null) {
             trackpoint.y = frameHeight - trackpoint.y;
         }
+        trackpoint.x = Math.round(trackpoint.x);
+        trackpoint.y = Math.round(trackpoint.y);
         return trackpoint;
     }
 
     format_coordinate(value) {
-        return String(Number(value));
+        return String(Math.round(Number(value)));
     }
 
     format_trackpoint_location(trackpoint) {
@@ -280,6 +308,52 @@ class TracerController extends MovieController {
         return { scale: scale, pos_units: pos_units };
     }
 
+    default_marker_position(name) {
+        return DEFAULT_MARKERS.find(marker => marker.label === name) || null;
+    }
+
+    marker_is_at_default_position(marker) {
+        const defaultMarker = this.default_marker_position(marker.name);
+        if (!defaultMarker) {
+            return false;
+        }
+        return Math.round(marker.x) === Math.round(defaultMarker.x)
+            && Math.round(marker.y) === Math.round(defaultMarker.y);
+    }
+
+    ruler_calibration_ready() {
+        const markerObjects = this.objects.filter(obj => obj.constructor.name == Marker.name);
+        const ruler0 = markerObjects.find(marker => marker.name === 'Ruler 0mm');
+        const ruler10 = markerObjects.find(marker => marker.name === 'Ruler 10mm');
+        if (!ruler0 || !ruler10) {
+            return false;
+        }
+        if (this.selected && get_ruler_size(this.selected.name) !== null) {
+            return false;
+        }
+        return !this.marker_is_at_default_position(ruler0)
+            && !this.marker_is_at_default_position(ruler10);
+    }
+
+    marker_location_mm(marker, calculations) {
+        if (!this.ruler_calibration_ready() || calculations.pos_units !== 'mm') {
+            return 'n/a';
+        }
+        const trackpoint = this.canvas_marker_to_trackpoint(marker);
+        return "("+ Math.round(trackpoint.x * calculations.scale) + ", " + Math.round(trackpoint.y * calculations.scale) + ")";
+    }
+
+    update_marker_table_locations() {
+        const calculations = this.calculate_scale(this.objects);
+        for (const obj of this.objects) {
+            if (obj.constructor.name != Marker.name || !obj.table_cell_id) {
+                continue;
+            }
+            $( "#"+obj.table_cell_id ).text( this.marker_location(obj) );
+            $( "#"+obj.table_cell_id+"-mm" ).text( this.marker_location_mm(obj, calculations) );
+        }
+    }
+
     create_marker_table() {
         // Generate the HTML for the table body
         let rows = '';
@@ -289,11 +363,7 @@ class TracerController extends MovieController {
             if (obj.constructor.name == Marker.name){
                 obj.table_cell_id = "td-" + (++cell_id_counter);
                 const trackpoint = this.canvas_marker_to_trackpoint(obj);
-                if (calculations.pos_units == 'mm') {
-                    obj.loc_mm = "("+ Math.round(trackpoint.x * calculations.scale) + ", " + Math.round(trackpoint.y * calculations.scale) + ")";
-                } else {
-                    obj.loc_mm = "n/a";
-                }
+                obj.loc_mm = this.marker_location_mm(obj, calculations);
                 rows += `<tr>` +
                     `<td class="dot" style="color:${obj.fill};">●</td>` +
                     `<td>${obj.name}</td>` +
@@ -322,9 +392,8 @@ class TracerController extends MovieController {
 
     // Subclassed methods
     // Update the matrix location of the object the moved
-    object_did_move(obj) {
-        $( "#"+obj.table_cell_id ).text( this.marker_location(obj) );
-        $( ".obj-mm" ).text( "n/a" ); // set all of the mm classes to be n/a
+    object_did_move(_obj) {
+        this.update_marker_table_locations();
         this.markFutureFramesDirty();
 
         if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
@@ -334,6 +403,7 @@ class TracerController extends MovieController {
 
     // Movement finished; upload new annotations
     object_move_finished(_obj) {
+        this.update_marker_table_locations();
         this.put_markers();
     }
 
@@ -394,6 +464,7 @@ class TracerController extends MovieController {
         this.tracking = true;
         this.pending_retrace_to_end = false;
         this.pending_trace_start_frame = retraceStartFrame;
+        this.tracking_start_deadline_ms = Date.now() + TRACKING_START_TIMEOUT_MS;
         this.poll_error_count = 0;
         this.set_movie_control_buttons();
 
@@ -427,11 +498,13 @@ class TracerController extends MovieController {
                         console.warn('[track-movie] attempt', attempt, 'failed:', status, msg, '- retrying in', TRACK_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACK_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
                     }
+                    const failedFrameStart = self.pending_trace_start_frame;
                     self.tracking = false;
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
+                    self.tracking_start_deadline_ms = null;
                     self.tracking_status.text(msg);
                     console.error('[track-movie] final failure (HTTP):', {
                         status,
@@ -439,7 +512,7 @@ class TracerController extends MovieController {
                         attempt,
                         url,
                         movie_id: self.movie_id,
-                        frame_start: self.pending_trace_start_frame,
+                        frame_start: failedFrameStart,
                     });
                     alert(msg);
                 })
@@ -448,11 +521,13 @@ class TracerController extends MovieController {
                         console.warn('[track-movie] attempt', attempt, 'failed (network error):', err && err.message, '- retrying in', TRACK_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACK_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
                     }
+                    const failedFrameStart = self.pending_trace_start_frame;
                     self.tracking = false;
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
+                    self.tracking_start_deadline_ms = null;
                     const msg = err && err.message ? err.message : "Tracking request failed.";
                     self.tracking_status.text(msg);
                     console.error('[track-movie] final failure (network):', {
@@ -460,12 +535,43 @@ class TracerController extends MovieController {
                         error: err && err.message,
                         url,
                         movie_id: self.movie_id,
-                        frame_start: self.pending_trace_start_frame,
+                        frame_start: failedFrameStart,
                     });
                     alert(msg);
                 });
         }
         tryTrackMovie(1);
+    }
+
+    tracking_has_started(metadata) {
+        if (!metadata || metadata.last_frame_tracked == null) {
+            return false;
+        }
+        const startFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
+        return Number(metadata.last_frame_tracked) > Number(startFrame);
+    }
+
+    tracking_start_timed_out(metadata) {
+        if (!this.tracking || this.tracking_start_deadline_ms == null) {
+            return false;
+        }
+        if (this.tracking_has_started(metadata)) {
+            this.tracking_start_deadline_ms = null;
+            return false;
+        }
+        return Date.now() >= this.tracking_start_deadline_ms;
+    }
+
+    report_backend_lambda_unresponsive() {
+        this.tracking = false;
+        $(this.div_selector).removeClass('tracing-dimmed');
+        this.set_movie_control_buttons();
+        this.enableTrackButtonIfAllowed();
+        this.pending_trace_start_frame = null;
+        this.tracking_start_deadline_ms = null;
+        this.tracking_status.text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        $('#status-big').text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        alert(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
     }
 
     add_frame_objects( frame ){
@@ -550,6 +656,10 @@ class TracerController extends MovieController {
                         }
                         return;
                     }
+                    if (self.tracking_start_timed_out(data.metadata)) {
+                        self.report_backend_lambda_unresponsive();
+                        return;
+                    }
                     const last = data.metadata.last_frame_tracked;
                     if (last != null) {
                         let statusText = `Tracing frame ${last}`;
@@ -563,6 +673,10 @@ class TracerController extends MovieController {
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
+                if (self.tracking_start_timed_out(null)) {
+                    self.report_backend_lambda_unresponsive();
+                    return;
+                }
                 if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
                   alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
@@ -573,6 +687,10 @@ class TracerController extends MovieController {
             .fail((_xhr, status, err) => {
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
+                if (self.tracking_start_timed_out(null)) {
+                    self.report_backend_lambda_unresponsive();
+                    return;
+                }
                 if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
                   alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
@@ -586,6 +704,7 @@ class TracerController extends MovieController {
     movie_tracked(_data) {
         this.tracking = false;
         this.set_movie_control_buttons();
+        this.tracking_start_deadline_ms = null;
         this.tracking_status.text('Tracing complete. Loading movie...');
         const self = this;
         const focusFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
@@ -673,16 +792,17 @@ class TracerController extends MovieController {
 var cc;                         // where we hold the controller
 function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0_url, metadata_frames, api_key) {
     cc = new TracerController(div_controller, movie_metadata, api_key);
+    let pendingDefaultFrame0Markers = false;
     cc.did_onload_callback = (imgStack) => {
-        if (imgStack && imgStack.img && (cc.movie_metadata.width == null || cc.movie_metadata.height == null)) {
-            const nw = imgStack.img.naturalWidth;
-            const nh = imgStack.img.naturalHeight;
-            if (nw > 0 && nh > 0) {
-                cc.movie_metadata.width = nw;
-                cc.movie_metadata.height = nh;
-                $(cc.div_selector + ' #canvas-id').attr('width', nw).attr('height', nh);
-                $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
+        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        if (dimensionsWereMissing) {
+            $(cc.div_selector + ' #canvas-id').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
+            $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
+            if (pendingDefaultFrame0Markers) {
+                cc.frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
+                pendingDefaultFrame0Markers = false;
             }
+            cc.goto_frame(cc.frame_number || 0);
         }
         if (demo_mode) {
             $('#status-big').html('Movie cannot be traced in demo mode.');
@@ -697,8 +817,11 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
     const frame0HasServerMarkers = metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length;
     const frame0Markers = frame0HasServerMarkers
         ? metadata_frames[0].markers
-        : create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
-    var frames = [{'frame_url': frame0_url, 'markers': frame0Markers}];
+        : (cc.movie_metadata_has_dimensions()
+            ? create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }))
+            : []);
+    pendingDefaultFrame0Markers = !frame0HasServerMarkers && frame0Markers.length === 0;
+    var frames = [{'frame_url': frame0_url, 'markers': frame0Markers, 'frame_number': 0}];
 
     cc.load_movie(frames);      // all the frames - we just have one for now
     cc.create_marker_table();   // create the initial table
@@ -733,22 +856,18 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
 
         const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
 
-        movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers};
+        movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers, 'frame_number': frameIndex};
     });
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
-        if (imgStack && imgStack.img && (cc.movie_metadata.width == null || cc.movie_metadata.height == null)) {
-            const nw = imgStack.img.naturalWidth;
-            const nh = imgStack.img.naturalHeight;
-            if (nw > 0 && nh > 0) {
-                cc.movie_metadata.width = nw;
-                cc.movie_metadata.height = nh;
-                // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
-                // resets the canvas to natural (100%) size. resize() in WebImage.onload
-                // already ran before this callback and correctly applied cc.zoom.
-                $(cc.div_selector + ' video').attr('width', nw).attr('height', nh);
-            }
+        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        if (dimensionsWereMissing) {
+            // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
+            // resets the canvas to natural (100%) size. resize() in WebImage.onload
+            // already ran before this callback and correctly applied cc.zoom.
+            $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
+            cc.goto_frame(cc.frame_number || 0);
         }
     };
     cc.set_movie_control_buttons();
@@ -791,14 +910,67 @@ function calc_scale(markers) {
     return { scale: scale, pos_units: pos_units };
 }
 
+function is_graphable_marker(marker) {
+    return marker && typeof marker.label === 'string' && marker.label.length > 0
+        && get_ruler_size(marker.label) === null;
+}
+
+function graph_marker_label(frames) {
+    let firstGraphableLabel = null;
+
+    for (const frame of frames) {
+        const markers = frame.markers || [];
+        for (const marker of markers) {
+            if (!is_graphable_marker(marker)) {
+                continue;
+            }
+            if (marker.label === 'Apex') {
+                return 'Apex';
+            }
+            if (firstGraphableLabel === null) {
+                firstGraphableLabel = marker.label;
+            }
+        }
+    }
+
+    return firstGraphableLabel;
+}
+
+function marker_for_label(markers, label) {
+    if (label === null) {
+        return null;
+    }
+    return (markers || []).find(marker => marker.label === label) || null;
+}
+
+function first_marker_for_label(frames, label) {
+    for (const frame of frames) {
+        const marker = marker_for_label(frame.markers, label);
+        if (marker) {
+            return marker;
+        }
+    }
+    return null;
+}
+
+function graph_frame_number(frame, marker, frameIndex) {
+    if (marker && marker.frame_number != null) {
+        return marker.frame_number;
+    }
+    if (frame && frame.frame_number != null) {
+        return frame.frame_number;
+    }
+    return frameIndex;
+}
+
 function graph_data(cc, frames) {
     const frame_labels = [];
     const x_values_mm = [];
     const y_values_mm = [];
-    const firstMarkers = (frames[0] && frames[0].markers) || [];
-    const apex0 = firstMarkers.find(marker => marker.label === 'Apex');
-    const x_apex_0 = (apex0 && apex0.x != null) ? apex0.x : 0;
-    const y_apex_0 = (apex0 && apex0.y != null) ? apex0.y : 0;
+    const markerLabel = graph_marker_label(frames);
+    const baselineMarker = first_marker_for_label(frames, markerLabel);
+    const x_marker_0 = (baselineMarker && baselineMarker.x != null) ? baselineMarker.x : 0;
+    const y_marker_0 = (baselineMarker && baselineMarker.y != null) ? baselineMarker.y : 0;
     let pos_units = "pixels";
     let time_units = "frames";
 
@@ -806,18 +978,18 @@ function graph_data(cc, frames) {
         time_units = "minutes";
     }
 
-    frames.forEach((frame) => {
+    frames.forEach((frame, frameIndex) => {
         const markers = frame.markers || [];
-        const apexMarker = markers.find(marker => marker.label === 'Apex');
+        const trackedMarker = marker_for_label(markers, markerLabel);
         const calculations = calc_scale(markers);
         const scale = calculations.scale;
         pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
 
-        // If 'Apex' marker is found, push the frame number and the x, y positions
-        if (apexMarker) {
-            frame_labels.push(cc.fpm ? (Math.floor(1 / cc.fpm) * apexMarker.frame_number) : apexMarker.frame_number); // frame rate = 1 frame/min
-            x_values_mm.push((apexMarker.x - x_apex_0) * scale);
-            y_values_mm.push((apexMarker.y - y_apex_0) * scale);
+        if (trackedMarker) {
+            const frameNumber = graph_frame_number(frame, trackedMarker, frameIndex);
+            frame_labels.push(cc.fpm ? frameNumber / cc.fpm : frameNumber);
+            x_values_mm.push((trackedMarker.x - x_marker_0) * scale);
+            y_values_mm.push((trackedMarker.y - y_marker_0) * scale);
         }
     });
 

@@ -153,6 +153,29 @@ def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):
     ]
 
 
+def test_lazy_migration_can_use_supplied_frame_height_when_movie_height_missing(new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression=f"REMOVE {TRACKPOINT_ORIGIN}, {HEIGHT}",
+    )
+    ddbo.put_movie_frame(
+        {
+            MOVIE_ID: movie_id,
+            FRAME_NUMBER: 0,
+            "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(20), label="plant").model_dump()],
+        }
+    )
+
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=150)
+
+    assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {"frame_number": 0, "x": 10, "y": 130, "label": "plant"},
+    ]
+
+
 def test_get_movie_trackpoints_lazily_migrates_legacy_csv_export(client, new_movie):
     movie_id = new_movie[MOVIE_ID]
     _make_legacy_top_left_movie(movie_id=movie_id, frame_height=150, legacy_y=20)

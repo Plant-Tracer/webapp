@@ -163,6 +163,9 @@ class CanvasController {
     // -- pointer device-independent marker drag handling
 
     getPointerLocation(e) {
+        if (!e || e.x == null || e.y == null) {
+            throw new Error('getPointerLocation: missing or invalid event');
+        }
         let rect = this.c.getBoundingClientRect();
         return {
             x: (Math.round(e.x) - rect.left) / this.zoom,
@@ -170,11 +173,20 @@ class CanvasController {
         };
     }
 
+    clampPointToCanvas(pt) {
+        const maxX = Number(this.naturalWidth || this.c.width || 0);
+        const maxY = Number(this.naturalHeight || this.c.height || 0);
+        return {
+            x: Math.min(Math.max(pt.x, 0), maxX),
+            y: Math.min(Math.max(pt.y, 0), maxY)
+        };
+    }
+
     startMarkerDrag(e) {
         // if an object is selected, unselect it
         this.clear_selection();
 
-        if (!e || !e.x || !e.y) {
+        if (!e || e.x == null || e.y == null) {
             throw new Error('startMarkerDrag: missing or invalid event');
         }
 
@@ -197,11 +209,11 @@ class CanvasController {
             return;
         }
 
-        if (!e || !e.x || !e.y) {
+        if (!e || e.x == null || e.y == null) {
             throw new Error('moveMarker: missing or invalid event');
         }
 
-        const pointerPosition = this.getPointerLocation(e);
+        const pointerPosition = this.clampPointToCanvas(this.getPointerLocation(e));
 
         // update position
         // Update the position in the selected object
@@ -295,6 +307,73 @@ class CanvasController {
         this.redraw();
     }
 
+    labelRect(marker, option, textWidth) {
+        const textHeight = marker.labelTextHeight || 16;
+        const anchorX = marker.x + option.dx;
+        const anchorY = marker.y + option.dy;
+        let left = anchorX;
+        if (option.align === 'right') {
+            left = anchorX - textWidth;
+        } else if (option.align === 'center') {
+            left = anchorX - textWidth / 2;
+        }
+        return {
+            left,
+            right: left + textWidth,
+            top: anchorY - textHeight / 2,
+            bottom: anchorY + textHeight / 2
+        };
+    }
+
+    rectOverlap(a, b) {
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    offscreenPenalty(rect) {
+        return Math.max(0, -rect.left)
+            + Math.max(0, -rect.top)
+            + Math.max(0, rect.right - this.naturalWidth)
+            + Math.max(0, rect.bottom - this.naturalHeight);
+    }
+
+    layout_marker_labels() {
+        const markers = this.objects.filter(obj => obj.constructor.name === Marker.name);
+        const placed = [];
+        if (markers.length === 0) {
+            return;
+        }
+        this.octx.save();
+        this.octx.font = Marker.LABEL_FONT;
+        for (const marker of markers) {
+            const textWidth = this.octx.measureText(marker.name).width;
+            const labelOptions = [
+                { dx: marker.r + 5, dy: marker.r / 2, align: 'left' },
+                { dx: -marker.r - 5, dy: marker.r / 2, align: 'right' },
+                { dx: marker.r + 5, dy: -marker.r, align: 'left' },
+                { dx: -marker.r - 5, dy: -marker.r, align: 'right' },
+                { dx: 0, dy: -marker.r - 10, align: 'center' },
+                { dx: 0, dy: marker.r + 10, align: 'center' },
+            ];
+            let best = null;
+            for (const option of labelOptions) {
+                const rect = this.labelRect(marker, option, textWidth);
+                const collisions = placed.filter(used => this.rectOverlap(rect, used)).length;
+                const score = collisions * 1000 + this.offscreenPenalty(rect);
+                if (!best || score < best.score) {
+                    best = { option, rect, score };
+                }
+                if (score === 0) {
+                    break;
+                }
+            }
+            marker.labelOffsetX = best.option.dx;
+            marker.labelOffsetY = best.option.dy;
+            marker.labelTextAlign = best.option.align;
+            placed.push(best.rect);
+        }
+        this.octx.restore();
+    }
+
     // Main drawing function:
     redraw() {
         // redraw the object stack.
@@ -310,6 +389,7 @@ class CanvasController {
 
         // draw the objects. Always draw the selected objects after
         // the unselected (so they are on top)
+        this.layout_marker_labels();
         this.octx.save();
         this.octx.scale(this.zoom, this.zoom);
         for (let s = 0; s < 2; s++) {
@@ -371,6 +451,12 @@ class CanvasItem {
  */
 
 class Marker extends CanvasItem {
+    static LABEL_FONT = '16px sans-serif';
+    static CROSSHAIR_SHADOW_COLOR = 'rgba(0, 0, 0, 0.5)';
+    static CROSSHAIR_HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.5)';
+    static CROSSHAIR_SHADOW_WIDTH = 3;
+    static CROSSHAIR_HIGHLIGHT_WIDTH = 1;
+
     constructor(x, y, r, fill, stroke, name) {
         super(x, y, name);
         this.startingAngle = 0;
@@ -380,6 +466,24 @@ class Marker extends CanvasItem {
         this.fill = fill;     // string for color
         this.stroke = stroke;   // string for color
         this.name = name;     //
+    }
+
+    draw_crosshair(ctx) {
+        const extent = this.r;
+        for (const [lineWidth, strokeStyle] of [
+            [Marker.CROSSHAIR_SHADOW_WIDTH, Marker.CROSSHAIR_SHADOW_COLOR],
+            [Marker.CROSSHAIR_HIGHLIGHT_WIDTH, Marker.CROSSHAIR_HIGHLIGHT_COLOR],
+        ]) {
+            ctx.beginPath();
+            ctx.moveTo(this.x - extent, this.y);
+            ctx.lineTo(this.x + extent, this.y);
+            ctx.moveTo(this.x, this.y - extent);
+            ctx.lineTo(this.x, this.y + extent);
+            ctx.lineCap = 'butt';
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = strokeStyle;
+            ctx.stroke();
+        }
     }
 
     draw(ctx, selected) {
@@ -398,8 +502,13 @@ class Marker extends CanvasItem {
         ctx.strokeStyle = this.stroke;
         ctx.stroke();
         ctx.globalAlpha = 1.0;
-        ctx.font = '18px sanserif';
-        ctx.fillText(this.name, this.x + this.r + 5, this.y + this.r / 2);
+        this.draw_crosshair(ctx);
+        ctx.font = Marker.LABEL_FONT;
+        ctx.textAlign = this.labelTextAlign || 'left';
+        ctx.textBaseline = 'middle';
+        const labelOffsetX = (this.labelOffsetX == null) ? this.r + 5 : this.labelOffsetX;
+        const labelOffsetY = (this.labelOffsetY == null) ? this.r / 2 : this.labelOffsetY;
+        ctx.fillText(this.name, this.x + labelOffsetX, this.y + labelOffsetY);
         ctx.restore();
     }
 

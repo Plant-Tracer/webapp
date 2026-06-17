@@ -37,9 +37,11 @@ The conversion uses the actual analysis-frame height:
    trackpoint_x = canvas_x
    trackpoint_y = frame_height - canvas_y
 
-Coordinates are continuous frame coordinates, not integer pixel indexes. The
-top edge of a ``480`` pixel analysis frame has trackpoint ``y = 480``; the bottom
-edge has trackpoint ``y = 0``.
+OpenCV may calculate subpixel coordinates while tracking. Browser marker edits
+are displayed and saved as rounded integer pixel coordinates so the marker
+table, edited marker payload, and exported CSV agree. The top edge of a ``480``
+pixel analysis frame has trackpoint ``y = 480``; the bottom edge has trackpoint
+``y = 0``.
 
 Frame Height Source
 -------------------
@@ -50,7 +52,9 @@ raw uploaded movie height.
 The analysis frame is the rotated and scaled frame produced by
 ``lambda-resize/src/resize_app/mpeg_jpeg_zip.py``. The browser can use the
 canvas controller's natural image height once the background frame has loaded.
-Lambda tracking can use the current OpenCV frame array height.
+Lambda derives the conversion height from the first processed OpenCV frame
+using the same rotation and scaling path as tracking, then supplies that height
+to legacy migration if the movie row does not yet have stored dimensions.
 
 DynamoDB Contract
 -----------------
@@ -132,6 +136,10 @@ When loading frame markers:
   ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
+* If movie metadata lacks analysis-frame dimensions when the first frame is
+  added, rebuild the current frame after the loaded image reports its natural
+  dimensions. Do not flip bottom-left trackpoints against the placeholder canvas
+  height.
 * For legacy ``"top-left"`` movies that have not yet been migrated, use stored
   coordinates as canvas coordinates for visual correctness.
 
@@ -139,13 +147,22 @@ When dragging markers:
 
 * Keep the marker object in canvas coordinates so the marker follows the mouse
   over the unflipped movie.
+* Clamp dragged marker centers to the analysis-frame bounds so marker
+  coordinates cannot leave the region of interest.
 * The marker table must display converted trackpoint coordinates live while the
   user drags.
-* ``get_markers()`` must return trackpoint coordinates, not raw canvas
-  coordinates, before posting to ``/api/put-frame-trackpoints``.
+* ``get_markers()`` must return rounded integer trackpoint coordinates, not raw
+  canvas coordinates, before posting to ``/api/put-frame-trackpoints``.
 
-The marker table and the posted payload must use the same formatter/conversion
-path so initial render, drag updates, saved data, and CSV export agree.
+The marker table and the posted payload must use the same conversion path so
+initial render, drag updates, saved data, and CSV export agree.
+
+The ``Location (mm)`` column is calibrated only after both default ruler markers
+(``Ruler 0mm`` and ``Ruler 10mm``) have moved away from their starting
+positions. While a non-ruler marker is dragged after calibration, the pixel and
+millimeter columns update together in real time. While a ruler marker itself is
+being dragged, millimeter locations are withheld until the marker is released
+and the calibration can be recomputed from the new ruler distance.
 
 Graph Responsibilities
 ----------------------
@@ -165,8 +182,7 @@ Flask stores those values unchanged.
 ``trackpoint_origin`` inside ``metadata.trackpoint_origin``. The endpoint already
 returns the dictionary from ``odb.get_movie_metadata()`` inside the ``metadata``
 response key, so the field is exposed once it exists on ``schema.Movie`` and is
-present in the movie row. The field is not in the current schema or response
-before this implementation.
+present in the movie row.
 
 When ``POST /api/get-movie-metadata`` returns frame marker coordinates, Flask
 first runs the lazy migration if ``metadata.trackpoint_origin`` is missing or
@@ -185,7 +201,11 @@ bottom-left trackpoints to top-left image coordinates before calling optical
 flow or drawing labels, then converts tracker output back to bottom-left before
 writing frame trackpoints to DynamoDB.
 
-The conversion must use the current processed frame's height:
+The conversion uses the processed frame height derived from
+``mpeg_jpeg_zip.get_first_frame_from_url(...).shape[0]`` rather than requiring
+the movie row to already have ``height``. This keeps initial tracing from
+crashing when uploaded movie metadata has not yet been populated. The conversion
+formula is:
 
 * before ``cv2.calcOpticalFlowPyrLK``: ``image_y = frame_height - trackpoint_y``
 * before ``put_frame_trackpoints``: ``trackpoint_y = frame_height - image_y``
@@ -203,7 +223,7 @@ Substantive tests for the implementation should cover:
   ``y``.
 * JavaScript drag update: the marker table displays bottom-left ``y`` while the
   marker object remains in canvas coordinates.
-* JavaScript save: ``get_markers()`` posts bottom-left coordinates.
+* JavaScript save: ``get_markers()`` posts rounded bottom-left coordinates.
 * JavaScript path drawing: lines between frames convert both endpoints before
   drawing.
 * Graphing: Y deltas use bottom-left values and do not rely on reversed chart
@@ -213,7 +233,7 @@ Substantive tests for the implementation should cover:
 * Flask metadata: ``POST /api/get-movie-metadata`` exposes the movie-row field
   as ``metadata.trackpoint_origin``.
 * Flask CSV export: for a bottom-left movie, exported CSV values match stored
-  trackpoints.
+  trackpoints after integer export formatting.
 * Lambda tracking: input bottom-left trackpoints are converted before optical
   flow and converted back before persistence.
 * Migration: a legacy top-left movie is converted completely and marked

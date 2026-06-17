@@ -1563,7 +1563,7 @@ def _flip_trackpoint_dict_y(trackpoint: dict, frame_height: int) -> dict:
     return flipped
 
 
-def ensure_bottom_left_trackpoints(*, movie_id: str) -> dict:
+def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = None) -> dict:
     """Lazily migrate a movie's stored trackpoints to bottom-left coordinates."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
@@ -1583,7 +1583,7 @@ def ensure_bottom_left_trackpoints(*, movie_id: str) -> dict:
         })
         return ddbo.get_movie(movie_id)
 
-    frame_height = trackpoint_frame_height(movie)
+    frame_height = frame_height or trackpoint_frame_height(movie)
     ddbo.update_table(ddbo.movies, movie_id, {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS})
 
     for frame in frames_with_trackpoints:

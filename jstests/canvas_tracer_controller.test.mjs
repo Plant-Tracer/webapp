@@ -463,6 +463,16 @@ describe('TracerController.get_markers', () => {
         expect(tc.get_markers()).toEqual([{ x: 10, y: 120, label: 'Apex' }]);
     });
 
+    test('bottom-left movie rounds fractional canvas positions before saving trackpoints', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        tc.objects.push(new MockMarkerClass(184.25, 21.515625, 5, 'red', 'red', 'Apex'));
+        expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex' }]);
+    });
+
     test('ignores non-Marker objects', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.objects.push(new MockLineClass(0, 0, 50, 50, 2, 'blue'));
@@ -490,6 +500,97 @@ describe('TracerController.object_did_move', () => {
         expect(cellIdx).toBeGreaterThanOrEqual(0);
         expect(mock$.mock.results[cellIdx].value.text).toHaveBeenCalledWith('(10,120)');
         expect(marker.y).toBe(30);
+    });
+
+    test('bottom-left movie updates dragged marker table with rounded pixel coordinates', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        const marker = new MockMarkerClass(184.25, 21.515625, 5, 'red', 'red', 'Apex');
+        marker.table_cell_id = 'cell-apex';
+        tc.objects.push(marker);
+        jest.clearAllMocks();
+
+        tc.object_did_move(marker);
+
+        const cellIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex');
+        expect(cellIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[cellIdx].value.text).toHaveBeenCalledWith('(184,128)');
+    });
+
+    test('updates mm location during non-ruler marker drag after ruler markers are calibrated', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        const apex = new MockMarkerClass(50, 50, 5, 'red', 'red', 'Apex');
+        const ruler0 = new MockMarkerClass(10, 100, 5, 'red', 'red', 'Ruler 0mm');
+        const ruler10 = new MockMarkerClass(110, 100, 5, 'red', 'red', 'Ruler 10mm');
+        apex.table_cell_id = 'cell-apex';
+        ruler0.table_cell_id = 'cell-ruler0';
+        ruler10.table_cell_id = 'cell-ruler10';
+        tc.objects.push(apex, ruler0, ruler10);
+        jest.clearAllMocks();
+
+        tc.object_did_move(apex);
+
+        const mmIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex-mm');
+        expect(mmIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[mmIdx].value.text).toHaveBeenCalledWith('(5, 10)');
+    });
+
+    test('keeps mm location n/a until both ruler markers leave their starting positions', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        const apex = new MockMarkerClass(50, 50, 5, 'red', 'red', 'Apex');
+        const ruler0 = new MockMarkerClass(50, 100, 5, 'red', 'red', 'Ruler 0mm');
+        const ruler10 = new MockMarkerClass(110, 100, 5, 'red', 'red', 'Ruler 10mm');
+        apex.table_cell_id = 'cell-apex';
+        ruler0.table_cell_id = 'cell-ruler0';
+        ruler10.table_cell_id = 'cell-ruler10';
+        tc.objects.push(apex, ruler0, ruler10);
+        jest.clearAllMocks();
+
+        tc.object_did_move(apex);
+
+        const mmIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex-mm');
+        expect(mmIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[mmIdx].value.text).toHaveBeenCalledWith('n/a');
+    });
+
+    test('recomputes mm location after a ruler marker is released', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        const apex = new MockMarkerClass(50, 50, 5, 'red', 'red', 'Apex');
+        const ruler0 = new MockMarkerClass(10, 100, 5, 'red', 'red', 'Ruler 0mm');
+        const ruler10 = new MockMarkerClass(110, 100, 5, 'red', 'red', 'Ruler 10mm');
+        apex.table_cell_id = 'cell-apex';
+        ruler0.table_cell_id = 'cell-ruler0';
+        ruler10.table_cell_id = 'cell-ruler10';
+        tc.objects.push(apex, ruler0, ruler10);
+        tc.selected = ruler10;
+
+        jest.clearAllMocks();
+        tc.object_did_move(ruler10);
+        let mmIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex-mm');
+        expect(mmIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[mmIdx].value.text).toHaveBeenCalledWith('n/a');
+
+        tc.selected = null;
+        jest.clearAllMocks();
+        tc.object_move_finished(ruler10);
+        mmIdx = mock$.mock.calls.findIndex(args => args[0] === '#cell-apex-mm');
+        expect(mmIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[mmIdx].value.text).toHaveBeenCalledWith('(5, 10)');
     });
 });
 
@@ -605,6 +706,34 @@ describe('trace_movie_one_frame', () => {
         tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
         const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
+    });
+
+    test('rebuilds server markers after loaded image supplies missing bottom-left frame height', () => {
+        const tc = callTmof(
+            { 0: { markers: [{ x: 216, y: 232, label: 'jjjj' }] } },
+            { width: null, height: null, trackpoint_origin: 'bottom-left' }
+        );
+        const gotoSpy = jest.spyOn(tc, 'goto_frame');
+
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 381 } });
+
+        expect(tc.movie_metadata.height).toBe(381);
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 216, y: 149, label: 'jjjj' });
+        expect(gotoSpy).toHaveBeenCalledWith(0);
+        gotoSpy.mockRestore();
+    });
+
+    test('delays bottom-left default marker conversion until loaded image height is known', () => {
+        const tc = callTmof(null, { width: null, height: null, trackpoint_origin: 'bottom-left' });
+        expect(tc.frames[0].markers).toEqual([]);
+
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
+
+        expect(tc.frames[0].markers).toEqual([
+            { x: 50, y: 430, label: 'Apex' },
+            { x: 50, y: 380, label: 'Ruler 0mm' },
+            { x: 50, y: 330, label: 'Ruler 10mm' },
+        ]);
     });
 
     // E. did_onload_callback — status message and demo mode ───────────────────
@@ -817,6 +946,22 @@ describe('trace_movie_frames', () => {
         tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
         const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
         expect(canvasIdx).toBe(-1);
+    });
+
+    test('rebuilds current frame after loaded image supplies missing bottom-left frame height', async () => {
+        const tc = await callTmf(
+            makeEntries('frame_0000.jpg'),
+            { 0: { markers: [{ x: 216, y: 232, label: 'jjjj' }] } },
+            { width: null, height: null, trackpoint_origin: 'bottom-left' }
+        );
+        const gotoSpy = jest.spyOn(tc, 'goto_frame');
+
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 381 } });
+
+        expect(tc.movie_metadata.height).toBe(381);
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 216, y: 149, label: 'jjjj' });
+        expect(gotoSpy).toHaveBeenCalledWith(0);
+        gotoSpy.mockRestore();
     });
 
     test('does not resize when imgStack is null', async () => {
@@ -1411,6 +1556,21 @@ describe('TracerController.create_marker_table', () => {
         expect(htmlArg).toContain('(10,120)');
     });
 
+    test('bottom-left movie marker table displays rounded integer pixel coordinates', () => {
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ height: 150, trackpoint_origin: 'bottom-left' }),
+            'api-key'
+        );
+        jest.clearAllMocks();
+        tc.objects.push(new MockMarkerClass(184.25, 21.515625, 5, 'red', 'red', 'Apex'));
+        tc.create_marker_table();
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
+        expect(htmlArg).toContain('(184,128)');
+        expect(htmlArg).not.toContain('128.484375');
+    });
+
     test('calls redraw after building the table', () => {
         const redrawSpy = jest.spyOn(tc, 'redraw');
         tc.create_marker_table();
@@ -1564,6 +1724,24 @@ describe('TracerController.poll_for_track_end', () => {
         fireDone({ error: false, metadata: { last_frame_tracked: null } });
         tc.poll_for_track_end();
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing starting...');
+    });
+
+    test('done: no progress beyond source frame after deadline → alerts backend lambda unresponsive', () => {
+        tc.pending_trace_start_frame = 0;
+        tc.tracking_start_deadline_ms = Date.now() - 1;
+        fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 0 } });
+        tc.poll_for_track_end();
+        expect(global.alert).toHaveBeenCalledWith('backend lambda is unresponsive. Please report.');
+        expect(tc.tracking).toBe(false);
+    });
+
+    test('done: progress beyond source frame after deadline → does not alert backend lambda unresponsive', () => {
+        tc.pending_trace_start_frame = 0;
+        tc.tracking_start_deadline_ms = Date.now() - 1;
+        fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 1 } });
+        tc.poll_for_track_end();
+        expect(global.alert).not.toHaveBeenCalledWith('backend lambda is unresponsive. Please report.');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing frame 1');
     });
 
     test('done: error response → increments poll_error_count', () => {
@@ -1824,10 +2002,53 @@ describe('graph_data', () => {
         expect(ChartSpy).toHaveBeenCalledTimes(2);
     });
 
-    test('with no Apex markers: both charts have empty data arrays', async () => {
-        await runWithFrames(oneFrame(), { '0': { markers: [{ x: 10, y: 10, label: 'Base' }] } });
+    test('with only ruler markers: both charts have empty data arrays', async () => {
+        await runWithFrames(oneFrame(), { '0': { markers: [
+            { x: 10, y: 10, label: 'Ruler 0mm' },
+            { x: 20, y: 20, label: 'Ruler 10mm' },
+        ] } });
         const xConfig = ChartSpy.mock.calls[0][1];
+        const yConfig = ChartSpy.mock.calls[1][1];
         expect(xConfig.data.datasets[0].data).toEqual([]);
+        expect(yConfig.data.datasets[0].data).toEqual([]);
+    });
+
+    test('with no Apex marker: charts use first non-ruler marker', async () => {
+        global.URL.createObjectURL.mockReturnValue('blob:f0');
+        await runWithFrames(
+            { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
+              'frame_0001.jpg': { blob: jest.fn().mockResolvedValue({}) } },
+            {
+                '0': { markers: [{ x: 10, y: 20, label: 'jjjj', frame_number: 0 }] },
+                '1': { markers: [{ x: 30, y: 45, label: 'jjjj', frame_number: 1 }] },
+            }
+        );
+        const xConfig = ChartSpy.mock.calls[0][1];
+        const yConfig = ChartSpy.mock.calls[1][1];
+        expect(xConfig.data.datasets[0].data).toEqual([0, 20]);
+        expect(yConfig.data.datasets[0].data).toEqual([0, 25]);
+    });
+
+    test('with Apex and another marker: charts prefer Apex', async () => {
+        global.URL.createObjectURL.mockReturnValue('blob:f0');
+        await runWithFrames(
+            { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
+              'frame_0001.jpg': { blob: jest.fn().mockResolvedValue({}) } },
+            {
+                '0': { markers: [
+                    { x: 5, y: 10, label: 'Base', frame_number: 0 },
+                    { x: 10, y: 20, label: 'Apex', frame_number: 0 },
+                ] },
+                '1': { markers: [
+                    { x: 105, y: 110, label: 'Base', frame_number: 1 },
+                    { x: 30, y: 40, label: 'Apex', frame_number: 1 },
+                ] },
+            }
+        );
+        const xConfig = ChartSpy.mock.calls[0][1];
+        const yConfig = ChartSpy.mock.calls[1][1];
+        expect(xConfig.data.datasets[0].data).toEqual([0, 20]);
+        expect(yConfig.data.datasets[0].data).toEqual([0, 20]);
     });
 
     test('with Apex marker: x-chart dataset contains offset x value', async () => {
