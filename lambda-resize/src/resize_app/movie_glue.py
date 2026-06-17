@@ -130,13 +130,21 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int) ->
     )
     return {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames}
 
+def movie_rotation(movie: dict) -> int:
+    """Return a safe integer movie rotation, defaulting invalid metadata to 0."""
+    rotation_value = movie.get(MOVIE_ROTATION, 0) or 0
+    try:
+        return int(rotation_value)
+    except (TypeError, ValueError):
+        return 0
+
 def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     """
     Given an api_key and a movie_id, return a signed URL and the desired movie rotation
     """
     _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
 
-    rotation = int(movie.get(MOVIE_ROTATION,0))
+    rotation = movie_rotation(movie)
     urn = movie.get(MOVIE_DATA_URN)
     if not urn or not urn.strip():
         raise ValueError("MOVIE_DATA_URN not set")
@@ -198,7 +206,7 @@ def run_tracing(*, movie_id, frame_start):
     movie_urn = movie_record.get(MOVIE_DATA_URN)
     if not movie_urn:
         raise RuntimeError(f"movie {movie_id} has no movie data URN")
-    rotation = int(movie_record.get(MOVIE_ROTATION,0) or 0)
+    rotation = movie_rotation(movie_record)
     movie_url = s3_presigned.make_signed_url(urn=movie_urn)
     frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)

@@ -18,6 +18,13 @@ def test_first_frame_to_track_rejects_negative_source_frame():
         movie_glue.first_frame_to_track(source_frame_number=-1)
 
 
+def test_movie_rotation_defaults_invalid_metadata_to_zero():
+    assert movie_glue.movie_rotation({movie_glue.MOVIE_ROTATION: "90"}) == 90
+    assert movie_glue.movie_rotation({movie_glue.MOVIE_ROTATION: "unexpected"}) == 0
+    assert movie_glue.movie_rotation({movie_glue.MOVIE_ROTATION: None}) == 0
+    assert movie_glue.movie_rotation({}) == 0
+
+
 def test_analysis_frame_height_from_movie_uses_tracker_processed_frame():
     movie_path = ROOT / "tests" / "data" / "2019-07-31 plantmovie.mov"
 

@@ -449,7 +449,11 @@ def api_get_movie_metadata():
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
-        odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+        try:
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+        except RuntimeError as exc:
+            logger.exception("trackpoint migration failed movie_id=%s", movie_id)
+            return jsonify({C.API_KEY_ERROR: True, 'message': f"Trackpoint migration failed: {exc}"}), 500
         movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
     # Return only stored metadata; do not generate or write metadata here.

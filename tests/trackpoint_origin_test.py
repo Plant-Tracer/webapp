@@ -121,6 +121,39 @@ def test_get_movie_metadata_lazily_migrates_legacy_markers_to_bottom_left(client
     ]
 
 
+def test_get_movie_metadata_reports_lazy_migration_failure_as_json(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression=f"REMOVE {TRACKPOINT_ORIGIN}, #height",
+        ExpressionAttributeNames={"#height": HEIGHT},
+    )
+    ddbo.put_movie_frame(
+        {
+            MOVIE_ID: movie_id,
+            FRAME_NUMBER: 0,
+            "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(20), label="plant").model_dump()],
+        }
+    )
+
+    resp = client.post(
+        "/api/get-movie-metadata",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: movie_id,
+            "frame_start": 0,
+            "frame_count": 1,
+        },
+    )
+
+    assert resp.status_code == 500
+    res = resp.get_json()
+    assert res["error"] is True
+    assert "Trackpoint migration failed" in res["message"]
+    assert "does not have analysis frame height" in res["message"]
+
+
 def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):
     movie_id = new_movie[MOVIE_ID]
     ddbo = odb.DDBO()
