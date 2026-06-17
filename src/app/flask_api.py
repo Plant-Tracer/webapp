@@ -438,6 +438,24 @@ def api_get_movie_metadata():
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
 
+    # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
+    # then get all the trackpoints.
+    tracking_completed = movie_metadata.get(MOVIE_STATUS, '') == MOVIE_STATE_TRACING_COMPLETED
+    if tracking_completed and get_all_if_tracking_completed:
+        frame_start = 0
+        frame_count = C.MAX_FRAMES
+    if frame_start is not None:
+        if frame_count is None:
+            return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
+        if frame_count<1:
+            return make_response(E.FRAME_COUNT_GT_0, 400)
+        try:
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+        except RuntimeError as exc:
+            logger.exception("trackpoint migration failed movie_id=%s", movie_id)
+            return jsonify({C.API_KEY_ERROR: True, 'message': f"Trackpoint migration failed: {exc}"}), 500
+        movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
+
     # Return only stored metadata; do not generate or write metadata here.
     # Width/height are set when the first frame is served (Lambda get-frame) or by Lambda (rotate-and-zip).
 
@@ -450,17 +468,7 @@ def api_get_movie_metadata():
     ret = {C.API_KEY_ERROR: False,
            C.API_KEY_METADATA: movie_metadata}
 
-    # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
-    # then get all the trackpoints.
-    tracking_completed = movie_metadata.get(MOVIE_STATUS, '') == MOVIE_STATE_TRACING_COMPLETED
-    if tracking_completed and get_all_if_tracking_completed:
-        frame_start = 0
-        frame_count = C.MAX_FRAMES
     if frame_start is not None:
-        if frame_count is None:
-            return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
-        if frame_count<1:
-            return make_response(E.FRAME_COUNT_GT_0, 400)
         #
         # Get the trackpoints and then group by frame_number for the response
         ret[C.API_KEY_FRAMES] = defaultdict(dict)
