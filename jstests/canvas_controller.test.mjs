@@ -79,6 +79,11 @@ describe('CanvasController', () => {
     expect(pos).toHaveProperty('y');
   });
 
+  test('getPointerLocation accepts zero-valued coordinates', () => {
+    const pos = controller.getPointerLocation({ x: 0, y: 0 });
+    expect(pos).toEqual({ x: 0, y: 0 });
+  });
+
   test('getPointerLocation with missing event', () => {
     expect(() => controller.getPointerLocation()).toThrow();
   });
@@ -147,6 +152,40 @@ describe('CanvasController', () => {
     // Verify drag is ended
     expect(controller.selected).toBeNull();
     expect(controller.c.style.cursor).toBe('auto');
+  });
+
+  test('moveMarker clamps dragged marker to canvas bounds', () => {
+    const marker = new Marker(50, 50, 10, 'red', 'red', 'test-marker');
+    controller.add_object(marker);
+    controller.startMarkerDrag({ x: 50, y: 50 });
+
+    controller.moveMarker({ x: -25, y: 175 });
+
+    expect(marker.x).toBe(0);
+    expect(marker.y).toBe(100);
+  });
+
+  test('redraw lays out nearby marker labels without overlap', () => {
+    controller.resize(640, 480);
+    const ruler0 = new Marker(457, 352, 10, 'red', 'red', 'Ruler 0mm');
+    const ruler10 = new Marker(380, 348, 10, 'red', 'red', 'Ruler 10mm');
+    controller.add_object(ruler0);
+    controller.add_object(ruler10);
+
+    controller.redraw();
+
+    controller.octx.font = Marker.LABEL_FONT;
+    const ruler0Rect = controller.labelRect(ruler0, {
+      dx: ruler0.labelOffsetX,
+      dy: ruler0.labelOffsetY,
+      align: ruler0.labelTextAlign,
+    }, controller.octx.measureText(ruler0.name).width);
+    const ruler10Rect = controller.labelRect(ruler10, {
+      dx: ruler10.labelOffsetX,
+      dy: ruler10.labelOffsetY,
+      align: ruler10.labelTextAlign,
+    }, controller.octx.measureText(ruler10.name).width);
+    expect(controller.rectOverlap(ruler0Rect, ruler10Rect)).toBe(false);
   });
 
   test('resize updates both canvas and offscreen canvas dimensions at default zoom (1)', () => {
@@ -279,6 +318,41 @@ describe('Marker', () => {
     const marker = new Marker(0, 0, 10, 'red', 'black', 'm1');
     expect(marker.contains_point({ x: 0, y: 0 })).toBe(true);
     expect(marker.contains_point({ x: 20, y: 20 })).toBe(false);
+  });
+
+  test('draw adds a centered shadowed crosshair', () => {
+    const marker = new Marker(20, 30, 10, 'red', 'red', 'm1');
+    const calls = [];
+    const ctx = {
+      save: jest.fn(),
+      restore: jest.fn(),
+      beginPath: jest.fn(() => calls.push(['beginPath'])),
+      arc: jest.fn(),
+      fill: jest.fn(),
+      stroke: jest.fn(() => calls.push(['stroke', ctx.lineWidth, ctx.strokeStyle])),
+      moveTo: jest.fn((x, y) => calls.push(['moveTo', x, y])),
+      lineTo: jest.fn((x, y) => calls.push(['lineTo', x, y])),
+      fillText: jest.fn(),
+      globalAlpha: 1,
+      fillStyle: '',
+      font: '',
+      lineCap: '',
+      lineWidth: 0,
+      strokeStyle: '',
+      textAlign: '',
+      textBaseline: '',
+    };
+
+    marker.draw(ctx, false);
+
+    expect(calls).toEqual(expect.arrayContaining([
+      ['moveTo', 10, 30],
+      ['lineTo', 30, 30],
+      ['moveTo', 20, 20],
+      ['lineTo', 20, 40],
+      ['stroke', Marker.CROSSHAIR_SHADOW_WIDTH, Marker.CROSSHAIR_SHADOW_COLOR],
+      ['stroke', Marker.CROSSHAIR_HIGHLIGHT_WIDTH, Marker.CROSSHAIR_HIGHLIGHT_COLOR],
+    ]));
   });
 });
 

@@ -4,7 +4,7 @@ schema.py - the types we store in DynamoDB
 
 from decimal import Decimal, ROUND_HALF_UP
 
-from typing import Any, List, Annotated
+from typing import Any, List, Annotated, Literal
 from pydantic import (
     BaseModel,
     Field,
@@ -97,6 +97,7 @@ class Movie(BaseModel):
     fps: str | None = None  # otherwise we get roundoff errors
     width: Annotated[int | None, Field(ge=0, le=10000)] = None
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
+    trackpoint_origin: Literal["bottom-left"] | None = None
 
     total_frames: Annotated[int | None, Field(ge=0, le=999999)] = None
     total_bytes: Annotated[int | None, Field(ge=0)] = None

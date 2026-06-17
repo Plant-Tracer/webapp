@@ -89,9 +89,6 @@ make lint          # runs pylint + eslint (in src/app/static and src/app/templat
 make pylint        # Python only (threshold 10.0)
 make eslint        # JS/HTML in app
 make mypy          # Type checking (optional)
-make black         # Format Python (line-length 127)
-make black-check
-make isort / isort-check
 make flake         # flake8
 ```
 
@@ -123,7 +120,7 @@ Tests are pytest function-style (`def test_*()`); no test classes. Fixtures from
 
 - **Version**: 3.12+
 - **Linter**: Pylint (fail-under 10.0). Config in `pyproject.toml` (many docstring/length checks disabled).
-- **Formatting**: Black (line-length 127), isort (profile black).
+- **Formatting**: No Python autoformatter target is configured; follow existing local style.
 - **Type hints**: Encouraged; mypy/pyright in basic mode.
 - **Imports**: Standard library, then third-party, then local.
 - **Logging**: Use `logger.info("msg %s", var)` style, not f-strings in logging (performance and level filtering).

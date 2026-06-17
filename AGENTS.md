@@ -33,7 +33,6 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 make lint          # Python (pylint, threshold 10.0) + JS/HTML (eslint)
 make pylint        # Python only
 make eslint        # JS/HTML only
-make black         # Format Python (line-length 127)
 make mypy          # Type checking (optional)
 
 # Testing
@@ -96,7 +95,7 @@ Tests run against **real local services** (DynamoDB Local + Minio), not mocks. F
 
 ### Python
 - Python 3.12+; Pylint must pass at threshold 10.0 before committing (`poetry run pylint src/app/...`).
-- Black (line-length 127), isort (profile black).
+- No Python autoformatter target is configured; follow existing local style and keep Pylint clean.
 - All imports at the **top level** of the file — never inside functions (except `if __name__ == "__main__":` blocks). Never add `# pylint: disable=import-outside-toplevel`.
 - Prefix intentionally unused parameters with `_` (e.g. `_event`); do not use `# pylint: disable=unused-argument`.
 - Logging: `logger.info("msg %s", var)` style, not f-strings.

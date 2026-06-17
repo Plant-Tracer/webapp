@@ -137,7 +137,7 @@ class C:
         'published', 'deleted', 'version', 'last_frame_tracked', 'research_use', 'credit_by_name',
         'date_uploaded', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
     )
-    MOVIE_PROPS_STR = ('fps',)
+    MOVIE_PROPS_STR = ('fps', 'trackpoint_origin')
 
 
 def configure_local_environment(*, include_tracking_queue=False):
