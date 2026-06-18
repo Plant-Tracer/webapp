@@ -41,6 +41,7 @@ from .src.app.odb import (
 )
 
 from . import local_queue
+from . import mpeg_jpeg_zip
 from . import tracker
 
 __version__ = "0.1.0"
@@ -129,13 +130,21 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int) ->
     )
     return {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames}
 
+def movie_rotation(movie: dict) -> int:
+    """Return a safe integer movie rotation, defaulting invalid metadata to 0."""
+    rotation_value = movie.get(MOVIE_ROTATION, 0) or 0
+    try:
+        return int(rotation_value)
+    except (TypeError, ValueError):
+        return 0
+
 def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     """
     Given an api_key and a movie_id, return a signed URL and the desired movie rotation
     """
     _, _, movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
 
-    rotation = int(movie.get(MOVIE_ROTATION,0))
+    rotation = movie_rotation(movie)
     urn = movie.get(MOVIE_DATA_URN)
     if not urn or not urn.strip():
         raise ValueError("MOVIE_DATA_URN not set")
@@ -170,6 +179,15 @@ def first_frame_to_track(*, source_frame_number:int) -> int:
     return 1 if source_frame_number == 0 else source_frame_number + 1
 
 
+def analysis_frame_height_from_movie(*, movie_url: str, rotation: int) -> int:
+    """Return the frame height in the same rotated/scaled coordinate space used by tracker."""
+    frame = mpeg_jpeg_zip.get_first_frame_from_url(movie_url, rotation)
+    height = int(frame.shape[0])
+    if height <= 0:
+        raise RuntimeError("analysis frame height must be positive")
+    return height
+
+
 def run_tracing(*, movie_id, frame_start):
     """Run tracing pipeline and create both zipfile and tracked mp4.
 
@@ -184,8 +202,16 @@ def run_tracing(*, movie_id, frame_start):
                 movie_id, source_frame_number, tracking_frame_start, cleared_frames)
     ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
-    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
     movie_record = get_movie_metadata(movie_id=movie_id)
+    movie_urn = movie_record.get(MOVIE_DATA_URN)
+    if not movie_urn:
+        raise RuntimeError(f"movie {movie_id} has no movie data URN")
+    rotation = movie_rotation(movie_record)
+    movie_url = s3_presigned.make_signed_url(urn=movie_urn)
+    frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
+    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
+    tracker_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
     research_comment = mp4_metadata_lib.build_comment(
         movie_record.get("research_use", 0) or 0,
         movie_record.get("credit_by_name", 0) or 0,
@@ -196,14 +222,7 @@ def run_tracing(*, movie_id, frame_start):
         raise RuntimeError("Cannot track movie with no trackpoints")
 
     LOGGER.info("run_tracking movie_id=%s source_frame=%s tracking_frame_start=%s input_trackpoints=%s",
-                movie_id, source_frame_number, tracking_frame_start, input_trackpoints)
-
-    # Derive true movie dimensions from the file so shrink/rotate decisions are
-    # based on the real stream size, not any analysis/display size that may have
-    # been written into DB width/height by get-frame(size=analysis).
-    movie_urn = movie_record.get(MOVIE_DATA_URN)
-    if not movie_urn:
-        raise RuntimeError(f"movie {movie_id} has no movie data URN")
+                movie_id, source_frame_number, tracking_frame_start, tracker_input_trackpoints)
 
     movie_zipfile_path = None
     movie_traced_path = None
@@ -215,16 +234,16 @@ def run_tracing(*, movie_id, frame_start):
             movie_traced_path = Path(tf.name)
 
         def tracker_callback(obj:tracker.TrackerCallbackArg):
-            LOGGER.info("tracker_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints))
+            LOGGER.info("tracker_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints or []))
             if obj.frame_trackpoints:
+                frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
-                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=obj.frame_trackpoints)
+                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
-        rotation = movie_record.get(MOVIE_ROTATION,0) or 0
-        trackpoints = tracker.track_movie_v2(movie_url = s3_presigned.make_signed_url(urn=movie_urn),
+        trackpoints = tracker.track_movie_v2(movie_url = movie_url,
                                              frame_start = tracking_frame_start,
-                                             trackpoints = input_trackpoints,
+                                             trackpoints = tracker_input_trackpoints,
                                              movie_zipfile_path = movie_zipfile_path,
                                              movie_traced_path = movie_traced_path,
                                              rotation = rotation,

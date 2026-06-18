@@ -78,6 +78,11 @@ NAME = 'name'
 FPS = 'fps'
 WIDTH = 'width'
 HEIGHT = 'height'
+TRACKPOINT_ORIGIN = 'trackpoint_origin'
+TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left'
+TRACKPOINT_MIGRATION_ORIGIN = 'trackpoint_migration_origin'
+TRACKPOINT_MIGRATION_STATE = 'trackpoint_migration_state'
+TRACKPOINT_MIGRATION_IN_PROGRESS = 'in-progress'
 RESEARCH_USE = 'research_use'
 CREDIT_BY_NAME = 'credit_by_name'
 ATTRIBUTION_NAME = 'attribution_name'
@@ -1403,6 +1408,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     TOTAL_FRAMES: None,
                     TOTAL_BYTES: None,
                     VERSION: 0,
+                    TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
                     RESEARCH_USE: research_use,
                     CREDIT_BY_NAME: credit_by_name,
                     ATTRIBUTION_NAME: attribution_name,
@@ -1519,6 +1525,95 @@ def get_frame_urn(*, movie_id, frame_number):
 ################################################################
 ## Trackpoints
 
+def trackpoint_frame_height(movie: dict) -> int:
+    """Return the analysis-frame height used to flip trackpoint Y coordinates."""
+    rotation_value = movie.get(MOVIE_ROTATION, 0)
+    try:
+        rotation = int(rotation_value)
+    except (TypeError, ValueError):
+        rotation = 0
+    height_attr = WIDTH if rotation in (90, 270) else HEIGHT
+    height = movie.get(height_attr)
+    if height is None:
+        raise RuntimeError(f"movie {movie.get(MOVIE_ID)} does not have analysis frame height")
+    height = int(height)
+    if height <= 0:
+        raise RuntimeError(f"movie {movie.get(MOVIE_ID)} has invalid analysis frame height {height}")
+    return height
+
+
+def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:
+    """Flip a Y coordinate between top-left image space and bottom-left trackpoint space."""
+    return Decimal(str(frame_height)) - Decimal(str(y))
+
+
+def flip_trackpoint_y(trackpoint: Trackpoint, frame_height: int) -> Trackpoint:
+    """Return a Trackpoint with the same x/label/frame and flipped y."""
+    return Trackpoint(**{**trackpoint.model_dump(), 'y': flip_trackpoint_y_value(trackpoint.y, frame_height)})
+
+
+def flip_trackpoints_y(trackpoints: list[Trackpoint], frame_height: int) -> list[Trackpoint]:
+    """Flip every trackpoint's Y coordinate using the analysis-frame height."""
+    return [flip_trackpoint_y(trackpoint, frame_height) for trackpoint in trackpoints]
+
+
+def _flip_trackpoint_dict_y(trackpoint: dict, frame_height: int) -> dict:
+    flipped = copy.copy(trackpoint)
+    flipped['y'] = flip_trackpoint_y_value(trackpoint['y'], frame_height)
+    return flipped
+
+
+def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = None) -> dict:
+    """Lazily migrate a movie's stored trackpoints to bottom-left coordinates."""
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    origin = movie.get(TRACKPOINT_ORIGIN)
+    if origin == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
+        return movie
+    if origin is not None:
+        raise RuntimeError(f"movie {movie_id} has unsupported trackpoint origin {origin}")
+
+    frames = ddbo.get_frames(movie_id)
+    frames_with_trackpoints = [frame for frame in frames if frame.get('trackpoints')]
+    if not frames_with_trackpoints:
+        ddbo.update_table(ddbo.movies, movie_id, {
+            TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+            TRACKPOINT_MIGRATION_STATE: None,
+        })
+        return ddbo.get_movie(movie_id)
+
+    frame_height = frame_height or trackpoint_frame_height(movie)
+    ddbo.update_table(ddbo.movies, movie_id, {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS})
+
+    for frame in frames_with_trackpoints:
+        if frame.get(TRACKPOINT_MIGRATION_ORIGIN) == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
+            continue
+        converted_trackpoints = [_flip_trackpoint_dict_y(trackpoint, frame_height) for trackpoint in frame['trackpoints']]
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
+            UpdateExpression='SET trackpoints=:trackpoints, #origin=:origin',
+            ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
+            ExpressionAttributeValues={
+                ':trackpoints': converted_trackpoints,
+                ':origin': TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+            },
+        )
+
+    ddbo.update_table(ddbo.movies, movie_id, {
+        TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+        TRACKPOINT_MIGRATION_STATE: None,
+    })
+
+    for frame in frames_with_trackpoints:
+        ddbo.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
+            UpdateExpression='REMOVE #origin',
+            ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
+        )
+    return ddbo.get_movie(movie_id)
+
+
 def iter_movie_frames_in_range(table, movie_id, f1, f2):
     """Yield movie_frame records for movie_id where frame_number is between f1 and f2."""
     logger.debug("iter_movie_frames_in_range table=%s movie_id=%s f1=%s f2=%s",table,movie_id,f1,f2)
@@ -1546,6 +1641,8 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
     :param: frame_start, frame_count - optional
     """
+
+    ensure_bottom_left_trackpoints(movie_id=movie_id)
 
     if frame_start is None:
         frame_start = 0
@@ -1606,6 +1703,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of Tractpoints.
     """
+    ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump() for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)

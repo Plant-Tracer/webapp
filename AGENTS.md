@@ -21,17 +21,12 @@ After editing any file under `docs/`, always build and verify: `poetry run sphin
 
 Never commit or push directly to the `main` branch. All changes must go through a feature branch and be merged via Pull Request. Only proceed with a direct commit to `main` if the user explicitly says to override this rule.
 
-Every commit message must reference a GitHub Issue number (e.g. `fixes #123` or `refs #123`). If no Issue exists for the current change, generate a proposed Issue title and description, ask the user to confirm or edit it, and only create the Issue (via `gh issue create`) after receiving approval.
+Every commit message should reference a GitHub Issue number (preferred) or PR number (e.g. `fixes #123`, `refs #123`, or `refs PR #456`).
 
-All commits must be GPG-signed with the repository signing key
-matching the user who is running CODEX. Use `git commit -S` and do not
-substitute a different signing key unless the user explicitly requests
-it.
+- **Automated commits** (Claude, Codex): always include a reference. If no relevant Issue or PR exists, ask the user — and commit without a reference only if the user explicitly approves.
+- **Human commits**: before merging a PR, inspect all commits for missing references. If any are found, leave a PR review comment flagging them for the reviewer before merge.
 
-Human | Codex GPG Key
-|-----|-------------|
-| @simsong | 00neumann-kjbp-superJumbo.webp |
-
+Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
 
 ## Common Commands
 
@@ -40,7 +35,6 @@ Human | Codex GPG Key
 make lint          # Python (pylint, threshold 10.0) + JS/HTML (eslint)
 make pylint        # Python only
 make eslint        # JS/HTML only
-make black         # Format Python (line-length 127)
 make mypy          # Type checking (optional)
 
 # Testing
@@ -82,7 +76,7 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 `$` is jQuery. Browser pages load jQuery globally, and ES modules import `$` from `utils.js`, which re-exports the global jQuery instance.
 
 ### Data Storage
-- **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/MOVIE_METADATA.rst`).
+- **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/Development/MOVIE_METADATA.rst`).
 - **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `src/dbutil.py` (`--createdb`, `--makelink`, etc.).
 - Lambda is invoked via its HTTP API, **not** via S3 bucket notifications.
 
@@ -103,7 +97,7 @@ Tests run against **real local services** (DynamoDB Local + Minio), not mocks. F
 
 ### Python
 - Python 3.12+; Pylint must pass at threshold 10.0 before committing (`poetry run pylint src/app/...`).
-- Black (line-length 127), isort (profile black).
+- No Python autoformatter target is configured; follow existing local style and keep Pylint clean.
 - All imports at the **top level** of the file — never inside functions (except `if __name__ == "__main__":` blocks). Never add `# pylint: disable=import-outside-toplevel`.
 - Prefix intentionally unused parameters with `_` (e.g. `_event`); do not use `# pylint: disable=unused-argument`.
 - Logging: `logger.info("msg %s", var)` style, not f-strings.
