@@ -26,6 +26,8 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 - **Automated commits** (Claude, Codex): always include a reference. If no relevant Issue or PR exists, ask the user — and commit without a reference only if the user explicitly approves.
 - **Human commits**: before merging a PR, inspect all commits for missing references. If any are found, leave a PR review comment flagging them for the reviewer before merge.
 
+Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
+
 ## Common Commands
 
 ```bash
