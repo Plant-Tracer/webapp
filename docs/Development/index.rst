@@ -24,6 +24,7 @@ Developer Documentation
    ClientLambdaAPI
    FlaskAPI
    TrackpointCoordinateSystem
+   ../trim-design
    ProcessingPhases
    THEORY_OF_DESIGN
    NOTES_ON_SIMPLIFYING
