@@ -101,6 +101,53 @@ function is_ruler_marker_label(label) {
     return typeof label === 'string' && get_ruler_size(label) !== null;
 }
 
+function compare_marker_labels(aLabel, bLabel) {
+    const aRulerSize = get_ruler_size(aLabel);
+    const bRulerSize = get_ruler_size(bLabel);
+    if (aRulerSize !== null && bRulerSize !== null) {
+        return aRulerSize - bRulerSize || String(aLabel).localeCompare(String(bLabel));
+    }
+    if (aRulerSize !== null) {
+        return -1;
+    }
+    if (bRulerSize !== null) {
+        return 1;
+    }
+    return String(aLabel).localeCompare(String(bLabel));
+}
+
+function clone_marker(marker, frameNumber = null) {
+    const copy = {...marker};
+    if (frameNumber !== null && copy.frame_number != null) {
+        copy.frame_number = frameNumber;
+    }
+    return copy;
+}
+
+function sorted_ruler_markers(markers, frameNumber = null) {
+    return (markers || [])
+        .filter(marker => is_ruler_marker_label(marker.label))
+        .map(marker => clone_marker(marker, frameNumber))
+        .sort((a, b) => compare_marker_labels(a.label, b.label));
+}
+
+function canonical_ruler_markers(frames) {
+    const markersByLabel = new Map();
+    for (const frame of frames || []) {
+        for (const marker of frame.markers || []) {
+            if (is_ruler_marker_label(marker.label) && !markersByLabel.has(marker.label)) {
+                markersByLabel.set(marker.label, clone_marker(marker));
+            }
+        }
+    }
+    return Array.from(markersByLabel.values())
+        .sort((a, b) => compare_marker_labels(a.label, b.label));
+}
+
+function same_markers(aMarkers, bMarkers) {
+    return JSON.stringify(aMarkers) === JSON.stringify(bMarkers);
+}
+
 class TracerController extends MovieController {
     constructor( div_selector, movie_metadata, api_key) {
         super( div_selector );
@@ -662,22 +709,23 @@ class TracerController extends MovieController {
         // Generate the HTML for the table body
         let rows = '';
         let calculations = this.calculate_scale(this.objects)
-        for (let i=0;i<this.objects.length;i++){
-            const obj = this.objects[i];
-            if (obj.constructor.name == Marker.name){
-                obj.table_cell_id = "td-" + (++cell_id_counter);
-                const trackpoint = this.canvas_marker_to_trackpoint(obj);
-                obj.loc_mm = this.marker_location_mm(obj, calculations);
-                rows += `<tr>` +
-                    `<td class="dot" style="color:${obj.fill};">●</td>` +
-                    `<td>${obj.name}</td>` +
-                    `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
-                    `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
-                if (is_ruler_marker_label(obj.name)) {
-                    rows += `<td class="nodemo"></td></tr>`;
-                } else {
-                    rows += `<td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
-                }
+        const tableMarkers = this.objects
+            .map((obj, index) => ({obj, index}))
+            .filter(({obj}) => obj.constructor.name == Marker.name)
+            .sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
+        for (const {obj, index} of tableMarkers) {
+            obj.table_cell_id = "td-" + (++cell_id_counter);
+            const trackpoint = this.canvas_marker_to_trackpoint(obj);
+            obj.loc_mm = this.marker_location_mm(obj, calculations);
+            rows += `<tr>` +
+                `<td class="dot" style="color:${obj.fill};">●</td>` +
+                `<td>${obj.name}</td>` +
+                `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
+                `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
+            if (is_ruler_marker_label(obj.name)) {
+                rows += `<td class="nodemo"></td></tr>`;
+            } else {
+                rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -719,17 +767,27 @@ class TracerController extends MovieController {
         }
 
         const updates = [];
+        const canonicalRulers = canonical_ruler_markers(this.frames);
         for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
             const frame = this.frames[frameIndex];
             const markers = frame.markers || [];
-            const rulerMarkers = markers.filter(marker => is_ruler_marker_label(marker.label))
-                .map(marker => ({...marker}));
-            if (rulerMarkers.length === markers.length) {
+            const frameNumber = graph_frame_number(frame, null, frameIndex);
+            const rulersByLabel = new Map(
+                sorted_ruler_markers(markers, frameNumber).map(marker => [marker.label, marker])
+            );
+            const rulerMarkers = canonicalRulers.map(marker => clone_marker(
+                rulersByLabel.get(marker.label) || marker,
+                frameNumber
+            ));
+            if (canonicalRulers.length === 0) {
+                rulerMarkers.length = 0;
+            }
+            if (same_markers(rulerMarkers, markers)) {
                 continue;
             }
             updates.push({
                 frame_index: frameIndex,
-                frame_number: graph_frame_number(frame, null, frameIndex),
+                frame_number: frameNumber,
                 markers: rulerMarkers,
             });
         }

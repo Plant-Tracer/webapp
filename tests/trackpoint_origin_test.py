@@ -1,12 +1,16 @@
 import csv
 import io
+import zipfile
 from decimal import Decimal
 
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from app import odb, schema
+from app import odb_movie_data
 from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID
+from app.s3_presigned import make_urn
 from app.schema import Trackpoint
 
 
@@ -45,6 +49,19 @@ def _make_legacy_top_left_movie(*, movie_id: str, frame_height: int, legacy_y: i
             "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(legacy_y), label="plant").model_dump()],
         }
     )
+
+
+def _jpeg_bytes(*, width: int, height: int) -> bytes:
+    output = io.BytesIO()
+    Image.new("RGB", (width, height), color="white").save(output, format="JPEG")
+    return output.getvalue()
+
+
+def _zip_with_frame(*, width: int, height: int) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("frame_0000.jpeg", _jpeg_bytes(width=width, height=height))
+    return output.getvalue()
 
 
 def test_movie_schema_declares_trackpoint_origin_contract():
@@ -152,6 +169,44 @@ def test_get_movie_metadata_reports_lazy_migration_failure_as_json(client, new_m
     assert res["error"] is True
     assert "Trackpoint migration failed" in res["message"]
     assert "does not have analysis frame height" in res["message"]
+
+
+def test_get_movie_metadata_lazily_migrates_using_zipfile_height_when_movie_height_missing(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    zip_urn = make_urn(object_name=f"tests/{movie_id}_zipfile.mov")
+    odb_movie_data.write_object(zip_urn, _zip_with_frame(width=200, height=150))
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression=f"SET movie_zipfile_urn=:zip_urn REMOVE {TRACKPOINT_ORIGIN}, #height",
+        ExpressionAttributeNames={"#height": HEIGHT},
+        ExpressionAttributeValues={":zip_urn": zip_urn},
+    )
+    ddbo.put_movie_frame(
+        {
+            MOVIE_ID: movie_id,
+            FRAME_NUMBER: 0,
+            "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(20), label="plant").model_dump()],
+        }
+    )
+
+    resp = client.post(
+        "/api/get-movie-metadata",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: movie_id,
+            "frame_start": 0,
+            "frame_count": 1,
+        },
+    )
+
+    assert resp.status_code == 200
+    res = resp.get_json()
+    assert res["error"] is False
+    assert res["metadata"].get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+    assert res["frames"]["0"]["markers"] == [
+        {"frame_number": 0, "x": 10, "y": 130, "label": "plant"},
+    ]
 
 
 def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):

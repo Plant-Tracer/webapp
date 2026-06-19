@@ -2015,6 +2015,19 @@ describe('TracerController.create_marker_table', () => {
         expect(apexRow).toContain('🚫');
     });
 
+    test('sorts Ruler markers numerically before plant markers', () => {
+        tc.objects.push(new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex'));
+        tc.objects.push(new MockMarkerClass(20, 30, 5, 'magenta', 'magenta', 'Ruler 10mm'));
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm'));
+
+        tc.create_marker_table();
+
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
+        expect(htmlArg.indexOf('Ruler 0mm')).toBeLessThan(htmlArg.indexOf('Ruler 10mm'));
+        expect(htmlArg.indexOf('Ruler 10mm')).toBeLessThan(htmlArg.indexOf('Apex'));
+    });
+
     test('bottom-left movie displays trackpoint coordinates, not canvas coordinates', () => {
         tc = new TracerController(
             'div#tracer',
@@ -2146,21 +2159,40 @@ describe('TracerController.delete_all_markers', () => {
         }));
     }
 
-    test('removes non-ruler markers from every frame and persists changed frames', async () => {
+    test('removes non-ruler markers and repairs missing Ruler markers on every frame', async () => {
         mockSuccessfulFramePosts();
 
         await tc.delete_all_markers();
 
         expect(tc.frames.map(frame => frame.markers)).toEqual([
-            [{ x: 1, y: 2, label: 'Ruler 0mm' }],
-            [{ x: 3, y: 4, label: 'Ruler 10mm' }],
-            [{ x: 5, y: 6, label: 'Ruler 0mm' }],
+            [
+                { x: 1, y: 2, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
+            [
+                { x: 1, y: 2, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
+            [
+                { x: 5, y: 6, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
         ]);
-        expect(mockPost).toHaveBeenCalledTimes(2);
-        expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1]);
+        expect(mockPost).toHaveBeenCalledTimes(3);
+        expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1, 2]);
         expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
-            [{ x: 1, y: 2, label: 'Ruler 0mm' }],
-            [{ x: 3, y: 4, label: 'Ruler 10mm' }],
+            [
+                { x: 1, y: 2, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
+            [
+                { x: 1, y: 2, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
+            [
+                { x: 5, y: 6, label: 'Ruler 0mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ],
         ]);
     });
 
