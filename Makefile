@@ -366,7 +366,10 @@ LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
 LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64
 LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
 LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64
-MACOS_BASE=https://dl.min.io/server/minio/release/darwin-arm64
+MACOS_AMD64_BASE=https://dl.min.io/server/minio/release/darwin-amd64
+MACOS_ARM_BASE=https://dl.min.io/server/minio/release/darwin-arm64
+MACOS_AMD64_BASE_MC=https://dl.min.io/client/mc/release/darwin-amd64
+MACOS_ARM_BASE_MC=https://dl.min.io/client/mc/release/darwin-arm64
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
@@ -380,14 +383,17 @@ bin/minio:
 		echo Linux aarch64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
 		echo Linux arm64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
-	elif [ "$$(uname -s)" = "Darwin" ] ; then echo Darwin ; curl -fL $(MACOS_BASE)/minio -o bin/minio ; brew install minio/stable/mc ; \
+	elif [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ] ; then \
+		echo Darwin arm64 ; curl -fL $(MACOS_ARM_BASE)/minio -o bin/minio ; curl -fL $(MACOS_ARM_BASE_MC)/mc -o bin/mc ; \
+	elif [ "$$(uname -s)" = "Darwin" ] ; then \
+		echo Darwin amd64 ; curl -fL $(MACOS_AMD64_BASE)/minio -o bin/minio ; curl -fL $(MACOS_AMD64_BASE_MC)/mc -o bin/mc ; \
 	else \
 		echo unknown os/architecture; exit 1; \
 	fi
 	chmod +x bin/minio
 	ls -l bin/minio
 	file bin/minio
-	if [ "$$(uname -s)" = "Linux" ] ; then \
+	if [ -f bin/mc ] ; then \
 		chmod +x bin/mc ; \
 		ls -l bin/mc ; \
 		file bin/mc ; \
@@ -439,16 +445,21 @@ install-ubuntu:
 
 
 # Includes MacOS dependencies managed through Brew
+BREW_INSTALL=HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1 brew install
+BREW_INSTALL_CASK=HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1 brew install --cask
 install-macos:
-	brew update
-	which aws || brew install awscli
-	which chromium || brew install chromium
-	which ffmpeg || brew install ffmpeg
-	which lsof || brew install lsof
-	which node || brew install node
-	which npm || brew install npm
-	which poetry || brew install poetry
-	which python3 || brew install python3
+	command -v aws >/dev/null || $(BREW_INSTALL) awscli
+	if command -v chromium >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1 || [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ] || [ -x "/Applications/Chromium.app/Contents/MacOS/Chromium" ]; then \
+		echo "Chrome/Chromium is available"; \
+	else \
+		$(BREW_INSTALL_CASK) google-chrome ; \
+	fi
+	command -v ffmpeg >/dev/null || $(BREW_INSTALL) ffmpeg
+	command -v lsof >/dev/null || $(BREW_INSTALL) lsof
+	command -v node >/dev/null || $(BREW_INSTALL) node
+	command -v npm >/dev/null || $(BREW_INSTALL) node
+	command -v poetry >/dev/null || $(BREW_INSTALL) poetry
+	command -v python3 >/dev/null || $(BREW_INSTALL) python
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	$(MAKE) $(REQ)
