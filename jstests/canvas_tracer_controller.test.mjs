@@ -99,15 +99,23 @@ const makeEl = () => {
     };
     return el;
 };
-const mockPost = jest.fn().mockReturnValue({
-    done: jest.fn().mockReturnThis(),
-    fail: jest.fn().mockReturnThis(),
-});
+function makeDefaultPostResponse() {
+    return {
+        done: jest.fn().mockReturnThis(),
+        fail: jest.fn().mockReturnThis(),
+    };
+}
+const mockPost = jest.fn().mockReturnValue(makeDefaultPostResponse());
 const mock$ = jest.fn().mockImplementation(() => makeEl());
 mock$.post = mockPost;
 
 function resetDollarMock() {
     mock$.mockImplementation(() => makeEl());
+}
+
+function resetPostMock() {
+    mockPost.mockReset();
+    mockPost.mockReturnValue(makeDefaultPostResponse());
 }
 
 function normalizeSelector(selector) {
@@ -1941,6 +1949,20 @@ describe('TracerController.add_marker_onclick_handler', () => {
         expect(tc.objects[0].name).toBe('Apex');
     });
 
+    test('valid names: colors newly added markers red, orange, then magenta', () => {
+        for (const name of ['Apex', 'Base', 'Tipx', 'Ignored']) {
+            tc.marker_name_input.val.mockReturnValue(name);
+            tc.add_marker_onclick_handler({});
+        }
+
+        expect(tc.objects.slice(0, 3).map(marker => [marker.name, marker.fill])).toEqual([
+            ['Apex', 'red'],
+            ['Base', 'orange'],
+            ['Tipx', 'magenta'],
+        ]);
+        expect(tc.objects[3].name).toBe('Ignored');
+    });
+
     test('valid name: clears the input field', () => {
         tc.marker_name_input.val.mockReturnValue('Apex');
         tc.add_marker_onclick_handler({});
@@ -1977,6 +1999,20 @@ describe('TracerController.create_marker_table', () => {
         const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
         const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
         expect(htmlArg).toContain('Apex');
+    });
+
+    test('does not render per-row delete control for Ruler markers', () => {
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm'));
+        tc.objects.push(new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex'));
+        tc.create_marker_table();
+        const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
+        const htmlArg = mock$.mock.results[tbodyIdx].value.html.mock.calls[0][0];
+        const rulerRow = htmlArg.match(/<tr>.*?Ruler 0mm.*?<\/tr>/)[0];
+        const apexRow = htmlArg.match(/<tr>.*?Apex.*?<\/tr>/)[0];
+        expect(rulerRow).not.toContain('del-row');
+        expect(rulerRow).not.toContain('🚫');
+        expect(apexRow).toContain('del-row');
+        expect(apexRow).toContain('🚫');
     });
 
     test('bottom-left movie displays trackpoint coordinates, not canvas coordinates', () => {
@@ -2027,6 +2063,142 @@ describe('TracerController.create_marker_table', () => {
         tc.create_marker_table();
         const nodemoIdx = mock$.mock.calls.findIndex(a => a[0] === '.nodemo');
         expect(nodemoIdx).toBe(-1);
+    });
+});
+
+// ── del_row ──────────────────────────────────────────────────────────────────
+describe('TracerController.del_row', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+        jest.clearAllMocks();
+        global.demo_mode = false;
+    });
+
+    test('does not delete Ruler markers', () => {
+        const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
+        const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(ruler, apex);
+
+        tc.del_row(0);
+
+        expect(tc.objects).toEqual([ruler, apex]);
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    test('deletes non-ruler markers and persists the current frame', () => {
+        const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
+        const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(ruler, apex);
+
+        tc.del_row(1);
+
+        expect(tc.objects).toEqual([ruler]);
+        expect(mockPost).toHaveBeenCalledWith(
+            expect.stringContaining('put-frame-trackpoints'),
+            expect.objectContaining({ frame_number: 0 })
+        );
+    });
+});
+
+// ── delete_all_markers ───────────────────────────────────────────────────────
+describe('TracerController.delete_all_markers', () => {
+    let tc;
+    beforeEach(() => {
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ total_frames: 3, trim_start_frame: 0, trim_end_frame: 2, last_frame_tracked: 2 }),
+            'api-key'
+        );
+        tc.frames = [
+            { frame_number: 0, markers: [
+                { x: 10, y: 20, label: 'Apex' },
+                { x: 1, y: 2, label: 'Ruler 0mm' },
+            ] },
+            { frame_number: 1, markers: [
+                { x: 30, y: 40, label: 'Base' },
+                { x: 3, y: 4, label: 'Ruler 10mm' },
+            ] },
+            { frame_number: 2, markers: [
+                { x: 5, y: 6, label: 'Ruler 0mm' },
+            ] },
+        ];
+        global.confirm = jest.fn().mockReturnValue(true);
+        global.alert = jest.fn();
+        global.demo_mode = false;
+        jest.clearAllMocks();
+    });
+    afterEach(() => {
+        global.demo_mode = false;
+        delete global.confirm;
+        delete global.alert;
+        resetDollarMock();
+        resetPostMock();
+    });
+
+    function mockSuccessfulFramePosts() {
+        mockPost.mockImplementation(() => ({
+            done: jest.fn().mockImplementation(cb => {
+                cb({ error: false });
+                return { fail: jest.fn() };
+            }),
+            fail: jest.fn(),
+        }));
+    }
+
+    test('removes non-ruler markers from every frame and persists changed frames', async () => {
+        mockSuccessfulFramePosts();
+
+        await tc.delete_all_markers();
+
+        expect(tc.frames.map(frame => frame.markers)).toEqual([
+            [{ x: 1, y: 2, label: 'Ruler 0mm' }],
+            [{ x: 3, y: 4, label: 'Ruler 10mm' }],
+            [{ x: 5, y: 6, label: 'Ruler 0mm' }],
+        ]);
+        expect(mockPost).toHaveBeenCalledTimes(2);
+        expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1]);
+        expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
+            [{ x: 1, y: 2, label: 'Ruler 0mm' }],
+            [{ x: 3, y: 4, label: 'Ruler 10mm' }],
+        ]);
+    });
+
+    test('does nothing when confirmation is cancelled', () => {
+        global.confirm.mockReturnValue(false);
+
+        tc.delete_all_markers();
+
+        expect(mockPost).not.toHaveBeenCalled();
+        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
+    });
+
+    test('keeps local markers when persistence fails', async () => {
+        mockPost.mockReturnValue({
+            done: jest.fn().mockReturnValue({
+                fail: jest.fn().mockImplementation(cb => {
+                    cb({ responseText: 'Save failed' });
+                }),
+            }),
+        });
+
+        await tc.delete_all_markers();
+
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
+        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
+        expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base' });
+    });
+
+    test('in demo_mode shows popup and does not ask for confirmation', () => {
+        global.demo_mode = true;
+
+        tc.delete_all_markers();
+
+        const popupIdx = mock$.mock.calls.findIndex(a => a[0] === '#demo-popup');
+        expect(popupIdx).toBeGreaterThanOrEqual(0);
+        expect(mock$.mock.results[popupIdx].value.fadeIn).toHaveBeenCalledWith(300);
+        expect(global.confirm).not.toHaveBeenCalled();
+        expect(mockPost).not.toHaveBeenCalled();
     });
 });
 
@@ -2378,6 +2550,15 @@ describe('TracerController.add_frame_objects', () => {
         expect(markers).toHaveLength(2);
     });
 
+    test('frame markers use graph colors for the first non-ruler marker labels', () => {
+        tc.add_frame_objects(0);
+        const markers = tc.objects.filter(o => o instanceof MockMarkerClass);
+        expect(markers.map(marker => [marker.name, marker.fill])).toEqual([
+            ['Apex', 'red'],
+            ['Base', 'orange'],
+        ]);
+    });
+
     test('bottom-left movie converts stored markers to canvas coordinates when drawing frame markers', () => {
         tc = new TracerController(
             'div#tracer',
@@ -2398,6 +2579,12 @@ describe('TracerController.add_frame_objects', () => {
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
         expect(lines).toHaveLength(2); // Apex line + Base line
+    });
+
+    test('frame=1: Line objects use graph colors for their marker labels', () => {
+        tc.add_frame_objects(1);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines.map(line => line.color)).toEqual(['red', 'orange']);
     });
 
     test('frame=1: Line connects correct coordinates', () => {
@@ -2486,18 +2673,18 @@ describe('graph_data', () => {
         expect(ChartSpy.mock.calls[1][1].options.animation).toBe(false);
     });
 
-    test('with only ruler markers: both charts have empty data arrays', async () => {
+    test('with only ruler markers: both charts have no datasets', async () => {
         await runWithFrames(oneFrame(), { '0': { markers: [
             { x: 10, y: 10, label: 'Ruler 0mm' },
             { x: 20, y: 20, label: 'Ruler 10mm' },
         ] } });
         const xConfig = ChartSpy.mock.calls[0][1];
         const yConfig = ChartSpy.mock.calls[1][1];
-        expect(xConfig.data.datasets[0].data).toEqual([]);
-        expect(yConfig.data.datasets[0].data).toEqual([]);
+        expect(xConfig.data.datasets).toEqual([]);
+        expect(yConfig.data.datasets).toEqual([]);
     });
 
-    test('with no Apex marker: charts use first non-ruler marker', async () => {
+    test('graphs the first non-ruler marker', async () => {
         global.URL.createObjectURL.mockReturnValue('blob:f0');
         await runWithFrames(
             { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
@@ -2509,11 +2696,13 @@ describe('graph_data', () => {
         );
         const xConfig = ChartSpy.mock.calls[0][1];
         const yConfig = ChartSpy.mock.calls[1][1];
+        expect(xConfig.data.datasets[0].label).toBe('jjjj X Position');
         expect(xConfig.data.datasets[0].data).toEqual([0, 20]);
+        expect(yConfig.data.datasets[0].label).toBe('jjjj Y Position');
         expect(yConfig.data.datasets[0].data).toEqual([0, 25]);
     });
 
-    test('with Apex and another marker: charts prefer Apex', async () => {
+    test('graphs the first three non-ruler marker labels in encounter order with fixed colors', async () => {
         global.URL.createObjectURL.mockReturnValue('blob:f0');
         await runWithFrames(
             { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
@@ -2522,17 +2711,43 @@ describe('graph_data', () => {
                 '0': { markers: [
                     { x: 5, y: 10, label: 'Base', frame_number: 0 },
                     { x: 10, y: 20, label: 'Apex', frame_number: 0 },
+                    { x: 100, y: 200, label: 'Tip', frame_number: 0 },
+                    { x: 1000, y: 2000, label: 'Ignored', frame_number: 0 },
+                    { x: 0, y: 0, label: 'Ruler 0mm', frame_number: 0 },
                 ] },
                 '1': { markers: [
                     { x: 105, y: 110, label: 'Base', frame_number: 1 },
                     { x: 30, y: 40, label: 'Apex', frame_number: 1 },
+                    { x: 130, y: 250, label: 'Tip', frame_number: 1 },
+                    { x: 1200, y: 2400, label: 'Ignored', frame_number: 1 },
+                    { x: 10, y: 0, label: 'Ruler 10mm', frame_number: 1 },
                 ] },
             }
         );
         const xConfig = ChartSpy.mock.calls[0][1];
         const yConfig = ChartSpy.mock.calls[1][1];
-        expect(xConfig.data.datasets[0].data).toEqual([0, 20]);
-        expect(yConfig.data.datasets[0].data).toEqual([0, 20]);
+        expect(xConfig.data.datasets.map(dataset => dataset.label)).toEqual([
+            'Base X Position',
+            'Apex X Position',
+            'Tip X Position',
+        ]);
+        expect(xConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['red', 'orange', 'magenta']);
+        expect(xConfig.data.datasets.map(dataset => dataset.data)).toEqual([
+            [0, 100],
+            [0, 20],
+            [0, 30],
+        ]);
+        expect(yConfig.data.datasets.map(dataset => dataset.label)).toEqual([
+            'Base Y Position',
+            'Apex Y Position',
+            'Tip Y Position',
+        ]);
+        expect(yConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['red', 'orange', 'magenta']);
+        expect(yConfig.data.datasets.map(dataset => dataset.data)).toEqual([
+            [0, 100],
+            [0, 20],
+            [0, 50],
+        ]);
     });
 
     test('with Apex marker: x-chart dataset contains offset x value', async () => {

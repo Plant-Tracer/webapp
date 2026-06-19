@@ -22,6 +22,7 @@ import json
 import argparse
 import subprocess
 import logging
+import re
 import zipfile
 from pathlib import Path
 
@@ -49,6 +50,7 @@ TEXT_MARGIN = 5
 CIRCLE_WIDTH = 6
 CIRCLE_COLOR = RED
 MIN_MOVIE_BYTES = 10
+RULER_LABEL_RE = re.compile(r"^Ruler\s*\d+mm$")
 
 ## JPEG support
 
@@ -56,6 +58,23 @@ class TracerCallbackArg(NamedTuple):
     frame_number:int
     frame_data:np.ndarray
     frame_trackpoints:List[Trackpoint] | None
+
+
+def is_ruler_trackpoint(trackpoint: Trackpoint):
+    return bool(RULER_LABEL_RE.match(trackpoint.label))
+
+
+def preserve_missing_ruler_trackpoints(*,
+                                       previous_trackpoints:List[Trackpoint],
+                                       output_trackpoints:List[Trackpoint],
+                                       frame_number:int):
+    output_labels = {trackpoint.label for trackpoint in output_trackpoints}
+    missing_rulers = [
+        Trackpoint(x=trackpoint.x, y=trackpoint.y, label=trackpoint.label, frame_number=frame_number)
+        for trackpoint in previous_trackpoints
+        if is_ruler_trackpoint(trackpoint) and trackpoint.label not in output_labels
+    ]
+    return output_trackpoints + missing_rulers
 
 
 def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackpoints:List[Trackpoint], frame_number:int):
@@ -87,6 +106,9 @@ def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
                                                   y=point_array_out[i][1],
                                                   label=pt.label,
                                                   frame_number = frame_number ))
+        trackpoints_out = preserve_missing_ruler_trackpoints(previous_trackpoints=trackpoints,
+                                                             output_trackpoints=trackpoints_out,
+                                                             frame_number=frame_number)
     except cv2.error as e:  # pylint: disable=catching-non-exception
         logger.error("Optical flow failed: %s",e)
         # Don't return empty! Return the previous trackpoints but update their frame_number
