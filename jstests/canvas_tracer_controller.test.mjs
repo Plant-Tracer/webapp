@@ -480,6 +480,12 @@ describe('TracerController.getMaxViewableFrame', () => {
         tc.frames = new Array(5).fill({});
         expect(tc.getMaxViewableFrame()).toBe(4);
     });
+
+    test('clamps to total_frames - 1 when loaded frames include an extra frame', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({ last_frame_tracked: 53, total_frames: 53 }), 'k');
+        tc.frames = new Array(54).fill({});
+        expect(tc.getMaxViewableFrame()).toBe(52);
+    });
 });
 
 describe('TracerController trim behavior', () => {
@@ -540,6 +546,39 @@ describe('TracerController trim behavior', () => {
         expect(tc.isCurrentFrameEditable()).toBe(false);
         tc.frame_number = 3;
         expect(tc.isCurrentFrameEditable()).toBe(true);
+    });
+
+    test('frames outside trim draw a prominent trimmed overlay label', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 5, trim_start_frame: 1, trim_end_frame: 3 }),
+            'k'
+        );
+        jest.spyOn(tc, 'create_marker_table').mockImplementation(() => {});
+        tc.frames = Array.from({ length: 5 }, (_value, frameNumber) => ({
+            frame_number: frameNumber,
+            markers: [],
+        }));
+        tc.naturalWidth = 640;
+        tc.naturalHeight = 480;
+
+        tc.add_frame_objects(0);
+        const overlay = tc.objects[0];
+        const ctx = {
+            save: jest.fn(),
+            restore: jest.fn(),
+            fillRect: jest.fn(),
+            fillText: jest.fn(),
+        };
+
+        overlay.draw(ctx, false);
+
+        expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 640, 480);
+        expect(ctx.font).toBe('64px sans-serif');
+        expect(ctx.fillStyle).toBe('red');
+        expect(ctx.textAlign).toBe('center');
+        expect(ctx.textBaseline).toBe('middle');
+        expect(ctx.fillText).toHaveBeenCalledWith('TRIMMED', 320, 240);
     });
 
     test('play forward jumps to trim start when current frame is before trim', () => {
@@ -604,6 +643,48 @@ describe('TracerController trim behavior', () => {
         expect(trimControls.hide).toHaveBeenCalled();
     });
 
+    test('trim bound buttons are disabled only when the current frame matches that bound', () => {
+        const trimCheckbox = makeEl();
+        const trimControls = makeEl();
+        const trimStatus = makeEl();
+        const trimStartButton = makeEl();
+        const trimEndButton = makeEl();
+        useSelectorElements({
+            'div#tc input.show_trim_controls': trimCheckbox,
+            'div#tc .trim_controls': trimControls,
+            'div#tc .trim_status': trimStatus,
+            'div#tc input.trim_set_start_button': trimStartButton,
+            'div#tc input.trim_set_end_button': trimEndButton,
+        });
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 5, trim_start_frame: 1, trim_end_frame: 3, last_frame_tracked: 4 }),
+            'k'
+        );
+        tc.frames = new Array(5).fill({});
+
+        tc.frame_number = 1;
+        trimStartButton.prop.mockClear();
+        trimEndButton.prop.mockClear();
+        tc.set_movie_control_buttons();
+        expect(trimStartButton.prop).toHaveBeenCalledWith('disabled', true);
+        expect(trimEndButton.prop).toHaveBeenCalledWith('disabled', false);
+
+        tc.frame_number = 3;
+        trimStartButton.prop.mockClear();
+        trimEndButton.prop.mockClear();
+        tc.set_movie_control_buttons();
+        expect(trimStartButton.prop).toHaveBeenCalledWith('disabled', false);
+        expect(trimEndButton.prop).toHaveBeenCalledWith('disabled', true);
+
+        tc.frame_number = 2;
+        trimStartButton.prop.mockClear();
+        trimEndButton.prop.mockClear();
+        tc.set_movie_control_buttons();
+        expect(trimStartButton.prop).toHaveBeenCalledWith('disabled', false);
+        expect(trimEndButton.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
     test('set_trim_bound persists start, seeds new local start, and refreshes visible graph', () => {
         document.body.innerHTML = '<canvas id="apex-xChart"></canvas><canvas id="apex-yChart"></canvas>';
         const analysisResults = makeEl();
@@ -646,6 +727,53 @@ describe('TracerController trim behavior', () => {
         expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         expect(tc.frame_number).toBe(0);
+    });
+
+    test('set_trim_bound does not post or redraw graph when bound is unchanged', () => {
+        const analysisResults = makeEl();
+        analysisResults.is.mockReturnValue(true);
+        useSelectorElements({ '#analysis-results': analysisResults });
+        global.requestAnimationFrame = jest.fn((cb) => cb());
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 5, trim_start_frame: 0, trim_end_frame: 4, last_frame_tracked: 4 }),
+            'k'
+        );
+        tc.frame_number = 0;
+
+        tc.set_trim_bound('trim_start_frame');
+
+        expect(mockPost).not.toHaveBeenCalled();
+        expect(global.requestAnimationFrame).not.toHaveBeenCalled();
+    });
+
+    test('set_trim_bound clamps end to the last zero-based movie frame before posting', () => {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => {
+                cb({ error: false, metadata: { trim_start_frame: 0, trim_end_frame: 52 } });
+                return { fail: jest.fn().mockReturnThis() };
+            }),
+            fail: jest.fn().mockReturnThis(),
+        });
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 53, trim_start_frame: 0, trim_end_frame: 43, last_frame_tracked: 53 }),
+            'k'
+        );
+        tc.frames = Array.from({ length: 54 }, (_value, i) => ({ frame_number: i, markers: [] }));
+        tc.frame_number = 53;
+
+        tc.set_trim_bound('trim_end_frame');
+
+        expect(mockPost).toHaveBeenCalledWith(
+            expect.stringContaining('set-movie-trim'),
+            expect.objectContaining({
+                movie_id: 'test-movie-001',
+                trim_end_frame: 52,
+            })
+        );
+        expect(tc.trim_end_frame).toBe(52);
+        expect(tc.frame_number).toBe(52);
     });
 
     test('set_trim_bound reports server-side validation errors', () => {
@@ -1911,7 +2039,12 @@ describe('TracerController.put_markers', () => {
         global.demo_mode = false;
         global.alert = jest.fn();
     });
-    afterEach(() => { global.demo_mode = false; });
+    afterEach(() => {
+        global.demo_mode = false;
+        global.requestAnimationFrame = defaultRequestAnimationFrame;
+        global.Chart = class { constructor() {} destroy() {} };
+        resetDollarMock();
+    });
 
     test('in demo_mode: shows demo popup and does not POST', () => {
         global.demo_mode = true;
@@ -1954,6 +2087,42 @@ describe('TracerController.put_markers', () => {
         });
         tc.put_markers();
         expect(global.alert).not.toHaveBeenCalled();
+    });
+
+    test('done callback: refreshes visible graphs with updated current-frame markers', () => {
+        document.body.innerHTML = '<canvas id="apex-xChart"></canvas><canvas id="apex-yChart"></canvas>';
+        document.getElementById('apex-xChart').getContext = jest.fn().mockReturnValue({});
+        document.getElementById('apex-yChart').getContext = jest.fn().mockReturnValue({});
+        const analysisResults = makeEl();
+        analysisResults.is.mockReturnValue(true);
+        useSelectorElements({ '#analysis-results': analysisResults });
+        global.requestAnimationFrame = jest.fn((cb) => cb());
+        const ChartSpy = jest.fn().mockImplementation(function () { this.destroy = jest.fn(); });
+        global.Chart = ChartSpy;
+        tc = new TracerController(
+            'div#tracer',
+            makeMovieMetadata({ total_frames: 2, trim_start_frame: 0, trim_end_frame: 1, last_frame_tracked: 1 }),
+            'api-key'
+        );
+        tc.frames = [
+            { frame_number: 0, markers: [{ x: 10, y: 20, label: 'Apex' }] },
+            { frame_number: 1, markers: [{ x: 20, y: 30, label: 'Apex' }] },
+        ];
+        tc.frame_number = 1;
+        tc.objects.push(new MockMarkerClass(42, 55, 5, 'red', 'red', 'Apex'));
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => { cb({ error: false }); return { fail: jest.fn() }; }),
+            fail: jest.fn(),
+        });
+
+        tc.put_markers();
+
+        expect(tc.frames[1].markers).toEqual([{ x: 42, y: 55, label: 'Apex' }]);
+        expect(global.requestAnimationFrame).toHaveBeenCalled();
+        const xConfig = ChartSpy.mock.calls[0][1];
+        const yConfig = ChartSpy.mock.calls[1][1];
+        expect(xConfig.data.datasets[0].data).toEqual([0, 32]);
+        expect(yConfig.data.datasets[0].data).toEqual([0, 35]);
     });
 
     test('fail callback: alerts with response text', () => {
@@ -2309,6 +2478,12 @@ describe('graph_data', () => {
     test('creates two Chart instances (x and y)', async () => {
         await runWithFrames(oneFrame());
         expect(ChartSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('disables Chart.js animation for redraws', async () => {
+        await runWithFrames(oneFrame());
+        expect(ChartSpy.mock.calls[0][1].options.animation).toBe(false);
+        expect(ChartSpy.mock.calls[1][1].options.animation).toBe(false);
     });
 
     test('with only ruler markers: both charts have empty data arrays', async () => {

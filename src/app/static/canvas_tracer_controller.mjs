@@ -60,6 +60,11 @@ class TrimInactiveOverlay extends CanvasItem {
         ctx.save();
         ctx.fillStyle = 'rgba(128, 128, 128, 0.55)';
         ctx.fillRect(0, 0, this.width, this.height);
+        ctx.fillStyle = 'red';
+        ctx.font = '64px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('TRIMMED', this.width / 2, this.height / 2);
         ctx.restore();
     }
 }
@@ -218,6 +223,15 @@ class TracerController extends MovieController {
         return this.frame_number != null && this.isFrameInTrim(this.frame_number);
     }
 
+    trimBoundFrameNumber() {
+        const frameNumber = Number(this.frame_number);
+        const lastFrame = this.lastMovieFrameIndex();
+        if (!Number.isFinite(frameNumber)) {
+            return 0;
+        }
+        return Math.max(0, Math.min(frameNumber, lastFrame));
+    }
+
     frameForNumber(frameNumber) {
         if (!this.frames) {
             return null;
@@ -248,6 +262,20 @@ class TracerController extends MovieController {
         targetFrame.markers = this.cloneMarkersForFrame(oldStart);
     }
 
+    updateCurrentFrameMarkers(markers) {
+        const frame = this.frameForNumber(this.frame_number);
+        if (!frame) {
+            return;
+        }
+        frame.markers = markers.map(marker => ({...marker}));
+    }
+
+    refreshVisibleGraphs() {
+        if ($('#analysis-results').is(':visible')) {
+            requestAnimationFrame(() => graph_data(this, this.frames));
+        }
+    }
+
     refreshTrimControls() {
         if (!this.trim_checkbox || !this.trim_checkbox.length) {
             return;
@@ -264,8 +292,9 @@ class TracerController extends MovieController {
         }
         this.trim_status.text(`${this.trim_start_frame}-${this.trim_end_frame}`);
         this.trim_controls.toggle(this.trim_checkbox.prop('checked'));
-        this.trim_set_start_button.prop(DISABLED, false);
-        this.trim_set_end_button.prop(DISABLED, false);
+        const frameNumber = this.trimBoundFrameNumber();
+        this.trim_set_start_button.prop(DISABLED, frameNumber === this.trim_start_frame);
+        this.trim_set_end_button.prop(DISABLED, frameNumber === this.trim_end_frame);
     }
 
     refreshFrameEditState() {
@@ -322,7 +351,11 @@ class TracerController extends MovieController {
             return;
         }
         const oldStart = this.trim_start_frame;
-        const frameNumber = Number(this.frame_number);
+        const frameNumber = this.trimBoundFrameNumber();
+        const currentBound = prop === TRIM_START_FRAME ? this.trim_start_frame : this.trim_end_frame;
+        if (frameNumber === currentBound) {
+            return;
+        }
         const params = {
             api_key: this.api_key,
             movie_id: this.movie_id,
@@ -347,9 +380,7 @@ class TracerController extends MovieController {
                 }
                 this.refreshTrimControls();
                 this.goto_frame(frameNumber);
-                if ($('#analysis-results').is(':visible')) {
-                    requestAnimationFrame(() => graph_data(this, this.frames));
-                }
+                this.refreshVisibleGraphs();
             })
             .fail((res) => {
                 const msg = res.responseJSON && res.responseJSON.message
@@ -682,17 +713,21 @@ class TracerController extends MovieController {
             $('#demo-popup').fadeIn(300);
             return;
         }
+        const markers = this.get_markers();
         const put_frame_markers_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
             frame_number : this.frame_number,
-            trackpoints  : JSON.stringify(this.get_markers()) // markers as a JSON string because we do POST as a form, not as REST
+            trackpoints  : JSON.stringify(markers) // markers as a JSON string because we do POST as a form, not as REST
         };
         $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
+                    return;
                 }
+                this.updateCurrentFrameMarkers(markers);
+                this.refreshVisibleGraphs();
             })
             .fail( (res) => {
                 console.error("put-frame-trackpoints failed", res);
@@ -892,9 +927,10 @@ class TracerController extends MovieController {
     /** Highest frame index the user may navigate to (last frame with trackpoints; 0 if none traced yet). */
     getMaxViewableFrame() {
         if (!this.frames || this.frames.length === 0) return 0;
-        if (this.frames.length > 1) return this.frames.length - 1;
+        const lastMovieFrame = this.lastMovieFrameIndex();
+        if (this.frames.length > 1) return Math.min(this.frames.length - 1, lastMovieFrame);
         if (this.last_tracked_frame < 0) return 0;
-        return Math.min(this.last_tracked_frame, this.frames.length - 1);
+        return Math.min(this.last_tracked_frame, this.frames.length - 1, lastMovieFrame);
     }
 
     goto_frame(frame) {
@@ -1313,6 +1349,7 @@ function graph_data(cc, frames) {
             ]
         },
         options: {
+            animation: false,
             responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
             maintainAspectRatio: false,
             scales: {
@@ -1359,6 +1396,7 @@ function graph_data(cc, frames) {
             ]
         },
         options: {
+            animation: false,
             responsive: false, // Disable Chart.js responsiveness and respect HTML canvas size
             maintainAspectRatio: false,
             scales: {

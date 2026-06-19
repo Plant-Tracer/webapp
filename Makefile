@@ -158,7 +158,7 @@ pytest: $(LOCAL_TEST_REQ)
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=. --cov-report=xml --cov-report=html tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...

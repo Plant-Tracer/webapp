@@ -1,3 +1,5 @@
 # https://docs.codecov.io/docs/ignoring-paths
 ignore:
   - bin/local_services.py
+  - tests/**
+  - lambda-resize/tests/**
