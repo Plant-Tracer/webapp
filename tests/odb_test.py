@@ -365,6 +365,26 @@ def test_movie_trim_defaults_validate_and_filter_trackpoints(local_ddb):
         odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_END_FRAME, frame_number=3)
 
 
+def test_movie_trim_defaults_unknown_total_frames_omits_end(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=0)
+
+    metadata = odb.movie_metadata_with_trim_defaults(odb.get_movie(movie_id=movie_id))
+
+    assert metadata[odb.TRIM_START_FRAME] == 0
+    assert odb.TRIM_END_FRAME not in metadata
+    with pytest.raises(ValueError, match="total_frames is required"):
+        odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
+
+
+def test_trim_validation_rejects_negative_start_and_invalid_property(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=3)
+
+    with pytest.raises(ValueError, match="trim_start_frame must be >= 0"):
+        odb.validate_trim_bounds(trim_start_frame=-1, trim_end_frame=2, total_frames=3)
+    with pytest.raises(ValueError, match="invalid trim property"):
+        odb.set_movie_trim_frame(movie_id=movie_id, prop="trim_middle_frame", frame_number=1)
+
+
 def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: 2})
@@ -380,6 +400,36 @@ def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
     assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=0) == [
         {'frame_number': 0, 'x': 12, 'y': 22, 'label': 'apex'}
     ]
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
+
+
+def test_set_movie_trim_start_does_not_overwrite_existing_target_markers(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[Trackpoint(x=1, y=2, label='existing')],
+    )
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=2,
+        trackpoints=[Trackpoint(x=12, y=22, label='old-start')],
+    )
+
+    odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
+
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=0) == [
+        {'frame_number': 0, 'x': 1, 'y': 2, 'label': 'existing'}
+    ]
+
+
+def test_set_movie_trim_start_without_old_markers_does_not_synthesize_seed(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
+
+    metadata = odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
+
+    assert metadata[odb.TRIM_START_FRAME] == 0
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=0)
     assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
 
 

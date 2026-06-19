@@ -665,3 +665,40 @@ def test_trim_metadata_defaults_and_trackpoint_download_filter(client, new_movie
     assert payload['trackpoint_dicts'] == [
         {'frame_number': 1, 'x': 11, 'y': 21, 'label': 'apex'}
     ]
+
+
+def test_set_movie_trim_requires_exactly_one_bound(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'total_frames': 3})
+
+    resp = client.post('/api/set-movie-trim', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+    })
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "set exactly one trim frame"
+
+    resp = client.post('/api/set-movie-trim', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        odb.TRIM_START_FRAME: '0',
+        odb.TRIM_END_FRAME: '2',
+    })
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "set exactly one trim frame"
+
+
+def test_set_movie_trim_returns_validation_error(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'total_frames': 3})
+
+    resp = client.post('/api/set-movie-trim', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        odb.TRIM_END_FRAME: '3',
+    })
+
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "trim_end_frame must be < total_frames"
