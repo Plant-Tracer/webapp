@@ -1234,25 +1234,25 @@ function is_graphable_marker(marker) {
         && get_ruler_size(marker.label) === null;
 }
 
-const GRAPH_MARKER_COLORS = ['red', 'orange', 'magenta'];
+function graph_marker_label(frames) {
+    let firstGraphableLabel = null;
 
-function graph_marker_labels(frames) {
-    const labels = [];
     for (const frame of frames) {
         const markers = frame.markers || [];
         for (const marker of markers) {
             if (!is_graphable_marker(marker)) {
                 continue;
             }
-            if (!labels.includes(marker.label)) {
-                labels.push(marker.label);
+            if (marker.label === 'Apex') {
+                return 'Apex';
             }
-            if (labels.length >= GRAPH_MARKER_COLORS.length) {
-                return labels;
+            if (firstGraphableLabel === null) {
+                firstGraphableLabel = marker.label;
             }
         }
     }
-    return labels;
+
+    return firstGraphableLabel;
 }
 
 function marker_for_label(markers, label) {
@@ -1294,26 +1294,12 @@ function frame_in_graph_trim(cc, frame, frameIndex) {
 function graph_data(cc, frames) {
     const graphFrames = frames.filter((frame, frameIndex) => frame_in_graph_trim(cc, frame, frameIndex));
     const frame_labels = [];
-    const markerLabels = graph_marker_labels(graphFrames);
-    const xDatasets = markerLabels.map((label, index) => ({
-        label: `${label} X Position`,
-        data: [],
-        borderColor: GRAPH_MARKER_COLORS[index],
-        backgroundColor: GRAPH_MARKER_COLORS[index],
-        fill: false,
-        pointRadius: 0
-    }));
-    const yDatasets = markerLabels.map((label, index) => ({
-        label: `${label} Y Position`,
-        data: [],
-        borderColor: GRAPH_MARKER_COLORS[index],
-        backgroundColor: GRAPH_MARKER_COLORS[index],
-        fill: false,
-        pointRadius: 0
-    }));
-    const baselineMarkers = new Map(
-        markerLabels.map(label => [label, first_marker_for_label(graphFrames, label)])
-    );
+    const x_values_mm = [];
+    const y_values_mm = [];
+    const markerLabel = graph_marker_label(graphFrames);
+    const baselineMarker = first_marker_for_label(graphFrames, markerLabel);
+    const x_marker_0 = (baselineMarker && baselineMarker.x != null) ? baselineMarker.x : 0;
+    const y_marker_0 = (baselineMarker && baselineMarker.y != null) ? baselineMarker.y : 0;
     let pos_units = "pixels";
     let time_units = "frames";
 
@@ -1321,26 +1307,20 @@ function graph_data(cc, frames) {
         time_units = "minutes";
     }
 
-    if (markerLabels.length > 0) {
-        graphFrames.forEach((frame, frameIndex) => {
-            const markers = frame.markers || [];
-            const frameMarker = markerLabels.map(label => marker_for_label(markers, label)).find(marker => marker);
-            const frameNumber = graph_frame_number(frame, frameMarker, frameIndex);
-            const calculations = calc_scale(markers);
-            const scale = calculations.scale;
-            pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
-            frame_labels.push(cc.fpm ? frameNumber / cc.fpm : frameNumber);
+    graphFrames.forEach((frame, frameIndex) => {
+        const markers = frame.markers || [];
+        const trackedMarker = marker_for_label(markers, markerLabel);
+        const calculations = calc_scale(markers);
+        const scale = calculations.scale;
+        pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
 
-            markerLabels.forEach((label, index) => {
-                const trackedMarker = marker_for_label(markers, label);
-                const baselineMarker = baselineMarkers.get(label);
-                const xMarker0 = (baselineMarker && baselineMarker.x != null) ? baselineMarker.x : 0;
-                const yMarker0 = (baselineMarker && baselineMarker.y != null) ? baselineMarker.y : 0;
-                xDatasets[index].data.push(trackedMarker ? (trackedMarker.x - xMarker0) * scale : null);
-                yDatasets[index].data.push(trackedMarker ? (trackedMarker.y - yMarker0) * scale : null);
-            });
-        });
-    }
+        if (trackedMarker) {
+            const frameNumber = graph_frame_number(frame, trackedMarker, frameIndex);
+            frame_labels.push(cc.fpm ? frameNumber / cc.fpm : frameNumber);
+            x_values_mm.push((trackedMarker.x - x_marker_0) * scale);
+            y_values_mm.push((trackedMarker.y - y_marker_0) * scale);
+        }
+    });
 
     const canvasX = document.getElementById('apex-xChart');
     const canvasY = document.getElementById('apex-yChart');
@@ -1358,7 +1338,15 @@ function graph_data(cc, frames) {
         type: 'line',
         data: {
             labels: frame_labels,
-            datasets: xDatasets
+            datasets: [
+                {
+                    label: 'Time vs X Position',
+                    data: x_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
         },
         options: {
             animation: false,
@@ -1397,7 +1385,15 @@ function graph_data(cc, frames) {
         type: 'line',
         data: {
             labels: frame_labels,
-            datasets: yDatasets
+            datasets: [
+                {
+                    label: 'Time vs Y Position',
+                    data: y_values_mm,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
         },
         options: {
             animation: false,
