@@ -36,6 +36,8 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end():
     movie_record = {
         movie_glue.MOVIE_DATA_URN: "s3://bucket/movie.mp4",
         movie_glue.TOTAL_FRAMES: 5,
+        movie_glue.odb.TRIM_START_FRAME: 0,
+        movie_glue.odb.TRIM_END_FRAME: 4,
         movie_glue.MOVIE_ROTATION: 0,
     }
     seed_trackpoints = [Trackpoint(x=10, y=20, label="apex", frame_number=1)]
@@ -43,6 +45,7 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end():
     def trace_movie_side_effect(**kwargs):
         assert kwargs["frame_start"] == 2
         assert kwargs["frame_end"] == 3
+        assert kwargs["movie_traced_frame_range"] == tracer.TracedMovieFrameRange(start=0, end=3)
         callback = kwargs["callback"]
         callback(tracer.TracerCallbackArg(
             frame_number=3,

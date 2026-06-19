@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT = 'point_array_out'
 RED = (0, 0, 255)
+ORANGE = (0, 165, 255)
+MAGENTA = (255, 0, 255)
 BLACK = (0, 0, 0)
 TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_SCALE = 0.75
@@ -49,6 +51,8 @@ TEXT_THICKNESS = 2
 TEXT_MARGIN = 5
 CIRCLE_WIDTH = 6
 CIRCLE_COLOR = RED
+LINE_WIDTH = 2
+GRAPH_MARKER_COLORS = [RED, ORANGE, MAGENTA]
 MIN_MOVIE_BYTES = 10
 RULER_LABEL_RE = re.compile(r"^Ruler\s*\d+mm$")
 
@@ -58,6 +62,19 @@ class TracerCallbackArg(NamedTuple):
     frame_number:int
     frame_data:np.ndarray
     frame_trackpoints:List[Trackpoint] | None
+
+
+class TrackpointSegment(NamedTuple):
+    label:str
+    x1:float
+    y1:float
+    x2:float
+    y2:float
+
+
+class TracedMovieFrameRange(NamedTuple):
+    start:int = 0
+    end:int | None = None
 
 
 def is_ruler_trackpoint(trackpoint: Trackpoint):
@@ -75,6 +92,38 @@ def preserve_missing_ruler_trackpoints(*,
         if is_ruler_trackpoint(trackpoint) and trackpoint.label not in output_labels
     ]
     return output_trackpoints + missing_rulers
+
+
+def graphable_trackpoint_label(label:str):
+    return bool(label) and not RULER_LABEL_RE.match(label)
+
+
+def trackpoint_colors(trackpoints:List[Trackpoint]):
+    """Return BGR colors by label, matching the browser's first-three marker rule."""
+    labels = []
+    for trackpoint in trackpoints:
+        if graphable_trackpoint_label(trackpoint.label) and trackpoint.label not in labels:
+            labels.append(trackpoint.label)
+        if len(labels) >= len(GRAPH_MARKER_COLORS):
+            break
+    return {label: GRAPH_MARKER_COLORS[index] for index, label in enumerate(labels)}
+
+
+def update_trackpoint_segments(*,
+                               previous_trackpoints:List[Trackpoint] | None,
+                               current_trackpoints:List[Trackpoint] | None,
+                               segments:List[TrackpointSegment]):
+    if not previous_trackpoints or not current_trackpoints:
+        return
+    current_by_label = {trackpoint.label: trackpoint for trackpoint in current_trackpoints}
+    for previous in previous_trackpoints:
+        current = current_by_label.get(previous.label)
+        if current is not None:
+            segments.append(TrackpointSegment(label=previous.label,
+                                              x1=previous.x,
+                                              y1=previous.y,
+                                              x2=current.x,
+                                              y2=current.y))
 
 
 def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackpoints:List[Trackpoint], frame_number:int):
@@ -117,7 +166,12 @@ def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
     return trackpoints_out
 
 
-def cv2_label_frame(*, frame:np.ndarray, trackpoints:List[Trackpoint], frame_label=None):
+def cv2_label_frame(*,
+                    frame:np.ndarray,
+                    trackpoints:List[Trackpoint],
+                    frame_label=None,
+                    trackpoint_segments:List[TrackpointSegment] | None = None,
+                    colors_by_label:dict[str, tuple[int, int, int]] | None = None):
     """
     :param: frame - cv2 frame
     :param: trackpoints - array of dicts where each dict has at least an ['x'] and a ['y']
@@ -127,10 +181,20 @@ def cv2_label_frame(*, frame:np.ndarray, trackpoints:List[Trackpoint], frame_lab
     # frame_height = len(frame)
     frame_width = len(frame[0])
 
-    # use the points to annotate the colored frames. write to colored tracked video
+    colors_by_label = colors_by_label or {}
+
+    # Use the points to annotate the colored frames. Write to colored tracked video.
+    for segment in trackpoint_segments or []:
+        cv2.line(frame,
+                 (int(segment.x1), int(segment.y1)),
+                 (int(segment.x2), int(segment.y2)),
+                 colors_by_label.get(segment.label, CIRCLE_COLOR),
+                 LINE_WIDTH)
+
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
     for pt in trackpoints:
-        cv2.circle(frame, (int(pt.x), int(pt.y)), CIRCLE_WIDTH, CIRCLE_COLOR, -1)     # pylint: disable=no-member
+        color = colors_by_label.get(pt.label, CIRCLE_COLOR)
+        cv2.circle(frame, (int(pt.x), int(pt.y)), CIRCLE_WIDTH, color, -1)     # pylint: disable=no-member
 
     if frame_label is not None:
         # Label in upper right hand corner
@@ -152,6 +216,7 @@ def trace_movie_v2(*, movie_url,
                    trackpoints:List[Trackpoint],
                    movie_zipfile_path:Optional[Path] = None,
                    movie_traced_path:Optional[Path] = None,
+                   movie_traced_frame_range:TracedMovieFrameRange | None = None,
                    rotation=0,
                    callback = prototype_callback,
                    comment="Processed by PlantTracer AWS Lambda"):
@@ -164,6 +229,7 @@ def trace_movie_v2(*, movie_url,
     :param frame_end: optional inclusive final frame to track.
     :param trackpoints: a trackpoints data structure. Trackpoints for frame_start-1 must be provided.
     :param movie_zipfile_path: If provided, where the movie_zipfile of scaled, rotated images goes.
+    :param movie_traced_frame_range: inclusive frame range to include in the traced MP4.
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
@@ -175,6 +241,16 @@ def trace_movie_v2(*, movie_url,
         frame_end = int(frame_end)
         if frame_end < frame_start - 1:
             raise ValueError(f"frame_end {frame_end} must be at least source frame {frame_start - 1}")
+    movie_traced_frame_start = int(movie_traced_frame_range.start) if movie_traced_frame_range else 0
+    if movie_traced_frame_start < 0:
+        raise ValueError("movie_traced_frame_start must be >= 0")
+    movie_traced_frame_end = movie_traced_frame_range.end if movie_traced_frame_range else None
+    if movie_traced_frame_end is None:
+        movie_traced_frame_end = frame_end
+    else:
+        movie_traced_frame_end = int(movie_traced_frame_end)
+    if movie_traced_frame_end is not None and movie_traced_frame_end < movie_traced_frame_start:
+        raise ValueError("movie_traced_frame_end must be >= movie_traced_frame_start")
 
     # if the movie_url is a file, make sure it exists
     if not str(movie_url).startswith("http"):
@@ -202,6 +278,8 @@ def trace_movie_v2(*, movie_url,
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
+    trackpoint_segments:list[TrackpointSegment] = []
+    colors_by_label = trackpoint_colors(trackpoints)
     for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
         # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -216,6 +294,16 @@ def trace_movie_v2(*, movie_url,
         else:
             trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
 
+        frame_in_traced_movie = (
+            frame_number >= movie_traced_frame_start
+            and (movie_traced_frame_end is None or frame_number <= movie_traced_frame_end)
+        )
+        prior_frame_in_traced_movie = frame_number > movie_traced_frame_start
+        if frame_in_traced_movie and prior_frame_in_traced_movie:
+            update_trackpoint_segments(previous_trackpoints=trackpoints_prev,
+                                       current_trackpoints=trackpoints_this,
+                                       segments=trackpoint_segments)
+
         # Create the movie_zipfile if asked
         if zf is not None:
             jpeg = convert_frame_to_jpeg(frame)
@@ -224,9 +312,13 @@ def trace_movie_v2(*, movie_url,
             zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
 
         # Label the frame and write to the mp4 output if we are doing that
-        if movie_traced_writer:
+        if movie_traced_writer and frame_in_traced_movie:
             frame_to_label = frame.copy()
-            cv2_label_frame(frame=frame_to_label, trackpoints=trackpoints_this,frame_label=frame_number)
+            cv2_label_frame(frame=frame_to_label,
+                            trackpoints=trackpoints_this,
+                            frame_label=frame_number,
+                            trackpoint_segments=trackpoint_segments,
+                            colors_by_label=colors_by_label)
             # IMPORTANT: OpenCV uses BGR colors, but ImageIO expects RGB!
             frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
             movie_traced_writer.append_data(frame_rgb)

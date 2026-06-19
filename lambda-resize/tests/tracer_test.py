@@ -58,3 +58,39 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
         Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5),
         Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5),
     ]
+
+
+def test_update_trackpoint_segments_adds_lines_for_matching_labels_only():
+    segments = []
+
+    tracer.update_trackpoint_segments(
+        previous_trackpoints=[
+            Trackpoint(x=1, y=2, label="Apex", frame_number=0),
+            Trackpoint(x=5, y=6, label="Other", frame_number=0),
+        ],
+        current_trackpoints=[
+            Trackpoint(x=3, y=4, label="Apex", frame_number=1),
+            Trackpoint(x=7, y=8, label="Different", frame_number=1),
+        ],
+        segments=segments,
+    )
+
+    assert segments == [
+        tracer.TrackpointSegment(label="Apex", x1=1, y1=2, x2=3, y2=4),
+    ]
+
+
+def test_cv2_label_frame_draws_trackpoint_segments_before_markers():
+    frame = np.zeros((12, 12, 3), dtype=np.uint8)
+
+    tracer.cv2_label_frame(
+        frame=frame,
+        trackpoints=[Trackpoint(x=9, y=6, label="Apex", frame_number=1)],
+        trackpoint_segments=[
+            tracer.TrackpointSegment(label="Apex", x1=2, y1=6, x2=9, y2=6),
+        ],
+        colors_by_label={"Apex": tracer.ORANGE},
+    )
+
+    assert frame[6, 5].tolist() == list(tracer.ORANGE)
+    assert frame[6, 9].tolist() == list(tracer.ORANGE)

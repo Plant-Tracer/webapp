@@ -58,3 +58,41 @@ def test_trace_movie_v2_respects_frame_end(monkeypatch):
     assert [obj.frame_number for obj in callbacks] == [0, 1, 2, 3]
     assert callbacks[2].frame_trackpoints == [Trackpoint(x=2, y=3, label="apex", frame_number=2)]
     assert callbacks[3].frame_trackpoints == []
+
+
+def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
+    frames = []
+    for frame_number in range(4):
+        frame = np.zeros((12, 12, 3), dtype=np.uint8)
+        frame[0, 0] = [frame_number, 0, 0]
+        frames.append(frame)
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
+
+    def fake_trace_frame(*, gray_frame_prev, gray_frame, trackpoints, frame_number):
+        del gray_frame_prev, gray_frame, trackpoints
+        return [Trackpoint(x=6, y=6, label="apex", frame_number=frame_number)]
+
+    appended_frames = []
+
+    class FakeWriter:
+        def append_data(self, frame):
+            appended_frames.append(frame.copy())
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tracer, "cv2_trace_frame", fake_trace_frame)
+    monkeypatch.setattr(tracer.imageio, "get_writer", lambda *_args, **_kwargs: FakeWriter())
+
+    tracer.trace_movie_v2(
+        movie_url="https://example.com/movie.mp4",
+        frame_start=1,
+        frame_end=2,
+        trackpoints=[Trackpoint(x=6, y=6, label="apex", frame_number=0)],
+        movie_traced_path=Path("traced.mp4"),
+        movie_traced_frame_range=tracer.TracedMovieFrameRange(start=1, end=2),
+        callback=None,
+    )
+
+    assert len(appended_frames) == 2
+    assert [int(frame[0, 0, 2]) for frame in appended_frames] == [1, 2]
