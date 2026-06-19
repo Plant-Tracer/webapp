@@ -244,8 +244,12 @@ class MovieController extends CanvasController {
         const maxFrame = (this.max_frame_index != null && this.max_frame_index >= 0)
             ? this.max_frame_index
             : (this.frames.length > 0 ? this.frames.length - 1 : 0);
-        $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
-        $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number >= maxFrame);
+        const firstTarget = this.first_frame_target();
+        const lastTarget = Math.min(this.last_frame_target(), maxFrame);
+        $(this.div_selector + ' input.first_button').prop('disabled', this.frame_number === firstTarget);
+        $(this.div_selector + ' input.prev_frame').prop('disabled', this.frame_number==0); // can't move backwards
+        $(this.div_selector + ' input.next_frame').prop('disabled', this.frame_number >= maxFrame);
+        $(this.div_selector + ' input.last_button').prop('disabled', this.frame_number === lastTarget);
         $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number >= this.play_upper_bound());
         $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number <= this.play_lower_bound());
     }

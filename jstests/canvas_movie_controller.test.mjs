@@ -71,6 +71,12 @@ function loadMovieController() {
 const MovieController = loadMovieController();
 
 class TrimmedMovieController extends MovieController {
+    first_frame_target() {
+        return this.frame_number === 2 ? 0 : 2;
+    }
+    last_frame_target() {
+        return this.frame_number === 4 ? 5 : 4;
+    }
     play_lower_bound() { return 2; }
     play_upper_bound() { return 4; }
 }
@@ -150,5 +156,21 @@ describe('MovieController trim play bounds', () => {
 
         expect(elementMatching('play_forward').prop).toHaveBeenCalledWith('disabled', true);
         expect(elementMatching('play_reverse').prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('first and last buttons stay enabled when trim jump target differs from current frame', () => {
+        const controller = makeController();
+        controller.frame_number = 5;
+
+        controller.set_movie_control_buttons();
+
+        expect(elementMatching('last_button').prop).toHaveBeenCalledWith('disabled', false);
+        expect(elementMatching('next_frame').prop).toHaveBeenCalledWith('disabled', true);
+
+        controller.frame_number = 0;
+        controller.set_movie_control_buttons();
+
+        expect(elementMatching('first_button').prop).toHaveBeenCalledWith('disabled', false);
+        expect(elementMatching('prev_frame').prop).toHaveBeenCalledWith('disabled', true);
     });
 });
