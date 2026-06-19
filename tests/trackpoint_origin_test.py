@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app import odb, schema
 from app import odb_movie_data
-from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID
+from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID, MOVIE_TRACED_URN, NEEDS_RETRACING
 from app.s3_presigned import make_urn
 from app.schema import Trackpoint
 
@@ -92,6 +92,36 @@ def test_get_movie_metadata_exposes_trackpoint_origin(client, new_movie):
     res = resp.get_json()
     assert res["error"] is False
     assert res["metadata"].get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+
+
+def test_put_frame_trackpoints_marks_movie_as_needing_retrace(client, new_movie):
+    resp = client.post(
+        "/api/put-frame-trackpoints",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: new_movie[MOVIE_ID],
+            FRAME_NUMBER: 0,
+            "trackpoints": '[{"x":10,"y":20,"label":"Apex"}]',
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["error"] is False
+    movie = odb.get_movie(movie_id=new_movie[MOVIE_ID])
+    assert movie[NEEDS_RETRACING] == 1
+
+
+def test_list_movies_returns_signed_traced_movie_url(client, new_movie):
+    traced_urn = make_urn(object_name=f"{new_movie[MOVIE_ID]}_traced.mp4")
+    ddbo = odb.DDBO()
+    ddbo.update_table(ddbo.movies, new_movie[MOVIE_ID], {MOVIE_TRACED_URN: traced_urn})
+
+    resp = client.post("/api/list-movies", data={API_KEY: new_movie[API_KEY]})
+
+    assert resp.status_code == 200
+    res = resp.get_json()
+    listed_movie = next(movie for movie in res["movies"] if movie[MOVIE_ID] == new_movie[MOVIE_ID])
+    assert listed_movie["movie_traced_url"].startswith("http")
 
 
 def test_new_movie_api_stores_bottom_left_trackpoint_origin(client, new_course):

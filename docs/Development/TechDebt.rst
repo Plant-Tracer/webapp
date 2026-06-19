@@ -47,6 +47,12 @@ Medium
   Impact: high; exercises Flask, DynamoDB Local, MinIO, and the local
   ``lambda-resize`` bridge together. Files: 6-10.
 
+* Replace movie-level retrace staleness with frame-range artifact validity.
+  Impact: medium; ``needs_retracing`` is currently a coarse movie-level flag,
+  but regional tracing and trimmed traced-MP4 exports need to distinguish the
+  first stale frame, the stale end frame, and whether a full-movie or clipped
+  traced artifact is current. Files: 5-9.
+
 * Consolidate local setup docs and Make targets.
   Impact: medium; reduces drift across Mac, Ubuntu, and generic setup documents.
   Files: 5-8.

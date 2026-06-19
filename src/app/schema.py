@@ -111,6 +111,7 @@ class Movie(BaseModel):
     zip_frame_processing: dict | None = None  # {"total": int, "current": int}
 
     last_frame_tracked: Annotated[int | None, Field(ge=0)] = None
+    needs_retracing: Annotated[int, Field(ge=0, le=1)] | None = None
 
     version: Annotated[int | None, Field(ge=0)] = None
 

@@ -417,6 +417,11 @@ describe('calc_scale', () => {
 
 // ── TracerController constructor ─────────────────────────────────────────────
 describe('TracerController constructor', () => {
+    afterEach(() => {
+        resetDollarMock();
+        resetPostMock();
+    });
+
     test('creates an instance with expected properties', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'my-key');
         expect(tc.movie_id).toBe('test-movie-001');
@@ -461,6 +466,30 @@ describe('TracerController constructor', () => {
         expect(tc.download_button.prop).toHaveBeenCalledWith('disabled', false);
         expect(tc.dl_api_key.prop).toHaveBeenCalledWith('disabled', false);
         expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('traced movie download is shown when metadata has movie_traced_url', () => {
+        const tracedControl = makeEl();
+        const tracedLink = makeEl();
+        useSelectorElements({
+            'div#tc .traced_movie_download_control': tracedControl,
+            'div#tc .traced_movie_download_link': tracedLink,
+        });
+
+        new TracerController('div#tc', makeMovieMetadata({ movie_traced_url: 'https://example.com/traced.mp4' }), 'k');
+
+        expect(tracedLink.attr).toHaveBeenCalledWith('href', 'https://example.com/traced.mp4');
+        expect(tracedControl.show).toHaveBeenCalled();
+    });
+
+    test('retrace required message follows needs_retracing metadata', () => {
+        const retraceMessage = makeEl();
+        useSelectorElements({ 'div#tc .retrace_required_message': retraceMessage });
+
+        new TracerController('div#tc', makeMovieMetadata({ needs_retracing: 1 }), 'k');
+
+        expect(retraceMessage.show).toHaveBeenCalled();
+        expect(retraceMessage.hide).not.toHaveBeenCalled();
     });
 });
 
@@ -2291,6 +2320,17 @@ describe('TracerController.put_markers', () => {
         });
         tc.put_markers();
         expect(global.alert).not.toHaveBeenCalled();
+    });
+
+    test('done callback: marks traced movie as requiring retrace on success', () => {
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => { cb({ error: false }); return { fail: jest.fn() }; }),
+            fail: jest.fn(),
+        });
+
+        tc.put_markers();
+
+        expect(tc.movie_metadata.needs_retracing).toBe(1);
     });
 
     test('done callback: refreshes visible graphs with updated current-frame markers', () => {

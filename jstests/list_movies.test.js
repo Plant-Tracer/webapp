@@ -90,6 +90,36 @@ describe('list_movies_data', () => {
     expect(publishedHtml).toContain("Movie Title");
   });
 
+  test('should show traced movie download and retrace warning when present', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        width: 1280,
+        height: 720,
+        total_bytes: 2000000,
+        fps: '30',
+        total_frames: 3600,
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+        movie_traced_url: 'https://example.com/traced.mp4?x=1&y=2',
+        needs_retracing: 1,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain('download traced');
+    expect(publishedHtml).toContain("class='play traced-movie-download'");
+    expect(publishedHtml).toContain('https://example.com/traced.mp4?x=1&amp;y=2');
+    expect(publishedHtml).toContain('marker moved; movie requires retracing');
+  });
+
   test('should handle an empty list of movies gracefully', () => {
     const movies = [];
 

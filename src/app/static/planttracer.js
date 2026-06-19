@@ -542,6 +542,19 @@ function analyze_clicked( e ) {
   window.location = `/analyze?movie_id=${movie_id}`;
 }
 
+function download_traced_clicked( e ) {
+  const url = e.getAttribute('x-movie_traced_url');
+  if (!url) {
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 ////////////////
 // EDIT METADATA
 
@@ -802,6 +815,15 @@ function list_movies_data( movies ) {
         return `<input type='button' x-movie_id='${movie_id}' x-property='${prop}' value='${kind}' x-value='${nval}' onclick='action_button_clicked(this)'>`;
       }
 
+      function html_attr(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
       // Get the metadata for the movie (date_uploaded is seconds; 0/null = not set yet / processing)
       const dateSec = m.date_uploaded && Number(m.date_uploaded);
       const movieDate = dateSec ? new Date(dateSec * 1000) : null;
@@ -814,6 +836,9 @@ function list_movies_data( movies ) {
         analyze_label = 're-analyze';
       }
       const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
+      const downloadTraced = m.movie_traced_url
+        ? `<input class='play traced-movie-download' x-movie_traced_url="${html_attr(m.movie_traced_url)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
+        : '';
 
       const you_class = (m.user_id == user_id) ? "you" : "";
       const frameStr = (m.width != null && m.height != null) ? `${m.width} x ${m.height}` : '—';
@@ -823,7 +848,7 @@ function list_movies_data( movies ) {
 
       let rows = `<tr class='${you_class}'>` +
           `<td class='${you_class}'> ${m.user_name} </td> <td data-order='${dateSec || 0}'> ${up_down} </td>` + // #1, #2, #3
-          make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
+          make_td_text( "title", m.title, "<br/>" + play + playt + analyze + downloadTraced ) + make_td_text( "description", m.description, '') + // #4 #5
           `<td data-order='${m.total_bytes || 0}'> frame: ${frameStr} Kbytes: ${kbytesStr} ` +
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
@@ -836,6 +861,9 @@ function list_movies_data( movies ) {
         rows += "<i>Deleted</i>";
       } else {
         rows += m.published ? "<b>Published</b> " : "Not published";
+      }
+      if (Number(m.needs_retracing || 0) === 1) {
+        rows += "<br><span class='retrace-required-message'>marker moved; movie requires retracing</span>";
       }
       rows += "<br/>";
 
@@ -1033,6 +1061,7 @@ window.purge_movie = purge_movie;
 window.rotate_movie = rotate_movie;
 window.play_clicked = play_clicked;
 window.analyze_clicked = analyze_clicked;
+window.download_traced_clicked = download_traced_clicked;
 window.row_pencil_clicked = row_pencil_clicked;
 window.action_button_clicked = action_button_clicked;
 window.research_metadata_changed = research_metadata_changed;
@@ -1053,6 +1082,7 @@ if (typeof module != 'undefined'){
     checkLambdaStatus,
     check_upload_metadata,
     computeSHA256,
+    download_traced_clicked,
     dtInstances,
     first_frame_url,
     list_movies_data,

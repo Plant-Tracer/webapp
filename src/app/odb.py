@@ -62,6 +62,7 @@ MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
 MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
 MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
 MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
+NEEDS_RETRACING = 'needs_retracing'           # traced MP4 may be stale after marker edits
 TITLE = 'title'
 DESCRIPTION = 'description'
 ORIG_MOVIE = 'orig_movie'

@@ -199,9 +199,9 @@ One record per uploaded movie. Key attributes:
 
 ``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
-``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``first_frame_urn``,
+``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1/None; None = not yet answered), ``credit_by_name`` (0/1/None; None = not yet answered), ``attribution_name``,
-``rotation`` (0/90/180/270 degrees).
+``rotation`` (0/90/180/270 degrees), ``needs_retracing`` (0/1; traced MP4 may be stale after marker edits).
 
 See ``src/app/schema.py`` ``Movie`` class for the full schema and constraints.
 

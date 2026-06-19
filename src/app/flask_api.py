@@ -34,6 +34,8 @@ from .odb import (
     MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
     MOVIE_TRACED_URN,
+    MOVIE_TRACED_URL,
+    NEEDS_RETRACING,
     MOVIE_METADATA_BULK_PROPS,
     MOVIE_ROTATION,
     FRAME_URN,
@@ -468,7 +470,12 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
-    return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
+    movies = odb.list_movies(user_id=get_user_id())
+    for movie in movies:
+        traced_urn = movie.get(MOVIE_TRACED_URN)
+        if (traced_urn or "").startswith("s3:"):
+            movie[MOVIE_TRACED_URL] = make_signed_url(urn=traced_urn)
+    return jsonify({'error': False, 'movies': movies})
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
@@ -695,6 +702,8 @@ def api_put_frame_trackpoints():
         for tp in trackpoints:
             logger.debug("%s",tp)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.movies, movie_id, {NEEDS_RETRACING: 1})
 
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 

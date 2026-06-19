@@ -90,6 +90,7 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end():
         {
             movie_glue.TOTAL_FRAMES: 5,
             movie_glue.MOVIE_STATUS: movie_glue.MOVIE_STATE_TRACING_COMPLETED,
+            movie_glue.NEEDS_RETRACING: 0,
             movie_glue.MOVIE_TRACED_URN: "s3://bucket/movie_traced.mp4",
             movie_glue.MOVIE_ZIPFILE_URN: "s3://bucket/movie_zipfile.mp4",
         },

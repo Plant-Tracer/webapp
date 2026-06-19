@@ -31,6 +31,7 @@ from .src.app.odb import (
     MOVIE_ROTATION,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
+    NEEDS_RETRACING,
     MOVIE_STATUS,
     MOVIE_STATE_READY,
     MOVIE_STATE_UPLOADING,
@@ -284,6 +285,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
         # note: should we update width, height and fps?
         ddbo.update_table(ddbo.movies, movie_id, {TOTAL_FRAMES:total_frames,
                                                   MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
+                                                  NEEDS_RETRACING: 0,
                                                   MOVIE_TRACED_URN: movie_traced_urn,
                                                   MOVIE_ZIPFILE_URN: movie_zipfile_urn})
 

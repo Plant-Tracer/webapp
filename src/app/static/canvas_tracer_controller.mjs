@@ -30,6 +30,8 @@ const TRACKING_START_TIMEOUT_MS = 15000;
 const BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE = 'backend lambda is unresponsive. Please report.';
 const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
+const MOVIE_TRACED_URL = 'movie_traced_url';
+const NEEDS_RETRACING = 'needs_retracing';
 const GRAPH_MARKER_COLORS = ['red', 'orange', 'magenta'];
 
 var cell_id_counter = 0;
@@ -177,6 +179,11 @@ class TracerController extends MovieController {
         this.dl_movie_id.attr("value", this.movie_id);
         this.download_button = $(".download_button");
         this.download_button.hide(); // Hide the download link until we track or retrack
+        this.traced_movie_download_control = $(this.div_selector + " .traced_movie_download_control");
+        this.traced_movie_download_link = $(this.div_selector + " .traced_movie_download_link");
+        this.refreshTracedMovieDownload();
+        this.retrace_required_message = $(this.div_selector + " .retrace_required_message");
+        this.refreshRetraceRequiredMessage();
 
         // Size the canvas and video from metadata when present; else leave default until first frame loads.
         const w = this.movie_metadata.width;
@@ -494,10 +501,38 @@ class TracerController extends MovieController {
         this.refreshTrackButtonState();
     }
 
+    markTracedMovieNeedsRetracing() {
+        this.movie_metadata[NEEDS_RETRACING] = 1;
+        this.refreshRetraceRequiredMessage();
+    }
+
+    refreshRetraceRequiredMessage() {
+        if (!this.retrace_required_message) {
+            return;
+        }
+        if (Number(this.movie_metadata[NEEDS_RETRACING] || 0) === 1) {
+            this.retrace_required_message.show();
+        } else {
+            this.retrace_required_message.hide();
+        }
+    }
+
+    refreshTracedMovieDownload() {
+        const tracedMovieUrl = this.movie_metadata[MOVIE_TRACED_URL];
+        if (tracedMovieUrl) {
+            this.traced_movie_download_link.attr('href', tracedMovieUrl);
+            this.traced_movie_download_control.show();
+        } else {
+            this.traced_movie_download_link.attr('href', '#');
+            this.traced_movie_download_control.hide();
+        }
+    }
+
     refreshTrackButtonState() {
         if (this.pending_retrace_to_end) {
             this.track_button.val(RETRACE_TO_END_OF_MOVIE);
             this.download_button.hide();
+            this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
@@ -509,9 +544,11 @@ class TracerController extends MovieController {
             // and disabled inputs are excluded from HTML form submission.
             this.dl_api_key.prop('disabled', false);
             this.dl_movie_id.prop('disabled', false);
+            this.refreshRetraceRequiredMessage();
             return;
         }
         this.track_button.val(TRACE_MOVIE);
+        this.refreshRetraceRequiredMessage();
     }
 
 
@@ -822,6 +859,7 @@ class TracerController extends MovieController {
                 for (const update of updates) {
                     this.frames[update.frame_index].markers = update.markers.map(marker => ({...marker}));
                 }
+                this.markTracedMovieNeedsRetracing();
                 this.goto_frame(this.frame_number);
                 this.refreshVisibleGraphs();
                 this.markFutureFramesDirty();
@@ -890,6 +928,7 @@ class TracerController extends MovieController {
                     return;
                 }
                 this.updateCurrentFrameMarkers(markers);
+                this.markTracedMovieNeedsRetracing();
                 this.refreshVisibleGraphs();
             })
             .fail( (res) => {
