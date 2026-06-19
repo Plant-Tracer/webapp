@@ -37,11 +37,11 @@ class MovieController extends CanvasController {
     bind_movie_controls(div_selector) {
         // set up movie controls  (manipulations are all done with CSS classes)
         // pressing a button calls either play() or goto_frame()
-        $(div_selector + " input.first_button").off('click').on('click', () => {this.goto_frame(0);});
+        $(div_selector + " input.first_button").off('click').on('click', () => {this.goto_frame(this.first_frame_target());});
         $(div_selector + " input.play_reverse").off('click').on('click', () => {this.play(-1);});
         $(div_selector + " input.play_forward").off('click').on('click', () => {this.play(+1);});
         $(div_selector + " input.pause_button").off('click').on('click', () => {this.stop_button_pressed();});
-        $(div_selector + " input.last_button").off('click').on('click', () => {this.goto_frame(1e10);});
+        $(div_selector + " input.last_button").off('click').on('click', () => {this.goto_frame(this.last_frame_target());});
         $(div_selector + " input.next_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number+1);});
         $(div_selector + " input.prev_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number-1);});
         $(div_selector + " input.frame_number_field").off('input').on('input', () => {
@@ -61,6 +61,10 @@ class MovieController extends CanvasController {
 
     set_bounce( bounce) { this.bounce = bounce; }
     set_loop( loop) { this.loop = loop; }
+    first_frame_target() { return 0; }
+    last_frame_target() { return 1e10; }
+    play_lower_bound() { return 0; }
+    play_upper_bound() { return this.frames.length > 0 ? this.frames.length - 1 : 0; }
 
     /*
      * loads the description of the movie and annotations
@@ -161,12 +165,16 @@ class MovieController extends CanvasController {
             this.timer = null;
         }
         this.playing = delta;
+        const lowerBound = this.play_lower_bound();
+        const upperBound = this.play_upper_bound();
         if (delta>0) {
-            if (this.frame_number >= this.frames.length-1) {
+            if (this.frame_number < lowerBound) {
+                next_frame = lowerBound;
+            } else if (this.frame_number >= upperBound) {
                 if (this.loop) {
-                    next_frame = 0;
-                } else if (this.bounce) {
-                    next_frame = this.frames.length - 2;
+                    next_frame = lowerBound;
+                } else if (this.bounce && upperBound > lowerBound) {
+                    next_frame = upperBound - 1;
                     next_delta = -1;
                 } else {
                     this.playing=0;
@@ -176,11 +184,13 @@ class MovieController extends CanvasController {
             }
         }
         if (delta<0) {
-            if (this.frame_number == 0) {
+            if (this.frame_number > upperBound) {
+                next_frame = upperBound;
+            } else if (this.frame_number <= lowerBound) {
                 if (this.loop) {
-                    next_frame = this.frames.length-1;
-                } else if (this.bounce) {
-                    next_frame = 1;
+                    next_frame = upperBound;
+                } else if (this.bounce && upperBound > lowerBound) {
+                    next_frame = lowerBound + 1;
                     next_delta = 1;
                 } else {
                     this.playing = 0;
@@ -236,8 +246,8 @@ class MovieController extends CanvasController {
             : (this.frames.length > 0 ? this.frames.length - 1 : 0);
         $(this.div_selector + ' input.movement_backwards').prop('disabled', this.frame_number==0); // can't move backwards
         $(this.div_selector + ' input.movement_forwards').prop('disabled', this.frame_number >= maxFrame);
-        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number >= maxFrame);
-        $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number==0);
+        $(this.div_selector + ' input.play_forward').prop('disabled', this.frame_number >= this.play_upper_bound());
+        $(this.div_selector + ' input.play_reverse').prop('disabled', this.frame_number <= this.play_lower_bound());
     }
 }
 

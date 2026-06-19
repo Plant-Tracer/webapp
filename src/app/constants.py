@@ -68,7 +68,8 @@ class C:
     TEST_ENDPOINT_URL_DYNAMODB = 'http://localhost:8000'
     DEFAULT_LOCAL_BUCKET = 'planttracer-local'
     DEFAULT_LOCAL_TABLE_PREFIX = 'demo-'
-    LOCAL_TRACKING_QUEUE_MODE = 'local'
+    LOCAL_TRACING_QUEUE_MODE = 'local'
+    LOCAL_TRACKING_QUEUE_MODE = LOCAL_TRACING_QUEUE_MODE
 
     # Confs
     DEFAULT_MAX_ENROLLMENT = 100
@@ -136,11 +137,12 @@ class C:
     MOVIE_PROPS_INT = (
         'published', 'deleted', 'version', 'last_frame_tracked', 'research_use', 'credit_by_name',
         'date_uploaded', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
+        'trim_start_frame', 'trim_end_frame',
     )
     MOVIE_PROPS_STR = ('fps', 'trackpoint_origin')
 
 
-def configure_local_environment(*, include_tracking_queue=False):
+def configure_local_environment(*, include_tracing_queue=False, include_tracking_queue=False):
     """Apply local DynamoDB/MinIO defaults unless the caller already set them."""
     os.environ.setdefault(C.AWS_REGION, "local")
     if os.environ.get(C.AWS_REGION) == "local":
@@ -150,7 +152,8 @@ def configure_local_environment(*, include_tracking_queue=False):
         os.environ.setdefault(C.AWS_ENDPOINT_URL_S3, C.TEST_ENDPOINT_URL_S3)
         os.environ.setdefault(C.PLANTTRACER_S3_BUCKET, C.DEFAULT_LOCAL_BUCKET)
     os.environ.setdefault(C.DYNAMODB_TABLE_PREFIX, C.DEFAULT_LOCAL_TABLE_PREFIX)
-    if include_tracking_queue:
+    if include_tracing_queue or include_tracking_queue:
+        os.environ.setdefault("TRACING_QUEUE_MODE", C.LOCAL_TRACING_QUEUE_MODE)
         os.environ.setdefault("TRACKING_QUEUE_MODE", C.LOCAL_TRACKING_QUEUE_MODE)
 
 class MIME:

@@ -1,6 +1,6 @@
 # lambda-resize
 
-`lambda-resize` is the Plant Tracer video/frame/tracking service. It is deployed
+`lambda-resize` is the Plant Tracer video/frame/tracing service. It is deployed
 as a Lambda HTTP API and can also run locally through `make run-local-lambda-debug`.
 
 ## HTTP Routes
@@ -23,13 +23,13 @@ as a Lambda HTTP API and can also run locally through `make run-local-lambda-deb
 
 - `POST /resize-api/v1/trace-movie`
   Queue retracing. The API key is sent in the `x-api-key` header. The JSON body
-  contains `movie_id` and `frame_start`.
+  contains `movie_id`, `frame_start`, and optionally `frame_end`.
 
 ## Queue Modes
 
-- Local: `TRACKING_QUEUE_MODE=local` sends retrace work to an in-process queue
+- Local: `TRACING_QUEUE_MODE=local` sends retrace work to an in-process queue
   drained by the local debug process.
-- Deployed: `TRACKING_QUEUE_URL` points to SQS. SQS events are handled by the
+- Deployed: `TRACING_QUEUE_URL` points to SQS. SQS events are handled by the
   same Lambda entry point.
 
 ## Shared Code
@@ -40,10 +40,10 @@ Lambda imports those files with `from .src.app ...`.
 
 ## Video Processing
 
-Frame extraction, scaling, JPEG generation, and tracking use OpenCV (`cv2`) and
+Frame extraction, scaling, JPEG generation, and tracing use OpenCV (`cv2`) and
 Pillow. ffmpeg is legacy/local tooling and is not the Lambda runtime path.
 
-Tracking writes:
+Tracing writes:
 
 - frame trackpoints to DynamoDB,
 - a frame ZIP to S3/MinIO,

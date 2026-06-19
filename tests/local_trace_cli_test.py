@@ -25,7 +25,7 @@ def test_movie_rotation_defaults_invalid_metadata_to_zero():
     assert movie_glue.movie_rotation({}) == 0
 
 
-def test_analysis_frame_height_from_movie_uses_tracker_processed_frame():
+def test_analysis_frame_height_from_movie_uses_tracer_processed_frame():
     movie_path = ROOT / "tests" / "data" / "2019-07-31 plantmovie.mov"
 
     assert movie_glue.analysis_frame_height_from_movie(movie_url=str(movie_path), rotation=0) == 480

@@ -16,7 +16,7 @@ from typing import Any
 
 from flask import Flask, Response, request
 
-from resize_app import lambda_tracking_handler
+from resize_app import lambda_tracing_handler
 from resize_app import local_queue
 from resize_app import main as resize_main
 
@@ -99,9 +99,9 @@ def main():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args()
 
-    configure_shared_local_environment(include_tracking_queue=True)
+    configure_shared_local_environment(include_tracing_queue=True)
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not bridge_app.debug:
-        local_queue.start_worker(processor=lambda_tracking_handler.process_tracking_message)
+        local_queue.start_worker(processor=lambda_tracing_handler.process_tracing_message)
         atexit.register(local_queue.stop_worker)
 
     logger.info("Starting local lambda debug server at http://%s:%s", args.host, args.port)

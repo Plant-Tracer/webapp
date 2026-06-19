@@ -3,7 +3,7 @@
 # Creates:
 # - VM
 # - Lambda to Resize and Track
-# - SQS to allow tracker to queue longer track and return
+# - SQS to allow tracer to queue longer traces and return
 #
 # Deploy (guided the first time):
 #      sam deploy --guided
@@ -595,12 +595,12 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                   - sqs:GetQueueUrl
-                Resource: !GetAtt TrackingQueue.Arn
+                Resource: !GetAtt TracingQueue.Arn
 
-  TrackingQueue:
+  TracingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub "${AWS::StackName}-tracking-queue"
+      QueueName: !Sub "${AWS::StackName}-tracing-queue"
       VisibilityTimeout: 900
 
   LambdaFunction:
@@ -623,7 +623,7 @@ Resources:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Sub "${AWS::StackName}-"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
-          TRACKING_QUEUE_URL: !Ref TrackingQueue
+          TRACING_QUEUE_URL: !Ref TracingQueue
       Events:
         AnyRoot:
           Type: HttpApi
@@ -643,10 +643,10 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
-        TrackingQueueEvent:
+        TracingQueueEvent:
           Type: SQS
           Properties:
-            Queue: !GetAtt TrackingQueue.Arn
+            Queue: !GetAtt TracingQueue.Arn
             BatchSize: 10
             FunctionResponseTypes:
               - ReportBatchItemFailures

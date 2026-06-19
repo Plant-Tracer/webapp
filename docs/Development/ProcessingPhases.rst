@@ -60,13 +60,13 @@ Retracing
 
    .. code-block:: json
 
-      { "movie_id": "m...", "frame_start": 12 }
+     { "movie_id": "m...", "frame_start": 12, "frame_end": 200 }
 
 4. lambda-resize clears trackpoints after frame ``N``, marks the movie as
    ``tracing``, and queues the work.
-5. In local mode, ``TRACKING_QUEUE_MODE=local`` sends work to the in-process
-   queue. In deployed mode, ``TRACKING_QUEUE_URL`` sends work to SQS.
-6. The worker tracks from frame ``N + 1``, writes trackpoints to DynamoDB,
+5. In local mode, ``TRACING_QUEUE_MODE=local`` sends work to the in-process
+   queue. In deployed mode, ``TRACING_QUEUE_URL`` sends work to SQS.
+6. The worker traces from frame ``N + 1`` through optional ``frame_end``, writes trackpoints to DynamoDB,
    writes a ZIP and traced movie to S3/MinIO, and marks status as
    ``tracing completed``.
 7. The browser polls ``/api/get-movie-metadata`` until completion.
@@ -88,6 +88,6 @@ on port 9811 and the local retrace worker.
 Video Processing Library
 ------------------------
 
-Current lambda-resize frame extraction, scaling, JPEG generation, and tracking
+Current lambda-resize frame extraction, scaling, JPEG generation, and tracing
 use OpenCV (``cv2``) and Pillow. ffmpeg is legacy/local tooling, not the
 Lambda runtime path.

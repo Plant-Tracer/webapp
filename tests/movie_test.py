@@ -618,3 +618,50 @@ def test_get_movie_trackpoints_content_disposition(client, new_movie):
     lines = [line for line in body.splitlines() if line.strip()]
     assert len(lines) >= 2, f"Expected header + data row, got: {body!r}"
     assert 'frame_number' in lines[0]
+
+
+def test_trim_metadata_defaults_and_trackpoint_download_filter(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'total_frames': 3})
+
+    resp = client.post('/api/get-movie-metadata', data={'api_key': api_key, 'movie_id': movie_id})
+    metadata = resp.get_json()['metadata']
+    assert metadata[odb.TRIM_START_FRAME] == 0
+    assert metadata[odb.TRIM_END_FRAME] == 2
+    stored_movie = odb.get_movie(movie_id=movie_id)
+    assert odb.TRIM_START_FRAME not in stored_movie
+    assert odb.TRIM_END_FRAME not in stored_movie
+
+    for frame_number in range(3):
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label='apex')],
+        )
+
+    resp = client.post('/api/set-movie-trim', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        odb.TRIM_START_FRAME: '1',
+    })
+    assert resp.status_code == 200
+    assert resp.get_json()['metadata'][odb.TRIM_START_FRAME] == 1
+
+    resp = client.post('/api/set-movie-trim', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        odb.TRIM_END_FRAME: '1',
+    })
+    assert resp.status_code == 200
+    assert resp.get_json()['metadata'][odb.TRIM_END_FRAME] == 1
+
+    resp = client.post('/api/get-movie-trackpoints', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        'format': 'json',
+    })
+    payload = resp.get_json()
+    assert payload['trackpoint_dicts'] == [
+        {'frame_number': 1, 'x': 11, 'y': 21, 'label': 'apex'}
+    ]

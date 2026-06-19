@@ -19,6 +19,8 @@ def test_movie_schema():
     )
 
     schema.validate_movie_field("width", 0)
+    assert schema.validate_movie_field("trim_start_frame", "0") == 0
+    assert schema.validate_movie_field("trim_end_frame", "10") == 10
     with pytest.raises(AttributeError):
         schema.validate_movie_field("unknown", 0)
 

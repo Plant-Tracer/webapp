@@ -91,6 +91,62 @@ TEST_MOVIE_FRAME_DATA = {
 }
 
 
+def create_trim_test_movie(local_ddb, *, total_frames=5, trim_start_frame=None, trim_end_frame=None):
+    course_id = f"trim-course-{rand8()}"
+    course_key = f"trim-key-{uuid.uuid4().hex[:16]}"
+    user_id = odb.new_user_id()
+    movie_id = odb.new_movie_id()
+    local_ddb.put_course({
+        COURSE_ID: course_id,
+        'course_name': f"Trim Course {rand8()}",
+        'course_key': course_key,
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+    local_ddb.put_user({
+        USER_ID: user_id,
+        'email': f"trim-{uuid.uuid4().hex[:8]}@example.com",
+        'user_name': 'Trim User',
+        'created': int(time.time()),
+        'enabled': 1,
+        'admin_for_courses': [],
+        'courses': [course_id],
+        'primary_course_id': course_id,
+        'primary_course_name': 'Trim Course',
+    })
+    movie = {
+        MOVIE_ID: movie_id,
+        COURSE_ID: course_id,
+        USER_ID: user_id,
+        'user_name': 'Trim User',
+        'title': 'Trim test movie',
+        'published': 0,
+        'deleted': 0,
+        'description': 'Trim semantics test.',
+        'movie_zipfile_urn': 's3://bogus/trim.zip',
+        'movie_data_urn': 's3://bogus/trim.mov',
+        LAST_FRAME_TRACKED: 0,
+        'created_at': int(time.time()),
+        'date_uploaded': int(time.time()),
+        'fps': "29.92",
+        'total_frames': total_frames,
+        'total_bytes': 100,
+        odb.TRACKPOINT_ORIGIN: odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+    }
+    if trim_start_frame is not None:
+        movie[odb.TRIM_START_FRAME] = trim_start_frame
+    if trim_end_frame is not None:
+        movie[odb.TRIM_END_FRAME] = trim_end_frame
+    local_ddb.put_movie(movie)
+    for frame_number in range(total_frames):
+        local_ddb.put_movie_frame({
+            MOVIE_ID: movie_id,
+            'frame_number': frame_number,
+            'frame_urn': f's3://bogus/frame-{frame_number}.jpg',
+        })
+    return movie_id
+
+
 # pylint: disable=too-many-statements
 def test_odb(local_ddb):
     ddbo = local_ddb
@@ -264,6 +320,67 @@ def test_clear_movie_tracking_after_frame(local_ddb):
     assert odb.get_movie_trackpoints(movie_id=movie_id) == [
         {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'frame0'}
     ]
+
+
+def test_clear_movie_tracking_after_frame_respects_frame_end(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=4)
+    for frame_number in range(4):
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label=f'frame{frame_number}')],
+        )
+
+    deleted = odb.clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=0, frame_end=1)
+
+    assert deleted == 1
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'frame0'},
+        {'frame_number': 2, 'x': 12, 'y': 22, 'label': 'frame2'},
+        {'frame_number': 3, 'x': 13, 'y': 23, 'label': 'frame3'},
+    ]
+
+
+def test_movie_trim_defaults_validate_and_filter_trackpoints(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=3)
+    metadata = odb.movie_metadata_with_trim_defaults(odb.get_movie(movie_id=movie_id))
+    assert metadata[odb.TRIM_START_FRAME] == 0
+    assert metadata[odb.TRIM_END_FRAME] == 2
+    assert odb.TRIM_START_FRAME not in odb.get_movie(movie_id=movie_id)
+    assert odb.TRIM_END_FRAME not in odb.get_movie(movie_id=movie_id)
+
+    for frame_number in range(3):
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label=f'frame{frame_number}')],
+        )
+
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1) == [
+        {'frame_number': 1, 'x': 11, 'y': 21, 'label': 'frame1'}
+    ]
+    with pytest.raises(ValueError):
+        odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=3)
+    with pytest.raises(ValueError):
+        odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_END_FRAME, frame_number=3)
+
+
+def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: 2})
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=2,
+        trackpoints=[Trackpoint(x=12, y=22, label='apex')],
+    )
+
+    metadata = odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
+
+    assert metadata[odb.TRIM_START_FRAME] == 0
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=0) == [
+        {'frame_number': 0, 'x': 12, 'y': 22, 'label': 'apex'}
+    ]
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
 
 
 def test_delete_user_removes_course_enrollment(local_ddb):

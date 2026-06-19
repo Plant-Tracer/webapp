@@ -8,7 +8,7 @@ import argparse
 import subprocess
 
 from resize_app.src.app.schema import Trackpoint
-from resize_app import tracker
+from resize_app import tracer
 from resize_app import mpeg_jpeg_zip
 
 TEST_FILE = Path(__file__).parent.parent.parent / "tests" / "data" / "2019-07-12 circumnutation.mp4"
@@ -29,16 +29,16 @@ def do_mpeg(args):
 
 def do_track(args):
     trackpoints = [Trackpoint(**tp) for tp in json.loads(args.trackpoints)]
-    print("Tracking Trackpoints:",trackpoints)
+    print("Tracing Trackpoints:",trackpoints)
 
-    def tracker_callback(obj:tracker.TrackerCallbackArg):
+    def tracer_callback(obj:tracer.TracerCallbackArg):
         print(obj)
 
-    tracker.track_movie_v2(movie_url=args.infile, frame_start=0, trackpoints=trackpoints,
-                           movie_zipfile_path = args.zipfile,
-                           movie_traced_path = args.movie_traced,
-                           rotation=args.rotate, callback=tracker_callback,
-                           comment=args.comment)
+    tracer.trace_movie_v2(movie_url=args.infile, frame_start=0, trackpoints=trackpoints,
+                          movie_zipfile_path = args.zipfile,
+                          movie_traced_path = args.movie_traced,
+                          rotation=args.rotate, callback=tracer_callback,
+                          comment=args.comment)
 
 def main():
     parser = argparse.ArgumentParser(prog='sqs_cli', description='cli tester for SQS',
@@ -56,7 +56,7 @@ def main():
     mpeg_parser.add_argument("--zipfile",type=Path)
     mpeg_parser.add_argument("--first_frame",type=Path)
 
-    track_parser = subparsers.add_parser("tracker", help="Tracker test. Make the zipfile and track at the same time")
+    track_parser = subparsers.add_parser("tracer", help="Tracer test. Make the zipfile and trace at the same time")
     track_parser.set_defaults(func=do_track)
     track_parser.add_argument("--infile", type=Path, default=TEST_FILE)
     track_parser.add_argument("--zipfile", type=Path, default=Path("outfile.zip"))
