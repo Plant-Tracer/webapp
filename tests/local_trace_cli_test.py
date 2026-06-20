@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from resize_app import movie_glue
+from resize_app import tracer
+from resize_app.src.app.schema import Trackpoint
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,8 +28,33 @@ def test_movie_rotation_defaults_invalid_metadata_to_zero():
     assert movie_glue.movie_rotation({}) == 0
 
 
-def test_analysis_frame_height_from_movie_uses_tracker_processed_frame():
+def test_analysis_frame_height_from_movie_uses_tracer_processed_frame():
     movie_path = ROOT / "tests" / "data" / "2019-07-31 plantmovie.mov"
 
     assert movie_glue.analysis_frame_height_from_movie(movie_url=str(movie_path), rotation=0) == 480
     assert movie_glue.analysis_frame_height_from_movie(movie_url=str(movie_path), rotation=90) == 640
+
+
+def test_trace_movie_v2_respects_frame_end(monkeypatch):
+    frames = [np.zeros((8, 8, 3), dtype=np.uint8) for _frame_number in range(4)]
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
+
+    def fake_trace_frame(*, gray_frame_prev, gray_frame, trackpoints, frame_number):
+        del gray_frame_prev, gray_frame, trackpoints
+        return [Trackpoint(x=frame_number, y=frame_number + 1, label="apex", frame_number=frame_number)]
+
+    monkeypatch.setattr(tracer, "cv2_trace_frame", fake_trace_frame)
+    callbacks = []
+
+    trackpoints = tracer.trace_movie_v2(
+        movie_url="https://example.com/movie.mp4",
+        frame_start=1,
+        frame_end=2,
+        trackpoints=[Trackpoint(x=0, y=1, label="apex", frame_number=0)],
+        callback=callbacks.append,
+    )
+
+    assert [tp.frame_number for tp in trackpoints] == [0, 1, 2]
+    assert [obj.frame_number for obj in callbacks] == [0, 1, 2, 3]
+    assert callbacks[2].frame_trackpoints == [Trackpoint(x=2, y=3, label="apex", frame_number=2)]
+    assert callbacks[3].frame_trackpoints == []

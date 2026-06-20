@@ -9,7 +9,8 @@ Install Xcode command-line tools, Homebrew, and required packages:
 ```bash
 xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install awscli chromium ffmpeg lsof node poetry python openjdk
+brew install awscli ffmpeg lsof node poetry python openjdk
+brew install --cask google-chrome
 ```
 
 Ensure OpenJDK is on your path if Homebrew asks you to add it:

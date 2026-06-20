@@ -67,6 +67,8 @@ DESCRIPTION = 'description'
 ORIG_MOVIE = 'orig_movie'
 TOTAL_BYTES = 'total_bytes'
 TOTAL_FRAMES = 'total_frames'
+TRIM_START_FRAME = 'trim_start_frame'
+TRIM_END_FRAME = 'trim_end_frame'
 DATE_UPLOADED = 'date_uploaded'
 VERSION = 'version'
 DELETED = 'deleted'
@@ -1346,6 +1348,98 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     return movie
 
 
+def _movie_total_frames(movie: dict) -> int | None:
+    total_frames = movie.get(TOTAL_FRAMES)
+    if total_frames is None:
+        return None
+    total_frames = int(total_frames)
+    if total_frames < 1:
+        return None
+    return total_frames
+
+
+def default_trim_end_frame(movie: dict) -> int | None:
+    """Return the default inclusive trim end frame, or None when total_frames is unknown."""
+    total_frames = _movie_total_frames(movie)
+    return None if total_frames is None else total_frames - 1
+
+
+def validate_trim_bounds(*, trim_start_frame: int, trim_end_frame: int, total_frames: int):
+    """Validate inclusive, zero-based trim bounds for a movie with known total frames."""
+    if not 0 <= trim_start_frame:
+        raise ValueError("trim_start_frame must be >= 0")
+    if trim_start_frame > trim_end_frame:
+        raise ValueError("trim_start_frame must be <= trim_end_frame")
+    if not trim_end_frame < total_frames:
+        raise ValueError("trim_end_frame must be < total_frames")
+
+
+def movie_trim_bounds(movie: dict) -> tuple[int, int | None]:
+    """Return inclusive trim bounds, applying defaults without mutating ``movie``."""
+    trim_start_frame = int(movie.get(TRIM_START_FRAME, 0) or 0)
+    default_end = default_trim_end_frame(movie)
+    raw_end = movie.get(TRIM_END_FRAME, default_end)
+    trim_end_frame = None if raw_end is None else int(raw_end)
+    if trim_end_frame is not None and default_end is not None:
+        trim_end_frame = min(trim_end_frame, default_end)
+    total_frames = _movie_total_frames(movie)
+    if trim_end_frame is not None and total_frames is not None:
+        validate_trim_bounds(
+            trim_start_frame=trim_start_frame,
+            trim_end_frame=trim_end_frame,
+            total_frames=total_frames,
+        )
+    return trim_start_frame, trim_end_frame
+
+
+def movie_metadata_with_trim_defaults(movie: dict) -> dict:
+    """Return movie metadata with computed trim defaults, without persisting them."""
+    metadata = copy.copy(movie)
+    trim_start_frame, trim_end_frame = movie_trim_bounds(metadata)
+    metadata[TRIM_START_FRAME] = trim_start_frame
+    if trim_end_frame is not None:
+        metadata[TRIM_END_FRAME] = trim_end_frame
+    return metadata
+
+
+def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_frame: int):
+    """Copy markers from one frame to another only when the target has no markers."""
+    assert is_movie_id(movie_id)
+    ddbo = DDBO()
+    target = ddbo.get_movie_frame(movie_id, to_frame)
+    if target and target.get('trackpoints'):
+        return False
+    source = ddbo.get_movie_frame(movie_id, from_frame)
+    if not source or not source.get('trackpoints'):
+        return False
+    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source['trackpoints']]
+    put_frame_trackpoints(movie_id=movie_id, frame_number=to_frame, trackpoints=trackpoints)
+    return True
+
+
+def set_movie_trim_frame(*, movie_id: str, prop: str, frame_number: int) -> dict:
+    """Set one trim bound after validation and return metadata with defaults."""
+    assert is_movie_id(movie_id)
+    if prop not in (TRIM_START_FRAME, TRIM_END_FRAME):
+        raise ValueError(f"invalid trim property {prop}")
+    frame_number = int(frame_number)
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    total_frames = _movie_total_frames(movie)
+    if total_frames is None:
+        raise ValueError("total_frames is required before trimming")
+    old_start, old_end = movie_trim_bounds(movie)
+    new_start = frame_number if prop == TRIM_START_FRAME else old_start
+    new_end = frame_number if prop == TRIM_END_FRAME else old_end
+    if new_end is None:
+        new_end = total_frames - 1
+    validate_trim_bounds(trim_start_frame=new_start, trim_end_frame=new_end, total_frames=total_frames)
+    if prop == TRIM_START_FRAME and new_start < old_start:
+        _copy_frame_trackpoints_if_missing(movie_id=movie_id, from_frame=old_start, to_frame=new_start)
+    ddbo.update_table(ddbo.movies, movie_id, {prop: frame_number})
+    return movie_metadata_with_trim_defaults(get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True))
+
+
 def can_access_movie(*, user_id, movie_id):
     """
     Checks to see if the user is allowed to access the movie:
@@ -1637,21 +1731,23 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
         if not last_evaluated_key:
             break
 
-def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None):
+def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame_end=None):
     """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    :param: frame_start, frame_count - optional
+    :param: frame_start, frame_count, frame_end - optional. frame_end is inclusive.
     """
 
     ensure_bottom_left_trackpoints(movie_id=movie_id)
 
     if frame_start is None:
         frame_start = 0
-    if frame_count is None:
-        frame_count = 1e10
+    if frame_end is None:
+        if frame_count is None:
+            frame_count = 1e10
+        frame_end = frame_start + frame_count
 
     ret = []
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
-                                             frame_start, frame_start+frame_count ):
+                                             frame_start, frame_end ):
         for tp in frame.get('trackpoints',[]):
             ret.append({FRAME_NUMBER:int(frame[FRAME_NUMBER]),
                         'x':int(tp['x']),
@@ -1725,22 +1821,27 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
 
 
-def clear_movie_tracking_after_frame(*, movie_id, frame_number:int):
+def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:int|None=None):
     """Remove trackpoints for frames strictly after ``frame_number``.
 
     This is used when the user edits frame ``N`` and requests a retrace: frame ``N``
-    remains the source of truth, while frames ``N+1`` through the end of the movie
+    remains the source of truth, while frames ``N+1`` through ``frame_end`` (or the
+    end of the movie when no end is provided)
     are invalidated and must be recomputed.
 
     Returns the count of frame records whose ``trackpoints`` attribute was removed.
     """
     assert is_movie_id(movie_id)
     assert frame_number >= 0
+    if frame_end is not None:
+        assert frame_end >= frame_number
     ddbo = DDBO()
     deleted = 0
     for frame in ddbo.get_frames(movie_id):
         fn = frame.get(FRAME_NUMBER)
         if fn is None or int(fn) <= frame_number or 'trackpoints' not in frame:
+            continue
+        if frame_end is not None and int(fn) > frame_end:
             continue
         ddbo.movie_frames.update_item(
             Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},

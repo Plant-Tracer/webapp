@@ -198,7 +198,7 @@ Lambda Tracking Responsibilities
 
 OpenCV must receive canvas/image coordinates. Lambda tracking therefore converts
 bottom-left trackpoints to top-left image coordinates before calling optical
-flow or drawing labels, then converts tracker output back to bottom-left before
+flow or drawing labels, then converts tracer output back to bottom-left before
 writing frame trackpoints to DynamoDB.
 
 The conversion uses the processed frame height derived from

@@ -89,11 +89,11 @@ Mail
 Lambda Queue
 ------------
 
-``TRACKING_QUEUE_MODE``
+``TRACING_QUEUE_MODE``
    Set to ``local`` to use the in-process local retrace queue.
 
-``TRACKING_QUEUE_URL``
-   SQS queue URL used by deployed lambda-resize tracking.
+``TRACING_QUEUE_URL``
+   SQS queue URL used by deployed lambda-resize tracing.
 
 Development And Diagnostics
 ---------------------------

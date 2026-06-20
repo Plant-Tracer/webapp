@@ -1,8 +1,8 @@
 """
 Lambda HTTP API and SQS entry point. Parses the event and delegates to API handlers.
 API's primary function:
-- resize, rotate, track, and code an MP3 of the movie.
-- Creates a ZIP of the tracking with the rotated frames.
+- resize, rotate, trace, and code an MP3 of the movie.
+- Creates a ZIP of the tracing with the rotated frames.
 - Renders into the frames.
 - Uses all the final frames to make a new mp4 that is also uploaded.
 
@@ -30,7 +30,7 @@ from aws_lambda_powertools.utilities.batch import (
 
 from . import movie_glue
 from . import mpeg_jpeg_zip
-from . import lambda_tracking_handler
+from . import lambda_tracing_handler
 
 LOGGER = Logger(service="planttracer")
 
@@ -171,10 +171,16 @@ def handle_post_actions():
         return Response(status_code=400, body="movie_id must be provided")
 
     frame_start = body.get("frame_start", 0)
+    frame_end = body.get("frame_end")
     LOGGER.info("trace-movie. movie_id=%s", movie_id)
     try:
-        movie_glue.prepare_tracing_request(api_key=api_key, movie_id=movie_id, frame_start=frame_start)
-        return movie_glue.queue_tracing(api_key, movie_id, frame_start)
+        movie_glue.prepare_tracing_request(
+            api_key=api_key,
+            movie_id=movie_id,
+            frame_start=frame_start,
+            frame_end=frame_end,
+        )
+        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end)
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, body=str(e.args))
@@ -187,6 +193,6 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, A
         # Route to SQS handler for partial batch processing
         return process_partial_response( event=event, context=context,
                                          processor=BatchProcessor(event_type=EventType.SQS),
-                                         record_handler=lambda_tracking_handler.process_tracking_record)
+                                         record_handler=lambda_tracing_handler.process_tracing_record)
     # Powertools resolves HTTP events natively
     return app.resolve(event, context)

@@ -100,6 +100,8 @@ class Movie(BaseModel):
     trackpoint_origin: Literal["bottom-left"] | None = None
 
     total_frames: Annotated[int | None, Field(ge=0, le=999999)] = None
+    trim_start_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
+    trim_end_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
     total_bytes: Annotated[int | None, Field(ge=0)] = None
 
     movie_data_urn: str | None = None

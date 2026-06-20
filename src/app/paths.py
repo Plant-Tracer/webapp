@@ -28,7 +28,7 @@ STANDALONE_PATH = join(ROOT_DIR, 'standalone.py')
 TEST_MOVIE_FILENAME = join(TEST_DATA_DIR,'2019-07-31 plantmovie-rotated.mov')
 
 # LEGACY: Static ffmpeg binaries. Production uses cv2+Pillow only; ffmpeg is only for legacy
-# tracker helpers (cleanup_mp4, rotate_movie, render_tracked_movie). Use the one matching host arch.
+# tracer helpers (cleanup_mp4, rotate_movie, render_tracked_movie). Use the one matching host arch.
 AWS_LAMBDA_LINUX_STATIC_FFMPEG_AMD64 = join(ETC_DIR, 'ffmpeg-6.1-amd64-static')
 AWS_LAMBDA_LINUX_STATIC_FFMPEG_ARM64 = join(ETC_DIR, 'ffmpeg-6.1-arm64-static')
 

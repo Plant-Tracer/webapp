@@ -27,7 +27,7 @@ webapp/
 │   │   ├── schema.py           # DynamoDB table definitions
 │   │   ├── mailer.py           # Email via SMTP or AWS SES
 │   │   ├── s3_presigned.py     # S3 signed URLs and presigned POST
-│   │   ├── tracker.py          # Plant motion tracking
+│   │   ├── tracer.py           # Plant motion tracing
 │   │   ├── templates/         # Jinja2 HTML + MIME email templates
 │   │   └── static/            # CSS, JavaScript, images
 │   ├── dbutil.py               # CLI: createdb, makelink, course creation, etc.

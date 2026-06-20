@@ -8,7 +8,7 @@ Files in this directory and the rational:
 |gravitropism_test.py| TODO |
 |mailer_test.py | |
 |movie_test.py | tests database functions involved in movie creation |
-|tracker_test.py | tests tracking algorithms|
+|local_trace_cli_test.py | tests tracing support functions|
 |user_test.py | tests database functions involved in user and course creation |
 |fixtures/localmail_config.py | Experiment on moving fixtures to a subdirectory. Currently only used by mailer_test.py |
 

@@ -68,7 +68,7 @@ make run-local-debug                     # Flask dev server at localhost:8080
 - `auth.py`, `apikey.py` — authentication
 - `s3_presigned.py` — S3 presigned URLs and uploads
 - `mailer.py` — email via SMTP or AWS SES
-- `tracker.py` — plant motion tracking (VM only; Lambda uses vendored copy)
+- `tracer.py` — plant motion tracing (VM only; Lambda uses vendored copy)
 
 Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_presigned.py`, etc.
 

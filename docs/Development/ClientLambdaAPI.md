@@ -29,7 +29,7 @@ Lambda validates it against DynamoDB.
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |
 | Movie zip redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=zip` | query `api_key` | 302 redirect to signed frame ZIP URL if present. |
-| Trace movie | POST | `/resize-api/v1/trace-movie` | `x-api-key` header | Queues retracing from a user-edited source frame. |
+| Trace movie | POST | `/resize-api/v1/trace-movie` | `x-api-key` header | Queues retracing from a user-edited source frame through an optional end frame. |
 
 Compatibility route:
 
@@ -49,13 +49,13 @@ Content-Type: application/json
 Body:
 
 ```json
-{ "movie_id": "m...", "frame_start": 12 }
+{ "movie_id": "m...", "frame_start": 12, "frame_end": 200 }
 ```
 
 `frame_start` is the edited source frame. Plant Tracer preserves that frame,
-clears stored trackpoints after it, marks the movie as `tracing`, and queues
-work. In local mode the work goes to the in-process queue; in deployed mode it
-goes to SQS through `TRACKING_QUEUE_URL`.
+clears stored trackpoints after it through `frame_end` when supplied, marks the
+movie as `tracing`, and queues work. In local mode the work goes to the
+in-process queue; in deployed mode it goes to SQS through `TRACING_QUEUE_URL`.
 
 ## Local Development
 

@@ -34,6 +34,8 @@ from .odb import (
     MOVIE_TRACED_URN,
     MOVIE_METADATA_BULK_PROPS,
     MOVIE_ROTATION,
+    TRIM_START_FRAME,
+    TRIM_END_FRAME,
     MOVIE_STATUS,
     MOVIE_STATE_TRACING_COMPLETED,
     DDBO,
@@ -458,6 +460,7 @@ def api_get_movie_metadata():
 
     # Return only stored metadata; do not generate or write metadata here.
     # Width/height are set when the first frame is served (Lambda get-frame) or by Lambda (rotate-and-zip).
+    movie_metadata = odb.movie_metadata_with_trim_defaults(movie_metadata)
 
     # For any of these URNs, create URLs
     for urn_name in [MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN]:
@@ -502,7 +505,15 @@ def api_get_movie_trackpoints():
     # NOTE - getting the movie should (soon) get all the trackpoints, as they will all be stored together
     # get_movie_trackpoints() returns a dictionary for each trackpoint.
     # we want a dictionary for each frame_number
-    trackpoint_dicts = odb.get_movie_trackpoints(movie_id=movie[MOVIE_ID])
+    movie_metadata = odb.movie_metadata_with_trim_defaults(
+        odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
+    )
+    trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
+    trackpoint_dicts = odb.get_movie_trackpoints(
+        movie_id=movie[MOVIE_ID],
+        frame_start=trim_start_frame,
+        frame_end=trim_end_frame,
+    )
     frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
     labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
     frame_dicts    = defaultdict(dict)
@@ -531,6 +542,28 @@ def api_get_movie_trackpoints():
         response.headers['Content-Type'] = 'text/csv'
         response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
         return response
+
+
+@api_bp.route('/set-movie-trim', methods=POST)
+def api_set_movie_trim():
+    """Set one inclusive movie trim bound."""
+    movie_id = get_movie_id()
+    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
+    trim_start_frame = get_int(TRIM_START_FRAME)
+    trim_end_frame = get_int(TRIM_END_FRAME)
+    if (trim_start_frame is None) == (trim_end_frame is None):
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: "set exactly one trim frame"}), 400
+    prop = TRIM_START_FRAME if trim_start_frame is not None else TRIM_END_FRAME
+    frame_number = trim_start_frame if trim_start_frame is not None else trim_end_frame
+    try:
+        metadata = odb.set_movie_trim_frame(
+            movie_id=movie[MOVIE_ID],
+            prop=prop,
+            frame_number=frame_number,
+        )
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    return jsonify({C.API_KEY_ERROR: False, C.API_KEY_METADATA: metadata})
 
 
 

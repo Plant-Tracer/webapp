@@ -56,7 +56,7 @@ def populate_demo_user():
 
 
 def populate_demo_movies():
-    # TODO - Just use the tracker to track!
+    # TODO - Just use the tracer to trace.
     def is_movie_fn(fn):
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 

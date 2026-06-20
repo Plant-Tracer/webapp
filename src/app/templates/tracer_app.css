@@ -15,6 +15,17 @@ canvas {
     padding: 2px;
 }
 
+.trim-control-row {
+    margin-top: 0.35rem;
+}
+
+.trim_controls {
+    margin-left: 0.4rem;
+}
+
+.trim_status {
+    margin-left: 0.4rem;
+}
 
 /* Popup styles */
 
