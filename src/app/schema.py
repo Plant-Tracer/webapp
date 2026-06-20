@@ -149,6 +149,7 @@ class Trackpoint(BaseModel):
     x: Decimal
     y: Decimal
     label: str
+    undeletable: bool | None = None
     frame_number: int | None = None
     status: int | None = None
     err: Decimal | None = None

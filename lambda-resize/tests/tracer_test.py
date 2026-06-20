@@ -4,10 +4,10 @@ from resize_app import tracer
 from resize_app.src.app.schema import Trackpoint
 
 
-def test_preserve_missing_ruler_trackpoints_copies_only_missing_rulers():
+def test_preserve_missing_undeletable_trackpoints_copies_only_missing_undeletable():
     previous_trackpoints = [
         Trackpoint(x=1, y=2, label="Apex", frame_number=4),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, undeletable=True),
         Trackpoint(x=30, y=40, label="Ruler10mm", frame_number=4),
     ]
     output_trackpoints = [
@@ -15,7 +15,7 @@ def test_preserve_missing_ruler_trackpoints_copies_only_missing_rulers():
         Trackpoint(x=31, y=41, label="Ruler10mm", frame_number=5),
     ]
 
-    result = tracer.preserve_missing_ruler_trackpoints(
+    result = tracer.preserve_missing_undeletable_trackpoints(
         previous_trackpoints=previous_trackpoints,
         output_trackpoints=output_trackpoints,
         frame_number=5,
@@ -24,15 +24,15 @@ def test_preserve_missing_ruler_trackpoints_copies_only_missing_rulers():
     assert result == [
         Trackpoint(x=2, y=3, label="Apex", frame_number=5),
         Trackpoint(x=31, y=41, label="Ruler10mm", frame_number=5),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, undeletable=True),
     ]
 
 
 def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
     previous_trackpoints = [
         Trackpoint(x=1, y=2, label="Apex", frame_number=4),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4),
-        Trackpoint(x=30, y=40, label="Ruler 10mm", frame_number=4),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, undeletable=True),
+        Trackpoint(x=30, y=40, label="Ruler 10mm", frame_number=4, undeletable=True),
     ]
 
     def fake_optical_flow(_gray_frame_prev, _gray_frame, _input_points, _unused, **_kwargs):
@@ -55,8 +55,8 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
 
     assert result == [
         Trackpoint(x=2, y=3, label="Apex", frame_number=5),
-        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5),
+        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, undeletable=True),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, undeletable=True),
     ]
 
 

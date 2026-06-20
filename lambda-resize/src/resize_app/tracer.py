@@ -77,21 +77,25 @@ class TracedMovieFrameRange(NamedTuple):
     end:int | None = None
 
 
-def is_ruler_trackpoint(trackpoint: Trackpoint):
-    return bool(RULER_LABEL_RE.match(trackpoint.label))
+def trackpoint_with_updates(trackpoint: Trackpoint, **updates):
+    return Trackpoint(**{**trackpoint.model_dump(), **updates})
 
 
-def preserve_missing_ruler_trackpoints(*,
-                                       previous_trackpoints:List[Trackpoint],
-                                       output_trackpoints:List[Trackpoint],
-                                       frame_number:int):
+def is_undeletable_trackpoint(trackpoint: Trackpoint):
+    return trackpoint.undeletable is True
+
+
+def preserve_missing_undeletable_trackpoints(*,
+                                             previous_trackpoints:List[Trackpoint],
+                                             output_trackpoints:List[Trackpoint],
+                                             frame_number:int):
     output_labels = {trackpoint.label for trackpoint in output_trackpoints}
-    missing_rulers = [
-        Trackpoint(x=trackpoint.x, y=trackpoint.y, label=trackpoint.label, frame_number=frame_number)
+    missing_undeletable = [
+        trackpoint_with_updates(trackpoint, frame_number=frame_number)
         for trackpoint in previous_trackpoints
-        if is_ruler_trackpoint(trackpoint) and trackpoint.label not in output_labels
+        if is_undeletable_trackpoint(trackpoint) and trackpoint.label not in output_labels
     ]
-    return output_trackpoints + missing_rulers
+    return output_trackpoints + missing_undeletable
 
 
 def graphable_trackpoint_label(label:str):
@@ -151,17 +155,17 @@ def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
         trackpoints_out = []
         for (i, pt) in enumerate(trackpoints):
             if status_array[i] == 1:
-                trackpoints_out.append(Trackpoint(x=point_array_out[i][0],
-                                                  y=point_array_out[i][1],
-                                                  label=pt.label,
-                                                  frame_number = frame_number ))
-        trackpoints_out = preserve_missing_ruler_trackpoints(previous_trackpoints=trackpoints,
-                                                             output_trackpoints=trackpoints_out,
-                                                             frame_number=frame_number)
+                trackpoints_out.append(trackpoint_with_updates(pt,
+                                                               x=point_array_out[i][0],
+                                                               y=point_array_out[i][1],
+                                                               frame_number=frame_number))
+        trackpoints_out = preserve_missing_undeletable_trackpoints(previous_trackpoints=trackpoints,
+                                                                   output_trackpoints=trackpoints_out,
+                                                                   frame_number=frame_number)
     except cv2.error as e:  # pylint: disable=catching-non-exception
         logger.error("Optical flow failed: %s",e)
         # Don't return empty! Return the previous trackpoints but update their frame_number
-        trackpoints_out = [ Trackpoint(x=pt.x, y=pt.y, label=pt.label, frame_number=frame_number) for pt in trackpoints ]
+        trackpoints_out = [trackpoint_with_updates(pt, frame_number=frame_number) for pt in trackpoints]
     logger.info("cv2_trace_frame output_trackpoints=%s", trackpoints_out)
     return trackpoints_out
 

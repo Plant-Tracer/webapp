@@ -357,6 +357,13 @@ describe('create_default_markers', () => {
         expect(create_default_markers()[0].label).toBe('Apex');
     });
 
+    test('default ruler markers are undeletable', () => {
+        const markers = create_default_markers();
+        expect(markers[0].undeletable).toBeUndefined();
+        expect(markers[1]).toMatchObject({ label: 'Ruler 0mm', undeletable: true });
+        expect(markers[2]).toMatchObject({ label: 'Ruler 10mm', undeletable: true });
+    });
+
     test('returns a fresh copy each call', () => {
         const a = create_default_markers();
         const b = create_default_markers();
@@ -935,6 +942,30 @@ describe('TracerController.get_markers', () => {
         expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex' }]);
     });
 
+    test('carries marker metadata when saving moved trackpoints', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        const marker = tc.marker_from_trackpoint({
+            x: 10,
+            y: 20,
+            label: 'Ruler 0mm',
+            frame_number: 4,
+            undeletable: true,
+            status: 1,
+        });
+        marker.x = 30;
+        marker.y = 40;
+        tc.objects.push(marker);
+
+        expect(tc.get_markers()).toEqual([{
+            x: 30,
+            y: 40,
+            label: 'Ruler 0mm',
+            frame_number: 4,
+            undeletable: true,
+            status: 1,
+        }]);
+    });
+
     test('ignores non-Marker objects', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.objects.push(new MockLineClass(0, 0, 50, 50, 2, 'blue'));
@@ -1193,8 +1224,8 @@ describe('trace_movie_one_frame', () => {
 
         expect(tc.frames[0].markers).toEqual([
             { x: 50, y: 430, label: 'Apex' },
-            { x: 50, y: 380, label: 'Ruler 0mm' },
-            { x: 50, y: 330, label: 'Ruler 10mm' },
+            { x: 50, y: 380, label: 'Ruler 0mm', undeletable: true },
+            { x: 50, y: 330, label: 'Ruler 10mm', undeletable: true },
         ]);
     });
 
@@ -2040,8 +2071,10 @@ describe('TracerController.create_marker_table', () => {
         expect(htmlArg).toContain('Apex');
     });
 
-    test('does not render per-row delete control for Ruler markers', () => {
-        tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm'));
+    test('does not render per-row delete control for undeletable markers', () => {
+        const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
+        ruler.undeletable = true;
+        tc.objects.push(ruler);
         tc.objects.push(new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex'));
         tc.create_marker_table();
         const tbodyIdx = mock$.mock.calls.findIndex(a => a[0] && a[0].includes('tbody.marker_table_body'));
@@ -2127,8 +2160,9 @@ describe('TracerController.del_row', () => {
         global.demo_mode = false;
     });
 
-    test('does not delete Ruler markers', () => {
+    test('does not delete undeletable markers', () => {
         const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
+        ruler.undeletable = true;
         const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
         tc.objects.push(ruler, apex);
 
@@ -2138,14 +2172,14 @@ describe('TracerController.del_row', () => {
         expect(mockPost).not.toHaveBeenCalled();
     });
 
-    test('deletes non-ruler markers and persists the current frame', () => {
+    test('deletes marker with ruler label when it is not undeletable', () => {
         const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
         const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
         tc.objects.push(ruler, apex);
 
-        tc.del_row(1);
+        tc.del_row(0);
 
-        expect(tc.objects).toEqual([ruler]);
+        expect(tc.objects).toEqual([apex]);
         expect(mockPost).toHaveBeenCalledWith(
             expect.stringContaining('put-frame-trackpoints'),
             expect.objectContaining({ frame_number: 0 })
@@ -2153,8 +2187,8 @@ describe('TracerController.del_row', () => {
     });
 });
 
-// ── delete_all_markers ───────────────────────────────────────────────────────
-describe('TracerController.delete_all_markers', () => {
+// ── delete_all_deletable_markers ─────────────────────────────────────────────
+describe('TracerController.delete_all_deletable_markers', () => {
     let tc;
     beforeEach(() => {
         tc = new TracerController(
@@ -2165,14 +2199,14 @@ describe('TracerController.delete_all_markers', () => {
         tc.frames = [
             { frame_number: 0, markers: [
                 { x: 10, y: 20, label: 'Apex' },
-                { x: 1, y: 2, label: 'Ruler 0mm' },
+                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
             ] },
             { frame_number: 1, markers: [
                 { x: 30, y: 40, label: 'Base' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ] },
             { frame_number: 2, markers: [
-                { x: 5, y: 6, label: 'Ruler 0mm' },
+                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
             ] },
         ];
         global.confirm = jest.fn().mockReturnValue(true);
@@ -2198,39 +2232,39 @@ describe('TracerController.delete_all_markers', () => {
         }));
     }
 
-    test('removes non-ruler markers and repairs missing Ruler markers on every frame', async () => {
+    test('removes deletable markers and repairs missing undeletable markers on every frame', async () => {
         mockSuccessfulFramePosts();
 
-        await tc.delete_all_markers();
+        await tc.delete_all_deletable_markers();
 
         expect(tc.frames.map(frame => frame.markers)).toEqual([
             [
-                { x: 1, y: 2, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
             [
-                { x: 1, y: 2, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
             [
-                { x: 5, y: 6, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
         ]);
         expect(mockPost).toHaveBeenCalledTimes(3);
         expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1, 2]);
         expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
             [
-                { x: 1, y: 2, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
             [
-                { x: 1, y: 2, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
             [
-                { x: 5, y: 6, label: 'Ruler 0mm' },
-                { x: 3, y: 4, label: 'Ruler 10mm' },
+                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
+                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
             ],
         ]);
     });
@@ -2238,7 +2272,7 @@ describe('TracerController.delete_all_markers', () => {
     test('does nothing when confirmation is cancelled', () => {
         global.confirm.mockReturnValue(false);
 
-        tc.delete_all_markers();
+        tc.delete_all_deletable_markers();
 
         expect(mockPost).not.toHaveBeenCalled();
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
@@ -2253,7 +2287,7 @@ describe('TracerController.delete_all_markers', () => {
             }),
         });
 
-        await tc.delete_all_markers();
+        await tc.delete_all_deletable_markers();
 
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
@@ -2263,7 +2297,7 @@ describe('TracerController.delete_all_markers', () => {
     test('in demo_mode shows popup and does not ask for confirmation', () => {
         global.demo_mode = true;
 
-        tc.delete_all_markers();
+        tc.delete_all_deletable_markers();
 
         const popupIdx = mock$.mock.calls.findIndex(a => a[0] === '#demo-popup');
         expect(popupIdx).toBeGreaterThanOrEqual(0);
@@ -2753,6 +2787,12 @@ describe('graph_data', () => {
         await runWithFrames(oneFrame());
         expect(ChartSpy.mock.calls[0][1].options.animation).toBe(false);
         expect(ChartSpy.mock.calls[1][1].options.animation).toBe(false);
+    });
+
+    test('draws Y position with positive values higher on the chart', async () => {
+        await runWithFrames(oneFrame());
+        const yConfig = ChartSpy.mock.calls[1][1];
+        expect(yConfig.options.scales.y.reverse).toBe(false);
     });
 
     test('with only ruler markers: both charts have no datasets', async () => {

@@ -201,7 +201,6 @@ def test_odb(local_ddb):
                                            Trackpoint(x=65, y=85, label='name4')])
     assert odb.last_tracked_movie_frame(movie_id=TEST_MOVIE_ID)==1
 
-
     # Make an API key
     api_key = odb.make_new_api_key( email = TEST_USER_EMAIL)
     assert odb.is_api_key(api_key)
@@ -256,6 +255,20 @@ def test_odb(local_ddb):
 
     # Delete the user's course
     odb.delete_course(course_id=TEST_COURSE_ID)
+
+
+def test_get_movie_trackpoints_carries_marker_metadata(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=1)
+
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[Trackpoint(x=10, y=20, label='Ruler 0mm', undeletable=True)],
+    )
+
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'Ruler 0mm', 'undeletable': True}
+    ]
 
 
 def test_clear_movie_tracking_after_frame(local_ddb):

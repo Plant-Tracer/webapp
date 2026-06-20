@@ -44,8 +44,8 @@ import { unzip, setOptions } from './unzipit.module.mjs';
 // Default marker positions used only when a new movie is first loaded for analysis
 // and frame 0 has no markers yet (no frames traced). See create_default_markers().
 const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
-                         {'x':50,'y':100,'label':'Ruler 0mm'},
-                         {'x':50,'y':150,'label':'Ruler 10mm'}
+                         {'x':50,'y':100,'label':'Ruler 0mm', 'undeletable': true},
+                         {'x':50,'y':150,'label':'Ruler 10mm', 'undeletable': true}
                         ];
 
 let xChartInstance = null;
@@ -103,6 +103,10 @@ function is_ruler_marker_label(label) {
     return typeof label === 'string' && get_ruler_size(label) !== null;
 }
 
+function marker_is_undeletable(marker) {
+    return marker && marker.undeletable === true;
+}
+
 function compare_marker_labels(aLabel, bLabel) {
     const aRulerSize = get_ruler_size(aLabel);
     const bRulerSize = get_ruler_size(bLabel);
@@ -126,18 +130,18 @@ function clone_marker(marker, frameNumber = null) {
     return copy;
 }
 
-function sorted_ruler_markers(markers, frameNumber = null) {
+function sorted_undeletable_markers(markers, frameNumber = null) {
     return (markers || [])
-        .filter(marker => is_ruler_marker_label(marker.label))
+        .filter(marker => marker_is_undeletable(marker))
         .map(marker => clone_marker(marker, frameNumber))
         .sort((a, b) => compare_marker_labels(a.label, b.label));
 }
 
-function canonical_ruler_markers(frames) {
+function canonical_undeletable_markers(frames) {
     const markersByLabel = new Map();
     for (const frame of frames || []) {
         for (const marker of frame.markers || []) {
-            if (is_ruler_marker_label(marker.label) && !markersByLabel.has(marker.label)) {
+            if (marker_is_undeletable(marker) && !markersByLabel.has(marker.label)) {
                 markersByLabel.set(marker.label, clone_marker(marker));
             }
         }
@@ -207,7 +211,7 @@ class TracerController extends MovieController {
         this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.off('click').on('click', () => {this.track_to_end();});
         this.delete_all_markers_button = $(this.div_selector + " input.delete_all_markers_button");
-        this.delete_all_markers_button.off('click').on('click', () => {this.delete_all_markers();});
+        this.delete_all_markers_button.off('click').on('click', () => {this.delete_all_deletable_markers();});
 
         this.trim_checkbox = $(this.div_selector + " input.show_trim_controls");
         this.trim_controls = $(this.div_selector + " .trim_controls");
@@ -648,9 +652,26 @@ class TracerController extends MovieController {
         return canvasPoint;
     }
 
+    marker_from_trackpoint(trackpoint) {
+        const canvasPoint = this.trackpoint_to_canvas(trackpoint);
+        const color = this.marker_color_for_label(trackpoint.label);
+        const marker = new Marker(canvasPoint.x, canvasPoint.y, 10, color, color, trackpoint.label);
+        marker.trackpoint_metadata = {...trackpoint};
+        marker.undeletable = trackpoint.undeletable === true;
+        return marker;
+    }
+
     canvas_marker_to_trackpoint(marker) {
         const frameHeight = this.analysis_frame_height();
-        const trackpoint = {x: Number(marker.x), y: Number(marker.y), label: marker.name || marker.label};
+        const trackpoint = {...(marker.trackpoint_metadata || {})};
+        trackpoint.x = Number(marker.x);
+        trackpoint.y = Number(marker.y);
+        trackpoint.label = marker.name || marker.label;
+        if (marker.undeletable === true) {
+            trackpoint.undeletable = true;
+        } else {
+            delete trackpoint.undeletable;
+        }
         if (this.uses_bottom_left_trackpoints() && frameHeight != null) {
             trackpoint.y = frameHeight - trackpoint.y;
         }
@@ -760,7 +781,7 @@ class TracerController extends MovieController {
                 `<td>${obj.name}</td>` +
                 `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
                 `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
-            if (is_ruler_marker_label(obj.name)) {
+            if (marker_is_undeletable(obj)) {
                 rows += `<td class="nodemo"></td></tr>`;
             } else {
                 rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
@@ -783,7 +804,7 @@ class TracerController extends MovieController {
             return;
         }
         const obj = this.objects[i];
-        if (!obj || obj.constructor.name != Marker.name || is_ruler_marker_label(obj.name)) {
+        if (!obj || obj.constructor.name != Marker.name || marker_is_undeletable(obj)) {
             return;
         }
         this.objects.splice(i,1);
@@ -792,7 +813,7 @@ class TracerController extends MovieController {
         this.put_markers();
     }
 
-    delete_all_markers() {
+    delete_all_deletable_markers() {
         if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
@@ -800,33 +821,33 @@ class TracerController extends MovieController {
         if (!this.frames || this.frames.length === 0) {
             return;
         }
-        if (!confirm('Delete all non-ruler markers from every frame?')) {
+        if (!confirm('Delete all deletable markers from every frame?')) {
             return;
         }
 
         const updates = [];
-        const canonicalRulers = canonical_ruler_markers(this.frames);
+        const canonicalUndeletableMarkers = canonical_undeletable_markers(this.frames);
         for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
             const frame = this.frames[frameIndex];
             const markers = frame.markers || [];
             const frameNumber = graph_frame_number(frame, null, frameIndex);
-            const rulersByLabel = new Map(
-                sorted_ruler_markers(markers, frameNumber).map(marker => [marker.label, marker])
+            const undeletableMarkersByLabel = new Map(
+                sorted_undeletable_markers(markers, frameNumber).map(marker => [marker.label, marker])
             );
-            const rulerMarkers = canonicalRulers.map(marker => clone_marker(
-                rulersByLabel.get(marker.label) || marker,
+            const undeletableMarkers = canonicalUndeletableMarkers.map(marker => clone_marker(
+                undeletableMarkersByLabel.get(marker.label) || marker,
                 frameNumber
             ));
-            if (canonicalRulers.length === 0) {
-                rulerMarkers.length = 0;
+            if (canonicalUndeletableMarkers.length === 0) {
+                undeletableMarkers.length = 0;
             }
-            if (same_markers(rulerMarkers, markers)) {
+            if (same_markers(undeletableMarkers, markers)) {
                 continue;
             }
             updates.push({
                 frame_index: frameIndex,
                 frame_number: frameNumber,
-                markers: rulerMarkers,
+                markers: undeletableMarkers,
             });
         }
         if (updates.length === 0) {
@@ -1120,9 +1141,7 @@ class TracerController extends MovieController {
         // Add the markers for this frame if this frame has markers
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
-                const canvasPoint = this.trackpoint_to_canvas(tp);
-                const color = this.marker_color_for_label(tp.label);
-                this.add_object( new Marker(canvasPoint.x, canvasPoint.y, 10, color, color, tp.label ));
+                this.add_object(this.marker_from_trackpoint(tp));
             }
         }
         this.create_marker_table();
@@ -1612,7 +1631,7 @@ function graph_data(cc, frames) {
                     }
                 },
                 y: {
-                    reverse: true, // flips the pixel y value to bottom left
+                    reverse: false,
                     title: {
                         display: true,
                         text: 'Y Position (' + pos_units + ')'

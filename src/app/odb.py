@@ -1750,10 +1750,11 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_end ):
         for tp in frame.get('trackpoints',[]):
-            ret.append({FRAME_NUMBER:int(frame[FRAME_NUMBER]),
-                        'x':int(tp['x']),
-                        'y':int(tp['y']),
-                        'label':tp['label']})
+            trackpoint = {key: value for key, value in tp.items() if value is not None}
+            trackpoint[FRAME_NUMBER] = int(frame[FRAME_NUMBER])
+            trackpoint['x'] = int(tp['x'])
+            trackpoint['y'] = int(tp['y'])
+            ret.append(trackpoint)
     return ret
 
 def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
@@ -1802,7 +1803,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     """
     ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
-    trackpoints = [ tp.model_dump() for tp in trackpoints ]
+    trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()

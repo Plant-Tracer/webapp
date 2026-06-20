@@ -66,5 +66,11 @@ def test_user_schema():
             course_id="ctest",
             published=0,
         )
-        logger.debug("m=%s",m)
+        logger.debug("m=%s", m)
     logger.debug("u=%s", u)
+
+
+def test_trackpoint_schema_accepts_undeletable_flag():
+    trackpoint = schema.Trackpoint(x=1, y=2, label="Ruler 0mm", undeletable=True)
+
+    assert trackpoint.undeletable is True
