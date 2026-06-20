@@ -15,6 +15,8 @@ When completing work on any Issue or PR, always review whether documentation und
 
 If any screenshots in `docs/tutorial_images/` may be affected, flag them for the user rather than updating them automatically.
 
+**`docs/Development/FlaskAPI.md` must be updated in the same commit or PR whenever `src/app/flask_api.py` changes** — document any new endpoints, changed parameters, or behavioral side effects.
+
 After editing any file under `docs/`, always build and verify: `poetry run sphinx-build -W --keep-going -b html docs docs/_build/html`
 
 ## Git Workflow
