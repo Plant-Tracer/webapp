@@ -349,6 +349,31 @@ Set `research_use` (and optionally `credit_by_name`) for a movie. Only the movie
 
 ---
 
+#### `POST /api/set-movie-trim`
+
+Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
+`trim_end_frame` must be provided per call.
+
+**Parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `api_key` | Yes | Must not be the demo key |
+| `movie_id` | Yes | |
+| `trim_start_frame` | Cond. | Zero-based first frame to include in trim (provide this or `trim_end_frame`, not both) |
+| `trim_end_frame` | Cond. | Zero-based last frame to include in trim (inclusive; provide this or `trim_start_frame`, not both) |
+
+**Response**
+
+```json
+{ "error": false, "metadata": { "movie_id": "m...", "trim_start_frame": 0, "trim_end_frame": 42, ... } }
+```
+
+Returns HTTP 400 with `error: true` if both or neither trim frame parameter is provided, or if
+the resulting trim bounds are invalid (e.g. `trim_start_frame > trim_end_frame`).
+
+---
+
 #### `POST /api/set-metadata`
 
 Set a single metadata property on a movie or user record.
