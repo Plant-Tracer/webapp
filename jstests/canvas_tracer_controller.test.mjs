@@ -360,8 +360,9 @@ describe('create_default_markers', () => {
     test('default ruler markers are undeletable', () => {
         const markers = create_default_markers();
         expect(markers[0].undeletable).toBeUndefined();
-        expect(markers[1]).toMatchObject({ label: 'Ruler 0mm', undeletable: true });
-        expect(markers[2]).toMatchObject({ label: 'Ruler 10mm', undeletable: true });
+        expect(markers[0]).toMatchObject({ label: 'Apex', color: 'orange' });
+        expect(markers[1]).toMatchObject({ label: 'Ruler 0mm', color: 'red', undeletable: true });
+        expect(markers[2]).toMatchObject({ label: 'Ruler 10mm', color: 'red', undeletable: true });
     });
 
     test('returns a fresh copy each call', () => {
@@ -929,7 +930,7 @@ describe('TracerController.get_markers', () => {
             'k'
         );
         tc.objects.push(new MockMarkerClass(10, 30, 5, 'red', 'red', 'Apex'));
-        expect(tc.get_markers()).toEqual([{ x: 10, y: 120, label: 'Apex' }]);
+        expect(tc.get_markers()).toEqual([{ x: 10, y: 120, label: 'Apex', color: 'orange' }]);
     });
 
     test('bottom-left movie rounds fractional canvas positions before saving trackpoints', () => {
@@ -939,7 +940,7 @@ describe('TracerController.get_markers', () => {
             'k'
         );
         tc.objects.push(new MockMarkerClass(184.25, 21.515625, 5, 'red', 'red', 'Apex'));
-        expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex' }]);
+        expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex', color: 'orange' }]);
     });
 
     test('carries marker metadata when saving moved trackpoints', () => {
@@ -948,6 +949,7 @@ describe('TracerController.get_markers', () => {
             x: 10,
             y: 20,
             label: 'Ruler 0mm',
+            color: 'red',
             frame_number: 4,
             undeletable: true,
             status: 1,
@@ -960,10 +962,18 @@ describe('TracerController.get_markers', () => {
             x: 30,
             y: 40,
             label: 'Ruler 0mm',
+            color: 'red',
             frame_number: 4,
             undeletable: true,
             status: 1,
         }]);
+    });
+
+    test('forces special marker colors when loading stale marker data', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+
+        expect(tc.marker_from_trackpoint({ x: 10, y: 20, label: 'Ruler 0mm', color: '#0096ff' }).color).toBe('red');
+        expect(tc.marker_from_trackpoint({ x: 10, y: 20, label: 'Apex', color: '#0096ff' }).color).toBe('orange');
     });
 
     test('ignores non-Marker objects', () => {
@@ -1223,9 +1233,9 @@ describe('trace_movie_one_frame', () => {
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
 
         expect(tc.frames[0].markers).toEqual([
-            { x: 50, y: 430, label: 'Apex' },
-            { x: 50, y: 380, label: 'Ruler 0mm', undeletable: true },
-            { x: 50, y: 330, label: 'Ruler 10mm', undeletable: true },
+            { x: 50, y: 430, label: 'Apex', color: 'orange' },
+            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', undeletable: true },
+            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', undeletable: true },
         ]);
     });
 
@@ -2019,18 +2029,34 @@ describe('TracerController.add_marker_onclick_handler', () => {
         expect(tc.objects[0].name).toBe('Apex');
     });
 
-    test('valid names: colors newly added markers red, orange, then magenta', () => {
+    test('valid names: colors Apex orange, then fixed plant marker colors', () => {
         for (const name of ['Apex', 'Base', 'Tipx', 'Ignored']) {
             tc.marker_name_input.val.mockReturnValue(name);
             tc.add_marker_onclick_handler({});
         }
 
-        expect(tc.objects.slice(0, 3).map(marker => [marker.name, marker.fill])).toEqual([
-            ['Apex', 'red'],
-            ['Base', 'orange'],
-            ['Tipx', 'magenta'],
+        expect(tc.objects.map(marker => [marker.name, marker.color, marker.fill])).toEqual([
+            ['Apex', 'orange', 'orange'],
+            ['Base', 'magenta', 'magenta'],
+            ['Tipx', '#b58900', '#b58900'],
+            ['Ignored', '#0096ff', '#0096ff'],
         ]);
-        expect(tc.objects[3].name).toBe('Ignored');
+    });
+
+    test('valid names: uses random colors after fixed plant marker colors', () => {
+        const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+        for (const name of ['Base', 'Tipx', 'Stem', 'Leaf']) {
+            tc.marker_name_input.val.mockReturnValue(name);
+            tc.add_marker_onclick_handler({});
+        }
+
+        expect(tc.objects.map(marker => [marker.name, marker.color])).toEqual([
+            ['Base', 'magenta'],
+            ['Tipx', '#b58900'],
+            ['Stem', '#0096ff'],
+            ['Leaf', '#800000'],
+        ]);
+        randomSpy.mockRestore();
     });
 
     test('valid name: clears the input field', () => {
@@ -2187,28 +2213,29 @@ describe('TracerController.del_row', () => {
     });
 });
 
-// ── delete_all_deletable_markers ─────────────────────────────────────────────
-describe('TracerController.delete_all_deletable_markers', () => {
+// ── reset_tracing ─────────────────────────────────────────────────────────────
+describe('TracerController.reset_tracing', () => {
     let tc;
     beforeEach(() => {
         tc = new TracerController(
             'div#tracer',
-            makeMovieMetadata({ total_frames: 3, trim_start_frame: 0, trim_end_frame: 2, last_frame_tracked: 2 }),
+            makeMovieMetadata({ total_frames: 3, trim_start_frame: 1, trim_end_frame: 2, last_frame_tracked: 2 }),
             'api-key'
         );
         tc.frames = [
             { frame_number: 0, markers: [
-                { x: 10, y: 20, label: 'Apex' },
-                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
+                { x: 10, y: 20, label: 'Apex', color: 'orange' },
+                { x: 1, y: 2, label: 'Ruler 0mm', color: 'red', undeletable: true },
             ] },
             { frame_number: 1, markers: [
-                { x: 30, y: 40, label: 'Base' },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
+                { x: 30, y: 40, label: 'Base', color: 'magenta' },
+                { x: 3, y: 4, label: 'Ruler 10mm', color: 'red', undeletable: true },
             ] },
             { frame_number: 2, markers: [
-                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
+                { x: 5, y: 6, label: 'Ruler 0mm', color: 'red', undeletable: true },
             ] },
         ];
+        tc.frame_number = 2;
         global.confirm = jest.fn().mockReturnValue(true);
         global.alert = jest.fn();
         global.demo_mode = false;
@@ -2232,50 +2259,44 @@ describe('TracerController.delete_all_deletable_markers', () => {
         }));
     }
 
-    test('removes deletable markers and repairs missing undeletable markers on every frame', async () => {
+    test('clears all markers, seeds defaults on the first trimmed frame, and goes there', async () => {
         mockSuccessfulFramePosts();
 
-        await tc.delete_all_deletable_markers();
+        await tc.reset_tracing();
 
         expect(tc.frames.map(frame => frame.markers)).toEqual([
+            [],
             [
-                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
+                { x: 50, y: 50, label: 'Apex', color: 'orange' },
+                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', undeletable: true },
+                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', undeletable: true },
             ],
-            [
-                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
-            ],
-            [
-                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
-            ],
+            [],
         ]);
         expect(mockPost).toHaveBeenCalledTimes(3);
         expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1, 2]);
         expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
+            [],
             [
-                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
+                { x: 50, y: 50, label: 'Apex', color: 'orange' },
+                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', undeletable: true },
+                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', undeletable: true },
             ],
-            [
-                { x: 1, y: 2, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
-            ],
-            [
-                { x: 5, y: 6, label: 'Ruler 0mm', undeletable: true },
-                { x: 3, y: 4, label: 'Ruler 10mm', undeletable: true },
-            ],
+            [],
         ]);
+        expect(global.confirm).toHaveBeenCalledWith(
+            'Are you sure you want to delete all of the work and reset to the first frame?'
+        );
+        expect(tc.frame_number).toBe(1);
     });
 
     test('does nothing when confirmation is cancelled', () => {
         global.confirm.mockReturnValue(false);
 
-        tc.delete_all_deletable_markers();
+        tc.reset_tracing();
 
         expect(mockPost).not.toHaveBeenCalled();
-        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
+        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
     });
 
     test('keeps local markers when persistence fails', async () => {
@@ -2287,17 +2308,17 @@ describe('TracerController.delete_all_deletable_markers', () => {
             }),
         });
 
-        await tc.delete_all_deletable_markers();
+        await tc.reset_tracing();
 
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
-        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex' });
-        expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base' });
+        expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
+        expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base', color: 'magenta' });
     });
 
     test('in demo_mode shows popup and does not ask for confirmation', () => {
         global.demo_mode = true;
 
-        tc.delete_all_deletable_markers();
+        tc.reset_tracing();
 
         const popupIdx = mock$.mock.calls.findIndex(a => a[0] === '#demo-popup');
         expect(popupIdx).toBeGreaterThanOrEqual(0);
@@ -2345,7 +2366,7 @@ describe('TracerController.put_markers', () => {
         tc.put_markers();
         const params = mockPost.mock.calls[0][1];
         const tp = JSON.parse(params.trackpoints);
-        expect(tp).toEqual([{ x: 10, y: 20, label: 'Apex' }]);
+        expect(tp).toEqual([{ x: 10, y: 20, label: 'Apex', color: 'orange' }]);
     });
 
     test('done callback: alerts when server returns error', () => {
@@ -2405,7 +2426,7 @@ describe('TracerController.put_markers', () => {
 
         tc.put_markers();
 
-        expect(tc.frames[1].markers).toEqual([{ x: 42, y: 55, label: 'Apex' }]);
+        expect(tc.frames[1].markers).toEqual([{ x: 42, y: 55, label: 'Apex', color: 'orange' }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         const xConfig = ChartSpy.mock.calls[0][1];
         const yConfig = ChartSpy.mock.calls[1][1];
@@ -2666,12 +2687,12 @@ describe('TracerController.add_frame_objects', () => {
         expect(markers).toHaveLength(2);
     });
 
-    test('frame markers use graph colors for the first non-ruler marker labels', () => {
+    test('frame markers use assigned marker colors for their labels', () => {
         tc.add_frame_objects(0);
         const markers = tc.objects.filter(o => o instanceof MockMarkerClass);
         expect(markers.map(marker => [marker.name, marker.fill])).toEqual([
-            ['Apex', 'red'],
-            ['Base', 'orange'],
+            ['Apex', 'orange'],
+            ['Base', 'magenta'],
         ]);
     });
 
@@ -2697,10 +2718,10 @@ describe('TracerController.add_frame_objects', () => {
         expect(lines).toHaveLength(2); // Apex line + Base line
     });
 
-    test('frame=1: Line objects use graph colors for their marker labels', () => {
+    test('frame=1: Line objects use marker colors for their labels', () => {
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
-        expect(lines.map(line => line.color)).toEqual(['red', 'orange']);
+        expect(lines.map(line => line.color)).toEqual(['orange', 'magenta']);
     });
 
     test('frame=1: Line connects correct coordinates', () => {
@@ -2824,7 +2845,7 @@ describe('graph_data', () => {
         expect(yConfig.data.datasets[0].data).toEqual([0, 25]);
     });
 
-    test('graphs the first three non-ruler marker labels in encounter order with fixed colors', async () => {
+    test('graphs non-ruler marker labels in encounter order with marker colors', async () => {
         global.URL.createObjectURL.mockReturnValue('blob:f0');
         await runWithFrames(
             { 'frame_0000.jpg': { blob: jest.fn().mockResolvedValue({}) },
@@ -2852,23 +2873,27 @@ describe('graph_data', () => {
             'Base X Position',
             'Apex X Position',
             'Tip X Position',
+            'Ignored X Position',
         ]);
-        expect(xConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['red', 'orange', 'magenta']);
+        expect(xConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['magenta', 'orange', '#b58900', '#0096ff']);
         expect(xConfig.data.datasets.map(dataset => dataset.data)).toEqual([
             [0, 100],
             [0, 20],
             [0, 30],
+            [0, 200],
         ]);
         expect(yConfig.data.datasets.map(dataset => dataset.label)).toEqual([
             'Base Y Position',
             'Apex Y Position',
             'Tip Y Position',
+            'Ignored Y Position',
         ]);
-        expect(yConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['red', 'orange', 'magenta']);
+        expect(yConfig.data.datasets.map(dataset => dataset.borderColor)).toEqual(['magenta', 'orange', '#b58900', '#0096ff']);
         expect(yConfig.data.datasets.map(dataset => dataset.data)).toEqual([
             [0, 100],
             [0, 20],
             [0, 50],
+            [0, 400],
         ]);
     });
 

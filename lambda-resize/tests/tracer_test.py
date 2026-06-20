@@ -7,7 +7,7 @@ from resize_app.src.app.schema import Trackpoint
 def test_preserve_missing_undeletable_trackpoints_copies_only_missing_undeletable():
     previous_trackpoints = [
         Trackpoint(x=1, y=2, label="Apex", frame_number=4),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, undeletable=True),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, color="red", undeletable=True),
         Trackpoint(x=30, y=40, label="Ruler10mm", frame_number=4),
     ]
     output_trackpoints = [
@@ -24,15 +24,15 @@ def test_preserve_missing_undeletable_trackpoints_copies_only_missing_undeletabl
     assert result == [
         Trackpoint(x=2, y=3, label="Apex", frame_number=5),
         Trackpoint(x=31, y=41, label="Ruler10mm", frame_number=5),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, undeletable=True),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
     ]
 
 
 def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
     previous_trackpoints = [
-        Trackpoint(x=1, y=2, label="Apex", frame_number=4),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, undeletable=True),
-        Trackpoint(x=30, y=40, label="Ruler 10mm", frame_number=4, undeletable=True),
+        Trackpoint(x=1, y=2, label="Apex", frame_number=4, color="orange"),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, color="red", undeletable=True),
+        Trackpoint(x=30, y=40, label="Ruler 10mm", frame_number=4, color="red", undeletable=True),
     ]
 
     def fake_optical_flow(_gray_frame_prev, _gray_frame, _input_points, _unused, **_kwargs):
@@ -54,9 +54,9 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
     )
 
     assert result == [
-        Trackpoint(x=2, y=3, label="Apex", frame_number=5),
-        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, undeletable=True),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, undeletable=True),
+        Trackpoint(x=2, y=3, label="Apex", frame_number=5, color="orange"),
+        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, color="red", undeletable=True),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
     ]
 
 
@@ -94,3 +94,17 @@ def test_cv2_label_frame_draws_trackpoint_segments_before_markers():
 
     assert frame[6, 5].tolist() == list(tracer.ORANGE)
     assert frame[6, 9].tolist() == list(tracer.ORANGE)
+
+
+def test_trackpoint_colors_prefer_marker_color_property():
+    colors = tracer.trackpoint_colors([
+        Trackpoint(x=1, y=2, label="Apex", color="#0096ff"),
+        Trackpoint(x=3, y=4, label="Base", color="#0096ff"),
+        Trackpoint(x=5, y=6, label="Ruler 0mm", color="#0096ff"),
+        Trackpoint(x=7, y=8, label="Tip"),
+    ])
+
+    assert colors["Apex"] == tracer.ORANGE
+    assert colors["Base"] == tracer.BRIGHT_BLUE
+    assert colors["Ruler 0mm"] == tracer.RED
+    assert colors["Tip"] == tracer.MAGENTA

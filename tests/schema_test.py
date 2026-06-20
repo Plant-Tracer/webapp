@@ -70,7 +70,8 @@ def test_user_schema():
     logger.debug("u=%s", u)
 
 
-def test_trackpoint_schema_accepts_undeletable_flag():
-    trackpoint = schema.Trackpoint(x=1, y=2, label="Ruler 0mm", undeletable=True)
+def test_trackpoint_schema_accepts_marker_metadata():
+    trackpoint = schema.Trackpoint(x=1, y=2, label="Ruler 0mm", color="red", undeletable=True)
 
+    assert trackpoint.color == "red"
     assert trackpoint.undeletable is True

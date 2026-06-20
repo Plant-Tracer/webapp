@@ -14,7 +14,9 @@
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
-const PLANT_MARKER_COLOR = 'red';
+const RULER_MARKER_COLOR = 'red';
+const APEX_MARKER_COLOR = 'orange';
+const FIXED_PLANT_MARKER_COLORS = ['magenta', '#b58900', '#0096ff'];
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const RETRACE_MOVIE = 'Retrace movie';
@@ -32,7 +34,6 @@ const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
 const MOVIE_TRACED_URL = 'movie_traced_url';
 const NEEDS_RETRACING = 'needs_retracing';
-const GRAPH_MARKER_COLORS = ['red', 'orange', 'magenta'];
 
 var cell_id_counter = 0;
 
@@ -43,9 +44,9 @@ import { unzip, setOptions } from './unzipit.module.mjs';
 
 // Default marker positions used only when a new movie is first loaded for analysis
 // and frame 0 has no markers yet (no frames traced). See create_default_markers().
-const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
-                         {'x':50,'y':100,'label':'Ruler 0mm', 'undeletable': true},
-                         {'x':50,'y':150,'label':'Ruler 10mm', 'undeletable': true}
+const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex', 'color': APEX_MARKER_COLOR},
+                         {'x':50,'y':100,'label':'Ruler 0mm', 'color': RULER_MARKER_COLOR, 'undeletable': true},
+                         {'x':50,'y':150,'label':'Ruler 10mm', 'color': RULER_MARKER_COLOR, 'undeletable': true}
                         ];
 
 let xChartInstance = null;
@@ -103,8 +104,25 @@ function is_ruler_marker_label(label) {
     return typeof label === 'string' && get_ruler_size(label) !== null;
 }
 
+function is_apex_marker_label(label) {
+    return label === 'Apex';
+}
+
 function marker_is_undeletable(marker) {
     return marker && marker.undeletable === true;
+}
+
+function graphable_marker_label(label) {
+    return typeof label === 'string' && label.length > 0
+        && !is_ruler_marker_label(label);
+}
+
+function custom_marker_label(label) {
+    return graphable_marker_label(label) && !is_apex_marker_label(label);
+}
+
+function random_marker_color() {
+    return '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0');
 }
 
 function compare_marker_labels(aLabel, bLabel) {
@@ -120,34 +138,6 @@ function compare_marker_labels(aLabel, bLabel) {
         return 1;
     }
     return String(aLabel).localeCompare(String(bLabel));
-}
-
-function clone_marker(marker, frameNumber = null) {
-    const copy = {...marker};
-    if (frameNumber !== null && copy.frame_number != null) {
-        copy.frame_number = frameNumber;
-    }
-    return copy;
-}
-
-function sorted_undeletable_markers(markers, frameNumber = null) {
-    return (markers || [])
-        .filter(marker => marker_is_undeletable(marker))
-        .map(marker => clone_marker(marker, frameNumber))
-        .sort((a, b) => compare_marker_labels(a.label, b.label));
-}
-
-function canonical_undeletable_markers(frames) {
-    const markersByLabel = new Map();
-    for (const frame of frames || []) {
-        for (const marker of frame.markers || []) {
-            if (marker_is_undeletable(marker) && !markersByLabel.has(marker.label)) {
-                markersByLabel.set(marker.label, clone_marker(marker));
-            }
-        }
-    }
-    return Array.from(markersByLabel.values())
-        .sort((a, b) => compare_marker_labels(a.label, b.label));
 }
 
 function same_markers(aMarkers, bMarkers) {
@@ -173,6 +163,7 @@ class TracerController extends MovieController {
         this.pending_retrace_to_end = false;
         this.pending_trace_start_frame = null;
         this.tracking_start_deadline_ms = null;
+        this.marker_colors_by_label = new Map();
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -211,7 +202,7 @@ class TracerController extends MovieController {
         this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.off('click').on('click', () => {this.track_to_end();});
         this.delete_all_markers_button = $(this.div_selector + " input.delete_all_markers_button");
-        this.delete_all_markers_button.off('click').on('click', () => {this.delete_all_deletable_markers();});
+        this.delete_all_markers_button.off('click').on('click', () => {this.reset_tracing();});
 
         this.trim_checkbox = $(this.div_selector + " input.show_trim_controls");
         this.trim_controls = $(this.div_selector + " .trim_controls");
@@ -328,26 +319,65 @@ class TracerController extends MovieController {
         targetFrame.markers = this.cloneMarkersForFrame(oldStart);
     }
 
-    marker_color_for_label(label) {
-        const labels = graph_marker_labels(this.frames || []);
+    marker_color_from_existing_data(label) {
+        for (const frame of this.frames || []) {
+            for (const marker of frame.markers || []) {
+                if (marker.label === label && marker.color) {
+                    return marker.color;
+                }
+            }
+        }
         for (const obj of this.objects || []) {
-            if (obj.constructor.name != Marker.name || !is_graphable_marker({label: obj.name})) {
+            if (obj.constructor.name == Marker.name && obj.name === label && obj.color) {
+                return obj.color;
+            }
+        }
+        return null;
+    }
+
+    custom_marker_labels(label = null) {
+        const labels = [];
+        const addLabel = (candidate) => {
+            if (custom_marker_label(candidate) && !labels.includes(candidate)) {
+                labels.push(candidate);
+            }
+        };
+        for (const frame of this.frames || []) {
+            for (const marker of frame.markers || []) {
+                addLabel(marker.label);
+            }
+        }
+        for (const obj of this.objects || []) {
+            if (obj.constructor.name != Marker.name) {
                 continue;
             }
-            if (!labels.includes(obj.name)) {
-                labels.push(obj.name);
-            }
-            if (labels.length >= GRAPH_MARKER_COLORS.length) {
-                break;
-            }
+            addLabel(obj.name);
         }
-        if (labels.length < GRAPH_MARKER_COLORS.length
-            && is_graphable_marker({label: label})
-            && !labels.includes(label)) {
-            labels.push(label);
+        addLabel(label);
+        return labels;
+    }
+
+    marker_color_for_label(label) {
+        if (is_ruler_marker_label(label)) {
+            return RULER_MARKER_COLOR;
         }
-        const index = labels.indexOf(label);
-        return index >= 0 ? GRAPH_MARKER_COLORS[index] : PLANT_MARKER_COLOR;
+        if (is_apex_marker_label(label)) {
+            return APEX_MARKER_COLOR;
+        }
+        const existingColor = this.marker_color_from_existing_data(label);
+        if (existingColor) {
+            this.marker_colors_by_label.set(label, existingColor);
+            return existingColor;
+        }
+        if (this.marker_colors_by_label.has(label)) {
+            return this.marker_colors_by_label.get(label);
+        }
+        const index = this.custom_marker_labels(label).indexOf(label);
+        const color = index >= 0 && index < FIXED_PLANT_MARKER_COLORS.length
+            ? FIXED_PLANT_MARKER_COLORS[index]
+            : random_marker_color();
+        this.marker_colors_by_label.set(label, color);
+        return color;
     }
 
     updateCurrentFrameMarkers(markers) {
@@ -601,8 +631,10 @@ class TracerController extends MovieController {
         if (!this.isCurrentFrameEditable()) {
             return;
         }
-        let color = this.marker_color_for_label(name);
-        this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
+        const color = this.marker_color_for_label(name);
+        const marker = new Marker(x, y, MARKER_RADIUS, color, color, name);
+        marker.color = color;
+        this.objects.push(marker);
         this.create_marker_table(); // redraw table
         this.markFutureFramesDirty();
         // Finally enable the track-to-end button
@@ -654,9 +686,12 @@ class TracerController extends MovieController {
 
     marker_from_trackpoint(trackpoint) {
         const canvasPoint = this.trackpoint_to_canvas(trackpoint);
-        const color = this.marker_color_for_label(trackpoint.label);
+        const color = is_ruler_marker_label(trackpoint.label) || is_apex_marker_label(trackpoint.label)
+            ? this.marker_color_for_label(trackpoint.label)
+            : trackpoint.color || this.marker_color_for_label(trackpoint.label);
         const marker = new Marker(canvasPoint.x, canvasPoint.y, 10, color, color, trackpoint.label);
-        marker.trackpoint_metadata = {...trackpoint};
+        marker.trackpoint_metadata = {...trackpoint, color: color};
+        marker.color = color;
         marker.undeletable = trackpoint.undeletable === true;
         return marker;
     }
@@ -667,6 +702,7 @@ class TracerController extends MovieController {
         trackpoint.x = Number(marker.x);
         trackpoint.y = Number(marker.y);
         trackpoint.label = marker.name || marker.label;
+        trackpoint.color = marker.color || trackpoint.color || this.marker_color_for_label(trackpoint.label);
         if (marker.undeletable === true) {
             trackpoint.undeletable = true;
         } else {
@@ -813,7 +849,11 @@ class TracerController extends MovieController {
         this.put_markers();
     }
 
-    delete_all_deletable_markers() {
+    default_trackpoints_from_template() {
+        return create_default_markers().map(marker => this.canvas_marker_to_trackpoint({...marker, name: marker.label}));
+    }
+
+    reset_tracing() {
         if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
@@ -821,37 +861,30 @@ class TracerController extends MovieController {
         if (!this.frames || this.frames.length === 0) {
             return;
         }
-        if (!confirm('Delete all deletable markers from every frame?')) {
+        if (!confirm('Are you sure you want to delete all of the work and reset to the first frame?')) {
             return;
         }
 
         const updates = [];
-        const canonicalUndeletableMarkers = canonical_undeletable_markers(this.frames);
+        const firstTrimFrame = this.trim_start_frame;
         for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
             const frame = this.frames[frameIndex];
             const markers = frame.markers || [];
             const frameNumber = graph_frame_number(frame, null, frameIndex);
-            const undeletableMarkersByLabel = new Map(
-                sorted_undeletable_markers(markers, frameNumber).map(marker => [marker.label, marker])
-            );
-            const undeletableMarkers = canonicalUndeletableMarkers.map(marker => clone_marker(
-                undeletableMarkersByLabel.get(marker.label) || marker,
-                frameNumber
-            ));
-            if (canonicalUndeletableMarkers.length === 0) {
-                undeletableMarkers.length = 0;
-            }
-            if (same_markers(undeletableMarkers, markers)) {
+            const resetMarkers = Number(frameNumber) === Number(firstTrimFrame)
+                ? this.default_trackpoints_from_template()
+                : [];
+            if (same_markers(resetMarkers, markers)) {
                 continue;
             }
             updates.push({
                 frame_index: frameIndex,
                 frame_number: frameNumber,
-                markers: undeletableMarkers,
+                markers: resetMarkers,
             });
         }
         if (updates.length === 0) {
-            this.goto_frame(this.frame_number);
+            this.goto_frame(firstTrimFrame);
             this.refreshVisibleGraphs();
             return;
         }
@@ -866,7 +899,7 @@ class TracerController extends MovieController {
             $.post(`${API_BASE}api/put-frame-trackpoints`, params)
                 .done((data) => {
                     if (data.error) {
-                        reject(new Error(data.message || 'Error deleting markers.'));
+                        reject(new Error(data.message || 'Error resetting tracing.'));
                         return;
                     }
                     resolve();
@@ -882,12 +915,12 @@ class TracerController extends MovieController {
                     this.frames[update.frame_index].markers = update.markers.map(marker => ({...marker}));
                 }
                 this.markTracedMovieNeedsRetracing();
-                this.goto_frame(this.frame_number);
+                this.goto_frame(firstTrimFrame);
                 this.refreshVisibleGraphs();
                 this.markFutureFramesDirty();
             })
             .catch((err) => {
-                alert("error from delete-all-markers:\n"+err.message);
+                alert("error from reset-tracing:\n"+err.message);
             });
     }
 
@@ -1452,8 +1485,7 @@ function calc_scale(markers) {
 }
 
 function is_graphable_marker(marker) {
-    return marker && typeof marker.label === 'string' && marker.label.length > 0
-        && get_ruler_size(marker.label) === null;
+    return marker && graphable_marker_label(marker.label);
 }
 
 function graph_marker_labels(frames) {
@@ -1466,9 +1498,6 @@ function graph_marker_labels(frames) {
             }
             if (!labels.includes(marker.label)) {
                 labels.push(marker.label);
-            }
-            if (labels.length >= GRAPH_MARKER_COLORS.length) {
-                return labels;
             }
         }
     }
@@ -1490,6 +1519,14 @@ function first_marker_for_label(frames, label) {
         }
     }
     return null;
+}
+
+function graph_marker_color(cc, frames, label) {
+    const marker = first_marker_for_label(frames, label);
+    if (marker && marker.color) {
+        return marker.color;
+    }
+    return cc && cc.marker_color_for_label ? cc.marker_color_for_label(label) : APEX_MARKER_COLOR;
 }
 
 function graph_frame_number(frame, marker, frameIndex) {
@@ -1515,19 +1552,19 @@ function graph_data(cc, frames) {
     const graphFrames = frames.filter((frame, frameIndex) => frame_in_graph_trim(cc, frame, frameIndex));
     const frame_labels = [];
     const markerLabels = graph_marker_labels(graphFrames);
-    const xDatasets = markerLabels.map((label, index) => ({
+    const xDatasets = markerLabels.map((label) => ({
         label: `${label} X Position`,
         data: [],
-        borderColor: GRAPH_MARKER_COLORS[index],
-        backgroundColor: GRAPH_MARKER_COLORS[index],
+        borderColor: graph_marker_color(cc, graphFrames, label),
+        backgroundColor: graph_marker_color(cc, graphFrames, label),
         fill: false,
         pointRadius: 0
     }));
-    const yDatasets = markerLabels.map((label, index) => ({
+    const yDatasets = markerLabels.map((label) => ({
         label: `${label} Y Position`,
         data: [],
-        borderColor: GRAPH_MARKER_COLORS[index],
-        backgroundColor: GRAPH_MARKER_COLORS[index],
+        borderColor: graph_marker_color(cc, graphFrames, label),
+        backgroundColor: graph_marker_color(cc, graphFrames, label),
         fill: false,
         pointRadius: 0
     }));

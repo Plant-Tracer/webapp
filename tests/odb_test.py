@@ -263,11 +263,11 @@ def test_get_movie_trackpoints_carries_marker_metadata(local_ddb):
     odb.put_frame_trackpoints(
         movie_id=movie_id,
         frame_number=0,
-        trackpoints=[Trackpoint(x=10, y=20, label='Ruler 0mm', undeletable=True)],
+        trackpoints=[Trackpoint(x=10, y=20, label='Ruler 0mm', color='red', undeletable=True)],
     )
 
     assert odb.get_movie_trackpoints(movie_id=movie_id) == [
-        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'Ruler 0mm', 'undeletable': True}
+        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'Ruler 0mm', 'color': 'red', 'undeletable': True}
     ]
 
 

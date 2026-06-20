@@ -18,6 +18,7 @@ Uses imageio to write tracked movie, which does not have H.264 licensing issues
 
 # pylint: disable=no-member
 from typing import List,Optional,NamedTuple
+import hashlib
 import json
 import argparse
 import subprocess
@@ -44,6 +45,8 @@ POINT_ARRAY_OUT = 'point_array_out'
 RED = (0, 0, 255)
 ORANGE = (0, 165, 255)
 MAGENTA = (255, 0, 255)
+MUSTARD = (0, 137, 181)
+BRIGHT_BLUE = (255, 150, 0)
 BLACK = (0, 0, 0)
 TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_SCALE = 0.75
@@ -52,7 +55,12 @@ TEXT_MARGIN = 5
 CIRCLE_WIDTH = 6
 CIRCLE_COLOR = RED
 LINE_WIDTH = 2
-GRAPH_MARKER_COLORS = [RED, ORANGE, MAGENTA]
+FIXED_PLANT_MARKER_COLORS = [MAGENTA, MUSTARD, BRIGHT_BLUE]
+CSS_COLORS_BGR = {
+    "red": RED,
+    "orange": ORANGE,
+    "magenta": MAGENTA,
+}
 MIN_MOVIE_BYTES = 10
 RULER_LABEL_RE = re.compile(r"^Ruler\s*\d+mm$")
 
@@ -102,15 +110,52 @@ def graphable_trackpoint_label(label:str):
     return bool(label) and not RULER_LABEL_RE.match(label)
 
 
+def css_color_to_bgr(color:str | None):
+    if not color:
+        return None
+    normalized = color.strip().lower()
+    if normalized in CSS_COLORS_BGR:
+        return CSS_COLORS_BGR[normalized]
+    if re.match(r"^#[0-9a-f]{6}$", normalized):
+        red = int(normalized[1:3], 16)
+        green = int(normalized[3:5], 16)
+        blue = int(normalized[5:7], 16)
+        return (blue, green, red)
+    return None
+
+
+def stable_color_for_label(label:str):
+    digest = hashlib.sha256(label.encode("utf-8")).digest()
+    red = digest[0]
+    green = digest[1]
+    blue = digest[2]
+    return (blue, green, red)
+
+
 def trackpoint_colors(trackpoints:List[Trackpoint]):
-    """Return BGR colors by label, matching the browser's first-three marker rule."""
+    """Return BGR colors by label, preferring stored browser marker colors."""
     labels = []
+    colors_by_label = {}
     for trackpoint in trackpoints:
+        if RULER_LABEL_RE.match(trackpoint.label):
+            colors_by_label.setdefault(trackpoint.label, RED)
+            continue
+        if trackpoint.label == "Apex":
+            colors_by_label.setdefault(trackpoint.label, ORANGE)
+            continue
+        stored_color = css_color_to_bgr(trackpoint.color)
+        if stored_color:
+            colors_by_label[trackpoint.label] = stored_color
+            continue
         if graphable_trackpoint_label(trackpoint.label) and trackpoint.label not in labels:
             labels.append(trackpoint.label)
-        if len(labels) >= len(GRAPH_MARKER_COLORS):
-            break
-    return {label: GRAPH_MARKER_COLORS[index] for index, label in enumerate(labels)}
+    for index, label in enumerate(labels):
+        colors_by_label[label] = (
+            FIXED_PLANT_MARKER_COLORS[index]
+            if index < len(FIXED_PLANT_MARKER_COLORS)
+            else stable_color_for_label(label)
+        )
+    return colors_by_label
 
 
 def update_trackpoint_segments(*,
@@ -197,7 +242,12 @@ def cv2_label_frame(*,
 
     # https://stackoverflow.com/questions/55904418/draw-text-inside-circle-opencv
     for pt in trackpoints:
-        color = colors_by_label.get(pt.label, CIRCLE_COLOR)
+        if RULER_LABEL_RE.match(pt.label):
+            color = RED
+        elif pt.label == "Apex":
+            color = ORANGE
+        else:
+            color = colors_by_label.get(pt.label) or css_color_to_bgr(pt.color) or CIRCLE_COLOR
         cv2.circle(frame, (int(pt.x), int(pt.y)), CIRCLE_WIDTH, color, -1)     # pylint: disable=no-member
 
     if frame_label is not None:
