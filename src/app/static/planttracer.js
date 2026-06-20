@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
 import { $, begin_inline_text_edit } from "./utils.js";
+import { RETRACE_REQUIRED_MESSAGE } from "./ui_constants.js";
 
 
 
@@ -829,7 +830,7 @@ function list_movies_data( movies ) {
         rows += m.published ? "<b>Published</b> " : "Not published";
       }
       if (Number(m.needs_retracing || 0) === 1 && m.movie_traced_url) {
-        rows += "<br><span class='retrace-required-message'>marker moved; movie requires retracing</span>";
+        rows += `<br><span class='retrace-required-message'>${RETRACE_REQUIRED_MESSAGE}</span>`;
       }
       rows += "<br/>";
 

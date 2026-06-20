@@ -20,10 +20,6 @@ const FIXED_PLANT_MARKER_COLORS = ['magenta', '#b58900', '#0096ff'];
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const TRACING_FLAG='tracing';
-const RETRACE_MOVIE = 'Retrace movie';
-const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
-const TRACE_TO_END_OF_MOVIE = 'Trace to end of movie';
-const TRACE_MOVIE = 'Trace movie';
 const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
@@ -31,7 +27,6 @@ const STATUS_POLL_MAX_ERRORS = 5;
 const TRACE_MOVIE_RETRY_DELAY_MS = 5000; // if trace movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
 const TRACKING_START_TIMEOUT_MS = 15000;
-const BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE = 'backend lambda is unresponsive. Please report.';
 const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
 const MOVIE_TRACED_URL = 'movie_traced_url';
@@ -40,6 +35,27 @@ const NEEDS_RETRACING = 'needs_retracing';
 var cell_id_counter = 0;
 
 import { $, begin_inline_text_edit } from "./utils.js";
+import {
+    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    MARKER_NAME_IN_USE_MESSAGE,
+    MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
+    MOVIE_IS_TRACED_MESSAGE,
+    MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE,
+    MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE,
+    MOVIE_READY_FOR_TRACING_MESSAGE,
+    MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE,
+    PLACE_MARKERS_TRACE_START_MESSAGE,
+    PRESS_PLAY_STATUS_TEXT,
+    RETRACE_MOVIE,
+    RETRACE_REQUIRED_MESSAGE,
+    RETRACE_TO_END_OF_MOVIE,
+    RESET_TRACING_CONFIRM_MESSAGE,
+    TRACE_MOVIE,
+    TRACE_TO_END_OF_MOVIE,
+    TRACE_MOVIE_TRIM_DISABLED_TITLE,
+    TRACING_COMPLETE_LOADING_MOVIE_MESSAGE,
+    TRACING_STARTING_MESSAGE,
+} from "./ui_constants.js";
 import { CanvasItem, Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
@@ -207,6 +223,7 @@ class TracerController extends MovieController {
         this.traced_movie_download_link = $(this.div_selector + " .traced_movie_download_link");
         this.refreshTracedMovieDownload();
         this.retrace_required_message = $(this.div_selector + " .retrace_required_message");
+        $(this.div_selector + " .retrace_required_message span").text(RETRACE_REQUIRED_MESSAGE);
         this.refreshRetraceRequiredMessage();
 
         // Size the canvas and video from metadata when present; else leave default until first frame loads.
@@ -453,7 +470,7 @@ class TracerController extends MovieController {
         this.ensure_trim_defaults();
         const enabled = this.hasTraceableFrameData();
         this.trim_checkbox.prop(DISABLED, !enabled);
-        this.trim_checkbox.attr('title', enabled ? '' : 'Trace movie to enable trimming.');
+        this.trim_checkbox.attr('title', enabled ? '' : TRACE_MOVIE_TRIM_DISABLED_TITLE);
         if (!enabled) {
             this.trim_checkbox.prop('checked', false);
             this.trim_controls.hide();
@@ -713,7 +730,7 @@ class TracerController extends MovieController {
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
             if(this.objects[i].name == val){
-                this.add_marker_status.text("That name is in use, choose another.");
+                this.add_marker_status.text(MARKER_NAME_IN_USE_MESSAGE);
                 this.add_marker_button.prop(DISABLED,true);
                 return;
             }
@@ -1036,7 +1053,7 @@ class TracerController extends MovieController {
             return;
         }
         if (this.marker_name_in_use(newName, i)) {
-            alert("That name is in use, choose another.");
+            alert(MARKER_NAME_IN_USE_MESSAGE);
             return;
         }
         $.post(`${API_BASE}api/rename-marker`, {
@@ -1092,7 +1109,7 @@ class TracerController extends MovieController {
         if (!this.frames || this.frames.length === 0) {
             return;
         }
-        if (!confirm('Are you sure you want to delete all of the work and reset to the first frame?')) {
+        if (!confirm(RESET_TRACING_CONFIRM_MESSAGE)) {
             return;
         }
         this.resetting_tracing = true;
@@ -1483,7 +1500,7 @@ class TracerController extends MovieController {
                         self.tracking_status.text(statusText);
                         $('#status-big').text(statusText);
                     } else {
-                        self.tracking_status.text(data.metadata.status || "Tracing starting...");
+                        self.tracking_status.text(data.metadata.status || TRACING_STARTING_MESSAGE);
                     }
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
@@ -1522,7 +1539,7 @@ class TracerController extends MovieController {
         this.tracking = false;
         this.set_movie_control_buttons();
         this.tracking_start_deadline_ms = null;
-        this.tracking_status.text('Tracing complete. Loading movie...');
+        this.tracking_status.text(TRACING_COMPLETE_LOADING_MOVIE_MESSAGE);
         const self = this;
         const focusFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
@@ -1586,7 +1603,7 @@ class TracerController extends MovieController {
                     ? `Retraced from frame ${focusFrame} to frame ${endFrame}.`
                     : `Traced from frame 0 to frame ${endFrame}.`;
                 self.tracking_status.text(completionMessage);
-                $('#status-big').html(`${completionMessage} Press play <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
+                $('#status-big').html(`${completionMessage} ${PRESS_PLAY_STATUS_TEXT} <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
                 self.pending_trace_start_frame = null;
             })
             .catch((err) => {
@@ -1622,9 +1639,9 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             cc.goto_frame(cc.frame_number || 0);
         }
         if (demo_mode) {
-            $('#status-big').html('Movie cannot be traced in demo mode.');
+            $('#status-big').html(MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE);
         } else {
-            $('#status-big').html('Movie ready for initial tracing.');
+            $('#status-big').html(MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE);
             cc.track_button.prop(DISABLED,false); // enable
         }
     };
@@ -1944,7 +1961,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         $('#demo-popup').fadeOut(300);
     });
 
-    // Clicking the ▶ in "Press play ▶ to watch..." triggers the play button
+    // Clicking the play glyph in the status headline triggers the play button.
     function triggerPlay() {
         const playBtn = $('input.play_forward');
         if (playBtn.length && !playBtn.prop('disabled')) {
@@ -1980,18 +1997,18 @@ function trace_movie(div_controller, movie_id, api_key) {
             const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
-                $('#status-big').html('Movie ready for tracing.');
+                $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);
             } else {
-                $('#status-big').html('Place markers and click Trace movie to start tracing.');
+                $('#status-big').html(PLACE_MARKERS_TRACE_START_MESSAGE);
             }
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
         if (demo_mode) {
-            $('#status-big').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
+            $('#status-big').html(showResults ? MOVIE_IS_TRACED_MESSAGE : MOVIE_READY_FOR_TRACING_MESSAGE);
         } else {
-          $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
-                                : 'Movie ready for tracing. Place markers and click Trace movie.');
+          $('#status-big').html(showResults ? MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE
+                                : MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE);
         }
         const movie_zipfile_url = resp.metadata.movie_zipfile_url;
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);

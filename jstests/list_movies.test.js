@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const module = require('planttracer');
+const { RETRACE_REQUIRED_MESSAGE } = require('ui_constants');
 const list_movies_data = module.list_movies_data;
 const play_clicked = module.play_clicked;
 const hide_clicked = module.hide_clicked;
@@ -117,7 +118,7 @@ describe('list_movies_data', () => {
     expect(publishedHtml).toContain('download traced');
     expect(publishedHtml).toContain("class='play traced-movie-download'");
     expect(publishedHtml).toContain('https://example.com/traced.mp4?x=1&amp;y=2');
-    expect(publishedHtml).toContain('marker moved; movie requires retracing');
+    expect(publishedHtml).toContain(RETRACE_REQUIRED_MESSAGE);
   });
 
   test('should not show retrace warning before a traced movie exists', () => {
@@ -140,7 +141,7 @@ describe('list_movies_data', () => {
     list_movies_data(movies);
 
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
-    expect(publishedHtml).not.toContain('marker moved; movie requires retracing');
+    expect(publishedHtml).not.toContain(RETRACE_REQUIRED_MESSAGE);
   });
 
   test('should handle an empty list of movies gracefully', () => {

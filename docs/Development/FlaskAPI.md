@@ -292,7 +292,7 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 { "error": false, "message": "trackpoints recorded: 2 " }
 ```
 
-**Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 is now stale. The client uses it to show a "movie requires retracing" warning when `movie_traced_url` is also present.
+**Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 may now be stale. The client uses it to show the retracing warning when `movie_traced_url` is also present.
 
 The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
 

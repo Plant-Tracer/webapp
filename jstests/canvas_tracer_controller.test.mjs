@@ -222,6 +222,21 @@ const defaultRequestAnimationFrame = global.requestAnimationFrame || ((callback)
 
 // ── Import module under test (after all mocks are registered) ────────────────
 const {
+    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    MARKER_NAME_IN_USE_MESSAGE,
+    MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
+    MOVIE_IS_TRACED_MESSAGE,
+    MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE,
+    MOVIE_READY_FOR_TRACING_MESSAGE,
+    PRESS_PLAY_STATUS_TEXT,
+    RESET_TRACING_CONFIRM_MESSAGE,
+    RETRACE_TO_END_OF_MOVIE,
+    TRACE_TO_END_OF_MOVIE,
+    TRACING_COMPLETE_LOADING_MOVIE_MESSAGE,
+    TRACING_STARTING_MESSAGE,
+} = await import('ui_constants.js');
+
+const {
     get_ruler_size,
     frame_index_from_zip_name,
     is_movie_tracked,
@@ -488,7 +503,7 @@ describe('TracerController constructor', () => {
 
         tc.refreshTrackButtonState();
 
-        expect(tc.track_button.val).toHaveBeenCalledWith('Trace to end of movie');
+        expect(tc.track_button.val).toHaveBeenCalledWith(TRACE_TO_END_OF_MOVIE);
     });
 
     test('pending trace-to-end says retrace when a traced movie exists', () => {
@@ -502,7 +517,7 @@ describe('TracerController constructor', () => {
 
         tc.refreshTrackButtonState();
 
-        expect(tc.track_button.val).toHaveBeenCalledWith('Retrace to end of movie');
+        expect(tc.track_button.val).toHaveBeenCalledWith(RETRACE_TO_END_OF_MOVIE);
     });
 
     test('traced movie download is shown when metadata has movie_traced_url', () => {
@@ -1377,7 +1392,7 @@ describe('trace_movie_one_frame', () => {
         const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
         expect(statusIdx).toBeGreaterThanOrEqual(0);
         expect(mock$.mock.results[statusIdx].value.html)
-            .toHaveBeenCalledWith('Movie ready for initial tracing.');
+            .toHaveBeenCalledWith(MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE);
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
 
@@ -1389,7 +1404,7 @@ describe('trace_movie_one_frame', () => {
         const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
         expect(statusIdx).toBeGreaterThanOrEqual(0);
         expect(mock$.mock.results[statusIdx].value.html)
-            .toHaveBeenCalledWith('Movie cannot be traced in demo mode.');
+            .toHaveBeenCalledWith(MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE);
         expect(tc.track_button.prop).not.toHaveBeenCalledWith('disabled', false);
     });
 });
@@ -1741,13 +1756,13 @@ describe('trace_movie', () => {
             .toHaveBeenCalledWith(expect.stringContaining('Place markers'));
     });
 
-    test('no-zip + demo mode: status says "Movie ready for tracing."', () => {
+    test('no-zip + demo mode: status says movie is ready', () => {
         global.demo_mode = true;
         mockApiResponse(makeResp());
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
         expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith('Movie ready for tracing.');
+            .toHaveBeenCalledWith(MOVIE_READY_FOR_TRACING_MESSAGE);
     });
 
     test('no-zip path: unzip is NOT called', () => {
@@ -1772,13 +1787,13 @@ describe('trace_movie', () => {
         expect(capturedTc).toBeNull();
     });
 
-    test('zip + non-demo + tracked: status says "Movie is traced!"', () => {
+    test('zip + non-demo + tracked: status says movie is traced', () => {
         mockUnzip.mockResolvedValueOnce({ entries: {} });
         mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip', last_frame_tracked: 5, total_frames: 10 }));
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
         expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining('Movie is traced!'));
+            .toHaveBeenCalledWith(expect.stringContaining(MOVIE_IS_TRACED_MESSAGE));
     });
 
     test('zip + non-demo + not tracked: status says "Movie ready for tracing"', () => {
@@ -1787,25 +1802,25 @@ describe('trace_movie', () => {
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
         expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining('Movie ready for tracing'));
+            .toHaveBeenCalledWith(expect.stringContaining(MOVIE_READY_FOR_TRACING_MESSAGE));
     });
 
-    test('zip + demo + tracked: status says exactly "Movie is traced!"', () => {
+    test('zip + demo + tracked: status says exactly traced', () => {
         global.demo_mode = true;
         mockUnzip.mockResolvedValueOnce({ entries: {} });
         mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip', last_frame_tracked: 5, total_frames: 10 }));
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith('Movie is traced!');
+        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith(MOVIE_IS_TRACED_MESSAGE);
     });
 
-    test('zip + demo + not tracked: status says exactly "Movie ready for tracing."', () => {
+    test('zip + demo + not tracked: status says exactly ready', () => {
         global.demo_mode = true;
         mockUnzip.mockResolvedValueOnce({ entries: {} });
         mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip' }));
         trace_movie('div#tracer', 'movie-123', 'api-key');
         const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith('Movie ready for tracing.');
+        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith(MOVIE_READY_FOR_TRACING_MESSAGE);
     });
 
     // F. Play-trigger wiring ───────────────────────────────────────────────────
@@ -2384,7 +2399,7 @@ describe('TracerController.rename_marker', () => {
 
         tc.rename_marker(0, 'Ruler 30mm');
 
-        expect(global.alert).toHaveBeenCalledWith('That name is in use, choose another.');
+        expect(global.alert).toHaveBeenCalledWith(MARKER_NAME_IN_USE_MESSAGE);
         expect(mockPost).not.toHaveBeenCalled();
     });
 });
@@ -2553,7 +2568,7 @@ describe('TracerController.reset_tracing', () => {
             [],
         ]);
         expect(global.confirm).toHaveBeenCalledWith(
-            'Are you sure you want to delete all of the work and reset to the first frame?'
+            RESET_TRACING_CONFIRM_MESSAGE
         );
         expect(tc.frame_number).toBe(1);
         expect(resetButton.prop).toHaveBeenLastCalledWith('disabled', true);
@@ -2565,7 +2580,7 @@ describe('TracerController.reset_tracing', () => {
 
         await tc.reset_tracing();
 
-        expect(tc.track_button.val).toHaveBeenCalledWith('Trace to end of movie');
+        expect(tc.track_button.val).toHaveBeenCalledWith(TRACE_TO_END_OF_MOVIE);
     });
 
     test('does nothing when confirmation is cancelled', () => {
@@ -2853,10 +2868,10 @@ describe('TracerController.poll_for_track_end', () => {
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Initialising');
     });
 
-    test('done: in-progress with no status or last → shows "Tracing starting..."', () => {
+    test('done: in-progress with no status or last shows starting fallback', () => {
         fireDone({ error: false, metadata: { last_frame_tracked: null } });
         tc.poll_for_track_end();
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing starting...');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(TRACING_STARTING_MESSAGE);
     });
 
     test('done: no progress beyond source frame after deadline → alerts backend lambda unresponsive', () => {
@@ -2864,7 +2879,7 @@ describe('TracerController.poll_for_track_end', () => {
         tc.tracking_start_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 0 } });
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith('backend lambda is unresponsive. Please report.');
+        expect(global.alert).toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
         expect(tc.tracking).toBe(false);
     });
 
@@ -2873,7 +2888,7 @@ describe('TracerController.poll_for_track_end', () => {
         tc.tracking_start_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 1 } });
         tc.poll_for_track_end();
-        expect(global.alert).not.toHaveBeenCalledWith('backend lambda is unresponsive. Please report.');
+        expect(global.alert).not.toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing frame 1');
     });
 
@@ -2949,9 +2964,9 @@ describe('TracerController.movie_tracked', () => {
         expect(tc.tracking).toBe(false);
     });
 
-    test('sets tracking_status to "Tracing complete. Loading movie..."', () => {
+    test('sets tracking_status while loading the traced movie', () => {
         tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing complete. Loading movie...');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(TRACING_COMPLETE_LOADING_MOVIE_MESSAGE);
     });
 
     test('with zip URL: unzip is called with the zip URL', async () => {
@@ -2971,13 +2986,13 @@ describe('TracerController.movie_tracked', () => {
         expect(dimmedRemoved).toBe(true);
     });
 
-    test('with zip URL: shows "Press play" status after load', async () => {
+    test('with zip URL: shows playable status after load', async () => {
         mockUnzip.mockResolvedValueOnce({ entries: {} });
         tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
         await jest.runAllTimersAsync();
         const statusIdx = mock$.mock.calls.findLastIndex(a => a[0] === '#status-big');
         expect(mock$.mock.results[statusIdx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining('Press play'));
+            .toHaveBeenCalledWith(expect.stringContaining(PRESS_PLAY_STATUS_TEXT));
     });
 
     test('with zip URL: enables track button', async () => {
