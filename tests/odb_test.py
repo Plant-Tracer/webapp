@@ -376,13 +376,28 @@ def test_movie_trim_defaults_unknown_total_frames_omits_end(local_ddb):
         odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
 
 
+def test_movie_trim_defaults_clamps_stale_end_frame(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=3, trim_start_frame=0, trim_end_frame=8)
+
+    metadata = odb.movie_metadata_with_trim_defaults(odb.get_movie(movie_id=movie_id))
+
+    assert metadata[odb.TRIM_END_FRAME] == 2
+
+
 def test_trim_validation_rejects_negative_start_and_invalid_property(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=3)
 
     with pytest.raises(ValueError, match="trim_start_frame must be >= 0"):
         odb.validate_trim_bounds(trim_start_frame=-1, trim_end_frame=2, total_frames=3)
+    with pytest.raises(ValueError, match="trim_start_frame must be <= trim_end_frame"):
+        odb.validate_trim_bounds(trim_start_frame=2, trim_end_frame=1, total_frames=3)
     with pytest.raises(ValueError, match="invalid trim property"):
         odb.set_movie_trim_frame(movie_id=movie_id, prop="trim_middle_frame", frame_number=1)
+
+
+def test_trim_validation_rejects_start_after_end():
+    with pytest.raises(ValueError, match="trim_start_frame must be <= trim_end_frame"):
+        odb.validate_trim_bounds(trim_start_frame=3, trim_end_frame=1, total_frames=10)
 
 
 def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
