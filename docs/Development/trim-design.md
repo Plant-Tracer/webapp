@@ -50,6 +50,9 @@ Trim updates must satisfy:
 Reject invalid updates before persisting them. In particular, setting start
 after end or end before start is invalid. Generate an exception so
 that we can fix this in development, not have it silently fixed during runtime.
+When reading existing metadata, clamp a stored `trim_end_frame` that is beyond
+`total_frames - 1`; this can happen after a movie is replaced with a shorter
+one while stale trim metadata remains.
 
 ## Analyze Page Controls
 

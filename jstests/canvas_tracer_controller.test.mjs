@@ -463,7 +463,7 @@ describe('TracerController.getMaxViewableFrame', () => {
         expect(tc.getMaxViewableFrame()).toBe(0);
     });
 
-    test('returns 0 when last_tracked_frame is -1', () => {
+    test('returns last loaded frame when no frames are traced yet', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata({ last_frame_tracked: -1, total_frames: 5 }), 'k');
         tc.frames = new Array(5).fill({});
         expect(tc.getMaxViewableFrame()).toBe(4);
@@ -509,6 +509,16 @@ describe('TracerController trim behavior', () => {
         ]);
         expect(tc.trim_start_frame).toBe(0);
         expect(tc.trim_end_frame).toBe(2);
+    });
+
+    test('stale trim_end_frame is clamped to current movie length', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 3, trim_start_frame: 0, trim_end_frame: 8 }),
+            'k'
+        );
+        expect(tc.trim_end_frame).toBe(2);
+        expect(tc.movie_metadata.trim_end_frame).toBe(2);
     });
 
     test('first button target toggles between trim start and frame 0', () => {

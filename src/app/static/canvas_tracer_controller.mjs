@@ -106,7 +106,7 @@ class TracerController extends MovieController {
         this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
         this.trim_start_frame_missing = movie_metadata[TRIM_START_FRAME] == null;
         this.trim_end_frame_missing = movie_metadata[TRIM_END_FRAME] == null;
-        // Last frame index that has trackpoints (from API). -1 = none traced yet; only frame 0 viewable.
+        // Last frame index that has trackpoints (from API). -1 = none traced yet.
         this.last_tracked_frame = (movie_metadata.last_frame_tracked != null && movie_metadata.last_frame_tracked !== undefined)
             ? movie_metadata.last_frame_tracked : -1;
         this.total_frames = (movie_metadata.total_frames != null && movie_metadata.total_frames !== undefined)
@@ -199,8 +199,9 @@ class TracerController extends MovieController {
     ensure_trim_defaults() {
         const lastFrame = this.lastMovieFrameIndex();
         const trimStart = this.trim_start_frame_missing ? 0 : this.trimValue(TRIM_START_FRAME, 0);
-        const trimEnd = this.trim_end_frame_missing ? lastFrame : this.trimValue(TRIM_END_FRAME, lastFrame);
-        if (trimStart < 0 || trimStart > trimEnd || trimEnd > lastFrame) {
+        const rawTrimEnd = this.trim_end_frame_missing ? lastFrame : this.trimValue(TRIM_END_FRAME, lastFrame);
+        const trimEnd = Math.min(rawTrimEnd, lastFrame);
+        if (trimStart < 0 || trimStart > trimEnd) {
             throw new Error(`Invalid trim bounds ${trimStart}-${trimEnd} for last frame ${lastFrame}`);
         }
         this.trim_start_frame = trimStart;
@@ -924,12 +925,11 @@ class TracerController extends MovieController {
         this.create_marker_table();
     }
 
-    /** Highest frame index the user may navigate to (last frame with trackpoints; 0 if none traced yet). */
+    /** Highest frame index the user may navigate to from currently loaded frame data. */
     getMaxViewableFrame() {
         if (!this.frames || this.frames.length === 0) return 0;
         const lastMovieFrame = this.lastMovieFrameIndex();
         if (this.frames.length > 1) return Math.min(this.frames.length - 1, lastMovieFrame);
-        if (this.last_tracked_frame < 0) return 0;
         return Math.min(this.last_tracked_frame, this.frames.length - 1, lastMovieFrame);
     }
 

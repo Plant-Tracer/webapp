@@ -1380,6 +1380,8 @@ def movie_trim_bounds(movie: dict) -> tuple[int, int | None]:
     default_end = default_trim_end_frame(movie)
     raw_end = movie.get(TRIM_END_FRAME, default_end)
     trim_end_frame = None if raw_end is None else int(raw_end)
+    if trim_end_frame is not None and default_end is not None:
+        trim_end_frame = min(trim_end_frame, default_end)
     total_frames = _movie_total_frames(movie)
     if trim_end_frame is not None and total_frames is not None:
         validate_trim_bounds(
