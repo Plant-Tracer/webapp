@@ -35,7 +35,6 @@ from .odb import (
     MOVIE_ZIPFILE_URN,
     MOVIE_TRACED_URN,
     MOVIE_TRACED_URL,
-    NEEDS_RETRACING,
     MOVIE_METADATA_BULK_PROPS,
     MOVIE_ROTATION,
     FRAME_URN,
@@ -701,9 +700,10 @@ def api_put_frame_trackpoints():
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
             logger.debug("%s",tp)
-    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
-    ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {NEEDS_RETRACING: 1})
+    odb.put_frame_trackpoints(movie_id=movie_id,
+                              frame_number=frame_number,
+                              trackpoints=trackpoints,
+                              needs_retracing=True)
 
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 

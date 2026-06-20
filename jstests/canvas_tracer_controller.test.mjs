@@ -490,11 +490,24 @@ describe('TracerController constructor', () => {
         expect(tracedControl.show).toHaveBeenCalled();
     });
 
-    test('retrace required message follows needs_retracing metadata', () => {
+    test('retrace required message is hidden before a traced movie exists', () => {
         const retraceMessage = makeEl();
         useSelectorElements({ 'div#tc .retrace_required_message': retraceMessage });
 
         new TracerController('div#tc', makeMovieMetadata({ needs_retracing: 1 }), 'k');
+
+        expect(retraceMessage.hide).toHaveBeenCalled();
+        expect(retraceMessage.show).not.toHaveBeenCalled();
+    });
+
+    test('retrace required message follows needs_retracing after a traced movie exists', () => {
+        const retraceMessage = makeEl();
+        useSelectorElements({ 'div#tc .retrace_required_message': retraceMessage });
+
+        new TracerController('div#tc', makeMovieMetadata({
+            needs_retracing: 1,
+            movie_traced_url: 'https://example.com/traced.mp4',
+        }), 'k');
 
         expect(retraceMessage.show).toHaveBeenCalled();
         expect(retraceMessage.hide).not.toHaveBeenCalled();
@@ -601,6 +614,24 @@ describe('TracerController trim behavior', () => {
         expect(tc.isCurrentFrameEditable()).toBe(false);
         tc.frame_number = 3;
         expect(tc.isCurrentFrameEditable()).toBe(true);
+    });
+
+    test('current frame is not editable while tracing, resetting, or movie status is tracing', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 10, trim_start_frame: 3, trim_end_frame: 8 }),
+            'k'
+        );
+        tc.frame_number = 3;
+        expect(tc.isCurrentFrameEditable()).toBe(true);
+        tc.tracking = true;
+        expect(tc.isCurrentFrameEditable()).toBe(false);
+        tc.tracking = false;
+        tc.resetting_tracing = true;
+        expect(tc.isCurrentFrameEditable()).toBe(false);
+        tc.resetting_tracing = false;
+        tc.movie_metadata.status = 'tracing';
+        expect(tc.isCurrentFrameEditable()).toBe(false);
     });
 
     test('frames outside trim draw a prominent trimmed overlay label', () => {
@@ -2216,7 +2247,10 @@ describe('TracerController.del_row', () => {
 // ── reset_tracing ─────────────────────────────────────────────────────────────
 describe('TracerController.reset_tracing', () => {
     let tc;
+    let resetButton;
     beforeEach(() => {
+        resetButton = makeEl();
+        useSelectorElements({ 'div#tracer input.delete_all_markers_button': resetButton });
         tc = new TracerController(
             'div#tracer',
             makeMovieMetadata({ total_frames: 3, trim_start_frame: 1, trim_end_frame: 2, last_frame_tracked: 2 }),
@@ -2299,6 +2333,21 @@ describe('TracerController.reset_tracing', () => {
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
     });
 
+    test('disables reset button and ignores re-entry while save requests are pending', () => {
+        mockPost.mockReturnValue({
+            done: jest.fn().mockReturnThis(),
+            fail: jest.fn().mockReturnThis(),
+        });
+
+        const promise = tc.reset_tracing();
+        tc.reset_tracing();
+
+        expect(resetButton.prop).toHaveBeenCalledWith('disabled', true);
+        expect(global.confirm).toHaveBeenCalledTimes(1);
+        expect(mockPost).toHaveBeenCalledTimes(3);
+        expect(promise).toBeInstanceOf(Promise);
+    });
+
     test('keeps local markers when persistence fails', async () => {
         mockPost.mockReturnValue({
             done: jest.fn().mockReturnValue({
@@ -2311,6 +2360,7 @@ describe('TracerController.reset_tracing', () => {
         await tc.reset_tracing();
 
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
+        expect(resetButton.prop).toHaveBeenCalledWith('disabled', false);
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
         expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base', color: 'magenta' });
     });
@@ -2814,6 +2864,14 @@ describe('graph_data', () => {
         await runWithFrames(oneFrame());
         const yConfig = ChartSpy.mock.calls[1][1];
         expect(yConfig.options.scales.y.reverse).toBe(false);
+    });
+
+    test('legend labels do not force a stale single marker color', async () => {
+        await runWithFrames(oneFrame());
+        const xConfig = ChartSpy.mock.calls[0][1];
+        const yConfig = ChartSpy.mock.calls[1][1];
+        expect(xConfig.options.plugins.legend.labels.borderColor).toBeUndefined();
+        expect(yConfig.options.plugins.legend.labels.borderColor).toBeUndefined();
     });
 
     test('with only ruler markers: both charts have no datasets', async () => {

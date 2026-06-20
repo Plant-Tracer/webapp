@@ -60,6 +60,34 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
     ]
 
 
+def test_cv2_trace_frame_preserves_all_markers_when_cv2_errors(monkeypatch):
+    class FakeCv2Error(Exception):
+        pass
+
+    previous_trackpoints = [
+        Trackpoint(x=1, y=2, label="Apex", frame_number=4, color="orange"),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, color="red", undeletable=True),
+    ]
+
+    def fake_optical_flow(_gray_frame_prev, _gray_frame, _input_points, _unused, **_kwargs):
+        raise FakeCv2Error("optical flow failed")
+
+    monkeypatch.setattr(tracer.cv2, "error", FakeCv2Error)
+    monkeypatch.setattr(tracer.cv2, "calcOpticalFlowPyrLK", fake_optical_flow)
+
+    result = tracer.cv2_trace_frame(
+        gray_frame_prev=np.zeros((8, 8), dtype=np.uint8),
+        gray_frame=np.zeros((8, 8), dtype=np.uint8),
+        trackpoints=previous_trackpoints,
+        frame_number=5,
+    )
+
+    assert result == [
+        Trackpoint(x=1, y=2, label="Apex", frame_number=5, color="orange"),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
+    ]
+
+
 def test_update_trackpoint_segments_adds_lines_for_matching_labels_only():
     segments = []
 

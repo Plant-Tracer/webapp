@@ -19,6 +19,7 @@ const APEX_MARKER_COLOR = 'orange';
 const FIXED_PLANT_MARKER_COLORS = ['magenta', '#b58900', '#0096ff'];
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
+const TRACING_FLAG='tracing';
 const RETRACE_MOVIE = 'Retrace movie';
 const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
 const TRACE_MOVIE = 'Trace movie';
@@ -148,6 +149,7 @@ class TracerController extends MovieController {
     constructor( div_selector, movie_metadata, api_key) {
         super( div_selector );
         this.tracking = false;  // are we tracking a movie?
+        this.resetting_tracing = false;
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
@@ -276,8 +278,17 @@ class TracerController extends MovieController {
         return frameNumber >= this.trim_start_frame && frameNumber <= this.trim_end_frame;
     }
 
+    movieStatusIsTracing() {
+        return String(this.movie_metadata.status || '').toLowerCase() === TRACING_FLAG;
+    }
+
+    editingLocked() {
+        return this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+    }
+
     isCurrentFrameEditable() {
-        return this.frame_number != null && this.isFrameInTrim(this.frame_number);
+        return !this.editingLocked()
+            && this.frame_number != null && this.isFrameInTrim(this.frame_number);
     }
 
     trimBoundFrameNumber() {
@@ -418,6 +429,7 @@ class TracerController extends MovieController {
     refreshFrameEditState() {
         const editable = this.isCurrentFrameEditable();
         this.marker_name_input.prop(DISABLED, !editable);
+        this.delete_all_markers_button.prop(DISABLED, this.editingLocked());
         if (!editable) {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
@@ -545,7 +557,8 @@ class TracerController extends MovieController {
         if (!this.retrace_required_message) {
             return;
         }
-        if (Number(this.movie_metadata[NEEDS_RETRACING] || 0) === 1) {
+        if (Number(this.movie_metadata[NEEDS_RETRACING] || 0) === 1
+            && this.movie_metadata[MOVIE_TRACED_URL]) {
             this.retrace_required_message.show();
         } else {
             this.retrace_required_message.hide();
@@ -854,6 +867,9 @@ class TracerController extends MovieController {
     }
 
     reset_tracing() {
+        if (this.editingLocked()) {
+            return;
+        }
         if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
@@ -864,6 +880,9 @@ class TracerController extends MovieController {
         if (!confirm('Are you sure you want to delete all of the work and reset to the first frame?')) {
             return;
         }
+        this.resetting_tracing = true;
+        this.delete_all_markers_button.prop(DISABLED, true);
+        this.refreshFrameEditState();
 
         const updates = [];
         const firstTrimFrame = this.trim_start_frame;
@@ -886,6 +905,9 @@ class TracerController extends MovieController {
         if (updates.length === 0) {
             this.goto_frame(firstTrimFrame);
             this.refreshVisibleGraphs();
+            this.resetting_tracing = false;
+            this.delete_all_markers_button.prop(DISABLED, false);
+            this.refreshFrameEditState();
             return;
         }
 
@@ -921,6 +943,11 @@ class TracerController extends MovieController {
             })
             .catch((err) => {
                 alert("error from reset-tracing:\n"+err.message);
+            })
+            .finally(() => {
+                this.resetting_tracing = false;
+                this.delete_all_markers_button.prop(DISABLED, false);
+                this.refreshFrameEditState();
             });
     }
 
@@ -1641,8 +1668,7 @@ function graph_data(cc, frames) {
                     labels: {
                         usePointStyle: true,  // Use line instead of a box in the legend
                         boxWidth: 4,         // Make the line shorter in the legend
-                        pointStyle: 'line',  // Show a line instead of the default box
-                        borderColor: 'rgba(255, 0, 0, 1)'
+                        pointStyle: 'line'  // Show a line instead of the default box
                     }
                 }
             }
@@ -1681,8 +1707,7 @@ function graph_data(cc, frames) {
                     labels: {
                         usePointStyle: true,  // Use line instead of a box in the legend
                         boxWidth: 4,         // Make the line shorter in the legend
-                        pointStyle: 'line',  // Show a line instead of the default box
-                        borderColor: 'rgba(255, 0, 0, 1)'
+                        pointStyle: 'line'  // Show a line instead of the default box
                     }
                 }
             }

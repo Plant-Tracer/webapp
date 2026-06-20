@@ -218,7 +218,7 @@ List all movies visible to the caller (their own movies and published movies in 
 { "error": false, "movies": [ { "movie_id": "m...", "title": "...", ... } ] }
 ```
 
-Each movie dict contains all DynamoDB metadata fields. In addition, if the movie has a traced MP4 stored in S3 (`movie_traced_urn` starts with `s3:`), the response injects a short-lived presigned URL:
+Each movie dict contains all DynamoDB metadata fields. In addition, if the movie has a traced MP4 stored in S3 (`movie_traced_urn` starts with `s3:`), the response injects a short-lived presigned URL. Clients should treat `needs_retracing=1` as user-visible only when this URL is present; before the first traced MP4 exists there is no stale traced artifact to warn about.
 
 | Field | Description |
 |-------|-------------|
@@ -293,6 +293,8 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 ```
 
 **Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 is now stale. The client uses it to show a "movie requires retracing" warning when `movie_traced_url` is also present.
+
+The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
 
 ---
 
@@ -373,7 +375,7 @@ Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 
 **Response**
 
-```json
+```text
 { "error": false, "metadata": { "movie_id": "m...", "trim_start_frame": 0, "trim_end_frame": 42, ... } }
 ```
 

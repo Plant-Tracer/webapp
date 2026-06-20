@@ -1796,7 +1796,8 @@ def last_tracked_movie_frame(*, movie_id):
             break
     return None
 
-def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint]):
+def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
+                          needs_retracing:bool=False):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of Tractpoints.
@@ -1820,7 +1821,10 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
         lft = frame_number
     else:
         lft = max(current, frame_number)
-    set_movie_metadata(movie_id=movie_id, movie_metadata = {LAST_FRAME_TRACKED:lft})
+    movie_metadata = {LAST_FRAME_TRACKED:lft}
+    if needs_retracing:
+        movie_metadata[NEEDS_RETRACING] = 1
+    set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
 
 
 def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:int|None=None):

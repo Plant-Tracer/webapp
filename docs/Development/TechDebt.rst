@@ -51,7 +51,18 @@ Medium
   Impact: medium; ``needs_retracing`` is currently a coarse movie-level flag,
   but regional tracing and trimmed traced-MP4 exports need to distinguish the
   first stale frame, the stale end frame, and whether a full-movie or clipped
-  traced artifact is current. Files: 5-9.
+  traced artifact is current. The current browser UI disables marker edits while
+  that browser session is tracing, and when loaded metadata has
+  ``status="tracing"``, but there is still no server-side lock: an edit from
+  another tab with stale metadata or another client during Lambda tracing can
+  race with Lambda's final ``needs_retracing=0`` write. Files: 5-9.
+
+* Represent partial traces explicitly in graph data.
+  Impact: low; graph labels currently cover the trimmed frame range and marker
+  datasets use ``null`` where a marker is absent. For partially traced movies
+  this can leave an empty gap at the right edge of the graph, but it preserves
+  frame alignment across multiple marker datasets and is acceptable until graph
+  exports gain richer trace-range metadata. Files: 2-4.
 
 * Consolidate local setup docs and Make targets.
   Impact: medium; reduces drift across Mac, Ubuntu, and generic setup documents.

@@ -862,7 +862,7 @@ function list_movies_data( movies ) {
       } else {
         rows += m.published ? "<b>Published</b> " : "Not published";
       }
-      if (Number(m.needs_retracing || 0) === 1) {
+      if (Number(m.needs_retracing || 0) === 1 && m.movie_traced_url) {
         rows += "<br><span class='retrace-required-message'>marker moved; movie requires retracing</span>";
       }
       rows += "<br/>";

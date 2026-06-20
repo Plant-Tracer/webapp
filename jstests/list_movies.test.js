@@ -120,6 +120,29 @@ describe('list_movies_data', () => {
     expect(publishedHtml).toContain('marker moved; movie requires retracing');
   });
 
+  test('should not show retrace warning before a traced movie exists', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        total_bytes: 2000000,
+        total_frames: 3600,
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+        needs_retracing: 1,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).not.toContain('marker moved; movie requires retracing');
+  });
+
   test('should handle an empty list of movies gracefully', () => {
     const movies = [];
 
