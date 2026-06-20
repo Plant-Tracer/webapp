@@ -298,6 +298,29 @@ The tracer UI disables marker editing and reset actions while a trace request is
 
 ---
 
+#### `POST /api/rename-marker`
+
+Rename one marker label across all stored trackpoints for a movie. Other marker properties, such as coordinates, color, `undeletable`, status, and error metadata, are preserved.
+
+**Parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `api_key` | Yes | Must not be the demo key |
+| `movie_id` | Yes | |
+| `old_label` | Yes | Existing marker label to rename |
+| `new_label` | Yes | New marker label. Must not already exist on the movie. |
+
+**Response**
+
+```json
+{ "error": false, "frames_updated": 3, "trackpoints_updated": 3 }
+```
+
+**Side effect:** when any stored trackpoints are renamed, sets `needs_retracing=1` on the movie record.
+
+---
+
 #### `POST /api/rotate-movie`
 
 Set the movie's rotation. Tracking is cleared; Lambda applies the rotation when re-processing.

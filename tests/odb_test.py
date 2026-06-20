@@ -271,6 +271,57 @@ def test_get_movie_trackpoints_carries_marker_metadata(local_ddb):
     ]
 
 
+def test_rename_movie_marker_preserves_marker_metadata(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=2)
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[
+            Trackpoint(x=10, y=20, label='Ruler 0mm', color='red', undeletable=True, frame_number=0, status=0),
+            Trackpoint(x=30, y=40, label='Apex', color='orange', frame_number=0),
+        ],
+    )
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=1,
+        trackpoints=[
+            Trackpoint(x=11, y=21, label='Ruler 0mm', color='red', undeletable=True, frame_number=1, status=1),
+            Trackpoint(x=31, y=41, label='Apex', color='orange', frame_number=1),
+        ],
+    )
+
+    result = odb.rename_movie_marker(
+        movie_id=movie_id,
+        old_label='Ruler 0mm',
+        new_label='Ruler 30mm',
+        needs_retracing=True,
+    )
+
+    assert result == {'frames_updated': 2, 'trackpoints_updated': 2}
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {'frame_number': 0, 'x': 10, 'y': 20, 'label': 'Ruler 30mm', 'color': 'red', 'undeletable': True, 'status': 0},
+        {'frame_number': 0, 'x': 30, 'y': 40, 'label': 'Apex', 'color': 'orange'},
+        {'frame_number': 1, 'x': 11, 'y': 21, 'label': 'Ruler 30mm', 'color': 'red', 'undeletable': True, 'status': 1},
+        {'frame_number': 1, 'x': 31, 'y': 41, 'label': 'Apex', 'color': 'orange'},
+    ]
+    assert odb.get_movie(movie_id=movie_id)[odb.NEEDS_RETRACING] == 1
+
+
+def test_rename_movie_marker_rejects_existing_target_label(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=1)
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[
+            Trackpoint(x=10, y=20, label='Ruler 0mm'),
+            Trackpoint(x=30, y=40, label='Ruler 30mm'),
+        ],
+    )
+
+    with pytest.raises(ValueError, match='marker label already exists'):
+        odb.rename_movie_marker(movie_id=movie_id, old_label='Ruler 0mm', new_label='Ruler 30mm')
+
+
 def test_clear_movie_tracking_after_frame(local_ddb):
     ddbo = local_ddb
     course_id = f"retrace-course-{rand8()}"

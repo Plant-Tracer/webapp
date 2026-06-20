@@ -708,6 +708,28 @@ def api_put_frame_trackpoints():
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 
 
+@api_bp.route('/rename-marker', methods=POST)
+def api_rename_marker():
+    """Rename a marker label across all stored trackpoints for a movie."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    try:
+        rename_result = odb.rename_movie_marker(
+            movie_id=movie[MOVIE_ID],
+            old_label=get('old_label'),
+            new_label=get('new_label'),
+            needs_retracing=True,
+        )
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    return jsonify({
+        C.API_KEY_ERROR: False,
+        'frames_updated': rename_result['frames_updated'],
+        'trackpoints_updated': rename_result['trackpoints_updated'],
+    })
+
+
 ################################################################
 ##
 # Log API

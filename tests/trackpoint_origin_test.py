@@ -111,6 +111,32 @@ def test_put_frame_trackpoints_marks_movie_as_needing_retrace(client, new_movie)
     assert movie[NEEDS_RETRACING] == 1
 
 
+def test_rename_marker_api_renames_stored_trackpoints(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[Trackpoint(x=Decimal(10), y=Decimal(20), label="Ruler 0mm", color="red", undeletable=True)],
+    )
+
+    resp = client.post(
+        "/api/rename-marker",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: movie_id,
+            "old_label": "Ruler 0mm",
+            "new_label": "Ruler 30mm",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json() == {"error": False, "frames_updated": 1, "trackpoints_updated": 1}
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {"frame_number": 0, "x": 10, "y": 20, "label": "Ruler 30mm", "color": "red", "undeletable": True},
+    ]
+    assert odb.get_movie(movie_id=movie_id)[NEEDS_RETRACING] == 1
+
+
 def test_list_movies_returns_signed_traced_movie_url(client, new_movie):
     traced_urn = make_urn(object_name=f"{new_movie[MOVIE_ID]}_traced.mp4")
     ddbo = odb.DDBO()

@@ -86,10 +86,15 @@
         <div class='pure-control-group nodemo'>
           <label></label>
           <input class='track_button pure-button pure-button-primary' type='button' value='Trace movie'>
+          <span class="traced_movie_download_control">
+            <a class="traced_movie_download_link pure-button pure-button-primary"
+               href="#"
+               download>Download traced movie</a>
+          </span>
         </div>
         <div class='pure-control-group nodemo'>
           <label></label>
-          <input class='delete_all_markers_button pure-button' type='button' value='Reset tracing'>
+          <input class='delete_all_markers_button pure-button' type='button' value='Reset tracing' disabled='true'>
         </div>
       </fieldset>
     </form>
@@ -108,14 +113,6 @@
         </div>
       </fieldset>
     </form>
-    <div class="pure-form pure-form-aligned traced_movie_download_control">
-      <div class="pure-control-group">
-        <label></label>
-        <a class="traced_movie_download_link pure-button pure-button-primary"
-           href="#"
-           download>Download traced movie</a>
-      </div>
-    </div>
   </div>
   <div id="analysis-results">
     <canvas id="apex-xChart" width="400" height="200"></canvas>

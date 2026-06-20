@@ -21,7 +21,18 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 from pydantic import ValidationError
 
-from .schema import User, Movie, Trackpoint, validate_movie_field, Course, fix_movie, fix_movies, fix_movie_prop_value, validate_user_field
+from .schema import (
+    User,
+    Movie,
+    Trackpoint,
+    RenameMarkerRequest,
+    validate_movie_field,
+    Course,
+    fix_movie,
+    fix_movies,
+    fix_movie_prop_value,
+    validate_user_field,
+)
 from .constants import C,logger
 
 # tables
@@ -1795,6 +1806,51 @@ def last_tracked_movie_frame(*, movie_id):
         if not last_evaluated_key:
             break
     return None
+
+def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
+                        needs_retracing: bool = False) -> dict:
+    """Rename a marker label across all stored trackpoints for one movie."""
+    assert is_movie_id(movie_id)
+    rename_request = RenameMarkerRequest(old_label=old_label, new_label=new_label)
+    old_label = rename_request.old_label
+    new_label = rename_request.new_label
+    if old_label == new_label:
+        return {'frames_updated': 0, 'trackpoints_updated': 0}
+
+    ensure_bottom_left_trackpoints(movie_id=movie_id)
+    ddbo = DDBO()
+    frames = ddbo.get_frames(movie_id)
+    for frame in frames:
+        for trackpoint in frame.get('trackpoints', []):
+            if trackpoint.get('label') == new_label:
+                raise ValueError(f"marker label already exists: {new_label}")
+
+    frames_updated = 0
+    trackpoints_updated = 0
+    for frame in frames:
+        trackpoints = frame.get('trackpoints', [])
+        if not trackpoints:
+            continue
+        renamed_trackpoints = []
+        frame_changed = False
+        for trackpoint in trackpoints:
+            renamed_trackpoint = copy.copy(trackpoint)
+            if renamed_trackpoint.get('label') == old_label:
+                renamed_trackpoint['label'] = new_label
+                frame_changed = True
+                trackpoints_updated += 1
+            renamed_trackpoints.append(renamed_trackpoint)
+        if frame_changed:
+            ddbo.movie_frames.update_item(
+                Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
+                UpdateExpression='SET trackpoints=:trackpoints',
+                ExpressionAttributeValues={':trackpoints': renamed_trackpoints},
+            )
+            frames_updated += 1
+
+    if needs_retracing and trackpoints_updated:
+        set_movie_metadata(movie_id=movie_id, movie_metadata={NEEDS_RETRACING: 1})
+    return {'frames_updated': frames_updated, 'trackpoints_updated': trackpoints_updated}
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
                           needs_retracing:bool=False):

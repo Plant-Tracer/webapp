@@ -1,6 +1,6 @@
 "use strict";
 /* jshint esversion: 8 */
-import { $ } from "./utils.js";
+import { $, begin_inline_text_edit } from "./utils.js";
 
 
 
@@ -633,45 +633,11 @@ function row_checkbox_clicked( e ) {
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
 function row_pencil_clicked( e ) {
   console.log('row_pencil_clicked e=',e);
-  const target = e.getAttribute('x-target-id'); // name of the target
-  console.log('target=',target);
-  const t = $(`#${target}`).get(0); // element of the target
-  console.log('t=',t);
-  const user_id  = t.getAttribute('x-user_id'); // property we are changing
-  const movie_id = t.getAttribute('x-movie_id'); // property we are changing
-  const property = t.getAttribute('x-property'); // property we are changing
-  const oValue   = t.textContent;                // current content of the text
-  t.setAttribute('contenteditable','true');      // make the text editable
-  t.focus();                                     // give it the focus
-
-  function finished_editing() {                  // undoes editing and sends to server
-    t.setAttribute('contenteditable','false'); // no longer editable
-    t.blur();                                  // no longer key
-    const value = t.textContent;
-    if (value != oValue){
-      set_property(user_id, movie_id, property, value);
-    } else {
-      //console.log(`value unchanged`);
-    }
-  }
-
-  // handle tab, return and escape
-  t.addEventListener('keydown', function(e) {
-    if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
-      //console.log('tab or return pressed');
-      finished_editing();
-    } else if (e.keyCode==27){ // escape pressed
-      //console.log(`escape pressed. Restore ${oValue}`);
-      t.textContent = oValue; // restore the original value
-      t.blur();           // does this work?
-      t.setAttribute('contenteditable','false'); // no longer editable
-    } else {
-      // Normal keypress
-    }
-  });
-  // Click somewhere else to finish editing
-  t.addEventListener('blur', function(_e) {
-    finished_editing();
+  begin_inline_text_edit(e, function(t, value, _oldValue) {
+    const user_id  = t.getAttribute('x-user_id'); // property we are changing
+    const movie_id = t.getAttribute('x-movie_id'); // property we are changing
+    const property = t.getAttribute('x-property'); // property we are changing
+    set_property(user_id, movie_id, property, value);
   });
 }
 
