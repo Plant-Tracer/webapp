@@ -471,6 +471,23 @@ describe('TracerController inflection point', () => {
         expect(after).toBe(1);
     });
 
+    test('refreshFrameEditState enables the inflection button on an editable empty frame', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.add_inflection_point_button = { prop: jest.fn() };
+        tc.refreshFrameEditState();
+        expect(tc.add_inflection_point_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('refreshFrameEditState disables the inflection button once one exists', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.objects.push(new MockMarkerClass(50, 50, 5, 'red', 'red', INFLECTION_POINT_LABEL));
+        tc.add_inflection_point_button = { prop: jest.fn() };
+        tc.refreshFrameEditState();
+        expect(tc.add_inflection_point_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
     test('typed reserved name (any case) is blocked when one already exists', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.isCurrentFrameEditable = () => true;

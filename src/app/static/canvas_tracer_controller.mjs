@@ -521,6 +521,10 @@ class TracerController extends MovieController {
         const editable = this.isCurrentFrameEditable();
         this.marker_name_input.prop(DISABLED, !editable);
         this.refreshResetTracingButtonState();
+        if (this.add_inflection_point_button) {
+            // Enabled only on an editable frame that does not already have one.
+            this.add_inflection_point_button.prop(DISABLED, !editable || this.has_inflection_marker());
+        }
         if (!editable) {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
@@ -820,6 +824,7 @@ class TracerController extends MovieController {
         this.create_marker_table(); // redraw table
         this.markFutureFramesDirty();
         this.refreshResetTracingButtonState();
+        this.refreshFrameEditState(); // keep the inflection-point button in sync
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
     }
@@ -1146,6 +1151,7 @@ class TracerController extends MovieController {
         this.create_marker_table();
         this.markFutureFramesDirty();
         this.refreshResetTracingButtonState();
+        this.refreshFrameEditState(); // re-enable the inflection-point button if it was removed
         this.put_markers();
     }
 
