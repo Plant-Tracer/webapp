@@ -25,6 +25,7 @@ Developer Documentation
    FlaskAPI
    TrackpointCoordinateSystem
    trim-design
+   AnalysisResults
    ProcessingPhases
    THEORY_OF_DESIGN
    NOTES_ON_SIMPLIFYING

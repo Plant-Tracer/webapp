@@ -83,6 +83,13 @@ Interpreting and Reading Results
 --------------------------------
 - Use the arrow buttons just below the tracked movie to play, or navigate to a particular frame.
 - The Position Graphs visualize the change in the non-RulerXX markers'horizontal (x position) and vertical (y position) since frame 0.
+- Above the graphs, Plant Tracer shows aggregate result statistics. Use the **Results** selector to choose **All**, **Gravitropism**, or **Circumnutation**:
+
+  - **Gravitropism** reports the **Distance** the tracked tip moved from the first to the last frame, and (when an Inflection Point marker is present) the bending **Angle** at that pivot.
+  - **Circumnutation** reports the **Max Amplitude**, the horizontal range of the tracked tip across all frames.
+
+  Results are shown in millimeters when two or more ruler markers are present, otherwise in pixels.
+- To compute the gravitropism Angle, click **Add Inflection Point** to place the reference pivot marker (the base or bend point of the stem), then position it like any other marker. The marker name ``Inflection Point`` is reserved (matched case-insensitively) and only one may be added per movie.
 - When tracking is complete, you can press the "Download Trackpoints" button to get the tracking data in CSV format.
 - At this point, you are ready to use a spreadsheet to further analyze and graph the data.
 

@@ -73,6 +73,8 @@
           <label for='marker-name-id'>Marker name:</label>
           <input id='marker-name-id' class='marker_name_input' type='text' placeholder='Marker name' size='20'>
           <input class='add_marker_button pure-button  pure-button-primary' type='button' value='Add new marker' disabled='true'>
+          <input class='add_inflection_point_button pure-button' type='button' value='Add Inflection Point'
+                 title='Add the reference pivot used for the gravitropism Angle statistic'>
         </div>
 
         <div class='pure-control-group nodemo'>
@@ -115,6 +117,15 @@
     </form>
   </div>
   <div id="analysis-results">
+    <div class="result-controls">
+      <label for="result-mode-select">Results:</label>
+      <select id="result-mode-select" class="result_mode_select">
+        <option value="all" selected>All</option>
+        <option value="gravitropism">Gravitropism</option>
+        <option value="circumnutation">Circumnutation</option>
+      </select>
+    </div>
+    <div id="result-stats" class="result-stats"></div>
     <canvas id="apex-xChart" width="400" height="200"></canvas>
     <canvas id="apex-yChart" width="400" height="200"></canvas>
   </div>

@@ -17,6 +17,12 @@ const MARKER_RADIUS = 10;           // default radius of the marker
 const RULER_MARKER_COLOR = 'red';
 const APEX_MARKER_COLOR = 'orange';
 const FIXED_PLANT_MARKER_COLORS = ['magenta', '#b58900', '#0096ff'];
+// Reserved marker used as the fixed pivot for the gravitropism Angle statistic.
+// The name is matched case-insensitively; the marker is tracked and graphed like any
+// plant marker, but its reserved name lets the dedicated button and the Angle
+// calculation locate it.
+const INFLECTION_POINT_LABEL = 'Inflection Point';
+const INFLECTION_MARKER_COLOR = '#2aa198';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const TRACING_FLAG='tracing';
@@ -59,6 +65,7 @@ import {
 import { CanvasItem, Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
+import { gravitropism_results, circumnutation_results } from "./analysis_results.mjs";
 
 // Default marker positions used only when a new movie is first loaded for analysis
 // and frame 0 has no markers yet (no frames traced). See create_default_markers().
@@ -126,6 +133,11 @@ function is_apex_marker_label(label) {
     return label === 'Apex';
 }
 
+// Case-insensitive: "Inflection Point", "inflection point", "INFLECTION POINT" all match.
+function is_inflection_marker_label(label) {
+    return typeof label === 'string' && /^\s*Inflection\s*Point\s*$/i.test(label);
+}
+
 function marker_is_undeletable(marker) {
     return marker && marker.undeletable === true;
 }
@@ -146,7 +158,8 @@ function graphable_marker_label(label) {
 }
 
 function custom_marker_label(label) {
-    return graphable_marker_label(label) && !is_apex_marker_label(label);
+    return graphable_marker_label(label) && !is_apex_marker_label(label)
+        && !is_inflection_marker_label(label);
 }
 
 function random_marker_color() {
@@ -243,6 +256,13 @@ class TracerController extends MovieController {
         // We need to be able to enable or display the add_marker button, so we record it
         this.add_marker_button = $(this.div_selector + " input.add_marker_button");
         this.add_marker_button.off('click').on('click', (event) => { this.add_marker_onclick_handler(event);});
+
+        this.add_inflection_point_button = $(this.div_selector + " input.add_inflection_point_button");
+        this.add_inflection_point_button.off('click').on('click', (event) => { this.add_inflection_point_onclick_handler(event);});
+
+        // Results mode selector (All / Gravitropism / Circumnutation) lives in #analysis-results.
+        this.result_mode_select = $("#result-mode-select");
+        this.result_mode_select.off('change').on('change', () => { this.refreshResults(); });
 
         // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
@@ -419,6 +439,9 @@ class TracerController extends MovieController {
         if (is_apex_marker_label(label)) {
             return APEX_MARKER_COLOR;
         }
+        if (is_inflection_marker_label(label)) {
+            return INFLECTION_MARKER_COLOR;
+        }
         const existingColor = this.marker_color_from_existing_data(label);
         if (existingColor) {
             this.marker_colors_by_label.set(label, existingColor);
@@ -459,7 +482,17 @@ class TracerController extends MovieController {
 
     refreshVisibleGraphs() {
         if ($('#analysis-results').is(':visible')) {
-            requestAnimationFrame(() => graph_data(this, this.frames_for_graph()));
+            requestAnimationFrame(() => {
+                graph_data(this, this.frames_for_graph());
+                display_results(this, this.frames_for_graph());
+            });
+        }
+    }
+
+    // Recompute the result statistics for the current mode-selector value.
+    refreshResults() {
+        if ($('#analysis-results').is(':visible')) {
+            display_results(this, this.frames_for_graph());
         }
     }
 
@@ -727,6 +760,13 @@ class TracerController extends MovieController {
             this.add_marker_status.text("");
             this.add_marker_button.prop(DISABLED,false);
         }
+        // Reject a second inflection point regardless of casing (the reserved name is
+        // matched case-insensitively, so an exact-name check below would miss "inflection point").
+        if (is_inflection_marker_label(val) && this.has_inflection_marker()) {
+            this.add_marker_status.text(MARKER_NAME_IN_USE_MESSAGE);
+            this.add_marker_button.prop(DISABLED,true);
+            return;
+        }
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
             if(this.objects[i].name == val){
@@ -739,6 +779,12 @@ class TracerController extends MovieController {
         this.add_marker_button.prop(DISABLED,false);
     }
 
+    // True if a marker with the reserved Inflection Point name already exists.
+    has_inflection_marker() {
+        return (this.objects || []).some(
+            obj => obj.constructor.name === Marker.name && is_inflection_marker_label(obj.name));
+    }
+
     // new marker added
     add_marker_onclick_handler(_e) {
         if (!this.isCurrentFrameEditable()) {
@@ -748,6 +794,18 @@ class TracerController extends MovieController {
             this.add_marker( 50, 50, this.marker_name_input.val());
             this.marker_name_input.val("");
         }
+    }
+
+    // Add the reserved Inflection Point marker via its dedicated button.
+    add_inflection_point_onclick_handler(_e) {
+        if (!this.isCurrentFrameEditable()) {
+            return;
+        }
+        if (this.has_inflection_marker()) {
+            this.add_marker_status.text(MARKER_NAME_IN_USE_MESSAGE);
+            return;
+        }
+        this.add_marker(50, 50, INFLECTION_POINT_LABEL);
     }
 
     // add a tracking circle with the next color
@@ -1713,7 +1771,10 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
     if (show_results) {
         $('#analysis-results').show();
-        requestAnimationFrame(() => graph_data(cc, movie_frames));
+        requestAnimationFrame(() => {
+            graph_data(cc, movie_frames);
+            display_results(cc, movie_frames);
+        });
     }
 }
 
@@ -1779,6 +1840,92 @@ function first_marker_for_label(frames, label) {
         }
     }
     return null;
+}
+
+function last_marker_for_label(frames, label) {
+    for (let i = frames.length - 1; i >= 0; i--) {
+        const marker = marker_for_label(frames[i].markers, label);
+        if (marker) {
+            return marker;
+        }
+    }
+    return null;
+}
+
+// The tracked "tip" for result statistics: Apex if present, else the first graphable
+// non-inflection marker. The inflection point is graphable but is the pivot, not the tip.
+function result_tip_label(frames) {
+    const labels = graph_marker_labels(frames).filter(label => !is_inflection_marker_label(label));
+    if (labels.includes('Apex')) {
+        return 'Apex';
+    }
+    return labels.length ? labels[0] : null;
+}
+
+function result_inflection_label(frames) {
+    return graph_marker_labels(frames).find(label => is_inflection_marker_label(label)) || null;
+}
+
+function current_result_mode() {
+    const select = document.getElementById('result-mode-select');
+    return select ? select.value : 'all';
+}
+
+function result_units_word(pos_units) {
+    return pos_units === 'mm' ? 'mm' : 'pixel';
+}
+
+function format_measure(value) {
+    return Number(value).toFixed(2);
+}
+
+// Compute and render the aggregate statistics into #result-stats per the mode selector.
+function display_results(cc, frames) {
+    const container = document.getElementById('result-stats');
+    if (!container) {
+        return;
+    }
+    const mode = current_result_mode();
+    const graphFrames = frames.filter((frame, frameIndex) => frame_in_graph_trim(cc, frame, frameIndex));
+    const firstFrame = graphFrames[0];
+    const { scale, pos_units } = firstFrame
+        ? calc_scale(firstFrame.markers || [])
+        : { scale: 1, pos_units: 'pixels' };
+    const units = result_units_word(pos_units);
+
+    const tipLabel = result_tip_label(graphFrames);
+    const inflectionLabel = result_inflection_label(graphFrames);
+    const lines = [];
+
+    if (mode === 'all' || mode === 'gravitropism') {
+        const { distance, angle } = gravitropism_results({
+            firstTip: tipLabel ? first_marker_for_label(graphFrames, tipLabel) : null,
+            lastTip: tipLabel ? last_marker_for_label(graphFrames, tipLabel) : null,
+            firstInflection: inflectionLabel ? first_marker_for_label(graphFrames, inflectionLabel) : null,
+            lastInflection: inflectionLabel ? last_marker_for_label(graphFrames, inflectionLabel) : null,
+            scale,
+        });
+        if (distance != null) {
+            lines.push(`Distance: ${format_measure(distance)} ${units}`);
+        }
+        if (angle != null) {
+            lines.push(`Angle: ${format_measure(angle)} degree`);
+        } else if (mode === 'gravitropism' && !inflectionLabel) {
+            lines.push('Add an Inflection Point marker to compute the bending angle.');
+        }
+    }
+
+    if (mode === 'all' || mode === 'circumnutation') {
+        const tipPoints = tipLabel
+            ? graphFrames.map(frame => marker_for_label(frame.markers, tipLabel)).filter(marker => marker)
+            : [];
+        const { maxAmplitude } = circumnutation_results({ tipPoints, scale });
+        if (maxAmplitude != null) {
+            lines.push(`Max Amplitude: ${format_measure(maxAmplitude)} ${units}`);
+        }
+    }
+
+    container.innerHTML = lines.map(line => `<div>${html_escape(line)}</div>`).join('');
 }
 
 function graph_marker_color(cc, frames, label) {
@@ -2026,4 +2173,6 @@ function is_movie_tracked(metadata) {
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
          get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
-         create_default_markers, calc_scale };
+         create_default_markers, calc_scale,
+         is_inflection_marker_label, is_graphable_marker, INFLECTION_POINT_LABEL,
+         display_results };
