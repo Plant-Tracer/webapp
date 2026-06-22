@@ -118,6 +118,45 @@ def test_build_comment_credit():
     assert got == "research use allowed; credit Alyssa P. Hacker"
 
 
+def test_fpm_roundtrip(sample_mp4):
+    """set_fpm writes a freeform atom that get_fpm reads back; absent => None."""
+    assert mp4_metadata_lib.get_fpm(sample_mp4) is None
+    mp4_metadata_lib.set_fpm(sample_mp4, "30")
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "30"
+
+
+def test_fpm_atom_separate_from_comment(sample_mp4):
+    """The fpm atom and the research-attribution comment do not clobber each other."""
+    mp4_metadata_lib.set_comment(sample_mp4, "research use prohibited")
+    mp4_metadata_lib.set_fpm(sample_mp4, "0.5")
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "0.5"
+    assert _get_comment(sample_mp4) == "research use prohibited"
+
+
+def test_get_fpm_missing_or_invalid_file_returns_none(tmp_path):
+    """get_fpm is best-effort and returns None for missing or invalid files."""
+    assert mp4_metadata_lib.get_fpm(str(tmp_path / "missing.mp4")) is None
+
+    invalid_mp4 = tmp_path / "invalid.mp4"
+    invalid_mp4.write_text("not an mp4", encoding="utf-8")
+    assert mp4_metadata_lib.get_fpm(str(invalid_mp4)) is None
+
+
+def test_set_fpm_overwrites_existing_value(sample_mp4):
+    """set_fpm replaces the previous capture interval atom."""
+    mp4_metadata_lib.set_fpm(sample_mp4, "30")
+    mp4_metadata_lib.set_fpm(sample_mp4, "0.5")
+
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "0.5"
+
+
+def test_set_fpm_stores_non_string_values_as_text(sample_mp4):
+    """set_fpm coerces values to text before writing the freeform atom."""
+    mp4_metadata_lib.set_fpm(sample_mp4, 24)
+
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "24"
+
+
 def test_add_comment_to_jpeg_roundtrip():
     """add_comment_to_jpeg adds a COM segment that can be read back with Pillow."""
     # Minimal 1x1 RGB JPEG bytes (no comment)

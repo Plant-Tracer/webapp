@@ -85,10 +85,11 @@ Interpreting and Reading Results
 - The Position Graphs visualize the change in the non-RulerXX markers'horizontal (x position) and vertical (y position) since frame 0.
 - Above the graphs, Plant Tracer shows aggregate result statistics. Use the **Results** selector to choose **All**, **Gravitropism**, or **Circumnutation**:
 
-  - **Gravitropism** reports the **Distance** the tracked tip moved from the first to the last frame, and (when an Inflection Point marker is present) the bending **Angle** at that pivot.
-  - **Circumnutation** reports the **Max Amplitude**, the horizontal range of the tracked tip across all frames.
+  - **Gravitropism** reports the **Distance** the tracked tip moved from the first to the last frame, a **Rate**, and (when an Inflection Point marker is present) the bending **Angle** at that pivot.
+  - **Circumnutation** reports the **Max Amplitude**, the horizontal range of the tracked tip across all frames, and a **Rate**.
 
   Results are shown in millimeters when two or more ruler markers are present, otherwise in pixels.
+- **Rate** is reported per minute when you have entered the capture interval (frames/minute); otherwise it is reported per frame. Enter the capture interval in the **Capture interval (frames/minute)** field and click **Set** — the graphs' time axis and the Rate update immediately, with no need to retrace. You can also set it on the Upload page.
 - To compute the gravitropism Angle, click **Add Inflection Point** to place the reference pivot marker (the base or bend point of the stem), then position it like any other marker. The marker name ``Inflection Point`` is reserved (matched case-insensitively) and only one may be added per movie.
 - When tracking is complete, you can press the "Download Trackpoints" button to get the tracking data in CSV format.
 - At this point, you are ready to use a spreadsheet to further analyze and graph the data.
@@ -117,7 +118,11 @@ Further Adjustments to Tracking
 Converting Frames to Time
 -------------------------
 
-Currently, the Plant Tracer webapp tracks time only as frame numbers in the uploaded movie file. It is up to the the user to convert frames to elapsed timestamps from the beginning of the video. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 30 frames per hour.
+If you enter the **capture interval (frames/minute)** — on the Upload page or in the field on the Analyze page — Plant Tracer converts frames to elapsed time for you: the position graphs are labeled in minutes and the **Rate** statistics are reported per minute. The capture interval is the number of time-lapse frames captured per minute of real time (for example, one frame every two minutes is ``0.5`` frames/minute). It is independent of the movie's encoded playback frame rate.
+
+If you do **not** enter a capture interval, the webapp tracks time only as frame numbers and reports Rate per frame; it is then up to the user to convert frames to elapsed timestamps as described below. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 0.5 frames per minute.
+
+While the program automatically does these conversions for you when a capture interval is present, here are the calculations if you need to do them yourself.
 
 To convert frame numbers to time, multiply the frame number by the frame period:
 

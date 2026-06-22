@@ -652,3 +652,47 @@ def test_delete_user_api_keys_pagination(local_ddb, mocker):
     ddbo.delete_user(user_id)
     assert user_id not in odb.course_enrollments(course_id=course_id)
     odb.delete_course(course_id=course_id)
+
+
+def test_normalize_fpm_valid_values():
+    assert odb.normalize_fpm(None) is None
+    assert odb.normalize_fpm('') is None
+    assert odb.normalize_fpm('   ') is None
+    assert odb.normalize_fpm('30') == '30'
+    assert odb.normalize_fpm('  0.5 ') == '0.5'
+
+
+def test_normalize_fpm_rejects_invalid():
+    with pytest.raises(ValueError, match="fpm must be a number"):
+        odb.normalize_fpm('abc')
+    with pytest.raises(ValueError, match="fpm must be greater than 0"):
+        odb.normalize_fpm('0')
+    with pytest.raises(ValueError, match="fpm must be greater than 0"):
+        odb.normalize_fpm('-1')
+    with pytest.raises(ValueError, match="fpm must be <="):
+        odb.normalize_fpm('99999')
+
+
+def test_create_new_movie_stores_fpm(local_ddb):
+    course_id = f"fpm-course-{rand8()}"
+    local_ddb.put_course({
+        COURSE_ID: course_id,
+        'course_name': 'FPM Course',
+        'course_key': f"k-{uuid.uuid4().hex[:12]}",
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+    user_id = odb.new_user_id()
+    local_ddb.put_user({
+        USER_ID: user_id,
+        'email': f"fpm-{uuid.uuid4().hex[:8]}@example.com",
+        'user_name': 'FPM User',
+        'created': int(time.time()),
+        'enabled': 1,
+        'admin_for_courses': [],
+        'courses': [course_id],
+        'primary_course_id': course_id,
+        'primary_course_name': 'FPM Course',
+    })
+    movie_id = odb.create_new_movie(user_id=user_id, course_id=course_id, title='t', description='d', fpm='20')
+    assert odb.get_movie(movie_id=movie_id)[odb.FPM] == '20'

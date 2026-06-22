@@ -115,9 +115,11 @@ def make_signed_url(*,urn,operation=C.GET, expires=3600):
         ExpiresIn=expires)
 
 def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
-                        research_use='not-answered', credit_by_name='not-answered', attribution_name=''):
+                        research_use='not-answered', credit_by_name='not-answered', attribution_name='',
+                        fpm=''):
     """Returns a dictionary with 'url' and 'fields'.
-    research_use, credit_by_name, attribution_name are included in the signature and set as S3 object metadata.
+    research_use, credit_by_name, attribution_name, and fpm (capture interval, frames/minute) are included in
+    the signature and set as S3 object metadata.
     Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
     reset in the browser when POST body is not re-sent on redirect).
     """
@@ -138,12 +140,15 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
     meta_research = 'x-amz-meta-research-use'
     meta_credit = 'x-amz-meta-credit-by-name'
     meta_attribution = 'x-amz-meta-attribution-name'
+    meta_fpm = 'x-amz-meta-fpm'
     attribution_safe = (attribution_name or '')[:256]
+    fpm_safe = (fpm or '')[:32]
     fields = {
         'Content-Type': mime_type,
         meta_research: research_use,
         meta_credit: credit_by_name,
         meta_attribution: attribution_safe,
+        meta_fpm: fpm_safe,
     }
     conditions = [
         {"Content-Type": mime_type},
@@ -151,6 +156,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
         {meta_research: research_use},
         {meta_credit: credit_by_name},
         {meta_attribution: attribution_safe},
+        {meta_fpm: fpm_safe},
     ]
     return client.generate_presigned_post(
         Bucket=bucket,

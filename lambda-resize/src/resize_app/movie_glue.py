@@ -300,6 +300,15 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
         movie_zipfile_urn = name+"_zipfile"+ext
         write_object_from_path(urn=movie_zipfile_urn, path=movie_zipfile_path)
 
+        # Best-effort snapshot of the capture interval into the traced MP4. DynamoDB remains
+        # authoritative; later edits update only the DB (see docs/Development/MOVIE_METADATA.rst).
+        movie_fpm = movie_record.get("fpm")
+        if movie_fpm:
+            try:
+                mp4_metadata_lib.set_fpm(str(movie_traced_path), movie_fpm)
+            except Exception:  # pylint: disable=broad-exception-caught
+                LOGGER.exception("failed to write fpm metadata to traced movie movie_id=%s", movie_id)
+
         movie_traced_urn = name+"_traced"+ext
         write_object_from_path(urn=movie_traced_urn, path=movie_traced_path)
 

@@ -386,13 +386,19 @@ def api_new_movie():
     if credit_by_name != 1:
         attribution_name = None
 
+    try:
+        fpm = odb.normalize_fpm(get('fpm'))
+    except ValueError as exc:
+        return {'error': True, 'message': str(exc)}
+
     ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
                                          course_id=user['primary_course_id'],
                                          title=request.values.get('title'),
                                          description=request.values.get('description'),
                                          research_use=research_use,
                                          credit_by_name=credit_by_name,
-                                         attribution_name=attribution_name)
+                                         attribution_name=attribution_name,
+                                         fpm=fpm)
 
     oname = make_object_name(course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
                              movie_id=ret[MOVIE_ID],
@@ -414,7 +420,8 @@ def api_new_movie():
         sha256=movie_data_sha256,
         research_use=_tristate_to_str(research_use),
         credit_by_name=_tristate_to_str(credit_by_name),
-        attribution_name=attribution_name or '')
+        attribution_name=attribution_name or '',
+        fpm=fpm or '')
     return ret
 
 def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata):
@@ -626,6 +633,23 @@ def api_set_movie_trim():
         )
     except ValueError as exc:
         return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    return jsonify({C.API_KEY_ERROR: False, C.API_KEY_METADATA: metadata})
+
+
+@api_bp.route('/set-movie-fpm', methods=POST)
+def api_set_movie_fpm():
+    """Set the capture interval (frames/minute) for a movie. Owner/admin only."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    try:
+        fpm = odb.normalize_fpm(request.values.get('fpm'))
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    if fpm is None:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: "fpm is required"}), 400
+    odb.set_metadata(user_id=user_id, set_movie_id=movie[MOVIE_ID], prop=odb.FPM, value=fpm)
+    metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
     return jsonify({C.API_KEY_ERROR: False, C.API_KEY_METADATA: metadata})
 
 

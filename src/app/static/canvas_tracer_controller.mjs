@@ -125,6 +125,11 @@ function get_ruler_size(str) {
     return match ? parseInt(match[1], 10) : null;
 }
 
+// Parse a stored capture interval (frames/minute) to a positive number, or null when unset/invalid.
+function parse_fpm(value) {
+    return (value != null && Number(value) > 0) ? Number(value) : null;
+}
+
 function is_ruler_marker_label(label) {
     return typeof label === 'string' && get_ruler_size(label) !== null;
 }
@@ -209,6 +214,8 @@ class TracerController extends MovieController {
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
         this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
+        // Capture interval (frames/minute); null when unset => graphs/Rate fall back to frames.
+        this.fpm = parse_fpm(movie_metadata.fpm);
         this.trim_start_frame_missing = movie_metadata[TRIM_START_FRAME] == null;
         this.trim_end_frame_missing = movie_metadata[TRIM_END_FRAME] == null;
         // Last frame index that has trackpoints (from API). -1 = none traced yet.
@@ -286,6 +293,14 @@ class TracerController extends MovieController {
         this.trim_set_start_button.off('click').on('click', () => { this.set_trim_bound(TRIM_START_FRAME); });
         this.trim_set_end_button.off('click').on('click', () => { this.set_trim_bound(TRIM_END_FRAME); });
 
+        // Capture interval (frames/minute) input — edits update the DB only (no retrace).
+        this.fpm_input = $(this.div_selector + " input.fpm_input");
+        this.fpm_set_button = $(this.div_selector + " input.fpm_set_button");
+        if (this.fpm != null) {
+            this.fpm_input.val(this.fpm);
+        }
+        this.fpm_set_button.off('click').on('click', () => { this.set_fpm(); });
+
         $(this.div_selector + " span.total-frames-span").text(this.total_frames);
 
         this.refreshTrackButtonState();
@@ -316,6 +331,31 @@ class TracerController extends MovieController {
             throw new Error(`${prop} must be an integer`);
         }
         return parsed;
+    }
+
+    // POST the capture interval (frames/minute) and refresh graphs/results. No retrace needed.
+    set_fpm() {
+        if (demo_mode) {
+            $('#demo-popup').fadeIn(300);
+            return;
+        }
+        const params = {
+            api_key: this.api_key,
+            movie_id: this.movie_id,
+            fpm: this.fpm_input.val(),
+        };
+        $.post(`${API_BASE}api/set-movie-fpm`, params)
+            .done((data) => {
+                if (data.error) {
+                    alert(data.message);
+                    return;
+                }
+                this.movie_metadata = {...this.movie_metadata, ...data.metadata};
+                this.fpm = parse_fpm(this.movie_metadata.fpm);
+                this.refreshVisibleGraphs();
+                this.refreshResults();
+            })
+            .fail(() => { alert('Failed to set the capture interval.'); });
     }
 
     ensure_trim_defaults() {
@@ -1906,33 +1946,54 @@ function display_results(cc, frames) {
 
     const tipLabel = result_tip_label(graphFrames);
     const inflectionLabel = result_inflection_label(graphFrames);
+    const fpm = cc ? cc.fpm : null;
+    // Tracked-tip positions paired with their frame numbers, in trimmed order.
+    const tipEntries = tipLabel
+        ? graphFrames
+            .map((frame, frameIndex) => {
+                const marker = marker_for_label(frame.markers, tipLabel);
+                return marker ? { marker, frameNumber: graph_frame_number(frame, marker, frameIndex) } : null;
+            })
+            .filter(entry => entry)
+        : [];
+    const firstTipEntry = tipEntries[0] || null;
+    const lastTipEntry = tipEntries.length ? tipEntries[tipEntries.length - 1] : null;
     const lines = [];
 
     if (mode === 'all' || mode === 'gravitropism') {
-        const { distance, angle } = gravitropism_results({
-            firstTip: tipLabel ? first_marker_for_label(graphFrames, tipLabel) : null,
-            lastTip: tipLabel ? last_marker_for_label(graphFrames, tipLabel) : null,
+        const { distance, angle, rate, rateTimeUnit } = gravitropism_results({
+            firstTip: firstTipEntry ? firstTipEntry.marker : null,
+            lastTip: lastTipEntry ? lastTipEntry.marker : null,
             firstInflection: inflectionLabel ? first_marker_for_label(graphFrames, inflectionLabel) : null,
             lastInflection: inflectionLabel ? last_marker_for_label(graphFrames, inflectionLabel) : null,
             scale,
+            firstFrameNumber: firstTipEntry ? firstTipEntry.frameNumber : null,
+            lastFrameNumber: lastTipEntry ? lastTipEntry.frameNumber : null,
+            fpm,
         });
         if (distance != null) {
             lines.push(`Distance: ${format_measure(distance)} ${units}`);
         }
+        if (rate != null) {
+            lines.push(`Rate: ${format_measure(rate)} ${units}/${rateTimeUnit}`);
+        }
         if (angle != null) {
-            lines.push(`Angle: ${format_measure(angle)} degree`);
+            lines.push(`Angle: ${format_measure(angle)} degrees`);
         } else if (mode === 'gravitropism' && !inflectionLabel) {
             lines.push('Add an Inflection Point marker to compute the bending angle.');
         }
     }
 
     if (mode === 'all' || mode === 'circumnutation') {
-        const tipPoints = tipLabel
-            ? graphFrames.map(frame => marker_for_label(frame.markers, tipLabel)).filter(marker => marker)
-            : [];
-        const { maxAmplitude } = circumnutation_results({ tipPoints, scale });
+        const tipPoints = tipEntries.map(entry => ({
+            x: entry.marker.x, y: entry.marker.y, frame_number: entry.frameNumber,
+        }));
+        const { maxAmplitude, rate, rateTimeUnit } = circumnutation_results({ tipPoints, scale, fpm });
         if (maxAmplitude != null) {
             lines.push(`Max Amplitude: ${format_measure(maxAmplitude)} ${units}`);
+        }
+        if (rate != null) {
+            lines.push(`Rate: ${format_measure(rate)} ${units}/${rateTimeUnit}`);
         }
     }
 
