@@ -372,9 +372,76 @@ def test_get_movie_trackpoints_lazily_migrates_legacy_csv_export(client, new_mov
 
     assert resp.status_code == 200
     rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    # No ruler markers => uncalibrated => pixels, with units annotated in the headers.
     assert rows == [
-        {"frame_number": "0", "plant x": "10", "plant y": "130"},
+        {"frame_number": "0", "plant x (px)": "10", "plant y (px)": "130"},
     ]
     assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
     stored_frame = odb.DDBO().movie_frames.get_item(Key={MOVIE_ID: movie_id, FRAME_NUMBER: 0})["Item"]
     assert stored_frame["trackpoints"][0]["y"] == Decimal(130)
+
+
+def _seed_frame0(movie_id, trackpoints, *, height):
+    """Set the analysis-frame height and write a single frame 0 of trackpoints."""
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: height, "total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=trackpoints)
+
+
+def test_csv_uses_mm_for_non_ruler_markers_when_rulers_calibrated(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    # Rulers 100 px apart spanning 10 mm (scale 0.1 mm/px), placed off their default positions.
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ], height=480)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    row = rows[0]
+    # Non-ruler marker in mm: 100*0.1=10.0, 200*0.1=20.0
+    assert row["Apex x (mm)"] == "10.0"
+    assert row["Apex y (mm)"] == "20.0"
+    # Ruler markers stay in pixels
+    assert row["Ruler 0mm x (px)"] == "10"
+    assert row["Ruler 10mm y (px)"] == "110"
+
+
+def test_csv_uses_pixels_when_rulers_at_default_position(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    height = 480
+    # Rulers at their default canvas positions (bottom-left y = height - canvas_y) => uncalibrated.
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(50), y=Decimal(height - 100), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(50), y=Decimal(height - 150), label="Ruler 10mm"),
+    ], height=height)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    row = rows[0]
+    assert row["Apex x (px)"] == "100"
+    assert row["Apex y (px)"] == "200"
+    assert "Apex x (mm)" not in row
+
+
+def test_csv_uses_pixels_when_frame_height_unknown(client, new_movie):
+    # Rulers off default, but no analysis-frame height is set, so calibration cannot be verified;
+    # the export conservatively stays in pixels.
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f"REMOVE {HEIGHT}")
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
+    assert row["Apex x (px)"] == "100"
+    assert "Apex x (mm)" not in row

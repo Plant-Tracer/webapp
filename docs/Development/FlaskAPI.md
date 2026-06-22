@@ -269,8 +269,18 @@ Download all trackpoints for a movie as CSV (default) or JSON.
 | `movie_id` | Yes | |
 | `format` | No | `"json"` for JSON; omit for CSV |
 
-**Response:** CSV with columns `frame_number`, `<label> x`, `<label> y` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
-With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }`.
+**Response:** CSV with columns `frame_number`, `<label> x (<unit>)`, `<label> y (<unit>)` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
+
+**Units (#763):** each value column header is annotated with its unit, `(mm)` or `(px)`:
+
+- `Ruler XXmm` marker columns are **always** in pixels (`(px)`).
+- Other markers' columns are in **millimeters** (`(mm)`, value × scale) when the analysis is
+  ruler-calibrated — i.e. there are ≥ 2 `Ruler XXmm` markers and the lowest and highest are both
+  off their default positions; otherwise they are in pixels (`(px)`). The scale is derived from
+  the lowest and highest ruler markers in the first trimmed frame (mirrors the Analyze marker
+  table). mm values are rounded to 2 decimals.
+
+With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }` — JSON values are raw pixel coordinates (no unit conversion).
 
 ---
 

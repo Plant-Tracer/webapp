@@ -591,14 +591,45 @@ def api_get_movie_trackpoints():
     if get('format')=='json':
         return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
 
+    # Express non-ruler position values in mm when the analysis is ruler-calibrated (>= 2
+    # Ruler XXmm markers moved off their default positions); otherwise pixels. Ruler columns are
+    # always pixels. Units are annotated in the column headers. See #763.
+    try:
+        frame_height = odb.trackpoint_frame_height(movie_metadata)
+    except RuntimeError:
+        frame_height = None
+    ruler_frame_points = []
+    for frame_number in frame_numbers:
+        points = [tp for tp in trackpoint_dicts
+                  if tp['frame_number'] == frame_number and odb.get_ruler_size(tp['label']) is not None]
+        if points:
+            ruler_frame_points = points
+            break
+    calibrated = (frame_height is not None) and odb.rulers_calibrated(ruler_frame_points, frame_height)
+    scale, _scale_units = odb.movie_scale(ruler_frame_points)
+
+    def column_unit(label):
+        """'px' for ruler markers or an uncalibrated movie; 'mm' for other markers when calibrated."""
+        if odb.get_ruler_size(label) is not None or not calibrated:
+            return 'px'
+        return 'mm'
+
+    def column_value(label, value):
+        if column_unit(label) == 'mm':
+            return round(float(value) * scale, 2)
+        return value
+
     for tp in trackpoint_dicts:
-        frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
-        frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
+        label = tp['label']
+        unit = column_unit(label)
+        frame_dicts[tp['frame_number']][f"{label} x ({unit})"] = column_value(label, tp['x'])
+        frame_dicts[tp['frame_number']][f"{label} y ({unit})"] = column_value(label, tp['y'])
 
     fieldnames = ['frame_number']
     for label in labels:
-        fieldnames.append(label+' x')
-        fieldnames.append(label+' y')
+        unit = column_unit(label)
+        fieldnames.append(f"{label} x ({unit})")
+        fieldnames.append(f"{label} y ({unit})")
     logger.debug("fieldnames=%s",fieldnames)
 
     # Now write it out with the dictwriter
