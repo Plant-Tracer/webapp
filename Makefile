@@ -592,7 +592,6 @@ sam-build: $(REQ)
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
-	printenv | grep AWS
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
