@@ -44,6 +44,7 @@ from .odb import (
     MOVIE_STATE_TRACING_COMPLETED,
     DDBO,
     UnauthorizedUser,
+    AtomicRenameConflict,
     clear_movie_tracking,
 )
 from .s3_presigned import (
@@ -723,6 +724,8 @@ def api_rename_marker():
         )
     except ValueError as exc:
         return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    except AtomicRenameConflict as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
     return jsonify({
         C.API_KEY_ERROR: False,
         'frames_updated': rename_result['frames_updated'],

@@ -317,7 +317,7 @@ Rename one marker label across all stored trackpoints for a movie. Other marker 
 { "error": false, "frames_updated": 3, "trackpoints_updated": 3 }
 ```
 
-**Side effect:** when any stored trackpoints are renamed, sets `needs_retracing=1` on the movie record.
+**Side effect:** when any stored trackpoints are renamed, sets `needs_retracing=1` on the movie record. Marker labels are stored in the `movie_frames` marker-map item at `frame_number=-100`, so rename updates that marker map and does not rewrite each frame record.
 
 ---
 

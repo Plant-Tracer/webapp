@@ -322,6 +322,33 @@ def test_rename_movie_marker_rejects_existing_target_label(local_ddb):
         odb.rename_movie_marker(movie_id=movie_id, old_label='Ruler 0mm', new_label='Ruler 30mm')
 
 
+def test_rename_movie_marker_uses_marker_map_for_long_movies(local_ddb):
+    total_frames = 101
+    movie_id = create_trim_test_movie(local_ddb, total_frames=total_frames)
+    for frame_number in range(total_frames):
+        local_ddb.movie_frames.update_item(
+            Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: frame_number},
+            UpdateExpression='SET trackpoints=:trackpoints',
+            ExpressionAttributeValues={
+                ':trackpoints': [{'x': frame_number, 'y': frame_number + 1, 'label': 'Apex'}],
+            },
+        )
+
+    result = odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+
+    assert result == {'frames_updated': total_frames, 'trackpoints_updated': total_frames}
+    assert all(trackpoint['label'] == 'Tip' for trackpoint in odb.get_movie_trackpoints(movie_id=movie_id))
+    marker_map = local_ddb.movie_frames.get_item(
+        Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: odb.MOVIE_MARKER_MAP_FRAME_NUMBER},
+    ).get('Item')
+    assert marker_map[odb.MARKER_LABELS]['Tip']
+    assert len(local_ddb.get_frames(movie_id)) == total_frames
+    with pytest.raises(AssertionError):
+        local_ddb.get_movie_frame(movie_id, odb.MOVIE_MARKER_MAP_FRAME_NUMBER)
+    stored_frame = local_ddb.get_movie_frame(movie_id, 0)
+    assert stored_frame['trackpoints'][0]['label'] == 'Apex'
+
+
 def test_clear_movie_tracking_after_frame(local_ddb):
     ddbo = local_ddb
     course_id = f"retrace-course-{rand8()}"

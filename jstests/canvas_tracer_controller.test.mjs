@@ -2523,7 +2523,7 @@ describe('TracerController.rename_marker', () => {
         resetPostMock();
     });
 
-    test('posts rename and updates current objects plus loaded frames', () => {
+    test('posts rename and updates current objects plus loaded frames', async () => {
         const ruler0 = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
         ruler0.color = 'red';
         ruler0.undeletable = true;
@@ -2547,7 +2547,7 @@ describe('TracerController.rename_marker', () => {
             fail: jest.fn(),
         });
 
-        tc.rename_marker(0, ' Ruler 30mm ');
+        await expect(tc.rename_marker(0, ' Ruler 30mm ')).resolves.toBe(true);
 
         expect(mockPost).toHaveBeenCalledWith(
             expect.stringContaining('rename-marker'),
@@ -2571,10 +2571,45 @@ describe('TracerController.rename_marker', () => {
             new MockMarkerClass(30, 40, 5, 'red', 'red', 'Ruler 30mm')
         );
 
-        tc.rename_marker(0, 'Ruler 30mm');
+        expect(tc.rename_marker(0, 'Ruler 30mm')).toBe(false);
 
         expect(global.alert).toHaveBeenCalledWith(MARKER_NAME_IN_USE_MESSAGE);
         expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    test('returns false and leaves marker unchanged when server rejects rename', async () => {
+        const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(apex);
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockImplementation(cb => {
+                cb({ error: true, message: 'Rename failed' });
+                return { fail: jest.fn() };
+            }),
+            fail: jest.fn(),
+        });
+
+        await expect(tc.rename_marker(0, 'New Apex')).resolves.toBe(false);
+
+        expect(apex.name).toBe('Apex');
+        expect(global.alert).toHaveBeenCalledWith('Error renaming marker: Rename failed');
+    });
+
+    test('returns false and leaves marker unchanged when rename request fails', async () => {
+        const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(apex);
+        const fail = jest.fn().mockImplementation(cb => {
+            cb({ responseText: 'Network error' });
+            return { fail };
+        });
+        mockPost.mockReturnValueOnce({
+            done: jest.fn().mockReturnValue({ fail }),
+            fail,
+        });
+
+        await expect(tc.rename_marker(0, 'New Apex')).resolves.toBe(false);
+
+        expect(apex.name).toBe('Apex');
+        expect(global.alert).toHaveBeenCalledWith('error from rename-marker:\nNetwork error');
     });
 });
 

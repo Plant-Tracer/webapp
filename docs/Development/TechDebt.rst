@@ -79,6 +79,18 @@ Long Term
   Impact: high; moves from dict validation-on-write to typed read/write contracts
   for users, courses, movies, frames, and logs. Files: 25-40.
 
+* Migrate movie-related DynamoDB records to a composite key schema.
+  Impact: high; the current ``movies`` table has only ``movie_id`` as its
+  primary key, while ``movie_frames`` has the child-record shape we really need.
+  The marker map currently uses the ``movie_frames`` metadata sentinel
+  ``frame_number=-100``; this is clearer than overloading the ``movies``
+  partition key but still mixes frame rows with movie metadata. DynamoDB cannot
+  add a sort key to an existing table; fixing this requires a new table or
+  replacement table with a partition key such as ``movie_id`` and a sort key
+  such as ``record_type``/``sk``, plus a backfill. This would let one movie own
+  records like metadata, markers, and eventually consolidated frame data without
+  relying on sentinel frame numbers. Files: 10-20.
+
 * Define a durable processing state machine.
   Impact: high; clarifies upload, ready, tracing, completed, failed, stale-lock,
   and retry behavior across Flask, Lambda, SQS/local queue, and UI polling.

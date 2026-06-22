@@ -32,7 +32,19 @@ function begin_inline_text_edit(editor, onChange) {
         targetElement.blur();
         const value = targetElement.textContent;
         if (value != oldValue) {
-            onChange(targetElement, value, oldValue);
+            const result = onChange(targetElement, value, oldValue);
+            if (result === false) {
+                targetElement.textContent = oldValue;
+            } else if (result && typeof result.then === 'function') {
+                result.then((saveSucceeded) => {
+                    if (saveSucceeded === false) {
+                        targetElement.textContent = oldValue;
+                    }
+                }).catch((error) => {
+                    targetElement.textContent = oldValue;
+                    console.error(error);
+                });
+            }
         }
     }
 

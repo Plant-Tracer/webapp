@@ -1047,9 +1047,9 @@ class TracerController extends MovieController {
             const i = targetElement.getAttribute('x-marker-index');
             const obj = this.objects[i];
             if (!obj || obj.constructor.name != Marker.name) {
-                return;
+                return false;
             }
-            this.rename_marker(i, newName);
+            return this.rename_marker(i, newName);
         });
     }
 
@@ -1100,41 +1100,46 @@ class TracerController extends MovieController {
 
     rename_marker(i, newName) {
         if (!this.isCurrentFrameEditable()) {
-            return;
+            return false;
         }
         const obj = this.objects[i];
         if (!obj || obj.constructor.name != Marker.name) {
-            return;
+            return false;
         }
         const oldName = obj.name;
         newName = String(newName || '').trim();
         if (newName === oldName) {
-            return;
+            return true;
         }
         if (newName.length < MIN_MARKER_NAME_LEN) {
             alert("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
-            return;
+            return false;
         }
         if (this.marker_name_in_use(newName, i)) {
             alert(MARKER_NAME_IN_USE_MESSAGE);
-            return;
+            return false;
         }
-        $.post(`${API_BASE}api/rename-marker`, {
-            api_key: this.api_key,
-            movie_id: this.movie_id,
-            old_label: oldName,
-            new_label: newName
-        })
-            .done((data) => {
-                if (data.error) {
-                    alert("Error renaming marker: "+data.message);
-                    return;
-                }
-                this.apply_marker_rename(oldName, newName);
+        return new Promise((resolve) => {
+            $.post(`${API_BASE}api/rename-marker`, {
+                api_key: this.api_key,
+                movie_id: this.movie_id,
+                old_label: oldName,
+                new_label: newName
             })
-            .fail((res) => {
-                console.error("rename-marker failed", res);
-                alert("error from rename-marker:\n"+res.responseText);
+                .done((data) => {
+                    if (data.error) {
+                        alert("Error renaming marker: "+data.message);
+                        resolve(false);
+                        return;
+                    }
+                    this.apply_marker_rename(oldName, newName);
+                    resolve(true);
+                })
+                .fail((res) => {
+                    console.error("rename-marker failed", res);
+                    alert("error from rename-marker:\n"+res.responseText);
+                    resolve(false);
+                });
             });
     }
 

@@ -569,16 +569,21 @@ function set_property(user_id, movie_id, property, value)
   if (movie_id) formData.append("set_movie_id", movie_id);
   formData.append("property", property);
   formData.append("value", value);
-  fetch(`${API_BASE}api/set-metadata`, { method:"POST", body:formData})
+  return fetch(`${API_BASE}api/set-metadata`, { method:"POST", body:formData})
     .then((response) => response.json())
     .then((data) => {
       if (data.error!=false){
         $('#message').html('error: '+data.message);
+        return false;
       } else {
         list_ready_function();
+        return true;
       }
     })
-    .catch(console.error);
+    .catch((error) => {
+      console.error(error);
+      return false;
+    });
 }
 
 
@@ -638,7 +643,7 @@ function row_pencil_clicked( e ) {
     const user_id  = t.getAttribute('x-user_id'); // property we are changing
     const movie_id = t.getAttribute('x-movie_id'); // property we are changing
     const property = t.getAttribute('x-property'); // property we are changing
-    set_property(user_id, movie_id, property, value);
+    return set_property(user_id, movie_id, property, value);
   });
 }
 
