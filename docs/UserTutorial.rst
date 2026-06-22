@@ -120,7 +120,9 @@ Converting Frames to Time
 
 If you enter the **capture interval (frames/minute)** — on the Upload page or in the field on the Analyze page — Plant Tracer converts frames to elapsed time for you: the position graphs are labeled in minutes and the **Rate** statistics are reported per minute. The capture interval is the number of time-lapse frames captured per minute of real time (for example, one frame every two minutes is ``0.5`` frames/minute). It is independent of the movie's encoded playback frame rate.
 
-If you do **not** enter a capture interval, the webapp tracks time only as frame numbers and reports Rate per frame; it is then up to the user to convert frames to elapsed timestamps as described below. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 30 frames per hour.
+If you do **not** enter a capture interval, the webapp tracks time only as frame numbers and reports Rate per frame; it is then up to the user to convert frames to elapsed timestamps as described below. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 0.5 frames per minute.
+
+While the program automatically does these conversions for you when a capture interval is present, here are the calculations if you need to do them yourself.
 
 To convert frame numbers to time, multiply the frame number by the frame period:
 
