@@ -93,6 +93,12 @@ canvas {
 
 div#analysis-results {
     display:none;
+    float: left;
+    padding: 2px;
+}
+
+div#analysis-results canvas {
+    display: block;
 }
 
 /* Dim the frame area while tracing is in progress */

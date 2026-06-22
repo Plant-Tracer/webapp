@@ -1,12 +1,16 @@
 import csv
 import io
+import zipfile
 from decimal import Decimal
 
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from app import odb, schema
-from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID
+from app import odb_movie_data
+from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID, MOVIE_TRACED_URN, NEEDS_RETRACING
+from app.s3_presigned import make_urn
 from app.schema import Trackpoint
 
 
@@ -47,6 +51,19 @@ def _make_legacy_top_left_movie(*, movie_id: str, frame_height: int, legacy_y: i
     )
 
 
+def _jpeg_bytes(*, width: int, height: int) -> bytes:
+    output = io.BytesIO()
+    Image.new("RGB", (width, height), color="white").save(output, format="JPEG")
+    return output.getvalue()
+
+
+def _zip_with_frame(*, width: int, height: int) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("frame_0000.jpeg", _jpeg_bytes(width=width, height=height))
+    return output.getvalue()
+
+
 def test_movie_schema_declares_trackpoint_origin_contract():
     assert getattr(odb, "TRACKPOINT_ORIGIN", None) == TRACKPOINT_ORIGIN
     assert TRACKPOINT_ORIGIN in schema.Movie.model_fields.keys()
@@ -75,6 +92,62 @@ def test_get_movie_metadata_exposes_trackpoint_origin(client, new_movie):
     res = resp.get_json()
     assert res["error"] is False
     assert res["metadata"].get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+
+
+def test_put_frame_trackpoints_marks_movie_as_needing_retrace(client, new_movie):
+    resp = client.post(
+        "/api/put-frame-trackpoints",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: new_movie[MOVIE_ID],
+            FRAME_NUMBER: 0,
+            "trackpoints": '[{"x":10,"y":20,"label":"Apex"}]',
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["error"] is False
+    movie = odb.get_movie(movie_id=new_movie[MOVIE_ID])
+    assert movie[NEEDS_RETRACING] == 1
+
+
+def test_rename_marker_api_renames_stored_trackpoints(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    odb.put_frame_trackpoints(
+        movie_id=movie_id,
+        frame_number=0,
+        trackpoints=[Trackpoint(x=Decimal(10), y=Decimal(20), label="Ruler 0mm", color="red", undeletable=True)],
+    )
+
+    resp = client.post(
+        "/api/rename-marker",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: movie_id,
+            "old_label": "Ruler 0mm",
+            "new_label": "Ruler 30mm",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json() == {"error": False, "frames_updated": 1, "trackpoints_updated": 1}
+    assert odb.get_movie_trackpoints(movie_id=movie_id) == [
+        {"frame_number": 0, "x": 10, "y": 20, "label": "Ruler 30mm", "color": "red", "undeletable": True},
+    ]
+    assert odb.get_movie(movie_id=movie_id)[NEEDS_RETRACING] == 1
+
+
+def test_list_movies_returns_signed_traced_movie_url(client, new_movie):
+    traced_urn = make_urn(object_name=f"{new_movie[MOVIE_ID]}_traced.mp4")
+    ddbo = odb.DDBO()
+    ddbo.update_table(ddbo.movies, new_movie[MOVIE_ID], {MOVIE_TRACED_URN: traced_urn})
+
+    resp = client.post("/api/list-movies", data={API_KEY: new_movie[API_KEY]})
+
+    assert resp.status_code == 200
+    res = resp.get_json()
+    listed_movie = next(movie for movie in res["movies"] if movie[MOVIE_ID] == new_movie[MOVIE_ID])
+    assert listed_movie["movie_traced_url"].startswith("http")
 
 
 def test_new_movie_api_stores_bottom_left_trackpoint_origin(client, new_course):
@@ -152,6 +225,44 @@ def test_get_movie_metadata_reports_lazy_migration_failure_as_json(client, new_m
     assert res["error"] is True
     assert "Trackpoint migration failed" in res["message"]
     assert "does not have analysis frame height" in res["message"]
+
+
+def test_get_movie_metadata_lazily_migrates_using_zipfile_height_when_movie_height_missing(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    zip_urn = make_urn(object_name=f"tests/{movie_id}_zipfile.mov")
+    odb_movie_data.write_object(zip_urn, _zip_with_frame(width=200, height=150))
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression=f"SET movie_zipfile_urn=:zip_urn REMOVE {TRACKPOINT_ORIGIN}, #height",
+        ExpressionAttributeNames={"#height": HEIGHT},
+        ExpressionAttributeValues={":zip_urn": zip_urn},
+    )
+    ddbo.put_movie_frame(
+        {
+            MOVIE_ID: movie_id,
+            FRAME_NUMBER: 0,
+            "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(20), label="plant").model_dump()],
+        }
+    )
+
+    resp = client.post(
+        "/api/get-movie-metadata",
+        data={
+            API_KEY: new_movie[API_KEY],
+            MOVIE_ID: movie_id,
+            "frame_start": 0,
+            "frame_count": 1,
+        },
+    )
+
+    assert resp.status_code == 200
+    res = resp.get_json()
+    assert res["error"] is False
+    assert res["metadata"].get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+    assert res["frames"]["0"]["markers"] == [
+        {"frame_number": 0, "x": 10, "y": 130, "label": "plant"},
+    ]
 
 
 def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):

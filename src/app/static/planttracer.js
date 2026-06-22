@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
-import { $ } from "./utils.js";
+import { $, begin_inline_text_edit } from "./utils.js";
+import { RETRACE_REQUIRED_MESSAGE } from "./ui_constants.js";
 
 
 
@@ -542,6 +543,19 @@ function analyze_clicked( e ) {
   window.location = `/analyze?movie_id=${movie_id}`;
 }
 
+function download_traced_clicked( e ) {
+  const url = e.getAttribute('x-movie_traced_url');
+  if (!url) {
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 ////////////////
 // EDIT METADATA
 
@@ -555,16 +569,21 @@ function set_property(user_id, movie_id, property, value)
   if (movie_id) formData.append("set_movie_id", movie_id);
   formData.append("property", property);
   formData.append("value", value);
-  fetch(`${API_BASE}api/set-metadata`, { method:"POST", body:formData})
+  return fetch(`${API_BASE}api/set-metadata`, { method:"POST", body:formData})
     .then((response) => response.json())
     .then((data) => {
       if (data.error!=false){
         $('#message').html('error: '+data.message);
+        return false;
       } else {
         list_ready_function();
+        return true;
       }
     })
-    .catch(console.error);
+    .catch((error) => {
+      console.error(error);
+      return false;
+    });
 }
 
 
@@ -620,45 +639,11 @@ function row_checkbox_clicked( e ) {
 // This function is called when the edit pencil is chcked. It makes the corresponding span editable, sets up an event handler, and then selected it.
 function row_pencil_clicked( e ) {
   console.log('row_pencil_clicked e=',e);
-  const target = e.getAttribute('x-target-id'); // name of the target
-  console.log('target=',target);
-  const t = $(`#${target}`).get(0); // element of the target
-  console.log('t=',t);
-  const user_id  = t.getAttribute('x-user_id'); // property we are changing
-  const movie_id = t.getAttribute('x-movie_id'); // property we are changing
-  const property = t.getAttribute('x-property'); // property we are changing
-  const oValue   = t.textContent;                // current content of the text
-  t.setAttribute('contenteditable','true');      // make the text editable
-  t.focus();                                     // give it the focus
-
-  function finished_editing() {                  // undoes editing and sends to server
-    t.setAttribute('contenteditable','false'); // no longer editable
-    t.blur();                                  // no longer key
-    const value = t.textContent;
-    if (value != oValue){
-      set_property(user_id, movie_id, property, value);
-    } else {
-      //console.log(`value unchanged`);
-    }
-  }
-
-  // handle tab, return and escape
-  t.addEventListener('keydown', function(e) {
-    if (e.keyCode==9 || e.keyCode==13 ){ // tab or return pressed
-      //console.log('tab or return pressed');
-      finished_editing();
-    } else if (e.keyCode==27){ // escape pressed
-      //console.log(`escape pressed. Restore ${oValue}`);
-      t.textContent = oValue; // restore the original value
-      t.blur();           // does this work?
-      t.setAttribute('contenteditable','false'); // no longer editable
-    } else {
-      // Normal keypress
-    }
-  });
-  // Click somewhere else to finish editing
-  t.addEventListener('blur', function(_e) {
-    finished_editing();
+  begin_inline_text_edit(e, function(t, value, _oldValue) {
+    const user_id  = t.getAttribute('x-user_id'); // property we are changing
+    const movie_id = t.getAttribute('x-movie_id'); // property we are changing
+    const property = t.getAttribute('x-property'); // property we are changing
+    return set_property(user_id, movie_id, property, value);
   });
 }
 
@@ -802,6 +787,15 @@ function list_movies_data( movies ) {
         return `<input type='button' x-movie_id='${movie_id}' x-property='${prop}' value='${kind}' x-value='${nval}' onclick='action_button_clicked(this)'>`;
       }
 
+      function html_attr(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
       // Get the metadata for the movie (date_uploaded is seconds; 0/null = not set yet / processing)
       const dateSec = m.date_uploaded && Number(m.date_uploaded);
       const movieDate = dateSec ? new Date(dateSec * 1000) : null;
@@ -814,6 +808,9 @@ function list_movies_data( movies ) {
         analyze_label = 're-analyze';
       }
       const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
+      const downloadTraced = m.movie_traced_url
+        ? `<input class='play traced-movie-download' x-movie_traced_url="${html_attr(m.movie_traced_url)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
+        : '';
 
       const you_class = (m.user_id == user_id) ? "you" : "";
       const frameStr = (m.width != null && m.height != null) ? `${m.width} x ${m.height}` : '—';
@@ -823,7 +820,7 @@ function list_movies_data( movies ) {
 
       let rows = `<tr class='${you_class}'>` +
           `<td class='${you_class}'> ${m.user_name} </td> <td data-order='${dateSec || 0}'> ${up_down} </td>` + // #1, #2, #3
-          make_td_text( "title", m.title, "<br/>" + play + playt + analyze ) + make_td_text( "description", m.description, '') + // #4 #5
+          make_td_text( "title", m.title, "<br/>" + play + playt + analyze + downloadTraced ) + make_td_text( "description", m.description, '') + // #4 #5
           `<td data-order='${m.total_bytes || 0}'> frame: ${frameStr} Kbytes: ${kbytesStr} ` +
           `<br> fps: ${fpsStr} frames: ${framesStr} </td> `;  // #6
 
@@ -836,6 +833,9 @@ function list_movies_data( movies ) {
         rows += "<i>Deleted</i>";
       } else {
         rows += m.published ? "<b>Published</b> " : "Not published";
+      }
+      if (Number(m.needs_retracing || 0) === 1 && m.movie_traced_url) {
+        rows += `<br><span class='retrace-required-message'>${RETRACE_REQUIRED_MESSAGE}</span>`;
       }
       rows += "<br/>";
 
@@ -1033,6 +1033,7 @@ window.purge_movie = purge_movie;
 window.rotate_movie = rotate_movie;
 window.play_clicked = play_clicked;
 window.analyze_clicked = analyze_clicked;
+window.download_traced_clicked = download_traced_clicked;
 window.row_pencil_clicked = row_pencil_clicked;
 window.action_button_clicked = action_button_clicked;
 window.research_metadata_changed = research_metadata_changed;
@@ -1053,6 +1054,7 @@ if (typeof module != 'undefined'){
     checkLambdaStatus,
     check_upload_metadata,
     computeSHA256,
+    download_traced_clicked,
     dtInstances,
     first_frame_url,
     list_movies_data,

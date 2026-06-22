@@ -14,12 +14,12 @@
  */
 
 const MARKER_RADIUS = 10;           // default radius of the marker
-const PLANT_MARKER_COLOR = 'red';
+const RULER_MARKER_COLOR = 'red';
+const APEX_MARKER_COLOR = 'orange';
+const FIXED_PLANT_MARKER_COLORS = ['magenta', '#b58900', '#0096ff'];
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
-const RETRACE_MOVIE = 'Retrace movie';
-const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
-const TRACE_MOVIE = 'Trace movie';
+const TRACING_FLAG='tracing';
 const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
@@ -27,22 +27,44 @@ const STATUS_POLL_MAX_ERRORS = 5;
 const TRACE_MOVIE_RETRY_DELAY_MS = 5000; // if trace movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
 const TRACKING_START_TIMEOUT_MS = 15000;
-const BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE = 'backend lambda is unresponsive. Please report.';
 const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
+const MOVIE_TRACED_URL = 'movie_traced_url';
+const NEEDS_RETRACING = 'needs_retracing';
 
 var cell_id_counter = 0;
 
-import { $ } from "./utils.js";
+import { $, begin_inline_text_edit } from "./utils.js";
+import {
+    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    MARKER_NAME_IN_USE_MESSAGE,
+    MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
+    MOVIE_IS_TRACED_MESSAGE,
+    MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE,
+    MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE,
+    MOVIE_READY_FOR_TRACING_MESSAGE,
+    MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE,
+    PLACE_MARKERS_TRACE_START_MESSAGE,
+    PRESS_PLAY_STATUS_TEXT,
+    RETRACE_MOVIE,
+    RETRACE_REQUIRED_MESSAGE,
+    RETRACE_TO_END_OF_MOVIE,
+    RESET_TRACING_CONFIRM_MESSAGE,
+    TRACE_MOVIE,
+    TRACE_TO_END_OF_MOVIE,
+    TRACE_MOVIE_TRIM_DISABLED_TITLE,
+    TRACING_COMPLETE_LOADING_MOVIE_MESSAGE,
+    TRACING_STARTING_MESSAGE,
+} from "./ui_constants.js";
 import { CanvasItem, Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
 import { unzip, setOptions } from './unzipit.module.mjs';
 
 // Default marker positions used only when a new movie is first loaded for analysis
 // and frame 0 has no markers yet (no frames traced). See create_default_markers().
-const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex'},
-                         {'x':50,'y':100,'label':'Ruler 0mm'},
-                         {'x':50,'y':150,'label':'Ruler 10mm'}
+const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex', 'color': APEX_MARKER_COLOR},
+                         {'x':50,'y':100,'label':'Ruler 0mm', 'color': RULER_MARKER_COLOR, 'undeletable': true},
+                         {'x':50,'y':150,'label':'Ruler 10mm', 'color': RULER_MARKER_COLOR, 'undeletable': true}
                         ];
 
 let xChartInstance = null;
@@ -96,10 +118,80 @@ function get_ruler_size(str) {
     return match ? parseInt(match[1], 10) : null;
 }
 
+function is_ruler_marker_label(label) {
+    return typeof label === 'string' && get_ruler_size(label) !== null;
+}
+
+function is_apex_marker_label(label) {
+    return label === 'Apex';
+}
+
+function marker_is_undeletable(marker) {
+    return marker && marker.undeletable === true;
+}
+
+function html_escape(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[character]));
+}
+
+function graphable_marker_label(label) {
+    return typeof label === 'string' && label.length > 0
+        && !is_ruler_marker_label(label);
+}
+
+function custom_marker_label(label) {
+    return graphable_marker_label(label) && !is_apex_marker_label(label);
+}
+
+function random_marker_color() {
+    return '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0');
+}
+
+function compare_marker_labels(aLabel, bLabel) {
+    const aRulerSize = get_ruler_size(aLabel);
+    const bRulerSize = get_ruler_size(bLabel);
+    if (aRulerSize !== null && bRulerSize !== null) {
+        return aRulerSize - bRulerSize || String(aLabel).localeCompare(String(bLabel));
+    }
+    if (aRulerSize !== null) {
+        return -1;
+    }
+    if (bRulerSize !== null) {
+        return 1;
+    }
+    return String(aLabel).localeCompare(String(bLabel));
+}
+
+function reset_marker_signature(marker) {
+    return {
+        label: marker.label || marker.name,
+        x: Math.round(Number(marker.x)),
+        y: Math.round(Number(marker.y)),
+    };
+}
+
+function reset_marker_signatures(markers) {
+    return (markers || [])
+        .map(reset_marker_signature)
+        .sort((a, b) => compare_marker_labels(a.label, b.label));
+}
+
+function same_reset_markers(aMarkers, bMarkers) {
+    return JSON.stringify(reset_marker_signatures(aMarkers))
+        === JSON.stringify(reset_marker_signatures(bMarkers));
+}
+
 class TracerController extends MovieController {
     constructor( div_selector, movie_metadata, api_key) {
         super( div_selector );
         this.tracking = false;  // are we tracking a movie?
+        this.resetting_tracing = false;
         this.movie_metadata = movie_metadata;
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
@@ -113,8 +205,10 @@ class TracerController extends MovieController {
             ? Number(movie_metadata.total_frames) : 0;
         this.ensure_trim_defaults();
         this.pending_retrace_to_end = false;
+        this.tracing_was_reset = false;
         this.pending_trace_start_frame = null;
         this.tracking_start_deadline_ms = null;
+        this.marker_colors_by_label = new Map();
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -125,6 +219,12 @@ class TracerController extends MovieController {
         this.dl_movie_id.attr("value", this.movie_id);
         this.download_button = $(".download_button");
         this.download_button.hide(); // Hide the download link until we track or retrack
+        this.traced_movie_download_control = $(this.div_selector + " .traced_movie_download_control");
+        this.traced_movie_download_link = $(this.div_selector + " .traced_movie_download_link");
+        this.refreshTracedMovieDownload();
+        this.retrace_required_message = $(this.div_selector + " .retrace_required_message");
+        $(this.div_selector + " .retrace_required_message span").text(RETRACE_REQUIRED_MESSAGE);
+        this.refreshRetraceRequiredMessage();
 
         // Size the canvas and video from metadata when present; else leave default until first frame loads.
         const w = this.movie_metadata.width;
@@ -147,6 +247,8 @@ class TracerController extends MovieController {
         // Set up the track button
         this.track_button = $(this.div_selector + " input.track_button");
         this.track_button.off('click').on('click', () => {this.track_to_end();});
+        this.delete_all_markers_button = $(this.div_selector + " input.delete_all_markers_button");
+        this.delete_all_markers_button.off('click').on('click', () => {this.reset_tracing();});
 
         this.trim_checkbox = $(this.div_selector + " input.show_trim_controls");
         this.trim_controls = $(this.div_selector + " .trim_controls");
@@ -220,8 +322,17 @@ class TracerController extends MovieController {
         return frameNumber >= this.trim_start_frame && frameNumber <= this.trim_end_frame;
     }
 
+    movieStatusIsTracing() {
+        return String(this.movie_metadata.status || '').toLowerCase() === TRACING_FLAG;
+    }
+
+    editingLocked() {
+        return this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+    }
+
     isCurrentFrameEditable() {
-        return this.frame_number != null && this.isFrameInTrim(this.frame_number);
+        return !this.editingLocked()
+            && this.frame_number != null && this.isFrameInTrim(this.frame_number);
     }
 
     trimBoundFrameNumber() {
@@ -263,17 +374,92 @@ class TracerController extends MovieController {
         targetFrame.markers = this.cloneMarkersForFrame(oldStart);
     }
 
-    updateCurrentFrameMarkers(markers) {
-        const frame = this.frameForNumber(this.frame_number);
+    marker_color_from_existing_data(label) {
+        for (const frame of this.frames || []) {
+            for (const marker of frame.markers || []) {
+                if (marker.label === label && marker.color) {
+                    return marker.color;
+                }
+            }
+        }
+        for (const obj of this.objects || []) {
+            if (obj.constructor.name == Marker.name && obj.name === label && obj.color) {
+                return obj.color;
+            }
+        }
+        return null;
+    }
+
+    custom_marker_labels(label = null) {
+        const labels = [];
+        const addLabel = (candidate) => {
+            if (custom_marker_label(candidate) && !labels.includes(candidate)) {
+                labels.push(candidate);
+            }
+        };
+        for (const frame of this.frames || []) {
+            for (const marker of frame.markers || []) {
+                addLabel(marker.label);
+            }
+        }
+        for (const obj of this.objects || []) {
+            if (obj.constructor.name != Marker.name) {
+                continue;
+            }
+            addLabel(obj.name);
+        }
+        addLabel(label);
+        return labels;
+    }
+
+    marker_color_for_label(label) {
+        if (is_ruler_marker_label(label)) {
+            return RULER_MARKER_COLOR;
+        }
+        if (is_apex_marker_label(label)) {
+            return APEX_MARKER_COLOR;
+        }
+        const existingColor = this.marker_color_from_existing_data(label);
+        if (existingColor) {
+            this.marker_colors_by_label.set(label, existingColor);
+            return existingColor;
+        }
+        if (this.marker_colors_by_label.has(label)) {
+            return this.marker_colors_by_label.get(label);
+        }
+        const index = this.custom_marker_labels(label).indexOf(label);
+        const color = index >= 0 && index < FIXED_PLANT_MARKER_COLORS.length
+            ? FIXED_PLANT_MARKER_COLORS[index]
+            : random_marker_color();
+        this.marker_colors_by_label.set(label, color);
+        return color;
+    }
+
+    updateCurrentFrameMarkers(markers, frameNumber = this.frame_number) {
+        const frame = this.frameForNumber(frameNumber);
         if (!frame) {
             return;
         }
         frame.markers = markers.map(marker => ({...marker}));
+        this.refreshResetTracingButtonState();
+    }
+
+    frames_for_graph() {
+        return (this.frames || []).map((frame, frameIndex) => {
+            const frameNumber = graph_frame_number(frame, null, frameIndex);
+            if (Number(frameNumber) !== Number(this.frame_number)
+                || !(this.objects || []).some(obj => obj.constructor.name == Marker.name)) {
+                return frame;
+            }
+            const markers = this.current_frame_canvas_trackpoints()
+                .map(marker => ({...marker, frame_number: frameNumber}));
+            return {...frame, frame_number: frameNumber, markers: markers};
+        });
     }
 
     refreshVisibleGraphs() {
         if ($('#analysis-results').is(':visible')) {
-            requestAnimationFrame(() => graph_data(this, this.frames));
+            requestAnimationFrame(() => graph_data(this, this.frames_for_graph()));
         }
     }
 
@@ -284,7 +470,7 @@ class TracerController extends MovieController {
         this.ensure_trim_defaults();
         const enabled = this.hasTraceableFrameData();
         this.trim_checkbox.prop(DISABLED, !enabled);
-        this.trim_checkbox.attr('title', enabled ? '' : 'Trace movie to enable trimming.');
+        this.trim_checkbox.attr('title', enabled ? '' : TRACE_MOVIE_TRIM_DISABLED_TITLE);
         if (!enabled) {
             this.trim_checkbox.prop('checked', false);
             this.trim_controls.hide();
@@ -301,6 +487,7 @@ class TracerController extends MovieController {
     refreshFrameEditState() {
         const editable = this.isCurrentFrameEditable();
         this.marker_name_input.prop(DISABLED, !editable);
+        this.refreshResetTracingButtonState();
         if (!editable) {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
@@ -419,10 +606,92 @@ class TracerController extends MovieController {
         this.refreshTrackButtonState();
     }
 
+    current_frame_canvas_trackpoints() {
+        const markers = [];
+        for (const obj of this.objects || []) {
+            if (obj.constructor.name == Marker.name) {
+                markers.push(this.canvas_marker_to_trackpoint(obj));
+            }
+        }
+        return markers;
+    }
+
+    reset_target_markers_for_frame(frameNumber) {
+        return Number(frameNumber) === Number(this.trim_start_frame)
+            ? this.default_trackpoints_from_template(frameNumber)
+            : [];
+    }
+
+    reset_comparison_markers_for_frame(frame, frameIndex) {
+        const frameNumber = graph_frame_number(frame, null, frameIndex);
+        if (Number(frameNumber) === Number(this.frame_number)
+            && (this.objects || []).some(obj => obj.constructor.name == Marker.name)) {
+            return this.current_frame_canvas_trackpoints();
+        }
+        return frame.markers || [];
+    }
+
+    hasResettableTraceWork() {
+        if (!this.frames || this.frames.length === 0) {
+            return false;
+        }
+        for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
+            const frame = this.frames[frameIndex];
+            const frameNumber = graph_frame_number(frame, null, frameIndex);
+            const markers = this.reset_comparison_markers_for_frame(frame, frameIndex);
+            if (!same_reset_markers(this.reset_target_markers_for_frame(frameNumber), markers)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    refreshResetTracingButtonState() {
+        if (!this.delete_all_markers_button) {
+            return;
+        }
+        this.delete_all_markers_button.prop(DISABLED, this.editingLocked() || !this.hasResettableTraceWork());
+    }
+
+    markTracedMovieNeedsRetracing() {
+        this.movie_metadata[NEEDS_RETRACING] = 1;
+        this.refreshRetraceRequiredMessage();
+    }
+
+    refreshRetraceRequiredMessage() {
+        if (!this.retrace_required_message) {
+            return;
+        }
+        if (Number(this.movie_metadata[NEEDS_RETRACING] || 0) === 1
+            && this.movie_metadata[MOVIE_TRACED_URL]) {
+            this.retrace_required_message.show();
+        } else {
+            this.retrace_required_message.hide();
+        }
+    }
+
+    refreshTracedMovieDownload() {
+        const tracedMovieUrl = this.movie_metadata[MOVIE_TRACED_URL];
+        if (tracedMovieUrl) {
+            this.traced_movie_download_link.attr('href', tracedMovieUrl);
+            this.traced_movie_download_control.show();
+        } else {
+            this.traced_movie_download_link.attr('href', '#');
+            this.traced_movie_download_control.hide();
+        }
+    }
+
+    traceToEndLabel() {
+        return this.movie_metadata[MOVIE_TRACED_URL] && !this.tracing_was_reset
+            ? RETRACE_TO_END_OF_MOVIE
+            : TRACE_TO_END_OF_MOVIE;
+    }
+
     refreshTrackButtonState() {
         if (this.pending_retrace_to_end) {
-            this.track_button.val(RETRACE_TO_END_OF_MOVIE);
+            this.track_button.val(this.traceToEndLabel());
             this.download_button.hide();
+            this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
@@ -434,9 +703,11 @@ class TracerController extends MovieController {
             // and disabled inputs are excluded from HTML form submission.
             this.dl_api_key.prop('disabled', false);
             this.dl_movie_id.prop('disabled', false);
+            this.refreshRetraceRequiredMessage();
             return;
         }
         this.track_button.val(TRACE_MOVIE);
+        this.refreshRetraceRequiredMessage();
     }
 
 
@@ -459,7 +730,7 @@ class TracerController extends MovieController {
         // Make sure it isn't in use
         for (let i=0;i<this.objects.length; i++){
             if(this.objects[i].name == val){
-                this.add_marker_status.text("That name is in use, choose another.");
+                this.add_marker_status.text(MARKER_NAME_IN_USE_MESSAGE);
                 this.add_marker_button.prop(DISABLED,true);
                 return;
             }
@@ -484,10 +755,13 @@ class TracerController extends MovieController {
         if (!this.isCurrentFrameEditable()) {
             return;
         }
-        let color = PLANT_MARKER_COLOR;
-        this.objects.push( new Marker(x, y, MARKER_RADIUS, color, color, name));
+        const color = this.marker_color_for_label(name);
+        const marker = new Marker(x, y, MARKER_RADIUS, color, color, name);
+        marker.color = color;
+        this.objects.push(marker);
         this.create_marker_table(); // redraw table
         this.markFutureFramesDirty();
+        this.refreshResetTracingButtonState();
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
     }
@@ -535,9 +809,33 @@ class TracerController extends MovieController {
         return canvasPoint;
     }
 
-    canvas_marker_to_trackpoint(marker) {
+    marker_from_trackpoint(trackpoint) {
+        const canvasPoint = this.trackpoint_to_canvas(trackpoint);
+        const color = is_ruler_marker_label(trackpoint.label) || is_apex_marker_label(trackpoint.label)
+            ? this.marker_color_for_label(trackpoint.label)
+            : trackpoint.color || this.marker_color_for_label(trackpoint.label);
+        const marker = new Marker(canvasPoint.x, canvasPoint.y, 10, color, color, trackpoint.label);
+        marker.trackpoint_metadata = {...trackpoint, color: color};
+        marker.color = color;
+        marker.undeletable = trackpoint.undeletable === true;
+        return marker;
+    }
+
+    canvas_marker_to_trackpoint(marker, frameNumber = this.frame_number) {
         const frameHeight = this.analysis_frame_height();
-        const trackpoint = {x: Number(marker.x), y: Number(marker.y), label: marker.name || marker.label};
+        const trackpoint = {...(marker.trackpoint_metadata || {})};
+        trackpoint.x = Number(marker.x);
+        trackpoint.y = Number(marker.y);
+        trackpoint.label = marker.name || marker.label;
+        trackpoint.color = marker.color || trackpoint.color || this.marker_color_for_label(trackpoint.label);
+        if (frameNumber != null) {
+            trackpoint.frame_number = Number(frameNumber);
+        }
+        if (marker.undeletable === true) {
+            trackpoint.undeletable = true;
+        } else {
+            delete trackpoint.undeletable;
+        }
         if (this.uses_bottom_left_trackpoints() && frameHeight != null) {
             trackpoint.y = frameHeight - trackpoint.y;
         }
@@ -591,24 +889,34 @@ class TracerController extends MovieController {
     marker_is_at_default_position(marker) {
         const defaultMarker = this.default_marker_position(marker.name);
         if (!defaultMarker) {
-            return false;
+            if (!is_ruler_marker_label(marker.name)) {
+                return false;
+            }
+            return DEFAULT_MARKERS
+                .filter(candidate => is_ruler_marker_label(candidate.label))
+                .some(candidate => Math.round(marker.x) === Math.round(candidate.x)
+                    && Math.round(marker.y) === Math.round(candidate.y));
         }
         return Math.round(marker.x) === Math.round(defaultMarker.x)
             && Math.round(marker.y) === Math.round(defaultMarker.y);
     }
 
+    sorted_ruler_markers() {
+        return this.objects
+            .filter(obj => obj.constructor.name == Marker.name && is_ruler_marker_label(obj.name))
+            .sort((a, b) => get_ruler_size(a.name) - get_ruler_size(b.name));
+    }
+
     ruler_calibration_ready() {
-        const markerObjects = this.objects.filter(obj => obj.constructor.name == Marker.name);
-        const ruler0 = markerObjects.find(marker => marker.name === 'Ruler 0mm');
-        const ruler10 = markerObjects.find(marker => marker.name === 'Ruler 10mm');
-        if (!ruler0 || !ruler10) {
+        const rulerMarkers = this.sorted_ruler_markers();
+        if (rulerMarkers.length < 2) {
             return false;
         }
         if (this.selected && get_ruler_size(this.selected.name) !== null) {
             return false;
         }
-        return !this.marker_is_at_default_position(ruler0)
-            && !this.marker_is_at_default_position(ruler10);
+        return !this.marker_is_at_default_position(rulerMarkers[0])
+            && !this.marker_is_at_default_position(rulerMarkers[rulerMarkers.length - 1]);
     }
 
     marker_location_mm(marker, calculations) {
@@ -634,21 +942,31 @@ class TracerController extends MovieController {
         // Generate the HTML for the table body
         let rows = '';
         let calculations = this.calculate_scale(this.objects)
-        for (let i=0;i<this.objects.length;i++){
-            const obj = this.objects[i];
-            if (obj.constructor.name == Marker.name){
-                obj.table_cell_id = "td-" + (++cell_id_counter);
-                const trackpoint = this.canvas_marker_to_trackpoint(obj);
-                obj.loc_mm = this.marker_location_mm(obj, calculations);
-                rows += `<tr>` +
-                    `<td class="dot" style="color:${obj.fill};">●</td>` +
-                    `<td>${obj.name}</td>` +
-                    `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
-                    `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td><td class="del-row nodemo" object_index="${i}" >🚫</td></tr>`;
+        const tableMarkers = this.objects
+            .map((obj, index) => ({obj, index}))
+            .filter(({obj}) => obj.constructor.name == Marker.name)
+            .sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
+        for (const {obj, index} of tableMarkers) {
+            obj.table_cell_id = "td-" + (++cell_id_counter);
+            obj.name_cell_id = "td-marker-name-" + cell_id_counter;
+            const trackpoint = this.canvas_marker_to_trackpoint(obj);
+            obj.loc_mm = this.marker_location_mm(obj, calculations);
+            rows += `<tr>` +
+                `<td class="dot" style="color:${obj.fill};">●</td>` +
+                `<td><span id="${obj.name_cell_id}" x-marker-index="${index}">${html_escape(obj.name)}</span> ` +
+                `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` +
+                `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
+                `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
+            if (marker_is_undeletable(obj)) {
+                rows += `<td class="nodemo"></td></tr>`;
+            } else {
+                rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
         $(this.div_selector + " tbody.marker_table_body").html( rows );
+        $(this.div_selector + " .marker-name-editor").on('click',
+                     (event) => {this.begin_marker_rename(event.currentTarget);});
         $(this.div_selector + " .del-row").on('click',
                      (event) => {this.del_row(event.target.getAttribute('object_index'));});
         $(this.div_selector + " .del-row").css('cursor','default');
@@ -658,15 +976,213 @@ class TracerController extends MovieController {
         }
     }
 
+    begin_marker_rename(editor) {
+        if (!this.isCurrentFrameEditable()) {
+            return;
+        }
+        begin_inline_text_edit(editor, (targetElement, newName, _oldName) => {
+            const i = targetElement.getAttribute('x-marker-index');
+            const obj = this.objects[i];
+            if (!obj || obj.constructor.name != Marker.name) {
+                return false;
+            }
+            return this.rename_marker(i, newName);
+        });
+    }
+
+    marker_name_in_use(name, exceptIndex) {
+        return this.objects.some((obj, index) => index !== Number(exceptIndex)
+            && obj.constructor.name == Marker.name
+            && obj.name === name);
+    }
+
+    special_marker_color_change(oldName, newName) {
+        return is_ruler_marker_label(oldName) || is_apex_marker_label(oldName)
+            || is_ruler_marker_label(newName) || is_apex_marker_label(newName);
+    }
+
+    color_for_renamed_marker(oldName, newName, existingColor) {
+        return this.special_marker_color_change(oldName, newName)
+            ? this.marker_color_for_label(newName)
+            : existingColor;
+    }
+
+    apply_marker_rename(oldName, newName) {
+        for (const obj of this.objects) {
+            if (obj.constructor.name != Marker.name || obj.name !== oldName) {
+                continue;
+            }
+            const color = this.color_for_renamed_marker(oldName, newName, obj.color || obj.fill);
+            obj.name = newName;
+            obj.label = newName;
+            obj.color = color;
+            obj.fill = color;
+            obj.stroke = color;
+            obj.trackpoint_metadata = {...(obj.trackpoint_metadata || {}), label: newName, color: color};
+        }
+        for (const frame of this.frames || []) {
+            for (const marker of frame.markers || []) {
+                if (marker.label !== oldName) {
+                    continue;
+                }
+                marker.label = newName;
+                marker.color = this.color_for_renamed_marker(oldName, newName, marker.color);
+            }
+        }
+        this.create_marker_table();
+        this.refreshResetTracingButtonState();
+        this.refreshVisibleGraphs();
+        this.markTracedMovieNeedsRetracing();
+    }
+
+    rename_marker(i, newName) {
+        if (!this.isCurrentFrameEditable()) {
+            return false;
+        }
+        const obj = this.objects[i];
+        if (!obj || obj.constructor.name != Marker.name) {
+            return false;
+        }
+        const oldName = obj.name;
+        newName = String(newName || '').trim();
+        if (newName === oldName) {
+            return true;
+        }
+        if (newName.length < MIN_MARKER_NAME_LEN) {
+            alert("Marker name must be at least "+MIN_MARKER_NAME_LEN+" letters long");
+            return false;
+        }
+        if (this.marker_name_in_use(newName, i)) {
+            alert(MARKER_NAME_IN_USE_MESSAGE);
+            return false;
+        }
+        return new Promise((resolve) => {
+            $.post(`${API_BASE}api/rename-marker`, {
+                api_key: this.api_key,
+                movie_id: this.movie_id,
+                old_label: oldName,
+                new_label: newName
+            })
+                .done((data) => {
+                    if (data.error) {
+                        alert("Error renaming marker: "+data.message);
+                        resolve(false);
+                        return;
+                    }
+                    this.apply_marker_rename(oldName, newName);
+                    resolve(true);
+                })
+                .fail((res) => {
+                    console.error("rename-marker failed", res);
+                    alert("error from rename-marker:\n"+res.responseText);
+                    resolve(false);
+                });
+            });
+    }
+
     // Delete a row and update the server
     del_row(i) {
         if (!this.isCurrentFrameEditable()) {
             return;
         }
+        const obj = this.objects[i];
+        if (!obj || obj.constructor.name != Marker.name || marker_is_undeletable(obj)) {
+            return;
+        }
         this.objects.splice(i,1);
         this.create_marker_table();
         this.markFutureFramesDirty();
+        this.refreshResetTracingButtonState();
         this.put_markers();
+    }
+
+    default_trackpoints_from_template(frameNumber = this.frame_number) {
+        return create_default_markers().map(marker => this.canvas_marker_to_trackpoint(
+            {...marker, name: marker.label},
+            frameNumber
+        ));
+    }
+
+    reset_tracing() {
+        if (this.editingLocked() || !this.hasResettableTraceWork()) {
+            return;
+        }
+        if (demo_mode) {
+            $('#demo-popup').fadeIn(300);
+            return;
+        }
+        if (!this.frames || this.frames.length === 0) {
+            return;
+        }
+        if (!confirm(RESET_TRACING_CONFIRM_MESSAGE)) {
+            return;
+        }
+        this.resetting_tracing = true;
+        this.delete_all_markers_button.prop(DISABLED, true);
+        this.refreshFrameEditState();
+
+        const updates = [];
+        const firstTrimFrame = this.trim_start_frame;
+        for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
+            const frame = this.frames[frameIndex];
+            const markers = this.reset_comparison_markers_for_frame(frame, frameIndex);
+            const frameNumber = graph_frame_number(frame, null, frameIndex);
+            const resetMarkers = this.reset_target_markers_for_frame(frameNumber);
+            if (same_reset_markers(resetMarkers, markers)) {
+                continue;
+            }
+            updates.push({
+                frame_index: frameIndex,
+                frame_number: frameNumber,
+                markers: resetMarkers,
+            });
+        }
+        if (updates.length === 0) {
+            this.goto_frame(firstTrimFrame);
+            this.refreshVisibleGraphs();
+            this.resetting_tracing = false;
+            this.refreshFrameEditState();
+            return;
+        }
+
+        const requests = updates.map(update => new Promise((resolve, reject) => {
+            const params = {
+                api_key      : this.api_key,
+                movie_id     : this.movie_id,
+                frame_number : update.frame_number,
+                trackpoints  : JSON.stringify(update.markers)
+            };
+            $.post(`${API_BASE}api/put-frame-trackpoints`, params)
+                .done((data) => {
+                    if (data.error) {
+                        reject(new Error(data.message || 'Error resetting tracing.'));
+                        return;
+                    }
+                    resolve();
+                })
+                .fail((res) => {
+                    reject(new Error(res.responseText || 'error from put-frame-trackpoints'));
+                });
+        }));
+
+        return Promise.all(requests)
+            .then(() => {
+                for (const update of updates) {
+                    this.frames[update.frame_index].markers = update.markers.map(marker => ({...marker}));
+                }
+                this.markTracedMovieNeedsRetracing();
+                this.tracing_was_reset = true;
+                this.goto_frame(firstTrimFrame);
+                this.refreshVisibleGraphs();
+                this.markFutureFramesDirty();
+            })
+            .catch((err) => {
+                alert("error from reset-tracing:\n"+err.message);
+            })
+            .finally(() => {
+                this.resetting_tracing = false;
+                this.refreshFrameEditState();
+            });
     }
 
     // Subclassed methods
@@ -677,6 +1193,8 @@ class TracerController extends MovieController {
         }
         this.update_marker_table_locations();
         this.markFutureFramesDirty();
+        this.refreshResetTracingButtonState();
+        this.refreshVisibleGraphs();
 
         if (this.frame_number === 0 || (this.total_frames > 0 && this.frame_number < this.total_frames)) {
             this.enableTrackButtonIfAllowed(); // enable if Lambda (when configured) is reachable
@@ -689,6 +1207,7 @@ class TracerController extends MovieController {
             return;
         }
         this.update_marker_table_locations();
+        this.refreshVisibleGraphs();
         this.put_markers();
     }
 
@@ -714,11 +1233,12 @@ class TracerController extends MovieController {
             $('#demo-popup').fadeIn(300);
             return;
         }
+        const frameNumber = this.frame_number;
         const markers = this.get_markers();
         const put_frame_markers_params = {
             api_key      : this.api_key,
             movie_id     : this.movie_id,
-            frame_number : this.frame_number,
+            frame_number : frameNumber,
             trackpoints  : JSON.stringify(markers) // markers as a JSON string because we do POST as a form, not as REST
         };
         $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
@@ -727,7 +1247,8 @@ class TracerController extends MovieController {
                     alert("Error saving annotations: "+data.message);
                     return;
                 }
-                this.updateCurrentFrameMarkers(markers);
+                this.updateCurrentFrameMarkers(markers, frameNumber);
+                this.markTracedMovieNeedsRetracing();
                 this.refreshVisibleGraphs();
             })
             .fail( (res) => {
@@ -909,7 +1430,7 @@ class TracerController extends MovieController {
                     if (ends[st.label]){
                         const canvasStart = this.trackpoint_to_canvas(st);
                         const canvasEnd = this.trackpoint_to_canvas(ends[st.label]);
-                        this.add_object( new Line(canvasStart.x, canvasStart.y, canvasEnd.x, canvasEnd.y, 2, "red"));
+                        this.add_object( new Line(canvasStart.x, canvasStart.y, canvasEnd.x, canvasEnd.y, 2, this.marker_color_for_label(st.label)));
                     }
                 }
             }
@@ -918,8 +1439,7 @@ class TracerController extends MovieController {
         // Add the markers for this frame if this frame has markers
         if (this.frames[frame].markers) {
             for (let tp of this.frames[frame].markers) {
-                const canvasPoint = this.trackpoint_to_canvas(tp);
-                this.add_object( new Marker(canvasPoint.x, canvasPoint.y, 10, 'red', 'red', tp.label ));
+                this.add_object(this.marker_from_trackpoint(tp));
             }
         }
         this.create_marker_table();
@@ -985,7 +1505,7 @@ class TracerController extends MovieController {
                         self.tracking_status.text(statusText);
                         $('#status-big').text(statusText);
                     } else {
-                        self.tracking_status.text(data.metadata.status || "Tracing starting...");
+                        self.tracking_status.text(data.metadata.status || TRACING_STARTING_MESSAGE);
                     }
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
@@ -1024,7 +1544,7 @@ class TracerController extends MovieController {
         this.tracking = false;
         this.set_movie_control_buttons();
         this.tracking_start_deadline_ms = null;
-        this.tracking_status.text('Tracing complete. Loading movie...');
+        this.tracking_status.text(TRACING_COMPLETE_LOADING_MOVIE_MESSAGE);
         const self = this;
         const focusFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
         const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
@@ -1088,7 +1608,7 @@ class TracerController extends MovieController {
                     ? `Retraced from frame ${focusFrame} to frame ${endFrame}.`
                     : `Traced from frame 0 to frame ${endFrame}.`;
                 self.tracking_status.text(completionMessage);
-                $('#status-big').html(`${completionMessage} Press play <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
+                $('#status-big').html(`${completionMessage} ${PRESS_PLAY_STATUS_TEXT} <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
                 self.pending_trace_start_frame = null;
             })
             .catch((err) => {
@@ -1124,9 +1644,9 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             cc.goto_frame(cc.frame_number || 0);
         }
         if (demo_mode) {
-            $('#status-big').html('Movie cannot be traced in demo mode.');
+            $('#status-big').html(MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE);
         } else {
-            $('#status-big').html('Movie ready for initial tracing.');
+            $('#status-big').html(MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE);
             cc.track_button.prop(DISABLED,false); // enable
         }
     };
@@ -1230,29 +1750,23 @@ function calc_scale(markers) {
 }
 
 function is_graphable_marker(marker) {
-    return marker && typeof marker.label === 'string' && marker.label.length > 0
-        && get_ruler_size(marker.label) === null;
+    return marker && graphable_marker_label(marker.label);
 }
 
-function graph_marker_label(frames) {
-    let firstGraphableLabel = null;
-
+function graph_marker_labels(frames) {
+    const labels = [];
     for (const frame of frames) {
         const markers = frame.markers || [];
         for (const marker of markers) {
             if (!is_graphable_marker(marker)) {
                 continue;
             }
-            if (marker.label === 'Apex') {
-                return 'Apex';
-            }
-            if (firstGraphableLabel === null) {
-                firstGraphableLabel = marker.label;
+            if (!labels.includes(marker.label)) {
+                labels.push(marker.label);
             }
         }
     }
-
-    return firstGraphableLabel;
+    return labels;
 }
 
 function marker_for_label(markers, label) {
@@ -1272,12 +1786,20 @@ function first_marker_for_label(frames, label) {
     return null;
 }
 
-function graph_frame_number(frame, marker, frameIndex) {
-    if (marker && marker.frame_number != null) {
-        return marker.frame_number;
+function graph_marker_color(cc, frames, label) {
+    const marker = first_marker_for_label(frames, label);
+    if (marker && marker.color) {
+        return marker.color;
     }
+    return cc && cc.marker_color_for_label ? cc.marker_color_for_label(label) : APEX_MARKER_COLOR;
+}
+
+function graph_frame_number(frame, marker, frameIndex) {
     if (frame && frame.frame_number != null) {
         return frame.frame_number;
+    }
+    if (marker && marker.frame_number != null) {
+        return marker.frame_number;
     }
     return frameIndex;
 }
@@ -1294,12 +1816,26 @@ function frame_in_graph_trim(cc, frame, frameIndex) {
 function graph_data(cc, frames) {
     const graphFrames = frames.filter((frame, frameIndex) => frame_in_graph_trim(cc, frame, frameIndex));
     const frame_labels = [];
-    const x_values_mm = [];
-    const y_values_mm = [];
-    const markerLabel = graph_marker_label(graphFrames);
-    const baselineMarker = first_marker_for_label(graphFrames, markerLabel);
-    const x_marker_0 = (baselineMarker && baselineMarker.x != null) ? baselineMarker.x : 0;
-    const y_marker_0 = (baselineMarker && baselineMarker.y != null) ? baselineMarker.y : 0;
+    const markerLabels = graph_marker_labels(graphFrames);
+    const xDatasets = markerLabels.map((label) => ({
+        label: `${label} X Position`,
+        data: [],
+        borderColor: graph_marker_color(cc, graphFrames, label),
+        backgroundColor: graph_marker_color(cc, graphFrames, label),
+        fill: false,
+        pointRadius: 0
+    }));
+    const yDatasets = markerLabels.map((label) => ({
+        label: `${label} Y Position`,
+        data: [],
+        borderColor: graph_marker_color(cc, graphFrames, label),
+        backgroundColor: graph_marker_color(cc, graphFrames, label),
+        fill: false,
+        pointRadius: 0
+    }));
+    const baselineMarkers = new Map(
+        markerLabels.map(label => [label, first_marker_for_label(graphFrames, label)])
+    );
     let pos_units = "pixels";
     let time_units = "frames";
 
@@ -1307,20 +1843,26 @@ function graph_data(cc, frames) {
         time_units = "minutes";
     }
 
-    graphFrames.forEach((frame, frameIndex) => {
-        const markers = frame.markers || [];
-        const trackedMarker = marker_for_label(markers, markerLabel);
-        const calculations = calc_scale(markers);
-        const scale = calculations.scale;
-        pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
-
-        if (trackedMarker) {
-            const frameNumber = graph_frame_number(frame, trackedMarker, frameIndex);
+    if (markerLabels.length > 0) {
+        graphFrames.forEach((frame, frameIndex) => {
+            const markers = frame.markers || [];
+            const frameMarker = markerLabels.map(label => marker_for_label(markers, label)).find(marker => marker);
+            const frameNumber = graph_frame_number(frame, frameMarker, frameIndex);
+            const calculations = calc_scale(markers);
+            const scale = calculations.scale;
+            pos_units = calculations.pos_units; // TODO - if units change, revert to pixels.
             frame_labels.push(cc.fpm ? frameNumber / cc.fpm : frameNumber);
-            x_values_mm.push((trackedMarker.x - x_marker_0) * scale);
-            y_values_mm.push((trackedMarker.y - y_marker_0) * scale);
-        }
-    });
+
+            markerLabels.forEach((label, index) => {
+                const trackedMarker = marker_for_label(markers, label);
+                const baselineMarker = baselineMarkers.get(label);
+                const xMarker0 = (baselineMarker && baselineMarker.x != null) ? baselineMarker.x : 0;
+                const yMarker0 = (baselineMarker && baselineMarker.y != null) ? baselineMarker.y : 0;
+                xDatasets[index].data.push(trackedMarker ? (trackedMarker.x - xMarker0) * scale : null);
+                yDatasets[index].data.push(trackedMarker ? (trackedMarker.y - yMarker0) * scale : null);
+            });
+        });
+    }
 
     const canvasX = document.getElementById('apex-xChart');
     const canvasY = document.getElementById('apex-yChart');
@@ -1338,15 +1880,7 @@ function graph_data(cc, frames) {
         type: 'line',
         data: {
             labels: frame_labels,
-            datasets: [
-                {
-                    label: 'Time vs X Position',
-                    data: x_values_mm,
-                    borderColor: 'rgba(255, 0, 0, 1)',
-                    fill: false,
-                    pointRadius: 0
-                }
-            ]
+            datasets: xDatasets
         },
         options: {
             animation: false,
@@ -1372,8 +1906,7 @@ function graph_data(cc, frames) {
                     labels: {
                         usePointStyle: true,  // Use line instead of a box in the legend
                         boxWidth: 4,         // Make the line shorter in the legend
-                        pointStyle: 'line',  // Show a line instead of the default box
-                        borderColor: 'rgba(255, 0, 0, 1)'
+                        pointStyle: 'line'  // Show a line instead of the default box
                     }
                 }
             }
@@ -1385,15 +1918,7 @@ function graph_data(cc, frames) {
         type: 'line',
         data: {
             labels: frame_labels,
-            datasets: [
-                {
-                    label: 'Time vs Y Position',
-                    data: y_values_mm,
-                    borderColor: 'rgba(255, 0, 0, 1)',
-                    fill: false,
-                    pointRadius: 0
-                }
-            ]
+            datasets: yDatasets
         },
         options: {
             animation: false,
@@ -1407,7 +1932,7 @@ function graph_data(cc, frames) {
                     }
                 },
                 y: {
-                    reverse: true, // flips the pixel y value to bottom left
+                    reverse: false,
                     title: {
                         display: true,
                         text: 'Y Position (' + pos_units + ')'
@@ -1420,8 +1945,7 @@ function graph_data(cc, frames) {
                     labels: {
                         usePointStyle: true,  // Use line instead of a box in the legend
                         boxWidth: 4,         // Make the line shorter in the legend
-                        pointStyle: 'line',  // Show a line instead of the default box
-                        borderColor: 'rgba(255, 0, 0, 1)'
+                        pointStyle: 'line'  // Show a line instead of the default box
                     }
                 }
             }
@@ -1442,7 +1966,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         $('#demo-popup').fadeOut(300);
     });
 
-    // Clicking the ▶ in "Press play ▶ to watch..." triggers the play button
+    // Clicking the play glyph in the status headline triggers the play button.
     function triggerPlay() {
         const playBtn = $('input.play_forward');
         if (playBtn.length && !playBtn.prop('disabled')) {
@@ -1478,18 +2002,18 @@ function trace_movie(div_controller, movie_id, api_key) {
             const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
-                $('#status-big').html('Movie ready for tracing.');
+                $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);
             } else {
-                $('#status-big').html('Place markers and click Trace movie to start tracing.');
+                $('#status-big').html(PLACE_MARKERS_TRACE_START_MESSAGE);
             }
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
         if (demo_mode) {
-            $('#status-big').html(showResults ? 'Movie is traced!' : 'Movie ready for tracing.');
+            $('#status-big').html(showResults ? MOVIE_IS_TRACED_MESSAGE : MOVIE_READY_FOR_TRACING_MESSAGE);
         } else {
-          $('#status-big').html(showResults ? 'Movie is traced! Check for errors and retrace as necessary.'
-                                : 'Movie ready for tracing. Place markers and click Trace movie.');
+          $('#status-big').html(showResults ? MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE
+                                : MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE);
         }
         const movie_zipfile_url = resp.metadata.movie_zipfile_url;
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);

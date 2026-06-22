@@ -66,5 +66,22 @@ def test_user_schema():
             course_id="ctest",
             published=0,
         )
-        logger.debug("m=%s",m)
+        logger.debug("m=%s", m)
     logger.debug("u=%s", u)
+
+
+def test_trackpoint_schema_accepts_marker_metadata():
+    trackpoint = schema.Trackpoint(x=1, y=2, label="Ruler 0mm", color="red", undeletable=True)
+
+    assert trackpoint.color == "red"
+    assert trackpoint.undeletable is True
+
+
+def test_rename_marker_request_strips_and_validates_labels():
+    request = schema.RenameMarkerRequest(old_label=" Ruler 0mm ", new_label=" Ruler 30mm ")
+
+    assert request.old_label == "Ruler 0mm"
+    assert request.new_label == "Ruler 30mm"
+
+    with pytest.raises(ValidationError):
+        schema.RenameMarkerRequest(old_label="Ruler 0mm", new_label="")

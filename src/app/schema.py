@@ -111,6 +111,7 @@ class Movie(BaseModel):
     zip_frame_processing: dict | None = None  # {"total": int, "current": int}
 
     last_frame_tracked: Annotated[int | None, Field(ge=0)] = None
+    needs_retracing: Annotated[int, Field(ge=0, le=1)] | None = None
 
     version: Annotated[int | None, Field(ge=0)] = None
 
@@ -148,6 +149,9 @@ class Trackpoint(BaseModel):
     x: Decimal
     y: Decimal
     label: str
+    marker_id: str | None = None
+    color: str | None = None
+    undeletable: bool | None = None
     frame_number: int | None = None
     status: int | None = None
     err: Decimal | None = None
@@ -159,6 +163,20 @@ class Trackpoint(BaseModel):
             return v
         d = Decimal(str(v))  # string conversion avoids float issues
         return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+
+class RenameMarkerRequest(BaseModel):
+    """Request to rename a marker label across a movie's stored trackpoints."""
+
+    old_label: Annotated[str, Field(min_length=1, max_length=100)]
+    new_label: Annotated[str, Field(min_length=1, max_length=100)]
+
+    @field_validator("old_label", "new_label", mode="before")
+    @classmethod
+    def strip_label(cls, value):
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class MovieFrame(BaseModel):

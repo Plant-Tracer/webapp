@@ -10,10 +10,12 @@ import sys
 import smtplib
 import io
 import csv
+import zipfile
 from collections import defaultdict
 
 
 from flask import Blueprint, request, make_response, current_app, jsonify
+from PIL import Image, UnidentifiedImageError
 from validate_email_address import validate_email
 
 from . import config_check
@@ -32,14 +34,17 @@ from .odb import (
     MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
     MOVIE_TRACED_URN,
+    MOVIE_TRACED_URL,
     MOVIE_METADATA_BULK_PROPS,
     MOVIE_ROTATION,
+    FRAME_URN,
     TRIM_START_FRAME,
     TRIM_END_FRAME,
     MOVIE_STATUS,
     MOVIE_STATE_TRACING_COMPLETED,
     DDBO,
     UnauthorizedUser,
+    AtomicRenameConflict,
     clear_movie_tracking,
 )
 from .s3_presigned import (
@@ -50,10 +55,62 @@ from .s3_presigned import (
 )
 from .odb_movie_data import (
     delete_movie,
+    read_object,
 )
 
 
 api_bp = Blueprint('api', __name__)
+
+
+def _jpeg_height(jpeg_bytes):
+    try:
+        with Image.open(io.BytesIO(jpeg_bytes)) as img:
+            return img.height
+    except (UnidentifiedImageError, OSError):
+        return None
+
+
+def _height_from_movie_zipfile(movie_metadata):
+    zip_urn = movie_metadata.get(MOVIE_ZIPFILE_URN)
+    if not zip_urn:
+        return None
+    zip_bytes = read_object(zip_urn)
+    if not zip_bytes:
+        return None
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = sorted(name for name in zf.namelist() if name.lower().endswith(('.jpg', '.jpeg')))
+            for name in names:
+                height = _jpeg_height(zf.read(name))
+                if height:
+                    return height
+    except (zipfile.BadZipFile, OSError):
+        logger.warning("could not infer frame height from movie zipfile %s", zip_urn)
+    return None
+
+
+def _height_from_movie_frame(movie_id, frame_number):
+    frame = DDBO().get_movie_frame(movie_id, frame_number)
+    frame_urn = frame.get(FRAME_URN) if frame else None
+    if not frame_urn:
+        return None
+    frame_bytes = read_object(frame_urn)
+    if not frame_bytes:
+        return None
+    return _jpeg_height(frame_bytes)
+
+
+def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
+    try:
+        return odb.trackpoint_frame_height(movie_metadata)
+    except RuntimeError:
+        pass
+    candidate_frames = [frame_start, 0] if frame_start != 0 else [0]
+    for frame_number in candidate_frames:
+        height = _height_from_movie_frame(movie_id, frame_number)
+        if height:
+            return height
+    return _height_from_movie_zipfile(movie_metadata)
 
 ################################################################
 ### Handle invalid apikey exceptions
@@ -413,7 +470,12 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
-    return jsonify({'error': False, 'movies': odb.list_movies(user_id=get_user_id())})
+    movies = odb.list_movies(user_id=get_user_id())
+    for movie in movies:
+        traced_urn = movie.get(MOVIE_TRACED_URN)
+        if (traced_urn or "").startswith("s3:"):
+            movie[MOVIE_TRACED_URL] = make_signed_url(urn=traced_urn)
+    return jsonify({'error': False, 'movies': movies})
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
@@ -452,7 +514,8 @@ def api_get_movie_metadata():
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
         try:
-            odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+            frame_height = infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start)
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)
             return jsonify({C.API_KEY_ERROR: True, 'message': f"Trackpoint migration failed: {exc}"}), 500
@@ -638,9 +701,36 @@ def api_put_frame_trackpoints():
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
             logger.debug("%s",tp)
-    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=trackpoints)
+    odb.put_frame_trackpoints(movie_id=movie_id,
+                              frame_number=frame_number,
+                              trackpoints=trackpoints,
+                              needs_retracing=True)
 
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
+
+
+@api_bp.route('/rename-marker', methods=POST)
+def api_rename_marker():
+    """Rename a marker label across all stored trackpoints for a movie."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    try:
+        rename_result = odb.rename_movie_marker(
+            movie_id=movie[MOVIE_ID],
+            old_label=get('old_label'),
+            new_label=get('new_label'),
+            needs_retracing=True,
+        )
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    except AtomicRenameConflict as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
+    return jsonify({
+        C.API_KEY_ERROR: False,
+        'frames_updated': rename_result['frames_updated'],
+        'trackpoints_updated': rename_result['trackpoints_updated'],
+    })
 
 
 ################################################################

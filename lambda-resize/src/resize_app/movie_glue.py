@@ -31,6 +31,7 @@ from .src.app.odb import (
     MOVIE_ROTATION,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
+    NEEDS_RETRACING,
     MOVIE_STATUS,
     MOVIE_STATE_READY,
     MOVIE_STATE_UPLOADING,
@@ -243,6 +244,14 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
 
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s input_trackpoints=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, tracer_input_trackpoints)
+    movie_traced_frame_start, movie_traced_frame_end = odb.movie_trim_bounds(movie_record)
+    if frame_end_number is not None:
+        movie_traced_frame_end = (
+            frame_end_number if movie_traced_frame_end is None
+            else min(movie_traced_frame_end, frame_end_number)
+        )
+    LOGGER.info("run_tracing movie_id=%s traced_mp4_frame_start=%s traced_mp4_frame_end=%s",
+                movie_id, movie_traced_frame_start, movie_traced_frame_end)
 
     movie_zipfile_path = None
     movie_traced_path = None
@@ -254,7 +263,17 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
             movie_traced_path = Path(tf.name)
 
         def tracer_callback(obj:tracer.TracerCallbackArg):
-            LOGGER.info("tracer_callback len(obj.frame_trackpoints)=%s",len(obj.frame_trackpoints or []))
+            frame_trackpoints = obj.frame_trackpoints or []
+            LOGGER.info(
+                "tracer_callback frame=%s trace_range=%s-%s traced_mp4_range=%s-%s trackpoint_count=%s labels=%s",
+                obj.frame_number,
+                tracing_frame_start,
+                frame_end_number,
+                movie_traced_frame_start,
+                movie_traced_frame_end,
+                len(frame_trackpoints),
+                [trackpoint.label for trackpoint in frame_trackpoints],
+            )
             if obj.frame_trackpoints and (frame_end_number is None or obj.frame_number <= frame_end_number):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
@@ -267,6 +286,10 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
                                             trackpoints = tracer_input_trackpoints,
                                             movie_zipfile_path = movie_zipfile_path,
                                             movie_traced_path = movie_traced_path,
+                                            movie_traced_frame_range = tracer.TracedMovieFrameRange(
+                                                start=movie_traced_frame_start,
+                                                end=movie_traced_frame_end,
+                                            ),
                                             rotation = rotation,
                                             callback = tracer_callback,
                                             comment = research_comment )
@@ -284,6 +307,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
         # note: should we update width, height and fps?
         ddbo.update_table(ddbo.movies, movie_id, {TOTAL_FRAMES:total_frames,
                                                   MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
+                                                  NEEDS_RETRACING: 0,
                                                   MOVIE_TRACED_URN: movie_traced_urn,
                                                   MOVIE_ZIPFILE_URN: movie_zipfile_urn})
 

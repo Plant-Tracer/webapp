@@ -218,6 +218,12 @@ List all movies visible to the caller (their own movies and published movies in 
 { "error": false, "movies": [ { "movie_id": "m...", "title": "...", ... } ] }
 ```
 
+Each movie dict contains all DynamoDB metadata fields. In addition, if the movie has a traced MP4 stored in S3 (`movie_traced_urn` starts with `s3:`), the response injects a short-lived presigned URL. Clients should treat `needs_retracing=1` as user-visible only when this URL is present; before the first traced MP4 exists there is no stale traced artifact to warn about.
+
+| Field | Description |
+|-------|-------------|
+| `movie_traced_url` | Presigned S3 URL for downloading the traced MP4; only present when a traced MP4 exists |
+
 ---
 
 #### `POST /api/get-movie-metadata`
@@ -285,6 +291,33 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 ```json
 { "error": false, "message": "trackpoints recorded: 2 " }
 ```
+
+**Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 may now be stale. The client uses it to show the retracing warning when `movie_traced_url` is also present.
+
+The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
+
+---
+
+#### `POST /api/rename-marker`
+
+Rename one marker label across all stored trackpoints for a movie. Other marker properties, such as coordinates, color, `undeletable`, status, and error metadata, are preserved.
+
+**Parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `api_key` | Yes | Must not be the demo key |
+| `movie_id` | Yes | |
+| `old_label` | Yes | Existing marker label to rename |
+| `new_label` | Yes | New marker label. Must not already exist on the movie. |
+
+**Response**
+
+```json
+{ "error": false, "frames_updated": 3, "trackpoints_updated": 3 }
+```
+
+**Side effect:** when any stored trackpoints are renamed, sets `needs_retracing=1` on the movie record. Marker labels are stored in the `movie_frames` marker-map item at `frame_number=-100`, so rename updates that marker map and does not rewrite each frame record.
 
 ---
 
@@ -365,7 +398,7 @@ Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 
 **Response**
 
-```json
+```text
 { "error": false, "metadata": { "movie_id": "m...", "trim_start_frame": 0, "trim_end_frame": 42, ... } }
 ```
 

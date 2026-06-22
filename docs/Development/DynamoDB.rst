@@ -64,7 +64,7 @@ All table names below are shown without the prefix. With ``DYNAMODB_TABLE_PREFIX
      - ``movie_id``
      - —
    * - ``movie_frames``
-     - Per-frame trackpoint annotations
+     - Per-frame trackpoint annotations and movie-scoped marker metadata
      - ``movie_id``
      - ``frame_number``
    * - ``logs``
@@ -199,9 +199,9 @@ One record per uploaded movie. Key attributes:
 
 ``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
-``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``first_frame_urn``,
+``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1/None; None = not yet answered), ``credit_by_name`` (0/1/None; None = not yet answered), ``attribution_name``,
-``rotation`` (0/90/180/270 degrees).
+``rotation`` (0/90/180/270 degrees), ``needs_retracing`` (0/1; traced MP4 may be stale after marker edits).
 
 See ``src/app/schema.py`` ``Movie`` class for the full schema and constraints.
 
@@ -210,10 +210,19 @@ movie_frames
 ~~~~~~~~~~~~
 
 Per-frame trackpoint storage. Keyed by ``(movie_id, frame_number)``.
+Real movie frames use non-negative ``frame_number`` values. Range queries and
+single-frame reads treat negative frame numbers as internal metadata, not as
+user-visible frames.
 
 Each record's ``trackpoints`` attribute is a list of objects with fields
-``x``, ``y``, ``label``, ``frame_number``, ``status``, and ``err`` (all defined in the
+``x``, ``y``, ``label``, ``marker_id``, ``frame_number``, ``status``, and ``err`` (all defined in the
 ``Trackpoint`` class in ``schema.py``).
+
+The marker lookup table is stored as a metadata item in ``movie_frames`` with
+``frame_number=-100``. It stores ``markers`` (``marker_id`` to marker metadata),
+``marker_labels`` (current label to ``marker_id``), and ``marker_aliases``
+(stored or legacy label to ``marker_id``). Frame trackpoints may store
+``marker_id``; API responses resolve the current label through this marker map.
 
 
 Data Consistency Notes

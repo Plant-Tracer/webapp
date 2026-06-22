@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const module = require('planttracer');
+const { RETRACE_REQUIRED_MESSAGE } = require('ui_constants');
 const list_movies_data = module.list_movies_data;
 const play_clicked = module.play_clicked;
 const hide_clicked = module.hide_clicked;
@@ -88,6 +89,59 @@ describe('list_movies_data', () => {
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain("pure-table");
     expect(publishedHtml).toContain("Movie Title");
+  });
+
+  test('should show traced movie download and retrace warning when present', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        width: 1280,
+        height: 720,
+        total_bytes: 2000000,
+        fps: '30',
+        total_frames: 3600,
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+        movie_traced_url: 'https://example.com/traced.mp4?x=1&y=2',
+        needs_retracing: 1,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain('download traced');
+    expect(publishedHtml).toContain("class='play traced-movie-download'");
+    expect(publishedHtml).toContain('https://example.com/traced.mp4?x=1&amp;y=2');
+    expect(publishedHtml).toContain(RETRACE_REQUIRED_MESSAGE);
+  });
+
+  test('should not show retrace warning before a traced movie exists', () => {
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: 1,
+        published: 1,
+        title: 'Movie Title',
+        description: 'Description',
+        total_bytes: 2000000,
+        total_frames: 3600,
+        date_uploaded: 1627689600,
+        deleted: 0,
+        orig_movie: false,
+        needs_retracing: 1,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).not.toContain(RETRACE_REQUIRED_MESSAGE);
   });
 
   test('should handle an empty list of movies gracefully', () => {
