@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import zipfile
 import xml.etree.ElementTree as ET
 from decimal import Decimal
@@ -99,6 +100,16 @@ def _xlsx_cell_value(cell, shared_strings):
     return int(value.text)
 
 
+def _xlsx_cell_column(cell):
+    match = re.match(r"([A-Z]+)", cell.get("r", ""))
+    if not match:
+        return 0
+    column = 0
+    for character in match.group(1):
+        column = column * 26 + ord(character) - ord("A") + 1
+    return column - 1
+
+
 def _xlsx_rows(data, sheet_path):
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         shared_strings = _xlsx_shared_strings(zf)
@@ -106,7 +117,13 @@ def _xlsx_rows(data, sheet_path):
     namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     rows = []
     for row in root.findall(".//s:sheetData/s:row", namespace):
-        rows.append([_xlsx_cell_value(cell, shared_strings) for cell in row.findall("s:c", namespace)])
+        values = []
+        for cell in row.findall("s:c", namespace):
+            column = _xlsx_cell_column(cell)
+            while len(values) <= column:
+                values.append("")
+            values[column] = _xlsx_cell_value(cell, shared_strings)
+        rows.append(values)
     return rows
 
 
@@ -457,10 +474,18 @@ def test_csv_uses_mm_for_non_ruler_markers_when_rulers_calibrated(client, new_mo
 def test_xlsx_exports_trackpoints_and_metadata(client, new_movie):
     movie_id = new_movie[MOVIE_ID]
     _seed_frame0(movie_id, [
-        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex", color="orange"),
+        Trackpoint(x=Decimal(20), y=Decimal(20), label="Inflection Point", color="#336699"),
         Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
         Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
     ], height=480)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 2})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1, trackpoints=[
+        Trackpoint(x=Decimal(105), y=Decimal(190), label="Apex", color="orange", status=0),
+        Trackpoint(x=Decimal(25), y=Decimal(20), label="Inflection Point", color="#336699"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
 
     resp = client.post("/api/get-movie-trackpoints", data={
         API_KEY: new_movie[API_KEY],
@@ -476,30 +501,63 @@ def test_xlsx_exports_trackpoints_and_metadata(client, new_movie):
     with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
         assert "xl/worksheets/sheet1.xml" in zf.namelist()
         assert "xl/worksheets/sheet2.xml" in zf.namelist()
+        assert "xl/worksheets/sheet3.xml" in zf.namelist()
+        assert "xl/worksheets/sheet4.xml" in zf.namelist()
+        assert "xl/worksheets/sheet5.xml" in zf.namelist()
+        assert "xl/charts/chart1.xml" in zf.namelist()
+        assert "xl/charts/chart2.xml" in zf.namelist()
+        chart1_xml = zf.read("xl/charts/chart1.xml").decode("utf-8")
+        chart2_xml = zf.read("xl/charts/chart2.xml").decode("utf-8")
+        assert '<c:tickLblPos val="low"/>' in chart1_xml
+        assert '<c:tickLblPos val="low"/>' in chart2_xml
 
     trackpoint_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet1.xml")
     assert trackpoint_rows[0] == [
         "frame_number",
         "Apex x (mm)",
         "Apex y (mm)",
+        "Inflection Point x (mm)",
+        "Inflection Point y (mm)",
         "Ruler 0mm x (px)",
         "Ruler 0mm y (px)",
         "Ruler 10mm x (px)",
         "Ruler 10mm y (px)",
     ]
-    assert trackpoint_rows[1] == [0, 10, 20, 10, 10, 10, 110]
+    assert trackpoint_rows[1] == [0, 10, 20, 2, 2, 10, 10, 10, 110]
+    assert trackpoint_rows[2] == [1, 10.5, 19, 2.5, 2, 10, 10, 10, 110]
 
     metadata_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet2.xml")
     metadata = {row[0]: row[1] if len(row) > 1 else "" for row in metadata_rows[1:]}
     assert metadata["movie_id"] == movie_id
     assert metadata["trim_start_frame"] == 0
-    assert metadata["trim_end_frame"] == 0
-    assert metadata["exported_frame_count"] == 1
-    assert metadata["marker_count"] == 3
+    assert metadata["trim_end_frame"] == 1
+    assert metadata["exported_frame_count"] == 2
+    assert metadata["marker_count"] == 4
     assert metadata["ruler_calibrated"] == "yes"
     assert metadata["ruler_marker_units"] == "px"
     assert metadata["non_ruler_marker_units"] == "mm"
     assert metadata["scale_mm_per_px"] == 0.1
+
+    marker_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet3.xml")
+    assert marker_rows[0][:5] == ["label", "type", "graphable", "color", "colors_seen"]
+    assert marker_rows[1][:5] == ["Apex", "apex", "yes", "orange", "orange"]
+    assert marker_rows[2][:5] == [
+        "Inflection Point", "inflection point", "yes", "#336699", "#336699",
+    ]
+    assert marker_rows[3][:4] == ["Ruler 0mm", "ruler", "no", ""]
+
+    chart_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet4.xml")
+    assert chart_rows == [
+        [
+            "frame_number",
+            "Apex X Position (mm)",
+            "Apex Y Position (mm)",
+            "Inflection Point X Position (mm)",
+            "Inflection Point Y Position (mm)",
+        ],
+        [0, 0, 0, 0, 0],
+        [1, 0.5, -1, 0.5, 0],
+    ]
 
 
 def test_xlsx_trackpoint_download_respects_trim_bounds(client, new_movie):

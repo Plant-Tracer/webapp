@@ -122,6 +122,132 @@ def _spreadsheet_value(value):
     return value
 
 
+def _is_inflection_marker_label(label):
+    return isinstance(label, str) and " ".join(label.split()).casefold() == "inflection point"
+
+
+def _marker_type(label):
+    ruler_size = odb.get_ruler_size(label)
+    if ruler_size is not None:
+        return "ruler"
+    if _is_inflection_marker_label(label):
+        return "inflection point"
+    if label == "Apex":
+        return "apex"
+    return "marker"
+
+
+def _positive_float(value):
+    if value in (None, ''):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _marker_summary_rows(labels, trackpoint_dicts):
+    rows = []
+    for label in labels:
+        marker_points = [tp for tp in trackpoint_dicts if tp['label'] == label]
+        first_point = marker_points[0] if marker_points else {}
+        color_values = sorted(set(tp.get('color') for tp in marker_points if tp.get('color')))
+        marker_ids = sorted(set(tp.get('marker_id') for tp in marker_points if tp.get('marker_id')))
+        undeletable_values = sorted(set(
+            str(tp.get('undeletable')).lower()
+            for tp in marker_points
+            if tp.get('undeletable') is not None
+        ))
+        status_values = sorted(set(
+            str(tp.get('status'))
+            for tp in marker_points
+            if tp.get('status') is not None
+        ))
+        err_values = sorted(set(
+            str(_spreadsheet_value(tp.get('err')))
+            for tp in marker_points
+            if tp.get('err') is not None
+        ))
+        frame_numbers = [tp['frame_number'] for tp in marker_points]
+        marker_kind = _marker_type(label)
+        rows.append({
+            'label': label,
+            'type': marker_kind,
+            'graphable': 'no' if marker_kind == 'ruler' else 'yes',
+            'color': first_point.get('color', '') or '',
+            'colors_seen': ", ".join(color_values),
+            'marker_id': first_point.get('marker_id', '') or '',
+            'marker_ids_seen': ", ".join(marker_ids),
+            'ruler_size_mm': odb.get_ruler_size(label) if marker_kind == 'ruler' else '',
+            'undeletable': first_point.get('undeletable', '') if first_point.get('undeletable') is not None else '',
+            'undeletable_values_seen': ", ".join(undeletable_values),
+            'first_frame': min(frame_numbers) if frame_numbers else '',
+            'last_frame': max(frame_numbers) if frame_numbers else '',
+            'trackpoint_count': len(marker_points),
+            'status_values_seen': ", ".join(status_values),
+            'error_values_seen': ", ".join(err_values),
+        })
+    return rows
+
+
+def _chart_export_data(frame_numbers, labels, trackpoint_dicts, fpm, position_scale, calibrated):
+    graphable_labels = [label for label in labels if odb.get_ruler_size(label) is None]
+    fpm_value = _positive_float(fpm)
+    if not graphable_labels:
+        return {
+            'fieldnames': [],
+            'rows': [],
+            'marker_labels': [],
+            'time_units': 'minutes' if fpm_value else 'frames',
+            'position_units': 'mm' if calibrated else 'px',
+        }
+    position_units = 'mm' if calibrated else 'px'
+    frame_points = defaultdict(dict)
+    for tp in trackpoint_dicts:
+        frame_points[tp['frame_number']][tp['label']] = tp
+    baseline_points = {}
+    for label in graphable_labels:
+        for frame_number in frame_numbers:
+            point = frame_points[frame_number].get(label)
+            if point:
+                baseline_points[label] = point
+                break
+
+    fieldnames = ['time (minutes)' if fpm_value else 'frame_number']
+    for label in graphable_labels:
+        fieldnames.append(f"{label} X Position ({position_units})")
+        fieldnames.append(f"{label} Y Position ({position_units})")
+
+    rows = []
+    for frame_number in frame_numbers:
+        row = {fieldnames[0]: round(frame_number / fpm_value, 4) if fpm_value else frame_number}
+        for label in graphable_labels:
+            point = frame_points[frame_number].get(label)
+            baseline = baseline_points.get(label)
+            if point and baseline:
+                row[f"{label} X Position ({position_units})"] = round(
+                    (float(point['x']) - float(baseline['x'])) * position_scale,
+                    4,
+                )
+                row[f"{label} Y Position ({position_units})"] = round(
+                    (float(point['y']) - float(baseline['y'])) * position_scale,
+                    4,
+                )
+            else:
+                row[f"{label} X Position ({position_units})"] = ''
+                row[f"{label} Y Position ({position_units})"] = ''
+        rows.append(row)
+
+    return {
+        'fieldnames': fieldnames,
+        'rows': rows,
+        'marker_labels': graphable_labels,
+        'time_units': 'minutes' if fpm_value else 'frames',
+        'position_units': position_units,
+    }
+
+
 def _trackpoint_export_data(movie):
     """Build shared trackpoint-export rows, fieldnames, and metadata."""
     movie_metadata = odb.movie_metadata_with_trim_defaults(
@@ -198,11 +324,39 @@ def _trackpoint_export_data(movie):
         ('scale_mm_per_px', round(scale, 8) if calibrated else ''),
         ('fpm', movie_metadata.get(odb.FPM, '')),
     ]
+    marker_summary_fieldnames = [
+        'label',
+        'type',
+        'graphable',
+        'color',
+        'colors_seen',
+        'marker_id',
+        'marker_ids_seen',
+        'ruler_size_mm',
+        'undeletable',
+        'undeletable_values_seen',
+        'first_frame',
+        'last_frame',
+        'trackpoint_count',
+        'status_values_seen',
+        'error_values_seen',
+    ]
+    chart_data = _chart_export_data(
+        frame_numbers,
+        labels,
+        trackpoint_dicts,
+        movie_metadata.get(odb.FPM),
+        scale if calibrated else 1,
+        calibrated,
+    )
     return {
         'trackpoint_dicts': trackpoint_dicts,
         'fieldnames': fieldnames,
         'rows': rows,
         'metadata_rows': metadata_rows,
+        'marker_summary_fieldnames': marker_summary_fieldnames,
+        'marker_summary_rows': _marker_summary_rows(labels, trackpoint_dicts),
+        'chart_data': chart_data,
     }
 
 
@@ -223,6 +377,65 @@ def _csv_trackpoint_response(export_data):
         return response
 
 
+def _write_worksheet_table(worksheet, fieldnames, rows, header_format):
+    for column, fieldname in enumerate(fieldnames):
+        worksheet.write(0, column, fieldname, header_format)
+        worksheet.set_column(column, column, max(len(fieldname) + 2, 12))
+    for row_index, row in enumerate(rows, start=1):
+        for column, fieldname in enumerate(fieldnames):
+            worksheet.write(row_index, column, _spreadsheet_value(row.get(fieldname, '')))
+    if fieldnames:
+        worksheet.freeze_panes(1, 0)
+        worksheet.autofilter(0, 0, len(rows), len(fieldnames) - 1)
+
+
+def _excel_chart_color(color):
+    named_colors = {
+        'black': '#000000',
+        'blue': '#0000FF',
+        'green': '#008000',
+        'orange': '#FFA500',
+        'purple': '#800080',
+        'red': '#FF0000',
+        'yellow': '#FFFF00',
+    }
+    if isinstance(color, str):
+        if color.startswith('#') and len(color) == 7:
+            return color
+        return named_colors.get(color.lower())
+    return None
+
+
+def _add_position_chart(workbook, charts, chart_data, marker_colors, *, axis):
+    if not chart_data['rows'] or not chart_data['marker_labels']:
+        return None
+    axis_offset = 1 if axis == 'x' else 2
+    chart = workbook.add_chart({'type': 'line'})
+    last_row = len(chart_data['rows'])
+    for marker_index, label in enumerate(chart_data['marker_labels']):
+        column = 1 + marker_index * 2 + axis_offset - 1
+        series = {
+            'name': label,
+            'categories': ['Chart Data', 1, 0, last_row, 0],
+            'values': ['Chart Data', 1, column, last_row, column],
+        }
+        color = _excel_chart_color(marker_colors.get(label))
+        if color:
+            series['line'] = {'color': color}
+        chart.add_series(series)
+    chart.set_title({'name': f"Time vs {axis.upper()} Position"})
+    chart.set_x_axis({
+        'name': f"Time ({chart_data['time_units']})",
+        'label_position': 'low',
+    })
+    chart.set_y_axis({'name': f"{axis.upper()} Position ({chart_data['position_units']})"})
+    chart.set_legend({'position': 'bottom'})
+    chart.set_size({'width': 720, 'height': 360})
+    cell = 'A1' if axis == 'x' else 'A20'
+    charts.insert_chart(cell, chart)
+    return chart
+
+
 def _xlsx_trackpoint_response(export_data):
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -230,15 +443,7 @@ def _xlsx_trackpoint_response(export_data):
     metadata_key_format = workbook.add_format({'bold': True})
 
     trackpoints = workbook.add_worksheet('Trackpoints')
-    for column, fieldname in enumerate(export_data['fieldnames']):
-        trackpoints.write(0, column, fieldname, header_format)
-        trackpoints.set_column(column, column, max(len(fieldname) + 2, 12))
-    for row_index, row in enumerate(export_data['rows'], start=1):
-        for column, fieldname in enumerate(export_data['fieldnames']):
-            trackpoints.write(row_index, column, _spreadsheet_value(row.get(fieldname, '')))
-    if export_data['fieldnames']:
-        trackpoints.freeze_panes(1, 0)
-        trackpoints.autofilter(0, 0, len(export_data['rows']), len(export_data['fieldnames']) - 1)
+    _write_worksheet_table(trackpoints, export_data['fieldnames'], export_data['rows'], header_format)
 
     metadata = workbook.add_worksheet('Metadata')
     metadata.write(0, 0, 'Field', header_format)
@@ -250,6 +455,34 @@ def _xlsx_trackpoint_response(export_data):
         metadata.write(row_index, 1, _spreadsheet_value(value))
     metadata.freeze_panes(1, 0)
     metadata.autofilter(0, 0, len(export_data['metadata_rows']), 1)
+
+    markers = workbook.add_worksheet('Markers')
+    _write_worksheet_table(
+        markers,
+        export_data['marker_summary_fieldnames'],
+        export_data['marker_summary_rows'],
+        header_format,
+    )
+
+    chart_data = workbook.add_worksheet('Chart Data')
+    _write_worksheet_table(
+        chart_data,
+        export_data['chart_data']['fieldnames'],
+        export_data['chart_data']['rows'],
+        header_format,
+    )
+
+    charts = workbook.add_worksheet('Charts')
+    marker_colors = {
+        row['label']: row['color']
+        for row in export_data['marker_summary_rows']
+        if row.get('color')
+    }
+    if export_data['chart_data']['rows'] and export_data['chart_data']['marker_labels']:
+        _add_position_chart(workbook, charts, export_data['chart_data'], marker_colors, axis='x')
+        _add_position_chart(workbook, charts, export_data['chart_data'], marker_colors, axis='y')
+    else:
+        charts.write(0, 0, 'No graphable marker data is available for charts.', metadata_key_format)
 
     workbook.close()
     response = make_response(output.getvalue())

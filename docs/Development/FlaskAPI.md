@@ -275,6 +275,9 @@ With `format=xlsx`, returns an Excel workbook served with `Content-Type: applica
 
 - `Trackpoints`: the same columns, values, trim filtering, and unit conversion as the CSV export.
 - `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture interval (`fpm`) when available.
+- `Markers`: one row per marker label with marker type (`apex`, `ruler`, `inflection point`, or `marker`), graphable status, color, marker id, ruler size, undeletable status, frame range, trackpoint count, and any status/error values found in exported trackpoints.
+- `Chart Data`: displacement from each graphable marker's first exported position, using frames as the x-axis or minutes when `fpm` is set. Ruler markers are excluded from chart data.
+- `Charts`: native Excel line charts for X Position and Y Position, backed by `Chart Data`.
 
 **Units (#763):** each value column header is annotated with its unit, `(mm)` or `(px)`:
 
