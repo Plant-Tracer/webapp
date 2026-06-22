@@ -94,7 +94,8 @@ class Movie(BaseModel):
     deleted: Annotated[int, Field(ge=0, le=1)]
     date_uploaded: int | None = None
     orig_movie: str | None = None
-    fps: str | None = None  # otherwise we get roundoff errors
+    fps: str | None = None  # encoded playback frame rate; string to avoid roundoff errors
+    fpm: str | None = None  # capture interval in frames/minute (time-lapse); string to avoid roundoff
     width: Annotated[int | None, Field(ge=0, le=10000)] = None
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
     trackpoint_origin: Literal["bottom-left"] | None = None

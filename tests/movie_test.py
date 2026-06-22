@@ -178,6 +178,38 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
     logger.info("PURGE MOVIE %s",res['movie_id'])
 
 
+def test_new_movie_stores_fpm_and_signs_metadata(client, new_course, local_s3):
+    """new-movie with fpm stores it on the movie and includes x-amz-meta-fpm in the presigned post."""
+    api_key = copy.copy(new_course)[API_KEY]
+    with open(TEST_PLANTMOVIE_PATH, "rb") as f:
+        movie_data_sha256 = s3_presigned.sha256_hash(f.read())
+    resp = client.post('/api/new-movie',
+                       data={'api_key': api_key,
+                             "title": f'fpm-movie {uuid.uuid4()}',
+                             "description": "fpm movie",
+                             "movie_data_sha256": movie_data_sha256,
+                             "fpm": "30"})
+    res = resp.get_json()
+    assert res['error'] is False
+    assert odb.get_movie(movie_id=res['movie_id'])[odb.FPM] == "30"
+    assert res['presigned_post']['fields'].get('x-amz-meta-fpm') == "30"
+    odb_movie_data.purge_movie(movie_id=res['movie_id'])
+
+
+def test_new_movie_rejects_invalid_fpm(client, new_course):
+    """new-movie with an invalid fpm returns an error and does not create the movie."""
+    api_key = copy.copy(new_course)[API_KEY]
+    resp = client.post('/api/new-movie',
+                       data={'api_key': api_key,
+                             "title": f'bad-fpm {uuid.uuid4()}',
+                             "description": "bad fpm",
+                             "movie_data_sha256": "a" * 64,
+                             "fpm": "-5"})
+    res = resp.get_json()
+    assert res['error'] is True
+    assert res['message'] == "fpm must be greater than 0"
+
+
 def test_movie_update_metadata(client, new_movie):
     """try updating the metadata, and making sure some updates fail."""
     cfg = copy.copy(new_movie)
@@ -702,3 +734,46 @@ def test_set_movie_trim_returns_validation_error(client, new_movie):
 
     assert resp.status_code == 400
     assert resp.get_json()['message'] == "trim_end_frame must be < total_frames"
+
+
+def test_set_movie_fpm_persists_value(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+
+    resp = client.post('/api/set-movie-fpm', data={
+        'api_key': api_key,
+        'movie_id': movie_id,
+        'fpm': '30',
+    })
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['error'] is False
+    assert body['metadata'][odb.FPM] == '30'
+    assert odb.get_movie(movie_id=movie_id)[odb.FPM] == '30'
+
+
+def test_set_movie_fpm_accepts_fractional(client, new_movie):
+    resp = client.post('/api/set-movie-fpm', data={
+        'api_key': new_movie[API_KEY],
+        'movie_id': new_movie[MOVIE_ID],
+        'fpm': '0.5',
+    })
+    assert resp.status_code == 200
+    assert resp.get_json()['metadata'][odb.FPM] == '0.5'
+
+
+def test_set_movie_fpm_rejects_invalid(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+
+    resp = client.post('/api/set-movie-fpm', data={'api_key': api_key, 'movie_id': movie_id, 'fpm': 'abc'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "fpm must be a number"
+
+    resp = client.post('/api/set-movie-fpm', data={'api_key': api_key, 'movie_id': movie_id, 'fpm': '0'})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "fpm must be greater than 0"
+
+    resp = client.post('/api/set-movie-fpm', data={'api_key': api_key, 'movie_id': movie_id})
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == "fpm is required"

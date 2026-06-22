@@ -192,6 +192,7 @@ first frame from lambda-resize and links the user to Analyze.
 | `research_use` | No | `"1"` = yes, `"0"` = no, omit = not answered |
 | `credit_by_name` | No | `"1"` = yes, `"0"` = no, omit = not answered (only meaningful when `research_use=1`) |
 | `attribution_name` | No | Attribution name (only stored when `credit_by_name=1`) |
+| `fpm` | No | Capture interval in frames/minute (time-lapse). Positive number, fractional allowed; stored on the movie and included as `x-amz-meta-fpm` in the presigned post |
 
 **Response**
 
@@ -404,6 +405,31 @@ Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 
 Returns HTTP 400 with `error: true` if both or neither trim frame parameter is provided, or if
 the resulting trim bounds are invalid (e.g. `trim_start_frame > trim_end_frame`).
+
+---
+
+#### `POST /api/set-movie-fpm`
+
+Set the capture interval (frames/minute) for a movie. Owner or course admin only.
+Editing this value only rescales the Analyze time axis and Rate statistics; it does
+not require retracing. See `docs/Development/AnalysisResults.rst`.
+
+**Parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `api_key` | Yes | Must not be the demo key |
+| `movie_id` | Yes | |
+| `fpm` | Yes | Capture interval in frames/minute. Positive number, fractional allowed (e.g. `0.5`) |
+
+**Response**
+
+```text
+{ "error": false, "metadata": { "movie_id": "m...", "fpm": "30", ... } }
+```
+
+Returns HTTP 400 with `error: true` if `fpm` is missing, non-numeric, not positive, or above the
+allowed maximum.
 
 ---
 

@@ -32,6 +32,11 @@
         <span class="pure-form-message-inline">required (at least 3 characters)</span>
       </div>
       <div class='pure-control-group'>
+        <label for='movie-fpm'>Capture interval (frames/minute):</label>
+        <input type='number' id='movie-fpm' name='fpm' min='0' step='any'>
+        <span class="pure-form-message-inline">optional (time-lapse rate; can be set later)</span>
+      </div>
+      <div class='pure-control-group'>
         <label for='movie-file'>Select movie to upload:</label>
         <input id='movie-file' type="file" onchange='check_upload_metadata()'>
         <span class="pure-form-message-inline">required</span>

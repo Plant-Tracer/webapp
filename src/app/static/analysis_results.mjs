@@ -16,8 +16,10 @@
  *     Inflection Point pivot, via the law of cosines).
  *   - Circumnutation: Max Amplitude (horizontal x-range of the tip over all frames).
  *
- * Rate (displacement per unit time) is intentionally NOT computed here yet; the
- * frame->time conversion is unresolved (see #986) and tracked as a follow-up.
+ * Rate (displacement per unit time) is computed from the capture interval `fpm`
+ * (frames/minute, see #1056): elapsed_time(min) = frame_span / fpm. When fpm is not set,
+ * Rate is expressed per frame instead of per minute (the `rateTimeUnit` field is
+ * 'min' or 'frame' accordingly). See #1053.
  *
  * All inputs are points of the form {x, y} in a single consistent coordinate space.
  * `scale` converts pixels to physical units (mm/pixel); pass 1 for pixels. Distance and
@@ -31,6 +33,33 @@ function distance_between(a, b) {
 
 function is_point(p) {
     return p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y));
+}
+
+function rate_time_unit(fpm) {
+    return (fpm != null && Number(fpm) > 0) ? 'min' : 'frame';
+}
+
+function frame_span(a, b) {
+    if (a == null || b == null || !Number.isFinite(Number(a)) || !Number.isFinite(Number(b))) {
+        return null;
+    }
+    return Math.abs(Number(b) - Number(a));
+}
+
+/*
+ * Rate of a magnitude over an elapsed frame span. With a positive fpm, the span is
+ * converted to minutes (span / fpm); otherwise the span stays in frames. Returns
+ * { rate, rateTimeUnit } where rate is null when it cannot be computed (no span, or a
+ * zero-length span — e.g. the x extremes fall on the same frame).
+ */
+function elapsed_rate(magnitude, elapsedFrames, fpm) {
+    const rateTimeUnit = rate_time_unit(fpm);
+    if (magnitude == null || elapsedFrames == null) {
+        return { rate: null, rateTimeUnit };
+    }
+    const elapsed = rateTimeUnit === 'min' ? elapsedFrames / Number(fpm) : elapsedFrames;
+    const rate = elapsed > 0 ? magnitude / elapsed : null;
+    return { rate, rateTimeUnit };
 }
 
 /*
@@ -47,13 +76,15 @@ function is_point(p) {
  * point, making the triangle undefined).
  */
 function gravitropism_results({ firstTip, lastTip, firstInflection = null,
-                                lastInflection = null, scale = 1 } = {}) {
+                                lastInflection = null, scale = 1,
+                                firstFrameNumber = null, lastFrameNumber = null, fpm = null } = {}) {
     if (!is_point(firstTip) || !is_point(lastTip)) {
-        return { distance: null, angle: null };
+        return { distance: null, angle: null, rate: null, rateTimeUnit: rate_time_unit(fpm) };
     }
     const distance = distance_between(firstTip, lastTip) * scale;
     const angle = inflection_angle(firstTip, lastTip, firstInflection, lastInflection);
-    return { distance, angle };
+    const { rate, rateTimeUnit } = elapsed_rate(distance, frame_span(firstFrameNumber, lastFrameNumber), fpm);
+    return { distance, angle, rate, rateTimeUnit };
 }
 
 /*
@@ -81,18 +112,33 @@ function inflection_angle(firstTip, lastTip, firstInflection, lastInflection) {
 /*
  * Circumnutation results.
  *
- * @param {Array}  tipPoints  tip positions {x, y} across all (trimmed) frames
+ * @param {Array}  tipPoints  tip positions {x, y, frame_number} across all (trimmed) frames
  * @param {number} scale      mm/pixel (default 1 = pixels)
+ * @param {number} fpm        capture interval in frames/minute (null/0 => Rate per frame)
  *
- * Returns { maxAmplitude } = (max x - min x) * scale, or null when there are no points.
+ * Returns { maxAmplitude, rate, rateTimeUnit }. maxAmplitude = (max x - min x) * scale.
+ * Rate = maxAmplitude / elapsed time between the x-extreme frames (legacy semantics); it is
+ * null when there are no points or the extremes fall on the same frame.
  */
-function circumnutation_results({ tipPoints = [], scale = 1 } = {}) {
-    const xs = (tipPoints || []).filter(is_point).map(p => Number(p.x));
-    if (xs.length === 0) {
-        return { maxAmplitude: null };
+function circumnutation_results({ tipPoints = [], scale = 1, fpm = null } = {}) {
+    const points = (tipPoints || []).filter(is_point);
+    if (points.length === 0) {
+        return { maxAmplitude: null, rate: null, rateTimeUnit: rate_time_unit(fpm) };
     }
-    const maxAmplitude = (Math.max(...xs) - Math.min(...xs)) * scale;
-    return { maxAmplitude };
+    let minPoint = points[0];
+    let maxPoint = points[0];
+    for (const point of points) {
+        if (Number(point.x) < Number(minPoint.x)) {
+            minPoint = point;
+        }
+        if (Number(point.x) > Number(maxPoint.x)) {
+            maxPoint = point;
+        }
+    }
+    const maxAmplitude = (Number(maxPoint.x) - Number(minPoint.x)) * scale;
+    const { rate, rateTimeUnit } = elapsed_rate(
+        maxAmplitude, frame_span(minPoint.frame_number, maxPoint.frame_number), fpm);
+    return { maxAmplitude, rate, rateTimeUnit };
 }
 
 export { gravitropism_results, circumnutation_results, inflection_angle, distance_between };

@@ -7,9 +7,13 @@ import io
 from typing import Optional
 
 from PIL import Image
-from mutagen.mp4 import MP4, MP4Tags
+from mutagen.mp4 import MP4, MP4Tags, MP4FreeForm
 
 COMMENT_ATOM = "\xa9cmt"
+# Dedicated freeform atom for the capture interval (frames/minute), kept separate from the
+# research-attribution comment atom. DynamoDB remains authoritative; this is a best-effort
+# snapshot written when the movie is processed (see docs/Development/MOVIE_METADATA.rst).
+FPM_ATOM = "----:com.planttracer:capture_fpm"
 
 RESEARCH_PROHIBITED = "research use prohibited"
 RESEARCH_ANONYMOUS = "research use allowed (no credit required)"
@@ -57,6 +61,33 @@ def set_comment(path: str, comment: str) -> None:
         mp4.add_tags()
     assert isinstance(mp4.tags, MP4Tags)
     mp4.tags[COMMENT_ATOM] = [comment]
+    mp4.save()
+
+
+def get_fpm(path: str) -> str | None:
+    """Read the capture-interval (frames/minute) atom from an MP4/MOV file. None if missing/error."""
+    try:
+        mp4 = MP4(path)
+        if mp4.tags is None:
+            return None
+        values = mp4.tags.get(FPM_ATOM, [])
+        if not values:
+            return None
+        part = values[0]
+        if isinstance(part, bytes):
+            return part.decode("utf-8", "replace")
+        return str(part)
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+
+
+def set_fpm(path: str, fpm: str) -> None:
+    """Set the capture-interval (frames/minute) atom and save the file."""
+    mp4 = MP4(path)
+    if mp4.tags is None:
+        mp4.add_tags()
+    assert isinstance(mp4.tags, MP4Tags)
+    mp4.tags[FPM_ATOM] = [MP4FreeForm(str(fpm).encode("utf-8"))]
     mp4.save()
 
 

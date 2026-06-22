@@ -200,7 +200,7 @@ async function startLambdaProcessing(movie_id) {
  *
  * Presigned post is provided by the /api/new-movie call (see below)
  */
-async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name)
+async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm)
 {
   // If Lambda is configured, ensure it is healthy before starting upload
   if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
@@ -221,6 +221,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
   if (research_use !== null) { formData.append("research_use", research_use); }
   if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
   formData.append("attribution_name", attribution_name || "");
+  if (fpm) { formData.append("fpm", fpm); }
   const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
   const obj = await r.json();
   console.log('new-movie obj=',obj);
@@ -354,6 +355,7 @@ function upload_movie()
   const research_use = $('input[name="research_use"]:checked').val() || null;   // '1', '0', or null
   const credit_by_name = $('input[name="credit_by_name"]:checked').val() || null; // '1', '0', or null
   const attribution_name = (research_use === '1' && credit_by_name === '1') ? ($('#attribution-name').val() || '').trim() : '';
+  const fpm = ($('#movie-fpm').val() || '').trim();
 
   if (movie_title.length < 3) {
     $('#message').html('<b>Movie title must be at least 3 characters long');
@@ -379,7 +381,7 @@ function upload_movie()
   $('#upload-button').prop('disabled', true);
   $('#upload_message').html(`Uploading movie ...`);
 
-  upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name);
+  upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm);
 }
 
 async function _get_movie_metadata(movie_id){

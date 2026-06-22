@@ -95,6 +95,7 @@ CREATED_AT = 'created_at'
 EMAIL = 'email'
 NAME = 'name'
 FPS = 'fps'
+FPM = 'fpm'
 WIDTH = 'width'
 HEIGHT = 'height'
 TRACKPOINT_ORIGIN = 'trackpoint_origin'
@@ -1373,6 +1374,31 @@ def get_movie_metadata(*, movie_id, get_last_frame_tracked=False):
     return movie
 
 
+FPM_MAX = 6000  # soft upper bound to catch typos (frames/minute)
+
+
+def normalize_fpm(raw):
+    """Normalize a user-supplied capture interval (frames/minute) for storage.
+
+    Returns a trimmed string for a valid positive number, or None when blank/absent.
+    Raises ValueError when the value is non-numeric, not positive, or above FPM_MAX.
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if text == '':
+        return None
+    try:
+        value = float(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fpm must be a number") from exc
+    if value <= 0:
+        raise ValueError("fpm must be greater than 0")
+    if value > FPM_MAX:
+        raise ValueError(f"fpm must be <= {FPM_MAX}")
+    return text
+
+
 def _movie_total_frames(movie: dict) -> int | None:
     total_frames = movie.get(TOTAL_FRAMES)
     if total_frames is None:
@@ -1490,7 +1516,7 @@ def can_access_movie(*, user_id, movie_id):
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
-                     research_use=None, credit_by_name=None, attribution_name=None):
+                     research_use=None, credit_by_name=None, attribution_name=None, fpm=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -1501,6 +1527,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param research_use: - 1 if movie may be used in research, 0 if not, None if not yet answered
     :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
+    :param fpm: - capture interval in frames/minute (time-lapse), as a string, or None
     :return: movie_id of the created movie
 
     """
@@ -1526,6 +1553,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     DATE_UPLOADED: int(time.time()),
                     TOTAL_FRAMES: None,
                     TOTAL_BYTES: None,
+                    FPM: fpm,
                     VERSION: 0,
                     TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
                     RESEARCH_USE: research_use,
@@ -2197,6 +2225,7 @@ SET_MOVIE_METADATA = {
     DESCRIPTION: 'update movies set description=%s where id=%s and (@is_owner or @is_admin)',
     MOVIE_STATUS: 'update movies set status=%s where id=%s and (@is_owner or @is_admin)',
     FPS: 'update movies set fps=%s where id=%s and (@is_owner or @is_admin)',
+    FPM: 'update movies set fpm=%s where id=%s and (@is_owner or @is_admin)',
     WIDTH: 'update movies set width=%s where id=%s and (@is_owner or @is_admin)',
     HEIGHT: 'update movies set height=%s where id=%s and (@is_owner or @is_admin)',
     TOTAL_FRAMES: 'update movies set total_frames=%s where id=%s and (@is_owner or @is_admin)',

@@ -121,3 +121,27 @@ Traceability
 - **S3:** Each object has the same information in ``x-amz-meta-*``, so that
   exports, copies, or downstream systems can enforce or display attribution
   and research-use without relying solely on the application database.
+
+Capture interval (frames per minute)
+====================================
+
+The **capture interval** ``fpm`` (frames per minute) is a separate, optional
+per-movie value used by the Analyze page to report results per minute of real
+time (see :doc:`AnalysisResults` and issues #1056/#1053). It is distinct from the
+encoded playback ``fps``.
+
+- **DynamoDB is authoritative.** ``fpm`` is stored as a string on the movie row
+  (``schema.Movie.fpm``; ``odb.FPM``) and is what the application reads and edits.
+  The user can set it at upload (``/api/new-movie``) or later on the Analyze page
+  (``POST /api/set-movie-fpm``); editing it only rescales time/rate and never
+  requires retracing.
+- **S3 object metadata.** When supplied at upload, ``fpm`` is included in the
+  presigned ``Fields`` as ``x-amz-meta-fpm`` (``make_presigned_post``), like the
+  attribution fields.
+- **MP4 file (best-effort snapshot).** When a movie is processed, the capture
+  interval is written into the traced MP4 as a dedicated freeform atom
+  (``----:com.planttracer:capture_fpm``; ``mp4_metadata_lib.set_fpm`` /
+  ``get_fpm``), separate from the research-attribution comment atom. This is a
+  best-effort archival snapshot of the value at processing time; later Analyze-page
+  edits update only DynamoDB, so the embedded copy may lag the authoritative row.
+  Legacy movies have no atom, which is harmless.

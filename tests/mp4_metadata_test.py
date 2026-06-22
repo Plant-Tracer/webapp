@@ -118,6 +118,21 @@ def test_build_comment_credit():
     assert got == "research use allowed; credit Alyssa P. Hacker"
 
 
+def test_fpm_roundtrip(sample_mp4):
+    """set_fpm writes a freeform atom that get_fpm reads back; absent => None."""
+    assert mp4_metadata_lib.get_fpm(sample_mp4) is None
+    mp4_metadata_lib.set_fpm(sample_mp4, "30")
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "30"
+
+
+def test_fpm_atom_separate_from_comment(sample_mp4):
+    """The fpm atom and the research-attribution comment do not clobber each other."""
+    mp4_metadata_lib.set_comment(sample_mp4, "research use prohibited")
+    mp4_metadata_lib.set_fpm(sample_mp4, "0.5")
+    assert mp4_metadata_lib.get_fpm(sample_mp4) == "0.5"
+    assert _get_comment(sample_mp4) == "research use prohibited"
+
+
 def test_add_comment_to_jpeg_roundtrip():
     """add_comment_to_jpeg adds a COM segment that can be read back with Pillow."""
     # Minimal 1x1 RGB JPEG bytes (no comment)

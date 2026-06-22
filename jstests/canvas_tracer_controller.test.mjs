@@ -499,6 +499,29 @@ describe('TracerController inflection point', () => {
     });
 });
 
+// ── capture interval (fpm) parsing (#1056) ───────────────────────────────────
+describe('TracerController fpm parsing', () => {
+    afterEach(() => {
+        resetDollarMock();
+        resetPostMock();
+    });
+
+    test('parses a stored fpm string into a positive number', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({ fpm: '30' }), 'k');
+        expect(tc.fpm).toBe(30);
+    });
+
+    test('fpm is null when absent', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        expect(tc.fpm).toBeNull();
+    });
+
+    test('fpm is null when non-positive', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({ fpm: '0' }), 'k');
+        expect(tc.fpm).toBeNull();
+    });
+});
+
 // ── display_results (#986) ───────────────────────────────────────────────────
 describe('display_results', () => {
     const cc = { isFrameInTrim: () => true, fpm: null };
@@ -573,6 +596,21 @@ describe('display_results', () => {
     test('no #result-stats element is a no-op', () => {
         document.body.innerHTML = '';
         expect(() => display_results(cc, framesWithInflection())).not.toThrow();
+    });
+
+    test('Rate is shown per frame when fpm is unset', () => {
+        const el = setupDom('gravitropism');
+        display_results(cc, framesWithInflection());
+        // distance 0.50 mm over 1 frame (frames 0->1) => 0.50 mm/frame
+        expect(el.textContent).toMatch(/Rate: 0\.50 mm\/frame/);
+    });
+
+    test('Rate is shown per minute when fpm is set', () => {
+        const el = setupDom('gravitropism');
+        const ccWithFpm = { isFrameInTrim: () => true, fpm: 2 };
+        display_results(ccWithFpm, framesWithInflection());
+        // 1 frame / 2 fpm = 0.5 min; 0.50 mm / 0.5 min = 1.00 mm/min
+        expect(el.textContent).toMatch(/Rate: 1\.00 mm\/min/);
     });
 });
 

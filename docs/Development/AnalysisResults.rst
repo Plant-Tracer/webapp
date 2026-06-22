@@ -45,14 +45,32 @@ Circumnutation
 
 * **Max Amplitude** — horizontal range of the tip over all (trimmed) frames,
   ``(max x − min x) × scale``.
+* **Rate** — ``Max Amplitude ÷ elapsed time between the x-extreme frames`` (legacy
+  semantics; see #1053). Null when the extremes fall on the same frame.
 
-Rate (deferred)
----------------
+Rate and the capture interval (fpm)
+-----------------------------------
 
-The legacy app also reported a **Rate** (displacement per unit time) using a
-hardcoded ``FPS = 20`` and the per-video frame rate. The web app stores a movie
-``fps`` field but has no working frame→time conversion yet, so Rate is not computed
-in this implementation. It is tracked as a follow-up to #986.
+Rate is displacement per unit time. The time base is the **capture interval**
+``fpm`` (frames per minute), a per-movie value the user supplies at upload or on the
+Analyze page (#1056). The conversion is::
+
+   elapsed_time(min) = frame_span ÷ fpm
+
+* **Gravitropism Rate** = ``Distance ÷ elapsed_time`` over the first→last frame.
+* **Circumnutation Rate** = ``Max Amplitude ÷ elapsed_time`` between the frames of
+  the minimum and maximum x.
+
+When ``fpm`` is unset (legacy movies, or not yet entered), the graph x-axis stays in
+frames and Rate is reported **per frame** (``mm/frame`` or ``pixel/frame``); once a
+positive ``fpm`` is set it is reported **per minute**. ``fpm`` is distinct from the
+encoded playback ``fps`` and is stored as a string on the movie row (authoritative)
+with a best-effort snapshot in the traced MP4 (see
+:doc:`MOVIE_METADATA`). Editing ``fpm`` on the Analyze page only rescales time and
+rate — it does not require retracing.
+
+This replaces the legacy ``frames × 20 ÷ framerate`` formula (an iOS playback-time
+artifact); the ``FPS = 20`` constant is not used.
 
 Reserved marker names
 ---------------------
