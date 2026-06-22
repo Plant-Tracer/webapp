@@ -599,6 +599,8 @@ Resources:
 
   TracingQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       QueueName: !Sub "${AWS::StackName}-tracing-queue"
       VisibilityTimeout: 900
