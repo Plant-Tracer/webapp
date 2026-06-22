@@ -427,9 +427,9 @@ def test_csv_uses_pixels_when_rulers_at_default_position(client, new_movie):
     assert "Apex x (mm)" not in row
 
 
-def test_csv_uses_pixels_when_frame_height_unknown(client, new_movie):
-    # Rulers off default, but no analysis-frame height is set, so calibration cannot be verified;
-    # the export conservatively stays in pixels.
+def test_csv_uses_pixels_when_frame_height_unknown(client, new_movie, mocker):
+    # Rulers off default, but the analysis-frame height cannot be determined at all
+    # (not in metadata, not inferable), so the export conservatively stays in pixels.
     movie_id = new_movie[MOVIE_ID]
     ddbo = odb.DDBO()
     ddbo.movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f"REMOVE {HEIGHT}")
@@ -439,9 +439,31 @@ def test_csv_uses_pixels_when_frame_height_unknown(client, new_movie):
         Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
         Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
     ])
+    mocker.patch("app.flask_api.infer_trackpoint_frame_height", return_value=None)
 
     resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
     assert resp.status_code == 200
     row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
     assert row["Apex x (px)"] == "100"
     assert "Apex x (mm)" not in row
+
+
+def test_csv_uses_inferred_height_when_metadata_height_missing(client, new_movie, mocker):
+    # The movie has no stored height, but the height is recoverable (e.g. from the movie zip).
+    # The CSV must still calibrate and report non-ruler markers in mm. Regression for the
+    # ctrack case where height was absent from metadata.
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
+    odb.DDBO().movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f"REMOVE {HEIGHT}")
+    mocker.patch("app.flask_api.infer_trackpoint_frame_height", return_value=480)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
+    assert row["Apex x (mm)"] == "10.0"
+    assert row["Ruler 0mm x (px)"] == "10"

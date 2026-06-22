@@ -594,10 +594,10 @@ def api_get_movie_trackpoints():
     # Express non-ruler position values in mm when the analysis is ruler-calibrated (>= 2
     # Ruler XXmm markers moved off their default positions); otherwise pixels. Ruler columns are
     # always pixels. Units are annotated in the column headers. See #763.
-    try:
-        frame_height = odb.trackpoint_frame_height(movie_metadata)
-    except RuntimeError:
-        frame_height = None
+    # Use the robust height lookup (falls back to the movie zip) so calibration still works for
+    # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
+    # only when the height cannot be determined at all.
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
     ruler_frame_points = []
     for frame_number in frame_numbers:
         points = [tp for tp in trackpoint_dicts
