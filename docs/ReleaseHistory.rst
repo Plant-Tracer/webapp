@@ -59,9 +59,25 @@ Release History
      - 0.9.7.6.2
      - May 28, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.7.6.2>`__
+   * - Jun-22-2026
+     - 0.9.8
+     - June 22, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8>`__
 
 Release Notes
 -------------
+
+0.9.8 Summary
+*************
+    * Analyze: aggregate trace result statistics — Gravitropism (Distance, Angle) and Circumnutation (Max Amplitude), selectable via a results control
+    * Analyze: special Inflection Point marker used as the pivot for the gravitropism Angle
+    * Analyze: Rate statistics, computed from a user-entered capture interval (frames/minute) set on the Upload or Analyze page
+    * Analyze: trackpoints now use a bottom-left coordinate system; position graphs unflipped; lazy migration of existing movies made concurrency-safe
+    * Analyze: multi-marker graphing with per-marker colors
+    * Analyze/Movies: video trimming — trace and export a selected frame range
+    * Movies: deleting a user also removes their course enrollments (no more ghost enrollment IDs)
+    * Documentation: developer docs reorganized under docs/Development/; updated upload tutorial; corrected MOVIE_METADATA references
+    * Process: release-process improvements — pre-tag make check, scripted release notes, and commit/PR issue-traceability requirements
 
 0.9.7.6.2 Summary
 *****************
