@@ -1709,27 +1709,35 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
         if frame.get(TRACKPOINT_MIGRATION_ORIGIN) == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
             continue
         converted_trackpoints = [_flip_trackpoint_dict_y(trackpoint, frame_height) for trackpoint in frame['trackpoints']]
-        ddbo.movie_frames.update_item(
-            Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
-            UpdateExpression='SET trackpoints=:trackpoints, #origin=:origin',
-            ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
-            ExpressionAttributeValues={
-                ':trackpoints': converted_trackpoints,
-                ':origin': TRACKPOINT_ORIGIN_BOTTOM_LEFT,
-            },
-        )
+        try:
+            # Atomic per-frame flip: convert only if the frame is not already marked
+            # bottom-left. The conditional write (plus the durable marker, which we no
+            # longer remove) makes concurrent or repeated migrations of the same movie
+            # safe — a frame's Y can never be flipped twice (refs #1058). The in-memory
+            # check above is a cheap fast-path; this condition is the actual guarantee,
+            # since a concurrent runner's snapshot may not see another runner's write.
+            ddbo.movie_frames.update_item(
+                Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
+                UpdateExpression='SET trackpoints=:trackpoints, #origin=:origin',
+                ConditionExpression='attribute_not_exists(#origin)',
+                ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
+                ExpressionAttributeValues={
+                    ':trackpoints': converted_trackpoints,
+                    ':origin': TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+                },
+            )
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code', '') != 'ConditionalCheckFailedException':
+                raise
+            # A concurrent migration already flipped this frame; leave its result intact.
 
+    # The per-frame markers are intentionally left in place. Once the movie's
+    # trackpoint_origin is bottom-left, ensure_bottom_left_trackpoints() returns early and
+    # never reads them again, so they cannot re-expose a flipped frame to a second flip.
     ddbo.update_table(ddbo.movies, movie_id, {
         TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
         TRACKPOINT_MIGRATION_STATE: None,
     })
-
-    for frame in frames_with_trackpoints:
-        ddbo.movie_frames.update_item(
-            Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
-            UpdateExpression='REMOVE #origin',
-            ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
-        )
     return ddbo.get_movie(movie_id)
 
 

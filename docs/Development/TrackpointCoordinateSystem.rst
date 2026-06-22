@@ -86,9 +86,12 @@ Rules:
 string constant for the DynamoDB attribute.
 
 The permanent coordinate contract belongs on the movie row, not on each frame or
-trackpoint. Temporary per-frame migration markers are allowed only as internal
-rollback/retry machinery during lazy migration; they must not become the public
-coordinate contract.
+trackpoint. A per-frame migration marker (``odb.TRACKPOINT_MIGRATION_ORIGIN``) is
+internal idempotency machinery for lazy migration; it is not the public
+coordinate contract and is never exposed in API responses. The marker is durable
+(left in place after migration); once the movie row's ``trackpoint_origin`` is
+``"bottom-left"`` the migration routine returns early and never reads the markers
+again.
 
 Legacy Migration
 ----------------
@@ -114,12 +117,14 @@ Migration must be resumable or fail closed:
 
 * Determine the analysis-frame height before any write. If it cannot be
   determined, return an error and leave the movie unchanged.
-* Serialize migration for a single movie, for example with a conditional
-  movie-row migration state or lock.
-* Convert frames using an idempotent progress marker or equivalent backup plan
-  so a retry never double-flips frames already converted by a failed attempt.
+* Convert each frame with an atomic conditional write that only flips when the
+  frame is not already marked bottom-left
+  (``ConditionExpression='attribute_not_exists(#origin)'``). This makes the
+  per-frame flip idempotent, so a retry — or a concurrent migration of the same
+  movie — can never double-flip a frame (a failed condition is caught and the
+  existing result is left intact). See #1058.
 * Set ``trackpoint_origin = "bottom-left"`` only after every frame with
-  trackpoints has been converted and verified.
+  trackpoints has been converted.
 * While a movie is in an incomplete migration state, editing, retracing, and
   exporting trackpoints must wait, retry, or return an error rather than expose
   mixed-origin data.
