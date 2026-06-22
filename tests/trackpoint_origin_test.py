@@ -297,6 +297,47 @@ def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):
     ]
 
 
+def test_lazy_migration_conditional_write_prevents_concurrent_double_flip(new_movie, mocker):
+    # Simulate two concurrent first-accesses: the real DynamoDB frame has already been
+    # flipped and marked bottom-left by one runner, while this runner is working from a
+    # stale snapshot that still shows the frame unmarked with its original y. The in-memory
+    # skip cannot catch this, so the per-frame ConditionExpression must prevent a second
+    # flip (refs #1058).
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: 150})
+    ddbo.movies.update_item(
+        Key={MOVIE_ID: movie_id},
+        UpdateExpression=f"REMOVE {TRACKPOINT_ORIGIN}",
+    )
+    # Real DB state: frame already flipped (y 20 -> 130) and marked bottom-left.
+    ddbo.put_movie_frame(
+        {
+            MOVIE_ID: movie_id,
+            FRAME_NUMBER: 0,
+            odb.TRACKPOINT_MIGRATION_ORIGIN: BOTTOM_LEFT,
+            "trackpoints": [Trackpoint(x=Decimal(10), y=Decimal(130), label="plant").model_dump()],
+        }
+    )
+    # Stale snapshot this runner reads: the already-flipped value (y=130) but WITHOUT the
+    # marker, so the in-memory skip does not fire. A second flip would compute 150-130=20
+    # and corrupt the frame; the ConditionExpression must prevent that write.
+    stale_frame = {
+        MOVIE_ID: movie_id,
+        FRAME_NUMBER: 0,
+        "trackpoints": [{"x": Decimal(10), "y": Decimal(130), "label": "plant"}],
+    }
+    mocker.patch.object(odb.DDBO, "get_frames", return_value=[stale_frame])
+
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=150)
+
+    # Read the raw frame directly (get_frames is patched); the conditional write must have
+    # failed, so y stays single-flipped at 130 rather than being flipped back to 20.
+    item = ddbo.movie_frames.get_item(Key={MOVIE_ID: movie_id, FRAME_NUMBER: 0})["Item"]
+    assert item["trackpoints"][0]["y"] == Decimal(130)
+    assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
+
+
 def test_lazy_migration_can_use_supplied_frame_height_when_movie_height_missing(new_movie):
     movie_id = new_movie[MOVIE_ID]
     ddbo = odb.DDBO()
