@@ -242,6 +242,10 @@ const {
     is_movie_tracked,
     create_default_markers,
     calc_scale,
+    is_inflection_marker_label,
+    is_graphable_marker,
+    INFLECTION_POINT_LABEL,
+    display_results,
     TracerController,
     trace_movie,
     trace_movie_one_frame,
@@ -399,6 +403,176 @@ describe('create_default_markers', () => {
             expect(typeof m.y).toBe('number');
             expect(typeof m.label).toBe('string');
         }
+    });
+});
+
+// ── Inflection Point marker (#1033) ──────────────────────────────────────────
+describe('is_inflection_marker_label', () => {
+    test('canonical name matches', () => {
+        expect(is_inflection_marker_label('Inflection Point')).toBe(true);
+    });
+
+    test('case-insensitive matches', () => {
+        expect(is_inflection_marker_label('inflection point')).toBe(true);
+        expect(is_inflection_marker_label('INFLECTION POINT')).toBe(true);
+        expect(is_inflection_marker_label('Inflection  Point')).toBe(true);
+        expect(is_inflection_marker_label('  Inflection Point  ')).toBe(true);
+    });
+
+    test('non-matches', () => {
+        expect(is_inflection_marker_label('Apex')).toBe(false);
+        expect(is_inflection_marker_label('Inflection')).toBe(false);
+        expect(is_inflection_marker_label('Ruler 0mm')).toBe(false);
+        expect(is_inflection_marker_label(null)).toBe(false);
+    });
+
+    test('the exported label constant is itself recognized', () => {
+        expect(is_inflection_marker_label(INFLECTION_POINT_LABEL)).toBe(true);
+    });
+});
+
+describe('inflection point stays graphable', () => {
+    test('inflection marker is graphable (plotted like any plant marker)', () => {
+        expect(is_graphable_marker({ label: INFLECTION_POINT_LABEL })).toBeTruthy();
+    });
+
+    test('ruler markers remain non-graphable', () => {
+        expect(is_graphable_marker({ label: 'Ruler 0mm' })).toBeFalsy();
+    });
+});
+
+describe('TracerController inflection point', () => {
+    afterEach(() => {
+        resetDollarMock();
+        resetPostMock();
+    });
+
+    test('has_inflection_marker reflects objects', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        expect(tc.has_inflection_marker()).toBe(false);
+        tc.objects.push(new MockMarkerClass(50, 50, 5, 'red', 'red', INFLECTION_POINT_LABEL));
+        expect(tc.has_inflection_marker()).toBe(true);
+    });
+
+    test('has_inflection_marker is case-insensitive', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.objects.push(new MockMarkerClass(50, 50, 5, 'red', 'red', 'inflection point'));
+        expect(tc.has_inflection_marker()).toBe(true);
+    });
+
+    test('dedicated button adds one inflection point and refuses a second', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.add_inflection_point_onclick_handler();
+        const count = tc.objects.filter(o => is_inflection_marker_label(o.name)).length;
+        expect(count).toBe(1);
+        tc.add_inflection_point_onclick_handler();
+        const after = tc.objects.filter(o => is_inflection_marker_label(o.name)).length;
+        expect(after).toBe(1);
+    });
+
+    test('refreshFrameEditState enables the inflection button on an editable empty frame', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.add_inflection_point_button = { prop: jest.fn() };
+        tc.refreshFrameEditState();
+        expect(tc.add_inflection_point_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('refreshFrameEditState disables the inflection button once one exists', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.objects.push(new MockMarkerClass(50, 50, 5, 'red', 'red', INFLECTION_POINT_LABEL));
+        tc.add_inflection_point_button = { prop: jest.fn() };
+        tc.refreshFrameEditState();
+        expect(tc.add_inflection_point_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
+    test('typed reserved name (any case) is blocked when one already exists', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        tc.isCurrentFrameEditable = () => true;
+        tc.objects.push(new MockMarkerClass(50, 50, 5, 'red', 'red', INFLECTION_POINT_LABEL));
+        tc.marker_name_input = { val: () => 'inflection point' };
+        tc.marker_name_changed();
+        expect(tc.add_marker_status.text).toHaveBeenCalledWith(MARKER_NAME_IN_USE_MESSAGE);
+        expect(tc.add_marker_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+});
+
+// ── display_results (#986) ───────────────────────────────────────────────────
+describe('display_results', () => {
+    const cc = { isFrameInTrim: () => true, fpm: null };
+
+    function setupDom(mode = 'all') {
+        document.body.innerHTML =
+            `<select id="result-mode-select"><option value="all"></option>` +
+            `<option value="gravitropism"></option><option value="circumnutation"></option></select>` +
+            `<div id="result-stats"></div>`;
+        document.getElementById('result-mode-select').value = mode;
+        return document.getElementById('result-stats');
+    }
+
+    // Apex tip moves (0,0)->(3,4); inflection at (0,0)/(2,0); ruler gives 0.1 mm/px.
+    function framesWithInflection() {
+        return [
+            { frame_number: 0, markers: [
+                { label: 'Apex', x: 0, y: 0 },
+                { label: INFLECTION_POINT_LABEL, x: 0, y: 10 },
+                { label: 'Ruler 0mm', x: 0, y: 0 },
+                { label: 'Ruler 10mm', x: 100, y: 0 },
+            ] },
+            { frame_number: 1, markers: [
+                { label: 'Apex', x: 3, y: 4 },
+                { label: INFLECTION_POINT_LABEL, x: 2, y: 10 },
+                { label: 'Ruler 0mm', x: 0, y: 0 },
+                { label: 'Ruler 10mm', x: 100, y: 0 },
+            ] },
+        ];
+    }
+
+    test('all mode shows Distance, Angle and Max Amplitude', () => {
+        const el = setupDom('all');
+        display_results(cc, framesWithInflection());
+        expect(el.textContent).toMatch(/Distance:/);
+        expect(el.textContent).toMatch(/Angle:.*degree/);
+        expect(el.textContent).toMatch(/Max Amplitude:/);
+    });
+
+    test('gravitropism mode omits Max Amplitude', () => {
+        const el = setupDom('gravitropism');
+        display_results(cc, framesWithInflection());
+        expect(el.textContent).toMatch(/Distance:/);
+        expect(el.textContent).not.toMatch(/Max Amplitude:/);
+    });
+
+    test('circumnutation mode shows only Max Amplitude', () => {
+        const el = setupDom('circumnutation');
+        display_results(cc, framesWithInflection());
+        expect(el.textContent).toMatch(/Max Amplitude:/);
+        expect(el.textContent).not.toMatch(/Distance:/);
+        expect(el.textContent).not.toMatch(/Angle:/);
+    });
+
+    test('ruler markers convert distance to mm', () => {
+        const el = setupDom('gravitropism');
+        display_results(cc, framesWithInflection());
+        // displacement 5 px * 0.1 mm/px = 0.50 mm
+        expect(el.textContent).toMatch(/Distance: 0\.50 mm/);
+    });
+
+    test('gravitropism without an inflection point hints to add one', () => {
+        const el = setupDom('gravitropism');
+        const frames = framesWithInflection().map(f => ({
+            ...f, markers: f.markers.filter(m => !is_inflection_marker_label(m.label)),
+        }));
+        display_results(cc, frames);
+        expect(el.textContent).not.toMatch(/Angle:/);
+        expect(el.textContent).toMatch(/Add an Inflection Point/);
+    });
+
+    test('no #result-stats element is a no-op', () => {
+        document.body.innerHTML = '';
+        expect(() => display_results(cc, framesWithInflection())).not.toThrow();
     });
 });
 
