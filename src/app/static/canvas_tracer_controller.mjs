@@ -1978,7 +1978,7 @@ function display_results(cc, frames) {
             lines.push(`Rate: ${format_measure(rate)} ${units}/${rateTimeUnit}`);
         }
         if (angle != null) {
-            lines.push(`Angle: ${format_measure(angle)} degree`);
+            lines.push(`Angle: ${format_measure(angle)} degrees`);
         } else if (mode === 'gravitropism' && !inflectionLabel) {
             lines.push('Add an Inflection Point marker to compute the bending angle.');
         }

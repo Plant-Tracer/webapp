@@ -557,7 +557,7 @@ describe('display_results', () => {
         const el = setupDom('all');
         display_results(cc, framesWithInflection());
         expect(el.textContent).toMatch(/Distance:/);
-        expect(el.textContent).toMatch(/Angle:.*degree/);
+        expect(el.textContent).toMatch(/Angle:.*degrees/);
         expect(el.textContent).toMatch(/Max Amplitude:/);
     });
 
