@@ -259,7 +259,7 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 
 #### `POST /api/get-movie-trackpoints`
 
-Download all trackpoints for a movie as CSV (default) or JSON.
+Download all trackpoints for a movie as CSV (default), XLSX, or JSON.
 
 **Parameters**
 
@@ -267,9 +267,14 @@ Download all trackpoints for a movie as CSV (default) or JSON.
 |------|----------|-------------|
 | `api_key` | Yes | |
 | `movie_id` | Yes | |
-| `format` | No | `"json"` for JSON; omit for CSV |
+| `format` | No | `"xlsx"` for an Excel workbook, `"json"` for JSON; omit for CSV |
 
 **Response:** CSV with columns `frame_number`, `<label> x (<unit>)`, `<label> y (<unit>)` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
+
+With `format=xlsx`, returns an Excel workbook served with `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="trackpoints.xlsx"`. The workbook contains:
+
+- `Trackpoints`: the same columns, values, trim filtering, and unit conversion as the CSV export.
+- `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture interval (`fpm`) when available.
 
 **Units (#763):** each value column header is annotated with its unit, `(mm)` or `(px)`:
 

@@ -11,9 +11,11 @@ import smtplib
 import io
 import csv
 import zipfile
+from decimal import Decimal
 from collections import defaultdict
 
 
+import xlsxwriter
 from flask import Blueprint, request, make_response, current_app, jsonify
 from PIL import Image, UnidentifiedImageError
 from validate_email_address import validate_email
@@ -111,6 +113,149 @@ def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
         if height:
             return height
     return _height_from_movie_zipfile(movie_metadata)
+
+
+def _spreadsheet_value(value):
+    """Return a value that XlsxWriter can store with a useful cell type."""
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    return value
+
+
+def _trackpoint_export_data(movie):
+    """Build shared trackpoint-export rows, fieldnames, and metadata."""
+    movie_metadata = odb.movie_metadata_with_trim_defaults(
+        odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
+    )
+    trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
+    trackpoint_dicts = odb.get_movie_trackpoints(
+        movie_id=movie[MOVIE_ID],
+        frame_start=trim_start_frame,
+        frame_end=trim_end_frame,
+    )
+    frame_numbers = sorted(set((tp['frame_number'] for tp in trackpoint_dicts)))
+    labels = sorted(set((tp['label'] for tp in trackpoint_dicts)))
+    frame_dicts = defaultdict(dict)
+
+    # Express non-ruler position values in mm when the analysis is ruler-calibrated (>= 2
+    # Ruler XXmm markers moved off their default positions); otherwise pixels. Ruler columns are
+    # always pixels. Units are annotated in the column headers. See #763.
+    # Use the robust height lookup (falls back to the movie zip) so calibration still works for
+    # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
+    # only when the height cannot be determined at all.
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
+    ruler_frame_points = []
+    for frame_number in frame_numbers:
+        points = [tp for tp in trackpoint_dicts
+                  if tp['frame_number'] == frame_number and odb.get_ruler_size(tp['label']) is not None]
+        if points:
+            ruler_frame_points = points
+            break
+    calibrated = (frame_height is not None) and odb.rulers_calibrated(ruler_frame_points, frame_height)
+    scale, _scale_units = odb.movie_scale(ruler_frame_points)
+
+    def column_unit(label):
+        """'px' for ruler markers or an uncalibrated movie; 'mm' for other markers when calibrated."""
+        if odb.get_ruler_size(label) is not None or not calibrated:
+            return 'px'
+        return 'mm'
+
+    def column_value(label, value):
+        if column_unit(label) == 'mm':
+            return round(float(value) * scale, 2)
+        return value
+
+    for tp in trackpoint_dicts:
+        label = tp['label']
+        unit = column_unit(label)
+        frame_dicts[tp['frame_number']][f"{label} x ({unit})"] = column_value(label, tp['x'])
+        frame_dicts[tp['frame_number']][f"{label} y ({unit})"] = column_value(label, tp['y'])
+
+    fieldnames = ['frame_number']
+    for label in labels:
+        unit = column_unit(label)
+        fieldnames.append(f"{label} x ({unit})")
+        fieldnames.append(f"{label} y ({unit})")
+    logger.debug("fieldnames=%s", fieldnames)
+
+    rows = []
+    for frame in frame_numbers:
+        frame_dicts[frame]['frame_number'] = frame
+        rows.append(frame_dicts[frame])
+
+    metadata_rows = [
+        ('movie_id', movie[MOVIE_ID]),
+        ('title', movie.get('title', '')),
+        ('trim_start_frame', trim_start_frame),
+        ('trim_end_frame', trim_end_frame),
+        ('exported_frame_count', len(frame_numbers)),
+        ('marker_count', len(labels)),
+        ('trackpoint_origin', movie_metadata.get(odb.TRACKPOINT_ORIGIN, '')),
+        ('frame_height_px', frame_height if frame_height is not None else ''),
+        ('ruler_calibrated', 'yes' if calibrated else 'no'),
+        ('ruler_marker_units', 'px'),
+        ('non_ruler_marker_units', 'mm' if calibrated else 'px'),
+        ('scale_mm_per_px', round(scale, 8) if calibrated else ''),
+        ('fpm', movie_metadata.get(odb.FPM, '')),
+    ]
+    return {
+        'trackpoint_dicts': trackpoint_dicts,
+        'fieldnames': fieldnames,
+        'rows': rows,
+        'metadata_rows': metadata_rows,
+    }
+
+
+def _csv_trackpoint_response(export_data):
+    with io.StringIO() as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=export_data['fieldnames'],
+            restval='',
+            extrasaction='ignore',
+        )
+        writer.writeheader()
+        for row in export_data['rows']:
+            writer.writerow(row)
+        response = make_response(f.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
+        return response
+
+
+def _xlsx_trackpoint_response(export_data):
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#D9EAF7', 'border': 1})
+    metadata_key_format = workbook.add_format({'bold': True})
+
+    trackpoints = workbook.add_worksheet('Trackpoints')
+    for column, fieldname in enumerate(export_data['fieldnames']):
+        trackpoints.write(0, column, fieldname, header_format)
+        trackpoints.set_column(column, column, max(len(fieldname) + 2, 12))
+    for row_index, row in enumerate(export_data['rows'], start=1):
+        for column, fieldname in enumerate(export_data['fieldnames']):
+            trackpoints.write(row_index, column, _spreadsheet_value(row.get(fieldname, '')))
+    if export_data['fieldnames']:
+        trackpoints.freeze_panes(1, 0)
+        trackpoints.autofilter(0, 0, len(export_data['rows']), len(export_data['fieldnames']) - 1)
+
+    metadata = workbook.add_worksheet('Metadata')
+    metadata.write(0, 0, 'Field', header_format)
+    metadata.write(0, 1, 'Value', header_format)
+    metadata.set_column(0, 0, 24)
+    metadata.set_column(1, 1, 32)
+    for row_index, (field, value) in enumerate(export_data['metadata_rows'], start=1):
+        metadata.write(row_index, 0, field, metadata_key_format)
+        metadata.write(row_index, 1, _spreadsheet_value(value))
+    metadata.freeze_panes(1, 0)
+    metadata.autofilter(0, 0, len(export_data['metadata_rows']), 1)
+
+    workbook.close()
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.xlsx"'
+    return response
 
 ################################################################
 ### Handle invalid apikey exceptions
@@ -562,7 +707,7 @@ def api_get_movie_metadata():
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
 def api_get_movie_trackpoints():
-    """Downloads the movie trackpoints as a CSV or JSON
+    """Downloads the movie trackpoints as CSV, XLSX, or JSON.
     :param api_key:   authentication
     :param movie_id:   movie
     :param: format - 'xlsx' or 'json'
@@ -572,77 +717,13 @@ def api_get_movie_trackpoints():
     movie_id = get_movie_id()
     movie = odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id)
 
-    # NOTE - getting the movie should (soon) get all the trackpoints, as they will all be stored together
-    # get_movie_trackpoints() returns a dictionary for each trackpoint.
-    # we want a dictionary for each frame_number
-    movie_metadata = odb.movie_metadata_with_trim_defaults(
-        odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
-    )
-    trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
-    trackpoint_dicts = odb.get_movie_trackpoints(
-        movie_id=movie[MOVIE_ID],
-        frame_start=trim_start_frame,
-        frame_end=trim_end_frame,
-    )
-    frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
-    labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
-    frame_dicts    = defaultdict(dict)
+    export_data = _trackpoint_export_data(movie)
 
     if get('format')=='json':
-        return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
-
-    # Express non-ruler position values in mm when the analysis is ruler-calibrated (>= 2
-    # Ruler XXmm markers moved off their default positions); otherwise pixels. Ruler columns are
-    # always pixels. Units are annotated in the column headers. See #763.
-    # Use the robust height lookup (falls back to the movie zip) so calibration still works for
-    # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
-    # only when the height cannot be determined at all.
-    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
-    ruler_frame_points = []
-    for frame_number in frame_numbers:
-        points = [tp for tp in trackpoint_dicts
-                  if tp['frame_number'] == frame_number and odb.get_ruler_size(tp['label']) is not None]
-        if points:
-            ruler_frame_points = points
-            break
-    calibrated = (frame_height is not None) and odb.rulers_calibrated(ruler_frame_points, frame_height)
-    scale, _scale_units = odb.movie_scale(ruler_frame_points)
-
-    def column_unit(label):
-        """'px' for ruler markers or an uncalibrated movie; 'mm' for other markers when calibrated."""
-        if odb.get_ruler_size(label) is not None or not calibrated:
-            return 'px'
-        return 'mm'
-
-    def column_value(label, value):
-        if column_unit(label) == 'mm':
-            return round(float(value) * scale, 2)
-        return value
-
-    for tp in trackpoint_dicts:
-        label = tp['label']
-        unit = column_unit(label)
-        frame_dicts[tp['frame_number']][f"{label} x ({unit})"] = column_value(label, tp['x'])
-        frame_dicts[tp['frame_number']][f"{label} y ({unit})"] = column_value(label, tp['y'])
-
-    fieldnames = ['frame_number']
-    for label in labels:
-        unit = column_unit(label)
-        fieldnames.append(f"{label} x ({unit})")
-        fieldnames.append(f"{label} y ({unit})")
-    logger.debug("fieldnames=%s",fieldnames)
-
-    # Now write it out with the dictwriter
-    with io.StringIO() as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
-        writer.writeheader()
-        for frame in frame_numbers:
-            frame_dicts[frame]['frame_number'] = frame
-            writer.writerow(frame_dicts[frame])
-        response = make_response(f.getvalue())
-        response.headers['Content-Type'] = 'text/csv'
-        response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
-        return response
+        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts']})
+    if get('format')=='xlsx':
+        return _xlsx_trackpoint_response(export_data)
+    return _csv_trackpoint_response(export_data)
 
 
 @api_bp.route('/set-movie-trim', methods=POST)

@@ -1,6 +1,7 @@
 import csv
 import io
 import zipfile
+import xml.etree.ElementTree as ET
 from decimal import Decimal
 
 import pytest
@@ -9,7 +10,16 @@ from pydantic import ValidationError
 
 from app import odb, schema
 from app import odb_movie_data
-from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID, MOVIE_TRACED_URN, NEEDS_RETRACING
+from app.odb import (
+    API_KEY,
+    FRAME_NUMBER,
+    HEIGHT,
+    MOVIE_ID,
+    MOVIE_TRACED_URN,
+    NEEDS_RETRACING,
+    TRIM_END_FRAME,
+    TRIM_START_FRAME,
+)
 from app.s3_presigned import make_urn
 from app.schema import Trackpoint
 
@@ -62,6 +72,42 @@ def _zip_with_frame(*, width: int, height: int) -> bytes:
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("frame_0000.jpeg", _jpeg_bytes(width=width, height=height))
     return output.getvalue()
+
+
+def _xlsx_shared_strings(zf):
+    try:
+        xml = zf.read("xl/sharedStrings.xml")
+    except KeyError:
+        return []
+    root = ET.fromstring(xml)
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    strings = []
+    for si in root.findall("s:si", namespace):
+        strings.append("".join(node.text or "" for node in si.findall(".//s:t", namespace)))
+    return strings
+
+
+def _xlsx_cell_value(cell, shared_strings):
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    value = cell.find("s:v", namespace)
+    if value is None or value.text is None:
+        return ""
+    if cell.get("t") == "s":
+        return shared_strings[int(value.text)]
+    if "." in value.text:
+        return float(value.text)
+    return int(value.text)
+
+
+def _xlsx_rows(data, sheet_path):
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        shared_strings = _xlsx_shared_strings(zf)
+        root = ET.fromstring(zf.read(sheet_path))
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    rows = []
+    for row in root.findall(".//s:sheetData/s:row", namespace):
+        rows.append([_xlsx_cell_value(cell, shared_strings) for cell in row.findall("s:c", namespace)])
+    return rows
 
 
 def test_movie_schema_declares_trackpoint_origin_contract():
@@ -406,6 +452,82 @@ def test_csv_uses_mm_for_non_ruler_markers_when_rulers_calibrated(client, new_mo
     # Ruler markers stay in pixels
     assert row["Ruler 0mm x (px)"] == "10"
     assert row["Ruler 10mm y (px)"] == "110"
+
+
+def test_xlsx_exports_trackpoints_and_metadata(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ], height=480)
+
+    resp = client.post("/api/get-movie-trackpoints", data={
+        API_KEY: new_movie[API_KEY],
+        MOVIE_ID: movie_id,
+        "format": "xlsx",
+    })
+
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert resp.headers["Content-Disposition"] == 'attachment; filename="trackpoints.xlsx"'
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        assert "xl/worksheets/sheet1.xml" in zf.namelist()
+        assert "xl/worksheets/sheet2.xml" in zf.namelist()
+
+    trackpoint_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet1.xml")
+    assert trackpoint_rows[0] == [
+        "frame_number",
+        "Apex x (mm)",
+        "Apex y (mm)",
+        "Ruler 0mm x (px)",
+        "Ruler 0mm y (px)",
+        "Ruler 10mm x (px)",
+        "Ruler 10mm y (px)",
+    ]
+    assert trackpoint_rows[1] == [0, 10, 20, 10, 10, 10, 110]
+
+    metadata_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet2.xml")
+    metadata = {row[0]: row[1] if len(row) > 1 else "" for row in metadata_rows[1:]}
+    assert metadata["movie_id"] == movie_id
+    assert metadata["trim_start_frame"] == 0
+    assert metadata["trim_end_frame"] == 0
+    assert metadata["exported_frame_count"] == 1
+    assert metadata["marker_count"] == 3
+    assert metadata["ruler_calibrated"] == "yes"
+    assert metadata["ruler_marker_units"] == "px"
+    assert metadata["non_ruler_marker_units"] == "mm"
+    assert metadata["scale_mm_per_px"] == 0.1
+
+
+def test_xlsx_trackpoint_download_respects_trim_bounds(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        "total_frames": 3,
+        TRIM_START_FRAME: 1,
+        TRIM_END_FRAME: 1,
+    })
+    for frame_number in range(3):
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label="apex")],
+        )
+
+    resp = client.post("/api/get-movie-trackpoints", data={
+        API_KEY: new_movie[API_KEY],
+        MOVIE_ID: movie_id,
+        "format": "xlsx",
+    })
+
+    assert resp.status_code == 200
+    rows = _xlsx_rows(resp.data, "xl/worksheets/sheet1.xml")
+    assert rows == [
+        ["frame_number", "apex x (px)", "apex y (px)"],
+        [1, 11, 21],
+    ]
 
 
 def test_csv_uses_pixels_when_rulers_at_default_position(client, new_movie):
