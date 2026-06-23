@@ -26,7 +26,6 @@ Developer Documentation
    TrackpointCoordinateSystem
    trim-design
    AnalysisResults
-   CalculationReference
    ProcessingPhases
    THEORY_OF_DESIGN
    NOTES_ON_SIMPLIFYING
