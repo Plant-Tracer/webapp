@@ -63,9 +63,18 @@ Release History
      - 0.9.8
      - June 22, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8>`__
+   * - Jun-23-2026
+     - 0.9.8.1
+     - June 23, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.1>`__
 
 Release Notes
 -------------
+
+0.9.8.1 Summary
+***************
+    * Analyze: Download Trackpoints CSV now expresses position values in mm when Ruler markers are calibrated (moved off their default positions); Ruler marker columns remain in pixels
+    * Analyze: Download analysis as an Excel XLSX file with marker summary and native Excel charts
 
 0.9.8 Summary
 *************
