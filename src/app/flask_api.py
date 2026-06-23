@@ -11,9 +11,11 @@ import smtplib
 import io
 import csv
 import zipfile
+from decimal import Decimal
 from collections import defaultdict
 
 
+import xlsxwriter
 from flask import Blueprint, request, make_response, current_app, jsonify
 from PIL import Image, UnidentifiedImageError
 from validate_email_address import validate_email
@@ -111,6 +113,382 @@ def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
         if height:
             return height
     return _height_from_movie_zipfile(movie_metadata)
+
+
+def _spreadsheet_value(value):
+    """Return a value that XlsxWriter can store with a useful cell type."""
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    return value
+
+
+def _is_inflection_marker_label(label):
+    return isinstance(label, str) and " ".join(label.split()).casefold() == "inflection point"
+
+
+def _marker_type(label):
+    ruler_size = odb.get_ruler_size(label)
+    if ruler_size is not None:
+        return "ruler"
+    if _is_inflection_marker_label(label):
+        return "inflection point"
+    if label == "Apex":
+        return "apex"
+    return "marker"
+
+
+def _positive_float(value):
+    if value in (None, ''):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _marker_summary_rows(labels, trackpoint_dicts):
+    rows = []
+    for label in labels:
+        marker_points = [tp for tp in trackpoint_dicts if tp['label'] == label]
+        first_point = marker_points[0] if marker_points else {}
+        color_values = sorted(set(tp.get('color') for tp in marker_points if tp.get('color')))
+        marker_ids = sorted(set(tp.get('marker_id') for tp in marker_points if tp.get('marker_id')))
+        undeletable_values = sorted(set(
+            str(tp.get('undeletable')).lower()
+            for tp in marker_points
+            if tp.get('undeletable') is not None
+        ))
+        status_values = sorted(set(
+            str(tp.get('status'))
+            for tp in marker_points
+            if tp.get('status') is not None
+        ))
+        err_values = sorted(set(
+            str(_spreadsheet_value(tp.get('err')))
+            for tp in marker_points
+            if tp.get('err') is not None
+        ))
+        frame_numbers = [tp['frame_number'] for tp in marker_points]
+        marker_kind = _marker_type(label)
+        rows.append({
+            'label': label,
+            'type': marker_kind,
+            'graphable': 'no' if marker_kind == 'ruler' else 'yes',
+            'color': first_point.get('color', '') or '',
+            'colors_seen': ", ".join(color_values),
+            'marker_id': first_point.get('marker_id', '') or '',
+            'marker_ids_seen': ", ".join(marker_ids),
+            'ruler_size_mm': odb.get_ruler_size(label) if marker_kind == 'ruler' else '',
+            'undeletable': first_point.get('undeletable', '') if first_point.get('undeletable') is not None else '',
+            'undeletable_values_seen': ", ".join(undeletable_values),
+            'first_frame': min(frame_numbers) if frame_numbers else '',
+            'last_frame': max(frame_numbers) if frame_numbers else '',
+            'trackpoint_count': len(marker_points),
+            'status_values_seen': ", ".join(status_values),
+            'error_values_seen': ", ".join(err_values),
+        })
+    return rows
+
+
+def _chart_export_data(frame_numbers, labels, trackpoint_dicts, fpm, position_scale, calibrated):
+    graphable_labels = [label for label in labels if odb.get_ruler_size(label) is None]
+    fpm_value = _positive_float(fpm)
+    if not graphable_labels:
+        return {
+            'fieldnames': [],
+            'rows': [],
+            'marker_labels': [],
+            'time_units': 'minutes' if fpm_value else 'frames',
+            'position_units': 'mm' if calibrated else 'px',
+        }
+    position_units = 'mm' if calibrated else 'px'
+    frame_points = defaultdict(dict)
+    for tp in trackpoint_dicts:
+        frame_points[tp['frame_number']][tp['label']] = tp
+    baseline_points = {}
+    for label in graphable_labels:
+        for frame_number in frame_numbers:
+            point = frame_points[frame_number].get(label)
+            if point:
+                baseline_points[label] = point
+                break
+
+    fieldnames = ['time (minutes)' if fpm_value else 'frame_number']
+    for label in graphable_labels:
+        fieldnames.append(f"{label} X Position ({position_units})")
+        fieldnames.append(f"{label} Y Position ({position_units})")
+
+    rows = []
+    for frame_number in frame_numbers:
+        row = {fieldnames[0]: round(frame_number / fpm_value, 4) if fpm_value else frame_number}
+        for label in graphable_labels:
+            point = frame_points[frame_number].get(label)
+            baseline = baseline_points.get(label)
+            if point and baseline:
+                row[f"{label} X Position ({position_units})"] = round(
+                    (float(point['x']) - float(baseline['x'])) * position_scale,
+                    4,
+                )
+                row[f"{label} Y Position ({position_units})"] = round(
+                    (float(point['y']) - float(baseline['y'])) * position_scale,
+                    4,
+                )
+            else:
+                row[f"{label} X Position ({position_units})"] = ''
+                row[f"{label} Y Position ({position_units})"] = ''
+        rows.append(row)
+
+    return {
+        'fieldnames': fieldnames,
+        'rows': rows,
+        'marker_labels': graphable_labels,
+        'time_units': 'minutes' if fpm_value else 'frames',
+        'position_units': position_units,
+    }
+
+
+def _trackpoint_export_data(movie):
+    """Build shared trackpoint-export rows, fieldnames, and metadata."""
+    movie_metadata = odb.movie_metadata_with_trim_defaults(
+        odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
+    )
+    trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
+    trackpoint_dicts = odb.get_movie_trackpoints(
+        movie_id=movie[MOVIE_ID],
+        frame_start=trim_start_frame,
+        frame_end=trim_end_frame,
+    )
+    frame_numbers = sorted(set((tp['frame_number'] for tp in trackpoint_dicts)))
+    labels = sorted(set((tp['label'] for tp in trackpoint_dicts)))
+    frame_dicts = defaultdict(dict)
+
+    # Express non-ruler position values in mm when the analysis is ruler-calibrated (>= 2
+    # Ruler XXmm markers moved off their default positions); otherwise pixels. Ruler columns are
+    # always pixels. Units are annotated in the column headers. See #763.
+    # Use the robust height lookup (falls back to the movie zip) so calibration still works for
+    # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
+    # only when the height cannot be determined at all.
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
+    ruler_frame_points = []
+    for frame_number in frame_numbers:
+        points = [tp for tp in trackpoint_dicts
+                  if tp['frame_number'] == frame_number and odb.get_ruler_size(tp['label']) is not None]
+        if points:
+            ruler_frame_points = points
+            break
+    calibrated = (frame_height is not None) and odb.rulers_calibrated(ruler_frame_points, frame_height)
+    scale, _scale_units = odb.movie_scale(ruler_frame_points)
+
+    def column_unit(label):
+        """'px' for ruler markers or an uncalibrated movie; 'mm' for other markers when calibrated."""
+        if odb.get_ruler_size(label) is not None or not calibrated:
+            return 'px'
+        return 'mm'
+
+    def column_value(label, value):
+        if column_unit(label) == 'mm':
+            return round(float(value) * scale, 2)
+        return value
+
+    for tp in trackpoint_dicts:
+        label = tp['label']
+        unit = column_unit(label)
+        frame_dicts[tp['frame_number']][f"{label} x ({unit})"] = column_value(label, tp['x'])
+        frame_dicts[tp['frame_number']][f"{label} y ({unit})"] = column_value(label, tp['y'])
+
+    fieldnames = ['frame_number']
+    for label in labels:
+        unit = column_unit(label)
+        fieldnames.append(f"{label} x ({unit})")
+        fieldnames.append(f"{label} y ({unit})")
+    logger.debug("fieldnames=%s", fieldnames)
+
+    rows = []
+    for frame in frame_numbers:
+        frame_dicts[frame]['frame_number'] = frame
+        rows.append(frame_dicts[frame])
+
+    metadata_rows = [
+        ('movie_id', movie[MOVIE_ID]),
+        ('title', movie.get('title', '')),
+        ('trim_start_frame', trim_start_frame),
+        ('trim_end_frame', trim_end_frame),
+        ('exported_frame_count', len(frame_numbers)),
+        ('marker_count', len(labels)),
+        ('trackpoint_origin', movie_metadata.get(odb.TRACKPOINT_ORIGIN, '')),
+        ('frame_height_px', frame_height if frame_height is not None else ''),
+        ('ruler_calibrated', 'yes' if calibrated else 'no'),
+        ('ruler_marker_units', 'px'),
+        ('non_ruler_marker_units', 'mm' if calibrated else 'px'),
+        ('scale_mm_per_px', round(scale, 8) if calibrated else ''),
+        ('fpm', movie_metadata.get(odb.FPM, '')),
+    ]
+    marker_summary_fieldnames = [
+        'label',
+        'type',
+        'graphable',
+        'color',
+        'colors_seen',
+        'marker_id',
+        'marker_ids_seen',
+        'ruler_size_mm',
+        'undeletable',
+        'undeletable_values_seen',
+        'first_frame',
+        'last_frame',
+        'trackpoint_count',
+        'status_values_seen',
+        'error_values_seen',
+    ]
+    chart_data = _chart_export_data(
+        frame_numbers,
+        labels,
+        trackpoint_dicts,
+        movie_metadata.get(odb.FPM),
+        scale if calibrated else 1,
+        calibrated,
+    )
+    return {
+        'trackpoint_dicts': trackpoint_dicts,
+        'fieldnames': fieldnames,
+        'rows': rows,
+        'metadata_rows': metadata_rows,
+        'marker_summary_fieldnames': marker_summary_fieldnames,
+        'marker_summary_rows': _marker_summary_rows(labels, trackpoint_dicts),
+        'chart_data': chart_data,
+    }
+
+
+def _csv_trackpoint_response(export_data):
+    with io.StringIO() as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=export_data['fieldnames'],
+            restval='',
+            extrasaction='ignore',
+        )
+        writer.writeheader()
+        for row in export_data['rows']:
+            writer.writerow(row)
+        response = make_response(f.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
+        return response
+
+
+def _write_worksheet_table(worksheet, fieldnames, rows, header_format):
+    for column, fieldname in enumerate(fieldnames):
+        worksheet.write(0, column, fieldname, header_format)
+        worksheet.set_column(column, column, max(len(fieldname) + 2, 12))
+    for row_index, row in enumerate(rows, start=1):
+        for column, fieldname in enumerate(fieldnames):
+            worksheet.write(row_index, column, _spreadsheet_value(row.get(fieldname, '')))
+    if fieldnames:
+        worksheet.freeze_panes(1, 0)
+        worksheet.autofilter(0, 0, len(rows), len(fieldnames) - 1)
+
+
+def _excel_chart_color(color):
+    named_colors = {
+        'black': '#000000',
+        'blue': '#0000FF',
+        'green': '#008000',
+        'orange': '#FFA500',
+        'purple': '#800080',
+        'red': '#FF0000',
+        'yellow': '#FFFF00',
+    }
+    if isinstance(color, str):
+        if color.startswith('#') and len(color) == 7:
+            return color
+        return named_colors.get(color.lower())
+    return None
+
+
+def _add_position_chart(workbook, charts, chart_data, marker_colors, *, axis):
+    if not chart_data['rows'] or not chart_data['marker_labels']:
+        return None
+    axis_offset = 1 if axis == 'x' else 2
+    chart = workbook.add_chart({'type': 'line'})
+    last_row = len(chart_data['rows'])
+    for marker_index, label in enumerate(chart_data['marker_labels']):
+        column = 1 + marker_index * 2 + axis_offset - 1
+        series = {
+            'name': label,
+            'categories': ['Chart Data', 1, 0, last_row, 0],
+            'values': ['Chart Data', 1, column, last_row, column],
+        }
+        color = _excel_chart_color(marker_colors.get(label))
+        if color:
+            series['line'] = {'color': color}
+        chart.add_series(series)
+    chart.set_title({'name': f"Time vs {axis.upper()} Position"})
+    chart.set_x_axis({
+        'name': f"Time ({chart_data['time_units']})",
+        'label_position': 'low',
+    })
+    chart.set_y_axis({'name': f"{axis.upper()} Position ({chart_data['position_units']})"})
+    chart.set_legend({'position': 'bottom'})
+    chart.set_size({'width': 720, 'height': 360})
+    cell = 'A1' if axis == 'x' else 'A20'
+    charts.insert_chart(cell, chart)
+    return chart
+
+
+def _xlsx_trackpoint_response(export_data):
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#D9EAF7', 'border': 1})
+    metadata_key_format = workbook.add_format({'bold': True})
+
+    trackpoints = workbook.add_worksheet('Trackpoints')
+    _write_worksheet_table(trackpoints, export_data['fieldnames'], export_data['rows'], header_format)
+
+    metadata = workbook.add_worksheet('Metadata')
+    metadata.write(0, 0, 'Field', header_format)
+    metadata.write(0, 1, 'Value', header_format)
+    metadata.set_column(0, 0, 24)
+    metadata.set_column(1, 1, 32)
+    for row_index, (field, value) in enumerate(export_data['metadata_rows'], start=1):
+        metadata.write(row_index, 0, field, metadata_key_format)
+        metadata.write(row_index, 1, _spreadsheet_value(value))
+    metadata.freeze_panes(1, 0)
+    metadata.autofilter(0, 0, len(export_data['metadata_rows']), 1)
+
+    markers = workbook.add_worksheet('Markers')
+    _write_worksheet_table(
+        markers,
+        export_data['marker_summary_fieldnames'],
+        export_data['marker_summary_rows'],
+        header_format,
+    )
+
+    chart_data = workbook.add_worksheet('Chart Data')
+    _write_worksheet_table(
+        chart_data,
+        export_data['chart_data']['fieldnames'],
+        export_data['chart_data']['rows'],
+        header_format,
+    )
+
+    charts = workbook.add_worksheet('Charts')
+    marker_colors = {
+        row['label']: row['color']
+        for row in export_data['marker_summary_rows']
+        if row.get('color')
+    }
+    if export_data['chart_data']['rows'] and export_data['chart_data']['marker_labels']:
+        _add_position_chart(workbook, charts, export_data['chart_data'], marker_colors, axis='x')
+        _add_position_chart(workbook, charts, export_data['chart_data'], marker_colors, axis='y')
+    else:
+        charts.write(0, 0, 'No graphable marker data is available for charts.', metadata_key_format)
+
+    workbook.close()
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.xlsx"'
+    return response
 
 ################################################################
 ### Handle invalid apikey exceptions
@@ -562,7 +940,7 @@ def api_get_movie_metadata():
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
 def api_get_movie_trackpoints():
-    """Downloads the movie trackpoints as a CSV or JSON
+    """Downloads the movie trackpoints as CSV, XLSX, or JSON.
     :param api_key:   authentication
     :param movie_id:   movie
     :param: format - 'xlsx' or 'json'
@@ -572,46 +950,13 @@ def api_get_movie_trackpoints():
     movie_id = get_movie_id()
     movie = odb.can_access_movie(user_id=get_user_id(), movie_id=movie_id)
 
-    # NOTE - getting the movie should (soon) get all the trackpoints, as they will all be stored together
-    # get_movie_trackpoints() returns a dictionary for each trackpoint.
-    # we want a dictionary for each frame_number
-    movie_metadata = odb.movie_metadata_with_trim_defaults(
-        odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
-    )
-    trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
-    trackpoint_dicts = odb.get_movie_trackpoints(
-        movie_id=movie[MOVIE_ID],
-        frame_start=trim_start_frame,
-        frame_end=trim_end_frame,
-    )
-    frame_numbers  = sorted( set(( tp['frame_number'] for tp in trackpoint_dicts) ))
-    labels         = sorted( set(( tp['label'] for tp in trackpoint_dicts) ))
-    frame_dicts    = defaultdict(dict)
+    export_data = _trackpoint_export_data(movie)
 
     if get('format')=='json':
-        return jsonify({'error':'False', 'trackpoint_dicts':trackpoint_dicts})
-
-    for tp in trackpoint_dicts:
-        frame_dicts[tp['frame_number']][tp['label']+' x'] = tp['x']
-        frame_dicts[tp['frame_number']][tp['label']+' y'] = tp['y']
-
-    fieldnames = ['frame_number']
-    for label in labels:
-        fieldnames.append(label+' x')
-        fieldnames.append(label+' y')
-    logger.debug("fieldnames=%s",fieldnames)
-
-    # Now write it out with the dictwriter
-    with io.StringIO() as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, restval='', extrasaction='ignore')
-        writer.writeheader()
-        for frame in frame_numbers:
-            frame_dicts[frame]['frame_number'] = frame
-            writer.writerow(frame_dicts[frame])
-        response = make_response(f.getvalue())
-        response.headers['Content-Type'] = 'text/csv'
-        response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
-        return response
+        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts']})
+    if get('format')=='xlsx':
+        return _xlsx_trackpoint_response(export_data)
+    return _csv_trackpoint_response(export_data)
 
 
 @api_bp.route('/set-movie-trim', methods=POST)

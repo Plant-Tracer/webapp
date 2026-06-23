@@ -1569,7 +1569,7 @@ class TracerController extends MovieController {
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
         if (this.tracking) {
-            $(this.div_selector + ' input').prop(DISABLED,true); // disable all the inputs
+            $(this.div_selector + ' input, ' + this.div_selector + ' button').prop(DISABLED,true);
             return;
         }
         this.max_frame_index = this.getMaxViewableFrame();

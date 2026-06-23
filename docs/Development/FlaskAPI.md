@@ -259,7 +259,7 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 
 #### `POST /api/get-movie-trackpoints`
 
-Download all trackpoints for a movie as CSV (default) or JSON.
+Download all trackpoints for a movie as CSV (default), XLSX, or JSON.
 
 **Parameters**
 
@@ -267,10 +267,28 @@ Download all trackpoints for a movie as CSV (default) or JSON.
 |------|----------|-------------|
 | `api_key` | Yes | |
 | `movie_id` | Yes | |
-| `format` | No | `"json"` for JSON; omit for CSV |
+| `format` | No | `"xlsx"` for an Excel workbook, `"json"` for JSON; omit for CSV |
 
-**Response:** CSV with columns `frame_number`, `<label> x`, `<label> y` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
-With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }`.
+**Response:** CSV with columns `frame_number`, `<label> x (<unit>)`, `<label> y (<unit>)` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
+
+With `format=xlsx`, returns an Excel workbook served with `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="trackpoints.xlsx"`. The workbook contains:
+
+- `Trackpoints`: the same columns, values, trim filtering, and unit conversion as the CSV export.
+- `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture interval (`fpm`) when available.
+- `Markers`: one row per marker label with marker type (`apex`, `ruler`, `inflection point`, or `marker`), graphable status, color, marker id, ruler size, undeletable status, frame range, trackpoint count, and any status/error values found in exported trackpoints.
+- `Chart Data`: displacement from each graphable marker's first exported position, using frames as the x-axis or minutes when `fpm` is set. Ruler markers are excluded from chart data.
+- `Charts`: native Excel line charts for X Position and Y Position, backed by `Chart Data`.
+
+**Units (#763):** each value column header is annotated with its unit, `(mm)` or `(px)`:
+
+- `Ruler XXmm` marker columns are **always** in pixels (`(px)`).
+- Other markers' columns are in **millimeters** (`(mm)`, value × scale) when the analysis is
+  ruler-calibrated — i.e. there are ≥ 2 `Ruler XXmm` markers and the lowest and highest are both
+  off their default positions; otherwise they are in pixels (`(px)`). The scale is derived from
+  the lowest and highest ruler markers in the first trimmed frame (mirrors the Analyze marker
+  table). mm values are rounded to 2 decimals.
+
+With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }` — JSON values are raw pixel coordinates (no unit conversion).
 
 ---
 

@@ -696,3 +696,44 @@ def test_create_new_movie_stores_fpm(local_ddb):
     })
     movie_id = odb.create_new_movie(user_id=user_id, course_id=course_id, title='t', description='d', fpm='20')
     assert odb.get_movie(movie_id=movie_id)[odb.FPM] == '20'
+
+
+def test_get_ruler_size():
+    assert odb.get_ruler_size('Ruler 0mm') == 0
+    assert odb.get_ruler_size('Ruler 10mm') == 10
+    assert odb.get_ruler_size('Ruler10mm') == 10
+    assert odb.get_ruler_size('Apex') is None
+    assert odb.get_ruler_size('Inflection Point') is None
+    assert odb.get_ruler_size(None) is None
+
+
+def test_movie_scale():
+    # Two rulers 100 px apart spanning 10 mm => 0.1 mm/px.
+    points = [
+        {'label': 'Ruler 0mm', 'x': 10, 'y': 10},
+        {'label': 'Ruler 10mm', 'x': 10, 'y': 110},
+    ]
+    scale, units = odb.movie_scale(points)
+    assert units == 'mm'
+    assert scale == 0.1
+    # Fewer than two rulers => pixels.
+    assert odb.movie_scale([{'label': 'Ruler 0mm', 'x': 10, 'y': 10}]) == (1.0, 'pixels')
+    assert odb.movie_scale([{'label': 'Apex', 'x': 5, 'y': 5}]) == (1.0, 'pixels')
+
+
+def test_rulers_calibrated():
+    frame_height = 480
+    # Off default canvas positions (Ruler 0mm default (50,100), Ruler 10mm default (50,150)).
+    off_default = [
+        {'label': 'Ruler 0mm', 'x': 10, 'y': 10},
+        {'label': 'Ruler 10mm', 'x': 10, 'y': 110},
+    ]
+    assert odb.rulers_calibrated(off_default, frame_height) is True
+    # At default positions: bottom-left y = frame_height - canvas_y.
+    at_default = [
+        {'label': 'Ruler 0mm', 'x': 50, 'y': frame_height - 100},
+        {'label': 'Ruler 10mm', 'x': 50, 'y': frame_height - 150},
+    ]
+    assert odb.rulers_calibrated(at_default, frame_height) is False
+    # Fewer than two rulers.
+    assert odb.rulers_calibrated(off_default[:1], frame_height) is False
