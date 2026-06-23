@@ -480,11 +480,10 @@ Resources:
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
-  # --- IAM: EC2 Role with hardcoded prefix ---
+  # --- IAM: EC2 Role ---
   Ec2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -541,18 +540,16 @@ Resources:
                   - ses:SendRawEmail
                 Resource: "*"
 
-  # --- Instance Profile with hardcoded prefix ---
+  # --- Instance Profile ---
   Ec2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "PlantTracer-${AWS::StackName}-InstanceProfile"
       Roles: [!Ref Ec2Role]
 
-  # --- Lambda Role with hardcoded prefix ---
+  # --- Lambda Role ---
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-LambdaRole"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -602,7 +599,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      QueueName: !Sub "${AWS::StackName}-tracing-queue"
       VisibilityTimeout: 900
 
   LambdaFunction:
