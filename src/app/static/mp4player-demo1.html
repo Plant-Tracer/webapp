@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MP4 Player Demo 1</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f7f8;
+        color: #1f2933;
+      }
+
+      main {
+        box-sizing: border-box;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+
+      video {
+        display: block;
+        width: 100%;
+        max-height: 70vh;
+        background: #000;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      button {
+        min-width: 72px;
+        border: 1px solid #9aa5b1;
+        border-radius: 4px;
+        padding: 8px 12px;
+        background: #fff;
+        color: #1f2933;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        color: #7b8794;
+        cursor: not-allowed;
+      }
+
+      output {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Native MP4 1 FPS Step Demo</h1>
+      <video id="plant-movie" controls preload="metadata">
+        <source src="https://simson.net/plantmovie.mp4" type="video/mp4">
+      </video>
+      <div class="controls">
+        <button id="play-button" type="button">Play</button>
+        <button id="pause-button" type="button">Pause</button>
+        <button id="next-frame-button" type="button">+1</button>
+        <button id="previous-frame-button" type="button">-1</button>
+        <output id="time-output">0.000 s</output>
+      </div>
+    </main>
+
+    <script>
+      const LOGICAL_FPS = 1;
+      const SOURCE_FPS = 15;
+
+      const video = document.getElementById('plant-movie');
+      const playButton = document.getElementById('play-button');
+      const pauseButton = document.getElementById('pause-button');
+      const nextFrameButton = document.getElementById('next-frame-button');
+      const previousFrameButton = document.getElementById('previous-frame-button');
+      const timeOutput = document.getElementById('time-output');
+
+      let animationFrameId = 0;
+
+      function formatSeconds(seconds) {
+        return `${seconds.toFixed(3)} s`;
+      }
+
+      function currentFrame() {
+        return Math.round(video.currentTime * SOURCE_FPS);
+      }
+
+      function currentLogicalTime() {
+        return currentFrame() / LOGICAL_FPS;
+      }
+
+      function clampTime(seconds) {
+        const duration = Number.isFinite(video.duration) ? video.duration : seconds;
+        return Math.min(Math.max(seconds, 0), duration);
+      }
+
+      function updateTime() {
+        timeOutput.value = formatSeconds(currentLogicalTime());
+      }
+
+      function updateFrameButtons() {
+        const paused = video.paused || video.ended;
+        nextFrameButton.disabled = !paused;
+        previousFrameButton.disabled = !paused;
+      }
+
+      function updateWhilePlaying() {
+        updateTime();
+        if (!video.paused && !video.ended) {
+          animationFrameId = window.requestAnimationFrame(updateWhilePlaying);
+        }
+      }
+
+      function stopTimeUpdates() {
+        if (animationFrameId) {
+          window.cancelAnimationFrame(animationFrameId);
+          animationFrameId = 0;
+        }
+        updateTime();
+      }
+
+      function seekFrames(delta) {
+        if (!video.paused && !video.ended) {
+          return;
+        }
+        const frame = Math.max(currentFrame() + delta, 0);
+        video.currentTime = clampTime(frame / SOURCE_FPS);
+        updateTime();
+      }
+
+      playButton.addEventListener('click', () => {
+        video.playbackRate = LOGICAL_FPS / SOURCE_FPS;
+        void video.play();
+      });
+
+      pauseButton.addEventListener('click', () => {
+        video.pause();
+      });
+
+      nextFrameButton.addEventListener('click', () => {
+        seekFrames(1);
+      });
+
+      previousFrameButton.addEventListener('click', () => {
+        seekFrames(-1);
+      });
+
+      video.addEventListener('loadedmetadata', updateTime);
+      video.addEventListener('timeupdate', updateTime);
+      video.addEventListener('seeked', updateTime);
+      video.addEventListener('play', () => {
+        updateFrameButtons();
+        updateWhilePlaying();
+      });
+      video.addEventListener('pause', () => {
+        updateFrameButtons();
+        stopTimeUpdates();
+      });
+      video.addEventListener('ended', () => {
+        updateFrameButtons();
+        stopTimeUpdates();
+      });
+
+      video.playbackRate = LOGICAL_FPS / SOURCE_FPS;
+      updateFrameButtons();
+      updateTime();
+    </script>
+  </body>
+</html>
