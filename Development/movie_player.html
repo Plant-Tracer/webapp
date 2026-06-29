@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Movie Player Design &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b93c872d" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Bibliography" href="resources.html" />
+    <link rel="prev" title="Gallery Learning Plan" href="gallery_learning_plan.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="movie-player-design">
+<h1>Movie Player Design<a class="headerlink" href="#movie-player-design" title="Link to this heading">¶</a></h1>
+<p>The Analyze page is a browser-side canvas application. Flask serves the page and
+metadata APIs; lambda-resize supplies video/frame data.</p>
+<section id="runtime-inputs">
+<h2>Runtime Inputs<a class="headerlink" href="#runtime-inputs" title="Link to this heading">¶</a></h2>
+<p>The base template injects these browser globals:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">API_BASE</span></code> - Flask API base.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LAMBDA_API_BASE</span></code> - lambda-resize HTTP API base.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">api_key</span></code> - current login token.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user_id</span></code> - current user.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">demo_mode</span></code> - whether mutating UI actions should be disabled.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_FILE_UPLOAD</span></code> - upload size limit.</p></li>
+</ul>
+</section>
+<section id="frame-and-playback-apis">
+<h2>Frame And Playback APIs<a class="headerlink" href="#frame-and-playback-apis" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/resize-api/v1/first-frame</span></code></dt><dd><p>Returns frame 0 as JPEG after API-key validation, saved rotation, and
+analysis-size scaling.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/resize-api/v1/movie-data</span></code></dt><dd><p>Returns or redirects to signed S3 URLs for original movie playback and the
+optional frame ZIP.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/resize-api/v1/trace-movie</span></code></dt><dd><p>Queues retracing after the browser saves edited trackpoints through Flask.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/get-movie-metadata</span></code></dt><dd><p>Returns stored movie metadata and, when requested, frame trackpoints.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/put-frame-trackpoints</span></code></dt><dd><p>Stores marker positions for a single frame before retracing.</p>
+</dd>
+</dl>
+</section>
+<section id="client-classes">
+<h2>Client Classes<a class="headerlink" href="#client-classes" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">CanvasController</span></code></dt><dd><p>Owns the HTML canvas, zoom state, drawing, hit detection, and draggable items.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">CanvasMovieController</span></code></dt><dd><p>Extends canvas behavior with frame loading and playback controls.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">TracerController</span></code></dt><dd><p>Coordinates markers, marker table, tracking/retracking actions, graph data,
+and server persistence.</p>
+</dd>
+</dl>
+</section>
+<section id="state-variables">
+<h2>State Variables<a class="headerlink" href="#state-variables" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">movie_id</span></code> - movie being analyzed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">total_frames</span></code> - number of known frames.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">last_frame_tracked</span></code> - latest tracked frame stored by the server.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">current_frame</span></code> - frame currently displayed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tracking</span></code> - true while retracing is in progress.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">playing</span></code> - true while playback is advancing frames.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frames</span></code> - cached frame data from ZIP entries or Lambda frame URLs.</p></li>
+</ul>
+</section>
+<section id="retrace-flow">
+<h2>Retrace Flow<a class="headerlink" href="#retrace-flow" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>User moves markers on frame <code class="docutils literal notranslate"><span class="pre">N</span></code>.</p></li>
+<li><p>Browser posts the edited frame’s trackpoints to Flask.</p></li>
+<li><p>Browser posts <code class="docutils literal notranslate"><span class="pre">movie_id</span></code> and <code class="docutils literal notranslate"><span class="pre">frame_start=N</span></code> to lambda-resize.</p></li>
+<li><p>lambda-resize preserves frame <code class="docutils literal notranslate"><span class="pre">N</span></code>, clears later trackpoints, and queues
+tracking from <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">+</span> <span class="pre">1</span></code>.</p></li>
+<li><p>Browser polls Flask metadata until status becomes <code class="docutils literal notranslate"><span class="pre">tracing</span> <span class="pre">completed</span></code>.</p></li>
+<li><p>Browser reloads frame/trackpoint data and re-enables controls.</p></li>
+</ol>
+</section>
+<section id="invariants">
+<h2>Invariants<a class="headerlink" href="#invariants" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">playing</span></code> and <code class="docutils literal notranslate"><span class="pre">tracking</span></code> are not true at the same time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;=</span> <span class="pre">current_frame</span> <span class="pre">&lt;</span> <span class="pre">total_frames</span></code> when <code class="docutils literal notranslate"><span class="pre">total_frames</span></code> is known.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">last_frame_tracked</span></code> is absent or between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">total_frames</span> <span class="pre">-</span> <span class="pre">1</span></code>.</p></li>
+<li><p>Marker coordinates are stored per frame in DynamoDB <code class="docutils literal notranslate"><span class="pre">movie_frames</span></code> rows.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CalculationReference.html">Calculation Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaWebMigration.html">Lambda Web Migration Discussion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TrackpointCoordinateSystem.html">Trackpoint Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trim-design.html">Video Trim Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="AnalysisResults.html">Analyze: Aggregate Result Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="gallery_learning_plan.html" title="previous chapter">Gallery Learning Plan</a></li>
+      <li>Next: <a href="resources.html" title="next chapter">Bibliography</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/movie_player.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

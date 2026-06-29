@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Plant Tracer Movie Processing &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b93c872d" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Web App Theory Of Design" href="THEORY_OF_DESIGN.html" />
+    <link rel="prev" title="Analyze: Aggregate Result Statistics" href="AnalysisResults.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="plant-tracer-movie-processing">
+<h1>Plant Tracer Movie Processing<a class="headerlink" href="#plant-tracer-movie-processing" title="Link to this heading">¶</a></h1>
+<p>This page describes the current upload, first-frame, playback, and retrace
+workflow. Historical phase plans have been collapsed into the live behavior.</p>
+<section id="upload">
+<h2>Upload<a class="headerlink" href="#upload" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>The browser computes a SHA-256 digest for the selected movie.</p></li>
+<li><p>The browser posts metadata to <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/new-movie</span></code>.</p></li>
+<li><p>Flask creates a DynamoDB movie row with status <code class="docutils literal notranslate"><span class="pre">uploading</span></code> and returns a
+presigned S3 POST for the final object key.</p></li>
+<li><p>The browser uploads the movie directly to S3/MinIO with the returned form
+fields.</p></li>
+<li><p>The upload page requests the first frame from lambda-resize and links the
+user to Analyze.</p></li>
+</ol>
+<p>There is no S3 <code class="docutils literal notranslate"><span class="pre">uploads/</span></code> staging prefix and no S3 bucket notification path.
+Lambda is invoked by HTTP or SQS/local queue.</p>
+</section>
+<section id="first-frame">
+<h2>First Frame<a class="headerlink" href="#first-frame" title="Link to this heading">¶</a></h2>
+<p>The browser requests:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>GET LAMBDA_API_BASE/resize-api/v1/first-frame?api_key=...&amp;movie_id=...
+</pre></div>
+</div>
+<p>lambda-resize validates the API key, signs the movie S3 URL, extracts frame 0,
+applies saved rotation, scales the frame to the analysis size, and returns a
+JPEG.</p>
+</section>
+<section id="playback">
+<h2>Playback<a class="headerlink" href="#playback" title="Link to this heading">¶</a></h2>
+<p>The movie list requests:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>GET LAMBDA_API_BASE/api/v1/movie-data?api_key=...&amp;movie_id=...&amp;format=json
+</pre></div>
+</div>
+<p>The compatibility route returns signed movie and optional ZIP URLs. The browser
+sets the video element source to the signed movie URL so playback bytes come
+from S3/MinIO.</p>
+</section>
+<section id="retracing">
+<h2>Retracing<a class="headerlink" href="#retracing" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p>The user edits markers on frame <code class="docutils literal notranslate"><span class="pre">N</span></code>.</p></li>
+<li><p>The browser saves frame <code class="docutils literal notranslate"><span class="pre">N</span></code> trackpoints through Flask
+<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/put-frame-trackpoints</span></code>.</p></li>
+<li><p>The browser posts to lambda-resize:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>POST /resize-api/v1/trace-movie
+x-api-key: &lt;api_key&gt;
+</pre></div>
+</div>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;movie_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;m...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;frame_start&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;frame_end&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p>lambda-resize clears trackpoints after frame <code class="docutils literal notranslate"><span class="pre">N</span></code>, marks the movie as
+<code class="docutils literal notranslate"><span class="pre">tracing</span></code>, and queues the work.</p></li>
+<li><p>In local mode, <code class="docutils literal notranslate"><span class="pre">TRACING_QUEUE_MODE=local</span></code> sends work to the in-process
+queue. In deployed mode, <code class="docutils literal notranslate"><span class="pre">TRACING_QUEUE_URL</span></code> sends work to SQS.</p></li>
+<li><p>The worker traces from frame <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">+</span> <span class="pre">1</span></code> through optional <code class="docutils literal notranslate"><span class="pre">frame_end</span></code>, writes trackpoints to DynamoDB,
+writes a ZIP and traced movie to S3/MinIO, and marks status as
+<code class="docutils literal notranslate"><span class="pre">tracing</span> <span class="pre">completed</span></code>.</p></li>
+<li><p>The browser polls <code class="docutils literal notranslate"><span class="pre">/api/get-movie-metadata</span></code> until completion.</p></li>
+</ol>
+</section>
+<section id="local-process-model">
+<h2>Local Process Model<a class="headerlink" href="#local-process-model" title="Link to this heading">¶</a></h2>
+<p>Use two local processes:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>run-local-lambda-debug
+make<span class="w"> </span>run-local-debug
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">run-local-debug</span></code> starts Flask on port 8080 and ensures a local Lambda
+endpoint is available. <code class="docutils literal notranslate"><span class="pre">run-local-lambda-debug</span></code> starts the local HTTP bridge
+on port 9811 and the local retrace worker.</p>
+</section>
+<section id="video-processing-library">
+<h2>Video Processing Library<a class="headerlink" href="#video-processing-library" title="Link to this heading">¶</a></h2>
+<p>Current lambda-resize frame extraction, scaling, JPEG generation, and tracing
+use OpenCV (<code class="docutils literal notranslate"><span class="pre">cv2</span></code>) and Pillow. ffmpeg is legacy/local tooling, not the
+Lambda runtime path.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CalculationReference.html">Calculation Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaWebMigration.html">Lambda Web Migration Discussion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TrackpointCoordinateSystem.html">Trackpoint Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trim-design.html">Video Trim Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="AnalysisResults.html">Analyze: Aggregate Result Statistics</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="AnalysisResults.html" title="previous chapter">Analyze: Aggregate Result Statistics</a></li>
+      <li>Next: <a href="THEORY_OF_DESIGN.html" title="next chapter">Web App Theory Of Design</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/ProcessingPhases.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

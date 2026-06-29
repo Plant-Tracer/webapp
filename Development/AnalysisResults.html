@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Analyze: Aggregate Result Statistics &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b93c872d" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Plant Tracer Movie Processing" href="ProcessingPhases.html" />
+    <link rel="prev" title="Video Trim Design" href="trim-design.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="analyze-aggregate-result-statistics">
+<h1>Analyze: Aggregate Result Statistics<a class="headerlink" href="#analyze-aggregate-result-statistics" title="Link to this heading">¶</a></h1>
+<p>After a movie is traced, the Analyze page computes aggregate statistics from the
+per-frame trackpoint data, in addition to the position-vs-time charts. The
+calculations are ported from the legacy iOS app’s <code class="docutils literal notranslate"><span class="pre">showResult()</span></code> and live in the
+pure, DOM-free module <code class="docutils literal notranslate"><span class="pre">src/app/static/analysis_results.mjs</span></code> (issue #986). The
+display wiring lives in <code class="docutils literal notranslate"><span class="pre">canvas_tracer_controller.mjs</span></code> (<code class="docutils literal notranslate"><span class="pre">display_results()</span></code>).</p>
+<section id="result-modes">
+<h2>Result modes<a class="headerlink" href="#result-modes" title="Link to this heading">¶</a></h2>
+<p>A selector on the Analyze page (<code class="docutils literal notranslate"><span class="pre">#result-mode-select</span></code>) chooses which statistics
+to show:</p>
+<ul class="simple">
+<li><p><strong>All</strong> (default) — both groups below.</p></li>
+<li><p><strong>Gravitropism</strong> — Distance and Angle.</p></li>
+<li><p><strong>Circumnutation</strong> — Max Amplitude.</p></li>
+</ul>
+<p>The tracked “tip” marker is the <strong>Apex</strong> if present, otherwise the first graphable
+(non-ruler) marker. Ruler markers set the millimeter scale; when two or more are
+present, distances are reported in mm, otherwise in pixels.</p>
+</section>
+<section id="gravitropism">
+<h2>Gravitropism<a class="headerlink" href="#gravitropism" title="Link to this heading">¶</a></h2>
+<p>Computed from the tip in the first and last (trimmed) frames, and the
+<strong>Inflection Point</strong> marker (see <a class="reference internal" href="#reserved-marker-names">Reserved marker names</a> below).</p>
+<ul>
+<li><p><strong>Distance</strong> — Euclidean displacement of the tip from first to last frame,
+multiplied by the scale.</p></li>
+<li><p><strong>Angle</strong> — the bend at the inflection pivot, via the law of cosines. With
+<code class="docutils literal notranslate"><span class="pre">b</span></code> = first-tip→first-inflection, <code class="docutils literal notranslate"><span class="pre">c</span></code> = last-tip→last-inflection, and
+<code class="docutils literal notranslate"><span class="pre">a</span></code> = first-tip→last-tip:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>angle = acos((b² + c² − a²) / (2·b·c)) · 180/π
+</pre></div>
+</div>
+<p>The inflection point is tracked per frame, so <code class="docutils literal notranslate"><span class="pre">b</span></code> uses its first-frame
+position and <code class="docutils literal notranslate"><span class="pre">c</span></code> its last-frame position. The angle is scale-invariant. It is
+omitted when no inflection point is present or the triangle is degenerate (a tip
+coincides with the inflection point).</p>
+</li>
+</ul>
+</section>
+<section id="circumnutation">
+<h2>Circumnutation<a class="headerlink" href="#circumnutation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Max Amplitude</strong> — horizontal range of the tip over all (trimmed) frames,
+<code class="docutils literal notranslate"><span class="pre">(max</span> <span class="pre">x</span> <span class="pre">−</span> <span class="pre">min</span> <span class="pre">x)</span> <span class="pre">×</span> <span class="pre">scale</span></code>.</p></li>
+<li><p><strong>Rate</strong> — <code class="docutils literal notranslate"><span class="pre">Max</span> <span class="pre">Amplitude</span> <span class="pre">÷</span> <span class="pre">elapsed</span> <span class="pre">time</span> <span class="pre">between</span> <span class="pre">the</span> <span class="pre">x-extreme</span> <span class="pre">frames</span></code> (legacy
+semantics; see #1053). Null when the extremes fall on the same frame.</p></li>
+</ul>
+</section>
+<section id="rate-and-the-capture-interval-fpm">
+<h2>Rate and the capture interval (fpm)<a class="headerlink" href="#rate-and-the-capture-interval-fpm" title="Link to this heading">¶</a></h2>
+<p>Rate is displacement per unit time. The time base is the <strong>capture interval</strong>
+<code class="docutils literal notranslate"><span class="pre">fpm</span></code> (frames per minute), a per-movie value the user supplies at upload or on the
+Analyze page (#1056). The conversion is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>elapsed_time(min) = frame_span ÷ fpm
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Gravitropism Rate</strong> = <code class="docutils literal notranslate"><span class="pre">Distance</span> <span class="pre">÷</span> <span class="pre">elapsed_time</span></code> over the first→last frame.</p></li>
+<li><p><strong>Circumnutation Rate</strong> = <code class="docutils literal notranslate"><span class="pre">Max</span> <span class="pre">Amplitude</span> <span class="pre">÷</span> <span class="pre">elapsed_time</span></code> between the frames of
+the minimum and maximum x.</p></li>
+</ul>
+<p>When <code class="docutils literal notranslate"><span class="pre">fpm</span></code> is unset (legacy movies, or not yet entered), the graph x-axis stays in
+frames and Rate is reported <strong>per frame</strong> (<code class="docutils literal notranslate"><span class="pre">mm/frame</span></code> or <code class="docutils literal notranslate"><span class="pre">pixel/frame</span></code>); once a
+positive <code class="docutils literal notranslate"><span class="pre">fpm</span></code> is set it is reported <strong>per minute</strong>. <code class="docutils literal notranslate"><span class="pre">fpm</span></code> is distinct from the
+encoded playback <code class="docutils literal notranslate"><span class="pre">fps</span></code> and is stored as a string on the movie row (authoritative)
+with a best-effort snapshot in the traced MP4 (see
+<a class="reference internal" href="MOVIE_METADATA.html"><span class="doc">Movie attribution and research metadata</span></a>). Editing <code class="docutils literal notranslate"><span class="pre">fpm</span></code> on the Analyze page only rescales time and
+rate — it does not require retracing.</p>
+<p>This replaces the legacy <code class="docutils literal notranslate"><span class="pre">frames</span> <span class="pre">×</span> <span class="pre">20</span> <span class="pre">÷</span> <span class="pre">framerate</span></code> formula (an iOS playback-time
+artifact); the <code class="docutils literal notranslate"><span class="pre">FPS</span> <span class="pre">=</span> <span class="pre">20</span></code> constant is not used.</p>
+</section>
+<section id="reserved-marker-names">
+<h2>Reserved marker names<a class="headerlink" href="#reserved-marker-names" title="Link to this heading">¶</a></h2>
+<p>Two marker names are reserved and given special treatment:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Ruler</span> <span class="pre">Nmm</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">Ruler</span> <span class="pre">0mm</span></code>, <code class="docutils literal notranslate"><span class="pre">Ruler</span> <span class="pre">10mm</span></code>) — define the mm/pixel scale;
+excluded from graphing.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Inflection</span> <span class="pre">Point</span></code> (matched <strong>case-insensitively</strong>) — the gravitropism pivot.
+It is tracked and graphed like any plant marker, but its reserved name lets the
+dedicated <strong>Add Inflection Point</strong> button and the Angle calculation locate it.
+Only one is allowed per movie. See issue #1033.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CalculationReference.html">Calculation Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaWebMigration.html">Lambda Web Migration Discussion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TrackpointCoordinateSystem.html">Trackpoint Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trim-design.html">Video Trim Design</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Analyze: Aggregate Result Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="trim-design.html" title="previous chapter">Video Trim Design</a></li>
+      <li>Next: <a href="ProcessingPhases.html" title="next chapter">Plant Tracer Movie Processing</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/AnalysisResults.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
