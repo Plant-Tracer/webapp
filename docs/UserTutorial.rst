@@ -9,7 +9,7 @@ Welcome and Registration
 - Go to `prod.planttracer.com/register`.
 - Register for an account using your Name, Email Address, and Course Key.
 - If you are using Plant Tracer with a specific course or project, you can enter your course Key provided by your course administrator (your instructor should be able to help you here).
-- Alternately, you can register for the Web course whose course key is 2c01-48cd
+- Alternately, you can register for the Web course whose course key is 1b05-4024
 
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer registration form with Name, Email Address, and Course Key input fields and a Register button
@@ -61,7 +61,7 @@ Tracking the Uploaded Movie
 - To measure the gravitropism bending angle, click **Add Inflection Point** (below the Marker Table) to add a special pivot marker at the base or bend point of the stem. Position it like any other marker. Only one Inflection Point may be added per movie.
 - Plant Tracer will attempt to track the motion related to every marker.
 - Typically, the apex of some part of the plant is tracked. So, to do that, move the Apex marker, for example, to the top of the vertical stem.
-- Markers whose names have the form ``RulerXXmm`` are special. ``XX`` is any non-negative integer representing a real-world distance in millimeters. These markers are used for distance calibration. **The value of XX must match the actual ruler markings in your video** — for example, if your ruler is 30mm long, you need markers named ``Ruler 0mm`` and ``Ruler 30mm``, not ``Ruler 10mm``. The default markers are named ``Ruler 0mm`` and ``Ruler 10mm``; if your ruler uses different values, delete the default marker and add a new one with the correct name (e.g. ``Ruler 30mm``) using the Marker Table. In this way, Plant Tracer can report analysis results in millimeters rather than pixels.
+- Markers whose names have the form ``RulerXXmm`` are special. ``XX`` is any non-negative integer representing a real-world distance in millimeters. These markers are used for distance calibration. Place one marker at a known position and a second marker at a point that is exactly ``XX`` millimeters away — for example, ``Ruler 0mm`` at one end of a ruler and ``Ruler 30mm`` at a point 30mm further along it. The XX values specify the distance between the marker positions; they do not need to correspond to specific tick marks on any ruler in the video. The default markers are named ``Ruler 0mm`` and ``Ruler 10mm``; if you want to calibrate over a different distance, delete the default marker and add a new one with the correct name (e.g. ``Ruler 30mm``) using the Marker Table. In this way, Plant Tracer can report analysis results in millimeters rather than pixels.
 - There can be any number of RulerXXmm markers, but Plant Tracer will only use the RulerXXmm markers with the lowest and highest XX values in its calculations, and ignores any intermediate RulerXXmm markers for purposes of distance calculations. Plant Tracer only uses mm distances.
 - If there are fewer than two RulerXXmm markers on a given analysis, then analysis results are calclulated and presented using units of pixels.
 
@@ -95,23 +95,24 @@ Interpreting and Reading Results
 
   Results are shown in millimeters when two or more ruler markers are present, otherwise in pixels.
 
-.. image:: tutorial_images/results_gravitropism.png
+.. image:: tutorial_images/coming_soon.png
    :alt: Plant Tracer results panel showing Gravitropism Distance, Rate, and Angle statistics with the Results selector set to Gravitropism
 
-.. image:: tutorial_images/results_circumnutation.png
+.. image:: tutorial_images/coming_soon.png
    :alt: Plant Tracer results panel showing Circumnutation Max Amplitude and Rate statistics with the Results selector set to Circumnutation
 
 - **Rate** is reported per minute when you have entered the capture interval (frames/minute); otherwise it is reported per frame. Enter the capture interval in the **Capture interval (frames/minute)** field and click **Set** — the graphs' time axis and the Rate update immediately, with no need to retrace. You can also set it on the Upload page.
 
-.. image:: tutorial_images/capture_interval.png
+.. image:: tutorial_images/coming_soon.png
    :alt: Plant Tracer Analyze page showing the Capture interval field with a value entered and a Set button
 
 - To compute the gravitropism Angle, click **Add Inflection Point** to place the reference pivot marker (the base or bend point of the stem), then position it like any other marker. The marker name ``Inflection Point`` is reserved (matched case-insensitively) and only one may be added per movie.
 
-.. image:: tutorial_images/inflection_point.png
+.. image:: tutorial_images/coming_soon.png
    :alt: Plant Tracer Analyze page with the Add Inflection Point button highlighted and an Inflection Point marker placed on the plant stem
 
 - When tracking is complete, you can press **Download CSV** to get the tracking data in CSV format, or **Download Excel** to get an XLSX workbook with trackpoints, metadata, marker summary, chart data, and native Excel chart sheets. Each position column header notes its unit. ``Ruler XXmm`` marker columns are always in pixels. Other markers' columns are in millimeters when you have calibrated with two or more ``Ruler XXmm`` markers placed on the ruler in your video (moved off their default positions); otherwise they are in pixels.
+- Press **Download Traced Movie** to download an MP4 of the analyzed movie with the marker positions overlaid on each frame. This is useful for sharing or presenting the traced result.
 - At this point, you are ready to use a spreadsheet to further analyze and graph the data.
 
 .. image:: tutorial_images/download_trackpoints.png
