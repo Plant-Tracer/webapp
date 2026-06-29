@@ -7,8 +7,9 @@ program, ``src/dbbackup.py``.
 
 This is an operational backup for selected Plant Tracer data, not a full AWS
 account snapshot. It is intended to run from a developer or administrator
-machine with AWS credentials and a configured ``DYNAMODB_TABLE_PREFIX`` and
-``PLANTTRACER_S3_BUCKET``. A future web-admin download/upload workflow may be
+machine with AWS credentials and a configured ``PLANTTRACER_S3_BUCKET``. The
+target DynamoDB table prefix is specified on the command line and supersedes
+``DYNAMODB_TABLE_PREFIX``. A future web-admin download/upload workflow may be
 added later.
 
 Goals
@@ -26,6 +27,28 @@ Goals
 The first implementation should preserve existing IDs on restore. In
 particular, ``course_id``, ``user_id``, and ``movie_id`` are restored exactly as
 recorded in the backup.
+
+Command-Line Contract
+---------------------
+
+The CLI should keep backup, restore, inspection, login-link sending, and
+migration as separate subcommands:
+
+.. code-block:: text
+
+   src/dbbackup.py backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
+   src/dbbackup.py restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--regenerate-zips]
+   src/dbbackup.py inspect file.ptb
+   src/dbbackup.py send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
+   src/dbbackup.py migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
+
+``--table-prefix`` is the authoritative table prefix for commands that touch
+DynamoDB. It overrides ``DYNAMODB_TABLE_PREFIX`` if that environment variable is
+also set.
+
+``restore`` and ``migrate-course`` default to preflight mode. They must inspect
+the target state and report planned writes or blockers, but they must not write
+anything unless ``--commit`` is present.
 
 Backup Scope
 ------------
@@ -47,6 +70,9 @@ Backups do not include:
 * frame ZIP artifacts;
 * original uploaded movie files, by default;
 * traced movie artifacts.
+
+Deleted movies are excluded by default. ``backup`` includes deleted movies only
+when ``--include-deleted`` is present.
 
 ``unique_emails`` is regenerated during restore from restored user records.
 ``api_keys`` are intentionally not restored; after restore, the operator should
@@ -78,8 +104,22 @@ Backup Format
 The backup file extension is ``.ptb``. The file is a ZIP archive containing:
 
 * a manifest JSON file;
+* a human-readable ``README`` file;
 * one JSON Lines file per backed-up DynamoDB table;
 * one MP4 file per backed-up movie.
+
+The archive layout should be:
+
+.. code-block:: text
+
+   manifest.json
+   README
+   tables/users.jsonl
+   tables/courses.jsonl
+   tables/course_users.jsonl
+   tables/movies.jsonl
+   tables/movie_frames.jsonl
+   movies/{movie_id}.mp4
 
 Each DynamoDB record is written as one JSON object per line. The serializer must
 round-trip DynamoDB values such as ``Decimal`` values without changing their
@@ -100,6 +140,12 @@ The manifest records at least:
 * per-table record counts;
 * per-movie object names, sizes, and checksums.
 
+The ``README`` must contain a full warning that the archive contains student
+data, course data, movie metadata, trackpoint annotations, and movie files. It
+must state that the archive is not password protected, should be stored and
+transmitted as sensitive data, and can be restored into a Plant Tracer
+deployment by an operator with suitable AWS credentials.
+
 Selective Backup
 ----------------
 
@@ -111,8 +157,16 @@ Backup selection is separate from restore selection. Backup should support:
 * one movie by ``movie_id``.
 
 A selective backup must include the dependency records needed to restore the
-selected data consistently. For example, a movie backup includes its owning
-user, course, enrollment rows, movie row, frame rows, and movie MP4.
+selected data consistently.
+
+For a user backup, include the user, the user's primary course, every course
+that contains one of the user's movies, the corresponding enrollment rows, the
+user's selected movie rows, their frame rows, and their movie MP4 files.
+
+For a movie backup, include only the movie owner user record, the movie's
+course, the needed enrollment row, the movie row, frame rows, and movie MP4.
+Do not include course administrator users solely because they administer the
+movie's course.
 
 Restore Behavior
 ----------------
@@ -124,9 +178,13 @@ Restore should support:
 * one user by email address;
 * one movie by ``movie_id``.
 
-Restore preserves IDs exactly. It should create required DynamoDB tables only
-when the operator explicitly requests that behavior or after documenting the
-target table-prefix assumption.
+Restore preserves IDs exactly. The target DynamoDB tables must already exist
+under the specified ``--table-prefix``. Restore must not create tables.
+
+Restore defaults to preflight mode. Without ``--commit``, it validates the
+archive, validates target dependencies, reports blockers or planned changes to
+stderr, and exits without writing DynamoDB records or S3 objects. Stderr is
+enough for preflight failure reporting in the first implementation.
 
 If any restored email address already exists in the target ``users`` table,
 restore blocks before writing data. A future enhancement should allow movies
@@ -134,7 +192,8 @@ from the backup to be restored under the existing email address with a different
 ``user_id``. That remapping is out of scope for the first implementation.
 
 Restore must not restore API keys. It should provide a follow-up option to send
-fresh login emails to restored users.
+fresh login emails to restored users. That login-link command defaults to a dry
+run; it sends email only when ``--send`` is present.
 
 Restore should warn that the backup may not be transactionally consistent if
 the production app is active during backup. The first implementation does not
@@ -148,6 +207,11 @@ and MP4 objects are restored. Regeneration must use the same local/deployed
 processing path used elsewhere in the project: Lambda through HTTP/SQS or the
 local Lambda bridge. The restore path should not invent a separate video
 processing implementation.
+
+When ``--regenerate-zips`` is present, restore should enqueue regeneration work,
+poll until completion, and print status to stderr once per second using ``\r``
+to overprint the current line. It should emit a real newline every 30 seconds so
+logs remain readable. ZIP regeneration times out after 5 minutes.
 
 Course and Movie Migration
 --------------------------
@@ -167,7 +231,20 @@ database inconsistency, including:
 Plant Tracer S3 keys include ``course_id/movie_id``. Therefore migrating a
 movie to a new course must move or copy its objects under the new course prefix
 and rewrite the stored URNs. Leaving movie objects under the old course prefix
-is not acceptable for the migration command.
+is not acceptable for the migration command. Course migration should completely
+rewrite affected records to the new course ID rather than preserving the old
+course ID as restore metadata.
+
+Security and Privacy
+--------------------
+
+``.ptb`` files are not password protected in the first implementation. Operators
+must treat them as sensitive student-data archives. The archive ``README`` must
+make this explicit.
+
+Because the backup includes movie files and metadata, it should be stored only
+where student data is allowed, transmitted only over approved channels, and
+deleted when it is no longer operationally needed.
 
 Testing Requirements
 --------------------
@@ -180,10 +257,14 @@ The first substantive integration test should:
 
 * create one course with one user and one movie;
 * back up that single course;
-* restore it and verify the restored DynamoDB records and MP4 object match the
-  source backup data;
-* restore or migrate the same data to a different course and verify that
-  course references and S3 object keys are consistent.
+* verify that restore without ``--commit`` performs preflight only;
+* restore with ``--commit`` and verify the restored DynamoDB records and MP4
+  object match the source backup data;
+* restore or migrate the same data to a different course and verify that course
+  references and S3 object keys are consistent.
+
+``inspect`` should also be covered in the first implementation so operators can
+view manifest data and counts before running restore.
 
 Open Follow-Ups
 ---------------
