@@ -75,7 +75,7 @@ Unreleased Summary
 ******************
     * Developer: add ``src/dbbackup.py`` for default full and selective Plant Tracer ``.ptb`` backups, restores, archive inspection, dry-run restore-link sending, and course migration
     * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges
-    * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts
+    * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
     * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
     * Test: add integration contract coverage for backup selection, default full backup, prefix discovery, restore preflight/commit/collision handling, dry-run restore links, verbose inspection, and course migration using DynamoDB Local and MinIO
 

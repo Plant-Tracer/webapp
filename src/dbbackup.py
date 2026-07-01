@@ -38,6 +38,9 @@ from app.odb import (
     COURSE_NAME,
     COURSE_USERS,
     COURSES,
+    CREATED,
+    CREATED_AT,
+    DATE_UPLOADED,
     DELETED,
     EMAIL,
     FRAME_NUMBER,
@@ -45,6 +48,7 @@ from app.odb import (
     FRAMES,
     MOVIE_DATA_URN,
     MOVIE_ID,
+    MOVIE_STATE_UPDATED_AT,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     MOVIES,
@@ -83,6 +87,11 @@ ROW_SORT_KEYS = {
     FRAMES: (MOVIE_ID, FRAME_NUMBER),
 }
 MOVIE_S3_URN_FIELDS = (MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN)
+USER_DATE_FIELDS = (CREATED,)
+COURSE_DATE_FIELDS = (CREATED, CREATED_AT)
+MOVIE_DATE_FIELDS = (CREATED_AT, DATE_UPLOADED, MOVIE_STATE_UPDATED_AT)
+LIST_PREFIX_HEADERS = ("prefix", "courses", "users", "movies", "from", "to")
+LIST_PREFIX_RIGHT_ALIGNED = (False, True, True, True, False, False)
 TRACKPOINTS = "trackpoints"
 TRACKPOINT_LABEL = "label"
 REQUIRED_PREFIX_TABLES = tuple(
@@ -202,6 +211,35 @@ class PrefixSummary(BaseModel):
     courses: int
     users: int
     movies: int
+    date_from: int | None = None
+    date_to: int | None = None
+
+
+class TimestampRange(BaseModel):
+    """A compact inclusive range of Unix epoch seconds."""
+
+    date_from: int | None = None
+    date_to: int | None = None
+
+    def include(self, value: Any) -> None:
+        epoch = epoch_seconds(value)
+        if epoch is None:
+            return
+        if self.date_from is None or epoch < self.date_from:
+            self.date_from = epoch
+        if self.date_to is None or epoch > self.date_to:
+            self.date_to = epoch
+
+    def include_range(self, other: "TimestampRange") -> None:
+        self.include(other.date_from)
+        self.include(other.date_to)
+
+
+class TableDateSummary(BaseModel):
+    """Count and timestamp range for a table scan."""
+
+    count: int = 0
+    date_range: TimestampRange
 
 
 def encode_attribute_value(attribute_value: dict[str, Any]) -> dict[str, Any]:
@@ -349,27 +387,122 @@ def complete_prefixes(table_names: list[str]) -> list[str]:
     )
 
 
-def count_table_items(table) -> int:
-    total = 0
-    scan_kwargs: dict[str, Any] = {"Select": "COUNT", "ConsistentRead": True}
+def epoch_seconds(value: Any) -> int | None:
+    """Return a sane Unix timestamp, or None for absent/non-timestamp values."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        try:
+            epoch = int(value)
+        except (OverflowError, ValueError):
+            return None
+    elif isinstance(value, int):
+        epoch = value
+    elif isinstance(value, str):
+        try:
+            epoch = int(Decimal(value.strip()))
+        except (ArithmeticError, ValueError):
+            return None
+    else:
+        return None
+    if epoch <= 0:
+        return None
+    return epoch
+
+
+def date_projection_kwargs(date_fields: tuple[str, ...]) -> dict[str, Any]:
+    expression_names = {
+        f"#date{i}": field_name
+        for i, field_name in enumerate(date_fields)
+    }
+    return {
+        "ProjectionExpression": ", ".join(expression_names),
+        "ExpressionAttributeNames": expression_names,
+    }
+
+
+def summarize_table_dates(table, date_fields: tuple[str, ...]) -> TableDateSummary:
+    summary = TableDateSummary(date_range=TimestampRange())
+    scan_kwargs: dict[str, Any] = {
+        "ConsistentRead": True,
+        **date_projection_kwargs(date_fields),
+    }
     while True:
         response = table.scan(**scan_kwargs)
-        total += int(response["Count"])
+        summary.count += int(response["Count"])
+        for item in response.get("Items", []):
+            for field_name in date_fields:
+                summary.date_range.include(item.get(field_name))
         last_key = response.get("LastEvaluatedKey")
         if last_key is None:
-            return total
+            return summary
         scan_kwargs["ExclusiveStartKey"] = last_key
+
+
+def format_epoch_seconds(epoch: int | None) -> str:
+    if epoch is None:
+        return "-"
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def list_prefix_row(summary: PrefixSummary) -> tuple[str, str, str, str, str, str]:
+    prefix = summary.prefix if summary.prefix else "(none)"
+    return (
+        prefix,
+        str(summary.courses),
+        str(summary.users),
+        str(summary.movies),
+        format_epoch_seconds(summary.date_from),
+        format_epoch_seconds(summary.date_to),
+    )
+
+
+def format_list_prefix_row(
+    row: tuple[str, ...],
+    widths: tuple[int, ...],
+) -> str:
+    cells = []
+    for cell, width, right_aligned in zip(row, widths, LIST_PREFIX_RIGHT_ALIGNED):
+        cells.append(cell.rjust(width) if right_aligned else cell.ljust(width))
+    return "  ".join(cells).rstrip()
+
+
+def format_list_prefixes(summaries: list[PrefixSummary]) -> list[str]:
+    rows = [LIST_PREFIX_HEADERS] + [list_prefix_row(summary) for summary in summaries]
+    widths = tuple(
+        max(len(row[index]) for row in rows)
+        for index in range(len(LIST_PREFIX_HEADERS))
+    )
+    return [format_list_prefix_row(row, widths) for row in rows]
 
 
 def prefix_summaries(dynamodb) -> list[PrefixSummary]:
     summaries: list[PrefixSummary] = []
     for prefix in complete_prefixes(list_dynamodb_table_names(dynamodb)):
+        course_summary = summarize_table_dates(
+            dynamodb.Table(prefix + COURSES),
+            COURSE_DATE_FIELDS,
+        )
+        user_summary = summarize_table_dates(
+            dynamodb.Table(prefix + USERS),
+            USER_DATE_FIELDS,
+        )
+        movie_summary = summarize_table_dates(
+            dynamodb.Table(prefix + MOVIES),
+            MOVIE_DATE_FIELDS,
+        )
+        date_range = TimestampRange()
+        date_range.include_range(course_summary.date_range)
+        date_range.include_range(user_summary.date_range)
+        date_range.include_range(movie_summary.date_range)
         summaries.append(
             PrefixSummary(
                 prefix=prefix,
-                courses=count_table_items(dynamodb.Table(prefix + COURSES)),
-                users=count_table_items(dynamodb.Table(prefix + USERS)),
-                movies=count_table_items(dynamodb.Table(prefix + MOVIES)),
+                courses=course_summary.count,
+                users=user_summary.count,
+                movies=movie_summary.count,
+                date_from=date_range.date_from,
+                date_to=date_range.date_to,
             )
         )
     return summaries
@@ -407,10 +540,8 @@ def prefix_summaries_with_sso_retry() -> list[PrefixSummary]:
 
 def command_list_prefixes(_args) -> int:
     summaries = prefix_summaries_with_sso_retry()
-    print("prefix\tcourses\tusers\tmovies")
-    for summary in summaries:
-        prefix = summary.prefix if summary.prefix else "(none)"
-        print(f"{prefix}\t{summary.courses}\t{summary.users}\t{summary.movies}")
+    for line in format_list_prefixes(summaries):
+        print(line)
     return 0
 
 
@@ -1304,7 +1435,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser(
         "list-prefixes",
-        help="List complete DynamoDB table prefixes and their course/user/movie counts",
+        help="List complete DynamoDB table prefixes with counts and date ranges",
     )
 
     send_links = subparsers.add_parser(

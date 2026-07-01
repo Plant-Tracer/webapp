@@ -24,6 +24,8 @@ from app.odb import (
     COURSE_USERS,
     COURSES,
     CREATED,
+    CREATED_AT,
+    DATE_UPLOADED,
     DELETED,
     EMAIL,
     ENABLED,
@@ -281,13 +283,14 @@ def make_user(
     primary_course_name: str,
     courses: list[str],
     admin_for_courses: list[str] | None = None,
+    created: int = 1_800_000_000,
 ) -> None:
     ddbo.put_user(
         {
             USER_ID: user_id,
             EMAIL: email,
             USER_NAME: name,
-            CREATED: 1_800_000_000,
+            CREATED: created,
             ENABLED: 1,
             "admin_for_courses": admin_for_courses or [],
             "primary_course_id": primary_course_id,
@@ -530,6 +533,12 @@ def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
     email = f"list-prefix-{uuid.uuid4().hex[:8]}@example.com"
     ddbo = prefix_tools["create_empty_prefix"](list_prefix)
     make_course(ddbo, course_id)
+    ddbo.courses.update_item(
+        Key={COURSE_ID: course_id},
+        UpdateExpression="SET #created_at = :created_at",
+        ExpressionAttributeNames={"#created_at": CREATED_AT},
+        ExpressionAttributeValues={":created_at": 1_600_000_000},
+    )
     make_user(
         ddbo,
         user_id=user_id,
@@ -538,12 +547,15 @@ def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
         primary_course_id=course_id,
         primary_course_name=f"Course {course_id}",
         courses=[course_id],
+        created=1_700_000_000,
     )
     ddbo.movies.put_item(
         Item={
             MOVIE_ID: unique_name("movie"),
             COURSE_ID: course_id,
             USER_ID: user_id,
+            CREATED_AT: Decimal("1900000000"),
+            DATE_UPLOADED: Decimal("1950000000"),
         }
     )
 
@@ -560,16 +572,18 @@ def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
         )
 
     lines = [line for line in result.stdout.splitlines() if line.strip()]
-    assert lines[0] == "prefix\tcourses\tusers\tmovies"
+    assert lines[0].split() == ["prefix", "courses", "users", "movies", "from", "to"]
     rows = {
         parts[0]: parts
-        for parts in (line.split("\t") for line in lines[1:])
+        for parts in (line.split() for line in lines[1:])
     }
     assert rows[normalized_prefix(list_prefix)] == [
         normalized_prefix(list_prefix),
         "1",
         "1",
         "1",
+        "2020-09-13T12:26:40Z",
+        "2031-10-17T10:40:00Z",
     ]
     assert normalized_prefix(partial_prefix) not in rows
 
@@ -585,7 +599,16 @@ def test_list_prefixes_can_run_aws_sso_login_and_retry(monkeypatch, capsys):
                 provider="sso",
                 error_msg="Token has expired and refresh failed",
             )
-        return [dbbackup.PrefixSummary(prefix="demo-", courses=2, users=3, movies=4)]
+        return [
+            dbbackup.PrefixSummary(
+                prefix="demo-",
+                courses=2,
+                users=3,
+                movies=4,
+                date_from=1_700_000_000,
+                date_to=1_700_000_060,
+            )
+        ]
 
     commands = []
 
@@ -605,8 +628,8 @@ def test_list_prefixes_can_run_aws_sso_login_and_retry(monkeypatch, capsys):
     assert "AWS SSO token retrieval failed" in captured.err
     assert "Run `aws sso login` and retry?" in captured.err
     assert captured.out.splitlines() == [
-        "prefix\tcourses\tusers\tmovies",
-        "demo-\t2\t3\t4",
+        "prefix  courses  users  movies  from                  to",
+        "demo-         2      3       4  2023-11-14T22:13:20Z  2023-11-14T22:14:20Z",
     ]
 
 
