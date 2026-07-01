@@ -67,6 +67,10 @@ Release History
      - 0.9.8.1
      - June 23, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.1>`__
+   * - Jun-29-2026
+     - 0.9.8.2
+     - June 29, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.2>`__
 
 Release Notes
 -------------
@@ -78,6 +82,12 @@ Unreleased Summary
     * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
     * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
     * Test: add integration contract coverage for backup selection, default full backup, prefix discovery, restore preflight/commit/collision handling, dry-run restore links, verbose inspection, and course migration using DynamoDB Local and MinIO
+0.9.8.2 Summary
+***************
+    * Documentation: new Calculation Reference page covering gravitropism and circumnutation statistics formulas
+    * Documentation: styled to match the Plant Tracer site fonts and colors
+    * Documentation: updated User Tutorial to cover 0.9.8.x features
+    * Infrastructure: CloudFormation/SAM template and Makefile hardened for deployment
 
 0.9.8.1 Summary
 ***************

@@ -207,7 +207,7 @@ After creating the GitHub release, open a PR to update `docs/ReleaseHistory.rst`
 1. Add a row to the release table at the top of the file (Name, Version, Date, link to the GitHub release tag).
 2. Add a summary section for the new release (above the previous release's summary), with a bullet per significant change derived from the release notes. The act of updating ReleaseHistory itself need not be mentioned in the summary.
 
-This PR should reference the tagging Issue (e.g. `refs #N`) so the work is traceable. It does **not** need its own separate GitHub Issue.
+The PR title should be `Add ver-X.Y.Z to ReleaseHistory` (no issue number in the title). The PR body should close the tagging Issue (e.g. `fixes #N`) so that merging the PR automatically closes it. It does **not** need its own separate GitHub Issue.
 
 ## Tagging a Release
 
