@@ -211,6 +211,26 @@ class ExistingBackup(BaseModel):
     manifest: Manifest
 
 
+class RestoreTargetState(BaseModel):
+    """DynamoDB table state for a restore target prefix."""
+
+    table_prefix: str
+    existing_table_names: set[str]
+    missing_table_names: set[str]
+
+    @property
+    def needs_creation(self) -> bool:
+        return not self.existing_table_names
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_table_names
+
+    @property
+    def is_partial(self) -> bool:
+        return bool(self.existing_table_names) and bool(self.missing_table_names)
+
+
 class BackupDataset(BaseModel):
     """Selected DynamoDB rows before writing an archive."""
 
@@ -416,6 +436,39 @@ def complete_prefixes(table_names: list[str]) -> list[str]:
         prefix
         for prefix, base_table_names in tables_by_prefix.items()
         if base_table_names >= required_tables
+    )
+
+
+def required_table_names_for_prefix(table_prefix: str) -> set[str]:
+    normalized_prefix = normalized_table_prefix(table_prefix)
+    return {
+        normalized_prefix + base_table_name
+        for base_table_name in REQUIRED_PREFIX_TABLES
+    }
+
+
+def dynamodb_table_exists(dynamodb, table_name: str) -> bool:
+    try:
+        dynamodb.meta.client.describe_table(TableName=table_name)
+        return True
+    except ClientError as exc:
+        if client_error_code(exc) == "ResourceNotFoundException":
+            return False
+        raise
+
+
+def restore_target_state(dynamodb, table_prefix: str) -> RestoreTargetState:
+    required_table_names = required_table_names_for_prefix(table_prefix)
+    existing_table_names = {
+        table_name
+        for table_name in required_table_names
+        if dynamodb_table_exists(dynamodb, table_name)
+    }
+    missing_table_names = required_table_names - existing_table_names
+    return RestoreTargetState(
+        table_prefix=normalized_table_prefix(table_prefix),
+        existing_table_names=existing_table_names,
+        missing_table_names=missing_table_names,
     )
 
 
@@ -1371,11 +1424,34 @@ def restore_rows(ddbo, data: ArchiveData) -> None:
     write_rows(ddbo.unique_emails, unique_email_rows)
 
 
+def ensure_restore_target_ready(target_state: RestoreTargetState) -> None:
+    if target_state.is_partial:
+        missing_tables = ", ".join(sorted(target_state.missing_table_names))
+        existing_tables = ", ".join(sorted(target_state.existing_table_names))
+        raise DbBackupError(
+            f"restore target prefix {target_state.table_prefix!r} is partial; "
+            f"existing tables: {existing_tables}; missing tables: {missing_tables}"
+        )
+
+
+def create_restore_target_tables(target_state: RestoreTargetState) -> None:
+    if not target_state.needs_creation:
+        return
+    print(
+        f"creating DynamoDB tables for restore target prefix {target_state.table_prefix}",
+        file=sys.stderr,
+    )
+    odbmaint.create_tables()
+    setattr(odb.DDBO, "_instance", None)
+
+
 def command_restore(args) -> int:
     configure_table_prefix(args.table_prefix)
     data = selected_archive_data(read_archive(args.archive), selection_from_args(args))
-    ddbo = odb.DDBO()
-    collisions = find_email_collisions(ddbo, data.tables[USERS])
+    target_state = restore_target_state(odb.DDBO.resource(), args.table_prefix)
+    ensure_restore_target_ready(target_state)
+    ddbo = None if target_state.needs_creation else odb.DDBO()
+    collisions = [] if ddbo is None else find_email_collisions(ddbo, data.tables[USERS])
     if collisions:
         print(
             "restore blocked: email address already exists: " + ", ".join(collisions),
@@ -1383,15 +1459,27 @@ def command_restore(args) -> int:
         )
         return 1
 
+    target_action = (
+        f"; will create DynamoDB tables for prefix {target_state.table_prefix}"
+        if target_state.needs_creation
+        else ""
+    )
     print(
         f"{'commit' if args.commit else 'preflight'} restore: "
         f"{len(data.tables[USERS])} users, {len(data.tables[COURSES])} courses, "
-        f"{len(data.tables[MOVIES])} movies",
+        f"{len(data.tables[MOVIES])} movies{target_action}",
         file=sys.stderr,
     )
     if not args.commit:
+        print(
+            "no restore was done because --commit was not provided",
+            file=sys.stderr,
+        )
         return 0
 
+    create_restore_target_tables(target_state)
+    if ddbo is None:
+        ddbo = odb.DDBO()
     restore_movie_objects(args.archive, data.manifest.movies)
     restore_rows(ddbo, data)
     if args.regenerate_zips:

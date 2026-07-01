@@ -120,10 +120,15 @@ def prefix_tools(local_ddb, monkeypatch):
         created_prefixes.append(prefix)
         return DDBO()
 
+    def drop_prefix_after_test(prefix: str) -> None:
+        if prefix not in created_prefixes:
+            created_prefixes.append(prefix)
+
     yield {
         "source_prefix": source_prefix,
         "set_prefix": set_prefix,
         "create_empty_prefix": create_empty_prefix,
+        "drop_prefix_after_test": drop_prefix_after_test,
     }
 
     for prefix in created_prefixes:
@@ -744,7 +749,9 @@ def test_restore_preflight_commit_and_collision(tmp_path, prefix_tools, backup_s
     prefix_tools["create_empty_prefix"](target_prefix)
     before_preflight = snapshot_prefix(prefix_tools, target_prefix)
     result = run_dbbackup("restore", "--table-prefix", target_prefix, str(archive_path), "--all")
-    assert "preflight" in (result.stdout + result.stderr).lower()
+    output = (result.stdout + result.stderr).lower()
+    assert "preflight" in output
+    assert "no restore was done because --commit was not provided" in output
     assert snapshot_prefix(prefix_tools, target_prefix) == before_preflight
     assert not s3_object_exists(backup_scenario.bucket, backup_scenario.active_movie_key)
 
@@ -780,6 +787,41 @@ def test_restore_preflight_commit_and_collision(tmp_path, prefix_tools, backup_s
     assert collision.returncode != 0
     assert "email" in collision.stderr.lower()
     assert snapshot_prefix(prefix_tools, collision_prefix) == before_collision
+
+
+def test_restore_preflight_reports_missing_prefix_and_commit_creates_tables(
+    tmp_path,
+    prefix_tools,
+    backup_scenario: BackupScenario,
+):
+    archive_path = tmp_path / "restore-missing-prefix.ptb"
+    target_prefix = unique_name("restore-missing")
+    prefix_tools["drop_prefix_after_test"](target_prefix)
+
+    run_dbbackup(
+        "backup",
+        "--table-prefix",
+        backup_scenario.source_prefix,
+        "--output",
+        str(archive_path),
+        "--course-id",
+        backup_scenario.movie_course_id,
+    )
+
+    target_state = dbbackup.restore_target_state(DDBO.resource(), target_prefix)
+    assert target_state.needs_creation
+
+    result = run_dbbackup("restore", "--table-prefix", target_prefix, str(archive_path), "--all")
+    output = (result.stdout + result.stderr).lower()
+    assert "preflight restore" in output
+    assert "will create dynamodb tables" in output
+    assert "no restore was done because --commit was not provided" in output
+    assert dbbackup.restore_target_state(DDBO.resource(), target_prefix).needs_creation
+
+    run_dbbackup("restore", "--table-prefix", target_prefix, str(archive_path), "--all", "--commit")
+    target_snapshot = snapshot_prefix(prefix_tools, target_prefix)
+    assert backup_scenario.owner_user_id in row_values(target_snapshot[USERS], USER_ID)
+    assert backup_scenario.active_movie_id in row_values(target_snapshot[MOVIES], MOVIE_ID)
 
 
 def test_inspect_and_send_restore_links_are_non_destructive_by_default(

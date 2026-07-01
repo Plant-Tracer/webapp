@@ -230,13 +230,19 @@ Restore supports:
 * one user by email address;
 * one movie by ``movie_id``.
 
-Restore preserves IDs exactly. The target DynamoDB tables must already exist
-under the specified ``--table-prefix``. Restore must not create tables.
+Restore preserves IDs exactly. If no DynamoDB tables exist under the specified
+``--table-prefix``, restore treats the target prefix as a new installation. In
+preflight mode it reports that the tables will be created and exits without
+creating them. With ``--commit``, restore creates the full table set before
+writing restored rows and movie objects. If only some required target tables
+exist, restore blocks because a partial prefix can hide existing data or schema
+drift.
 
 Restore defaults to preflight mode. Without ``--commit``, it validates the
 archive, validates target dependencies, reports blockers or planned changes to
-stderr, and exits without writing DynamoDB records or S3 objects. Stderr is
-enough for preflight failure reporting in the first implementation.
+stderr, prints ``no restore was done because --commit was not provided``, and
+exits without writing DynamoDB records or S3 objects. Stderr is enough for
+preflight failure reporting in the first implementation.
 
 If any restored email address already exists in the target ``users`` table,
 restore blocks before writing data. A future enhancement should allow movies
