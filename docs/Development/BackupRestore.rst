@@ -1,9 +1,8 @@
 Backup and Restore
 ==================
 
-This page specifies the planned Plant Tracer backup, restore, and course
-migration tool. The implementation target is a new developer command-line
-program, ``src/dbbackup.py``.
+This page specifies the Plant Tracer backup, restore, and course migration
+tool, ``src/dbbackup.py``.
 
 This is an operational backup for selected Plant Tracer data, not a full AWS
 account snapshot. It is intended to run from a developer or administrator
@@ -15,32 +14,34 @@ added later.
 Goals
 -----
 
-``src/dbbackup.py`` should support:
+``src/dbbackup.py`` supports:
 
 * full and selective backups;
 * full and selective restores;
 * restoring a complete course, user, or movie dependency set;
-* optional regeneration of omitted movie ZIP artifacts after restore;
+* dry-run login-link generation for restored users, with sending only when
+  ``--send`` is present;
 * course and movie migration without leaving inconsistent DynamoDB records or
   stale S3 object references.
 
-The first implementation should preserve existing IDs on restore. In
-particular, ``course_id``, ``user_id``, and ``movie_id`` are restored exactly as
-recorded in the backup.
+The implementation preserves existing IDs on restore. In particular,
+``course_id``, ``user_id``, and ``movie_id`` are restored exactly as recorded in
+the backup.
 
 Command-Line Contract
 ---------------------
 
-The CLI should keep backup, restore, inspection, login-link sending, and
-migration as separate subcommands:
+The CLI keeps backup, restore, inspection, login-link sending, and migration as
+separate subcommands:
 
 .. code-block:: text
 
-   src/dbbackup.py backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
-   src/dbbackup.py restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--regenerate-zips]
-   src/dbbackup.py inspect file.ptb
-   src/dbbackup.py send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
-   src/dbbackup.py migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
+   poetry run dbbackup backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
+   poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--regenerate-zips]
+   poetry run dbbackup inspect file.ptb [--verbose]
+   poetry run dbbackup list-prefixes
+   poetry run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
+   poetry run dbbackup migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
 
 ``--table-prefix`` is the authoritative table prefix for commands that touch
 DynamoDB. It overrides ``DYNAMODB_TABLE_PREFIX`` if that environment variable is
@@ -49,6 +50,16 @@ also set.
 ``restore`` and ``migrate-course`` default to preflight mode. They must inspect
 the target state and report planned writes or blockers, but they must not write
 anything unless ``--commit`` is present.
+
+``backup`` defaults to ``--all`` when no selector is supplied. Restore and
+``send-restore-links`` require an explicit selector so operators choose the
+restore or email scope deliberately.
+
+``list-prefixes`` does not take ``--table-prefix``. It uses the current
+DynamoDB connection settings, lists all tables, reports only prefixes for which
+all application tables exist, and prints the course, user, and movie counts for
+each complete prefix. If the current AWS SSO token is expired,
+``list-prefixes`` asks whether it should run ``aws sso login`` and retry once.
 
 Backup Scope
 ------------
@@ -121,9 +132,11 @@ The archive layout should be:
    tables/movie_frames.jsonl
    movies/{movie_id}.mp4
 
-Each DynamoDB record is written as one JSON object per line. The serializer must
-round-trip DynamoDB values such as ``Decimal`` values without changing their
-logical type.
+Each DynamoDB record is written as one JSON object per line using DynamoDB
+AttributeValue JSON, matching the native DynamoDB API item shape. For example,
+a string attribute is stored as ``{"S": "value"}`` and a number attribute is
+stored as ``{"N": "10.0"}``. This preserves DynamoDB value types, including
+decimal numbers, sets, binary values, booleans, nulls, lists, and maps.
 
 The manifest records at least:
 
@@ -149,9 +162,10 @@ deployment by an operator with suitable AWS credentials.
 Selective Backup
 ----------------
 
-Backup selection is separate from restore selection. Backup should support:
+Backup selection is separate from restore selection. Backup supports:
 
-* all courses, users, and movies;
+* all courses, users, and movies, which is the default when no selector is
+  supplied;
 * one course by ``course_id``;
 * one user by email address;
 * one movie by ``movie_id``.
@@ -168,10 +182,23 @@ course, the needed enrollment row, the movie row, frame rows, and movie MP4.
 Do not include course administrator users solely because they administer the
 movie's course.
 
+Archive Inspection
+------------------
+
+``inspect`` defaults to a concise summary: manifest metadata, per-table record
+counts, backed-up movie object count, and total backed-up movie bytes. It does
+not dump individual records by default.
+
+``inspect --verbose`` adds one-line summaries for each backed-up user, course,
+course enrollment, movie, and movie object. Frame records are not dumped
+individually. Instead, verbose inspection reports the total number of frame
+records and groups consecutive frame ranges that have the same trackpoint
+count and trackpoint labels, producing one line per trackpoint set.
+
 Restore Behavior
 ----------------
 
-Restore should support:
+Restore supports:
 
 * all backed-up data;
 * one course by ``course_id``;
@@ -191,13 +218,14 @@ restore blocks before writing data. A future enhancement should allow movies
 from the backup to be restored under the existing email address with a different
 ``user_id``. That remapping is out of scope for the first implementation.
 
-Restore must not restore API keys. It should provide a follow-up option to send
-fresh login emails to restored users. That login-link command defaults to a dry
-run; it sends email only when ``--send`` is present.
+Restore does not restore API keys. The ``send-restore-links`` command provides
+a follow-up option to send fresh login emails to restored users. That
+login-link command defaults to a dry run; it sends email only when ``--send``
+is present.
 
-Restore should warn that the backup may not be transactionally consistent if
-the production app is active during backup. The first implementation does not
-need to force downtime because current utilization is low.
+Backup records a manifest warning that the backup may not be transactionally
+consistent if the production app is active during backup. The implementation
+does not force downtime because current utilization is low.
 
 Regenerating ZIP Artifacts
 --------------------------
@@ -212,6 +240,10 @@ When ``--regenerate-zips`` is present, restore should enqueue regeneration work,
 poll until completion, and print status to stderr once per second using ``\r``
 to overprint the current line. It should emit a real newline every 30 seconds so
 logs remain readable. ZIP regeneration times out after 5 minutes.
+
+The current implementation accepts ``--regenerate-zips`` but fails closed with
+an operator-facing error because the regeneration queue/polling integration has
+not been implemented yet.
 
 Course and Movie Migration
 --------------------------
@@ -253,18 +285,18 @@ Backup and restore tests belong under the existing ``make pytest`` target.
 Tests must use DynamoDB Local and MinIO through existing fixtures and Makefile
 environment, not mocks.
 
-The first substantive integration test should:
+The first substantive integration test:
 
-* create one course with one user and one movie;
-* back up that single course;
-* verify that restore without ``--commit`` performs preflight only;
-* restore with ``--commit`` and verify the restored DynamoDB records and MP4
+* creates one course with one user and one movie;
+* backs up that single course;
+* verifies that restore without ``--commit`` performs preflight only;
+* restores with ``--commit`` and verifies the restored DynamoDB records and MP4
   object match the source backup data;
-* restore or migrate the same data to a different course and verify that course
+* restores or migrates the same data to a different course and verifies that course
   references and S3 object keys are consistent.
 
-``inspect`` should also be covered in the first implementation so operators can
-view manifest data and counts before running restore.
+``inspect`` is also covered so operators can view manifest data and counts
+before running restore.
 
 Open Follow-Ups
 ---------------

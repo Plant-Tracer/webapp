@@ -1,5 +1,6 @@
 """Integration contract tests for the planned src/dbbackup.py CLI."""
 
+import io
 import json
 import os
 import subprocess
@@ -11,7 +12,9 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from boto3.dynamodb.types import TypeDeserializer
 
+import dbbackup
 from app import odb, odbmaint
 from app.constants import C
 from app.odb import (
@@ -48,6 +51,7 @@ from app.s3_presigned import s3_client
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DBBACKUP = ROOT_DIR / "src" / "dbbackup.py"
+TYPE_DESERIALIZER = TypeDeserializer()
 TABLE_FILES = {
     USERS: "tables/users.jsonl",
     COURSES: "tables/courses.jsonl",
@@ -63,6 +67,7 @@ EXCLUDED_TABLE_FILES = {
 
 
 @dataclass(frozen=True)
+# pylint: disable=too-many-instance-attributes
 class BackupScenario:
     """A compact graph that exercises backup dependency closure."""
 
@@ -90,6 +95,7 @@ class PtbContents:
     names: set[str]
     manifest: dict
     readme: str
+    raw_tables: dict[str, list[dict]]
     tables: dict[str, list[dict]]
 
 
@@ -188,14 +194,26 @@ def snapshot_prefix(prefix_tools, prefix: str) -> dict[str, list[dict]]:
 def read_ptb(path: Path) -> PtbContents:
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
+        raw_tables = {}
         tables = {}
         for table, member_name in TABLE_FILES.items():
             with archive.open(member_name) as f:
-                tables[table] = [json.loads(line) for line in f.read().decode().splitlines()]
+                raw_tables[table] = [
+                    json.loads(line)
+                    for line in f.read().decode().splitlines()
+                ]
+                tables[table] = [
+                    {
+                        key: TYPE_DESERIALIZER.deserialize(value)
+                        for key, value in row.items()
+                    }
+                    for row in raw_tables[table]
+                ]
         return PtbContents(
             names=names,
             manifest=json.loads(archive.read("manifest.json")),
             readme=archive.read("README").decode(),
+            raw_tables=raw_tables,
             tables=tables,
         )
 
@@ -219,6 +237,26 @@ def s3_object_bytes(bucket: str, key: str) -> bytes:
 def delete_s3_objects(bucket: str, *keys: str) -> None:
     for key in keys:
         s3_client().delete_object(Bucket=bucket, Key=key)
+
+
+def normalized_prefix(prefix: str) -> str:
+    return (prefix.rstrip("-") + "-") if prefix else ""
+
+
+def create_partial_users_table(dynamodb, table_name: str) -> None:
+    table = dynamodb.create_table(
+        **{
+            odbmaint.TableName: table_name,
+            odbmaint.KeySchema: [
+                {odbmaint.AttributeName: USER_ID, odbmaint.KeyType: odbmaint.HASH},
+            ],
+            odbmaint.AttributeDefinitions: [
+                {odbmaint.AttributeName: USER_ID, odbmaint.AttributeType: odbmaint.S},
+            ],
+            odbmaint.BillingMode: odbmaint.PAY_PER_REQUEST,
+        }
+    )
+    table.wait_until_exists()
 
 
 def make_course(ddbo: DDBO, course_id: str, *, admins: list[str] | None = None) -> None:
@@ -425,9 +463,17 @@ def assert_no_excluded_artifacts(ptb: PtbContents) -> None:
     assert all(not any(fragment in name for fragment in forbidden_fragments) for name in ptb.names)
 
 
+def assert_uses_dynamodb_attribute_json(ptb: PtbContents) -> None:
+    movie_rows = ptb.raw_tables[MOVIES]
+    assert movie_rows
+    assert all(set(row[MOVIE_ID]) == {"S"} for row in movie_rows)
+    assert all(set(row[DELETED]) == {"N"} for row in movie_rows)
+
+
 @pytest.mark.parametrize(
     ("selection_args", "include_deleted", "expect_admin"),
     [
+        (("backup",), False, True),
         (("backup", "--course-id", "{movie_course_id}"), False, True),
         (("backup", "--user-email", "{owner_email}"), False, False),
         (("backup", "--movie-id", "{active_movie_id}"), False, False),
@@ -459,6 +505,7 @@ def test_backup_selection_matrix(
     assert_standard_ptb_layout(ptb)
     assert_readme_warns_about_student_data(ptb)
     assert_no_excluded_artifacts(ptb)
+    assert_uses_dynamodb_attribute_json(ptb)
     assert f"movies/{backup_scenario.active_movie_id}.mp4" in ptb.names
     assert (f"movies/{backup_scenario.deleted_movie_id}.mp4" in ptb.names) is include_deleted
 
@@ -471,8 +518,96 @@ def test_backup_selection_matrix(
     assert backup_scenario.active_movie_id in movies
     assert (backup_scenario.deleted_movie_id in movies) is include_deleted
 
-    if selection_args[1] == "--user-email":
+    if len(selection_args) > 1 and selection_args[1] == "--user-email":
         assert backup_scenario.primary_course_id in courses
+
+
+def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
+    list_prefix = unique_name("list-prefix")
+    partial_prefix = unique_name("partial-prefix")
+    course_id = unique_name("list-course")
+    user_id = odb.new_user_id()
+    email = f"list-prefix-{uuid.uuid4().hex[:8]}@example.com"
+    ddbo = prefix_tools["create_empty_prefix"](list_prefix)
+    make_course(ddbo, course_id)
+    make_user(
+        ddbo,
+        user_id=user_id,
+        email=email,
+        name="Prefix List User",
+        primary_course_id=course_id,
+        primary_course_name=f"Course {course_id}",
+        courses=[course_id],
+    )
+    ddbo.movies.put_item(
+        Item={
+            MOVIE_ID: unique_name("movie"),
+            COURSE_ID: course_id,
+            USER_ID: user_id,
+        }
+    )
+
+    dynamodb = DDBO.resource()
+    partial_table_name = normalized_prefix(partial_prefix) + USERS
+    create_partial_users_table(dynamodb, partial_table_name)
+    try:
+        result = run_dbbackup("list-prefixes")
+    finally:
+        odbmaint.drop_dynamodb_table(
+            dynamodb,
+            partial_table_name,
+            silent_warnings=True,
+        )
+
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert lines[0] == "prefix\tcourses\tusers\tmovies"
+    rows = {
+        parts[0]: parts
+        for parts in (line.split("\t") for line in lines[1:])
+    }
+    assert rows[normalized_prefix(list_prefix)] == [
+        normalized_prefix(list_prefix),
+        "1",
+        "1",
+        "1",
+    ]
+    assert normalized_prefix(partial_prefix) not in rows
+
+
+def test_list_prefixes_can_run_aws_sso_login_and_retry(monkeypatch, capsys):
+    attempts = 0
+
+    def fake_prefix_summaries(_dynamodb):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise dbbackup.TokenRetrievalError(
+                provider="sso",
+                error_msg="Token has expired and refresh failed",
+            )
+        return [dbbackup.PrefixSummary(prefix="demo-", courses=2, users=3, movies=4)]
+
+    commands = []
+
+    def fake_run(command, check=False):
+        commands.append((command, check))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(dbbackup, "prefix_summaries", fake_prefix_summaries)
+    monkeypatch.setattr(dbbackup.odb.DDBO, "resource", staticmethod(object))
+    monkeypatch.setattr(dbbackup.subprocess, "run", fake_run)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("yes\n"))
+
+    assert dbbackup.command_list_prefixes(object()) == 0
+
+    captured = capsys.readouterr()
+    assert commands == [(["aws", "sso", "login"], False)]
+    assert "AWS SSO token retrieval failed" in captured.err
+    assert "Run `aws sso login` and retry?" in captured.err
+    assert captured.out.splitlines() == [
+        "prefix\tcourses\tusers\tmovies",
+        "demo-\t2\t3\t4",
+    ]
 
 
 def test_restore_preflight_commit_and_collision(tmp_path, prefix_tools, backup_scenario: BackupScenario):
@@ -556,8 +691,16 @@ def test_inspect_and_send_restore_links_are_non_destructive_by_default(
     inspect_result = run_dbbackup("inspect", str(archive_path))
     inspect_output = inspect_result.stdout + inspect_result.stderr
     assert backup_scenario.source_prefix in inspect_output
-    assert "movies" in inspect_output.lower()
-    assert backup_scenario.active_movie_id in inspect_output
+    assert "movie_frames: 2" in inspect_output
+    assert "movie objects: 1" in inspect_output
+
+    verbose_result = run_dbbackup("inspect", str(archive_path), "--verbose")
+    verbose_output = verbose_result.stdout + verbose_result.stderr
+    assert backup_scenario.owner_email in verbose_output
+    assert backup_scenario.active_movie_id in verbose_output
+    assert "total frames: 2" in verbose_output
+    assert "frame 0: 2 trackpoints [Apex, Ruler 10mm]" in verbose_output
+    assert "frame 1: 1 trackpoint [Apex]" in verbose_output
 
     prefix_tools["create_empty_prefix"](target_prefix)
     run_dbbackup("restore", "--table-prefix", target_prefix, str(archive_path), "--all", "--commit")
