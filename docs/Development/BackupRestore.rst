@@ -180,6 +180,24 @@ Backup selection is separate from restore selection. Backup supports:
 A selective backup must include the dependency records needed to restore the
 selected data consistently.
 
+``backup`` prints progress to stderr while it examines DynamoDB tables, runs
+preflight checks, and creates the archive. During preflight it verifies that
+each selected movie MP4 object exists in S3. If a selected movie's MP4 is
+missing, backup prints a warning, records the warning in the manifest, omits
+that movie row and its frame rows from the archive, and continues backing up
+the remaining data. Other S3 access failures still abort the backup.
+
+If the output archive already exists, ``backup`` first reads its manifest. It
+will overwrite the archive only when the existing archive's source DynamoDB
+table prefix matches the requested ``--table-prefix`` after normalizing the
+trailing dash. This prevents accidentally replacing the metadata tables from a
+different DynamoDB installation. When overwriting a same-prefix archive,
+``backup`` reuses an existing archived movie MP4 if the manifest shows the same
+S3 bucket and key, copying that zip member into the new archive instead of
+downloading it again. If the current S3 object is missing but the same object is
+already present in the existing archive, ``backup`` records a warning and reuses
+the existing archived copy.
+
 For a user backup, include the user, the user's primary course, every course
 that contains one of the user's movies, the corresponding enrollment rows, the
 user's selected movie rows, their frame rows, and their movie MP4 files.

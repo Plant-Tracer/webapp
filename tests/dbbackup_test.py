@@ -525,6 +525,94 @@ def test_backup_selection_matrix(
         assert backup_scenario.primary_course_id in courses
 
 
+def test_backup_warns_and_skips_missing_movie_object(
+    tmp_path,
+    backup_scenario: BackupScenario,
+):
+    archive_path = tmp_path / "missing-movie.ptb"
+    delete_s3_objects(backup_scenario.bucket, backup_scenario.active_movie_key)
+
+    result = run_dbbackup(
+        "backup",
+        "--table-prefix",
+        backup_scenario.source_prefix,
+        "--output",
+        str(archive_path),
+        "--course-id",
+        backup_scenario.movie_course_id,
+    )
+
+    stderr = result.stderr.lower()
+    assert "examining dynamodb tables" in stderr
+    assert "preflight checking" in stderr
+    assert "creating archive" in stderr
+    assert "warning:" in stderr
+    assert backup_scenario.active_movie_id in result.stderr
+    assert "does not exist" in stderr
+
+    ptb = read_ptb(archive_path)
+    assert f"movies/{backup_scenario.active_movie_id}.mp4" not in ptb.names
+    assert backup_scenario.active_movie_id not in row_values(ptb.tables[MOVIES], MOVIE_ID)
+    assert backup_scenario.active_movie_id not in row_values(ptb.tables[FRAMES], MOVIE_ID)
+    assert any(backup_scenario.active_movie_id in warning for warning in ptb.manifest["warnings"])
+
+
+def test_backup_overwrite_requires_same_prefix_and_reuses_movie_objects(
+    tmp_path,
+    backup_scenario: BackupScenario,
+):
+    archive_path = tmp_path / "overwrite.ptb"
+
+    run_dbbackup(
+        "backup",
+        "--table-prefix",
+        backup_scenario.source_prefix,
+        "--output",
+        str(archive_path),
+        "--course-id",
+        backup_scenario.movie_course_id,
+    )
+
+    denied = run_dbbackup(
+        "backup",
+        "--table-prefix",
+        unique_name("wrong-prefix"),
+        "--output",
+        str(archive_path),
+        check=False,
+    )
+    assert denied.returncode != 0
+    assert "refusing to overwrite" in denied.stderr
+    assert normalized_prefix(backup_scenario.source_prefix) == read_ptb(archive_path).manifest[
+        "source_table_prefix"
+    ]
+
+    delete_s3_objects(backup_scenario.bucket, backup_scenario.active_movie_key)
+    result = run_dbbackup(
+        "backup",
+        "--table-prefix",
+        backup_scenario.source_prefix,
+        "--output",
+        str(archive_path),
+        "--course-id",
+        backup_scenario.movie_course_id,
+    )
+
+    stderr = result.stderr.lower()
+    assert "reusing archived movie object" in stderr
+    assert "missing in s3" in stderr
+    assert not s3_object_exists(backup_scenario.bucket, backup_scenario.active_movie_key)
+
+    ptb = read_ptb(archive_path)
+    assert f"movies/{backup_scenario.active_movie_id}.mp4" in ptb.names
+    assert backup_scenario.active_movie_id in row_values(ptb.tables[MOVIES], MOVIE_ID)
+    with zipfile.ZipFile(archive_path) as archive:
+        assert (
+            archive.read(f"movies/{backup_scenario.active_movie_id}.mp4")
+            == backup_scenario.active_movie_bytes
+        )
+
+
 def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
     list_prefix = unique_name("list-prefix")
     partial_prefix = unique_name("partial-prefix")

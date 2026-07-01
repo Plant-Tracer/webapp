@@ -81,7 +81,10 @@ Unreleased Summary
     * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges
     * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
     * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
+    * Developer: make ``dbbackup backup`` report progress to stderr and skip missing movie MP4 objects with manifest warnings instead of failing after writing a partial archive
+    * Developer: make ``dbbackup backup`` refuse to overwrite an archive from a different DynamoDB table prefix and reuse already archived movie MP4 objects when refreshing a same-prefix backup
     * Test: add integration contract coverage for backup selection, default full backup, prefix discovery, restore preflight/commit/collision handling, dry-run restore links, verbose inspection, and course migration using DynamoDB Local and MinIO
+
 0.9.8.2 Summary
 ***************
     * Documentation: new Calculation Reference page covering gravitropism and circumnutation statistics formulas

@@ -7,6 +7,7 @@ Selective backup, restore, inspection, and migration for Plant Tracer data.
 
 import argparse
 import base64
+import contextlib
 import copy
 import getpass
 import hashlib
@@ -154,6 +155,26 @@ class MovieObject(BaseModel):
     sha256: str
 
 
+class MovieObjectCandidate(BaseModel):
+    """A movie object that passed backup preflight."""
+
+    movie_id: str
+    urn: str
+    bucket: str
+    key: str
+    size: int | None = None
+    existing_movie_object: MovieObject | None = None
+    warning: str | None = None
+
+
+class BackupPreflight(BaseModel):
+    """Backup preflight result."""
+
+    movie_objects: list[MovieObjectCandidate]
+    skipped_movie_ids: set[str]
+    warnings: list[str]
+
+
 class Manifest(BaseModel):
     """The .ptb archive manifest."""
 
@@ -181,6 +202,13 @@ class ArchiveData(BaseModel):
 
     manifest: Manifest
     tables: dict[str, list[dict[str, Any]]]
+
+
+class ExistingBackup(BaseModel):
+    """A reusable existing backup archive."""
+
+    path: Path
+    manifest: Manifest
 
 
 class BackupDataset(BaseModel):
@@ -306,6 +334,10 @@ def decode_item(row: dict[str, Any]) -> dict[str, Any]:
 
 def json_dumps(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def normalized_table_prefix(table_prefix: str | None) -> str:
+    return (table_prefix.rstrip("-") + "-") if table_prefix else ""
 
 
 def configure_table_prefix(table_prefix: str) -> None:
@@ -718,16 +750,175 @@ def write_table_jsonl(
     archive.writestr(TABLE_MEMBER_BY_NAME[table_name], body)
 
 
-def read_movie_object(movie: dict[str, Any]) -> tuple[str, str, bytes]:
+def client_error_code(exc: ClientError) -> str:
+    return str(exc.response.get("Error", {}).get("Code", ""))
+
+
+def is_missing_s3_object_error(exc: ClientError) -> bool:
+    status_code = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+    return status_code == 404 or client_error_code(exc) in {"404", "NoSuchKey", "NotFound"}
+
+
+def read_archive_manifest(path: str | Path) -> Manifest:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return Manifest.model_validate(json.loads(archive.read(MEMBER_MANIFEST)))
+    except KeyError as exc:
+        raise DbBackupError(f"archive is missing {MEMBER_MANIFEST}") from exc
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        raise DbBackupError(f"cannot read backup archive {path}: {exc}") from exc
+
+
+def existing_backup_for_output(output: Path, table_prefix: str) -> ExistingBackup | None:
+    if not output.exists():
+        return None
+    manifest = read_archive_manifest(output)
+    output_prefix = normalized_table_prefix(manifest.source_table_prefix)
+    requested_prefix = normalized_table_prefix(table_prefix)
+    if output_prefix != requested_prefix:
+        raise DbBackupError(
+            f"{output} already contains a backup for DynamoDB table prefix "
+            f"{output_prefix!r}, not {requested_prefix!r}; refusing to overwrite"
+        )
+    return ExistingBackup(path=output, manifest=manifest)
+
+
+def existing_movie_object_for_candidate(
+        existing_backup: ExistingBackup | None,
+        bucket: str,
+        key: str) -> MovieObject | None:
+    if existing_backup is None:
+        return None
+    for movie_object in existing_backup.manifest.movies:
+        if movie_object.bucket == bucket and movie_object.key == key:
+            return movie_object
+    return None
+
+
+def movie_object_candidate(
+        movie: dict[str, Any],
+        existing_backup: ExistingBackup | None = None) -> MovieObjectCandidate | str:
+    movie_id = movie[MOVIE_ID]
     urn = movie.get(MOVIE_DATA_URN)
     if not urn:
-        raise DbBackupError(f"movie {movie[MOVIE_ID]} has no {MOVIE_DATA_URN}")
-    bucket, key = parse_s3_urn(urn=urn)
+        return f"movie {movie_id} has no {MOVIE_DATA_URN}; skipping movie"
     try:
-        body = s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+        bucket, key = parse_s3_urn(urn=urn)
+        existing_movie_object = existing_movie_object_for_candidate(
+            existing_backup,
+            bucket,
+            key,
+        )
+        response = s3_client().head_object(Bucket=bucket, Key=key)
+    except (RuntimeError, ValueError) as exc:
+        return f"movie {movie_id} has invalid {MOVIE_DATA_URN} {urn}: {exc}; skipping movie"
     except ClientError as exc:
-        raise DbBackupError(f"cannot read movie object {urn}: {exc}") from exc
-    return bucket, key, body
+        if is_missing_s3_object_error(exc):
+            existing_movie_object = existing_movie_object_for_candidate(
+                existing_backup,
+                bucket,
+                key,
+            )
+            if existing_movie_object is not None:
+                return MovieObjectCandidate(
+                    movie_id=movie_id,
+                    urn=urn,
+                    bucket=bucket,
+                    key=key,
+                    size=existing_movie_object.size,
+                    existing_movie_object=existing_movie_object,
+                    warning=(
+                        f"movie {movie_id} object {urn} is missing in S3; "
+                        "reusing existing archive copy"
+                    ),
+                )
+            return f"movie {movie_id} object {urn} does not exist; skipping movie"
+        raise DbBackupError(f"cannot check movie object {urn}: {exc}") from exc
+    return MovieObjectCandidate(
+        movie_id=movie_id,
+        urn=urn,
+        bucket=bucket,
+        key=key,
+        size=response.get("ContentLength"),
+        existing_movie_object=existing_movie_object,
+    )
+
+
+def preflight_movie_objects(
+        movies: list[dict[str, Any]],
+        existing_backup: ExistingBackup | None = None) -> BackupPreflight:
+    preflight = BackupPreflight(
+        movie_objects=[],
+        skipped_movie_ids=set(),
+        warnings=[],
+    )
+    for movie in movies:
+        candidate = movie_object_candidate(movie, existing_backup)
+        if isinstance(candidate, str):
+            preflight.skipped_movie_ids.add(movie[MOVIE_ID])
+            preflight.warnings.append(candidate)
+        else:
+            preflight.movie_objects.append(candidate)
+            if candidate.warning is not None:
+                preflight.warnings.append(candidate.warning)
+    return preflight
+
+
+def backup_dataset_without_movies(
+        dataset: BackupDataset,
+        skipped_movie_ids: set[str]) -> BackupDataset:
+    if not skipped_movie_ids:
+        return dataset
+    return BackupDataset(
+        users=dataset.users,
+        courses=dataset.courses,
+        course_users=dataset.course_users,
+        movies=[
+            movie for movie in dataset.movies
+            if movie[MOVIE_ID] not in skipped_movie_ids
+        ],
+        frames=[
+            frame for frame in dataset.frames
+            if frame[MOVIE_ID] not in skipped_movie_ids
+        ],
+    )
+
+
+def read_existing_movie_object(
+        candidate: MovieObjectCandidate,
+        existing_archive: zipfile.ZipFile | None) -> bytes:
+    movie_object = candidate.existing_movie_object
+    if movie_object is None:
+        raise DbBackupError(f"movie {candidate.movie_id} has no reusable archive object")
+    if existing_archive is None:
+        raise DbBackupError(f"movie {candidate.movie_id} cannot reuse an unopened archive")
+    try:
+        body = existing_archive.read(movie_object.member_name)
+    except KeyError as exc:
+        raise DbBackupError(
+            f"existing archive is missing {movie_object.member_name}"
+        ) from exc
+    digest = hashlib.sha256(body).hexdigest()
+    if digest != movie_object.sha256:
+        raise DbBackupError(
+            f"checksum mismatch for existing archive member {movie_object.member_name}: "
+            f"{digest} != {movie_object.sha256}"
+        )
+    return body
+
+
+def read_movie_object(
+        candidate: MovieObjectCandidate,
+        existing_archive: zipfile.ZipFile | None = None) -> bytes:
+    if candidate.existing_movie_object is not None:
+        return read_existing_movie_object(candidate, existing_archive)
+    try:
+        return s3_client().get_object(
+            Bucket=candidate.bucket,
+            Key=candidate.key,
+        )["Body"].read()
+    except ClientError as exc:
+        raise DbBackupError(f"cannot read movie object {candidate.urn}: {exc}") from exc
 
 
 def make_manifest(
@@ -736,7 +927,8 @@ def make_manifest(
         selection: Selection,
         options: BackupOptions,
         dataset: BackupDataset,
-        movie_objects: list[MovieObject]) -> Manifest:
+        movie_objects: list[MovieObject],
+        warnings: list[str]) -> Manifest:
     table_counts = {
         table_name: len(rows)
         for table_name, rows in dataset.table_rows().items()
@@ -748,65 +940,99 @@ def make_manifest(
         operator=getpass.getuser(),
         source_host=socket.gethostname(),
         aws_region=os.environ.get(C.AWS_REGION),
-        source_table_prefix=args.table_prefix,
+        source_table_prefix=normalized_table_prefix(args.table_prefix),
         source_s3_bucket=os.environ.get(C.PLANTTRACER_S3_BUCKET),
         selection=selection,
         options=options,
         table_counts=table_counts,
         movies=movie_objects,
-        warnings=[
-            "Backup may not be transactionally consistent if the application is active."
-        ],
+        warnings=warnings,
     )
+
+
+def backup_status(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def backup_archive_temp_path(output: Path) -> Path:
+    return output.with_name(f".{output.name}.tmp")
 
 
 def command_backup(args) -> int:
     configure_table_prefix(args.table_prefix)
     selection = selection_from_args(args, default_all=True)
-    ddbo = odb.DDBO()
     options = BackupOptions(include_deleted=args.include_deleted)
+    output = Path(args.output)
+    backup_status(f"backup: checking output archive {output}")
+    existing_backup = existing_backup_for_output(output, args.table_prefix)
+    ddbo = odb.DDBO()
+    backup_status(f"backup: examining DynamoDB tables for {selection.label}")
     dataset = build_backup_dataset(ddbo, selection, include_deleted=args.include_deleted)
+    backup_status(f"backup: preflight checking {len(dataset.movies)} movie objects")
+    preflight = preflight_movie_objects(dataset.movies, existing_backup)
+    warnings = [
+        "Backup may not be transactionally consistent if the application is active."
+    ] + preflight.warnings
+    for warning in preflight.warnings:
+        backup_status(f"WARNING: {warning}")
+    dataset = backup_dataset_without_movies(dataset, preflight.skipped_movie_ids)
     movie_objects: list[MovieObject] = []
 
-    output = Path(args.output)
-    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(MEMBER_README, backup_readme())
-        for table_name, rows in dataset.table_rows().items():
-            write_table_jsonl(archive, table_name, rows)
+    temp_output = backup_archive_temp_path(output)
+    backup_status(f"backup: creating archive {output}")
+    try:
+        with contextlib.ExitStack() as stack, zipfile.ZipFile(
+                temp_output,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED) as archive:
+            existing_archive = None
+            if existing_backup is not None:
+                existing_archive = stack.enter_context(zipfile.ZipFile(existing_backup.path))
+            archive.writestr(MEMBER_README, backup_readme())
+            for table_name, rows in dataset.table_rows().items():
+                write_table_jsonl(archive, table_name, rows)
 
-        for movie in dataset.movies:
-            bucket, key, body = read_movie_object(movie)
-            movie_id = movie[MOVIE_ID]
-            member_name = f"{MOVIE_MEMBER_PREFIX}{movie_id}.mp4"
-            digest = hashlib.sha256(body).hexdigest()
-            archive.writestr(member_name, body)
-            movie_objects.append(
-                MovieObject(
-                    movie_id=movie_id,
-                    member_name=member_name,
-                    urn=movie[MOVIE_DATA_URN],
-                    bucket=bucket,
-                    key=key,
-                    size=len(body),
-                    sha256=digest,
+            for candidate in preflight.movie_objects:
+                if candidate.existing_movie_object is not None:
+                    backup_status(f"backup: reusing archived movie object {candidate.movie_id}")
+                else:
+                    backup_status(f"backup: downloading movie object {candidate.movie_id}")
+                body = read_movie_object(candidate, existing_archive)
+                member_name = f"{MOVIE_MEMBER_PREFIX}{candidate.movie_id}.mp4"
+                digest = hashlib.sha256(body).hexdigest()
+                archive.writestr(member_name, body)
+                movie_objects.append(
+                    MovieObject(
+                        movie_id=candidate.movie_id,
+                        member_name=member_name,
+                        urn=candidate.urn,
+                        bucket=candidate.bucket,
+                        key=candidate.key,
+                        size=len(body),
+                        sha256=digest,
+                    )
                 )
-            )
 
-        manifest = make_manifest(
-            args=args,
-            selection=selection,
-            options=options,
-            dataset=dataset,
-            movie_objects=movie_objects,
-        )
-        archive.writestr(
-            MEMBER_MANIFEST,
-            json.dumps(manifest.model_dump(by_alias=True), indent=2, sort_keys=True) + "\n",
-        )
+            manifest = make_manifest(
+                args=args,
+                selection=selection,
+                options=options,
+                dataset=dataset,
+                movie_objects=movie_objects,
+                warnings=warnings,
+            )
+            archive.writestr(
+                MEMBER_MANIFEST,
+                json.dumps(manifest.model_dump(by_alias=True), indent=2, sort_keys=True) + "\n",
+            )
+        temp_output.replace(output)
+    except Exception:
+        temp_output.unlink(missing_ok=True)
+        raise
 
     print(
         f"wrote {output}: {len(dataset.users)} users, {len(dataset.courses)} courses, "
-        f"{len(dataset.movies)} movies"
+        f"{len(dataset.movies)} movies, {len(movie_objects)} movie objects"
     )
     return 0
 

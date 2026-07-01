@@ -5,7 +5,7 @@ This page documents the statistical calculations performed by Plant Tracer after
 a movie is traced. The calculations are implemented in
 ``src/app/static/analysis_results.mjs`` and ported from the legacy iOS app's
 ``showResult()`` function (see issue #986). For the implementation notes see
-:doc:`AnalysisResults`.
+:doc:`Development/AnalysisResults`.
 
 Coordinate system and scale
 ----------------------------
