@@ -375,7 +375,10 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
-    subparsers.add_parser("createdb", help="Create tables and populate the demo course")
+    subparsers.add_parser(
+        "createdb",
+        help="Create tables from etc/dynamodb_tables.json and populate the demo course",
+    )
     subparsers.add_parser("dropdb", help="Drop all configured DynamoDB tables")
     subparsers.add_parser(
         "create-demo",
