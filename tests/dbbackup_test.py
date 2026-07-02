@@ -142,7 +142,10 @@ def unique_name(label: str) -> str:
     return f"{label}-{uuid.uuid4().hex[:10]}"
 
 
-def run_dbbackup(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_dbbackup(
+        *args: str,
+        check: bool = True,
+        input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     """Run dbbackup as an operator-facing CLI command."""
     env = os.environ.copy()
     if "--table-prefix" in args:
@@ -156,6 +159,7 @@ def run_dbbackup(*args: str, check: bool = True) -> subprocess.CompletedProcess[
         cwd=ROOT_DIR,
         env=env,
         text=True,
+        input=input_text,
         capture_output=True,
         check=False,
     )
@@ -500,7 +504,7 @@ def test_backup_selection_matrix(
         value.format(**backup_scenario.__dict__) for value in selection_args
     ]
 
-    run_dbbackup(
+    result = run_dbbackup(
         formatted_selection[0],
         "--table-prefix",
         backup_scenario.source_prefix,
@@ -508,6 +512,7 @@ def test_backup_selection_matrix(
         str(archive_path),
         *formatted_selection[1:],
     )
+    assert f"backup: using S3 bucket(s): {backup_scenario.bucket}" in result.stderr
 
     ptb = read_ptb(archive_path)
     assert_standard_ptb_layout(ptb)
@@ -792,11 +797,13 @@ def test_restore_preflight_commit_and_collision(tmp_path, prefix_tools, backup_s
 def test_restore_preflight_reports_missing_prefix_and_commit_creates_tables(
     tmp_path,
     prefix_tools,
+    monkeypatch,
     backup_scenario: BackupScenario,
 ):
     archive_path = tmp_path / "restore-missing-prefix.ptb"
     target_prefix = unique_name("restore-missing")
     prefix_tools["drop_prefix_after_test"](target_prefix)
+    monkeypatch.delenv(C.PLANTTRACER_S3_BUCKET, raising=False)
 
     run_dbbackup(
         "backup",
@@ -807,6 +814,8 @@ def test_restore_preflight_reports_missing_prefix_and_commit_creates_tables(
         "--course-id",
         backup_scenario.movie_course_id,
     )
+    assert dbbackup.read_archive_manifest(archive_path).source_s3_bucket is None
+    delete_s3_objects(backup_scenario.bucket, backup_scenario.active_movie_key)
 
     target_state = dbbackup.restore_target_state(DDBO.resource(), target_prefix)
     assert target_state.needs_creation
@@ -815,13 +824,50 @@ def test_restore_preflight_reports_missing_prefix_and_commit_creates_tables(
     output = (result.stdout + result.stderr).lower()
     assert "preflight restore" in output
     assert "will create dynamodb tables" in output
+    assert f"restore s3 bucket(s): {backup_scenario.bucket}" in output
     assert "no restore was done because --commit was not provided" in output
     assert dbbackup.restore_target_state(DDBO.resource(), target_prefix).needs_creation
 
-    run_dbbackup("restore", "--table-prefix", target_prefix, str(archive_path), "--all", "--commit")
+    cancelled = run_dbbackup(
+        "restore",
+        "--table-prefix",
+        target_prefix,
+        str(archive_path),
+        "--all",
+        "--commit",
+        check=False,
+        input_text="\n",
+    )
+    cancelled_output = (cancelled.stdout + cancelled.stderr).lower()
+    assert cancelled.returncode != 0
+    assert "warning:" in cancelled_output
+    assert "type 'yes' to continue" in cancelled_output
+    assert "restore cancelled" in cancelled_output
+    assert dbbackup.restore_target_state(DDBO.resource(), target_prefix).needs_creation
+
+    confirmed = run_dbbackup(
+        "restore",
+        "--table-prefix",
+        target_prefix,
+        str(archive_path),
+        "--all",
+        "--commit",
+        "--threads",
+        "2",
+        input_text="yes\n",
+    )
+    confirmed_output = (confirmed.stdout + confirmed.stderr).lower()
+    assert "warning:" in confirmed_output
+    assert f"archive s3 bucket(s): {backup_scenario.bucket}" in confirmed_output
+    assert f"uploaded movie object {backup_scenario.active_movie_id}" in confirmed_output
+    assert f"wrote movie_frames for movie {backup_scenario.active_movie_id}: 2 frames" in confirmed_output
     target_snapshot = snapshot_prefix(prefix_tools, target_prefix)
     assert backup_scenario.owner_user_id in row_values(target_snapshot[USERS], USER_ID)
     assert backup_scenario.active_movie_id in row_values(target_snapshot[MOVIES], MOVIE_ID)
+    assert s3_object_bytes(
+        backup_scenario.bucket,
+        backup_scenario.active_movie_key,
+    ) == backup_scenario.active_movie_bytes
 
 
 def test_inspect_and_send_restore_links_are_non_destructive_by_default(
@@ -844,6 +890,7 @@ def test_inspect_and_send_restore_links_are_non_destructive_by_default(
     inspect_result = run_dbbackup("inspect", str(archive_path))
     inspect_output = inspect_result.stdout + inspect_result.stderr
     assert backup_scenario.source_prefix in inspect_output
+    assert f"restore S3 bucket(s): {backup_scenario.bucket}" in inspect_output
     assert "movie_frames: 2" in inspect_output
     assert "movie objects: 1" in inspect_output
 

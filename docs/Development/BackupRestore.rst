@@ -6,9 +6,11 @@ tool, ``src/dbbackup.py``.
 
 This is an operational backup for selected Plant Tracer data, not a full AWS
 account snapshot. It is intended to run from a developer or administrator
-machine with AWS credentials and a configured ``PLANTTRACER_S3_BUCKET``. The
-target DynamoDB table prefix is specified on the command line and supersedes
-``DYNAMODB_TABLE_PREFIX``. A future web-admin download/upload workflow may be
+machine with AWS credentials. The target DynamoDB table prefix is specified on
+the command line and supersedes ``DYNAMODB_TABLE_PREFIX``. If
+``PLANTTRACER_S3_BUCKET`` is configured during restore, restored movie objects
+are written to that bucket; otherwise restore uses the bucket recorded for each
+movie object in the archive. A future web-admin download/upload workflow may be
 added later.
 
 Goals
@@ -37,7 +39,7 @@ separate subcommands:
 .. code-block:: text
 
    poetry run dbbackup backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
-   poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--regenerate-zips]
+   poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--threads N] [--regenerate-zips]
    poetry run dbbackup inspect file.ptb [--verbose]
    poetry run dbbackup list-prefixes
    poetry run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
@@ -181,8 +183,9 @@ A selective backup must include the dependency records needed to restore the
 selected data consistently.
 
 ``backup`` prints progress to stderr while it examines DynamoDB tables, runs
-preflight checks, and creates the archive. During preflight it verifies that
-each selected movie MP4 object exists in S3. If a selected movie's MP4 is
+preflight checks, reports the S3 bucket or buckets used by selected movie
+objects, and creates the archive. During preflight it verifies that each
+selected movie MP4 object exists in S3. If a selected movie's MP4 is
 missing, backup prints a warning, records the warning in the manifest, omits
 that movie row and its frame rows from the archive, and continues backing up
 the remaining data. Other S3 access failures still abort the backup.
@@ -211,8 +214,9 @@ Archive Inspection
 ------------------
 
 ``inspect`` defaults to a concise summary: manifest metadata, per-table record
-counts, backed-up movie object count, and total backed-up movie bytes. It does
-not dump individual records by default.
+counts, the S3 bucket or buckets a restore would write movie objects to,
+backed-up movie object count, and total backed-up movie bytes. It does not dump
+individual records by default.
 
 ``inspect --verbose`` adds one-line summaries for each backed-up user, course,
 course enrollment, movie, and movie object. Frame records are not dumped
@@ -233,16 +237,31 @@ Restore supports:
 Restore preserves IDs exactly. If no DynamoDB tables exist under the specified
 ``--table-prefix``, restore treats the target prefix as a new installation. In
 preflight mode it reports that the tables will be created and exits without
-creating them. With ``--commit``, restore creates the full table set before
-writing restored rows and movie objects. If only some required target tables
-exist, restore blocks because a partial prefix can hide existing data or schema
-drift.
+creating them. With ``--commit``, restore creates the full table set in
+parallel before writing restored rows and movie objects. If any table creation
+fails, restore deletes tables it created and fails before writing S3 objects or
+DynamoDB rows. If only some required target tables exist, restore blocks
+because a partial prefix can hide existing data or schema drift.
 
 Restore defaults to preflight mode. Without ``--commit``, it validates the
-archive, validates target dependencies, reports blockers or planned changes to
-stderr, prints ``no restore was done because --commit was not provided``, and
-exits without writing DynamoDB records or S3 objects. Stderr is enough for
-preflight failure reporting in the first implementation.
+archive, validates target dependencies, reports blockers, planned changes, and
+the S3 bucket or buckets movie objects would be restored to, prints ``no restore
+was done because --commit was not provided``, and exits without writing
+DynamoDB records or S3 objects. Stderr is enough for preflight failure reporting
+in the first implementation.
+
+When ``PLANTTRACER_S3_BUCKET`` is not set, committed restore falls back to the
+bucket recorded for each movie object in the archive. Before writing anything,
+it prints a warning naming the archive bucket or buckets and requires the
+operator to type ``yes``. To avoid that confirmation, set
+``PLANTTRACER_S3_BUCKET`` explicitly.
+
+Committed restore uploads movie MP4 objects through a thread pool and prints a
+status line after each movie object is uploaded. It also writes
+``movie_frames`` in parallel by ``movie_id``; each movie's frame rows remain
+batched together, and restore prints a status line when all frame rows for that
+movie have been written. ``--threads`` controls the S3 upload and frame-write
+worker count and defaults to 6.
 
 If any restored email address already exists in the target ``users`` table,
 restore blocks before writing data. A future enhancement should allow movies

@@ -7,6 +7,7 @@ Selective backup, restore, inspection, and migration for Plant Tracer data.
 
 import argparse
 import base64
+import concurrent.futures
 import contextlib
 import copy
 import getpass
@@ -16,6 +17,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 from decimal import Decimal
@@ -65,6 +67,7 @@ from app.s3_presigned import parse_s3_urn, s3_client
 
 
 FORMAT_VERSION = 1
+DEFAULT_RESTORE_THREADS = 6
 MEMBER_MANIFEST = "manifest.json"
 MEMBER_README = "README"
 MOVIE_MEMBER_PREFIX = "movies/"
@@ -229,6 +232,15 @@ class RestoreTargetState(BaseModel):
     @property
     def is_partial(self) -> bool:
         return bool(self.existing_table_names) and bool(self.missing_table_names)
+
+
+class RestoreBucketPlan(BaseModel):
+    """S3 bucket choice for restored movie objects."""
+
+    env_bucket: str | None
+    archive_buckets: set[str]
+    target_buckets: set[str]
+    uses_archive_bucket: bool
 
 
 class BackupDataset(BaseModel):
@@ -1007,6 +1019,12 @@ def backup_status(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
+def bucket_list_text(buckets: set[str]) -> str:
+    if not buckets:
+        return "none"
+    return ", ".join(sorted(buckets))
+
+
 def backup_archive_temp_path(output: Path) -> Path:
     return output.with_name(f".{output.name}.tmp")
 
@@ -1023,6 +1041,10 @@ def command_backup(args) -> int:
     dataset = build_backup_dataset(ddbo, selection, include_deleted=args.include_deleted)
     backup_status(f"backup: preflight checking {len(dataset.movies)} movie objects")
     preflight = preflight_movie_objects(dataset.movies, existing_backup)
+    backup_status(
+        "backup: using S3 bucket(s): "
+        f"{bucket_list_text({candidate.bucket for candidate in preflight.movie_objects})}"
+    )
     warnings = [
         "Backup may not be transactionally consistent if the application is active."
     ] + preflight.warnings
@@ -1188,11 +1210,13 @@ def selected_archive_data(data: ArchiveData, selection: Selection) -> ArchiveDat
 
 def print_archive_summary(data: ArchiveData, *, stream) -> None:
     manifest = data.manifest
+    bucket_plan = restore_bucket_plan(manifest.movies)
     print(f"format version: {manifest.format_version}", file=stream)
     print(f"created at: {manifest.created_at}", file=stream)
     print(f"application version: {manifest.app_version}", file=stream)
     print(f"source table prefix: {manifest.source_table_prefix}", file=stream)
     print(f"source S3 bucket: {manifest.source_s3_bucket}", file=stream)
+    print(f"restore S3 bucket(s): {restore_bucket_plan_text(bucket_plan)}", file=stream)
     print(f"selection: {manifest.selection.label}", file=stream)
     print("tables:", file=stream)
     for table_name in TABLE_MEMBER_BY_NAME:
@@ -1365,23 +1389,67 @@ def find_email_collisions(ddbo, users: list[dict[str, Any]]) -> list[str]:
     return sorted(set(collisions))
 
 
-def target_bucket() -> str:
-    bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
-    if not bucket:
-        raise DbBackupError(f"{C.PLANTTRACER_S3_BUCKET} is not set")
-    return bucket
+def restore_bucket_plan(movie_objects: list[MovieObject]) -> RestoreBucketPlan:
+    env_bucket = os.environ.get(C.PLANTTRACER_S3_BUCKET)
+    archive_buckets = {
+        movie_object.bucket
+        for movie_object in movie_objects
+        if movie_object.bucket
+    }
+    target_buckets = {env_bucket} if env_bucket and movie_objects else archive_buckets
+    return RestoreBucketPlan(
+        env_bucket=env_bucket,
+        archive_buckets=archive_buckets,
+        target_buckets=target_buckets,
+        uses_archive_bucket=bool(movie_objects) and not bool(env_bucket),
+    )
+
+
+def restore_bucket_plan_text(bucket_plan: RestoreBucketPlan) -> str:
+    if not bucket_plan.target_buckets:
+        return "none (no movie objects)"
+    if bucket_plan.env_bucket:
+        return f"{bucket_list_text(bucket_plan.target_buckets)} (from {C.PLANTTRACER_S3_BUCKET})"
+    return f"{bucket_list_text(bucket_plan.target_buckets)} (from archive movie metadata)"
+
+
+def restore_bucket_for_movie_object(
+        movie_object: MovieObject,
+        bucket_plan: RestoreBucketPlan) -> str:
+    if bucket_plan.env_bucket:
+        return bucket_plan.env_bucket
+    if movie_object.bucket:
+        return movie_object.bucket
+    raise DbBackupError(
+        f"{C.PLANTTRACER_S3_BUCKET} is not set and archive movie "
+        f"{movie_object.movie_id} has no recorded S3 bucket"
+    )
+
+
+def confirm_archive_bucket_restore(bucket_plan: RestoreBucketPlan) -> bool:
+    if not bucket_plan.uses_archive_bucket or not bucket_plan.target_buckets:
+        return True
+    print(
+        f"WARNING: {C.PLANTTRACER_S3_BUCKET} is not set; restore will write "
+        "movie objects to archive S3 bucket(s): "
+        f"{bucket_list_text(bucket_plan.target_buckets)}.",
+        file=sys.stderr,
+    )
+    print("Type 'yes' to continue:", file=sys.stderr)
+    return sys.stdin.readline().strip().lower() == "yes"
 
 
 def rewrite_movie_rows_for_target_bucket(
         rows: list[dict[str, Any]],
-        movie_objects: list[MovieObject]) -> list[dict[str, Any]]:
-    bucket = target_bucket()
+        movie_objects: list[MovieObject],
+        bucket_plan: RestoreBucketPlan) -> list[dict[str, Any]]:
     object_by_movie_id = {movie.movie_id: movie for movie in movie_objects}
     rewritten: list[dict[str, Any]] = []
     for row in rows:
         new_row = copy.deepcopy(row)
         movie_object = object_by_movie_id.get(row[MOVIE_ID])
         if movie_object is not None and new_row.get(MOVIE_DATA_URN):
+            bucket = restore_bucket_for_movie_object(movie_object, bucket_plan)
             new_row[MOVIE_DATA_URN] = f"s3://{bucket}/{movie_object.key}"
         rewritten.append(new_row)
     return rewritten
@@ -1393,21 +1461,101 @@ def write_rows(table, rows: list[dict[str, Any]]) -> None:
             batch.put_item(Item=row)
 
 
-def restore_movie_objects(archive_path: str | Path, movie_objects: list[MovieObject]) -> None:
-    bucket = target_bucket()
+def restore_one_movie_object(
+        archive_path: str | Path,
+        movie_object: MovieObject,
+        bucket_plan: RestoreBucketPlan) -> None:
     with zipfile.ZipFile(archive_path) as archive:
-        for movie_object in movie_objects:
-            body = archive.read(movie_object.member_name)
-            digest = hashlib.sha256(body).hexdigest()
-            if digest != movie_object.sha256:
-                raise DbBackupError(
-                    f"checksum mismatch for {movie_object.member_name}: "
-                    f"{digest} != {movie_object.sha256}"
-                )
-            s3_client().put_object(Bucket=bucket, Key=movie_object.key, Body=body)
+        body = archive.read(movie_object.member_name)
+    digest = hashlib.sha256(body).hexdigest()
+    if digest != movie_object.sha256:
+        raise DbBackupError(
+            f"checksum mismatch for {movie_object.member_name}: "
+            f"{digest} != {movie_object.sha256}"
+        )
+    bucket = restore_bucket_for_movie_object(movie_object, bucket_plan)
+    s3_client().put_object(Bucket=bucket, Key=movie_object.key, Body=body)
+    print(
+        f"restore: uploaded movie object {movie_object.movie_id} "
+        f"to s3://{bucket}/{movie_object.key}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
-def restore_rows(ddbo, data: ArchiveData) -> None:
+def restore_movie_objects(
+        archive_path: str | Path,
+        movie_objects: list[MovieObject],
+        bucket_plan: RestoreBucketPlan,
+        *,
+        threads: int) -> None:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        future_by_movie_id = {
+            executor.submit(
+                restore_one_movie_object,
+                archive_path,
+                movie_object,
+                bucket_plan,
+            ): movie_object.movie_id
+            for movie_object in movie_objects
+        }
+        errors: list[str] = []
+        for future in concurrent.futures.as_completed(future_by_movie_id):
+            movie_id = future_by_movie_id[future]
+            try:
+                future.result()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                errors.append(f"{movie_id}: {exc}")
+        if errors:
+            raise DbBackupError("failed to restore movie objects: " + "; ".join(errors))
+
+
+def movie_frame_rows_by_movie_id(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped_rows: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped_rows.setdefault(str(row[MOVIE_ID]), []).append(row)
+    return grouped_rows
+
+
+def write_movie_frame_rows(table_name: str, movie_id: str, rows: list[dict[str, Any]]) -> None:
+    table = odb.DDBO.resource().Table(table_name)
+    write_rows(table, rows)
+    print(
+        f"restore: wrote movie_frames for movie {movie_id}: {len(rows)} frames",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def write_frame_rows_parallel(table, rows: list[dict[str, Any]], *, threads: int) -> None:
+    frame_rows_by_movie_id = movie_frame_rows_by_movie_id(rows)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        future_by_movie_id = {
+            executor.submit(
+                write_movie_frame_rows,
+                table.name,
+                movie_id,
+                movie_rows,
+            ): movie_id
+            for movie_id, movie_rows in frame_rows_by_movie_id.items()
+        }
+        errors: list[str] = []
+        for future in concurrent.futures.as_completed(future_by_movie_id):
+            movie_id = future_by_movie_id[future]
+            try:
+                future.result()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                errors.append(f"{movie_id}: {exc}")
+        if errors:
+            raise DbBackupError("failed to restore movie frame rows: " + "; ".join(errors))
+
+
+def restore_rows(
+        ddbo,
+        data: ArchiveData,
+        bucket_plan: RestoreBucketPlan,
+        *,
+        threads: int) -> None:
     tables = {
         table_name: [copy.deepcopy(row) for row in rows]
         for table_name, rows in data.tables.items()
@@ -1415,10 +1563,15 @@ def restore_rows(ddbo, data: ArchiveData) -> None:
     tables[MOVIES] = rewrite_movie_rows_for_target_bucket(
         tables[MOVIES],
         data.manifest.movies,
+        bucket_plan,
     )
 
     for table_name in TABLES_IN_RESTORE_ORDER:
-        write_rows(table_for_name(ddbo, table_name), tables[table_name])
+        table = table_for_name(ddbo, table_name)
+        if table_name == FRAMES:
+            write_frame_rows_parallel(table, tables[table_name], threads=threads)
+        else:
+            write_rows(table, tables[table_name])
 
     unique_email_rows = [{EMAIL: user[EMAIL]} for user in tables[USERS]]
     write_rows(ddbo.unique_emails, unique_email_rows)
@@ -1434,6 +1587,55 @@ def ensure_restore_target_ready(target_state: RestoreTargetState) -> None:
         )
 
 
+def restore_table_configuration(table_prefix: str, table_config: dict[str, Any]) -> dict[str, Any]:
+    table_configuration = copy.deepcopy(table_config)
+    table_configuration.pop(odbmaint.COMMENT, None)
+    table_configuration[odbmaint.TableName] = (
+        table_prefix + table_configuration[odbmaint.TableName]
+    )
+    return table_configuration
+
+
+def create_one_restore_table(
+        table_prefix: str,
+        table_config: dict[str, Any],
+        created_table_names: list[str],
+        created_table_names_lock: threading.Lock) -> str:
+    dynamodb = odb.DDBO.resource()
+    table_configuration = restore_table_configuration(table_prefix, table_config)
+    table_name = table_configuration[odbmaint.TableName]
+    table = dynamodb.create_table(**table_configuration)
+    with created_table_names_lock:
+        created_table_names.append(table_name)
+    time.sleep(C.TABLE_CREATE_SLEEP_TIME)
+    table.wait_until_exists()
+    return table_name
+
+
+def cleanup_created_restore_tables(table_names: list[str]) -> None:
+    if not table_names:
+        return
+    print(
+        "restore: deleting DynamoDB tables created before failed restore: "
+        f"{', '.join(sorted(table_names))}",
+        file=sys.stderr,
+    )
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(table_names)) as executor:
+        futures = [
+            executor.submit(
+                drop_one_restore_table,
+                table_name,
+            )
+            for table_name in sorted(table_names)
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
+
+
+def drop_one_restore_table(table_name: str) -> None:
+    odbmaint.drop_dynamodb_table(odb.DDBO.resource(), table_name, True)
+
+
 def create_restore_target_tables(target_state: RestoreTargetState) -> None:
     if not target_state.needs_creation:
         return
@@ -1441,13 +1643,42 @@ def create_restore_target_tables(target_state: RestoreTargetState) -> None:
         f"creating DynamoDB tables for restore target prefix {target_state.table_prefix}",
         file=sys.stderr,
     )
-    odbmaint.create_tables()
+    created_table_names: list[str] = []
+    created_table_names_lock = threading.Lock()
+    future_by_table_name = {}
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(odbmaint.TABLE_CONFIGURATIONS)) as executor:
+        for table_config in odbmaint.TABLE_CONFIGURATIONS:
+            table_name = target_state.table_prefix + table_config[odbmaint.TableName]
+            future = executor.submit(
+                create_one_restore_table,
+                target_state.table_prefix,
+                table_config,
+                created_table_names,
+                created_table_names_lock,
+            )
+            future_by_table_name[future] = table_name
+
+    errors: list[str] = []
+    for future, table_name in future_by_table_name.items():
+        try:
+            created_table_name = future.result()
+            print(f"restore: created DynamoDB table {created_table_name}", file=sys.stderr)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            errors.append(f"{table_name}: {exc}")
+
+    if errors:
+        cleanup_created_restore_tables(created_table_names)
+        raise DbBackupError(
+            "failed to create restore target DynamoDB tables: " + "; ".join(errors)
+        )
     setattr(odb.DDBO, "_instance", None)
 
 
 def command_restore(args) -> int:
     configure_table_prefix(args.table_prefix)
     data = selected_archive_data(read_archive(args.archive), selection_from_args(args))
+    bucket_plan = restore_bucket_plan(data.manifest.movies)
     target_state = restore_target_state(odb.DDBO.resource(), args.table_prefix)
     ensure_restore_target_ready(target_state)
     ddbo = None if target_state.needs_creation else odb.DDBO()
@@ -1470,6 +1701,11 @@ def command_restore(args) -> int:
         f"{len(data.tables[MOVIES])} movies{target_action}",
         file=sys.stderr,
     )
+    print(
+        "restore S3 bucket(s): "
+        f"{restore_bucket_plan_text(bucket_plan)}",
+        file=sys.stderr,
+    )
     if not args.commit:
         print(
             "no restore was done because --commit was not provided",
@@ -1477,11 +1713,20 @@ def command_restore(args) -> int:
         )
         return 0
 
+    if not confirm_archive_bucket_restore(bucket_plan):
+        print("restore cancelled", file=sys.stderr)
+        return 1
+
     create_restore_target_tables(target_state)
     if ddbo is None:
         ddbo = odb.DDBO()
-    restore_movie_objects(args.archive, data.manifest.movies)
-    restore_rows(ddbo, data)
+    restore_movie_objects(
+        args.archive,
+        data.manifest.movies,
+        bucket_plan,
+        threads=args.threads,
+    )
+    restore_rows(ddbo, data, bucket_plan, threads=args.threads)
     if args.regenerate_zips:
         raise DbBackupError("--regenerate-zips is not implemented yet")
     return 0
@@ -1710,6 +1955,13 @@ def selection_from_args(args, *, default_all: bool = False) -> Selection:
     )
 
 
+def positive_int(value: str) -> int:
+    parsed_value = int(value)
+    if parsed_value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed_value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Plant Tracer DynamoDB/S3 backup and restore tool.",
@@ -1733,6 +1985,12 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("archive", help=".ptb archive")
     add_selection(restore)
     restore.add_argument("--commit", action="store_true", help="write data")
+    restore.add_argument(
+        "--threads",
+        type=positive_int,
+        default=DEFAULT_RESTORE_THREADS,
+        help="parallel worker threads for S3 uploads and movie frame writes",
+    )
     restore.add_argument(
         "--regenerate-zips",
         action="store_true",
