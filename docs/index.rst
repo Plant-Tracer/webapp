@@ -11,6 +11,7 @@ Welcome to Plant Tracer Web Application's documentation!
    :caption: Contents:
 
    UserTutorial
+   CalculationReference
    VideoResizing
    ReleaseHistory
    Development/index

@@ -577,15 +577,25 @@ template-lint: .venv/pyvenv.cfg
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 
 sam-build: $(REQ)
-	@# Refuse to build if there are local changes or unpushed commits.
+	@# Refuse to build if there are local changes, unless HEAD is an exact tag
+	@# or a branch with an upstream and no unpushed commits.
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
 	  echo "Refusing to run sam-build: uncommitted changes present (stash/commit first)."; \
 	  exit 1; \
 	fi
-	@UPSTREAM=$$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true); \
-	if [ -z "$$UPSTREAM" ]; then \
-	  echo "Refusing to run sam-build: current branch has no upstream (push and set upstream first)."; \
-	  exit 1; \
+	@TAG=$$(git describe --exact-match --tags HEAD 2>/dev/null || true); \
+	if [ -n "$$TAG" ]; then \
+	  echo "Building SAM artifact from tag $$TAG"; \
+	else \
+	  UPSTREAM=$$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true); \
+	  if [ -z "$$UPSTREAM" ]; then \
+	    echo "Refusing to run sam-build: current branch has no upstream and HEAD is not an exact tag."; \
+	    exit 1; \
+	  fi; \
+	  if [ -n "$$(git log --oneline "$$UPSTREAM"..HEAD)" ]; then \
+	    echo "Refusing to run sam-build: branch has unpushed commits."; \
+	    exit 1; \
+	  fi; \
 	fi; \
 	$(MAKE) lambda-resize/src/requirements.txt
 	$(MAKE) vend-lambda-resize

@@ -67,9 +67,20 @@ Release History
      - 0.9.8.1
      - June 23, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.1>`__
+   * - Jun-29-2026
+     - 0.9.8.2
+     - June 29, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.2>`__
 
 Release Notes
 -------------
+
+0.9.8.2 Summary
+***************
+    * Documentation: new Calculation Reference page covering gravitropism and circumnutation statistics formulas
+    * Documentation: styled to match the Plant Tracer site fonts and colors
+    * Documentation: updated User Tutorial to cover 0.9.8.x features
+    * Infrastructure: CloudFormation/SAM template and Makefile hardened for deployment
 
 0.9.8.1 Summary
 ***************

@@ -292,6 +292,8 @@ Resources:
   ### Create the DynamoDB tables
   UsersTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-users"
       BillingMode: PAY_PER_REQUEST
@@ -313,6 +315,8 @@ Resources:
 
   UniqueEmailsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-unique_emails"
       BillingMode: PAY_PER_REQUEST
@@ -325,6 +329,8 @@ Resources:
 
   ApiKeysTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-api_keys"
       BillingMode: PAY_PER_REQUEST
@@ -346,6 +352,8 @@ Resources:
 
   CoursesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-courses"
       BillingMode: PAY_PER_REQUEST
@@ -367,6 +375,8 @@ Resources:
 
   CourseUsersTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-course_users"
       BillingMode: PAY_PER_REQUEST
@@ -383,6 +393,8 @@ Resources:
 
   MoviesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-movies"
       BillingMode: PAY_PER_REQUEST
@@ -412,6 +424,8 @@ Resources:
 
   MovieFramesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-movie_frames"
       BillingMode: PAY_PER_REQUEST
@@ -428,6 +442,8 @@ Resources:
 
   LogsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-logs"
       BillingMode: PAY_PER_REQUEST
@@ -480,11 +496,10 @@ Resources:
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
-  # --- IAM: EC2 Role with hardcoded prefix ---
+  # --- IAM: EC2 Role ---
   Ec2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-Ec2Role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -541,18 +556,16 @@ Resources:
                   - ses:SendRawEmail
                 Resource: "*"
 
-  # --- Instance Profile with hardcoded prefix ---
+  # --- Instance Profile ---
   Ec2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "PlantTracer-${AWS::StackName}-InstanceProfile"
       Roles: [!Ref Ec2Role]
 
-  # --- Lambda Role with hardcoded prefix ---
+  # --- Lambda Role ---
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "PlantTracer-${AWS::StackName}-LambdaRole"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -599,8 +612,9 @@ Resources:
 
   TracingQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      QueueName: !Sub "${AWS::StackName}-tracing-queue"
       VisibilityTimeout: 900
 
   LambdaFunction:

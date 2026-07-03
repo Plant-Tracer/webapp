@@ -91,6 +91,14 @@ Long Term
   records like metadata, markers, and eventually consolidated frame data without
   relying on sentinel frame numbers. Files: 10-20.
 
+* Implement DynamoDB backup and selective restore.
+  Impact: high; the S3 bucket is the long-term archive for movie objects, but
+  there is no documented or implemented DynamoDB backup/restore system. Add a
+  daily backup from DynamoDB to S3, plus a restore tool that can restore user
+  accounts, courses, and movies selectively into any existing stack. A movie
+  restore must include the movie metadata and its tracing data, including frame
+  trackpoints. Files: 8-15.
+
 * Define a durable processing state machine.
   Impact: high; clarifies upload, ready, tracing, completed, failed, stale-lock,
   and retry behavior across Flask, Lambda, SQS/local queue, and UI polling.
