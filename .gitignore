@@ -212,3 +212,4 @@ samconfig.toml
 *.jpeg
 dump.txt
 etc/planttracer-nginx-patch.*
+*.ptb
