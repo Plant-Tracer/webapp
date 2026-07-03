@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "tables": [
+    {
+      "TableName": "users",
+      "Comment": "Primary table for tracking users",
+      "KeySchema": [
+        {
+          "AttributeName": "user_id",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "user_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "email",
+          "AttributeType": "S"
+        }
+      ],
+      "GlobalSecondaryIndexes": [
+        {
+          "IndexName": "email_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "email",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "unique_emails",
+      "KeySchema": [
+        {
+          "AttributeName": "email",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "email",
+          "AttributeType": "S"
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "api_keys",
+      "KeySchema": [
+        {
+          "AttributeName": "api_key",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "api_key",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "user_id",
+          "AttributeType": "S"
+        }
+      ],
+      "GlobalSecondaryIndexes": [
+        {
+          "IndexName": "user_id_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "user_id",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "courses",
+      "KeySchema": [
+        {
+          "AttributeName": "course_id",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "course_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "course_key",
+          "AttributeType": "S"
+        }
+      ],
+      "GlobalSecondaryIndexes": [
+        {
+          "IndexName": "course_key_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "course_key",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        },
+        {
+          "IndexName": "course_id_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "course_id",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "course_users",
+      "Comment": "Tracks users registered in course",
+      "KeySchema": [
+        {
+          "AttributeName": "course_id",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "user_id",
+          "KeyType": "RANGE"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "course_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "user_id",
+          "AttributeType": "S"
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "movies",
+      "KeySchema": [
+        {
+          "AttributeName": "movie_id",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "movie_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "course_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "user_id",
+          "AttributeType": "S"
+        }
+      ],
+      "GlobalSecondaryIndexes": [
+        {
+          "IndexName": "course_id_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "course_id",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        },
+        {
+          "IndexName": "user_id_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "user_id",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "ALL"
+          }
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "movie_frames",
+      "KeySchema": [
+        {
+          "AttributeName": "movie_id",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "frame_number",
+          "KeyType": "RANGE"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "movie_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "frame_number",
+          "AttributeType": "N"
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
+      "TableName": "logs",
+      "KeySchema": [
+        {
+          "AttributeName": "log_id",
+          "KeyType": "HASH"
+        }
+      ],
+      "AttributeDefinitions": [
+        {
+          "AttributeName": "log_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "ipaddr",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "user_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "course_id",
+          "AttributeType": "S"
+        },
+        {
+          "AttributeName": "time_t",
+          "AttributeType": "N"
+        }
+      ],
+      "GlobalSecondaryIndexes": [
+        {
+          "IndexName": "ipaddr_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "ipaddr",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "INCLUDE",
+            "NonKeyAttributes": [
+              "log_id"
+            ]
+          }
+        },
+        {
+          "IndexName": "user_id_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "user_id",
+              "KeyType": "HASH"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "INCLUDE",
+            "NonKeyAttributes": [
+              "log_id"
+            ]
+          }
+        },
+        {
+          "IndexName": "course_time_t_idx",
+          "KeySchema": [
+            {
+              "AttributeName": "course_id",
+              "KeyType": "HASH"
+            },
+            {
+              "AttributeName": "time_t",
+              "KeyType": "RANGE"
+            }
+          ],
+          "Projection": {
+            "ProjectionType": "INCLUDE",
+            "NonKeyAttributes": [
+              "log_id"
+            ]
+          }
+        }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    }
+  ]
+}

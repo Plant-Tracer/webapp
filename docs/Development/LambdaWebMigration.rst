@@ -278,7 +278,7 @@ IAM Boundaries
 
 Likely web permissions:
 
-* DynamoDB read/write/query/scan on the stack tables.
+* DynamoDB read/write/query/scan on the configured prefix-scoped tables.
 * S3 presigned POST and metadata operations for the existing movie bucket.
 * SES or Secrets Manager access for mail.
 * CloudWatch Logs.
