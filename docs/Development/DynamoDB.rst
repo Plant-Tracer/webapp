@@ -20,9 +20,17 @@ development you can use the `AWS DynamoDB local (downloadable version)
 <https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html>`_. We
 recommend using the version downloaded as a JAR file.
 
-The canonical table definitions are in ``src/app/schema.py``. All attribute-name constants are
-defined at the top of ``src/app/odb.py``. Tables are created by ``odbmaint.create_tables()`` and
-dropped by ``odbmaint.drop_tables()`` — used by ``make make-local-demo`` and the test fixtures.
+The canonical table model is split between the application item schemas and the table creation
+contract. Item fields are defined in ``src/app/schema.py``, and attribute-name constants are
+defined at the top of ``src/app/odb.py``. DynamoDB table definitions are in
+``etc/dynamodb_tables.json``. ``src/dbutil.py createdb`` creates the tables from that JSON file
+and populates the demo course; ``odbmaint.drop_tables()`` drops the configured tables for local
+test and reset workflows.
+
+The SAM/CloudFormation stack does not own DynamoDB tables. For an existing stack that still owns
+tables from an older template, retain or otherwise detach those table resources before deploying a
+template that removes them; a normal CloudFormation update treats removed resources as deleted
+resources.
 
 
 Table Summary
