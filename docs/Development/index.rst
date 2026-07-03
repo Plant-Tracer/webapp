@@ -16,6 +16,7 @@ Developer Documentation
    demo_mode
    configuring_aws
    deploy_ec2
+   DataOwnership
    BackupRestore
    DynamoDB
    S3
