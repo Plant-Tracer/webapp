@@ -5,11 +5,10 @@ Maintain the DynamoDB Database.
 #pylint: disable=invalid-name
 
 import copy
+import json
 import os
 import os.path
 import time
-
-import tabulate
 
 import boto3
 from tabulate import tabulate
@@ -20,6 +19,7 @@ from . import odb
 from .s3_presigned import s3_client
 from .odb import USER_ID,DDBO
 from .constants import C,logger
+from .paths import ROOT_DIR
 
 KeySchema = 'KeySchema'
 KeyType = 'KeyType'
@@ -28,6 +28,7 @@ AttributeName = 'AttributeName'
 AttributeType = 'AttributeType'
 AttributeDefinitions = 'AttributeDefinitions'
 GlobalSecondaryIndexes = 'GlobalSecondaryIndexes'
+IndexName = 'IndexName'
 BillingMode = 'BillingMode'
 PAY_PER_REQUEST = 'PAY_PER_REQUEST'
 HASH = 'HASH'
@@ -36,198 +37,40 @@ COMMENT = 'Comment'
 S = 'S' # string
 N = 'N' # number
 
-billing = {BillingMode: PAY_PER_REQUEST} # alternative is provisioned throughput
-projection_all = {'Projection':{'ProjectionType':'ALL'}} # use all keys in index
+SCHEMA_VERSION = 'schema_version'
+TABLES = 'tables'
+TABLE_DEFINITION_SCHEMA_VERSION = 1
+TABLE_DEFINITION_FILE = os.path.join(ROOT_DIR, 'etc', 'dynamodb_tables.json')
 
-# Define all table configurations as a global constant
-# Note:
-# courses - each course knows its admins, but not its users.
 
-TABLE_CONFIGURATIONS = [
-    {
-        TableName: 'users',
-        COMMENT: "Primary table for tracking users",
-        KeySchema: [
-            {AttributeName: 'user_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'user_id', AttributeType: S},
-            {AttributeName: 'email', AttributeType: S}
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                'IndexName': 'email_idx',
-                KeySchema: [
-                    {AttributeName: 'email', KeyType: HASH}
-                ],
-                **projection_all,
-            }
-        ],
-        **billing,
-    },
-    {
-        TableName: 'unique_emails',
-        KeySchema: [
-            {AttributeName: 'email', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'email', AttributeType: S}
-        ],
-        **billing,
-    },
-    {
-        TableName: 'api_keys',
-        KeySchema: [
-            {AttributeName: 'api_key', KeyType: HASH}
-        ],
-        AttributeDefinitions : [
-            {AttributeName: 'api_key', AttributeType : S},
-            {AttributeName: 'user_id', AttributeType : S}
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                'IndexName': 'user_id_idx',
-                KeySchema: [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        TableName: 'courses',
-        KeySchema: [
-            {AttributeName: 'course_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'course_key', AttributeType: S}
-        ],
-        GlobalSecondaryIndexes : [
-            {
-                'IndexName': 'course_key_idx',
-                KeySchema: [
-                    {AttributeName: 'course_key', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-            {
-                'IndexName': 'course_id_idx',
-                KeySchema: [
-                    {AttributeName: 'course_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        TableName: 'course_users',
-        COMMENT: "Tracks users registered in course",
-        KeySchema: [
-            {AttributeName: 'course_id', KeyType: HASH},
-            {AttributeName: 'user_id', KeyType: RANGE},
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'user_id', AttributeType: S},
-        ],
-        **billing,
-    },
-    {
-        TableName: 'movies',
-        KeySchema: [
-            {AttributeName: 'movie_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'user_id', AttributeType: S},
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                'IndexName': 'course_id_idx',
-                KeySchema: [
-                    {AttributeName: 'course_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-            {
-                'IndexName': 'user_id_idx',
-                KeySchema: [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                **projection_all,
-            },
-        ],
-        **billing,
-    },
-    {
-        TableName: 'movie_frames',
-        KeySchema: [
-            {AttributeName: 'movie_id', KeyType: HASH},
-            {AttributeName: 'frame_number', KeyType: RANGE}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'movie_id', AttributeType: S},
-            {AttributeName: 'frame_number', AttributeType: N}
-        ],
-        **billing,
-    },
-    {
-        TableName: 'logs',
-        KeySchema: [
-            {AttributeName: 'log_id', KeyType: HASH}
-        ],
-        AttributeDefinitions: [
-            {AttributeName: 'log_id', AttributeType: S},
-            {AttributeName: 'ipaddr', AttributeType: S},
-            {AttributeName: 'user_id', AttributeType: S},
-            {AttributeName: 'course_id', AttributeType: S},
-            {AttributeName: 'time_t', AttributeType: N},
+def load_table_configurations(definition_path=TABLE_DEFINITION_FILE):
+    """Return DynamoDB create_table configurations from the JSON table definition."""
+    with open(definition_path, encoding='utf-8') as json_file:
+        definition = json.load(json_file)
+    try:
+        schema_version = definition[SCHEMA_VERSION]
+        table_configurations = definition[TABLES]
+    except KeyError as e:
+        raise ValueError(f"{definition_path} is missing required key {e}") from e
+    if schema_version != TABLE_DEFINITION_SCHEMA_VERSION:
+        raise ValueError(
+            f"{definition_path} schema_version {schema_version} is not supported; "
+            f"expected {TABLE_DEFINITION_SCHEMA_VERSION}"
+        )
+    if not isinstance(table_configurations, list):
+        raise ValueError(f"{definition_path} key {TABLES} must be a list")
+    return copy.deepcopy(table_configurations)
 
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                'IndexName': 'ipaddr_idx',
-                KeySchema: [
-                    {AttributeName: 'ipaddr', KeyType: HASH}
-                ],
-                'Projection': {
-                    'ProjectionType' : 'INCLUDE',
-                    'NonKeyAttributes' : ['log_id']
-                }
-            },
-            {
-                'IndexName': 'user_id_idx',
-                KeySchema: [
-                    {AttributeName: 'user_id', KeyType: HASH}
-                ],
-                'Projection': {
-                    'ProjectionType' : 'INCLUDE',
-                    'NonKeyAttributes' : ['log_id']
-                }
-            },
-            {
-                'IndexName': 'course_time_t_idx',
-                KeySchema: [
-                    {AttributeName: 'course_id', KeyType: HASH},
-                    {AttributeName: 'time_t', KeyType: RANGE}
-                ],
-                'Projection': {
-                    'ProjectionType' : 'INCLUDE',
-                    'NonKeyAttributes' : ['log_id']
-                }
-            },
-        ],
-        **billing,
-    }]
 
+def table_prefix_from_env():
+    table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
+    if table_prefix is None:
+        raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
+    return (table_prefix.rstrip('-') + '-') if table_prefix else ''
 
 
 def create_tables(*,ignore_table_exists = False):
-    """Creates DynamoDB tables based on the configurations defined in TABLE_CONFIGURATIONS.
+    """Creates DynamoDB tables based on etc/dynamodb_tables.json.
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
     :param dynamodb_resource: The boto3 DynamoDB resource object.
@@ -237,12 +80,9 @@ def create_tables(*,ignore_table_exists = False):
     :raises Exception: For any unexpected errors during creation.
     :return: the connected ddbo object
     """
-    table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
-    if table_prefix is None:
-        raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
-    table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
+    table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
-    for table_config in TABLE_CONFIGURATIONS:
+    for table_config in load_table_configurations():
         # prepend the prefix to the table name before creating it
         tc = copy.deepcopy(table_config)
         try:
@@ -299,12 +139,9 @@ def drop_dynamodb_table(dynamodb, table_name: str, silent_warnings=False):
 
 
 def drop_tables(silent_warnings=False):
-    table_prefix = os.environ.get(C.DYNAMODB_TABLE_PREFIX)
-    if table_prefix is None:
-        raise RuntimeError(f"Environment variable {C.DYNAMODB_TABLE_PREFIX} must be set")
-    table_prefix = (table_prefix.rstrip('-') + '-') if table_prefix else ''
+    table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
-    tables_to_drop = [ table_prefix + config[TableName] for config in TABLE_CONFIGURATIONS ]
+    tables_to_drop = [ table_prefix + config[TableName] for config in load_table_configurations() ]
     for table_name in tables_to_drop:
         drop_dynamodb_table(dynamodb, table_name, silent_warnings=silent_warnings)
 

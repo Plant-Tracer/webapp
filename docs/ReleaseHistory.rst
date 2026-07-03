@@ -63,9 +63,44 @@ Release History
      - 0.9.8
      - June 22, 2026
      - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8>`__
+   * - Jun-23-2026
+     - 0.9.8.1
+     - June 23, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.1>`__
+   * - Jun-29-2026
+     - 0.9.8.2
+     - June 29, 2026
+     - `Closed Issues <https://github.com/Plant-Tracer/webapp/releases/tag/ver-0.9.8.2>`__
 
 Release Notes
 -------------
+
+Unreleased Summary
+******************
+    * Developer: add ``src/dbbackup.py`` for default full and selective Plant Tracer ``.ptb`` backups, restores, archive inspection, dry-run restore-link sending, and course migration
+    * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges
+    * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
+    * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
+    * Developer: make ``dbbackup backup`` report progress to stderr and skip missing movie MP4 objects with manifest warnings instead of failing after writing a partial archive
+    * Developer: make ``dbbackup backup`` refuse to overwrite an archive from a different DynamoDB table prefix and reuse already archived movie MP4 objects when refreshing a same-prefix backup
+    * Developer: make ``dbbackup restore`` preflight missing target table prefixes and create them only when ``--commit`` is supplied
+    * Developer: make ``dbbackup restore`` explicitly report that no restore was done when ``--commit`` is omitted
+    * Developer: make ``dbbackup restore`` use archived movie-object buckets when ``PLANTTRACER_S3_BUCKET`` is not configured
+    * Developer: make ``dbbackup`` report backup, inspect, and restore S3 bucket choices and require confirmation before committed archive-bucket restores
+    * Developer: parallelize ``dbbackup restore`` table creation, movie-object uploads, and ``movie_frames`` writes grouped by movie ID
+    * Test: add integration contract coverage for backup selection, default full backup, prefix discovery, restore preflight/commit/collision handling, dry-run restore links, verbose inspection, and course migration using DynamoDB Local and MinIO
+
+0.9.8.2 Summary
+***************
+    * Documentation: new Calculation Reference page covering gravitropism and circumnutation statistics formulas
+    * Documentation: styled to match the Plant Tracer site fonts and colors
+    * Documentation: updated User Tutorial to cover 0.9.8.x features
+    * Infrastructure: CloudFormation/SAM template and Makefile hardened for deployment
+
+0.9.8.1 Summary
+***************
+    * Analyze: Download Trackpoints CSV now expresses position values in mm when Ruler markers are calibrated (moved off their default positions); Ruler marker columns remain in pixels
+    * Analyze: Download analysis as an Excel XLSX file with marker summary and native Excel charts
 
 0.9.8 Summary
 *************

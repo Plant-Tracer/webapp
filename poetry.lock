@@ -5859,6 +5859,18 @@ files = [
 h11 = ">=0.16.0,<1"
 
 [[package]]
+name = "xlsxwriter"
+version = "3.2.9"
+description = "A Python module for creating Excel XLSX files."
+optional = false
+python-versions = ">=3.8"
+groups = ["vm"]
+files = [
+    {file = "xlsxwriter-3.2.9-py3-none-any.whl", hash = "sha256:9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"},
+    {file = "xlsxwriter-3.2.9.tar.gz", hash = "sha256:254b1c37a368c444eac6e2f867405cc9e461b0ed97a3233b2ac1e574efb4140c"},
+]
+
+[[package]]
 name = "yappi"
 version = "1.7.6"
 description = "Yet Another Python Profiler"
@@ -6013,4 +6025,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "fd6a6ec2c870aaaf19ab73cb4c1822014bc8b0901f661b98060eb1b07cb1b922"
+content-hash = "a9849cac055e88bff26a061174ced18260ef9512baf84bb41c3199aae72d04c2"

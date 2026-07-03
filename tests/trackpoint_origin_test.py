@@ -1,6 +1,8 @@
 import csv
 import io
+import re
 import zipfile
+import xml.etree.ElementTree as ET
 from decimal import Decimal
 
 import pytest
@@ -9,7 +11,16 @@ from pydantic import ValidationError
 
 from app import odb, schema
 from app import odb_movie_data
-from app.odb import API_KEY, FRAME_NUMBER, HEIGHT, MOVIE_ID, MOVIE_TRACED_URN, NEEDS_RETRACING
+from app.odb import (
+    API_KEY,
+    FRAME_NUMBER,
+    HEIGHT,
+    MOVIE_ID,
+    MOVIE_TRACED_URN,
+    NEEDS_RETRACING,
+    TRIM_END_FRAME,
+    TRIM_START_FRAME,
+)
 from app.s3_presigned import make_urn
 from app.schema import Trackpoint
 
@@ -62,6 +73,58 @@ def _zip_with_frame(*, width: int, height: int) -> bytes:
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("frame_0000.jpeg", _jpeg_bytes(width=width, height=height))
     return output.getvalue()
+
+
+def _xlsx_shared_strings(zf):
+    try:
+        xml = zf.read("xl/sharedStrings.xml")
+    except KeyError:
+        return []
+    root = ET.fromstring(xml)
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    strings = []
+    for si in root.findall("s:si", namespace):
+        strings.append("".join(node.text or "" for node in si.findall(".//s:t", namespace)))
+    return strings
+
+
+def _xlsx_cell_value(cell, shared_strings):
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    value = cell.find("s:v", namespace)
+    if value is None or value.text is None:
+        return ""
+    if cell.get("t") == "s":
+        return shared_strings[int(value.text)]
+    if "." in value.text:
+        return float(value.text)
+    return int(value.text)
+
+
+def _xlsx_cell_column(cell):
+    match = re.match(r"([A-Z]+)", cell.get("r", ""))
+    if not match:
+        return 0
+    column = 0
+    for character in match.group(1):
+        column = column * 26 + ord(character) - ord("A") + 1
+    return column - 1
+
+
+def _xlsx_rows(data, sheet_path):
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        shared_strings = _xlsx_shared_strings(zf)
+        root = ET.fromstring(zf.read(sheet_path))
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    rows = []
+    for row in root.findall(".//s:sheetData/s:row", namespace):
+        values = []
+        for cell in row.findall("s:c", namespace):
+            column = _xlsx_cell_column(cell)
+            while len(values) <= column:
+                values.append("")
+            values[column] = _xlsx_cell_value(cell, shared_strings)
+        rows.append(values)
+    return rows
 
 
 def test_movie_schema_declares_trackpoint_origin_contract():
@@ -372,9 +435,215 @@ def test_get_movie_trackpoints_lazily_migrates_legacy_csv_export(client, new_mov
 
     assert resp.status_code == 200
     rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    # No ruler markers => uncalibrated => pixels, with units annotated in the headers.
     assert rows == [
-        {"frame_number": "0", "plant x": "10", "plant y": "130"},
+        {"frame_number": "0", "plant x (px)": "10", "plant y (px)": "130"},
     ]
     assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
     stored_frame = odb.DDBO().movie_frames.get_item(Key={MOVIE_ID: movie_id, FRAME_NUMBER: 0})["Item"]
     assert stored_frame["trackpoints"][0]["y"] == Decimal(130)
+
+
+def _seed_frame0(movie_id, trackpoints, *, height):
+    """Set the analysis-frame height and write a single frame 0 of trackpoints."""
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: height, "total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=trackpoints)
+
+
+def test_csv_uses_mm_for_non_ruler_markers_when_rulers_calibrated(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    # Rulers 100 px apart spanning 10 mm (scale 0.1 mm/px), placed off their default positions.
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ], height=480)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    row = rows[0]
+    # Non-ruler marker in mm: 100*0.1=10.0, 200*0.1=20.0
+    assert row["Apex x (mm)"] == "10.0"
+    assert row["Apex y (mm)"] == "20.0"
+    # Ruler markers stay in pixels
+    assert row["Ruler 0mm x (px)"] == "10"
+    assert row["Ruler 10mm y (px)"] == "110"
+
+
+def test_xlsx_exports_trackpoints_and_metadata(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex", color="orange"),
+        Trackpoint(x=Decimal(20), y=Decimal(20), label="Inflection Point", color="#336699"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ], height=480)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 2})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1, trackpoints=[
+        Trackpoint(x=Decimal(105), y=Decimal(190), label="Apex", color="orange", status=0),
+        Trackpoint(x=Decimal(25), y=Decimal(20), label="Inflection Point", color="#336699"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
+
+    resp = client.post("/api/get-movie-trackpoints", data={
+        API_KEY: new_movie[API_KEY],
+        MOVIE_ID: movie_id,
+        "format": "xlsx",
+    })
+
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert resp.headers["Content-Disposition"] == 'attachment; filename="trackpoints.xlsx"'
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        assert "xl/worksheets/sheet1.xml" in zf.namelist()
+        assert "xl/worksheets/sheet2.xml" in zf.namelist()
+        assert "xl/worksheets/sheet3.xml" in zf.namelist()
+        assert "xl/worksheets/sheet4.xml" in zf.namelist()
+        assert "xl/worksheets/sheet5.xml" in zf.namelist()
+        assert "xl/charts/chart1.xml" in zf.namelist()
+        assert "xl/charts/chart2.xml" in zf.namelist()
+        chart1_xml = zf.read("xl/charts/chart1.xml").decode("utf-8")
+        chart2_xml = zf.read("xl/charts/chart2.xml").decode("utf-8")
+        assert '<c:tickLblPos val="low"/>' in chart1_xml
+        assert '<c:tickLblPos val="low"/>' in chart2_xml
+
+    trackpoint_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet1.xml")
+    assert trackpoint_rows[0] == [
+        "frame_number",
+        "Apex x (mm)",
+        "Apex y (mm)",
+        "Inflection Point x (mm)",
+        "Inflection Point y (mm)",
+        "Ruler 0mm x (px)",
+        "Ruler 0mm y (px)",
+        "Ruler 10mm x (px)",
+        "Ruler 10mm y (px)",
+    ]
+    assert trackpoint_rows[1] == [0, 10, 20, 2, 2, 10, 10, 10, 110]
+    assert trackpoint_rows[2] == [1, 10.5, 19, 2.5, 2, 10, 10, 10, 110]
+
+    metadata_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet2.xml")
+    metadata = {row[0]: row[1] if len(row) > 1 else "" for row in metadata_rows[1:]}
+    assert metadata["movie_id"] == movie_id
+    assert metadata["trim_start_frame"] == 0
+    assert metadata["trim_end_frame"] == 1
+    assert metadata["exported_frame_count"] == 2
+    assert metadata["marker_count"] == 4
+    assert metadata["ruler_calibrated"] == "yes"
+    assert metadata["ruler_marker_units"] == "px"
+    assert metadata["non_ruler_marker_units"] == "mm"
+    assert metadata["scale_mm_per_px"] == 0.1
+
+    marker_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet3.xml")
+    assert marker_rows[0][:5] == ["label", "type", "graphable", "color", "colors_seen"]
+    assert marker_rows[1][:5] == ["Apex", "apex", "yes", "orange", "orange"]
+    assert marker_rows[2][:5] == [
+        "Inflection Point", "inflection point", "yes", "#336699", "#336699",
+    ]
+    assert marker_rows[3][:4] == ["Ruler 0mm", "ruler", "no", ""]
+
+    chart_rows = _xlsx_rows(resp.data, "xl/worksheets/sheet4.xml")
+    assert chart_rows == [
+        [
+            "frame_number",
+            "Apex X Position (mm)",
+            "Apex Y Position (mm)",
+            "Inflection Point X Position (mm)",
+            "Inflection Point Y Position (mm)",
+        ],
+        [0, 0, 0, 0, 0],
+        [1, 0.5, -1, 0.5, 0],
+    ]
+
+
+def test_xlsx_trackpoint_download_respects_trim_bounds(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        "total_frames": 3,
+        TRIM_START_FRAME: 1,
+        TRIM_END_FRAME: 1,
+    })
+    for frame_number in range(3):
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=frame_number,
+            trackpoints=[Trackpoint(x=10 + frame_number, y=20 + frame_number, label="apex")],
+        )
+
+    resp = client.post("/api/get-movie-trackpoints", data={
+        API_KEY: new_movie[API_KEY],
+        MOVIE_ID: movie_id,
+        "format": "xlsx",
+    })
+
+    assert resp.status_code == 200
+    rows = _xlsx_rows(resp.data, "xl/worksheets/sheet1.xml")
+    assert rows == [
+        ["frame_number", "apex x (px)", "apex y (px)"],
+        [1, 11, 21],
+    ]
+
+
+def test_csv_uses_pixels_when_rulers_at_default_position(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    height = 480
+    # Rulers at their default canvas positions (bottom-left y = height - canvas_y) => uncalibrated.
+    _seed_frame0(movie_id, [
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(50), y=Decimal(height - 100), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(50), y=Decimal(height - 150), label="Ruler 10mm"),
+    ], height=height)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
+    row = rows[0]
+    assert row["Apex x (px)"] == "100"
+    assert row["Apex y (px)"] == "200"
+    assert "Apex x (mm)" not in row
+
+
+def test_csv_uses_pixels_when_frame_height_unknown(client, new_movie, mocker):
+    # Rulers off default, but the analysis-frame height cannot be determined at all
+    # (not in metadata, not inferable), so the export conservatively stays in pixels.
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f"REMOVE {HEIGHT}")
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
+    mocker.patch("app.flask_api.infer_trackpoint_frame_height", return_value=None)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
+    assert row["Apex x (px)"] == "100"
+    assert "Apex x (mm)" not in row
+
+
+def test_csv_uses_inferred_height_when_metadata_height_missing(client, new_movie, mocker):
+    # The movie has no stored height, but the height is recoverable (e.g. from the movie zip).
+    # The CSV must still calibrate and report non-ruler markers in mm. Regression for the
+    # ctrack case where height was absent from metadata.
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={"total_frames": 1})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=Decimal(100), y=Decimal(200), label="Apex"),
+        Trackpoint(x=Decimal(10), y=Decimal(10), label="Ruler 0mm"),
+        Trackpoint(x=Decimal(10), y=Decimal(110), label="Ruler 10mm"),
+    ])
+    odb.DDBO().movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f"REMOVE {HEIGHT}")
+    mocker.patch("app.flask_api.infer_trackpoint_frame_height", return_value=480)
+
+    resp = client.post("/api/get-movie-trackpoints", data={API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id})
+    assert resp.status_code == 200
+    row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
+    assert row["Apex x (mm)"] == "10.0"
+    assert row["Ruler 0mm x (px)"] == "10"

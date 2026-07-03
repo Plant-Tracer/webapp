@@ -110,6 +110,7 @@ Developer entry points:
 
 - `docs/Development/DeveloperSetup.rst`
 - `docs/Development/Local Development and Github Actions.rst`
+- `docs/Development/BackupRestore.rst`
 - `docs/Development/FlaskAPI.md`
 - `docs/Development/ClientLambdaAPI.md`
 - `docs/Development/TechDebt.rst`

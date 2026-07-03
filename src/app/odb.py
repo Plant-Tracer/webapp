@@ -7,8 +7,10 @@ Currently dependent upon DynamoDB.
 
 #pylint: disable=too-many-lines, disable=invalid-name
 import os
+import re
 import json
 import copy
+import math
 import functools
 import hashlib
 import uuid
@@ -1397,6 +1399,77 @@ def normalize_fpm(raw):
     if value > FPM_MAX:
         raise ValueError(f"fpm must be <= {FPM_MAX}")
     return text
+
+
+# Ruler markers calibrate pixel->mm scale. Default (canvas, top-left) positions mirror the
+# client's DEFAULT_MARKERS in canvas_tracer_controller.mjs; a ruler still at its default
+# position means the user has not calibrated against a real-world ruler.
+RULER_LABEL_RE = re.compile(r'^Ruler\s*(\d+)mm$')
+RULER_DEFAULT_CANVAS_POSITIONS = {
+    'Ruler 0mm': (50, 100),
+    'Ruler 10mm': (50, 150),
+}
+
+
+def get_ruler_size(label):
+    """Return the integer mm value of a 'Ruler XXmm' label, or None if not a ruler label."""
+    if not isinstance(label, str):
+        return None
+    match = RULER_LABEL_RE.match(label)
+    return int(match.group(1)) if match else None
+
+
+def _sorted_ruler_points(ruler_points):
+    """Filter to ruler-labeled points and sort ascending by mm size. Each point is
+    a dict-like with 'label', 'x', 'y'. Returns list of (size, x, y, label)."""
+    rulers = []
+    for point in ruler_points:
+        size = get_ruler_size(point.get('label'))
+        if size is not None:
+            rulers.append((size, float(point['x']), float(point['y']), point['label']))
+    rulers.sort(key=lambda r: r[0])
+    return rulers
+
+
+def movie_scale(ruler_points):
+    """Return (scale, units) for converting pixels to mm.
+
+    Uses the lowest and highest 'Ruler XXmm' markers: scale = (size_hi - size_lo) / pixel_distance.
+    Distance is Euclidean and therefore origin-invariant (top-left vs bottom-left). When fewer
+    than two ruler markers are present, returns (1.0, 'pixels').
+    """
+    rulers = _sorted_ruler_points(ruler_points)
+    if len(rulers) < 2:
+        return (1.0, 'pixels')
+    lo, hi = rulers[0], rulers[-1]
+    pixel_distance = math.hypot(hi[1] - lo[1], hi[2] - lo[2])
+    if pixel_distance == 0:
+        return (1.0, 'pixels')
+    return ((hi[0] - lo[0]) / pixel_distance, 'mm')
+
+
+def _ruler_at_default_position(size, x, y, frame_height):
+    """True if a stored (bottom-left) ruler trackpoint is at its default canvas position.
+    Converts bottom-left -> canvas (canvas_y = frame_height - y) before comparing."""
+    label = f'Ruler {size}mm'
+    default = RULER_DEFAULT_CANVAS_POSITIONS.get(label)
+    if default is None:
+        return False
+    canvas_x = round(x)
+    canvas_y = round((frame_height - y) if frame_height is not None else y)
+    return canvas_x == round(default[0]) and canvas_y == round(default[1])
+
+
+def rulers_calibrated(ruler_points, frame_height):
+    """True when there are >= 2 ruler markers and the lowest and highest are both off their
+    default positions (i.e. the user has placed them on a real-world ruler). Mirrors the
+    client's ruler_calibration_ready()."""
+    rulers = _sorted_ruler_points(ruler_points)
+    if len(rulers) < 2:
+        return False
+    lo, hi = rulers[0], rulers[-1]
+    return (not _ruler_at_default_position(lo[0], lo[1], lo[2], frame_height)
+            and not _ruler_at_default_position(hi[0], hi[1], hi[2], frame_height))
 
 
 def _movie_total_frames(movie: dict) -> int | None:
