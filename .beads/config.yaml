@@ -1,0 +1,9 @@
+# Beads Configuration File
+# This file configures default behavior for bd commands in this repository.
+
+issue-prefix: "webapp-"
+
+agents.file: "AGENTS.md"
+
+export.auto: true
+export.path: "issues.jsonl"
