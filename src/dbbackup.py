@@ -98,9 +98,10 @@ LIST_PREFIX_HEADERS = ("prefix", "courses", "users", "movies", "from", "to")
 LIST_PREFIX_RIGHT_ALIGNED = (False, True, True, True, False, False)
 TRACKPOINTS = "trackpoints"
 TRACKPOINT_LABEL = "label"
+DYNAMODB_TABLE_CONFIGURATIONS = tuple(odbmaint.load_table_configurations())
 REQUIRED_PREFIX_TABLES = tuple(
     table_config[odbmaint.TableName]
-    for table_config in odbmaint.TABLE_CONFIGURATIONS
+    for table_config in DYNAMODB_TABLE_CONFIGURATIONS
 )
 
 
@@ -1647,8 +1648,8 @@ def create_restore_target_tables(target_state: RestoreTargetState) -> None:
     created_table_names_lock = threading.Lock()
     future_by_table_name = {}
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(odbmaint.TABLE_CONFIGURATIONS)) as executor:
-        for table_config in odbmaint.TABLE_CONFIGURATIONS:
+            max_workers=len(DYNAMODB_TABLE_CONFIGURATIONS)) as executor:
+        for table_config in DYNAMODB_TABLE_CONFIGURATIONS:
             table_name = target_state.table_prefix + table_config[odbmaint.TableName]
             future = executor.submit(
                 create_one_restore_table,
