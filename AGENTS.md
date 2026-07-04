@@ -30,6 +30,18 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 
 Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
 
+## Beads Workflow
+
+This repository uses Beads for local/agent task tracking. Beads issue data is stored in a Dolt database and syncs separately from normal Git commits.
+
+- Before starting issue work, run `bd ready` or `bd list`, then inspect the relevant issue with `bd show <id>`.
+- For the lambda-only migration, use epic `webapp-cgr` and its child issues (`webapp-cgr.1`, etc.) as the Beads work breakdown. Keep GitHub references (`gh-450`, `gh-699`, `gh-1110`) in Beads `external_ref` or metadata.
+- Claim work with `bd update <id> --claim`; update status/comments as work progresses.
+- Pull and push Beads data with `bd dolt pull` and `bd dolt push`. A normal `git push` is not enough unless the installed Beads hook successfully auto-pushes Dolt data; when in doubt, run `bd dolt push` explicitly.
+- Commit only lightweight Beads project files such as `.beads/config.yaml`, `.beads/metadata.json`, `.beads/README.md`, `.beads/hooks/*`, `.beads/.gitignore`, `.beads/interactions.jsonl`, and optionally `.beads/issues.jsonl`.
+- Do **not** commit live/runtime Beads data such as `.beads/embeddeddolt/`, `.beads/dolt/`, `.beads/backup/`, lock files, sockets, `export-state.json`, `last-touched`, or `.beadso/`.
+- Beads issues complement GitHub Issues; commit messages and PR bodies must still reference GitHub Issue or PR numbers per the Git workflow above.
+
 ## Common Commands
 
 ```bash
@@ -84,6 +96,20 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 
 ### Lambda (`lambda-resize/`)
 A separate Poetry project. App code from the main package is vendored into `resize_app/src/app/` via `make -C lambda-resize vend-app` before linting/testing. Imports in Lambda code use `from .src.app import odb` style — do not change these to import the top-level `app` package.
+
+### Lambda-only Migration
+
+The accepted migration goal for #450/#699 is a lambda-only distribution with no virtual machine in the SAM deployment path:
+
+- Add a separate `lambda-web` function for Flask HTML pages and Flask `/api/*` metadata/application routes.
+- Keep the existing `lambda-resize` function as the vision/video/SQS tracing service; do not merge web traffic into the vision package.
+- Expose the application through one public HTTPS hostname/front door. The two Lambda functions do not require separate product domain names; route HTML, Flask `/api/*`, and `/static/*` to `lambda-web`, and `/resize-api/*` to `lambda-resize`.
+- Remove VM resources and parameters from the SAM path, including EC2, VPC/subnet/route-table resources, security groups, EIP, instance profile, SSH/reload workflows, `GitRepoUrl`, and `GitBranch`.
+- Deploy current built artifacts from the current checkout/branch; do not rely on instance boot-time `git clone` or branch checkout.
+- Keep application static assets served by `lambda-web` for the initial migration, as Flask serves them now. Do not move static assets to S3/CloudFront until there is a versioned filename or asset-manifest plan.
+- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `src/dbutil.py` from `etc/dynamodb_tables.json`.
+- Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Preserve or deliberately migrate `/api/v1/movie-data` compatibility.
+- All build, test, local service, static publish, SAM validation, deployment, and smoke workflows should be Makefile targets.
 
 ## Testing Strategy
 
