@@ -33,10 +33,9 @@ export DEBIAN_FRONTEND=noninteractive
 export LOG_LEVEL ?= DEBUG
 
 SAM_CONFIG ?= samconfig.toml
-STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 APP_VERSION := $(shell awk -F"'" '/^__version__/ {print $$2; exit}' src/app/constants.py)
 PACKAGE_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
-SAM_DEPLOY_VERSION_FILE ?= .sam-last-deployed-version.$(STACK_NAME)
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
@@ -600,7 +599,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-deploy-version-check sam-record-deploy-version
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-version-check sam-deploy-version-check
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -611,6 +610,25 @@ template-lint: .venv/pyvenv.cfg
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+
+sam-config-path-check:
+	@if [ -z "$(SAM_CONFIG)" ]; then \
+		echo "Refusing to use SAM: SAM_CONFIG is not set."; \
+		echo "Create a local ignored SAM config, then pass SAM_CONFIG=<path>."; \
+		exit 1; \
+	fi
+	@if git ls-files --error-unmatch "$(SAM_CONFIG)" >/dev/null 2>&1; then \
+		echo "Refusing to use SAM: $(SAM_CONFIG) is tracked by git."; \
+		echo "SAM config files are per-stack local state and must stay out of the repo."; \
+		exit 1; \
+	fi
+
+sam-config-check: sam-config-path-check
+	@if [ ! -f "$(SAM_CONFIG)" ]; then \
+		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
+		echo "Create a local ignored SAM config for the target stack, or pass SAM_CONFIG=<path>."; \
+		exit 1; \
+	fi
 
 sam-build: $(REQ)
 	@# Refuse to build if there are local changes, unless HEAD is an exact tag
@@ -676,11 +694,7 @@ sam-audit-size:
 	done
 	@echo "========================================"
 
-sam-deploy-version-check:
-	@if [ -z "$(STACK_NAME)" ]; then \
-		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
-		exit 1; \
-	fi
+sam-version-check:
 	@if [ -z "$(APP_VERSION)" ]; then \
 		echo "Refusing to deploy: could not read __version__ from src/app/constants.py."; \
 		exit 1; \
@@ -693,17 +707,38 @@ sam-deploy-version-check:
 		echo "Refusing to deploy: src/app/constants.py version $(APP_VERSION) does not match pyproject.toml version $(PACKAGE_VERSION)."; \
 		exit 1; \
 	fi
-	@if [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ] && [ -f "$(SAM_DEPLOY_VERSION_FILE)" ] && [ "$$(cat "$(SAM_DEPLOY_VERSION_FILE)")" = "$(APP_VERSION)" ]; then \
-		echo "Refusing to deploy $(STACK_NAME): version $(APP_VERSION) was already recorded in $(SAM_DEPLOY_VERSION_FILE)."; \
-		echo "Bump src/app/constants.py and pyproject.toml before deploying again."; \
-		echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
+	@echo "Application version check passed for version $(APP_VERSION)."
+
+sam-deploy-version-check: sam-config-check sam-version-check
+	@if [ -z "$(STACK_NAME)" ]; then \
+		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
 		exit 1; \
 	fi
-	@echo "Deploy version check passed for $(STACK_NAME) version $(APP_VERSION)."
-
-sam-record-deploy-version:
-	@printf "%s\n" "$(APP_VERSION)" > "$(SAM_DEPLOY_VERSION_FILE)"
-	@echo "Recorded deployed version $(APP_VERSION) in $(SAM_DEPLOY_VERSION_FILE)."
+	@APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
+		if [ -n "$$DNS" ] && [ "$$DNS" != "None" ]; then \
+			APP_URL="https://$$DNS/"; \
+		fi; \
+	fi; \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		echo "WARNING: could not resolve deployed URL for $(STACK_NAME); allowing deploy."; \
+	else \
+		VERSION_URL="$${APP_URL%/}/api/ver"; \
+		VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
+		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+		if [ -z "$$DEPLOYED_VERSION" ]; then \
+			echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
+		elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
+			echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
+			echo "Bump src/app/constants.py and pyproject.toml before deploying again."; \
+			echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
+			echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
+			exit 1; \
+		else \
+			echo "Deploy version check passed for $(STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION)."; \
+		fi; \
+	fi
 
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -711,29 +746,39 @@ ifeq ($(AWS_REGION),local)
 endif
 	$(MAKE) sam-deploy-version-check
 	aws sts get-caller-identity --no-cli-pager
-	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
+	sam deploy --config-file "$(SAM_CONFIG)" --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
-	$(MAKE) sam-record-deploy-version
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
-	$(MAKE) sam-deploy-version-check
+	$(MAKE) sam-version-check
+	$(MAKE) sam-config-path-check
+	@if [ -f "$(SAM_CONFIG)" ]; then \
+		$(MAKE) sam-deploy-version-check; \
+	fi
 	aws sts get-caller-identity --no-cli-pager
 	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
-	sam deploy --guided --capabilities CAPABILITY_IAM
+	sam deploy --config-file "$(SAM_CONFIG)" --guided --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
-	$(MAKE) sam-record-deploy-version
 
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
-sam-status:
+sam-status: sam-config-check
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
+	VERSION_URL="https://$$DNS/api/ver"; \
+	VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
+	DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+	if [ -n "$$DEPLOYED_VERSION" ]; then \
+	  echo "Lambda deployed version: $$DEPLOYED_VERSION ($$VERSION_URL)"; \
+	else \
+	  echo "Lambda deployed version: unavailable ($$VERSION_URL)"; \
+	fi; \
 	WEB_URL="https://$$DNS/ping"; \
 	WEB_RESP=$$(curl -s -w "\n%{http_code}" "$$WEB_URL" 2>/dev/null); \
 	WEB_CODE=$$(echo "$$WEB_RESP" | tail -1); \
@@ -791,7 +836,7 @@ SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 # Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
 # activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
-sam-logs:
+sam-logs: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
 	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
@@ -799,7 +844,7 @@ sam-logs:
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
 # Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
-sam-logs-simple:
+sam-logs-simple: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
 	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \

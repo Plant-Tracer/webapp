@@ -206,8 +206,9 @@ sam-installation
 TAGS
 bin/
 *.whl
-samconfig.toml
-.sam-last-deployed-version.*
+samconfig*.toml
+.samconfig*.toml
+samconfig.toml-*
 .envrc
 .env
 .op

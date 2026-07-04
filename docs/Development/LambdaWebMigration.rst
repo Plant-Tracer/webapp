@@ -98,13 +98,24 @@ adding SnapStart or provisioned concurrency.
 Deploy Version Guard
 --------------------
 
-``make sam-deploy`` and ``make sam-deploy-guided`` record the deployed
-application version in a local, ignored dotfile named
-``.sam-last-deployed-version.<stack-name>``. The version comes from
-``src/app/constants.py`` and must match ``pyproject.toml``. The next deploy to
-the same stack is refused until both version numbers are bumped, unless the
-operator explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an intentional
-same-version redeploy.
+``make sam-deploy`` and ``make sam-deploy-guided`` require
+``src/app/constants.py`` and ``pyproject.toml`` to contain the same application
+version. For an existing stack, the deploy guard resolves the deployed
+application URL from CloudFormation and fetches ``/api/ver``. If the deployed
+application reports the same version as the local checkout, deploy is refused
+unless the operator explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an
+intentional same-version redeploy.
+
+The version bump is required because ``lambda-web`` uses SnapStart on published
+Lambda versions. A normal deployment should publish a deliberately new
+application version so the SnapStart snapshot and the user-visible version move
+together. If deployment is blocked by the same-version guard, update both
+``src/app/constants.py`` and ``pyproject.toml`` before deploying again.
+
+The deployed-version check is recovery tolerant. If the stack does not exist,
+CloudFormation outputs are missing, DNS is not usable, or ``/api/ver`` cannot
+return valid JSON, the guard prints a warning and allows the deploy. This keeps
+first deploys and repair deploys from being blocked by a broken stack.
 
 Local Testing
 -------------
@@ -172,3 +183,110 @@ Before PR #1113 is ready to merge, validate at least:
   ``lambda-web`` and ``lambda-resize``;
 * documentation reflects the Lambda-only deployment shape and the continued
   Flask-local development workflow.
+
+SAM Config Files
+----------------
+
+SAM stores deployment choices in a TOML config file. That file is not the
+application template; ``template.yaml`` is still the source-controlled
+CloudFormation/SAM definition. The SAM config records the local operator's
+selected deployment target and deploy-time parameters, including values such
+as:
+
+* ``stack_name``;
+* AWS region;
+* artifact bucket or ``resolve_s3`` behavior;
+* CloudFormation capabilities;
+* ``parameter_overrides`` for ``HostedZoneId``, ``BaseDomain``,
+  ``WildcardCertificateArn``, ``ImageBucketName``, ``ServerEmail``,
+  ``LogLevel``, and ``DynamoDBTablePrefix``.
+
+Because those values identify one concrete stack and its data resources, SAM
+config files are local deployment state. They must not be committed to the
+repository. The Makefile defaults to ``SAM_CONFIG=samconfig.toml`` for
+compatibility with the SAM CLI, but ``.gitignore`` ignores ``samconfig*.toml``,
+``.samconfig*.toml``, and ``samconfig.toml-*``. Deployment targets also refuse
+to use a SAM config file that is tracked by Git.
+
+Use one ignored SAM config file per stack. For example:
+
+.. code-block:: console
+
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.dev-stack.toml make sam-deploy
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.prod.toml make sam-deploy
+
+``sam deploy --guided`` can also create the selected file:
+
+.. code-block:: console
+
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy-guided
+
+SAM supports multiple profiles in a single config file, but this project should
+avoid that pattern. With multiple stacks in flight, separate files make the
+target stack visible in the command line and avoid accidentally using a stale
+default profile from a shared TOML file. Separate files also work better with
+SAM's habit of rewriting config during guided deploys.
+
+Cutover Runbook
+---------------
+
+Validate a non-production stack before any production DNS change. SAM config
+files are stack-local deployment state and are not committed to the repository.
+Use ``SAM_CONFIG=<path>`` to select the ignored config for the stack being
+tested. The branch must be pushed before ``make sam-build`` will build
+artifacts. This prevents deploying local-only commits that nobody else can
+inspect or rebuild.
+
+Preflight:
+
+* confirm ``git status`` is clean and the branch has no unpushed commits;
+* confirm ``src/app/constants.py`` and ``pyproject.toml`` have the same version;
+* confirm ``SAM_CONFIG`` points to an untracked local SAM config for the
+  intended non-production stack and table prefix;
+* confirm the S3 movie bucket and DynamoDB table prefix are the intended test
+  resources;
+* run ``make check``;
+* run ``make template-lint``;
+* run ``make sam-build``.
+
+Deploy:
+
+* run ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy`` for an
+  existing configured stack, or
+  ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy-guided`` for a new
+  stack;
+* let ``make sam-status`` verify ``/ping``, ``/static/planttracer.js``, and
+  ``/resize-api/v1/ping``;
+* inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
+  if any smoke check reports a failure.
+
+Manual smoke checks on the non-production stack:
+
+* open ``https://{stack}.planttracer.com/`` and verify the home page and static
+  assets load;
+* verify ``/ping`` returns ``{"status": "ok"}``;
+* verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``;
+* register a test user and confirm the registration email path works;
+* resend a login link and confirm the user can log in;
+* upload a small movie and confirm it appears in the list page;
+* open the analysis page, load the first frame, save at least one marker
+  change, and start tracing;
+* confirm the trace job reaches SQS/``lambda-resize`` and produces expected
+  artifacts or a clear user-visible status;
+* verify audit/admin pages still render for an admin user.
+
+Production DNS cutover must wait until the non-production stack passes the
+smoke matrix and the production mail/secrets path is confirmed. Record the
+pre-cutover DNS target and TTL before changing any record.
+
+Rollback:
+
+* if only DNS was changed, restore the previous Route53 record target and TTL;
+* if the Lambda stack was updated but DNS was not moved, redeploy the previous
+  known-good version or leave traffic on the existing production target;
+* if login, registration, upload, or tracing fails after DNS cutover, restore
+  the previous DNS target first, then inspect CloudWatch logs and stack events;
+* do not delete the movie S3 bucket or DynamoDB tables during rollback;
+* preserve the failed stack until logs, CloudFormation events, and Lambda
+  versions have been captured for diagnosis.
