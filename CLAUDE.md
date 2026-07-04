@@ -111,7 +111,9 @@ The accepted migration goal for #450/#699 is a lambda-only distribution with no 
 - Deploy current built artifacts from the current checkout/branch; do not rely on instance boot-time `git clone` or branch checkout.
 - Keep application static assets served by `lambda-web` for the initial migration, as Flask serves them now. Do not move static assets to S3/CloudFront until there is a versioned filename or asset-manifest plan.
 - Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `src/dbutil.py` from `etc/dynamodb_tables.json`.
-- Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Preserve or deliberately migrate `/api/v1/movie-data` compatibility.
+- Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Movie-data is resize-owned and lives at `/resize-api/v1/movie-data`; do not reintroduce `/api/v1/movie-data` compatibility.
+- `lambda-web` uses SnapStart on the published `live` alias. `lambda-resize` does not use SnapStart unless measured and deliberately enabled later.
+- `make sam-deploy` and `make sam-deploy-guided` record `.sam-last-deployed-version.<stack>` locally and refuse redeploying the same app version to the same stack; bump both `src/app/constants.py` and `pyproject.toml` before deploying again.
 - All build, test, local service, static publish, SAM validation, deployment, and smoke workflows should be Makefile targets.
 - Local Flask development and testing remain required. `make run-local-debug`, `make run-local-demo-debug`, and `make pytest` are still the primary local workflow.
 - Lambda-web handler tests and SAM local tests are additive checks for API Gateway/Lambda event shape. They do not replace normal Flask route tests.

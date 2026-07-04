@@ -218,6 +218,9 @@ Resources:
       PackageType: Zip
       CodeUri: lambda-web/src/
       Handler: lambda_web.main.lambda_handler
+      AutoPublishAlias: live
+      SnapStart:
+        ApplyOn: PublishedVersions
       Timeout: 30
       MemorySize: 512
       Environment:

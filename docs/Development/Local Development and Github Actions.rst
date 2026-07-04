@@ -290,11 +290,8 @@ The most important runtime uses are:
 
   * Used by the upload UI to reject oversized files before upload begins.
 
-Two values defined in ``base.html`` are intentionally not discussed further
-here:
+One value defined in ``base.html`` is intentionally not discussed further here:
 
-* ``STATIC_BASE`` is currently defined but not meaningfully used by the runtime
-  JavaScript in this repo.
 * ``version`` is useful for display/debugging in rendered pages, but not for
   the operational browser logic discussed in this document.
 

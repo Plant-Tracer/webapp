@@ -82,6 +82,30 @@ schema maintenance remain handled by repository tooling such as
 The migration must not make stack deletion delete the long-lived S3 archive or
 the DynamoDB data model.
 
+Cold Starts
+-----------
+
+``lambda-web`` enables Lambda SnapStart on the published ``live`` alias. This
+reduces cold-start initialization cost for the Flask web runtime, but it does
+not keep an execution environment continuously warm. Any code that relies on
+unique values, credentials, timestamps, temporary data, or network connections
+from module initialization must tolerate Lambda restore behavior.
+
+``lambda-resize`` does not use SnapStart in the initial migration. The resize
+function has different runtime characteristics and should be measured before
+adding SnapStart or provisioned concurrency.
+
+Deploy Version Guard
+--------------------
+
+``make sam-deploy`` and ``make sam-deploy-guided`` record the deployed
+application version in a local, ignored dotfile named
+``.sam-last-deployed-version.<stack-name>``. The version comes from
+``src/app/constants.py`` and must match ``pyproject.toml``. The next deploy to
+the same stack is refused until both version numbers are bumped, unless the
+operator explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an intentional
+same-version redeploy.
+
 Local Testing
 -------------
 

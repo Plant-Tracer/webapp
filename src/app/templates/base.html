@@ -30,12 +30,10 @@
       //   Used for: ping, first-frame, get-movie-data, and trace-movie calls owned by lambda-resize.
       //   All client calls to the Lambda API are authorized (client sends api_key in request; Lambda validates).
       //   Available as global LAMBDA_API_BASE to all JavaScript. See docs/ClientLambdaAPI.md.
-      // STATIC_BASE    - static assets base URL.
       "use strict";
       const version = '{{version}}';
-      const API_BASE = "{{API_BASE}}";
-      const STATIC_BASE = "{{STATIC_BASE}}";
-      const LAMBDA_API_BASE = "{{ lambda_api_base }}";
+      const API_BASE = {{ API_BASE | tojson }};
+      const LAMBDA_API_BASE = {{ lambda_api_base | tojson }};
       const MOVIE_STATE = {{ movie_states | tojson }};
       {% if logged_in %}
       const api_key = "{{api_key}}";

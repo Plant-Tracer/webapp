@@ -126,7 +126,7 @@ def _config_error_page_context(error_title: str, error_message: str):
     """Build template context for config_error.html without touching the DB."""
     ret = {
         C.API_BASE: apikey.api_base,
-        C.STATIC_BASE: apikey.static_base,
+        'lambda_api_base': apikey.get_lambda_api_base(),
         'favicon_base64': apikey.favicon_base64(),
         'api_key': None,
         'user_id': None,

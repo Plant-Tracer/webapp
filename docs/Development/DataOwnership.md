@@ -14,6 +14,11 @@ Plant Tracer has two different persistence lifetimes:
 - **S3 bucket:** The bucket named by `PLANTTRACER_S3_BUCKET` is pre-existing and
   stack-independent. It must outlive CloudFormation/SAM stacks because it is the
   durable archive for uploaded movies and derived movie artifacts.
+- **Artifacts bucket:** `s3://planttracer-artifacts` is shared manual
+  infrastructure for temporary operational artifacts. Objects under
+  `artifacts/` expire after 7 days; objects outside that prefix are retained and
+  should be limited to bucket documentation or control files such as
+  `README.md`.
 - **DynamoDB tables:** Tables are owned by the deployment stack or by the local
   DynamoDB test/dev environment. Every table name is prefixed by
   `DYNAMODB_TABLE_PREFIX`; local creation normalizes a non-empty prefix to end
@@ -150,6 +155,29 @@ During upload, `/api/new-movie` first creates the DynamoDB movie row with
 `status="uploading"` and returns a presigned POST for the final S3 key. The
 browser uploads directly to S3/MinIO. There is no live S3 bucket notification
 pipeline and no live `uploads/` staging-prefix path.
+
+## Operational Artifacts Bucket
+
+`s3://planttracer-artifacts` is a project-wide bucket for temporary operational
+artifacts such as CloudWatch Synthetics screenshots and other generated stack
+diagnostics. It is not the movie archive and is not owned by the lambda-only app
+stack.
+
+The bucket has these intended settings:
+
+- AWS account `343218180669`, region `us-east-1`
+- public access blocked
+- default SSE-S3 encryption
+- versioning disabled
+- lifecycle rule expiring current objects under `artifacts/` after 7 days
+- lifecycle rule aborting incomplete multipart uploads under `artifacts/` after
+  1 day
+
+Application and monitoring stacks should write under tool- and stack-specific
+prefixes such as `artifacts/synthetics/{stack-name}/`. The root `README.md`
+documents the bucket policy and is retained because it is outside `artifacts/`.
+Do not put uploaded movies, derived movie artifacts, DynamoDB backups, release
+artifacts, or other durable data in this bucket.
 
 ## Metadata Durability
 

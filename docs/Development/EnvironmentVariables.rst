@@ -45,18 +45,22 @@ Application URLs
 
 ``PLANTTRACER_API_BASE``
    Optional Flask API base injected into browser pages as ``API_BASE``. Empty
-   means same-origin.
+   means same-origin. If set, include a complete origin/base path; the runtime
+   normalizes a missing trailing slash.
 
 ``PLANTTRACER_STATIC_BASE``
-   Optional static asset base injected as ``STATIC_BASE``.
+   Reserved for a future versioned-asset plan. Static assets are currently
+   served same-origin by Flask/``lambda-web`` under ``/static/*``.
 
 ``PLANTTRACER_LAMBDA_API_BASE``
    Explicit lambda-resize HTTP API base injected as ``LAMBDA_API_BASE``. Local
-   default from the Makefile is ``http://127.0.0.1:9811/``.
+   default from the Makefile is ``http://127.0.0.1:9811/``. The Lambda-only
+   stack sets this to the same public application origin.
 
 ``HOSTNAME`` / ``DOMAIN``
    If ``PLANTTRACER_LAMBDA_API_BASE`` is absent, Flask derives
-   ``https://{HOSTNAME}-lambda.{DOMAIN}/``.
+   ``https://{HOSTNAME}.{DOMAIN}/``. If those are also absent, Flask uses the
+   current request origin.
 
 Demo Mode
 ---------

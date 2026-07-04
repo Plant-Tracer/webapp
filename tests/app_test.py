@@ -16,7 +16,7 @@ from app import apikey
 from app.odb import API_KEY
 
 # Fixtures are imported in conftest.py
-from app.constants import logger
+from app.constants import C, logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -60,6 +60,18 @@ def test_static_path(client):
     # Test file not found
     response = client.get('/static/no-file')
     assert response.status_code==404
+
+
+def test_base_template_uses_same_origin_static_contract(client, local_ddb, local_s3, monkeypatch):
+    del local_ddb, local_s3
+    monkeypatch.setenv(C.PLANTTRACER_LAMBDA_API_BASE, "http://127.0.0.1:9811")
+
+    response = client.get('/about')
+
+    assert response.status_code == 200
+    assert 'const API_BASE = "";' in response.text
+    assert 'const LAMBDA_API_BASE = "http://127.0.0.1:9811/";' in response.text
+    assert 'STATIC_BASE' not in response.text
 
 #
 # Test various error conditions

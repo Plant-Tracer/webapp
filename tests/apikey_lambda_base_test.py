@@ -17,7 +17,25 @@ def test_get_lambda_api_base_falls_back_to_hostname_and_domain(monkeypatch):
     monkeypatch.setenv("HOSTNAME", "stack-name")
     monkeypatch.setenv("DOMAIN", "planttracer.com")
 
-    assert apikey.get_lambda_api_base() == "https://stack-name-lambda.planttracer.com/"
+    assert apikey.get_lambda_api_base() == "https://stack-name.planttracer.com/"
+
+
+def test_get_lambda_api_base_falls_back_to_request_origin(monkeypatch):
+    monkeypatch.delenv(C.PLANTTRACER_LAMBDA_API_BASE, raising=False)
+    monkeypatch.delenv("HOSTNAME", raising=False)
+    monkeypatch.delenv("DOMAIN", raising=False)
+    app = Flask(__name__)
+
+    with app.test_request_context("/", base_url="https://stack-name.planttracer.com"):
+        assert apikey.get_lambda_api_base() == "https://stack-name.planttracer.com/"
+
+
+def test_browser_base_normalizes_trailing_slash():
+    assert apikey.browser_base("") == ""
+    assert (
+        apikey.browser_base("https://stack-name.planttracer.com")
+        == "https://stack-name.planttracer.com/"
+    )
 
 
 def test_in_demo_mode_enabled_by_demo_mode_env(monkeypatch):

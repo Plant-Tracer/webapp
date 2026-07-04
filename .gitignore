@@ -207,6 +207,7 @@ TAGS
 bin/
 *.whl
 samconfig.toml
+.sam-last-deployed-version.*
 .envrc
 .env
 .op

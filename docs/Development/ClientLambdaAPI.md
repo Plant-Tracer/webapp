@@ -15,10 +15,16 @@ Flask injects the Lambda API base URL into pages as the browser global
 - Template: `src/app/templates/base.html`
 - Server: `src/app/apikey.py`, via `get_lambda_api_base()`
 - Local override: `PLANTTRACER_LAMBDA_API_BASE=http://127.0.0.1:9811/`
-- Deployed fallback: `https://{HOSTNAME}-lambda.{DOMAIN}/`
+- Deployed same-origin stack: `https://{stack}.planttracer.com/`
+- Fallback when no explicit base is configured: `https://{HOSTNAME}.{DOMAIN}/`,
+  or the current request origin when those variables are absent.
 
 All client calls are authorized. The browser sends the current `api_key`; the
 Lambda validates it against DynamoDB.
+
+Static JavaScript and CSS are not part of `LAMBDA_API_BASE`; they are served
+same-origin by Flask/`lambda-web` under `/static/*` until there is a versioned
+asset plan for external static hosting.
 
 ## Endpoints
 

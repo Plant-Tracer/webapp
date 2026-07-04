@@ -34,6 +34,9 @@ export LOG_LEVEL ?= DEBUG
 
 SAM_CONFIG ?= samconfig.toml
 STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+APP_VERSION := $(shell awk -F"'" '/^__version__/ {print $$2; exit}' src/app/constants.py)
+PACKAGE_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
+SAM_DEPLOY_VERSION_FILE ?= .sam-last-deployed-version.$(STACK_NAME)
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
@@ -597,7 +600,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-deploy-version-check sam-record-deploy-version
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -673,24 +676,57 @@ sam-audit-size:
 	done
 	@echo "========================================"
 
+sam-deploy-version-check:
+	@if [ -z "$(STACK_NAME)" ]; then \
+		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
+		exit 1; \
+	fi
+	@if [ -z "$(APP_VERSION)" ]; then \
+		echo "Refusing to deploy: could not read __version__ from src/app/constants.py."; \
+		exit 1; \
+	fi
+	@if [ -z "$(PACKAGE_VERSION)" ]; then \
+		echo "Refusing to deploy: could not read version from pyproject.toml."; \
+		exit 1; \
+	fi
+	@if [ "$(APP_VERSION)" != "$(PACKAGE_VERSION)" ]; then \
+		echo "Refusing to deploy: src/app/constants.py version $(APP_VERSION) does not match pyproject.toml version $(PACKAGE_VERSION)."; \
+		exit 1; \
+	fi
+	@if [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ] && [ -f "$(SAM_DEPLOY_VERSION_FILE)" ] && [ "$$(cat "$(SAM_DEPLOY_VERSION_FILE)")" = "$(APP_VERSION)" ]; then \
+		echo "Refusing to deploy $(STACK_NAME): version $(APP_VERSION) was already recorded in $(SAM_DEPLOY_VERSION_FILE)."; \
+		echo "Bump src/app/constants.py and pyproject.toml before deploying again."; \
+		echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
+		exit 1; \
+	fi
+	@echo "Deploy version check passed for $(STACK_NAME) version $(APP_VERSION)."
+
+sam-record-deploy-version:
+	@printf "%s\n" "$(APP_VERSION)" > "$(SAM_DEPLOY_VERSION_FILE)"
+	@echo "Recorded deployed version $(APP_VERSION) in $(SAM_DEPLOY_VERSION_FILE)."
+
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	$(MAKE) sam-deploy-version-check
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-record-deploy-version
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	$(MAKE) sam-deploy-version-check
 	aws sts get-caller-identity --no-cli-pager
 	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
 	sam deploy --guided --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-record-deploy-version
 
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
