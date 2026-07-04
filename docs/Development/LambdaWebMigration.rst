@@ -71,6 +71,81 @@ rollback behavior.
 S3 remains the long-lived movie and frame archive. It is an existing bucket and
 must outlive the CloudFormation stack.
 
+Static HTML Shell Decision
+--------------------------
+
+The initial Lambda-only migration keeps Jinja-rendered HTML pages in
+``lambda-web``. Moving pages to static HTML shells should be a later,
+incremental project after cookie/API cleanup and versioned static assets are
+designed.
+
+This decision is conservative because the current templates are not just static
+markup. Routes call ``render_template(..., **page_dict(...))`` and
+``page_dict()`` performs authentication lookup, course/admin lookup, demo-mode
+selection, runtime URL selection, and JavaScript bootstrap injection. The base
+template uses that state for:
+
+* browser globals: ``API_BASE``, ``LAMBDA_API_BASE``, ``api_key``, ``user_id``,
+  ``demo_mode``, ``user_primary_course_id``, ``primary_course_name``,
+  ``MAX_FILE_UPLOAD``, ``MOVIE_STATE``, and ``admin``;
+* authenticated navigation and logged-in user/course display;
+* admin-only and demo-mode menu behavior;
+* version and git build display.
+
+Current template classification:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Template group
+     - Examples
+     - Static-shell status
+   * - Public informational pages
+     - ``about.html``, ``privacy.html``, ``tos.html``, ``error.html``
+     - Good later candidates, but today they still inherit dynamic navigation
+       and version display from ``base.html``.
+   * - Public account pages
+     - ``index.html``, ``login.html``, ``register.html``, ``logout.html``,
+       ``welcome.html``
+     - Possible later candidates after login links are consumed server-side,
+       auth cookies are canonical, and the browser has a session endpoint.
+   * - Authenticated app pages
+     - ``list.html``, ``upload.html``, ``analyze.html``, ``users.html``,
+       ``audit.html``, ``processing.html``
+     - Not initial candidates. They rely on injected user, course, admin, demo,
+       max-upload, and API-key state.
+   * - Demo/tracer pages and shared includes
+     - ``demo_tracer*.html``, ``tracer_app.html``, ``tracer_app.css``,
+       ``register_resend.html``, ``base.html``
+     - Keep as Jinja/includes for now. A later migration should treat shared
+       includes as normal static assets only after an asset versioning plan.
+   * - Operational and email templates
+     - ``config_error.html``, ``debug.html``, ``version.txt``,
+       ``email_login.html``, ``email_course_created.html``
+     - Keep server-rendered. These are diagnostics or MIME templates, not
+       browser static-shell targets.
+
+A future static-shell migration must define replacement browser contracts
+before changing templates:
+
+* a public runtime config endpoint or static config artifact for
+  ``API_BASE``, ``LAMBDA_API_BASE``, ``MOVIE_STATE``, ``MAX_FILE_UPLOAD``,
+  app version, and asset version;
+* a same-origin ``/api/session`` endpoint for logged-in state, user identity,
+  primary course, admin status, and demo mode;
+* a login-link flow that consumes ``?api_key=...``, sets the cookie, and
+  redirects to a clean URL before browser JavaScript runs;
+* a CSRF/log-safety decision for cookie-authenticated mutating endpoints;
+* a versioned static asset manifest before moving HTML, JavaScript, or CSS to
+  long-lived external caching.
+
+Any later implementation should update ``docs/Development/FlaskAPI.md``,
+``docs/Development/ClientLambdaAPI.md``,
+``docs/Development/EnvironmentVariables.rst``, and local-development docs.
+Tests should cover the new config/session contracts, login-link cleanup,
+authenticated and anonymous navigation states, admin/demo behavior, and the
+existing Selenium upload/list/analyze flows.
+
 Data Ownership
 --------------
 
