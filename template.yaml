@@ -39,16 +39,17 @@ Parameters:
     Description: "Existing S3 bucket for videos; must outlive the stack. Do not include s3://."
     Default: planttracer2
 
-  ServerEmail:
-    Type: String
-    Default: admin@planttracer.com
-    Description: "Sender address for application mail."
-
   LogLevel:
     Type: String
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the functions.
+
+  MailerDryRun:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "Set true for non-production stacks without SES sender access; email is logged instead of sent."
 
   DynamoDBTablePrefix:
     Type: String
@@ -57,6 +58,11 @@ Parameters:
     MaxLength: 220
     AllowedPattern: "[A-Za-z0-9_.-]+"
     ConstraintDescription: "Use only letters, numbers, dots, hyphens, and underscores."
+
+Mappings:
+  StackConstants:
+    Mail:
+      ServerEmail: admin@planttracer.com
 
 Resources:
   ################################################################
@@ -138,16 +144,14 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*/index/*"
               - Effect: Allow
                 Action:
-                  - ses:VerifyEmailIdentity
-                  - ses:ListIdentities
-                  - ses:GetSendQuota
-                  - ses:SendEmail
                   - ses:SendRawEmail
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: "*"
+                Resource:
+                  - !Sub
+                    - "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${ServerEmail}"
+                    - ServerEmail: !FindInMap [StackConstants, Mail, ServerEmail]
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !FindInMap [StackConstants, Mail, ServerEmail]
 
   LambdaResizeExecutionRole:
     Type: AWS::IAM::Role
@@ -227,10 +231,11 @@ Resources:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Ref DynamoDBTablePrefix
           LOG_LEVEL: !Ref LogLevel
+          MAILER_DRY_RUN: !Ref MailerDryRun
           PLANTTRACER_LAMBDA_API_BASE: !Sub "https://${AWS::StackName}.${BaseDomain}/"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
           PLANTTRACER_WEB_RUNTIME: lambda
-          SERVER_EMAIL: !Ref ServerEmail
+          SERVER_EMAIL: !FindInMap [StackConstants, Mail, ServerEmail]
       Events:
         WebRoot:
           Type: HttpApi

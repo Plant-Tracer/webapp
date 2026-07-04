@@ -58,7 +58,19 @@ Mailer Configuration
 --------------------
 
 Local development uses Mailpit through ``SMTPCONFIG_JSON`` set by the Makefile.
-For a real mailer, provide one of:
+The Lambda-only stack uses AWS SES with ``admin@planttracer.com`` as the
+``SERVER_EMAIL`` sender identity. Verify that exact address in SES in the
+deployment region before using registration or resend-login on a deployed
+stack.
+
+If you are deploying a non-production stack and cannot send SES mail as
+``admin@planttracer.com``, set the SAM ``MailerDryRun`` parameter to ``true``.
+The stack will deploy and registration/resend-login will render email into
+Lambda logs instead of sending it. Use only test users in this mode because the
+logs include login links and API keys. Production stacks must use
+``MailerDryRun=false`` with the SES sender verified.
+
+For a non-Lambda SMTP mailer, provide one of:
 
 * ``PLANTTRACER_CREDENTIALS`` pointing at an INI file with ``[smtp]``.
 * ``SMTPCONFIG_JSON`` with SMTP settings.

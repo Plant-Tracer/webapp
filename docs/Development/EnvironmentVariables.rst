@@ -79,18 +79,31 @@ Mail
 
 ``SERVER_EMAIL``
    Sender address for outgoing mail. Defaults to ``admin@planttracer.com``.
+   In the Lambda-only stack this is set by the stack to
+   ``admin@planttracer.com`` and the Lambda role is scoped to that SES sender.
+   The exact address must be verified in AWS SES in the deployment region.
 
 ``PLANTTRACER_CREDENTIALS``
-   Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections.
+   Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections. Used
+   for local or legacy VM-style SMTP configuration, not by the Lambda-only SAM
+   stack.
 
 ``SMTPCONFIG_JSON``
    JSON SMTP configuration. Local Make targets set this for Mailpit.
 
 ``SMTPCONFIG_ARN``
-   AWS Secrets Manager ARN containing SMTP configuration.
+   AWS Secrets Manager ARN containing SMTP configuration. The mailer supports
+   this explicit override, but the Lambda-only SAM stack does not set it and
+   does not grant Secrets Manager access by default. Lambda production mail uses
+   SES IAM permissions instead of committed or environment-injected SMTP
+   secrets.
 
 ``MAILER_DRY_RUN``
-   Set to ``true`` to log email content instead of sending it.
+   Set to ``true`` to log email content instead of sending it. The Lambda-only
+   stack exposes this as the ``MailerDryRun`` SAM parameter for non-production
+   stacks whose operators cannot send SES mail as ``admin@planttracer.com``.
+   Dry-run mail includes login links and API keys in Lambda logs, so use it
+   only with test users and test data.
 
 Lambda Queue
 ------------
