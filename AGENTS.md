@@ -63,7 +63,7 @@ npm test           # JS tests directly
 npm run test-debug # JS tests with verbose output
 
 # Run a single Python test module
-AWS_REGION=local PYTHONPATH=".:src:lambda-web/src:lambda-resize/src" poetry run pytest tests/endpoint_test.py -v
+env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local PYTHONPATH=".:src:lambda-web/src:lambda-resize/src" poetry run pytest tests/endpoint_test.py -v
 
 # Local development
 python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
@@ -121,7 +121,7 @@ The accepted migration goal for #450/#699 is a lambda-only distribution with no 
 Tests run against **real local services** (DynamoDB Local + Minio), not mocks. Fixtures in `tests/conftest.py` and `tests/fixtures/` handle setup automatically.
 
 - Use `make pytest` / `make check` rather than running `pytest` directly — the Makefile sets the correct environment.
-- If running `pytest` directly, always set `AWS_REGION=local` and `PYTHONPATH=".:src:lambda-web/src:lambda-resize/src"`.
+- If running `pytest` directly, always unset `AWS_PROFILE`/`AWS_DEFAULT_PROFILE`, set `AWS_REGION=local`, and use `PYTHONPATH=".:src:lambda-web/src:lambda-resize/src"`.
 - When AWS credential errors appear in tests, **do not change code** — first verify the environment is set correctly.
 - Tests must **fail** when prerequisites are missing. Do not make tests skip or pass silently — that is the project owner's decision.
 - Write function-style tests only (`def test_*()`); no test classes.
