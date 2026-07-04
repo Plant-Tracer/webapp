@@ -55,12 +55,15 @@ make mypy          # Type checking (optional)
 make check         # Full CI: lint + pytest + jscoverage
 make pytest        # Python tests (requires local DynamoDB + Minio running)
 make pytest-coverage  # Python tests with HTML coverage in htmlcov/
+make lambda-web-check     # Lambda-web adapter lint/tests; does not replace Flask local tests
+make lambda-resize-check  # Lambda-resize lint/tests
+make template-lint        # SAM/cfn-lint validation
 make jscoverage    # JavaScript Jest tests with coverage
 npm test           # JS tests directly
 npm run test-debug # JS tests with verbose output
 
 # Run a single Python test module
-AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/endpoint_test.py -v
+AWS_REGION=local PYTHONPATH="src:lambda-web/src:lambda-resize/src" poetry run pytest tests/endpoint_test.py -v
 
 # Local development
 python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
@@ -110,13 +113,15 @@ The accepted migration goal for #450/#699 is a lambda-only distribution with no 
 - Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `src/dbutil.py` from `etc/dynamodb_tables.json`.
 - Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Preserve or deliberately migrate `/api/v1/movie-data` compatibility.
 - All build, test, local service, static publish, SAM validation, deployment, and smoke workflows should be Makefile targets.
+- Local Flask development and testing remain required. `make run-local-debug`, `make run-local-demo-debug`, and `make pytest` are still the primary local workflow.
+- Lambda-web handler tests and SAM local tests are additive checks for API Gateway/Lambda event shape. They do not replace normal Flask route tests.
 
 ## Testing Strategy
 
 Tests run against **real local services** (DynamoDB Local + Minio), not mocks. Fixtures in `tests/conftest.py` and `tests/fixtures/` handle setup automatically.
 
 - Use `make pytest` / `make check` rather than running `pytest` directly — the Makefile sets the correct environment.
-- If running `pytest` directly, always set `AWS_REGION=local` and `PYTHONPATH="lambda-resize/src:src"`.
+- If running `pytest` directly, always set `AWS_REGION=local` and `PYTHONPATH="src:lambda-web/src:lambda-resize/src"`.
 - When AWS credential errors appear in tests, **do not change code** — first verify the environment is set correctly.
 - Tests must **fail** when prerequisites are missing. Do not make tests skip or pass silently — that is the project owner's decision.
 - Write function-style tests only (`def test_*()`); no test classes.

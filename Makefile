@@ -68,6 +68,8 @@ ifeq ($(AWS_REGION),local)
     export PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 endif
 
+export PYLINTHOME ?= $(CURDIR)/.pylint.d
+
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
     $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
@@ -111,7 +113,7 @@ coverage:
 	$(MAKE) AWS_REGION=local jscoverage
 
 tags:
-	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-resize/src/resize_app/*.py
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 
 ################################################################
 ## Program development: static analysis tools
@@ -125,7 +127,8 @@ lint: $(REQ)
 
 pylint:
 	$(MAKE) vend-lambda-resize
-	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
+	$(MAKE) vend-lambda-web
+	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:
@@ -150,15 +153,18 @@ dump.txt:
 
 ## These tests use fixtures that create DynamoDB Local and MinIO (when AWS_REGION=local, the default).
 ## PYTHONPATH includes lambda-resize/src so tests that use resize_app (tracer, lambda_tracing_handler) can load it.
+## PYTHONPATH includes lambda-web/src so tests can exercise the Flask app through the Lambda-web adapter.
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
+	$(MAKE) vend-lambda-web
+	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-resize/tests
+	$(MAKE) vend-lambda-web
+	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -169,7 +175,7 @@ pytest-selenium:
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	$(LOCAL_AWS_ENV) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -567,9 +573,36 @@ lambda-resize-lint: install-lambda-deps
 lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt template-lint
+################################################################
+## lambda-web
+
+vend-lambda-web:
+	mkdir -p lambda-web/src/app
+	rsync --verbose --archive --delete --delete-excluded \
+		--exclude .DS_Store \
+		--exclude __pycache__ \
+		--exclude '*.pyc' \
+		--exclude static-instrumented \
+		src/app/ lambda-web/src/app/
+
+# Install lambda-web group so root venv can run lambda-web lint/tests.
+install-lambda-web-deps: $(REQ)
+	poetry install --with lambda-web
+
+lambda-web-lint: install-lambda-web-deps
+	poetry run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
+	PYTHONPATH=src:lambda-web/src poetry run pylint lambda-web/src/lambda_web lambda-web/tests
+
+lambda-web-check: lambda-web-lint
+	$(MAKE) vend-lambda-web
+	PYTHONPATH=src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+
+lambda-web/src/requirements.txt:
+	poetry export --with lambda-web --without dev --without lambda --without vm --format=requirements.txt --output lambda-web/src/requirements.txt --without-hashes
 
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
@@ -597,8 +630,11 @@ sam-build: $(REQ)
 	    exit 1; \
 	  fi; \
 	fi; \
+	$(MAKE) lambda-web/src/requirements.txt
 	$(MAKE) lambda-resize/src/requirements.txt
+	$(MAKE) vend-lambda-web
 	$(MAKE) vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
@@ -642,8 +678,7 @@ ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
 	aws sts get-caller-identity --no-cli-pager
-	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
 
 sam-deploy-guided: $(REQ)
@@ -652,16 +687,9 @@ ifeq ($(AWS_REGION),local)
 endif
 	aws sts get-caller-identity --no-cli-pager
 	@echo ===============================
-	@echo use one of these keypairs:
-	aws ec2 describe-key-pairs --output json | jq -r '.KeyPairs.[].KeyName'
-	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
-	@echo ===============================
-	@echo use one of these git branches:
-	git branch -v
-	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	sam deploy --guided --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
 
 
@@ -670,26 +698,45 @@ sam-status:
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
-	URL="https://$$DNS/resize-api/v1/ping"; \
-	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
-	CODE=$$(echo "$$RESP" | tail -1); \
-	BODY=$$(echo "$$RESP" | sed '$$d'); \
-	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
-	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
-	  echo "Lambda status: operational ($$URL)"; \
+	WEB_URL="https://$$DNS/ping"; \
+	WEB_RESP=$$(curl -s -w "\n%{http_code}" "$$WEB_URL" 2>/dev/null); \
+	WEB_CODE=$$(echo "$$WEB_RESP" | tail -1); \
+	WEB_BODY=$$(echo "$$WEB_RESP" | sed '$$d'); \
+	if echo "$$WEB_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda web status: operational ($$WEB_URL)"; \
 	else \
-	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
+	  echo "Lambda web status: FAIL (HTTP $$WEB_CODE) ($$WEB_URL)"; echo "  response: $$WEB_BODY"; \
 	fi; \
-	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
+	STATIC_URL="https://$$DNS/static/planttracer.js"; \
+	STATIC_RESP=$$(curl -s -w "\n%{http_code}" "$$STATIC_URL" 2>/dev/null); \
+	STATIC_CODE=$$(echo "$$STATIC_RESP" | tail -1); \
+	STATIC_BODY=$$(echo "$$STATIC_RESP" | sed '$$d'); \
+	if [ "$$STATIC_CODE" = "200" ] && echo "$$STATIC_BODY" | grep -q "register_func"; then \
+	  echo "Lambda static status: operational ($$STATIC_URL)"; \
+	else \
+	  echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
+	fi; \
+	RESIZE_URL="https://$$DNS/resize-api/v1/ping"; \
+	RESIZE_RESP=$$(curl -s -w "\n%{http_code}" "$$RESIZE_URL" 2>/dev/null); \
+	RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
+	RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
+	if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda resize status: operational ($$RESIZE_URL)"; \
+	else \
+	  echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; echo "  response: $$RESIZE_BODY"; \
+	fi; \
 	echo ""; \
-	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
+	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs-web SAM_LOGS_LIMIT=40 || true; \
+	echo ""; \
+	echo "Recent Lambda resize log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs-resize SAM_LOGS_LIMIT=40 || true
 
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
 define SAM_LOGS_RESOLVE
-	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`$(SAM_LOGS_FUNCTION_OUTPUT)`].OutputValue' --output text 2>/dev/null); \
 	if [ -z "$$FUNC" ]; then \
 	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
 	fi; \
@@ -702,6 +749,8 @@ define SAM_LOGS_RESOLVE
 	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
 	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000
 endef
+
+SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 # Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
@@ -730,14 +779,28 @@ sam-logs-simple:
 sam-logs-simple-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
 
+sam-logs-web:
+	$(MAKE) sam-logs SAM_LOGS_FUNCTION_OUTPUT=LambdaWebFunction
+
+sam-logs-resize:
+	$(MAKE) sam-logs SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+
+sam-logs-web-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaWebFunction SAM_LOGS_TAIL=1
+
+sam-logs-resize-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction SAM_LOGS_TAIL=1
+
 # Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
 # Use this when sam-logs is dominated by HTTP traffic and you want only tracing-queue activity.
+sqs-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
 sqs-logs:
 	@$(SAM_LOGS_RESOLVE); \
 	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
 	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
 
 # Stream Lambda logs, showing only lines that contain SQS.
+sqs-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
 sqs-logs-tail:
 	@$(SAM_LOGS_RESOLVE); \
 	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
@@ -752,13 +815,13 @@ sam-delete:
 	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
 	@echo "Stack $(STACK_NAME) deleted successfully."
 
-# Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
+	@echo "ssh is not available for Lambda-only SAM stacks."
+	@exit 1
 
 sam-reload:
-	@echo reload the VM
-	ssh ubuntu@$(STACK_NAME).planttracer.com -i $$HOME/.ssh/plantadmin.pem 'cd /opt/webapp;git pull; sudo systemctl restart planttracer'
+	@echo "sam-reload is not available for Lambda-only SAM stacks. Use sam-build and sam-deploy."
+	@exit 1
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done

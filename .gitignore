@@ -154,6 +154,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+.pylint.d/
 .dmypy.json
 dmypy.json
 
