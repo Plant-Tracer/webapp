@@ -45,6 +45,8 @@ api_base = browser_base(env_value(C.PLANTTRACER_API_BASE,''))
 
 def get_lambda_api_base():
     """Lambda HTTP API base URL for status, frame, movie-data, and tracing calls."""
+    if C.PLANTTRACER_LAMBDA_API_BASE in os.environ:
+        return browser_base(env_value(C.PLANTTRACER_LAMBDA_API_BASE, ""))
     explicit_base = browser_base(env_value(C.PLANTTRACER_LAMBDA_API_BASE, ""))
     if explicit_base:
         return explicit_base

@@ -12,6 +12,14 @@ def test_get_lambda_api_base_prefers_explicit_override(monkeypatch):
     assert apikey.get_lambda_api_base() == "http://127.0.0.1:9811/"
 
 
+def test_get_lambda_api_base_allows_explicit_blank_for_local_flask(monkeypatch):
+    monkeypatch.setenv(C.PLANTTRACER_LAMBDA_API_BASE, "")
+    monkeypatch.setenv("HOSTNAME", "ignored-host")
+    monkeypatch.setenv("DOMAIN", "ignored.example.com")
+
+    assert apikey.get_lambda_api_base() == ""
+
+
 def test_get_lambda_api_base_falls_back_to_hostname_and_domain(monkeypatch):
     monkeypatch.delenv(C.PLANTTRACER_LAMBDA_API_BASE, raising=False)
     monkeypatch.setenv("HOSTNAME", "stack-name")

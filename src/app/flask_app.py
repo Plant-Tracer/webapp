@@ -324,16 +324,14 @@ def func_register():
      for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
     """
     return render_template('register.html',
-                           title='Plant Tracer Registration Page',
-                           hostname=request.host,
+                           **page_dict('Registration Page'),
                            register=True)
 
 @app.route('/resend', methods=GET)
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
     return render_template('register.html',
-                           title='Plant Tracer Resend Registration Link',
-                           hostname = request.host,
+                           **page_dict('Resend Registration Link'),
                            register=False)
 
 @app.route('/tos', methods=GET)

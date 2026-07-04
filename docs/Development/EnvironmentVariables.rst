@@ -54,7 +54,9 @@ Application URLs
 
 ``PLANTTRACER_LAMBDA_API_BASE``
    Explicit lambda-resize HTTP API base injected as ``LAMBDA_API_BASE``. Local
-   default from the Makefile is ``http://127.0.0.1:9811/``. The Lambda-only
+   debug targets set this to ``http://127.0.0.1:9811/`` when the local lambda
+   debug bridge is running. Set it to an explicit empty value to run
+   Flask-only browser tests without probing a resize service. The Lambda-only
    stack sets this to the same public application origin.
 
 ``HOSTNAME`` / ``DOMAIN``

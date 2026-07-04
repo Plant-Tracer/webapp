@@ -83,6 +83,8 @@ def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
     """
     app = flask_app.app
     app.config['TESTING'] = True
+    previous_lambda_api_base = os.environ.get(C.PLANTTRACER_LAMBDA_API_BASE)
+    os.environ[C.PLANTTRACER_LAMBDA_API_BASE] = ""
 
     # Use a different port to avoid conflicts
     port = 8765
@@ -95,6 +97,10 @@ def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
     yield f"http://127.0.0.1:{port}"
 
     server.shutdown()
+    if previous_lambda_api_base is None:
+        os.environ.pop(C.PLANTTRACER_LAMBDA_API_BASE, None)
+    else:
+        os.environ[C.PLANTTRACER_LAMBDA_API_BASE] = previous_lambda_api_base
 
 
 @pytest.fixture(scope="function")
