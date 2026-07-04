@@ -7,41 +7,10 @@ from pathlib import Path
 from lambda_web.main import lambda_handler
 
 from app.paths import STATIC_DIR
+from tests.lambda_web_event import DummyContext, make_http_event
 
 PING_PATH = "/ping"
 STATIC_PATH = "/static/planttracer.js"
-
-
-class DummyContext:
-    function_name = "test-lambda-web"
-    memory_limit_in_mb = 128
-    invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test-lambda-web"
-    aws_request_id = "test-request-id"
-
-
-def make_http_event(path: str, method: str = "GET") -> dict:
-    return {
-        "version": "2.0",
-        "routeKey": f"{method} {path}",
-        "rawPath": path,
-        "rawQueryString": "",
-        "headers": {
-            "host": "lambda-web.test",
-            "x-forwarded-for": "127.0.0.1",
-            "x-forwarded-port": "443",
-            "x-forwarded-proto": "https",
-        },
-        "requestContext": {
-            "stage": "$default",
-            "http": {
-                "method": method,
-                "path": path,
-                "protocol": "HTTP/1.1",
-                "sourceIp": "127.0.0.1",
-            },
-        },
-        "isBase64Encoded": False,
-    }
 
 
 def test_lambda_web_ping():

@@ -34,13 +34,12 @@ selection should be explicit:
 
 * ``/resize-api/*`` routes to ``lambda-resize``.
 * HTML pages route to ``lambda-web``.
-* Flask ``/api/*`` routes route to ``lambda-web`` unless a compatibility route
-  is deliberately kept on ``lambda-resize``.
+* Flask ``/api/*`` routes route to ``lambda-web``.
 * ``/static/*`` routes to ``lambda-web`` for the initial migration.
 
-The existing ``/api/v1/movie-data`` compatibility route must either remain
-explicitly routed to ``lambda-resize`` or be deliberately migrated to
-``lambda-web`` with client and documentation updates.
+Resize-owned browser endpoints, including movie-data, live under
+``/resize-api/v1/*``. The Lambda-only target does not preserve
+``/api/v1/movie-data`` as a public compatibility path.
 
 Removed VM Surface
 ------------------

@@ -159,12 +159,12 @@ dump.txt:
 pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -175,7 +175,7 @@ pytest-selenium:
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	$(LOCAL_AWS_ENV) PYTHONPATH=src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -591,11 +591,11 @@ install-lambda-web-deps: $(REQ)
 
 lambda-web-lint: install-lambda-web-deps
 	poetry run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
-	PYTHONPATH=src:lambda-web/src poetry run pylint lambda-web/src/lambda_web lambda-web/tests
+	PYTHONPATH=.:src:lambda-web/src poetry run pylint lambda-web/src/lambda_web lambda-web/tests
 
 lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
-	PYTHONPATH=src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint
 lambda-resize/src/requirements.txt:

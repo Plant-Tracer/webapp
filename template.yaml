@@ -284,15 +284,6 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
-        MovieDataCompatibility:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref HomeHttpApi
-            Path: /api/v1/movie-data
-            Method: ANY
-            PayloadFormatVersion: "2.0"
-            Auth:
-              Authorizer: NONE
         TracingQueueEvent:
           Type: SQS
           Properties:

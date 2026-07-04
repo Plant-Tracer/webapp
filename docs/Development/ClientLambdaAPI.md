@@ -31,10 +31,6 @@ Lambda validates it against DynamoDB.
 | Movie zip redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=zip` | query `api_key` | 302 redirect to signed frame ZIP URL if present. |
 | Trace movie | POST | `/resize-api/v1/trace-movie` | `x-api-key` header | Queues retracing from a user-edited source frame through an optional end frame. |
 
-Compatibility route:
-
-- `GET /api/v1/movie-data` calls the same handler as `/resize-api/v1/movie-data`.
-
 ## Trace Movie Request
 
 `POST /resize-api/v1/trace-movie`

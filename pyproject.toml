@@ -122,8 +122,8 @@ build-backend = "poetry.core.masonry.api"
 # Specify the Python version Pylint should assume for syntax checking.
 py-version = "3.12"
 recursive = true
-source-roots = ["src", "lambda-web/src", "lambda-resize/src"]
-init-hook = "import sys; sys.path.insert(0, 'lambda-resize/src'); sys.path.insert(0, 'lambda-web/src'); sys.path.insert(0, 'src');"
+source-roots = [".", "src", "lambda-web/src", "lambda-resize/src"]
+init-hook = "import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'lambda-resize/src'); sys.path.insert(0, 'lambda-web/src'); sys.path.insert(0, 'src');"
 ignore-paths = [
     "^lambda-resize/src/resize_app/src/.*$",
     "^lambda-web/src/app/.*$",

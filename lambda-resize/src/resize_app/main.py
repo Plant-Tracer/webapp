@@ -104,11 +104,6 @@ def _movie_data_response():
     return Response(status_code=302, headers={"Location": urls.signed_movie_url}, body="")
 
 
-@app.get("/api/v1/movie-data")
-def api_movie_data():
-    return _movie_data_response()
-
-
 @app.get("/resize-api/v1/movie-data")
 def api_resize_movie_data():
     return _movie_data_response()
