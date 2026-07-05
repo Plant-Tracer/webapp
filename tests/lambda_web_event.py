@@ -15,6 +15,7 @@ def make_http_event(
     body: str = "",
     content_type: str | None = None,
     cookies: list[str] | None = None,
+    stage: str = "$default",
 ) -> dict:
     headers = {
         "host": "lambda-web.test",
@@ -31,7 +32,7 @@ def make_http_event(
         "rawQueryString": "",
         "headers": headers,
         "requestContext": {
-            "stage": "$default",
+            "stage": stage,
             "http": {
                 "method": method,
                 "path": path,

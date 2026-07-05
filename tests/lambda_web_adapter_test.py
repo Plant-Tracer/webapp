@@ -23,6 +23,24 @@ def test_lambda_web_api_version_route():
     assert json.loads(response["body"])["__version__"] == __version__
 
 
+def test_lambda_web_api_version_route_strips_http_api_stage_prefix():
+    response = lambda_handler(make_http_event("/prod/api/ver", stage="prod"), DummyContext())
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["__version__"] == __version__
+
+
+def test_lambda_web_api_version_route_keeps_custom_domain_path_with_named_stage():
+    response = lambda_handler(make_http_event("/api/ver", stage="prod"), DummyContext())
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["__version__"] == __version__
+
+
+def test_lambda_web_root_route_strips_http_api_stage_prefix(local_ddb, local_s3):
+    response = lambda_handler(make_http_event("/prod", stage="prod"), DummyContext())
+    assert response["statusCode"] == 200
+    assert "Plant Tracer" in response["body"]
+
+
 def test_lambda_web_public_page(local_ddb, local_s3):
     response = lambda_handler(make_http_event("/about"), DummyContext())
     assert response["statusCode"] == 200

@@ -37,6 +37,17 @@ selection should be explicit:
 * Flask ``/api/*`` routes route to ``lambda-web``.
 * ``/static/*`` routes to ``lambda-web`` for the initial migration.
 
+When an HTTP API uses a named stage such as ``prod``, execute-api URLs include
+the stage segment, for example ``/prod/api/ver``. ``lambda-web`` normalizes that
+stage prefix before handing the request to Flask so Flask routes remain
+``/api/ver``, ``/static/...``, and ``/`` regardless of whether the request came
+through execute-api or the custom domain.
+
+``lambda-web`` uses AWS Lambda Powertools for Python to parse HTTP API v2
+events and emit request/route diagnostics. It still uses ``apig-wsgi`` for the
+actual Flask WSGI handoff because the Powertools API Gateway resolver is a
+native Lambda router, not a Flask WSGI adapter.
+
 Resize-owned browser endpoints, including movie-data, live under
 ``/resize-api/v1/*``. The Lambda-only target does not preserve
 ``/api/v1/movie-data`` as a public compatibility path.
@@ -282,7 +293,8 @@ Before PR #1113 is ready to merge, validate at least:
 
 * existing Flask local tests still pass through ``make pytest``;
 * ``lambda-web`` serves ``/ping`` or equivalent health, one static asset, and a
-  representative Flask route through API Gateway event handling;
+  representative Flask route through API Gateway event handling, including
+  named-stage paths such as ``/prod/api/ver``;
 * ``lambda-resize`` still serves ``/resize-api/v1/ping`` and keeps SQS trace
   event handling;
 * SAM template validation/linting passes;
@@ -366,7 +378,9 @@ Deploy:
   ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy-guided`` for a new
   stack;
 * let ``make sam-status`` verify ``/ping``, ``/static/planttracer.js``, and
-  ``/resize-api/v1/ping``;
+  ``/resize-api/v1/ping``. The deploy targets stamp the built
+  ``lambda-resize`` artifact before ``sam deploy``, and resize ping should
+  report the application version and UTC deployment timestamp;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
@@ -375,7 +389,8 @@ Manual smoke checks on the non-production stack:
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
 * verify ``/ping`` returns ``{"status": "ok"}``;
-* verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``;
+* verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
+  ``app_version``, and ``deployed_at``;
 * register a test user and confirm the registration email path works;
 * resend a login link and confirm the user can log in;
 * for ``MailerDryRun=true`` stacks, confirm the login email appears in Lambda

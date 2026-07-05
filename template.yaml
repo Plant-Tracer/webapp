@@ -235,6 +235,8 @@ Resources:
           PLANTTRACER_LAMBDA_API_BASE: !Sub "https://${AWS::StackName}.${BaseDomain}/"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
           PLANTTRACER_WEB_RUNTIME: lambda
+          POWERTOOLS_LOG_LEVEL: !Ref LogLevel
+          POWERTOOLS_SERVICE_NAME: "planttracer-web"
           SERVER_EMAIL: !FindInMap [StackConstants, Mail, ServerEmail]
       Events:
         WebRoot:

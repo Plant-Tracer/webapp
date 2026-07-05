@@ -166,7 +166,7 @@ version = "3.29.0"
 description = "Powertools for AWS Lambda (Python) is a developer toolkit to implement Serverless best practices and increase developer velocity."
 optional = false
 python-versions = "<4.0.0,>=3.10"
-groups = ["dev"]
+groups = ["dev", "lambda-web"]
 files = [
     {file = "aws_lambda_powertools-3.29.0-py3-none-any.whl", hash = "sha256:e9ca87b5a8a835a7f7e327d5bafa43b6e0c150c6cb8c6b42158b0814377edc7a"},
     {file = "aws_lambda_powertools-3.29.0.tar.gz", hash = "sha256:a81ce122356343878e095a11bd38f3e9a70f3fa0fea57b10b327d1e8dfe82b6e"},
@@ -6025,4 +6025,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "eef6926076b47683ff8c517a9e2cd2675cdad911396c61180c465f98d8e73720"
+content-hash = "e6e9e00aaa421a1c476c259a6ce34ab7ef680dbb219afc218da57c5480e608e3"

@@ -33,6 +33,7 @@ export DEBIAN_FRONTEND=noninteractive
 export LOG_LEVEL ?= DEBUG
 
 SAM_CONFIG ?= samconfig.toml
+SAM_BUILD_DIR=.aws-sam/build
 STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
 APP_VERSION := $(shell awk -F"'" '/^__version__/ {print $$2; exit}' src/app/constants.py)
 PACKAGE_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
@@ -599,7 +600,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-version-check sam-deploy-version-check
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -629,6 +630,17 @@ sam-config-check: sam-config-path-check
 		echo "Create a local ignored SAM config for the target stack, or pass SAM_CONFIG=<path>."; \
 		exit 1; \
 	fi
+
+stamp-sam-deploy-metadata: sam-version-check
+	@if [ ! -d "$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app" ]; then \
+		echo "Refusing to stamp deploy metadata: $(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app is missing."; \
+		echo "Run make sam-build before deploying."; \
+		exit 1; \
+	fi
+	@DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	METADATA_FILE="$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app/deploy_metadata.json"; \
+	printf '{\n  "deployed_at": "%s",\n  "app_version": "%s"\n}\n' "$$DEPLOYED_AT" "$(APP_VERSION)" > "$$METADATA_FILE"; \
+	echo "Stamped $$METADATA_FILE with deployed_at=$$DEPLOYED_AT app_version=$(APP_VERSION)."
 
 sam-build: $(REQ)
 	@# Refuse to build if there are local changes, unless HEAD is an exact tag
@@ -745,6 +757,7 @@ ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
 	$(MAKE) sam-deploy-version-check
+	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --config-file "$(SAM_CONFIG)" --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
@@ -758,6 +771,7 @@ endif
 	@if [ -f "$(SAM_CONFIG)" ]; then \
 		$(MAKE) sam-deploy-version-check; \
 	fi
+	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
 	@echo ===============================
 	@echo use one of these S3 buckets:
@@ -801,8 +815,13 @@ sam-status: sam-config-check
 	RESIZE_RESP=$$(curl -s -w "\n%{http_code}" "$$RESIZE_URL" 2>/dev/null); \
 	RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
 	RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
+	RESIZE_APP_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("app_version", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
+	RESIZE_DEPLOYED_AT=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
 	if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 	  echo "Lambda resize status: operational ($$RESIZE_URL)"; \
+	  if [ -n "$$RESIZE_APP_VERSION" ] || [ -n "$$RESIZE_DEPLOYED_AT" ]; then \
+	    echo "  app version: $${RESIZE_APP_VERSION:-unavailable}; deployed at: $${RESIZE_DEPLOYED_AT:-unavailable}"; \
+	  fi; \
 	else \
 	  echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; echo "  response: $$RESIZE_BODY"; \
 	fi; \
