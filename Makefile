@@ -675,7 +675,8 @@ sam-build: $(REQ)
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
 	@echo "========================================"
 	@echo "Checking unzipped artifact sizes..."
 	@for dir in .aws-sam/build/*/ ; do \
