@@ -98,7 +98,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags
+.PHONY: all check coverage tags admin-list
 
 all:
 	@echo verify syntax and then restart
@@ -117,6 +117,9 @@ coverage:
 
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
+
+admin-list:
+	poetry run python $(DBUTIL) admin-list
 
 ################################################################
 ## Program development: static analysis tools

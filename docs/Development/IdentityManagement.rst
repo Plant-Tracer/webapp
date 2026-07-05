@@ -89,6 +89,13 @@ operator Makefile targets. They should not be configured as SAM stack
 parameters because courses and users live in DynamoDB, and DynamoDB data now
 outlives individual lambda-only stacks.
 
+Operators can list current course administrators with ``make admin-list``. The
+target runs ``src/dbutil.py admin-list`` against the selected AWS/DynamoDB
+environment and prints each administrator's display name, email address,
+``user_id``, and administered courses. Set ``AWS_REGION`` and
+``DYNAMODB_TABLE_PREFIX`` for the target environment before running it; local
+development defaults still use DynamoDB Local and the ``demo-`` prefix.
+
 Courses
 -------
 

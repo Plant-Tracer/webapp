@@ -161,6 +161,31 @@ def print_report():
     print_course_report(ddbo)
 
 
+def format_admin_course(course):
+    """Return an operator-readable course label."""
+    if course.course_name:
+        return f"{course.course_name} ({course.course_id})"
+    return course.course_id
+
+
+def admin_list():
+    """Print all course administrators and their administered courses."""
+    admins = odb.list_admins()
+    if not admins:
+        print("No course administrators found.")
+        return
+    rows = [
+        [
+            admin.user_name,
+            admin.email,
+            admin.user_id,
+            "\n".join(format_admin_course(course) for course in admin.courses),
+        ]
+        for admin in admins
+    ]
+    print(tabulate(rows, headers=["name", "email", "user ID", "admin courses"]))
+
+
 def create_db():
     odbmaint.create_tables()
     populate_demo_user()
@@ -377,6 +402,11 @@ def build_parser():
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
     subparsers.add_parser(
+        "admin-list",
+        aliases=["admin_list"],
+        help="List course administrators and their administered courses",
+    )
+    subparsers.add_parser(
         "createdb",
         help="Create tables from etc/dynamodb_tables.json and populate the demo course",
     )
@@ -478,6 +508,9 @@ def main():
 
     if args.command == "report":
         print_report()
+        return 0
+    if args.command in ("admin-list", "admin_list"):
+        admin_list()
         return 0
     if args.command == "createdb":
         create_db()

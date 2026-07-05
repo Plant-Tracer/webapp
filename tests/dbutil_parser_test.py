@@ -25,6 +25,12 @@ def test_dbutil_commands_do_not_use_option_prefix():
     assert args.admin_email == "admin@example.com"
 
 
+def test_dbutil_has_admin_list_command():
+    args = parse_args("admin-list")
+
+    assert args.command == "admin-list"
+
+
 def test_dbutil_rejects_old_flag_style_commands():
     with pytest.raises(SystemExit):
         parse_args("--create_course", "--course_id", "PLANT101")

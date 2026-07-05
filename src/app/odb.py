@@ -29,6 +29,8 @@ from .schema import (
     Movie,
     Trackpoint,
     RenameMarkerRequest,
+    AdminCourse,
+    CourseAdmin,
     validate_movie_field,
     Course,
     fix_movie,
@@ -1012,9 +1014,9 @@ def list_users_courses(*, user_id):
 
 
 def list_admins():
-    """Returns dict of all the admins and the courses in which they are admins."""
+    """Return all course administrators and the courses they administer."""
     dd = DDBO()
-    admin_users = defaultdict(list)
+    courses_by_admin: dict[str, list[AdminCourse]] = defaultdict(list)
     last_evaluated_key = None
 
     while True:
@@ -1023,16 +1025,31 @@ def list_admins():
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
 
         response = dd.courses.scan(**scan_kwargs)
-        print("response=",response)
-        for course in response['Items']:
-            print("course=",course)
-            for user_id in course[ADMINS_FOR_COURSE]:
-                print("user_id=",user_id)
-                admin_users[user_id].append(course[COURSE_ID])
+        for course in response.get('Items', []):
+            admin_course = AdminCourse(
+                course_id=course[COURSE_ID],
+                course_name=course.get(COURSE_NAME, ""),
+            )
+            for user_id in course.get(ADMINS_FOR_COURSE, []):
+                courses_by_admin[user_id].append(admin_course)
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
             break
-    return admin_users
+
+    admins = []
+    for user_id, courses in courses_by_admin.items():
+        try:
+            user = dd.get_user(user_id)
+        except InvalidUser_Id:
+            logger.warning("course admin user_id %s is missing from users table", user_id)
+            continue
+        admins.append(CourseAdmin(
+            user_id=user_id,
+            email=user.get(EMAIL, ""),
+            user_name=user.get(USER_NAME, ""),
+            courses=sorted(courses, key=lambda course: (course.course_name, course.course_id)),
+        ))
+    return sorted(admins, key=lambda admin: (admin.user_name.casefold(), admin.email.casefold(), admin.user_id))
 
 # pylint-x: disable=too-many-arguments
 def register_email(email, user_name, *, course_key=None, course_id=None, admin=False):

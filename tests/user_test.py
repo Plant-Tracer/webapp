@@ -111,6 +111,10 @@ def test_course_list(client, new_course):
     # Make sure that there is an admin in the course (it's the user)
     recs2 = odb.list_admins()
     assert len(recs2)>=1        # we could do a better test
+    matching_admins = [admin for admin in recs2 if admin.email == cfg[ADMIN_EMAIL]]
+    assert len(matching_admins) == 1
+    assert matching_admins[0].user_name == "Course Admin"
+    assert any(course.course_id == cfg[COURSE_ID] for course in matching_admins[0].courses)
 
     # Make sure that the endpoint works
     response = client.post('/api/list-users',
