@@ -123,6 +123,29 @@ operator retry and ensures the selected administrator relationship and email
 step. If the existing course name differs, the command fails rather than
 silently reusing the wrong course id.
 
+For a deployed Lambda-only stack, prefer ``make sam-course-create``. It reads
+``stack_name`` from the selected ignored ``SAM_CONFIG`` file, resolves the
+stack's ``DynamoDBTablePrefix``, ``ApplicationUrl``, and ``MailerDryRun``
+settings from CloudFormation, and then delegates to
+``src/dbutil.py create-course --send-email``. Pass the same
+``COURSE_CREATE_FLAGS`` used by ``make course-create``. This keeps course
+initialization separate from stack deployment while reducing the chance of
+creating course data in the wrong table prefix or sending links for the wrong
+host.
+
+The demo course has its own narrower target: ``make demo-course-create``. That
+target runs ``src/dbutil.py create-demo-course`` and ensures only the durable
+demo course data exists: ``demo-course``, the demo course administrator, the
+demo user, and the fixed demo-mode API key. It does not create tables, upload
+objects, or seed demo movies. Run it after deploying a demo stack, or any time
+the selected DynamoDB prefix needs the demo course repaired. The command uses
+the current AWS/DynamoDB environment, so set ``AWS_REGION`` and
+``DYNAMODB_TABLE_PREFIX`` for the target database before running it.
+For local development with local services and seeded demo movies, continue to
+use ``make make-local-demo``. That target runs table creation, demo course
+creation, and sample movie seeding as separate ``dbutil`` commands; there is
+no combined ``dbutil create-demo`` command in the lambda-only workflow.
+
 Courses
 -------
 

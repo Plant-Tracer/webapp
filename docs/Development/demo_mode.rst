@@ -71,7 +71,11 @@ is running in demo mode":
 
 * ``make make-local-demo``
   Seeds the local database and bucket with the demo course, demo user, and demo
-  movies.
+  movies. Internally this is an explicit sequence: ``src/dbutil.py createdb``
+  creates tables, ``src/dbutil.py create-demo-course`` ensures the demo
+  course/admin/demo user/API key, and ``src/dbutil.py seed-demo-movies`` loads
+  local sample movies without recreating movie rows whose demo titles already
+  exist.
 
 * ``make run-local-debug``
   Starts Flask against the local dataset in **non-demo mode**. It explicitly

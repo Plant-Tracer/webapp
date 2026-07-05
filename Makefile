@@ -98,7 +98,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags admin-list admin-create course-create
+.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
@@ -128,6 +128,10 @@ admin-create:
 COURSE_CREATE_FLAGS ?=
 course-create:
 	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
+
+DEMO_COURSE_CREATE_FLAGS ?=
+demo-course-create:
+	poetry run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools
@@ -214,10 +218,12 @@ delete-local:
 	/bin/rm -rf var
 
 make-local-demo:
-	@echo creating a local course called demo-course with the prefix demo-
+	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) createdb
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo-course
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) seed-demo-movies
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -790,6 +796,37 @@ endif
 	aws s3 ls
 	sam deploy --config-file "$(SAM_CONFIG)" --guided --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+
+sam-course-create: sam-config-check
+ifeq ($(AWS_REGION),local)
+	@echo cannot initialize a deployed stack course with AWS_REGION=local. Please specify AWS_REGION. && exit 1
+endif
+	@if [ -z "$(STACK_NAME)" ]; then \
+		echo "Refusing to create course: stack_name is not set in $(SAM_CONFIG)."; \
+		exit 1; \
+	fi
+	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
+	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text); \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text); \
+		APP_URL="https://$$DNS/"; \
+	fi; \
+	MAILER_DRY_RUN_STACK=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`MailerDryRun`].ParameterValue | [0]' --output text); \
+	if [ -z "$$DDB_PREFIX" ] || [ "$$DDB_PREFIX" = "None" ]; then \
+		echo "Refusing to create course: stack $(STACK_NAME) did not report DynamoDBTablePrefix."; \
+		exit 1; \
+	fi; \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "https://None/" ]; then \
+		echo "Refusing to create course: stack $(STACK_NAME) did not report ApplicationUrl or LambdaDnsName."; \
+		exit 1; \
+	fi; \
+	if [ -z "$$MAILER_DRY_RUN_STACK" ] || [ "$$MAILER_DRY_RUN_STACK" = "None" ]; then \
+		MAILER_DRY_RUN_STACK=false; \
+	fi; \
+	echo "Creating or verifying course for stack $(STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
+	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
+		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
+		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.

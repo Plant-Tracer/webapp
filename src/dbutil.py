@@ -4,7 +4,6 @@ dbutil.py - CLI for dbmaint module.
 
 import argparse
 import sys
-import uuid
 import json
 import os
 import csv
@@ -21,7 +20,7 @@ from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
     COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO, InvalidCourse_Id, MOVIE_STATUS, MOVIE_STATE_READY,
+    DDBO, InvalidCourse_Id, MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, env_value
@@ -46,17 +45,15 @@ def populate_demo_user():
     # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
     admin_email = os.environ.get('ADMIN_EMAIL') or DEFAULT_ADMIN_EMAIL
     admin_name = os.environ.get('ADMIN_NAME') or DEFAULT_ADMIN_NAME
-    odbmaint.create_course(course_id  = DEMO_COURSE_ID,
-                           course_name = DEMO_COURSE_NAME,
-                           course_key = str(uuid.uuid4())[0:8],
-                           admin_email = admin_email,
-                           admin_name  = admin_name,
-                           max_enrollment = 2,
-                           ok_if_exists = True)
-
-    # Create the demo user to own the demo movies
-    user = odb.register_email(DEMO_USER_EMAIL, DEMO_USER_NAME, course_id=DEMO_COURSE_ID)
-    odb.make_new_api_key_for_user_id(user_id=user[USER_ID], demo_user=True)
+    return course_management.ensure_demo_course(
+        course_id=DEMO_COURSE_ID,
+        course_name=DEMO_COURSE_NAME,
+        admin_email=admin_email,
+        admin_name=admin_name,
+        demo_user_email=DEMO_USER_EMAIL,
+        demo_user_name=DEMO_USER_NAME,
+        max_enrollment=2,
+    )
 
 
 def populate_demo_movies():
@@ -65,23 +62,41 @@ def populate_demo_movies():
         return os.path.splitext(fn)[1] in ['.mp4','.mov']
 
     if not os.path.isdir(TEST_DATA_DIR):
-        return  # e.g. on EC2 when tests/data or demo movies are not present
+        return 0, 0  # e.g. on EC2 when tests/data or demo movies are not present
 
     # Add the demo movies
     demo_user = odb.get_user_email(DEMO_USER_EMAIL)
     demo_user_id = demo_user[USER_ID]
-    for (ct, fn) in enumerate([fn for fn in os.listdir(TEST_DATA_DIR) if (is_movie_fn(fn) and 'rotated' not in fn)], 1):
+    ddbo = DDBO()
+    existing_titles = {
+        movie.get(TITLE)
+        for movie in ddbo.get_movies_for_course_id(DEMO_COURSE_ID)
+    }
+    seeded = 0
+    skipped = 0
+    demo_movie_files = sorted(
+        fn for fn in os.listdir(TEST_DATA_DIR)
+        if is_movie_fn(fn) and 'rotated' not in fn
+    )
+    for (ct, fn) in enumerate(demo_movie_files, 1):
+        title = DEMO_MOVIE_TITLE.format(ct=ct)
+        if title in existing_titles:
+            skipped += 1
+            continue
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
             movie_id = odb.create_new_movie(user_id=demo_user_id,
                                             course_id=DEMO_COURSE_ID,
-                                            title=DEMO_MOVIE_TITLE.format(ct=ct),
+                                            title=title,
                                             description=DEMO_MOVIE_DESCRIPTION)
             set_movie_data(movie_id=movie_id, movie_data=f.read())
-            DDBO().update_table(DDBO().movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
+            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
+            existing_titles.add(title)
+            seeded += 1
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.
         base, _ = os.path.splitext(fn)
         _trackpoints_path = os.path.join(TEST_DATA_DIR, base + '_trackpoints.json')
         # Juse the API
+    return seeded, skipped
 
 
 
@@ -379,18 +394,24 @@ def create_course_usage_text(missing):
 
 def create_db():
     odbmaint.create_tables()
-    populate_demo_user()
-    populate_demo_movies()
 
 
 def drop_db():
     odbmaint.drop_tables()
 
 
-def create_demo():
-    odbmaint.create_tables(ignore_table_exists=True)
-    populate_demo_user()
-    populate_demo_movies()
+def create_demo_course():
+    result = populate_demo_user()
+    verb = "created" if result.created else "already exists"
+    print(f"demo course {result.course.course_id} {verb}")
+    print(f"administrator {result.admin_user.user_name} <{result.admin_user.email}>")
+    print(f"demo user {result.demo_user.user_name} <{result.demo_user.email}>")
+    print(f"demo api_key {result.demo_api_key}")
+
+
+def seed_demo_movies():
+    seeded, skipped = populate_demo_movies()
+    print(f"demo movies seeded={seeded} skipped={skipped}")
 
 
 def make_link(email, planttracer_endpoint):
@@ -605,13 +626,18 @@ def build_parser():
     )
     subparsers.add_parser(
         "createdb",
-        help="Create tables from etc/dynamodb_tables.json and populate the demo course",
+        help="Create tables from etc/dynamodb_tables.json",
     )
     subparsers.add_parser("dropdb", help="Drop all configured DynamoDB tables")
     subparsers.add_parser(
-        "create-demo",
-        aliases=["create_demos"],
-        help="Create local tables if needed and populate the demo course",
+        "create-demo-course",
+        aliases=["create_demo_course"],
+        help="Ensure the demo course, demo admin, demo user, and demo API key exist",
+    )
+    subparsers.add_parser(
+        "seed-demo-movies",
+        aliases=["seed_demo_movies"],
+        help="Seed local demo movies after the demo course exists",
     )
 
     makelink = subparsers.add_parser("makelink", help="Make a login link for an existing email address")
@@ -726,8 +752,11 @@ def main():
     if args.command == "dropdb":
         drop_db()
         return 0
-    if args.command in ("create-demo", "create_demos"):
-        create_demo()
+    if args.command in ("create-demo-course", "create_demo_course"):
+        create_demo_course()
+        return 0
+    if args.command in ("seed-demo-movies", "seed_demo_movies"):
+        seed_demo_movies()
         return 0
     if args.command == "makelink":
         make_link(args.email, args.planttracer_endpoint)

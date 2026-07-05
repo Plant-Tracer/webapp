@@ -24,6 +24,14 @@ class CourseCreateResult(BaseModel):
     created: bool
 
 
+class DemoCourseResult(BaseModel):
+    course: Course
+    admin_user: User
+    demo_user: User
+    demo_api_key: str
+    created: bool
+
+
 def generate_course_key():
     """Return a short registration key for a newly created course."""
     return uuid.uuid4().hex[:8]
@@ -120,4 +128,32 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         admin_user=admin_result.admin_user,
         api_key=admin_result.api_key,
         created=created,
+    )
+
+
+def ensure_demo_course(*, course_id, course_name, admin_email, admin_name,
+                       demo_user_email, demo_user_name,
+                       max_enrollment=2):
+    """Ensure the demo course, its admin, and the demo-mode user/API key exist."""
+    course_result = create_course_with_admin(
+        course_id=course_id,
+        course_name=course_name,
+        admin_email=admin_email,
+        admin_name=admin_name,
+        max_enrollment=max_enrollment,
+        send_email=False,
+    )
+    demo_user_result = odb.register_email(
+        email=demo_user_email,
+        user_name=demo_user_name,
+        course_id=course_id,
+    )
+    demo_user = User(**DDBO().get_user(demo_user_result[USER_ID]))
+    demo_api_key = odb.make_new_api_key_for_user_id(user_id=demo_user.user_id, demo_user=True)
+    return DemoCourseResult(
+        course=course_result.course,
+        admin_user=course_result.admin_user,
+        demo_user=demo_user,
+        demo_api_key=demo_api_key,
+        created=course_result.created,
     )

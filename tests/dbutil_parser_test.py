@@ -87,6 +87,23 @@ def test_dbutil_has_admin_create_command():
     assert args.no_send_email is True
 
 
+def test_dbutil_has_create_demo_course_command():
+    args = parse_args("create-demo-course")
+
+    assert args.command == "create-demo-course"
+
+
+def test_dbutil_has_seed_demo_movies_command():
+    args = parse_args("seed-demo-movies")
+
+    assert args.command == "seed-demo-movies"
+
+
+def test_dbutil_no_longer_has_create_demo_command():
+    with pytest.raises(SystemExit):
+        parse_args("create-demo")
+
+
 def test_dbutil_rejects_old_flag_style_commands():
     with pytest.raises(SystemExit):
         parse_args("--create_course", "--course_id", "PLANT101")

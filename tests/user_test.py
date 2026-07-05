@@ -66,6 +66,38 @@ def test_demo_user(new_course):
     userdict = odb.validate_api_key( C.DEMO_MODE_API_KEY )
     assert 'created' in userdict
 
+
+def test_ensure_demo_course_is_idempotent(local_ddb):
+    del local_ddb
+
+    result = course_management.ensure_demo_course(
+        course_id=DEMO_COURSE_ID,
+        course_name=DEMO_COURSE_NAME,
+        admin_email=DEFAULT_ADMIN_EMAIL,
+        admin_name=DEFAULT_ADMIN_NAME,
+        demo_user_email=DEMO_USER_EMAIL,
+        demo_user_name=DEMO_USER_NAME,
+        max_enrollment=2,
+    )
+    retry = course_management.ensure_demo_course(
+        course_id=DEMO_COURSE_ID,
+        course_name=DEMO_COURSE_NAME,
+        admin_email=DEFAULT_ADMIN_EMAIL,
+        admin_name=DEFAULT_ADMIN_NAME,
+        demo_user_email=DEMO_USER_EMAIL,
+        demo_user_name=DEMO_USER_NAME,
+        max_enrollment=2,
+    )
+
+    assert retry.created is False
+    assert retry.course.course_id == result.course.course_id
+    assert retry.admin_user.email == DEFAULT_ADMIN_EMAIL
+    assert retry.demo_user.email == DEMO_USER_EMAIL
+    assert retry.demo_api_key == C.DEMO_MODE_API_KEY
+    userdict = odb.validate_api_key(C.DEMO_MODE_API_KEY)
+    assert userdict[USER_ID] == retry.demo_user.user_id
+
+
 def test_add_remove_user_and_admin(new_course):
     """Tests creating a new user and adding them to the course as an admin"""
     cfg = copy.copy(new_course)

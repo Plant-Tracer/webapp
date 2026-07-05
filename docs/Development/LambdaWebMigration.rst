@@ -386,6 +386,27 @@ Deploy:
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
+Course initialization is a separate post-deploy data step. It replaces VM
+``etc/bootstrap.sh`` section 10 and must not run from Lambda cold start or from
+CloudFormation resource creation. After the stack is deployed and the intended
+``DynamoDBTablePrefix`` is confirmed, create or verify the non-demo course with
+``make sam-course-create``:
+
+.. code-block:: console
+
+   AWS_REGION=us-east-1 SAM_CONFIG=<path> \
+     COURSE_CREATE_FLAGS="--course_id BIO101 --course_name 'Plant Biology 101' --admin_email teacher@example.edu --admin_name 'Teacher Name'" \
+     make sam-course-create
+
+The target reads the table prefix, application URL, and ``MailerDryRun`` value
+from the selected stack, then delegates to ``src/dbutil.py create-course
+--send-email``. Rerunning it is safe when the course already exists with the
+same name: it verifies the course administrator relationship and sends the
+course setup/login email again. If the existing course id has a different
+name, the command fails so operators do not silently reuse the wrong course.
+For dry-run stacks, the email is rendered to logs through ``MAILER_DRY_RUN``;
+for production, verify SES sender access before running it.
+
 Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
