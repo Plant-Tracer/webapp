@@ -98,7 +98,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags admin-list admin-create
+.PHONY: all check coverage tags admin-list admin-create course-create
 
 all:
 	@echo verify syntax and then restart
@@ -124,6 +124,10 @@ admin-list:
 ADMIN_CREATE_FLAGS ?=
 admin-create:
 	poetry run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
+
+COURSE_CREATE_FLAGS ?=
+course-create:
+	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools

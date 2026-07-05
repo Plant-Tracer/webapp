@@ -36,15 +36,15 @@
       const LAMBDA_API_BASE = {{ lambda_api_base | tojson }};
       const MOVIE_STATE = {{ movie_states | tojson }};
       {% if logged_in %}
-      const api_key = "{{api_key}}";
-      const user_id = "{{user_id}}";
+      const api_key = {{ api_key | tojson }};
+      const user_id = {{ user_id | tojson }};
       {% if demo_mode %}
       const demo_mode = true;
       {% else %}
       const demo_mode = false;
       {% endif %}
-      const user_primary_course_id   = "{{user_primary_course_id}}";
-      const primary_course_name = "{{primary_course_name}}";
+      const user_primary_course_id = {{ user_primary_course_id | tojson }};
+      const primary_course_name = {{ primary_course_name | tojson }};
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
       {% else %}
       const api_key = null;

@@ -16,6 +16,7 @@ from app import clogging
 from app import odb
 from app import odbmaint
 from app import apikey
+from app import course_management
 from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
@@ -35,6 +36,7 @@ DEFAULT_ADMIN_EMAIL = 'plantadmin@planttracer.com'
 DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 
 NO_COURSES_MESSAGE = "No courses are available for this administrator."
+CREATE_COURSE_REQUIRED_FLAGS = ["--course_id", "--course_name", "--admin_email", "--admin_name"]
 
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
@@ -189,7 +191,7 @@ def admin_list():
 
 
 def course_sort_key(course):
-    return (course.get(COURSE_NAME, "").casefold(), course.get(COURSE_ID, "").casefold())
+    return (str(course.get(COURSE_NAME) or "").casefold(), str(course.get(COURSE_ID) or "").casefold())
 
 
 def courses_available_for_admin(admin_user=None):
@@ -207,6 +209,10 @@ def courses_available_for_admin(admin_user=None):
 
 def course_label(course):
     return f"{course.get(COURSE_NAME, '')} ({course[COURSE_ID]})"
+
+
+def course_model_label(course):
+    return f"{course.course_name} ({course.course_id})"
 
 
 def parse_course_selection(selection, available_courses):
@@ -265,61 +271,6 @@ def prompt_admin_create(args):
             args.planttracer_endpoint = input("Plant Tracer endpoint for login links: ").strip()
 
 
-def admin_create_for_courses(*, admin_email, admin_name, course_ids,
-                             planttracer_endpoint=None, send_email=True):
-    """Create/register a course administrator and add them to selected courses."""
-    if not admin_email:
-        raise ValueError("admin_email is required")
-    if not admin_name:
-        raise ValueError("admin_name is required")
-    if not course_ids:
-        raise ValueError("at least one course_id is required")
-
-    admin_user = None
-    added_courses = []
-    for course_id in course_ids:
-        course = odb.lookup_course_by_id(course_id=course_id)
-        if admin_user is None:
-            try:
-                admin_user = DDBO().get_user_email(admin_email)
-            except odb.InvalidUser_Email:
-                user_result = odb.register_email(
-                    email=admin_email,
-                    user_name=admin_name,
-                    course_id=course_id,
-                    admin=True,
-                )
-                admin_user = DDBO().get_user(user_result[USER_ID])
-            else:
-                odb.add_course_admin(admin_id=admin_user[USER_ID], course_id=course_id)
-                admin_user = DDBO().get_user(admin_user[USER_ID])
-        else:
-            odb.add_course_admin(admin_id=admin_user[USER_ID], course_id=course_id)
-            admin_user = DDBO().get_user(admin_user[USER_ID])
-        added_courses.append(course)
-
-    api_key = None
-    if send_email:
-        endpoint = planttracer_endpoint or planttracer_endpoint_from_env()
-        api_key = odb.get_first_api_key_for_user(admin_user[USER_ID])
-        if api_key is None:
-            api_key = odb.make_new_api_key(email=admin_email)
-        for course in added_courses:
-            mailer.send_course_created_email(
-                to_addr=admin_email,
-                course_name=course.get(COURSE_NAME, course[COURSE_ID]),
-                course_id=course[COURSE_ID],
-                planttracer_endpoint=endpoint,
-                api_key=api_key,
-            )
-            print(f"admin email sent to {admin_email} for {course[COURSE_ID]}")
-    return admin_user, added_courses, api_key
-
-
-def planttracer_endpoint_from_env():
-    return planttracer_endpoint()
-
-
 def admin_create(args, parser):
     if sys.stdin.isatty():
         prompt_admin_create(args)
@@ -341,17 +292,89 @@ def admin_create(args, parser):
     if unavailable:
         parser.error("course(s) unavailable for this administrator: " + ", ".join(unavailable))
 
-    admin_user, added_courses, _api_key = admin_create_for_courses(
+    send_email = not args.no_send_email
+    result = course_management.admin_create_for_courses(
         admin_email=args.admin_email,
         admin_name=args.admin_name,
         course_ids=args.course_id,
-        planttracer_endpoint=args.planttracer_endpoint,
-        send_email=not args.no_send_email,
+        planttracer_endpoint=endpoint_from_args(args) if send_email else None,
+        send_email=send_email,
     )
-    print(f"administrator {admin_user.get(USER_NAME, '')} <{admin_user[EMAIL]}>")
+    print(f"administrator {result.admin_user.user_name} <{result.admin_user.email}>")
     print("added courses:")
-    for course in added_courses:
-        print(f"  {course_label(course)}")
+    for course in result.added_courses:
+        print(f"  {course_model_label(course)}")
+        if send_email:
+            print(f"  admin email sent to {result.admin_user.email} for {course.course_id}")
+
+
+def prompt_existing_admin():
+    """Prompt for an existing admin; return None when operator wants a new admin."""
+    admins = odb.list_admins()
+    if not admins:
+        return None
+    rows = [
+        [
+            index,
+            admin.user_name,
+            admin.email,
+            "\n".join(format_admin_course(course) for course in admin.courses),
+        ]
+        for index, admin in enumerate(admins, 1)
+    ]
+    print(tabulate(rows, headers=["#", "name", "email", "admin courses"]))
+    raw_selection = input("Existing admin #, or blank to create a new admin: ").strip()
+    if not raw_selection:
+        return None
+    if not raw_selection.isdigit():
+        raise ValueError("existing admin selection must be a number")
+    index = int(raw_selection) - 1
+    if index < 0 or index >= len(admins):
+        raise ValueError(f"existing admin selection {raw_selection} is out of range")
+    return admins[index]
+
+
+def prompt_create_course(args):
+    """Fill missing create-course arguments from an interactive terminal."""
+    if args.course_id is None:
+        args.course_id = input("Course ID/number: ").strip()
+    if args.course_name is None:
+        args.course_name = input("Course name: ").strip()
+    if args.admin_email is None or args.admin_name is None:
+        selected_admin = prompt_existing_admin()
+        if selected_admin is not None:
+            args.admin_email = selected_admin.email
+            args.admin_name = selected_admin.user_name
+        else:
+            if args.admin_email is None:
+                args.admin_email = input("Course administrator email: ").strip()
+            if args.admin_name is None:
+                args.admin_name = input("Course administrator name: ").strip()
+    if args.send_email and getattr(args, "planttracer_endpoint", None) is None:
+        try:
+            endpoint_from_args(args)
+        except RuntimeError:
+            args.planttracer_endpoint = input("Plant Tracer endpoint for login links: ").strip()
+
+
+def create_course_usage_text(missing):
+    missing_flags = [flag for flag in CREATE_COURSE_REQUIRED_FLAGS if flag[2:] in missing]
+    lines = [
+        "create-course needs these flags when not running interactively:",
+        "  --course_id       Course id/number, for example BIO101",
+        "  --course_name     Course name, for example 'Plant Biology 101'",
+        "  --admin_email     Course administrator email address",
+        "  --admin_name      Course administrator display name",
+    ]
+    if missing_flags:
+        lines.append("Missing: " + ", ".join(missing_flags))
+    lines.extend([
+        "",
+        "Example:",
+        "  dbutil create-course --course_id BIO101 --course_name 'Plant Biology 101' "
+        "--admin_email teacher@example.edu --admin_name 'Teacher Name'",
+    ])
+    return "\n".join(lines)
 
 
 def create_db():
@@ -387,48 +410,33 @@ def send_link(email, planttracer_endpoint, *, debug=False):
 
 
 def create_course(args, parser):
+    if sys.stdin.isatty():
+        prompt_create_course(args)
     missing = [
         name
         for name in ["course_id", "course_name", "admin_email", "admin_name"]
         if getattr(args, name) is None
     ]
     if missing:
-        parser.error(
-            "create-course requires --course_name, --course_id, --admin_email and "
-            f"--admin_name. Missing: {','.join('--' + m for m in missing)}"
-        )
-    try:
-        odb.lookup_course_by_id(course_id=args.course_id)
-        print(f"course {args.course_id} already exists")
-    except InvalidCourse_Id:
-        print("creating course...")
-        course_key = str(uuid.uuid4())[9:18]
-        odbmaint.create_course(
-            course_id=args.course_id,
-            course_key=course_key,
-            course_name=args.course_name,
-            admin_email=args.admin_email,
-            admin_name=args.admin_name,
-            max_enrollment=args.max_enrollment,
-            ok_if_exists=False,
-        )
-        print(f"created {args.course_id}")
-    course = odb.lookup_course_by_id(course_id=args.course_id)
-    print(json.dumps(course, indent=4, default=str))
-
+        print(create_course_usage_text(missing), file=sys.stderr)
+        parser.exit(2)
+    result = course_management.create_course_with_admin(
+        course_id=args.course_id,
+        course_name=args.course_name,
+        admin_email=args.admin_email,
+        admin_name=args.admin_name,
+        max_enrollment=args.max_enrollment,
+        planttracer_endpoint=endpoint_from_args(args) if args.send_email else None,
+        send_email=args.send_email,
+    )
+    if result.created:
+        print(f"created {result.course.course_id}")
+    else:
+        print(f"course {result.course.course_id} already exists")
+    print(json.dumps(result.course.model_dump(), indent=4, default=str))
+    print(f"administrator {result.admin_user.user_name} <{result.admin_user.email}>")
     if args.send_email:
-        admin = odb.get_user_email(args.admin_email)
-        api_key = odb.get_first_api_key_for_user(admin[USER_ID])
-        if api_key is None:
-            api_key = odb.make_new_api_key(email=args.admin_email)
-        mailer.send_course_created_email(
-            to_addr=args.admin_email,
-            course_name=course.get(COURSE_NAME, args.course_id),
-            course_id=args.course_id,
-            planttracer_endpoint=endpoint_from_args(args),
-            api_key=api_key,
-        )
-        print(f"verification email sent to {args.admin_email}")
+        print(f"admin email sent to {result.admin_user.email} for {result.course.course_id}")
 
 
 def delete_course(args, parser):
@@ -627,9 +635,17 @@ def build_parser():
     create_course_parser.add_argument("--max_enrollment", help="Max enrollment for course", type=int, default=50)
     create_course_parser.add_argument(
         "--send-email",
+        dest="send_email",
         help="Send verification email to admin with magic link after ensuring course exists",
         action="store_true",
     )
+    create_course_parser.add_argument(
+        "--no-send-email",
+        dest="send_email",
+        help="Do not send course setup email",
+        action="store_false",
+    )
+    create_course_parser.set_defaults(send_email=False)
     create_course_parser.add_argument(
         "--planttracer_endpoint",
         help="Plant Tracer https:// endpoint for --send-email; defaults to HOSTNAME.DOMAIN",

@@ -108,6 +108,21 @@ through the configured mail path. Use ``--planttracer_endpoint`` or set
 ``--no-send-email`` for data-only dry runs, or ``MAILER_DRY_RUN=true`` to
 render mail without sending it.
 
+Operators can create courses with ``make course-create``. The target runs
+``src/dbutil.py create-course --send-email``. In an interactive terminal it asks
+for course id/number, course name, and course administrator. Existing course
+administrators are listed first so the operator can select one; pressing Enter
+creates a new administrator from the prompted email/name. Non-interactive
+automation can pass ``COURSE_CREATE_FLAGS``, for example
+``COURSE_CREATE_FLAGS="--course_id BIO101 --course_name 'Plant Biology 101' --admin_email teacher@example.edu --admin_name 'Teacher Name' --planttracer_endpoint https://example.planttracer.com"``.
+The reusable course/admin creation logic is in ``app.course_management`` so that
+future web administration pages can call the same operation without shelling out
+to ``dbutil``.
+If the course already exists with the same name, the command treats that as an
+operator retry and ensures the selected administrator relationship and email
+step. If the existing course name differs, the command fails rather than
+silently reusing the wrong course id.
+
 Courses
 -------
 

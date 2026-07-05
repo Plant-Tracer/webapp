@@ -5,11 +5,14 @@ Test the various functions in the database involving user creation.
 import uuid
 import copy
 
-import dbutil
+from app import course_management
 from app import odb
 from app import odbmaint
 from app.constants import C,logger
-from app.odb import ExistingCourse_Id, UserExists, COURSE_ID, API_KEY, COURSE_KEY, USER_ID
+from app.odb import (
+    ExistingCourse_Id, UserExists, COURSE_ID, COURSE_NAME, API_KEY, COURSE_KEY,
+    USER_ID, ADMINS_FOR_COURSE, MAX_ENROLLMENT, DDBO,
+)
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
 # Fixtures are imported in conftest.py
@@ -134,25 +137,90 @@ def test_admin_create_for_courses(new_course):
     cfg = copy.copy(new_course)
     admin_email = f"new-admin-{str(uuid.uuid4())[0:8]}@company.com"
 
-    admin_user, added_courses, api_key = dbutil.admin_create_for_courses(
+    result = course_management.admin_create_for_courses(
         admin_email=admin_email,
         admin_name="New Course Admin",
         course_ids=[cfg[COURSE_ID]],
         send_email=False,
     )
 
-    assert api_key is None
-    assert admin_user["email"] == admin_email
-    assert admin_user["user_name"] == "New Course Admin"
-    assert [course[COURSE_ID] for course in added_courses] == [cfg[COURSE_ID]]
-    assert odb.check_course_admin(user_id=admin_user[USER_ID], course_id=cfg[COURSE_ID])
+    assert result.api_key is None
+    assert result.admin_user.email == admin_email
+    assert result.admin_user.user_name == "New Course Admin"
+    assert [course.course_id for course in result.added_courses] == [cfg[COURSE_ID]]
+    assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=cfg[COURSE_ID])
     listed_admins = odb.list_admins()
     matching_admins = [admin for admin in listed_admins if admin.email == admin_email]
     assert len(matching_admins) == 1
     assert any(course.course_id == cfg[COURSE_ID] for course in matching_admins[0].courses)
 
-    odb.remove_course_admin(course_id=cfg[COURSE_ID], admin_id=admin_user[USER_ID])
-    odb.delete_user(user_id=admin_user[USER_ID])
+    odb.remove_course_admin(course_id=cfg[COURSE_ID], admin_id=result.admin_user.user_id)
+    odb.delete_user(user_id=result.admin_user.user_id)
+
+
+def test_create_course_with_existing_admin_is_idempotent(new_course):
+    cfg = copy.copy(new_course)
+    course_id = "CourseCreate-" + str(uuid.uuid4())[0:8]
+    course_name = "Course Create Test"
+
+    result = course_management.create_course_with_admin(
+        course_id=course_id,
+        course_name=course_name,
+        admin_email=cfg[ADMIN_EMAIL],
+        admin_name="Course Admin",
+        send_email=False,
+    )
+
+    assert result.created is True
+    assert result.api_key is None
+    assert result.course.course_id == course_id
+    assert result.course.course_name == course_name
+    assert result.admin_user.email == cfg[ADMIN_EMAIL]
+    assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=course_id)
+
+    retry = course_management.create_course_with_admin(
+        course_id=course_id,
+        course_name=course_name,
+        admin_email=cfg[ADMIN_EMAIL],
+        admin_name="Course Admin",
+        send_email=False,
+    )
+
+    assert retry.created is False
+    assert retry.api_key is None
+    assert retry.course.course_id == course_id
+    assert retry.admin_user.user_id == result.admin_user.user_id
+    assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=course_id)
+
+    odb.remove_course_admin(course_id=course_id, admin_id=result.admin_user.user_id)
+    odb.delete_course(course_id=course_id)
+
+
+def test_list_admins_tolerates_null_course_name(new_course):
+    cfg = copy.copy(new_course)
+    ddbo = DDBO()
+    course_id = "NullName-" + str(uuid.uuid4())[0:8]
+    ddbo.courses.put_item(Item={
+        COURSE_ID: course_id,
+        COURSE_NAME: None,
+        COURSE_KEY: "key-" + str(uuid.uuid4())[0:8],
+        ADMINS_FOR_COURSE: [cfg["admin_id"]],
+        MAX_ENROLLMENT: 50,
+    })
+
+    try:
+        admins = odb.list_admins()
+        matching_admins = [admin for admin in admins if admin.user_id == cfg["admin_id"]]
+        assert len(matching_admins) == 1
+        matching_courses = [
+            course
+            for course in matching_admins[0].courses
+            if course.course_id == course_id
+        ]
+        assert len(matching_courses) == 1
+        assert matching_courses[0].course_name == ""
+    finally:
+        ddbo.courses.delete_item(Key={COURSE_ID: course_id})
 
 
 def test_first_last_login_times(client, new_course):

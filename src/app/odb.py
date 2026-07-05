@@ -1028,7 +1028,7 @@ def list_admins():
         for course in response.get('Items', []):
             admin_course = AdminCourse(
                 course_id=course[COURSE_ID],
-                course_name=course.get(COURSE_NAME, ""),
+                course_name=course.get(COURSE_NAME) or "",
             )
             for user_id in course.get(ADMINS_FOR_COURSE, []):
                 courses_by_admin[user_id].append(admin_course)
