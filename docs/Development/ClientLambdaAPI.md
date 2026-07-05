@@ -30,7 +30,7 @@ asset plan for external static hosting.
 
 | Operation | Method | Path | Auth | Purpose |
 |-----------|--------|------|------|---------|
-| Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }`. |
+| Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }` with `app_version`, `deployed_at`, and selected stack parameters. |
 | First frame | GET | `/resize-api/v1/first-frame?api_key=...&movie_id=...` | query `api_key` | Returns JPEG frame 0 with saved rotation applied and scaled to the analysis size. |
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |

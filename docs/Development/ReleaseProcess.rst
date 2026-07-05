@@ -24,10 +24,11 @@ Step 2 — Bump the Version Number
 
 The version number **must** be updated via a normal feature branch + PR and merged to ``main`` before the tag is created (Step 4). Do not skip this step — two releases shipped with a stale version number because it was omitted.
 
-Update exactly **two files** (do not update ``lambda-resize``; its version is generated automatically):
+Update exactly **one file**. ``src/app/constants.py`` exposes
+``__version__`` for compatibility, but it reads the value from
+``pyproject.toml``.
 
 - ``pyproject.toml`` — ``version = "X.Y.Z"``
-- ``src/app/constants.py`` — ``__version__ = 'X.Y.Z'``
 
 Create an Issue for the bump, branch off ``main``, commit the changes referencing the issue, open a PR, and merge it before proceeding to Step 4.
 

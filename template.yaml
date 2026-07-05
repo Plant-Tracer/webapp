@@ -233,8 +233,11 @@ Resources:
           DYNAMODB_TABLE_PREFIX: !Ref DynamoDBTablePrefix
           LOG_LEVEL: !Ref LogLevel
           MAILER_DRY_RUN: !Ref MailerDryRun
+          PLANTTRACER_BASE_DOMAIN: !Ref BaseDomain
+          PLANTTRACER_HOSTED_ZONE_ID: !Ref HostedZoneId
           PLANTTRACER_LAMBDA_API_BASE: !Sub "https://${AWS::StackName}.${BaseDomain}/"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
+          PLANTTRACER_STACK_NAME: !Ref AWS::StackName
           PLANTTRACER_WEB_RUNTIME: lambda
           POWERTOOLS_LOG_LEVEL: !Ref LogLevel
           POWERTOOLS_SERVICE_NAME: "planttracer-web"
@@ -281,7 +284,10 @@ Resources:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Ref DynamoDBTablePrefix
           LOG_LEVEL: !Ref LogLevel
+          PLANTTRACER_BASE_DOMAIN: !Ref BaseDomain
+          PLANTTRACER_HOSTED_ZONE_ID: !Ref HostedZoneId
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
+          PLANTTRACER_STACK_NAME: !Ref AWS::StackName
           POWERTOOLS_EVENT_HANDLER_AUTO_JSON_DECIMAL: "true"
           POWERTOOLS_SERVICE_NAME: "planttracer"
           TABLE_PREFIX: !Ref DynamoDBTablePrefix

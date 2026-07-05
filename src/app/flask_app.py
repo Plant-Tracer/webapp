@@ -21,7 +21,10 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from . import apikey
 
 from .flask_api import api_bp
-from .constants import __version__, GET, GET_POST, C, log_level, logger
+from .constants import (
+    __version__, GET, GET_POST, C, log_level, logger,
+    stack_name, stack_parameter_overrides, STACK_NAME, STACK_PARAMETERS,
+)
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import (InvalidAPI_Key, InvalidUser_Email,
@@ -305,7 +308,15 @@ def func_logout():
 
 @app.route("/ping")
 def ping():
-    return jsonify({C.KEY_STATUS: C.STATUS_OK, C.API_KEY_MESSAGE: "pong"})
+    return jsonify({
+        C.KEY_STATUS: C.STATUS_OK,
+        C.API_KEY_MESSAGE: "pong",
+        "app_version": __version__,
+        "path": sys.path,
+        STACK_NAME: stack_name(),
+        STACK_PARAMETERS: stack_parameter_overrides(),
+        "time": time.time(),
+    })
 
 
 @app.route("/status")
