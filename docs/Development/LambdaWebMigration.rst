@@ -352,12 +352,14 @@ SAM's habit of rewriting config during guided deploys.
 Cutover Runbook
 ---------------
 
-Validate a non-production stack before any production DNS change. SAM config
-files are stack-local deployment state and are not committed to the repository.
-Use ``SAM_CONFIG=<path>`` to select the ignored config for the stack being
-tested. The branch must be pushed before ``make sam-build`` will build
-artifacts. This prevents deploying local-only commits that nobody else can
-inspect or rebuild.
+Validate each stack on its own hostname, for example
+``https://{stack}.planttracer.com/``. This migration does not depend on moving
+a shared production DNS record to Lambda; new and test deployments come up as
+separate named stacks. SAM config files are stack-local deployment state and
+are not committed to the repository. Use ``SAM_CONFIG=<path>`` to select the
+ignored config for the stack being tested. The branch must be pushed before
+``make sam-build`` will build artifacts. This prevents deploying local-only
+commits that nobody else can inspect or rebuild.
 
 Preflight:
 
@@ -425,17 +427,19 @@ Manual smoke checks on the non-production stack:
   artifacts or a clear user-visible status;
 * verify audit/admin pages still render for an admin user.
 
-Production DNS cutover must wait until the non-production stack passes the
-smoke matrix and the production mail/secrets path is confirmed. Record the
-pre-cutover DNS target and TTL before changing any record.
+Do not treat a new stack hostname as ready for users until it passes the smoke
+matrix and the mail/secrets path for that stack is confirmed. Keep the previous
+known-good stack hostname available until the new stack has been accepted.
 
 Rollback:
 
-* if only DNS was changed, restore the previous Route53 record target and TTL;
-* if the Lambda stack was updated but DNS was not moved, redeploy the previous
-  known-good version or leave traffic on the existing production target;
-* if login, registration, upload, or tracing fails after DNS cutover, restore
-  the previous DNS target first, then inspect CloudWatch logs and stack events;
+* if a new stack fails validation, keep users on the previous known-good stack
+  hostname;
+* if an existing stack was updated in place, redeploy the previous known-good
+  version or rebuild the stack under a new hostname for comparison;
+* if login, registration, upload, or tracing fails after users begin testing a
+  stack, stop directing testers to that hostname, then inspect CloudWatch logs
+  and stack events;
 * do not delete the movie S3 bucket or DynamoDB tables during rollback;
 * preserve the failed stack until logs, CloudFormation events, and Lambda
   versions have been captured for diagnosis.
