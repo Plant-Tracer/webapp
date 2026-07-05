@@ -31,8 +31,8 @@ DEMO_MOVIE_TITLE = 'Demo Movie {ct}'
 DEMO_MOVIE_DESCRIPTION = 'A demo movie'
 DEMO_USER_EMAIL = 'demouser@planttracer.com'
 DEMO_USER_NAME = 'Demo User'
-DEFAULT_ADMIN_EMAIL = 'admin@planttracer.com'
-DEFAULT_ADMIN_NAME = 'Plant Tracer Admin'
+DEFAULT_ADMIN_EMAIL = 'plantadmin@planttracer.com'
+DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
@@ -345,11 +345,12 @@ def register_student(args):
 
 def send_test_mail(email, *, debug=False):
     from_addr = mailer.get_server_email()
+    from_header = mailer.get_server_from_header()
     branch = apikey.git_branch().strip()
     commit = apikey.git_last_commit().strip()
     msg = EmailMessage()
     msg["Subject"] = "Plant Tracer test email"
-    msg["From"] = from_addr
+    msg["From"] = from_header
     msg["To"] = email
     msg.set_content(
         "This is a Plant Tracer test email.\n"
@@ -363,7 +364,7 @@ def send_test_mail(email, *, debug=False):
         smtp_config=mailer.get_smtp_config(),
         debug=debug,
     )
-    print(f"test email sent to {email} from {from_addr}")
+    print(f"test email sent to {email} from {from_header}")
 
 
 def build_parser():

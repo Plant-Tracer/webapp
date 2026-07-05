@@ -78,10 +78,16 @@ Mail
 ----
 
 ``SERVER_EMAIL``
-   Sender address for outgoing mail. Defaults to ``admin@planttracer.com``.
-   In the Lambda-only stack this is set by the stack to
-   ``admin@planttracer.com`` and the Lambda role is scoped to that SES sender.
-   The exact address must be verified in AWS SES in the deployment region.
+   Server sender address for outgoing mail. Defaults to
+   ``admin@planttracer.com``. In the Lambda-only stack this is set by the stack
+   and the Lambda role is scoped to that SES sender. The exact address must be
+   verified in AWS SES in the deployment region. This is not the course
+   administrator email; see :doc:`IdentityManagement`.
+
+``SERVER_EMAIL_NAME``
+   Display name used with ``SERVER_EMAIL`` in the MIME ``From`` header.
+   Defaults to ``Plant Tracer``. The Lambda-only stack sets this value and
+   passes it to ``lambda-web``.
 
 ``PLANTTRACER_CREDENTIALS``
    Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections. Used
@@ -101,7 +107,7 @@ Mail
 ``MAILER_DRY_RUN``
    Set to ``true`` to log email content instead of sending it. The Lambda-only
    stack exposes this as the ``MailerDryRun`` SAM parameter for non-production
-   stacks whose operators cannot send SES mail as ``admin@planttracer.com``.
+   stacks whose operators cannot send SES mail as ``SERVER_EMAIL``.
    Dry-run mail includes login links and API keys in Lambda logs, so use it
    only with test users and test data.
 

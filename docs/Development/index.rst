@@ -13,6 +13,7 @@ Developer Documentation
    Local Development and Github Actions
    Installation
    EnvironmentVariables
+   IdentityManagement
    demo_mode
    configuring_aws
    deploy_ec2

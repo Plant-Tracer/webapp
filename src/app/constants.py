@@ -42,8 +42,9 @@ class C:
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
-    # SERVER_EMAIL: sender address for all outgoing email (env var name; value default admin@planttracer.com, configured in SES)
+    # SERVER_EMAIL: sender address for outgoing email; configured/verified in SES.
     SERVER_EMAIL = 'SERVER_EMAIL'
+    SERVER_EMAIL_NAME = 'SERVER_EMAIL_NAME'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'

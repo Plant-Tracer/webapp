@@ -63,6 +63,7 @@ Mappings:
   StackConstants:
     Mail:
       ServerEmail: admin@planttracer.com
+      ServerEmailName: Plant Tracer
 
 Resources:
   ################################################################
@@ -238,6 +239,7 @@ Resources:
           POWERTOOLS_LOG_LEVEL: !Ref LogLevel
           POWERTOOLS_SERVICE_NAME: "planttracer-web"
           SERVER_EMAIL: !FindInMap [StackConstants, Mail, ServerEmail]
+          SERVER_EMAIL_NAME: !FindInMap [StackConstants, Mail, ServerEmailName]
       Events:
         WebRoot:
           Type: HttpApi

@@ -173,23 +173,25 @@ Mail
 
 The Lambda-only stack uses AWS SES for production mail. ``lambda-web`` sends
 the existing MIME templates through ``ses:SendRawEmail`` when no SMTP
-configuration is present. The stack sets ``SERVER_EMAIL`` to the stack constant
-``admin@planttracer.com``. That exact address must be a verified SES sender
-identity in the deployment region.
+configuration is present. The stack sets ``SERVER_EMAIL`` and
+``SERVER_EMAIL_NAME`` as stack constants and passes both to ``lambda-web``.
+``SERVER_EMAIL`` is the server sender address, not a course administrator
+account. That exact address must be a verified SES sender identity in the
+deployment region. See :doc:`IdentityManagement`.
 
 The ``lambda-web`` IAM role is scoped to ``ses:SendRawEmail`` for that sender
 identity only, and includes a ``ses:FromAddress`` condition requiring
-``admin@planttracer.com``. If the production sender changes, update the stack
-constant and verify the new address in SES before deploying.
+``SERVER_EMAIL``. If the production sender changes, update the stack constant
+and verify the new address in SES before deploying.
 
 Developers who can deploy a stack but cannot send SES mail as
-``admin@planttracer.com`` should set the SAM ``MailerDryRun`` parameter to
-``true``. The stack still deploys and registration/resend flows exercise the
-mailer path, but the rendered email is written to Lambda logs instead of being
-sent. Use this only for non-production stacks with test users and test data:
-dry-run mail includes login links and API keys in CloudWatch logs. A production
-stack must leave ``MailerDryRun`` at ``false`` and must have the SES sender
-identity verified.
+the configured ``SERVER_EMAIL`` should set the SAM ``MailerDryRun`` parameter
+to ``true``. The stack still deploys and registration/resend flows exercise
+the mailer path, but the rendered email is written to Lambda logs instead of
+being sent. Use this only for non-production stacks with test users and test
+data: dry-run mail includes login links and API keys in CloudWatch logs. A
+production stack must leave ``MailerDryRun`` at ``false`` and must have the SES
+sender identity verified.
 
 Do not put SMTP credentials in ``samconfig.toml`` or committed environment
 files. Local development continues to use Mailpit through ``SMTPCONFIG_JSON``.
@@ -365,7 +367,7 @@ Preflight:
   intended non-production stack and table prefix;
 * confirm the S3 movie bucket and DynamoDB table prefix are the intended test
   resources;
-* if the stack operator cannot send SES mail as ``admin@planttracer.com``,
+* if the stack operator cannot send SES mail as the configured ``SERVER_EMAIL``,
   confirm the SAM config sets ``MailerDryRun="true"`` and uses only test users;
 * run ``make check``;
 * run ``make template-lint``;

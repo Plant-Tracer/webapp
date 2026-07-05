@@ -25,7 +25,7 @@ LOCAL_AWS_ENV=env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local AWS_DEF
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
 LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
 LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
-LOCAL_ADMIN_EMAIL=admin@planttracer.com
+LOCAL_ADMIN_EMAIL=plantadmin@planttracer.com
 FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
