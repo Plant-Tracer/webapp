@@ -31,6 +31,27 @@ def test_dbutil_has_admin_list_command():
     assert args.command == "admin-list"
 
 
+def test_dbutil_has_admin_create_command():
+    args = parse_args(
+        "admin-create",
+        "--admin_email",
+        "teacher@example.com",
+        "--admin_name",
+        "Course Teacher",
+        "--course_id",
+        "BIO101",
+        "--course_id",
+        "BIO102",
+        "--no-send-email",
+    )
+
+    assert args.command == "admin-create"
+    assert args.admin_email == "teacher@example.com"
+    assert args.admin_name == "Course Teacher"
+    assert args.course_id == ["BIO101", "BIO102"]
+    assert args.no_send_email is True
+
+
 def test_dbutil_rejects_old_flag_style_commands():
     with pytest.raises(SystemExit):
         parse_args("--create_course", "--course_id", "PLANT101")

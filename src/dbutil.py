@@ -34,6 +34,8 @@ DEMO_USER_NAME = 'Demo User'
 DEFAULT_ADMIN_EMAIL = 'plantadmin@planttracer.com'
 DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 
+NO_COURSES_MESSAGE = "No courses are available for this administrator."
+
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
 """
@@ -184,6 +186,172 @@ def admin_list():
         for admin in admins
     ]
     print(tabulate(rows, headers=["name", "email", "user ID", "admin courses"]))
+
+
+def course_sort_key(course):
+    return (course.get(COURSE_NAME, "").casefold(), course.get(COURSE_ID, "").casefold())
+
+
+def courses_available_for_admin(admin_user=None):
+    """Return courses where admin_user is not already a course administrator."""
+    admin_id = admin_user.get(USER_ID) if admin_user else None
+    courses = sorted(scan_all(DDBO().courses), key=course_sort_key)
+    if admin_id is None:
+        return courses
+    return [
+        course
+        for course in courses
+        if admin_id not in course.get(odb.ADMINS_FOR_COURSE, [])
+    ]
+
+
+def course_label(course):
+    return f"{course.get(COURSE_NAME, '')} ({course[COURSE_ID]})"
+
+
+def parse_course_selection(selection, available_courses):
+    """Parse comma-separated course ids or 1-based row numbers."""
+    by_id = {course[COURSE_ID]: course for course in available_courses}
+    selected = []
+    seen_course_ids = set()
+    for raw_token in selection.split(","):
+        token = raw_token.strip()
+        if not token:
+            continue
+        if token.isdigit():
+            index = int(token) - 1
+            if index < 0 or index >= len(available_courses):
+                raise ValueError(f"course selection {token} is out of range")
+            course = available_courses[index]
+        else:
+            course = by_id.get(token)
+            if course is None:
+                raise ValueError(f"unknown course_id {token}")
+        course_id = course[COURSE_ID]
+        if course_id not in seen_course_ids:
+            selected.append(course)
+            seen_course_ids.add(course_id)
+    if not selected:
+        raise ValueError("no courses selected")
+    return selected
+
+
+def prompt_admin_create(args):
+    """Fill missing admin-create arguments from an interactive terminal."""
+    if args.admin_email is None:
+        args.admin_email = input("Course administrator email: ").strip()
+    if args.admin_name is None:
+        args.admin_name = input("Course administrator name: ").strip()
+
+    try:
+        admin_user = DDBO().get_user_email(args.admin_email)
+    except odb.InvalidUser_Email:
+        admin_user = None
+    available_courses = courses_available_for_admin(admin_user)
+    if not available_courses:
+        raise ValueError(NO_COURSES_MESSAGE)
+    if not args.course_id:
+        rows = [
+            [index, course.get(COURSE_NAME, ""), course[COURSE_ID]]
+            for index, course in enumerate(available_courses, 1)
+        ]
+        print(tabulate(rows, headers=["#", "course name", "course ID"]))
+        selection = input("Course(s) to add, by number or course_id (comma-separated): ").strip()
+        args.course_id = [course[COURSE_ID] for course in parse_course_selection(selection, available_courses)]
+    if not args.no_send_email and getattr(args, "planttracer_endpoint", None) is None:
+        try:
+            endpoint_from_args(args)
+        except RuntimeError:
+            args.planttracer_endpoint = input("Plant Tracer endpoint for login links: ").strip()
+
+
+def admin_create_for_courses(*, admin_email, admin_name, course_ids,
+                             planttracer_endpoint=None, send_email=True):
+    """Create/register a course administrator and add them to selected courses."""
+    if not admin_email:
+        raise ValueError("admin_email is required")
+    if not admin_name:
+        raise ValueError("admin_name is required")
+    if not course_ids:
+        raise ValueError("at least one course_id is required")
+
+    admin_user = None
+    added_courses = []
+    for course_id in course_ids:
+        course = odb.lookup_course_by_id(course_id=course_id)
+        if admin_user is None:
+            try:
+                admin_user = DDBO().get_user_email(admin_email)
+            except odb.InvalidUser_Email:
+                user_result = odb.register_email(
+                    email=admin_email,
+                    user_name=admin_name,
+                    course_id=course_id,
+                    admin=True,
+                )
+                admin_user = DDBO().get_user(user_result[USER_ID])
+            else:
+                odb.add_course_admin(admin_id=admin_user[USER_ID], course_id=course_id)
+                admin_user = DDBO().get_user(admin_user[USER_ID])
+        else:
+            odb.add_course_admin(admin_id=admin_user[USER_ID], course_id=course_id)
+            admin_user = DDBO().get_user(admin_user[USER_ID])
+        added_courses.append(course)
+
+    api_key = None
+    if send_email:
+        endpoint = planttracer_endpoint or planttracer_endpoint_from_env()
+        api_key = odb.get_first_api_key_for_user(admin_user[USER_ID])
+        if api_key is None:
+            api_key = odb.make_new_api_key(email=admin_email)
+        for course in added_courses:
+            mailer.send_course_created_email(
+                to_addr=admin_email,
+                course_name=course.get(COURSE_NAME, course[COURSE_ID]),
+                course_id=course[COURSE_ID],
+                planttracer_endpoint=endpoint,
+                api_key=api_key,
+            )
+            print(f"admin email sent to {admin_email} for {course[COURSE_ID]}")
+    return admin_user, added_courses, api_key
+
+
+def planttracer_endpoint_from_env():
+    return planttracer_endpoint()
+
+
+def admin_create(args, parser):
+    if sys.stdin.isatty():
+        prompt_admin_create(args)
+    missing = [
+        name
+        for name in ["admin_email", "admin_name"]
+        if getattr(args, name) is None
+    ]
+    if missing:
+        parser.error("admin-create requires " + ", ".join("--" + name for name in missing))
+    if not args.course_id:
+        parser.error("admin-create requires --course_id, or an interactive terminal to select courses")
+    try:
+        admin_user = DDBO().get_user_email(args.admin_email)
+    except odb.InvalidUser_Email:
+        admin_user = None
+    available_course_ids = {course[COURSE_ID] for course in courses_available_for_admin(admin_user)}
+    unavailable = [course_id for course_id in args.course_id if course_id not in available_course_ids]
+    if unavailable:
+        parser.error("course(s) unavailable for this administrator: " + ", ".join(unavailable))
+
+    admin_user, added_courses, _api_key = admin_create_for_courses(
+        admin_email=args.admin_email,
+        admin_name=args.admin_name,
+        course_ids=args.course_id,
+        planttracer_endpoint=args.planttracer_endpoint,
+        send_email=not args.no_send_email,
+    )
+    print(f"administrator {admin_user.get(USER_NAME, '')} <{admin_user[EMAIL]}>")
+    print("added courses:")
+    for course in added_courses:
+        print(f"  {course_label(course)}")
 
 
 def create_db():
@@ -406,6 +574,27 @@ def build_parser():
         aliases=["admin_list"],
         help="List course administrators and their administered courses",
     )
+    admin_create_parser = subparsers.add_parser(
+        "admin-create",
+        aliases=["admin_create"],
+        help="Create/register a course administrator, add courses, and send login email",
+    )
+    admin_create_parser.add_argument("--admin_email", help="course administrator email")
+    admin_create_parser.add_argument("--admin_name", help="course administrator name")
+    admin_create_parser.add_argument(
+        "--course_id",
+        action="append",
+        help="course id to administer; repeat for multiple courses",
+    )
+    admin_create_parser.add_argument(
+        "--planttracer_endpoint",
+        help="Plant Tracer https:// endpoint for email links; defaults to HOSTNAME.DOMAIN",
+    )
+    admin_create_parser.add_argument(
+        "--no-send-email",
+        action="store_true",
+        help="Add the administrator without sending email",
+    )
     subparsers.add_parser(
         "createdb",
         help="Create tables from etc/dynamodb_tables.json and populate the demo course",
@@ -511,6 +700,9 @@ def main():
         return 0
     if args.command in ("admin-list", "admin_list"):
         admin_list()
+        return 0
+    if args.command in ("admin-create", "admin_create"):
+        admin_create(args, parser)
         return 0
     if args.command == "createdb":
         create_db()

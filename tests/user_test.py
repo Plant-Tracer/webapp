@@ -5,6 +5,7 @@ Test the various functions in the database involving user creation.
 import uuid
 import copy
 
+import dbutil
 from app import odb
 from app import odbmaint
 from app.constants import C,logger
@@ -127,6 +128,31 @@ def test_course_list(client, new_course):
     # Regular user is not an admin: they see only themselves
     assert len(users2) == 1
     assert users1[0]['user_name'] == users2[0]['user_name']
+
+
+def test_admin_create_for_courses(new_course):
+    cfg = copy.copy(new_course)
+    admin_email = f"new-admin-{str(uuid.uuid4())[0:8]}@company.com"
+
+    admin_user, added_courses, api_key = dbutil.admin_create_for_courses(
+        admin_email=admin_email,
+        admin_name="New Course Admin",
+        course_ids=[cfg[COURSE_ID]],
+        send_email=False,
+    )
+
+    assert api_key is None
+    assert admin_user["email"] == admin_email
+    assert admin_user["user_name"] == "New Course Admin"
+    assert [course[COURSE_ID] for course in added_courses] == [cfg[COURSE_ID]]
+    assert odb.check_course_admin(user_id=admin_user[USER_ID], course_id=cfg[COURSE_ID])
+    listed_admins = odb.list_admins()
+    matching_admins = [admin for admin in listed_admins if admin.email == admin_email]
+    assert len(matching_admins) == 1
+    assert any(course.course_id == cfg[COURSE_ID] for course in matching_admins[0].courses)
+
+    odb.remove_course_admin(course_id=cfg[COURSE_ID], admin_id=admin_user[USER_ID])
+    odb.delete_user(user_id=admin_user[USER_ID])
 
 
 def test_first_last_login_times(client, new_course):

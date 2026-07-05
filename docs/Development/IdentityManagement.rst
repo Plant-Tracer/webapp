@@ -96,6 +96,18 @@ environment and prints each administrator's display name, email address,
 ``DYNAMODB_TABLE_PREFIX`` for the target environment before running it; local
 development defaults still use DynamoDB Local and the ``demo-`` prefix.
 
+Operators can create or update course administrators with ``make admin-create``.
+The target runs ``src/dbutil.py admin-create``. In an interactive terminal it
+asks for administrator email/name, lists courses where that user is not already
+an administrator, and accepts one or more selected courses. Non-interactive
+automation can pass ``ADMIN_CREATE_FLAGS``, for example
+``ADMIN_CREATE_FLAGS="--admin_email teacher@example.edu --admin_name 'Teacher Name' --course_id BIO101 --planttracer_endpoint https://example.planttracer.com"``.
+By default the command sends the administrator a course setup/login email
+through the configured mail path. Use ``--planttracer_endpoint`` or set
+``HOSTNAME``/``DOMAIN`` so generated links point at the intended stack. Use
+``--no-send-email`` for data-only dry runs, or ``MAILER_DRY_RUN=true`` to
+render mail without sending it.
+
 Courses
 -------
 
