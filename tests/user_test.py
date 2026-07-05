@@ -145,7 +145,7 @@ def test_course_list(client, new_course):
     assert len(matches)>0
 
     # Make sure that there is an admin in the course (it's the user)
-    recs2 = odb.list_admins()
+    recs2 = course_management.list_admins()
     assert len(recs2)>=1        # we could do a better test
     matching_admins = [admin for admin in recs2 if admin.email == cfg[ADMIN_EMAIL]]
     assert len(matching_admins) == 1
@@ -181,7 +181,7 @@ def test_admin_create_for_courses(new_course):
     assert result.admin_user.user_name == "New Course Admin"
     assert [course.course_id for course in result.added_courses] == [cfg[COURSE_ID]]
     assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=cfg[COURSE_ID])
-    listed_admins = odb.list_admins()
+    listed_admins = course_management.list_admins()
     matching_admins = [admin for admin in listed_admins if admin.email == admin_email]
     assert len(matching_admins) == 1
     assert any(course.course_id == cfg[COURSE_ID] for course in matching_admins[0].courses)
@@ -241,7 +241,7 @@ def test_list_admins_tolerates_null_course_name(new_course):
     })
 
     try:
-        admins = odb.list_admins()
+        admins = course_management.list_admins()
         matching_admins = [admin for admin in admins if admin.user_id == cfg["admin_id"]]
         assert len(matching_admins) == 1
         matching_courses = [

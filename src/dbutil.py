@@ -189,7 +189,7 @@ def format_admin_course(course):
 
 def admin_list():
     """Print all course administrators and their administered courses."""
-    admins = odb.list_admins()
+    admins = course_management.list_admins()
     if not admins:
         print("No course administrators found.")
         return
@@ -325,7 +325,7 @@ def admin_create(args, parser):
 
 def prompt_existing_admin():
     """Prompt for an existing admin; return None when operator wants a new admin."""
-    admins = odb.list_admins()
+    admins = course_management.list_admins()
     if not admins:
         return None
     rows = [

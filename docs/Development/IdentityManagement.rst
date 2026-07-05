@@ -95,6 +95,9 @@ environment and prints each administrator's display name, email address,
 ``user_id``, and administered courses. Set ``AWS_REGION`` and
 ``DYNAMODB_TABLE_PREFIX`` for the target environment before running it; local
 development defaults still use DynamoDB Local and the ``demo-`` prefix.
+The operator-facing administrator list is built by
+``app.course_management.list_admins`` so future web administration pages can
+reuse the same read model.
 
 Operators can create or update course administrators with ``make admin-create``.
 The target runs ``src/dbutil.py admin-create``. In an interactive terminal it

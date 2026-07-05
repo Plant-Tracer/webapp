@@ -1,14 +1,19 @@
-"""Reusable course and course-administrator management operations."""
+"""Reusable course and course-administrator management service operations."""
 
+from collections import defaultdict
 import uuid
 
 from pydantic import BaseModel
 
 from . import mailer
 from . import odb
-from .constants import C
-from .odb import COURSE_NAME, USER_ID, DDBO
-from .schema import Course, User
+from .constants import C, logger
+from .odb import ADMINS_FOR_COURSE, COURSE_ID, COURSE_NAME, EMAIL, USER_ID, USER_NAME, DDBO
+from .schema import AdminCourse, Course, CourseAdmin, User
+
+EXCLUSIVE_START_KEY = 'ExclusiveStartKey'
+ITEMS = 'Items'
+LAST_EVALUATED_KEY = 'LastEvaluatedKey'
 
 
 class AdminCreateResult(BaseModel):
@@ -35,6 +40,44 @@ class DemoCourseResult(BaseModel):
 def generate_course_key():
     """Return a short registration key for a newly created course."""
     return uuid.uuid4().hex[:8]
+
+
+def scan_table_items(table):
+    """Yield every item from a DynamoDB table resource scan."""
+    response = table.scan()
+    yield from response.get(ITEMS, [])
+    while response.get(LAST_EVALUATED_KEY):
+        response = table.scan(**{EXCLUSIVE_START_KEY: response[LAST_EVALUATED_KEY]})
+        yield from response.get(ITEMS, [])
+
+
+def list_admins():
+    """Return all course administrators and the courses they administer."""
+    ddbo = DDBO()
+    courses_by_admin: dict[str, list[AdminCourse]] = defaultdict(list)
+
+    for course in scan_table_items(ddbo.courses):
+        admin_course = AdminCourse(
+            course_id=course[COURSE_ID],
+            course_name=course.get(COURSE_NAME) or "",
+        )
+        for user_id in course.get(ADMINS_FOR_COURSE, []):
+            courses_by_admin[user_id].append(admin_course)
+
+    admins = []
+    for user_id, courses in courses_by_admin.items():
+        try:
+            user = ddbo.get_user(user_id)
+        except odb.InvalidUser_Id:
+            logger.warning("course admin user_id %s is missing from users table", user_id)
+            continue
+        admins.append(CourseAdmin(
+            user_id=user_id,
+            email=user.get(EMAIL, ""),
+            user_name=user.get(USER_NAME, ""),
+            courses=sorted(courses, key=lambda course: (course.course_name, course.course_id)),
+        ))
+    return sorted(admins, key=lambda admin: (admin.user_name.casefold(), admin.email.casefold(), admin.user_id))
 
 
 def admin_create_for_courses(*, admin_email, admin_name, course_ids,
