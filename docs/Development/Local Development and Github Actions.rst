@@ -290,11 +290,8 @@ The most important runtime uses are:
 
   * Used by the upload UI to reject oversized files before upload begins.
 
-Two values defined in ``base.html`` are intentionally not discussed further
-here:
+One value defined in ``base.html`` is intentionally not discussed further here:
 
-* ``STATIC_BASE`` is currently defined but not meaningfully used by the runtime
-  JavaScript in this repo.
 * ``version`` is useful for display/debugging in rendered pages, but not for
   the operational browser logic discussed in this document.
 
@@ -446,7 +443,10 @@ Verification Targets
 
 Local testing should cover at least these cases:
 
-* ``GET /resize-api/v1/ping`` returns ``status=ok``.
+* ``GET /resize-api/v1/ping`` returns ``status=ok`` with ``app_version`` and
+  ``deployed_at`` metadata. Local runs report ``deployed_at=unknown`` unless
+  ``PLANTTRACER_DEPLOYED_AT`` is set; Makefile-driven SAM deploys stamp the
+  built Lambda artifact with the UTC deploy timestamp.
 * ``GET /resize-api/v1/first-frame`` returns a JPEG for a movie in MinIO.
 * ``POST /resize-api/v1/trace-movie`` returns quickly and starts background
   tracing.

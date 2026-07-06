@@ -6,7 +6,10 @@ as a Lambda HTTP API and can also run locally through `make run-local-lambda-deb
 ## HTTP Routes
 
 - `GET /resize-api/v1/ping`
-  Health check.
+  Health check. Returns `status`, request `time`, runtime `path`, application
+  `app_version`, and `deployed_at`. Local runs report `deployed_at` as
+  `unknown`; Makefile-driven SAM deploys stamp the deployed artifact with a UTC
+  timestamp.
 
 - `GET /resize-api/v1/first-frame?api_key=...&movie_id=...`
   Validate access, fetch the movie from S3/MinIO through a signed URL, apply
@@ -17,9 +20,6 @@ as a Lambda HTTP API and can also run locally through `make run-local-lambda-deb
 
 - `GET /resize-api/v1/movie-data?api_key=...&movie_id=...&format=json`
   Return JSON with signed movie and optional ZIP URLs.
-
-- `GET /api/v1/movie-data?...`
-  Compatibility route handled by the same movie-data function.
 
 - `POST /resize-api/v1/trace-movie`
   Queue retracing. The API key is sent in the `x-api-key` header. The JSON body

@@ -54,7 +54,7 @@ def make_post_event(path: str, body: dict | None, headers: dict | None = None) -
 
 
 def test_movie_data_json_response():
-    event = make_http_event("/api/v1/movie-data", "api_key=test-key&movie_id=m123&format=json")
+    event = make_http_event("/resize-api/v1/movie-data", "api_key=test-key&movie_id=m123&format=json")
     mock_urls = SimpleNamespace(
         signed_movie_url="https://example.com/movie.mp4",
         signed_zipfile_url="https://example.com/movie.zip",

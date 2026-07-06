@@ -14,9 +14,12 @@ Methods:
 
 """
 
-import traceback
-import time
+import json
+import os
 import sys
+import time
+import traceback
+from pathlib import Path
 from typing import Any, Dict
 
 from aws_lambda_powertools import Logger
@@ -31,8 +34,18 @@ from aws_lambda_powertools.utilities.batch import (
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
+from .src.app.constants import __version__
 
 LOGGER = Logger(service="planttracer")
+DEPLOYED_AT_ENV = "PLANTTRACER_DEPLOYED_AT"
+DEPLOY_METADATA_FILE = "deploy_metadata.json"
+PING_APP_VERSION = "app_version"
+PING_DEPLOYED_AT = "deployed_at"
+PING_ERROR = "error"
+PING_PATH = "path"
+PING_STATUS = "status"
+PING_TIME = "time"
+UNKNOWN_DEPLOYED_AT = "unknown"
 
 # Permissive CORS automatically applied to all routes
 cors_config = CORSConfig(
@@ -41,6 +54,26 @@ cors_config = CORSConfig(
 )
 
 app = APIGatewayHttpResolver(cors=cors_config)
+
+
+def deploy_metadata(metadata_path: Path | None = None) -> Dict[str, str]:
+    """Return build/deploy metadata for health checks."""
+    deployed_at = os.environ.get(DEPLOYED_AT_ENV, "").strip()
+    app_version = __version__
+    if metadata_path is None:
+        metadata_path = Path(__file__).with_name(DEPLOY_METADATA_FILE)
+    if metadata_path.exists():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            LOGGER.warning("could not read deploy metadata from %s", metadata_path)
+        else:
+            deployed_at = str(metadata.get(PING_DEPLOYED_AT, deployed_at)).strip()
+            app_version = str(metadata.get(PING_APP_VERSION, app_version)).strip()
+    return {
+        PING_APP_VERSION: app_version,
+        PING_DEPLOYED_AT: deployed_at or UNKNOWN_DEPLOYED_AT,
+    }
 
 
 @app.exception_handler(Exception)
@@ -69,10 +102,11 @@ def handle_all_exceptions(ex: Exception):
 def api_ping() -> Dict[str, Any]:
     LOGGER.info("ping")
     return {
-        "error": False,
-        "status": "ok",
-        "time": time.time(),
-        "path": sys.path
+        PING_ERROR: False,
+        PING_STATUS: "ok",
+        PING_TIME: time.time(),
+        PING_PATH: sys.path,
+        **deploy_metadata(),
     }
 
 
@@ -102,11 +136,6 @@ def _movie_data_response():
             return Response(status_code=404, body="movie zipfile is not available")
         return Response(status_code=302, headers={"Location": urls.signed_zipfile_url}, body="")
     return Response(status_code=302, headers={"Location": urls.signed_movie_url}, body="")
-
-
-@app.get("/api/v1/movie-data")
-def api_movie_data():
-    return _movie_data_response()
 
 
 @app.get("/resize-api/v1/movie-data")

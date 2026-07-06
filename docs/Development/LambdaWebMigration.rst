@@ -1,408 +1,445 @@
-Lambda Web Migration Discussion
-===============================
+Lambda Web Migration
+====================
 
 Status
 ------
 
-This is a design discussion for deprecating the existing production VM and
-moving the Plant Tracer web application to AWS Lambda. It is not an
-implementation plan that has already been approved.
+This is the accepted implementation plan for PR #1113 and issues #450, #699,
+and #1110. The target distribution is Lambda-only: the SAM deployment path must
+not create, configure, or depend on a virtual machine.
 
-The current deployed architecture is split:
+Plant Tracer still uses Flask as the web application runtime. Local Flask
+development and testing remain required. SAM local testing is useful as an
+additional Lambda event-routing check, but it does not replace the normal
+Flask test path.
 
-* Flask on the VM serves HTML pages and metadata APIs.
-* ``lambda-resize`` serves video/frame/tracking APIs and SQS tracking work.
-* S3 stores movies and generated artifacts.
-* DynamoDB stores users, courses, API keys, movie metadata, trackpoints, and
-  audit logs.
+Target Architecture
+-------------------
 
-The proposed target keeps S3 and DynamoDB as the durable data stores, keeps
-``lambda-resize`` for video work, and adds a separate Lambda for the web
-application.
+The stack has two application Lambda functions:
 
-Recommended Direction
----------------------
+``lambda-web``
+    Runs the existing Flask application behind API Gateway HTTP API events. It
+    serves HTML pages, Flask ``/api/*`` routes, and application static files
+    under ``/static/*``.
 
-Add a new ``lambda-web`` function for the Flask HTML and metadata API runtime.
-Do not merge this work into ``lambda-resize``.
+``lambda-resize``
+    Remains the vision/video/tracing function. It serves ``/resize-api/*``
+    routes and consumes SQS trace work. It should not become the general web
+    application Lambda.
 
-Serve immutable static assets from S3, preferably behind the same front door as
-the web app. Continue to serve authenticated and per-user HTML from the web
-Lambda until those pages are deliberately converted into a static shell plus
-client-side API calls.
+The public application should use one HTTPS front door. Separate Lambda
+functions do not require separate product domain names. HTTP API route
+selection should be explicit:
 
-Keep VM operation during and after the migration. VM support should be a
-deployment/debugging mode, not a second application with divergent behavior.
-The same Flask route code should run in both VM and Lambda-web modes whenever
-practical.
+* ``/resize-api/*`` routes to ``lambda-resize``.
+* HTML pages route to ``lambda-web``.
+* Flask ``/api/*`` routes route to ``lambda-web``.
+* ``/static/*`` routes to ``lambda-web`` for the initial migration.
 
-Decision 1: Current Lambda Or New Lambda
-----------------------------------------
+When an HTTP API uses a named stage such as ``prod``, execute-api URLs include
+the stage segment, for example ``/prod/api/ver``. ``lambda-web`` normalizes that
+stage prefix before handing the request to Flask so Flask routes remain
+``/api/ver``, ``/static/...``, and ``/`` regardless of whether the request came
+through execute-api or the custom domain.
 
-Recommendation: create a new Lambda, tentatively named ``lambda-web``.
+``lambda-web`` uses AWS Lambda Powertools for Python to parse HTTP API v2
+events and emit request/route diagnostics. It still uses ``apig-wsgi`` for the
+actual Flask WSGI handoff because the Powertools API Gateway resolver is a
+native Lambda router, not a Flask WSGI adapter.
 
-Pros
-~~~~
+Resize-owned browser endpoints, including movie-data, live under
+``/resize-api/v1/*``. The Lambda-only target does not preserve
+``/api/v1/movie-data`` as a public compatibility path.
 
-* Keeps OpenCV, PyAV, and video-processing dependencies out of the web request
-  path.
-* Lets the web Lambda use lower memory, shorter timeout, and a smaller package
-  than ``lambda-resize``.
-* Keeps video/tracking scaling separate from normal page and metadata traffic.
-* Lets deployment, rollback, logging, and alarms distinguish web failures from
-  tracking failures.
-* Preserves the existing ``lambda-resize`` API while the web runtime is moved.
+Removed VM Surface
+------------------
 
-Cons
-~~~~
+The Lambda-only SAM path must remove these VM-era deployment concerns:
 
-* Adds another function, IAM role, log group, custom domain or route, and smoke
-  test.
-* Requires a clean shared-code packaging story so Flask, ``lambda-web``, and
-  ``lambda-resize`` do not drift.
-* Adds URL configuration that must remain consistent across browser globals:
-  ``API_BASE``, ``STATIC_BASE``, and ``LAMBDA_API_BASE``.
-* Requires a decision about whether both Lambdas share one HTTP API, separate
-  HTTP APIs, or a CloudFront distribution with multiple origins.
+* EC2 instance, EIP, security group, VPC/subnet/route-table, internet gateway,
+  instance profile, and VM DNS resources.
+* SSH, reload, and instance-log workflows from the Lambda deployment path.
+* VM bootstrap scripts as a required deployment step.
+* Branch selection parameters such as ``GitBranch``.
+* Boot-time ``git clone`` of the application.
 
-Implementation Consequences
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SAM builds and deploys the current checkout's built artifacts. The branch in
+use is the branch being built, not a CloudFormation parameter.
 
-The first implementation should prefer wrapping the existing Flask app for
-Lambda HTTP API events over rewriting all Flask routes into a new router. That
-keeps the first migration focused on runtime and deployment behavior rather
-than route semantics.
+Static Assets
+-------------
 
-This introduces a separate packaging target that includes the Flask web
-dependencies but excludes video-processing dependencies. The dependency groups
-should make that boundary explicit.
+Static files remain served by Flask through ``lambda-web`` for the first
+Lambda-only migration. This keeps the current local Flask behavior and avoids
+introducing a cache/versioning problem during the runtime migration.
 
-Decision 2: Static Pages And Assets From Lambda Or S3
------------------------------------------------------
+Do not move application JavaScript, CSS, images, or templates to S3 or
+CloudFront until there is an explicit asset-versioning plan. That later plan
+should define hashed or otherwise versioned filenames, cache policy, and
+rollback behavior.
 
-Recommendation: serve static assets from S3, but keep dynamic HTML in
-``lambda-web`` initially.
+S3 remains the long-lived movie and frame archive. It is an existing bucket and
+must outlive the CloudFormation stack.
 
-Plant Tracer has three different categories that should not be collapsed into
-one decision:
+Static HTML Shell Decision
+--------------------------
 
-* Immutable assets: JavaScript, CSS, images, favicon, and vendored browser
-  files. These should move to S3.
-* Public static pages: pages such as terms, privacy, and about could move to S3
-  only if they no longer depend on per-request navigation, demo-mode state, or
-  server-injected globals.
-* Dynamic pages: pages such as upload, list, analyze, users, audit, login, and
-  registration still need server-rendered state today and should remain served
-  by the web Lambda.
+The initial Lambda-only migration keeps Jinja-rendered HTML pages in
+``lambda-web``. Moving pages to static HTML shells should be a later,
+incremental project after cookie/API cleanup and versioned static assets are
+designed.
 
-Pros Of S3 Static Assets
-~~~~~~~~~~~~~~~~~~~~~~~~
+This decision is conservative because the current templates are not just static
+markup. Routes call ``render_template(..., **page_dict(...))`` and
+``page_dict()`` performs authentication lookup, course/admin lookup, demo-mode
+selection, runtime URL selection, and JavaScript bootstrap injection. The base
+template uses that state for:
 
-* Reduces web Lambda traffic and cold-start work.
-* Gives browser assets long cache lifetimes independent of API deployment.
-* Makes static delivery cheaper and simpler than serving bytes through Flask.
-* Fits the existing ``PLANTTRACER_STATIC_BASE`` mechanism.
+* browser globals: ``API_BASE``, ``LAMBDA_API_BASE``, ``api_key``, ``user_id``,
+  ``demo_mode``, ``user_primary_course_id``, ``primary_course_name``,
+  ``MAX_FILE_UPLOAD``, ``MOVIE_STATE``, and ``admin``;
+* authenticated navigation and logged-in user/course display;
+* admin-only and demo-mode menu behavior;
+* version and git build display.
 
-Cons And Risks
-~~~~~~~~~~~~~~
+Current template classification:
 
-* Current templates use ``url_for('static', ...)`` and inject per-user browser
-  globals from ``base.html``. Public pages that extend ``base.html`` are not
-  purely static today.
-* If S3 assets are served from a different origin, CORS, cookie, and API URL
-  behavior must be tested deliberately.
-* Cache invalidation needs a versioning strategy. A stale JavaScript file can
-  break active pages after a Lambda deployment.
-* Static docs and app assets have different lifecycles and should not be mixed
-  accidentally.
+.. list-table::
+   :header-rows: 1
 
-Open Subdecision
-~~~~~~~~~~~~~~~~
+   * - Template group
+     - Examples
+     - Static-shell status
+   * - Public informational pages
+     - ``about.html``, ``privacy.html``, ``tos.html``, ``error.html``
+     - Good later candidates, but today they still inherit dynamic navigation
+       and version display from ``base.html``.
+   * - Public account pages
+     - ``index.html``, ``login.html``, ``register.html``, ``logout.html``,
+       ``welcome.html``
+     - Possible later candidates after login links are consumed server-side,
+       auth cookies are canonical, and the browser has a session endpoint.
+   * - Authenticated app pages
+     - ``list.html``, ``upload.html``, ``analyze.html``, ``users.html``,
+       ``audit.html``, ``processing.html``
+     - Not initial candidates. They rely on injected user, course, admin, demo,
+       max-upload, and API-key state.
+   * - Demo/tracer pages and shared includes
+     - ``demo_tracer*.html``, ``tracer_app.html``, ``tracer_app.css``,
+       ``register_resend.html``, ``base.html``
+     - Keep as Jinja/includes for now. A later migration should treat shared
+       includes as normal static assets only after an asset versioning plan.
+   * - Operational and email templates
+     - ``config_error.html``, ``debug.html``, ``version.txt``,
+       ``email_login.html``, ``email_course_created.html``
+     - Keep server-rendered. These are diagnostics or MIME templates, not
+       browser static-shell targets.
 
-Choose the front door:
+A future static-shell migration must define replacement browser contracts
+before changing templates:
 
-* S3 static domain plus API Gateway custom domains is simpler to build, but it
-  makes cross-origin behavior more visible.
-* CloudFront with S3 and API Gateway origins is more infrastructure, but can
-  keep browser-visible paths under one host and gives better cache control.
+* a public runtime config endpoint or static config artifact for
+  ``API_BASE``, ``LAMBDA_API_BASE``, ``MOVIE_STATE``, ``MAX_FILE_UPLOAD``,
+  app version, and asset version;
+* a same-origin ``/api/session`` endpoint for logged-in state, user identity,
+  primary course, admin status, and demo mode;
+* a login-link flow that consumes ``?api_key=...``, sets the cookie, and
+  redirects to a clean URL before browser JavaScript runs;
+* a CSRF/log-safety decision for cookie-authenticated mutating endpoints;
+* a versioned static asset manifest before moving HTML, JavaScript, or CSS to
+  long-lived external caching.
 
-Decision 3: Continue Supporting VM Operation
---------------------------------------------
+Any later implementation should update ``docs/Development/FlaskAPI.md``,
+``docs/Development/ClientLambdaAPI.md``,
+``docs/Development/EnvironmentVariables.rst``, and local-development docs.
+Tests should cover the new config/session contracts, login-link cleanup,
+authenticated and anonymous navigation states, admin/demo behavior, and the
+existing Selenium upload/list/analyze flows.
 
-Recommendation: yes. Keep VM operation as a supported debug and fallback mode.
+Data Ownership
+--------------
 
-The application should expose its runtime mode explicitly, but business logic
-should not branch on that mode except where deployment-specific URLs or
-diagnostics require it.
+DynamoDB tables are external to CloudFormation ownership. The stack receives
+the table prefix and grants prefix-scoped permissions, but table creation and
+schema maintenance remain handled by repository tooling such as
+``src/dbutil.py`` and ``etc/dynamodb_tables.json``.
 
-Suggested configuration:
+The migration must not make stack deletion delete the long-lived S3 archive or
+the DynamoDB data model.
 
-* ``PLANTTRACER_WEB_RUNTIME=vm`` or ``PLANTTRACER_WEB_RUNTIME=lambda`` for
-  runtime diagnostics and generated status output.
-* A SAM/CloudFormation deployment parameter such as ``DeploymentMode`` with
-  values ``vm``, ``lambda``, or ``dual``.
-* ``dual`` should be the migration mode: VM, ``lambda-web``, ``lambda-resize``,
-  S3, and DynamoDB all exist so traffic can be compared before cutover.
+Mail
+----
 
-Pros
-~~~~
+The Lambda-only stack uses AWS SES for production mail. ``lambda-web`` sends
+the existing MIME templates through ``ses:SendRawEmail`` when no SMTP
+configuration is present. The stack sets ``SERVER_EMAIL`` and
+``SERVER_EMAIL_NAME`` as stack constants and passes both to ``lambda-web``.
+``SERVER_EMAIL`` is the server sender address, not a course administrator
+account. That exact address must be a verified SES sender identity in the
+deployment region. See :doc:`IdentityManagement`.
 
-* Keeps the existing interactive debugging path available.
-* Gives an operational fallback while Lambda-web is still new.
-* Lets developers run the same Flask app locally without requiring API Gateway
-  or SAM local emulation for every change.
+The ``lambda-web`` IAM role is scoped to ``ses:SendRawEmail`` for that sender
+identity only, and includes a ``ses:FromAddress`` condition requiring
+``SERVER_EMAIL``. If the production sender changes, update the stack constant
+and verify the new address in SES before deploying.
 
-Cons
-~~~~
+Developers who can deploy a stack but cannot send SES mail as
+the configured ``SERVER_EMAIL`` should set the SAM ``MailerDryRun`` parameter
+to ``true``. The stack still deploys and registration/resend flows exercise
+the mailer path, but the rendered email is written to Lambda logs instead of
+being sent. Use this only for non-production stacks with test users and test
+data: dry-run mail includes login links and API keys in CloudWatch logs. A
+production stack must leave ``MailerDryRun`` at ``false`` and must have the SES
+sender identity verified.
 
-* VM support can hide Lambda-only packaging, filesystem, timeout, and header
-  bugs if tests only exercise VM mode.
-* Deployment templates become more complex if they support VM-only,
-  Lambda-only, and dual mode.
-* Documentation and smoke tests must say which mode they validate.
+Do not put SMTP credentials in ``samconfig.toml`` or committed environment
+files. Local development continues to use Mailpit through ``SMTPCONFIG_JSON``.
+The application mailer still supports ``PLANTTRACER_CREDENTIALS``,
+``SMTPCONFIG_JSON``, and ``SMTPCONFIG_ARN`` for explicit SMTP configurations,
+but the Lambda-only stack does not set ``SMTPCONFIG_ARN`` and does not grant
+Secrets Manager access by default. If SMTP-backed Lambda mail is needed later,
+add a dedicated SAM parameter for the secret ARN and scope
+``secretsmanager:GetSecretValue`` to that one secret.
 
-Other Decisions To Make
+Cold Starts
+-----------
+
+``lambda-web`` enables Lambda SnapStart on the published ``live`` alias. This
+reduces cold-start initialization cost for the Flask web runtime, but it does
+not keep an execution environment continuously warm. Any code that relies on
+unique values, credentials, timestamps, temporary data, or network connections
+from module initialization must tolerate Lambda restore behavior.
+
+``lambda-resize`` does not use SnapStart in the initial migration. The resize
+function has different runtime characteristics and should be measured before
+adding SnapStart or provisioned concurrency.
+
+Deploy Version Guard
+--------------------
+
+``make sam-deploy`` and ``make sam-deploy-guided`` require
+``src/app/constants.py`` and ``pyproject.toml`` to contain the same application
+version. For an existing stack, the deploy guard resolves the deployed
+application URL from CloudFormation and fetches ``/api/ver``. If the deployed
+application reports the same version as the local checkout, deploy is refused
+unless the operator explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an
+intentional same-version redeploy.
+
+The version bump is required because ``lambda-web`` uses SnapStart on published
+Lambda versions. A normal deployment should publish a deliberately new
+application version so the SnapStart snapshot and the user-visible version move
+together. If deployment is blocked by the same-version guard, update both
+``src/app/constants.py`` and ``pyproject.toml`` before deploying again.
+
+The deployed-version check is recovery tolerant. If the stack does not exist,
+CloudFormation outputs are missing, DNS is not usable, or ``/api/ver`` cannot
+return valid JSON, the guard prints a warning and allows the deploy. This keeps
+first deploys and repair deploys from being blocked by a broken stack.
+
+Local Testing
+-------------
+
+Local Flask testing remains the primary development loop:
+
+* ``make run-local-debug`` starts the Flask app locally.
+* ``make run-local-demo-debug`` starts the Flask app in local demo mode.
+* ``make pytest`` runs the Python test suite against local DynamoDB and MinIO.
+
+Lambda-specific local testing should be additive:
+
+* ``lambda-web`` handler tests should exercise API Gateway HTTP API events
+  without bypassing Flask route behavior.
+* SAM local targets may provide higher-fidelity routing smoke tests for the
+  built template.
+* SAM local tests should not become a prerequisite for ordinary Flask route
+  development unless the behavior depends on Lambda/API Gateway event shape.
+
+Packaging Boundaries
+--------------------
+
+``lambda-web`` and ``lambda-resize`` need separate package boundaries.
+
+``lambda-web`` should include Flask, templates, static assets, and the
+application modules needed by HTML and Flask API routes. It should not include
+OpenCV/PyAV/video-processing dependencies unless a later measured need appears.
+
+``lambda-resize`` should continue to include only the video/tracing runtime and
+the small app modules it already vendors for DynamoDB/S3/movie metadata work.
+
+The Makefile is the source of truth for packaging, vendoring, tests, SAM
+validation, deployment, and smoke checks.
+
+Implementation Steps
+--------------------
+
+1. Add ``lambda-web`` with a small WSGI-to-HTTP-API adapter around the existing
+   Flask app.
+2. Add Makefile targets to vendor web runtime files, build ``lambda-web``
+   requirements, and test the handler while preserving ``make pytest``.
+3. Split SAM resources into explicit ``lambda-web`` and ``lambda-resize``
+   functions on one HTTP API.
+4. Remove VM parameters, resources, outputs, and VM-only deployment workflow
+   hooks from the Lambda-only SAM path.
+5. Preserve ``lambda-resize`` SQS trace processing and ``/resize-api/*`` routes.
+6. Preserve static file serving through Flask/``lambda-web``.
+7. Update deployment and smoke targets so they name the web and resize Lambda
+   functions separately.
+8. Run Makefile-based validation for Flask tests, Lambda handler tests, SAM
+   template validation, and documentation.
+
+Validation Requirements
 -----------------------
 
-Front Door And DNS
-~~~~~~~~~~~~~~~~~~
+Before PR #1113 is ready to merge, validate at least:
 
-Decide whether the browser sees one hostname or multiple hostnames.
+* existing Flask local tests still pass through ``make pytest``;
+* ``lambda-web`` serves ``/ping`` or equivalent health, one static asset, and a
+  representative Flask route through API Gateway event handling, including
+  named-stage paths such as ``/prod/api/ver``;
+* ``lambda-resize`` still serves ``/resize-api/v1/ping`` and keeps SQS trace
+  event handling;
+* SAM template validation/linting passes;
+* a deployed or SAM-local smoke path confirms route separation between
+  ``lambda-web`` and ``lambda-resize``;
+* documentation reflects the Lambda-only deployment shape and the continued
+  Flask-local development workflow.
 
-One-host model:
+SAM Config Files
+----------------
 
-* ``/static/*`` routes to S3.
-* ``/api/*`` and HTML routes route to ``lambda-web``.
-* ``/resize-api/*`` routes to ``lambda-resize``.
+SAM stores deployment choices in a TOML config file. That file is not the
+application template; ``template.yaml`` is still the source-controlled
+CloudFormation/SAM definition. The SAM config records the local operator's
+selected deployment target and deploy-time parameters, including values such
+as:
 
-This is cleaner for cookies, CORS, and browser globals, but likely requires
-CloudFront or careful API Gateway routing.
+* ``stack_name``;
+* AWS region;
+* artifact bucket or ``resolve_s3`` behavior;
+* CloudFormation capabilities;
+* ``parameter_overrides`` for ``HostedZoneId``, ``BaseDomain``,
+  ``WildcardCertificateArn``, ``ImageBucketName``, ``LogLevel``,
+  ``MailerDryRun``, and ``DynamoDBTablePrefix``.
 
-Multi-host model:
+Because those values identify one concrete stack and its data resources, SAM
+config files are local deployment state. They must not be committed to the
+repository. The Makefile defaults to ``SAM_CONFIG=samconfig.toml`` for
+compatibility with the SAM CLI, but ``.gitignore`` ignores ``samconfig*.toml``,
+``.samconfig*.toml``, and ``samconfig.toml-*``. Deployment targets also refuse
+to use a SAM config file that is tracked by Git.
 
-* HTML and metadata API use a web Lambda hostname.
-* Static assets use an S3 or CloudFront hostname.
-* Video APIs use the existing ``lambda-resize`` hostname.
+Use one ignored SAM config file per stack. For example:
 
-This is simpler to phase in but needs explicit cross-origin tests.
+.. code-block:: console
 
-Flask-On-Lambda Adapter
-~~~~~~~~~~~~~~~~~~~~~~~
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.dev-stack.toml make sam-deploy
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.prod.toml make sam-deploy
 
-Decide how Flask runs in Lambda:
+``sam deploy --guided`` can also create the selected file:
 
-* Keep Flask and add a WSGI-to-API-Gateway adapter.
-* Rewrite routes into the same AWS Lambda Powertools resolver style used by
-  ``lambda-resize``.
+.. code-block:: console
 
-Keeping Flask is the lower-risk migration path because it preserves existing
-templates, route decorators, error handlers, and tests. A rewrite can be
-considered later if Flask itself becomes the limiting factor.
+   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy-guided
 
-Shared Code And Dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SAM supports multiple profiles in a single config file, but this project should
+avoid that pattern. With multiple stacks in flight, separate files make the
+target stack visible in the command line and avoid accidentally using a stale
+default profile from a shared TOML file. Separate files also work better with
+SAM's habit of rewriting config during guided deploys.
 
-The repo already vendors selected app modules into ``lambda-resize``. A second
-Lambda makes this more important.
+Cutover Runbook
+---------------
 
-Decide whether to:
+Validate each stack on its own hostname, for example
+``https://{stack}.planttracer.com/``. This migration does not depend on moving
+a shared production DNS record to Lambda; new and test deployments come up as
+separate named stacks. SAM config files are stack-local deployment state and
+are not committed to the repository. Use ``SAM_CONFIG=<path>`` to select the
+ignored config for the stack being tested. The branch must be pushed before
+``make sam-build`` will build artifacts. This prevents deploying local-only
+commits that nobody else can inspect or rebuild.
 
-* keep separate vendoring targets for ``lambda-resize`` and ``lambda-web``;
-* create a shared installable package for code used by both;
-* split dependency groups into ``web``, ``lambda-web``, ``lambda-resize``,
-  ``vm``, and ``dev``.
+Preflight:
 
-The target should make it impossible for ``lambda-web`` to import OpenCV-only
-modules accidentally.
+* confirm ``git status`` is clean and the branch has no unpushed commits;
+* confirm ``src/app/constants.py`` and ``pyproject.toml`` have the same version;
+* confirm ``SAM_CONFIG`` points to an untracked local SAM config for the
+  intended non-production stack and table prefix;
+* confirm the S3 movie bucket and DynamoDB table prefix are the intended test
+  resources;
+* if the stack operator cannot send SES mail as the configured ``SERVER_EMAIL``,
+  confirm the SAM config sets ``MailerDryRun="true"`` and uses only test users;
+* run ``make check``;
+* run ``make template-lint``;
+* run ``make sam-build``.
 
-Authentication And Cookies
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Deploy:
 
-The current browser contract uses an ``api_key`` cookie and injects ``api_key``
-into JavaScript. The migration needs explicit decisions for:
+* run ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy`` for an
+  existing configured stack, or
+  ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy-guided`` for a new
+  stack;
+* let ``make sam-status`` verify ``/ping``, ``/static/planttracer.js``, and
+  ``/resize-api/v1/ping``. The deploy targets stamp the built
+  ``lambda-resize`` artifact before ``sam deploy``, and resize ping should
+  report the application version and UTC deployment timestamp;
+* inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
+  if any smoke check reports a failure.
 
-* cookie domain and path;
-* ``Secure`` and ``SameSite`` attributes;
-* whether S3 static assets and API calls are same-origin or cross-origin;
-* whether login links keep putting ``api_key`` in the URL;
-* whether public S3 pages can display login-aware navigation.
+Course initialization is a separate post-deploy data step. It replaces VM
+``etc/bootstrap.sh`` section 10 and must not run from Lambda cold start or from
+CloudFormation resource creation. After the stack is deployed and the intended
+``DynamoDBTablePrefix`` is confirmed, create or verify the non-demo course with
+``make sam-course-create``:
 
-Mail And Secrets
-~~~~~~~~~~~~~~~~
+.. code-block:: console
 
-The web Lambda must support registration, resend-login, and course mail flows.
-Decide the production mail path before cutover:
+   AWS_REGION=us-east-1 SAM_CONFIG=<path> \
+     COURSE_CREATE_FLAGS="--course_id BIO101 --course_name 'Plant Biology 101' --admin_email teacher@example.edu --admin_name 'Teacher Name'" \
+     make sam-course-create
 
-* SES through the Lambda role;
-* SMTP settings loaded from Secrets Manager;
-* dry-run behavior for non-production stacks.
+The target reads the table prefix, application URL, and ``MailerDryRun`` value
+from the selected stack, then delegates to ``src/dbutil.py create-course
+--send-email``. Rerunning it is safe when the course already exists with the
+same name: it verifies the course administrator relationship and sends the
+course setup/login email again. If the existing course id has a different
+name, the command fails so operators do not silently reuse the wrong course.
+For dry-run stacks, the email is rendered to logs through ``MAILER_DRY_RUN``;
+for production, verify SES sender access before running it.
 
-The VM bootstrap path currently creates environment files. Lambda deployment
-needs equivalent explicit parameters and secrets.
+Manual smoke checks on the non-production stack:
 
-Health Checks And Diagnostics
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* open ``https://{stack}.planttracer.com/`` and verify the home page and static
+  assets load;
+* verify ``/ping`` returns ``{"status": "ok"}``;
+* verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
+  ``app_version``, and ``deployed_at``;
+* register a test user and confirm the registration email path works;
+* resend a login link and confirm the user can log in;
+* for ``MailerDryRun=true`` stacks, confirm the login email appears in Lambda
+  web logs and treat the logged link as test-only secret material;
+* upload a small movie and confirm it appears in the list page;
+* open the analysis page, load the first frame, save at least one marker
+  change, and start tracing;
+* confirm the trace job reaches SQS/``lambda-resize`` and produces expected
+  artifacts or a clear user-visible status;
+* verify audit/admin pages still render for an admin user.
 
-Current Flask startup and request handling can check DynamoDB, S3 CORS, and S3
-bucket region. Decide which checks run:
+Do not treat a new stack hostname as ready for users until it passes the smoke
+matrix and the mail/secrets path for that stack is confirmed. Keep the previous
+known-good stack hostname available until the new stack has been accepted.
 
-* on every dynamic HTML request;
-* only on an admin/config endpoint;
-* as deployment smoke tests;
-* as CloudWatch alarms.
+Rollback:
 
-Lambda health output should include the runtime mode, package version, git SHA
-or build ID, table prefix, bucket name, and configured API/static bases without
-exposing secrets.
-
-Version And Build Metadata
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The VM can read git metadata from a checkout. A Lambda package may not have a
-``.git`` directory.
-
-Decide how to provide footer and diagnostics values such as:
-
-* application version;
-* git commit SHA;
-* git branch or tag;
-* build time.
-
-Prefer explicit build-time environment variables or a generated file over
-subprocess calls that assume a git checkout exists.
-
-IAM Boundaries
-~~~~~~~~~~~~~~
-
-``lambda-web`` needs a different policy than ``lambda-resize``.
-
-Likely web permissions:
-
-* DynamoDB read/write/query/scan on the configured prefix-scoped tables.
-* S3 presigned POST and metadata operations for the existing movie bucket.
-* SES or Secrets Manager access for mail.
-* CloudWatch Logs.
-
-Likely not needed for web:
-
-* OpenCV/PyAV runtime dependencies.
-* SQS receive/delete for tracking work.
-* Long Lambda timeout.
-
-Deployment And Rollback
-~~~~~~~~~~~~~~~~~~~~~~~
-
-Cutover should be staged:
-
-1. Deploy ``lambda-web`` without changing production DNS.
-2. Run smoke tests against its direct custom domain.
-3. Run dual mode against the same DynamoDB tables and S3 bucket if safe.
-4. Shift a development or demo hostname first.
-5. Shift production DNS only after upload, analyze, tracing, registration,
-   resend, audit, and admin flows pass.
-6. Keep the VM available for rollback until the Lambda path has run through a
-   real release cycle.
-
-Local Development
-~~~~~~~~~~~~~~~~~
-
-Keep the current Makefile-first workflow. Add new targets only where they make
-the mode explicit.
-
-Possible targets:
-
-* ``make run-local-debug`` keeps running the Flask web app locally.
-* ``make run-local-lambda-debug`` keeps running ``lambda-resize`` locally.
-* ``make run-local-lambda-web-debug`` runs the Lambda-web adapter locally, if
-  that provides meaningful coverage beyond Flask local mode.
-* ``make sam-build`` and ``make sam-deploy`` package and deploy both Lambda
-  functions when deployment mode requires them.
-
-Testing Requirements
-~~~~~~~~~~~~~~~~~~~~
-
-The migration needs tests that exercise behavior, not deployment scaffolding
-alone.
-
-Useful coverage:
-
-* existing Flask route tests still pass in VM/local mode;
-* Lambda-web handler smoke tests for ``/ping``, ``/ver``, one public page, one
-  authenticated page, and one metadata API;
-* MinIO-backed upload presign flow;
-* DynamoDB Local-backed login, list, and metadata flows;
-* browser globals are generated correctly for VM and Lambda modes;
-* static asset URLs point at S3 when ``PLANTTRACER_STATIC_BASE`` is set;
-* ``lambda-web`` package excludes video-processing dependencies;
-* ``lambda-resize`` remains responsible for first-frame, playback URL, and
-  retracing routes.
-
-Work To Do
-----------
-
-Inventory
-~~~~~~~~~
-
-* Classify every HTML route as public static, public dynamic, authenticated
-  dynamic, admin dynamic, or compatibility/debug.
-* Classify every ``/api`` route by authentication requirement and downstream
-  services.
-* Identify VM-only assumptions: local filesystem, git subprocesses, request
-  headers, proxy behavior, environment files, long-lived process caches, and
-  installed system packages.
-* List all static assets and decide their S3 key prefix and cache policy.
-
-Implementation
-~~~~~~~~~~~~~~
-
-* Add a ``lambda-web`` package/handler that runs the existing Flask app behind
-  HTTP API events.
-* Add a Makefile target to build the web Lambda dependency set without OpenCV.
-* Add a Makefile target to publish static assets to S3 or to a local equivalent
-  for tests.
-* Update templates so asset URLs honor ``PLANTTRACER_STATIC_BASE`` consistently.
-* Add deployment-template resources for ``lambda-web``, IAM, logs, domain
-  routing, and deployment mode conditions.
-* Add explicit build metadata for Lambda diagnostics.
-* Move VM bootstrap responsibilities into shared deployment parameters where
-  they are still needed by Lambda.
-
-Verification
-~~~~~~~~~~~~
-
-* Add local tests for Lambda-web event handling through the Makefile.
-* Add deployment smoke tests for web Lambda health, a dynamic page, a metadata
-  API, static asset delivery, and resize Lambda health.
-* Verify registration and resend-login mail in a non-production stack.
-* Verify upload and analyze in dual mode against MinIO/DynamoDB Local before
-  production-like AWS testing.
-* Verify rollback by leaving VM DNS and resources available during the first
-  Lambda-web production cutover.
-
-Documentation
-~~~~~~~~~~~~~
-
-* Update :doc:`ArchitectureDesign` after the target architecture is accepted.
-* Update :doc:`EnvironmentVariables` for runtime mode, web Lambda URL, static
-  asset base, and build metadata variables.
-* Update local development docs with any new Makefile targets.
-* Update deployment docs to explain ``vm``, ``lambda``, and ``dual`` modes.
-* Flag user tutorial screenshots if the migration changes visible URLs,
-  navigation, upload, analyze, or login behavior.
-
-Questions For Approval
-----------------------
-
-1. Should the first Lambda-web implementation keep Flask behind a WSGI adapter,
-   or should we rewrite the web/API routes into a native Lambda router?
-2. Do you want one browser-visible hostname for HTML, API, static assets, and
-   resize APIs, or are separate hostnames acceptable during the first cutover?
-3. Which pages, if any, should become truly static S3 HTML in the first
-   migration? The safest first step is static assets only.
-4. Should ``DeploymentMode`` support ``vm``, ``lambda``, and ``dual`` in one
-   SAM template, or should the Lambda-only deployment live in a separate
-   template until it is stable?
-5. Should production mail from Lambda use SES directly, SMTP credentials from
-   Secrets Manager, or the same mechanism as the VM?
-6. How long should the VM remain available after production DNS moves to
-   Lambda-web?
+* if a new stack fails validation, keep users on the previous known-good stack
+  hostname;
+* if an existing stack was updated in place, redeploy the previous known-good
+  version or rebuild the stack under a new hostname for comparison;
+* if login, registration, upload, or tracing fails after users begin testing a
+  stack, stop directing testers to that hostname, then inspect CloudWatch logs
+  and stack events;
+* do not delete the movie S3 bucket or DynamoDB tables during rollback;
+* preserve the failed stack until logs, CloudFormation events, and Lambda
+  versions have been captured for diagnosis.
