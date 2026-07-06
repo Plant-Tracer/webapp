@@ -21,11 +21,11 @@ DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
 DBUTIL=src/dbutil.py
 MAILPIT_SMTP_CONFIG={"SMTP_HOST":"127.0.0.1","SMTP_PORT":"1025","SMTP_NO_TLS":"1","SMTP_USERNAME":"","SMTP_PASSWORD":""}
-LOCAL_AWS_ENV=AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
+LOCAL_AWS_ENV=env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
 LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
 LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
-LOCAL_ADMIN_EMAIL=admin@planttracer.com
+LOCAL_ADMIN_EMAIL=plantadmin@planttracer.com
 FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
@@ -33,7 +33,10 @@ export DEBIAN_FRONTEND=noninteractive
 export LOG_LEVEL ?= DEBUG
 
 SAM_CONFIG ?= samconfig.toml
-STACK_NAME := $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+SAM_BUILD_DIR=.aws-sam/build
+STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+APP_VERSION := $(shell awk -F"'" '/^__version__/ {print $$2; exit}' src/app/constants.py)
+PACKAGE_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
@@ -68,6 +71,8 @@ ifeq ($(AWS_REGION),local)
     export PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET)
 endif
 
+export PYLINTHOME ?= $(CURDIR)/.pylint.d
+
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
     $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
@@ -93,7 +98,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags
+.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
@@ -111,7 +116,22 @@ coverage:
 	$(MAKE) AWS_REGION=local jscoverage
 
 tags:
-	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-resize/src/resize_app/*.py
+	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
+
+admin-list:
+	poetry run python $(DBUTIL) admin-list
+
+ADMIN_CREATE_FLAGS ?=
+admin-create:
+	poetry run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
+
+COURSE_CREATE_FLAGS ?=
+course-create:
+	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
+
+DEMO_COURSE_CREATE_FLAGS ?=
+demo-course-create:
+	poetry run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools
@@ -125,7 +145,8 @@ lint: $(REQ)
 
 pylint:
 	$(MAKE) vend-lambda-resize
-	poetry run pylint $(PYLINT_OPTS) lambda-resize src tests  *.py
+	$(MAKE) vend-lambda-web
+	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests  *.py
 
 ## Mypy static analysis
 mypy:
@@ -150,15 +171,18 @@ dump.txt:
 
 ## These tests use fixtures that create DynamoDB Local and MinIO (when AWS_REGION=local, the default).
 ## PYTHONPATH includes lambda-resize/src so tests that use resize_app (tracer, lambda_tracing_handler) can load it.
+## PYTHONPATH includes lambda-web/src so tests can exercise the Flask app through the Lambda-web adapter.
 ## Set LOG_LEVEL at start of CLI to change the log level.
 
 pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-resize/tests
+	$(MAKE) vend-lambda-web
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-resize/tests
+	$(MAKE) vend-lambda-web
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -169,7 +193,7 @@ pytest-selenium:
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	$(LOCAL_AWS_ENV) poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -194,10 +218,12 @@ delete-local:
 	/bin/rm -rf var
 
 make-local-demo:
-	@echo creating a local course called demo-course with the prefix demo-
+	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) createdb
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo-course
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) seed-demo-movies
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -567,14 +593,71 @@ lambda-resize-lint: install-lambda-deps
 lambda-resize-check: lambda-resize-lint
 	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt template-lint
+################################################################
+## lambda-web
+
+vend-lambda-web:
+	mkdir -p lambda-web/src/app
+	rsync --verbose --archive --delete --delete-excluded \
+		--exclude .DS_Store \
+		--exclude __pycache__ \
+		--exclude '*.pyc' \
+		--exclude static-instrumented \
+		src/app/ lambda-web/src/app/
+
+# Install lambda-web group so root venv can run lambda-web lint/tests.
+install-lambda-web-deps: $(REQ)
+	poetry install --with lambda-web
+
+lambda-web-lint: install-lambda-web-deps
+	poetry run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
+	PYTHONPATH=.:src:lambda-web/src poetry run pylint lambda-web/src/lambda_web lambda-web/tests
+
+lambda-web-check: lambda-web-lint
+	$(MAKE) vend-lambda-web
+	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+
+lambda-web/src/requirements.txt:
+	poetry export --with lambda-web --without dev --without lambda --without vm --format=requirements.txt --output lambda-web/src/requirements.txt --without-hashes
 
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+
+sam-config-path-check:
+	@if [ -z "$(SAM_CONFIG)" ]; then \
+		echo "Refusing to use SAM: SAM_CONFIG is not set."; \
+		echo "Create a local ignored SAM config, then pass SAM_CONFIG=<path>."; \
+		exit 1; \
+	fi
+	@if git ls-files --error-unmatch "$(SAM_CONFIG)" >/dev/null 2>&1; then \
+		echo "Refusing to use SAM: $(SAM_CONFIG) is tracked by git."; \
+		echo "SAM config files are per-stack local state and must stay out of the repo."; \
+		exit 1; \
+	fi
+
+sam-config-check: sam-config-path-check
+	@if [ ! -f "$(SAM_CONFIG)" ]; then \
+		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
+		echo "Create a local ignored SAM config for the target stack, or pass SAM_CONFIG=<path>."; \
+		exit 1; \
+	fi
+
+stamp-sam-deploy-metadata: sam-version-check
+	@if [ ! -d "$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app" ]; then \
+		echo "Refusing to stamp deploy metadata: $(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app is missing."; \
+		echo "Run make sam-build before deploying."; \
+		exit 1; \
+	fi
+	@DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	METADATA_FILE="$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app/deploy_metadata.json"; \
+	printf '{\n  "deployed_at": "%s",\n  "app_version": "%s"\n}\n' "$$DEPLOYED_AT" "$(APP_VERSION)" > "$$METADATA_FILE"; \
+	echo "Stamped $$METADATA_FILE with deployed_at=$$DEPLOYED_AT app_version=$(APP_VERSION)."
 
 sam-build: $(REQ)
 	@# Refuse to build if there are local changes, unless HEAD is an exact tag
@@ -597,8 +680,11 @@ sam-build: $(REQ)
 	    exit 1; \
 	  fi; \
 	fi; \
+	$(MAKE) lambda-web/src/requirements.txt
 	$(MAKE) lambda-resize/src/requirements.txt
+	$(MAKE) vend-lambda-web
 	$(MAKE) vend-lambda-resize
+	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
@@ -606,7 +692,8 @@ sam-build: $(REQ)
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
-	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container --parallel
+	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
+	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
 	@echo "========================================"
 	@echo "Checking unzipped artifact sizes..."
 	@for dir in .aws-sam/build/*/ ; do \
@@ -637,59 +724,168 @@ sam-audit-size:
 	done
 	@echo "========================================"
 
+sam-version-check:
+	@if [ -z "$(APP_VERSION)" ]; then \
+		echo "Refusing to deploy: could not read __version__ from src/app/constants.py."; \
+		exit 1; \
+	fi
+	@if [ -z "$(PACKAGE_VERSION)" ]; then \
+		echo "Refusing to deploy: could not read version from pyproject.toml."; \
+		exit 1; \
+	fi
+	@if [ "$(APP_VERSION)" != "$(PACKAGE_VERSION)" ]; then \
+		echo "Refusing to deploy: src/app/constants.py version $(APP_VERSION) does not match pyproject.toml version $(PACKAGE_VERSION)."; \
+		exit 1; \
+	fi
+	@echo "Application version check passed for version $(APP_VERSION)."
+
+sam-deploy-version-check: sam-config-check sam-version-check
+	@if [ -z "$(STACK_NAME)" ]; then \
+		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
+		exit 1; \
+	fi
+	@APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
+		if [ -n "$$DNS" ] && [ "$$DNS" != "None" ]; then \
+			APP_URL="https://$$DNS/"; \
+		fi; \
+	fi; \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		echo "WARNING: could not resolve deployed URL for $(STACK_NAME); allowing deploy."; \
+	else \
+		VERSION_URL="$${APP_URL%/}/api/ver"; \
+		VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
+		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+		if [ -z "$$DEPLOYED_VERSION" ]; then \
+			echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
+		elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
+			echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
+			echo "Bump src/app/constants.py and pyproject.toml before deploying again."; \
+			echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
+			echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
+			exit 1; \
+		else \
+			echo "Deploy version check passed for $(STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION)."; \
+		fi; \
+	fi
+
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	$(MAKE) sam-deploy-version-check
+	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
-	sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	sam deploy --config-file "$(SAM_CONFIG)" --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
+	$(MAKE) sam-version-check
+	$(MAKE) sam-config-path-check
+	@if [ -f "$(SAM_CONFIG)" ]; then \
+		$(MAKE) sam-deploy-version-check; \
+	fi
+	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
-	@echo ===============================
-	@echo use one of these keypairs:
-	aws ec2 describe-key-pairs --output json | jq -r '.KeyPairs.[].KeyName'
 	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
-	@echo ===============================
-	@echo use one of these git branches:
-	git branch -v
-	sam deploy --guided --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh-clean
+	sam deploy --config-file "$(SAM_CONFIG)" --guided --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+
+sam-course-create: sam-config-check
+ifeq ($(AWS_REGION),local)
+	@echo cannot initialize a deployed stack course with AWS_REGION=local. Please specify AWS_REGION. && exit 1
+endif
+	@if [ -z "$(STACK_NAME)" ]; then \
+		echo "Refusing to create course: stack_name is not set in $(SAM_CONFIG)."; \
+		exit 1; \
+	fi
+	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
+	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text); \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text); \
+		APP_URL="https://$$DNS/"; \
+	fi; \
+	MAILER_DRY_RUN_STACK=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`MailerDryRun`].ParameterValue | [0]' --output text); \
+	if [ -z "$$DDB_PREFIX" ] || [ "$$DDB_PREFIX" = "None" ]; then \
+		echo "Refusing to create course: stack $(STACK_NAME) did not report DynamoDBTablePrefix."; \
+		exit 1; \
+	fi; \
+	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "https://None/" ]; then \
+		echo "Refusing to create course: stack $(STACK_NAME) did not report ApplicationUrl or LambdaDnsName."; \
+		exit 1; \
+	fi; \
+	if [ -z "$$MAILER_DRY_RUN_STACK" ] || [ "$$MAILER_DRY_RUN_STACK" = "None" ]; then \
+		MAILER_DRY_RUN_STACK=false; \
+	fi; \
+	echo "Creating or verifying course for stack $(STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
+	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
+		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
+		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
 
 # After deploy: verify Lambda status URL returns 200. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
-sam-status:
+sam-status: sam-config-check
 	@echo "Checking Lambda status..."
 	@sleep 5; \
 	DNS=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue' --output text 2>/dev/null); \
-	URL="https://$$DNS/resize-api/v1/ping"; \
-	RESP=$$(curl -s -w "\n%{http_code}" "$$URL" 2>/dev/null); \
-	CODE=$$(echo "$$RESP" | tail -1); \
-	BODY=$$(echo "$$RESP" | sed '$$d'); \
-	VERS=$$(printf "%s" "$$BODY" | python -c 'import sys, json; \ntry:\n d=json.load(sys.stdin); v=d.get("status_version");\n print(v if v is not None else "")\nexcept Exception:\n print("")' 2>/dev/null); \
-	if echo "$$BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
-	  echo "Lambda status: operational ($$URL)"; \
+	VERSION_URL="https://$$DNS/api/ver"; \
+	VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
+	DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+	if [ -n "$$DEPLOYED_VERSION" ]; then \
+	  echo "Lambda deployed version: $$DEPLOYED_VERSION ($$VERSION_URL)"; \
 	else \
-	  echo "Lambda status: FAIL (HTTP $$CODE) ($$URL)"; echo "  response: $$BODY"; \
+	  echo "Lambda deployed version: unavailable ($$VERSION_URL)"; \
 	fi; \
-	if [ -n "$$VERS" ]; then echo "Status version: $$VERS"; fi; \
+	WEB_URL="https://$$DNS/ping"; \
+	WEB_RESP=$$(curl -s -w "\n%{http_code}" "$$WEB_URL" 2>/dev/null); \
+	WEB_CODE=$$(echo "$$WEB_RESP" | tail -1); \
+	WEB_BODY=$$(echo "$$WEB_RESP" | sed '$$d'); \
+	if echo "$$WEB_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda web status: operational ($$WEB_URL)"; \
+	else \
+	  echo "Lambda web status: FAIL (HTTP $$WEB_CODE) ($$WEB_URL)"; echo "  response: $$WEB_BODY"; \
+	fi; \
+	STATIC_URL="https://$$DNS/static/planttracer.js"; \
+	STATIC_RESP=$$(curl -s -w "\n%{http_code}" "$$STATIC_URL" 2>/dev/null); \
+	STATIC_CODE=$$(echo "$$STATIC_RESP" | tail -1); \
+	STATIC_BODY=$$(echo "$$STATIC_RESP" | sed '$$d'); \
+	if [ "$$STATIC_CODE" = "200" ] && echo "$$STATIC_BODY" | grep -q "register_func"; then \
+	  echo "Lambda static status: operational ($$STATIC_URL)"; \
+	else \
+	  echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
+	fi; \
+	RESIZE_URL="https://$$DNS/resize-api/v1/ping"; \
+	RESIZE_RESP=$$(curl -s -w "\n%{http_code}" "$$RESIZE_URL" 2>/dev/null); \
+	RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
+	RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
+	RESIZE_APP_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("app_version", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
+	RESIZE_DEPLOYED_AT=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
+	if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
+	  echo "Lambda resize status: operational ($$RESIZE_URL)"; \
+	  if [ -n "$$RESIZE_APP_VERSION" ] || [ -n "$$RESIZE_DEPLOYED_AT" ]; then \
+	    echo "  app version: $${RESIZE_APP_VERSION:-unavailable}; deployed at: $${RESIZE_DEPLOYED_AT:-unavailable}"; \
+	  fi; \
+	else \
+	  echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; echo "  response: $$RESIZE_BODY"; \
+	fi; \
 	echo ""; \
-	echo "Recent Lambda log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs SAM_LOGS_LIMIT=40 || true; \
+	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs-web SAM_LOGS_LIMIT=40 || true; \
+	echo ""; \
+	echo "Recent Lambda resize log events (newest first) for troubleshooting:"; \
+	$(MAKE) sam-logs-resize SAM_LOGS_LIMIT=40 || true
 
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
 define SAM_LOGS_RESOLVE
-	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunction`].OutputValue' --output text 2>/dev/null); \
+	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`$(SAM_LOGS_FUNCTION_OUTPUT)`].OutputValue' --output text 2>/dev/null); \
 	if [ -z "$$FUNC" ]; then \
 	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
 	fi; \
@@ -703,10 +899,12 @@ define SAM_LOGS_RESOLVE
 	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000
 endef
 
+SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
+
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 # Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
 # activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
-sam-logs:
+sam-logs: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
 	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
@@ -714,7 +912,7 @@ sam-logs:
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
 # Optional: make sam-logs-simple SAM_LOGS_TAIL=1 to stream (same as sam-logs-simple-tail).
-sam-logs-simple:
+sam-logs-simple: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	if [ -n "$(SAM_LOGS_TAIL)" ]; then \
 	  (aws logs tail "/aws/lambda/$$FUNC" --follow --format short $(SAM_LOGS_OPTIONS) || true) ; \
@@ -730,14 +928,28 @@ sam-logs-simple:
 sam-logs-simple-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_TAIL=1
 
+sam-logs-web:
+	$(MAKE) sam-logs SAM_LOGS_FUNCTION_OUTPUT=LambdaWebFunction
+
+sam-logs-resize:
+	$(MAKE) sam-logs SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+
+sam-logs-web-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaWebFunction SAM_LOGS_TAIL=1
+
+sam-logs-resize-tail:
+	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction SAM_LOGS_TAIL=1
+
 # Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
 # Use this when sam-logs is dominated by HTTP traffic and you want only tracing-queue activity.
+sqs-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
 sqs-logs:
 	@$(SAM_LOGS_RESOLVE); \
 	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
 	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
 
 # Stream Lambda logs, showing only lines that contain SQS.
+sqs-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
 sqs-logs-tail:
 	@$(SAM_LOGS_RESOLVE); \
 	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
@@ -752,13 +964,13 @@ sam-delete:
 	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
 	@echo "Stack $(STACK_NAME) deleted successfully."
 
-# Clever SSH via SSM (No SSH keys or port 22 required)
 ssh:
-	poetry run sam-config-tool --samconfig $(SAM_CONFIG) ssh
+	@echo "ssh is not available for Lambda-only SAM stacks."
+	@exit 1
 
 sam-reload:
-	@echo reload the VM
-	ssh ubuntu@$(STACK_NAME).planttracer.com -i $$HOME/.ssh/plantadmin.pem 'cd /opt/webapp;git pull; sudo systemctl restart planttracer'
+	@echo "sam-reload is not available for Lambda-only SAM stacks. Use sam-build and sam-deploy."
+	@exit 1
 
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done

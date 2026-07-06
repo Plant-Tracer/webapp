@@ -15,7 +15,6 @@ import functools
 import hashlib
 import uuid
 import time
-from collections import defaultdict
 from functools import wraps
 from decimal import Decimal
 
@@ -1010,29 +1009,6 @@ def list_users_courses(*, user_id):
 
     return {USERS: users_list, COURSES: courses_list}
 
-
-def list_admins():
-    """Returns dict of all the admins and the courses in which they are admins."""
-    dd = DDBO()
-    admin_users = defaultdict(list)
-    last_evaluated_key = None
-
-    while True:
-        scan_kwargs = {}
-        if last_evaluated_key:
-            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-
-        response = dd.courses.scan(**scan_kwargs)
-        print("response=",response)
-        for course in response['Items']:
-            print("course=",course)
-            for user_id in course[ADMINS_FOR_COURSE]:
-                print("user_id=",user_id)
-                admin_users[user_id].append(course[COURSE_ID])
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            break
-    return admin_users
 
 # pylint-x: disable=too-many-arguments
 def register_email(email, user_name, *, course_key=None, course_id=None, admin=False):

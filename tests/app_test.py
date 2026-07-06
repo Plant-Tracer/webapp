@@ -13,10 +13,10 @@ from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import API_KEY
+from app.odb import API_KEY, PRIMARY_COURSE_ID, PRIMARY_COURSE_NAME, USER_ID, DDBO
 
 # Fixtures are imported in conftest.py
-from app.constants import logger
+from app.constants import C, logger
 
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
@@ -60,6 +60,40 @@ def test_static_path(client):
     # Test file not found
     response = client.get('/static/no-file')
     assert response.status_code==404
+
+
+def test_base_template_uses_same_origin_static_contract(client, local_ddb, local_s3, monkeypatch):
+    del local_ddb, local_s3
+    monkeypatch.setenv(C.PLANTTRACER_LAMBDA_API_BASE, "http://127.0.0.1:9811")
+
+    response = client.get('/about')
+
+    assert response.status_code == 200
+    assert 'const API_BASE = "";' in response.text
+    assert 'const LAMBDA_API_BASE = "http://127.0.0.1:9811/";' in response.text
+    assert 'STATIC_BASE' not in response.text
+
+
+def test_base_template_json_escapes_logged_in_script_globals(client, new_course):
+    ddbo = DDBO()
+    api_key = new_course[API_KEY]
+    user_id = new_course[USER_ID]
+    ddbo.update_table(
+        ddbo.users,
+        user_id,
+        {
+            PRIMARY_COURSE_ID: 'Course "A"',
+            PRIMARY_COURSE_NAME: 'Plant "Biology" <101>',
+        },
+    )
+
+    client.set_cookie(apikey.cookie_name(), api_key)
+    response = client.get('/about')
+
+    assert response.status_code == 200
+    assert 'const user_primary_course_id = "Course \\"A\\"";' in response.text
+    assert 'const primary_course_name = "Plant \\"Biology\\" \\u003c101\\u003e";' in response.text
+
 
 #
 # Test various error conditions

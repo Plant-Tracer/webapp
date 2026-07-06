@@ -45,18 +45,24 @@ Application URLs
 
 ``PLANTTRACER_API_BASE``
    Optional Flask API base injected into browser pages as ``API_BASE``. Empty
-   means same-origin.
+   means same-origin. If set, include a complete origin/base path; the runtime
+   normalizes a missing trailing slash.
 
 ``PLANTTRACER_STATIC_BASE``
-   Optional static asset base injected as ``STATIC_BASE``.
+   Reserved for a future versioned-asset plan. Static assets are currently
+   served same-origin by Flask/``lambda-web`` under ``/static/*``.
 
 ``PLANTTRACER_LAMBDA_API_BASE``
    Explicit lambda-resize HTTP API base injected as ``LAMBDA_API_BASE``. Local
-   default from the Makefile is ``http://127.0.0.1:9811/``.
+   debug targets set this to ``http://127.0.0.1:9811/`` when the local lambda
+   debug bridge is running. Set it to an explicit empty value to run
+   Flask-only browser tests without probing a resize service. The Lambda-only
+   stack sets this to the same public application origin.
 
 ``HOSTNAME`` / ``DOMAIN``
    If ``PLANTTRACER_LAMBDA_API_BASE`` is absent, Flask derives
-   ``https://{HOSTNAME}-lambda.{DOMAIN}/``.
+   ``https://{HOSTNAME}.{DOMAIN}/``. If those are also absent, Flask uses the
+   current request origin.
 
 Demo Mode
 ---------
@@ -72,19 +78,38 @@ Mail
 ----
 
 ``SERVER_EMAIL``
-   Sender address for outgoing mail. Defaults to ``admin@planttracer.com``.
+   Server sender address for outgoing mail. Defaults to
+   ``admin@planttracer.com``. In the Lambda-only stack this is set by the stack
+   and the Lambda role is scoped to that SES sender. The exact address must be
+   verified in AWS SES in the deployment region. This is not the course
+   administrator email; see :doc:`IdentityManagement`.
+
+``SERVER_EMAIL_NAME``
+   Display name used with ``SERVER_EMAIL`` in the MIME ``From`` header.
+   Defaults to ``Plant Tracer``. The Lambda-only stack sets this value and
+   passes it to ``lambda-web``.
 
 ``PLANTTRACER_CREDENTIALS``
-   Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections.
+   Path to an INI file with ``[smtp]`` and optional ``[imap]`` sections. Used
+   for local or legacy VM-style SMTP configuration, not by the Lambda-only SAM
+   stack.
 
 ``SMTPCONFIG_JSON``
    JSON SMTP configuration. Local Make targets set this for Mailpit.
 
 ``SMTPCONFIG_ARN``
-   AWS Secrets Manager ARN containing SMTP configuration.
+   AWS Secrets Manager ARN containing SMTP configuration. The mailer supports
+   this explicit override, but the Lambda-only SAM stack does not set it and
+   does not grant Secrets Manager access by default. Lambda production mail uses
+   SES IAM permissions instead of committed or environment-injected SMTP
+   secrets.
 
 ``MAILER_DRY_RUN``
-   Set to ``true`` to log email content instead of sending it.
+   Set to ``true`` to log email content instead of sending it. The Lambda-only
+   stack exposes this as the ``MailerDryRun`` SAM parameter for non-production
+   stacks whose operators cannot send SES mail as ``SERVER_EMAIL``.
+   Dry-run mail includes login links and API keys in Lambda logs, so use it
+   only with test users and test data.
 
 Lambda Queue
 ------------
