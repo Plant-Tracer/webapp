@@ -1,6 +1,16 @@
+import uuid
+
 import pytest
 
+from app.schema import AdminCourse
+
 import dbutil
+
+from .constants import ADMIN_EMAIL
+
+
+HOSTNAME_ENV = "HOSTNAME"
+DOMAIN_ENV = "DOMAIN"
 
 
 def parse_args(*args):
@@ -60,6 +70,30 @@ def test_course_sort_key_handles_missing_or_null_names():
     assert dbutil.course_sort_key({"course_name": "Botany", "course_id": "BIO101"}) == ("botany", "bio101")
 
 
+def test_course_label_helpers_format_dicts_and_models():
+    named_course = AdminCourse(course_id="BIO101", course_name="Plant Biology")
+    unnamed_course = AdminCourse(course_id="BIO102", course_name="")
+
+    assert dbutil.course_label({dbutil.COURSE_ID: "BIO103", dbutil.COURSE_NAME: "Shoots"}) == "Shoots (BIO103)"
+    assert dbutil.course_label({dbutil.COURSE_ID: "BIO104"}) == " (BIO104)"
+    assert dbutil.course_model_label(named_course) == "Plant Biology (BIO101)"
+    assert dbutil.format_admin_course(named_course) == "Plant Biology (BIO101)"
+    assert dbutil.format_admin_course(unnamed_course) == "BIO102"
+
+
+@pytest.mark.parametrize(
+    ("row", "expected"),
+    [
+        ([], False),
+        (["name"], False),
+        (["Name", " Email "], True),
+        (["student", "email"], False),
+    ],
+)
+def test_csv_has_header(row, expected):
+    assert dbutil.csv_has_header(row) is expected
+
+
 def test_parse_course_selection_accepts_numbers_and_ids_once():
     available_courses = [
         {dbutil.COURSE_ID: "BIO101", dbutil.COURSE_NAME: "Plant Biology"},
@@ -70,6 +104,65 @@ def test_parse_course_selection_accepts_numbers_and_ids_once():
     selected = dbutil.parse_course_selection(" 2, BIO103, , 1, BIO102 ", available_courses)
 
     assert [course[dbutil.COURSE_ID] for course in selected] == ["BIO102", "BIO103", "BIO101"]
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ("0", "out of range"),
+        ("4", "out of range"),
+        ("BIO999", "unknown course_id"),
+        (" , ", "no courses selected"),
+    ],
+)
+def test_parse_course_selection_rejects_invalid_tokens(selection, message):
+    available_courses = [
+        {dbutil.COURSE_ID: "BIO101", dbutil.COURSE_NAME: "Plant Biology"},
+        {dbutil.COURSE_ID: "BIO102", dbutil.COURSE_NAME: "Roots"},
+        {dbutil.COURSE_ID: "BIO103", dbutil.COURSE_NAME: "Shoots"},
+    ]
+
+    with pytest.raises(ValueError, match=message):
+        dbutil.parse_course_selection(selection, available_courses)
+
+
+def test_planttracer_endpoint_uses_hostname_and_domain(monkeypatch):
+    monkeypatch.setenv(HOSTNAME_ENV, "stack-name")
+    monkeypatch.setenv(DOMAIN_ENV, "planttracer.com")
+
+    assert dbutil.planttracer_endpoint() == "https://stack-name.planttracer.com"
+
+
+def test_planttracer_endpoint_requires_hostname_and_domain(monkeypatch):
+    monkeypatch.delenv(HOSTNAME_ENV, raising=False)
+    monkeypatch.delenv(DOMAIN_ENV, raising=False)
+
+    with pytest.raises(RuntimeError, match="HOSTNAME, DOMAIN"):
+        dbutil.planttracer_endpoint()
+
+
+def test_courses_available_for_admin_filters_current_admin_courses(new_course):
+    available_course_id = "Available " + uuid.uuid4().hex[:8]
+    dbutil.odb.create_course(
+        course_id=available_course_id,
+        course_name="Available Course",
+        course_key="available-" + uuid.uuid4().hex[:8],
+    )
+
+    try:
+        all_course_ids = {course[dbutil.COURSE_ID] for course in dbutil.courses_available_for_admin()}
+        admin_user = dbutil.DDBO().get_user_email(new_course[ADMIN_EMAIL])
+        available_course_ids = {
+            course[dbutil.COURSE_ID]
+            for course in dbutil.courses_available_for_admin(admin_user)
+        }
+
+        assert new_course[dbutil.COURSE_ID] in all_course_ids
+        assert available_course_id in all_course_ids
+        assert new_course[dbutil.COURSE_ID] not in available_course_ids
+        assert available_course_id in available_course_ids
+    finally:
+        dbutil.odb.delete_course(course_id=available_course_id)
 
 
 def test_dbutil_has_admin_list_command():
