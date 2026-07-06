@@ -35,7 +35,7 @@ export LOG_LEVEL ?= DEBUG
 SAM_CONFIG ?= samconfig.toml
 SAM_BUILD_DIR=.aws-sam/build
 STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-APP_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
+APP_VERSION := $(shell python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
