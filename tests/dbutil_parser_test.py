@@ -60,6 +60,18 @@ def test_course_sort_key_handles_missing_or_null_names():
     assert dbutil.course_sort_key({"course_name": "Botany", "course_id": "BIO101"}) == ("botany", "bio101")
 
 
+def test_parse_course_selection_accepts_numbers_and_ids_once():
+    available_courses = [
+        {dbutil.COURSE_ID: "BIO101", dbutil.COURSE_NAME: "Plant Biology"},
+        {dbutil.COURSE_ID: "BIO102", dbutil.COURSE_NAME: "Roots"},
+        {dbutil.COURSE_ID: "BIO103", dbutil.COURSE_NAME: "Shoots"},
+    ]
+
+    selected = dbutil.parse_course_selection(" 2, BIO103, , 1, BIO102 ", available_courses)
+
+    assert [course[dbutil.COURSE_ID] for course in selected] == ["BIO102", "BIO103", "BIO101"]
+
+
 def test_dbutil_has_admin_list_command():
     args = parse_args("admin-list")
 
