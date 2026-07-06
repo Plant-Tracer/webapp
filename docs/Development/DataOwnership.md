@@ -165,7 +165,7 @@ stack.
 
 The bucket has these intended settings:
 
-- AWS account `343218180669`, region `us-east-1`
+- PlantAdmin AWS account `****0669`, region `us-east-1`
 - public access blocked
 - default SSE-S3 encryption
 - versioning disabled
