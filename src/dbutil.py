@@ -728,7 +728,7 @@ def build_parser():
     return parser
 
 
-def main():
+def main():  # pragma: no cover
     parser = build_parser()
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
