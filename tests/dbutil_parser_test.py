@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+from app import odb_movie_data
+from app.odb import MOVIE_ID
 from app.schema import AdminCourse
 
 import dbutil
@@ -163,6 +165,51 @@ def test_courses_available_for_admin_filters_current_admin_courses(new_course):
         assert available_course_id in available_course_ids
     finally:
         dbutil.odb.delete_course(course_id=available_course_id)
+
+
+def test_print_report_with_course_does_not_crash(new_course, capsys):
+    dbutil.print_report()
+
+    output = capsys.readouterr().out
+    assert "Courses" in output
+    assert new_course[dbutil.COURSE_ID] in output
+
+
+def test_dump_movie_with_movie_does_not_crash(new_movie, capsys):
+    dbutil.dump_movie(new_movie[MOVIE_ID])
+
+    output = capsys.readouterr().out
+    assert new_movie[MOVIE_ID] in output
+
+
+def test_admin_list_prints_course_admin(new_course, capsys):
+    dbutil.admin_list()
+
+    output = capsys.readouterr().out
+    assert new_course[ADMIN_EMAIL] in output
+    assert new_course[dbutil.COURSE_ID] in output
+
+
+def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
+    del local_ddb
+
+    dbutil.create_demo_course()
+    course_output = capsys.readouterr().out
+    assert dbutil.DEMO_COURSE_ID in course_output
+    assert dbutil.DEFAULT_ADMIN_EMAIL in course_output
+
+    seeded, skipped = dbutil.populate_demo_movies()
+    try:
+        assert seeded > 0
+        assert skipped == 0
+
+        dbutil.seed_demo_movies()
+        seed_output = capsys.readouterr().out
+        assert f"demo movies seeded=0 skipped={seeded}" in seed_output
+    finally:
+        for movie in dbutil.DDBO().get_movies_for_course_id(dbutil.DEMO_COURSE_ID):
+            odb_movie_data.purge_movie(movie_id=movie[MOVIE_ID])
+            odb_movie_data.delete_movie(movie_id=movie[MOVIE_ID])
 
 
 def test_dbutil_has_admin_list_command():
